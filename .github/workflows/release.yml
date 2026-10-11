@@ -25,8 +25,16 @@ jobs:
             name: seine-linux-arm64
 
     runs-on: ${{ matrix.os }}
+    container:
+      image: debian:12
 
     steps:
+      - name: Install build prerequisites
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git tar
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
