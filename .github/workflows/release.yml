@@ -29,7 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          # 手动发布始终编译默认分支当前最新源码；tag 仅作为 Release 标识。
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
 
       - uses: dtolnay/rust-toolchain@1.93.0
         with:
@@ -78,7 +79,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          # 与构建任务保持一致，确保变更日志来自实际编译的源码版本。
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
 
       - uses: actions/download-artifact@v4
         with:

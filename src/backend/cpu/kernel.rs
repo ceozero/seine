@@ -802,7 +802,10 @@ unsafe impl Sync for VirtualArena {}
 
 #[cfg(any(
     target_os = "windows",
-    all(target_os = "linux", target_arch = "x86_64")
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    )
 ))]
 fn round_up_to_multiple(value: usize, multiple: usize) -> Option<usize> {
     if multiple == 0 {
