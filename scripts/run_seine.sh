@@ -8,6 +8,7 @@ POOL_URL="${POOL_URL:-stratum+tcp://bntpool.com:3333}"
 WALLET_ADDRESS="${WALLET_ADDRESS:-N1uHhvgf3bg8X8hS9qrS6iqbSCemrYVTMNCMPyfrGAwoGcJcKg15YXPgfj4a98R3pjcSzTyJnrVj5PTDBVoyRqzM47Bc1}"
 RELEASE_BASE_URL="https://github.com/ceozero/seine/releases/latest/download"
 HUGEPAGE_PATH="/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages"
+GRUB_DEFAULT_FILE="/etc/default/grub"
 
 die() {
     echo "错误: $*" >&2
@@ -24,6 +25,33 @@ download() {
         wget --https-only --tries=3 --output-document="$output" "$url"
     else
         die "未找到 curl 或 wget，请先安装其中一个下载工具。"
+    fi
+}
+
+grub_has_1g_hugepages() {
+    local grub_line
+
+    [[ -f "$GRUB_DEFAULT_FILE" ]] || return 1
+    grub_line="$(grep -E '^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_DEFAULT_FILE" || true)"
+    [[ "$grub_line" == *"hugepagesz=1G"* ]] && [[ "$grub_line" =~ (^|[[:space:]])hugepages=[0-9]+([[:space:]]|\"|$) ]]
+}
+
+configure_grub_1g_hugepages() {
+    [[ -f "$GRUB_DEFAULT_FILE" ]] || die "未找到 ${GRUB_DEFAULT_FILE}，无法写入 GRUB 启动参数。"
+
+    cp -p "$GRUB_DEFAULT_FILE" "${GRUB_DEFAULT_FILE}.seine.bak"
+    if grep -qE '^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_DEFAULT_FILE"; then
+        sed -i -E "/^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=/ s/\"[[:space:]]*$/ hugepagesz=1G hugepages=${requested_pages}\"/" "$GRUB_DEFAULT_FILE"
+    else
+        printf '\nGRUB_CMDLINE_LINUX_DEFAULT="quiet hugepagesz=1G hugepages=%s"\n' "$requested_pages" >>"$GRUB_DEFAULT_FILE"
+    fi
+
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub
+    elif command -v grub-mkconfig >/dev/null 2>&1 && [[ -d /boot/grub ]]; then
+        grub-mkconfig -o /boot/grub/grub.cfg
+    else
+        die "已修改 ${GRUB_DEFAULT_FILE}，但未找到可用的 update-grub 或 grub-mkconfig。请手动生成 GRUB 配置后再重启。"
     fi
 }
 
@@ -69,17 +97,31 @@ fi
 [[ -e "$HUGEPAGE_PATH" ]] || die "内核未提供 1 GiB HugeTLB 接口: $HUGEPAGE_PATH"
 
 requested_pages=$((requested_threads * 2))
-echo "整理内存碎片并释放页缓存..."
-printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
-printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
-echo "检测到 ${cpu_count} 个 CPU、$((mem_total_kib / 1024 / 1024)) GiB 内存；申请 ${requested_pages} 个 1 GiB HugeTLB 页。"
-printf '%s\n' "$requested_pages" >"$HUGEPAGE_PATH" || die "无法设置 1 GiB HugeTLB 页。"
-
 actual_pages="$(<"$HUGEPAGE_PATH")"
 [[ "$actual_pages" =~ ^[0-9]+$ ]] || die "读取到无效的 nr_hugepages 值: $actual_pages"
 
-if ((actual_pages != requested_pages)); then
-    echo "警告: 仅实际分配到 ${actual_pages}/${requested_pages} 个 1 GiB HugeTLB 页。"
+if ((actual_pages == 0)); then
+    echo "当前没有 1 GiB HugeTLB 页；整理内存碎片并释放页缓存..."
+    printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
+    printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
+    echo "检测到 ${cpu_count} 个 CPU、$((mem_total_kib / 1024 / 1024)) GiB 内存；申请 ${requested_pages} 个 1 GiB HugeTLB 页。"
+    printf '%s\n' "$requested_pages" >"$HUGEPAGE_PATH" || die "无法设置 1 GiB HugeTLB 页。"
+    actual_pages="$(<"$HUGEPAGE_PATH")"
+    [[ "$actual_pages" =~ ^[0-9]+$ ]] || die "读取到无效的 nr_hugepages 值: $actual_pages"
+
+    if ((actual_pages != requested_pages)); then
+        echo "警告: 仅实际分配到 ${actual_pages}/${requested_pages} 个 1 GiB HugeTLB 页。"
+        if grub_has_1g_hugepages; then
+            echo "已检测到 GRUB 的 1 GiB HugeTLB 配置；将使用当前实际页数。"
+        else
+            configure_grub_1g_hugepages
+            echo "已写入 GRUB 参数 hugepagesz=1G hugepages=${requested_pages}，并备份原文件为 ${GRUB_DEFAULT_FILE}.seine.bak。"
+            echo "请重启服务器后重新运行此脚本，使所需的 1 GiB HugeTLB 页数在启动时预留。"
+            exit 0
+        fi
+    fi
+else
+    echo "检测到已有 ${actual_pages} 个 1 GiB HugeTLB 页；不修改 nr_hugepages，直接使用当前数量。"
 fi
 
 # HugeTLB 不足时以实际页数决定线程数；同时保留 CPU/内存计算出的上限。
