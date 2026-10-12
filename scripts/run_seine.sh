@@ -69,6 +69,9 @@ fi
 [[ -e "$HUGEPAGE_PATH" ]] || die "内核未提供 1 GiB HugeTLB 接口: $HUGEPAGE_PATH"
 
 requested_pages=$((requested_threads * 2))
+echo "整理内存碎片并释放页缓存..."
+printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
+printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
 echo "检测到 ${cpu_count} 个 CPU、$((mem_total_kib / 1024 / 1024)) GiB 内存；申请 ${requested_pages} 个 1 GiB HugeTLB 页。"
 printf '%s\n' "$requested_pages" >"$HUGEPAGE_PATH" || die "无法设置 1 GiB HugeTLB 页。"
 
@@ -111,5 +114,6 @@ printf -v tmux_command 'exec %q --pool-url %q --pool-worker %q --address %q --cp
 tmux new-session -d -s "$TMUX_SESSION" "$tmux_command"
 
 echo "已启动 Seine：架构=${release_arch}，threads=${threads}，1 GiB HugeTLB=${actual_pages} 页。"
-echo "查看运行窗口：tmux attach -t ${TMUX_SESSION}"
-echo "注意：HugeTLB 设置和 tmux 会话在重启后不会自动恢复；重启后请再次运行此脚本。"
+echo "将在 5 秒后进入 tmux 会话；按 Ctrl+C 可取消自动进入。"
+sleep 5
+exec tmux attach -t "$TMUX_SESSION"
