@@ -49,7 +49,7 @@ This file preserves the full engineering reference for AI agents doing optimizat
   - `auto` prefers explicit Windows large pages/Linux HugeTLB, then retains the platform fallback chain.
   - `regular` forces ordinary pages and disables Linux THP for a controlled baseline.
   - `large` requires every worker to allocate explicit large pages and fails CPU backend startup on any fallback; it is rejected on macOS.
-  - `large-1g` requires explicit 1 GiB HugeTLB pages (`MAP_HUGETLB|MAP_HUGE_1GB`, two pages per 2 GiB worker arena) and also fails closed; x86_64 Linux/WSL only. Telemetry reports it as `large1g`/`large1g_bytes`, separate from 2 MiB `large`.
+  - `large-1g` requires explicit 1 GiB HugeTLB pages (`MAP_HUGETLB|MAP_HUGE_1GB`, two pages per 2 GiB worker arena) and also fails closed; supported on Linux x86_64/aarch64 systems whose kernels expose a 1 GiB pool. Telemetry reports it as `large1g`/`large1g_bytes`, separate from 2 MiB `large`.
   - CPU autotune caches and benchmark compatibility are separated by page mode. Schema-12 benchmark reports retain measured backing workers/bytes and allocation failures.
 - `--cpu-profile` (`balanced`, `throughput`, `efficiency`; default `balanced`) applies preset CPU threading/poll/flush defaults.
   - Profile defaults apply when related knobs are omitted; explicit flags still override profile defaults.

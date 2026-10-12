@@ -146,7 +146,7 @@ Runtime checks:
 - Startup warns with exact sizing/commands when HugeTLB is under-provisioned (`hugepages | CPU lanes=... need ...`).
 - Per-backend fallback warnings still appear if a worker falls back from `MAP_HUGETLB` (`MAP_HUGETLB unavailable; hugepage coverage...`).
 - `--cpu-page-mode large` requires every CPU worker to receive `MAP_HUGETLB` and fails CPU backend startup instead of mixing page classes or silently falling back.
-- `--cpu-page-mode large-1g` does the same with explicit 1 GiB pages (`MAP_HUGETLB|MAP_HUGE_1GB`, x86_64 Linux/WSL only); see "WSL/Linux HugeTLB provisioning" below for reserving the 1 GiB pool.
+- `--cpu-page-mode large-1g` does the same with explicit 1 GiB pages (`MAP_HUGETLB|MAP_HUGE_1GB`, Linux x86_64/aarch64 systems whose kernels expose a 1 GiB pool); see "WSL/Linux HugeTLB provisioning" below for reserving the 1 GiB pool.
 - `--cpu-page-mode regular` disables THP for a controlled base-page benchmark. The default `auto` mode retains the production fallback chain.
 - Benchmark reports record measured HugeTLB, THP, regular-page, and heap bytes per CPU backend so page-backed runs can be verified rather than inferred.
 - In practice, once many CPU lanes are active, hugepage coverage usually matters more than ISA-level tuning for backend throughput.
@@ -188,7 +188,8 @@ fragmented, for example in `/etc/sysctl.d/99-seine-hugepages.conf`:
 vm.nr_hugepages = 9677
 ```
 
-`--cpu-page-mode large-1g` is the 1 GiB variant (x86_64 Linux/WSL only): every
+`--cpu-page-mode large-1g` is the 1 GiB variant (Linux x86_64/aarch64 systems
+with a 1 GiB HugeTLB pool): every
 worker arena is mapped with `MAP_HUGETLB|MAP_HUGE_1GB` from the explicit 1 GiB
 pool and startup fails closed on any shortfall. Each 2 GiB worker arena needs
 exactly two 1 GiB pages, so no fractional headroom is required:

@@ -60,8 +60,8 @@ pub enum CpuPageMode {
     Regular,
     /// Require explicit large pages and fail CPU backend startup when unavailable.
     Large,
-    /// Require explicit 1 GiB HugeTLB pages (x86_64 Linux only) and fail CPU
-    /// backend startup when unavailable.
+    /// Require explicit 1 GiB HugeTLB pages (supported Linux x86_64/aarch64
+    /// systems only) and fail CPU backend startup when unavailable.
     #[value(name = "large-1g")]
     Large1G,
 }
@@ -386,7 +386,7 @@ struct Cli {
     cpu_affinity: CpuAffinityMode,
 
     /// CPU arena page policy: auto fallback, forced regular pages, required large pages,
-    /// or required 1 GiB HugeTLB pages (`large-1g`, x86_64 Linux only).
+    /// or required 1 GiB HugeTLB pages (`large-1g`, supported Linux x86_64/aarch64 only).
     #[arg(long = "cpu-page-mode", value_enum, default_value_t = CpuPageMode::Auto)]
     cpu_page_mode: CpuPageMode,
 

@@ -429,7 +429,10 @@ fn fill_block_from_refs_mid_prefetch(
 /// hardware prefetcher doesn't have to ramp up from scratch.
 ///
 /// - x86_64: all 16 cache lines at 64-byte stride (full 1024-byte block).
-/// - AArch64: all 8 cache lines at 128-byte stride (full 1024-byte block).
+/// - Linux AArch64：按 64 字节步长覆盖全部 16 条缓存行，匹配 OCI A1 使用的
+///   Neoverse N1 / Ampere Altra。
+/// - 其他 AArch64：按 128 字节步长覆盖全部 8 条缓存行，保持 Apple Silicon
+///   的已验证调优基线。
 #[inline(always)]
 fn prefetch_pow_block(block: &PowBlock) {
     #[cfg(target_arch = "x86_64")]
@@ -455,7 +458,33 @@ fn prefetch_pow_block(block: &PowBlock) {
             _mm_prefetch(ptr.add(960), _MM_HINT_T0);
         }
     }
-    #[cfg(target_arch = "aarch64")]
+    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+    {
+        unsafe {
+            let ptr = block as *const PowBlock as *const u8;
+            std::arch::asm!(
+                "prfm pldl1keep, [{ptr}]",
+                "prfm pldl1keep, [{ptr}, #64]",
+                "prfm pldl1keep, [{ptr}, #128]",
+                "prfm pldl1keep, [{ptr}, #192]",
+                "prfm pldl1keep, [{ptr}, #256]",
+                "prfm pldl1keep, [{ptr}, #320]",
+                "prfm pldl1keep, [{ptr}, #384]",
+                "prfm pldl1keep, [{ptr}, #448]",
+                "prfm pldl1keep, [{ptr}, #512]",
+                "prfm pldl1keep, [{ptr}, #576]",
+                "prfm pldl1keep, [{ptr}, #640]",
+                "prfm pldl1keep, [{ptr}, #704]",
+                "prfm pldl1keep, [{ptr}, #768]",
+                "prfm pldl1keep, [{ptr}, #832]",
+                "prfm pldl1keep, [{ptr}, #896]",
+                "prfm pldl1keep, [{ptr}, #960]",
+                ptr = in(reg) ptr,
+                options(nostack, preserves_flags),
+            );
+        }
+    }
+    #[cfg(all(target_arch = "aarch64", not(target_os = "linux")))]
     {
         unsafe {
             let ptr = block as *const PowBlock as *const u8;

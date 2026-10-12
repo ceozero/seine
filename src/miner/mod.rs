@@ -1935,7 +1935,7 @@ fn maybe_warn_linux_1g_hugepages_setup(cpu_lanes: u64, mode: RuntimeMode) {
     let Some(total_pages) = read_pool("nr_hugepages") else {
         warn(
             tag,
-            "hugepages-1g | kernel does not expose a 1 GiB HugeTLB pool; --cpu-page-mode large-1g will fail closed (requires x86_64 with 1 GiB page support)",
+            "hugepages-1g | kernel does not expose a 1 GiB HugeTLB pool; --cpu-page-mode large-1g will fail closed (requires Linux x86_64/aarch64 with 1 GiB page support)",
         );
         return;
     };
