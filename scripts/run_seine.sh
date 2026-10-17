@@ -79,7 +79,8 @@ echo "安装 tmux..."
 apt-get install -y tmux
 
 if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
-    die "tmux 会话 ${TMUX_SESSION} 已存在；请先执行 tmux attach -t ${TMUX_SESSION} 查看，或手动停止后再运行脚本。"
+    echo "发现已有 tmux 会话 ${TMUX_SESSION}；先关闭旧会话后重建。"
+    tmux kill-session -t "$TMUX_SESSION" || die "无法关闭已有 tmux 会话 ${TMUX_SESSION}。"
 fi
 
 cpu_count="$(nproc)"
