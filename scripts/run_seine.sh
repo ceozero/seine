@@ -100,28 +100,24 @@ requested_pages=$((requested_threads * 2))
 actual_pages="$(<"$HUGEPAGE_PATH")"
 [[ "$actual_pages" =~ ^[0-9]+$ ]] || die "读取到无效的 nr_hugepages 值: $actual_pages"
 
-if ((actual_pages == 0)); then
-    echo "当前没有 1 GiB HugeTLB 页；整理内存碎片并释放页缓存..."
-    printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
-    printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
-    echo "检测到 ${cpu_count} 个 CPU、$((mem_total_kib / 1024 / 1024)) GiB 内存；申请 ${requested_pages} 个 1 GiB HugeTLB 页。"
-    printf '%s\n' "$requested_pages" >"$HUGEPAGE_PATH" || die "无法设置 1 GiB HugeTLB 页。"
-    actual_pages="$(<"$HUGEPAGE_PATH")"
-    [[ "$actual_pages" =~ ^[0-9]+$ ]] || die "读取到无效的 nr_hugepages 值: $actual_pages"
+echo "当前有 ${actual_pages} 个 1 GiB HugeTLB 页；整理内存碎片并释放页缓存..."
+printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
+printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
+echo "检测到 ${cpu_count} 个 CPU、$((mem_total_kib / 1024 / 1024)) GiB 内存；设置 ${requested_pages} 个 1 GiB HugeTLB 页。"
+printf '%s\n' "$requested_pages" >"$HUGEPAGE_PATH" || die "无法设置 1 GiB HugeTLB 页。"
+actual_pages="$(<"$HUGEPAGE_PATH")"
+[[ "$actual_pages" =~ ^[0-9]+$ ]] || die "读取到无效的 nr_hugepages 值: $actual_pages"
 
-    if ((actual_pages != requested_pages)); then
-        echo "警告: 仅实际分配到 ${actual_pages}/${requested_pages} 个 1 GiB HugeTLB 页。"
-        if grub_has_1g_hugepages; then
-            echo "已检测到 GRUB 的 1 GiB HugeTLB 配置；将使用当前实际页数。"
-        else
-            configure_grub_1g_hugepages
-            echo "已写入 GRUB 参数 hugepagesz=1G hugepages=${requested_pages}，并备份原文件为 ${GRUB_DEFAULT_FILE}.seine.bak。"
-            echo "请重启服务器后重新运行此脚本，使所需的 1 GiB HugeTLB 页数在启动时预留。"
-            exit 0
-        fi
+if ((actual_pages != requested_pages)); then
+    echo "警告: 仅实际分配到 ${actual_pages}/${requested_pages} 个 1 GiB HugeTLB 页。"
+    if grub_has_1g_hugepages; then
+        echo "已检测到 GRUB 的 1 GiB HugeTLB 配置；将使用当前实际页数。"
+    else
+        configure_grub_1g_hugepages
+        echo "已写入 GRUB 参数 hugepagesz=1G hugepages=${requested_pages}，并备份原文件为 ${GRUB_DEFAULT_FILE}.seine.bak。"
+        echo "请重启服务器后重新运行此脚本，使所需的 1 GiB HugeTLB 页数在启动时预留。"
+        exit 0
     fi
-else
-    echo "检测到已有 ${actual_pages} 个 1 GiB HugeTLB 页；不修改 nr_hugepages，直接使用当前数量。"
 fi
 
 # HugeTLB 不足时以实际页数决定线程数；同时保留 CPU/内存计算出的上限。
