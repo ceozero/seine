@@ -19,7 +19,7 @@ For the raw CLI output, run:
 | `--token` | string | Explicit daemon API bearer token. Optional override in daemon mode; optional in pool mode for local daemon wallet balance. |
 | `--wallet-password` | string | Wallet password for automatic wallet load when needed. |
 | `--wallet-password-file` | path | File containing the wallet password. |
-| `--address` | string | Pool login address in pool mode, or payout-address override for daemon templates. In daemon mode, if it matches daemon wallet address, TUI wallet stats remain available; otherwise pending/unlocked display as `---`. |
+| `--address` | string | Full payout address or Blocknet ID shortname (`@name` or `$name`) for pool login or daemon templates. Shortnames are verified and resolved once per mining run; quote them in shell commands, e.g. `--address '$name'`. In daemon mode, if the resolved address matches the daemon wallet, TUI wallet stats remain available; otherwise pending/unlocked display as `---`. |
 | `--cookie` | path | Explicit `api.cookie` path used to read daemon API token. Optional override in daemon mode; optional in pool mode for local daemon wallet balance. |
 | `--daemon-dir` | path, default wrapper-managed `~/.config/bnt/data/mainnet` | Daemon data dir used to find `api.cookie` when `--cookie` is not set. Also used by pool mode when probing for a local daemon wallet. |
 | `--data-dir` | path, default `./seine-data` | Seine data dir for persisted state (`seine.config.json`, autotune caches, etc). |

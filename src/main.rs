@@ -7,6 +7,7 @@ mod dev_fee;
 mod miner;
 mod pool;
 mod runtime_identity;
+mod shortname;
 mod types;
 mod user_config;
 mod version;

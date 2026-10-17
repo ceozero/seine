@@ -216,6 +216,21 @@ enum CpuAutotuneMeasureOutcome {
     MemoryLimited,
 }
 
+fn resolve_mining_config(
+    cfg: &Config,
+    resolver: &crate::shortname::ShortnameResolver,
+) -> Result<Config> {
+    let mut resolved = cfg.clone();
+    if let Some(destination) = cfg.mining_address.as_deref() {
+        let address = resolver.resolve(destination)?;
+        if address != destination.trim() {
+            info("ADDRESS", format!("resolved {destination} to {address}"));
+        }
+        resolved.mining_address = Some(address);
+    }
+    Ok(resolved)
+}
+
 pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     if cfg!(debug_assertions) {
         warn(
@@ -227,6 +242,11 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     if cfg.bench {
         return bench::run_benchmark(cfg, shutdown.as_ref());
     }
+
+    // Pin the destination for this run, including pool reconnects and daemon
+    // template requests. Keep the user's saved shortname for the next run.
+    let resolved_cfg = resolve_mining_config(cfg, &crate::shortname::ShortnameResolver::default())?;
+    let cfg = &resolved_cfg;
 
     // Phase 1: Build NVIDIA backends and start compilation in background threads.
     // NvidiaBackend::new() only depends on NVIDIA-specific config, not CPU autotune.
@@ -3499,6 +3519,28 @@ mod tests {
                 return false;
             }
             std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn shortname_is_pinned_for_pool_and_daemon_runs() {
+        use crate::shortname::tests::{mock_resolver, ADDRESS};
+        for mode in [MiningMode::Pool, MiningMode::Daemon] {
+            let mut cfg = test_config();
+            cfg.mode = mode;
+            cfg.mining_address = Some("$Alice".into());
+            let (resolver, task) = mock_resolver(ADDRESS);
+            let resolved = resolve_mining_config(&cfg, &resolver).unwrap();
+            task.join().unwrap();
+            assert_eq!(resolved.mining_address.as_deref(), Some(ADDRESS));
+            assert_eq!(cfg.mining_address.as_deref(), Some("$Alice"));
+            // Reconnects keep the address even when the resolver is down.
+            assert_eq!(
+                resolve_mining_config(&resolved, &resolver)
+                    .unwrap()
+                    .mining_address,
+                resolved.mining_address
+            );
         }
     }
 
