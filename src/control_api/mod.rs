@@ -19,13 +19,13 @@ use serde_json::{json, Value};
 use tokio::sync::broadcast;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::address::validate_mining_address;
 use crate::config::{
     read_token_from_cookie_file, BackendKind, BackendSpec, Config, CpuAffinityMode, CpuPageMode,
     CpuPerformanceProfile, MiningMode, UiMode, WorkAllocation,
 };
 use crate::dev_fee::{effective_pool_dev_fee_percent, DEV_ADDRESS, DEV_FEE_PERCENT};
 use crate::miner::ui::{set_log_sink, UiLogEvent};
+use crate::shortname::validate_destination;
 
 const API_EVENT_CHANNEL_CAPACITY: usize = 4096;
 const RECENT_LOG_CAPACITY: usize = 200;
@@ -1518,7 +1518,7 @@ fn apply_start_patch(cfg: &mut Config, patch: &StartRequest) -> Result<()> {
         if mining_address.is_empty() {
             bail!("mining_address cannot be empty");
         }
-        validate_mining_address(mining_address)
+        validate_destination(mining_address)
             .map_err(|err| anyhow!("invalid mining_address: {err}"))?;
         cfg.mining_address = Some(mining_address.to_string());
     }

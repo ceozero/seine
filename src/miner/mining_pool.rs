@@ -51,6 +51,7 @@ const POOL_DESYNC_STALE_ACK_WINDOW: Duration = Duration::from_secs(60);
 const POOL_DESYNC_STALE_ACK_THRESHOLD: usize = 3;
 const POOL_DESYNC_STALE_FOR_THRESHOLD: Duration = Duration::from_secs(15);
 const POOL_TELEMETRY_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+const POOL_HASHRATE_CACHE_TTL: Duration = Duration::from_secs(30);
 const POOL_TELEMETRY_TIMEOUT: Duration = Duration::from_secs(5);
 const POOL_TIMING_SLOW_CANCEL_THRESHOLD: Duration = Duration::from_secs(1);
 const POOL_TIMING_SLOW_ASSIGN_THRESHOLD: Duration = Duration::from_secs(1);
@@ -100,6 +101,7 @@ struct PoolUiTelemetryClient {
     endpoints: Vec<PoolTelemetryEndpoint>,
     http: HttpClient,
     rate_limit_backoff_until: Arc<Mutex<Option<Instant>>>,
+    hashrate_cache: Arc<Mutex<Option<(Instant, String)>>>,
 }
 
 #[derive(Debug)]
@@ -1044,7 +1046,7 @@ pub(super) fn run_pool_mining_loop(
                     warn("STATS", "failed to start pool telemetry refresh");
                     pool_telemetry_warning_logged = true;
                 }
-                next_pool_telemetry_refresh = Instant::now() + POOL_TELEMETRY_REFRESH_INTERVAL;
+                next_pool_telemetry_refresh = Instant::now() + pool_telemetry_refresh_delay();
             }
         }
 
@@ -2511,10 +2513,22 @@ impl PoolUiTelemetryClient {
             endpoints,
             http,
             rate_limit_backoff_until: Arc::new(Mutex::new(None)),
+            hashrate_cache: Arc::new(Mutex::new(None)),
         })
     }
 
     fn fetch_pool_hashrate(&self) -> Result<String> {
+        // This value is shared by the entire pool and already cached upstream.
+        // Keep balances responsive without polling global stats every five seconds.
+        let mut cache = self
+            .hashrate_cache
+            .lock()
+            .expect("hashrate cache lock poisoned");
+        if let Some((updated, value)) = cache.as_ref() {
+            if updated.elapsed() < POOL_HASHRATE_CACHE_TTL {
+                return Ok(value.clone());
+            }
+        }
         self.fail_if_rate_limited()?;
         let mut errors = Vec::new();
         for endpoint in &self.endpoints {
@@ -2555,7 +2569,9 @@ impl PoolUiTelemetryClient {
                 continue;
             }
 
-            return Ok(format_hashrate_ui(hashrate));
+            let value = format_hashrate_ui(hashrate);
+            *cache = Some((Instant::now(), value.clone()));
+            return Ok(value);
         }
 
         bail!("pool hashrate telemetry unavailable: {}", errors.join("; "));
@@ -2571,10 +2587,22 @@ impl PoolUiTelemetryClient {
                     if self.is_rate_limited() {
                         return Err(err);
                     }
+                    let legacy_route_missing = err
+                        .downcast_ref::<reqwest::Error>()
+                        .and_then(reqwest::Error::status)
+                        .is_some_and(|status| {
+                            matches!(
+                                status,
+                                StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+                            )
+                        });
                     errors.push(format!(
                         "GET {} failed: {err:#}",
                         endpoint.miner_balance_url
                     ));
+                    if !legacy_route_missing {
+                        continue;
+                    }
                 }
             }
 
@@ -2621,7 +2649,10 @@ impl PoolUiTelemetryClient {
     }
 
     fn json_or_rate_limit(&self, response: HttpResponse, url: &str) -> Result<Value> {
-        if response.status() == StatusCode::TOO_MANY_REQUESTS {
+        if matches!(
+            response.status(),
+            StatusCode::TOO_MANY_REQUESTS | StatusCode::SERVICE_UNAVAILABLE
+        ) {
             let retry_after = telemetry_retry_after(&response);
             self.record_rate_limit_backoff(retry_after);
             let secs = retry_after
@@ -2661,6 +2692,12 @@ impl PoolUiTelemetryClient {
             format_atomic_units_bnt(paid),
         ))
     }
+}
+
+fn pool_telemetry_refresh_delay() -> Duration {
+    let mut bytes = [0u8; 2];
+    let _ = getrandom::getrandom(&mut bytes);
+    POOL_TELEMETRY_REFRESH_INTERVAL + Duration::from_millis(u16::from_le_bytes(bytes) as u64 % 2001)
 }
 
 fn telemetry_retry_after(response: &HttpResponse) -> Option<Duration> {
@@ -2992,6 +3029,65 @@ mod tests {
         assert!(client.rate_limit_backoff_remaining().is_some());
         balance_mock.assert_hits(1);
         fallback_mock.assert_hits(0);
+    }
+
+    #[test]
+    fn telemetry_hashrate_cache_is_shared_and_expires() {
+        let server = MockServer::start();
+        let stats = server.mock(|when, then| {
+            when.method(GET).path("/api/stats");
+            then.status(200)
+                .json_body(json!({"chain": {"network_hashrate": 1234.0}}));
+        });
+        let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+        let first = client.fetch_pool_hashrate().unwrap();
+        assert_eq!(client.clone().fetch_pool_hashrate().unwrap(), first);
+        stats.assert_hits(1);
+        client.hashrate_cache.lock().unwrap().as_mut().unwrap().0 =
+            Instant::now() - super::POOL_HASHRATE_CACHE_TTL;
+        assert_eq!(client.fetch_pool_hashrate().unwrap(), first);
+        stats.assert_hits(2);
+    }
+
+    #[test]
+    fn telemetry_overload_does_not_amplify_requests() {
+        for status in [429, 503, 500] {
+            let server = MockServer::start();
+            let balance = server.mock(|when, then| {
+                when.method(GET).path("/api/miner/addr/balance");
+                then.status(status).header("retry-after", "5");
+            });
+            let fallback = server.mock(|when, then| {
+                when.method(GET).path("/api/miner/addr");
+                then.status(200);
+            });
+            let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+            assert!(client.fetch_pool_balances().is_err());
+            balance.assert_hits(1);
+            fallback.assert_hits(0);
+            if status != 500 {
+                assert!(client.fetch_pool_hashrate().is_err());
+                assert!(client.is_rate_limited());
+            }
+        }
+    }
+
+    #[test]
+    fn telemetry_missing_balance_route_still_uses_legacy_fallback() {
+        let server = MockServer::start();
+        let balance = server.mock(|when, then| {
+            when.method(GET).path("/api/miner/addr/balance");
+            then.status(404);
+        });
+        let fallback = server.mock(|when, then| {
+            when.method(GET).path("/api/miner/addr");
+            then.status(200)
+                .json_body(json!({"balance": {"pending": 1, "paid": 2}}));
+        });
+        let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+        assert!(client.fetch_pool_balances().is_ok());
+        balance.assert_hits(1);
+        fallback.assert_hits(1);
     }
 
     #[test]

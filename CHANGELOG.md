@@ -8,6 +8,26 @@ upgrade: lead with what they gain, keep it brief, skip internal refactors.
 
 ## Unreleased
 
+## v0.2.17
+
+**Less pool polling and better recovery when the pool is busy.** Seine reuses
+network hashrate readings for 30 seconds and staggers telemetry refreshes to
+reduce request bursts from rigs sharing an internet connection. It respects
+the pool's retry delay for both rate limits and temporary overload, and avoids
+requesting full miner details when a balance request fails temporarily.
+
+Recommended for pool miners, especially operators running several rigs behind
+one public IP. Mining and share submission are unchanged.
+
+## v0.2.16
+
+**Mine with your Blocknet ID shortname.** Use `--address '@name'` or
+`--address '$name'` in pool or solo mode, or enter a shortname during first-run
+setup. The control API accepts shortnames too. Seine verifies the signed
+mapping, shows the full payout address, and keeps it fixed for the mining run,
+including reconnects. Quote shortnames in shell commands so `$` is passed
+literally. Full wallet addresses continue to work without a lookup.
+
 **Multi-GPU rigs now mine on every GPU out of the box.** Seine detects all
 NVIDIA GPUs at startup and runs one backend instance per device — no more
 `--nvidia-devices 0,1,...` needed (that flag still works to pin or subset

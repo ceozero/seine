@@ -57,18 +57,18 @@ Running `./seine` with no flags is the default path.
 Default mode is **pool**.
 
 First startup behavior:
-- prompts for your Blocknet address
+- prompts for your Blocknet address or Blocknet ID shortname (`@name` or `$name`)
 - prompts for pool URL (defaults to `stratum+tcp://bntpool.com:3333`)
 - mining backends (CPU + NVIDIA when available)
 - CPU thread count from available cores and RAM
 
 #### First-run pool setup (visual)
 
-1. Enter your Blocknet payout address when prompted.
+1. Enter your Blocknet payout address or registered shortname (`@name` or `$name`) when prompted.
 
 ![Enter address prompt](enter-address.png)
 
-2. Confirm the address prompt is filled before continuing.
+2. Confirm your address or shortname is filled before continuing. Shortnames require Seine v0.2.16 or newer.
 
 ![Address entered](address-entered.png)
 
@@ -234,6 +234,8 @@ All miner flags are documented in [`docs/MINER_FLAGS.md`](docs/MINER_FLAGS.md).
 
 # Pool mode controls
 ./seine --address PpkFxY...
+./seine --address '@yourname'
+./seine --address '$yourname'
 ./seine --pool-url stratum+tcp://pool.example.com:3333
 ./seine --pool-worker rig-01
 
@@ -246,6 +248,8 @@ All miner flags are documented in [`docs/MINER_FLAGS.md`](docs/MINER_FLAGS.md).
 # Plain log output instead of TUI
 ./seine --ui plain
 ```
+
+`--address`, the first-run prompt, saved config, and the control API's `mining_address` accept Blocknet ID shortnames (`@name` or `$name`) in both pool and daemon mode. Quote `$name` in shells that expand variables. Seine verifies the signed mapping from `https://blocknet.id` and validates the address before starting mining. The resolved address is logged and stays fixed for that run, including reconnects; saved shortnames are resolved again on the next run. Unknown names, resolver failures, invalid signatures, and invalid addresses stop startup. Full addresses work without contacting the resolver.
 
 Note: in daemon mode, when `--address` matches the daemon wallet address, Seine keeps wallet pending/unlocked stats in the TUI. If it differs, TUI balance fields show `---` for the override address.
 

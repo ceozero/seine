@@ -9,7 +9,7 @@ use blocknet_pow_spec::CPU_LANE_MEMORY_BYTES;
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, ValueEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::address::validate_mining_address;
+use crate::shortname::validate_destination;
 use crate::user_config::{
     read_user_config, write_user_config, UserConfig, USER_CONFIG_SCHEMA_VERSION,
 };
@@ -336,7 +336,7 @@ struct Cli {
     #[arg(long)]
     wallet_password_file: Option<PathBuf>,
 
-    /// Optional payout address override for mining rewards.
+    /// Optional payout address or Blocknet ID shortname (@name or $name).
     /// When set, block templates are requested with this address instead of daemon wallet default.
     #[arg(long = "address")]
     mining_address: Option<String>,
@@ -862,7 +862,7 @@ impl Config {
             if mining_address.trim().is_empty() {
                 bail!("--address is empty");
             }
-            validate_mining_address(mining_address)
+            validate_destination(mining_address)
                 .map_err(|err| anyhow::anyhow!("invalid --address: {err}"))?;
         }
         if let Some(pool_url) = cli.pool_url.as_ref() {
@@ -2267,8 +2267,10 @@ fn resolve_first_run_pool_inputs(cli: &mut Cli, user_config_path: &Path) -> Resu
                 user_config_path.display()
             );
         }
-        let address =
-            prompt_required_value("Enter your Blocknet address (used for pool login): ", None)?;
+        let address = prompt_required_value(
+            "Enter your Blocknet address or shortname (@name / $name): ",
+            None,
+        )?;
         cli.mining_address = Some(address);
     }
 
@@ -2339,8 +2341,7 @@ fn validate_cli_mining_address(cli: &Cli, label: &str) -> Result<()> {
         if address.trim().is_empty() {
             bail!("{label} is empty");
         }
-        validate_mining_address(address)
-            .map_err(|err| anyhow::anyhow!("invalid {label}: {err}"))?;
+        validate_destination(address).map_err(|err| anyhow::anyhow!("invalid {label}: {err}"))?;
     }
     Ok(())
 }
@@ -2982,6 +2983,27 @@ mod tests {
             .as_nanos();
         dir.push(format!("seine-test-{}-{}", std::process::id(), now));
         dir
+    }
+
+    #[test]
+    fn shortnames_are_accepted_and_preserved_in_bootstrap_config() {
+        for destination in ["@Alice", "$alice"] {
+            let mut cli = sample_cli();
+            cli.mode = Some(MiningMode::Pool);
+            cli.mining_address = Some(destination.into());
+            validate_cli_mining_address(&cli, "--address").unwrap();
+            let dir = unique_temp_dir();
+            let path = dir.join("config.json");
+            persist_bootstrap_user_config(&cli, &path, "dev-worker").unwrap();
+            assert_eq!(
+                read_user_config(&path).unwrap().unwrap().address.as_deref(),
+                Some(destination)
+            );
+            fs::remove_dir_all(dir).unwrap();
+        }
+        let mut cli = sample_cli();
+        cli.mining_address = Some("@invalid/name".into());
+        assert!(validate_cli_mining_address(&cli, "--address").is_err());
     }
 
     fn sample_cli() -> Cli {
