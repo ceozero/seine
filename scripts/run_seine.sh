@@ -151,7 +151,7 @@ worker_name="$(hostname)"
 printf -v tmux_command 'exec %q --pool-url %q --pool-worker %q --address %q --cpu-page-mode large-1g --threads %q' \
     "${INSTALL_DIR}/seine" "$POOL_URL" "$worker_name" "$WALLET_ADDRESS" "$threads"
 tmux new-session -d -s "$TMUX_SESSION" "$tmux_command"
-
+echo "tmux new-session -d -s "$TMUX_SESSION" "$tmux_command""
 echo "已启动 Seine：架构=${release_arch}，threads=${threads}，1 GiB HugeTLB=${actual_pages} 页。"
 echo "将在 5 秒后进入 tmux 会话；按 Ctrl+C 可取消自动进入。手动查看运行窗口：tmux attach -t ${TMUX_SESSION}"
 sleep 5
