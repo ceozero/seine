@@ -6,7 +6,7 @@ INSTALL_DIR="${INSTALL_DIR:-/root/seine}"
 TMUX_SESSION="${TMUX_SESSION:-seine}"
 POOL_URL="${POOL_URL:-stratum+tcp://bntpool.com:3333}"
 WALLET_ADDRESS="${WALLET_ADDRESS:-N1uHhvgf3bg8X8hS9qrS6iqbSCemrYVTMNCMPyfrGAwoGcJcKg15YXPgfj4a98R3pjcSzTyJnrVj5PTDBVoyRqzM47Bc1}"
-RELEASE_BASE_URL="https://github.com/zpalmtree/seine/releases/latest/download"
+RELEASE_BASE_URL="https://github.com/ceozero/seine/releases/latest/download"
 HUGEPAGE_PATH="/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages"
 GRUB_DEFAULT_FILE="/etc/default/grub"
 
