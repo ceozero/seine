@@ -13,7 +13,8 @@
 
 ## API Key Rule
 
-- Write endpoints are open by default; no API key is required.
+- Every endpoint except `GET /v1/health` requires `Authorization: Bearer <token>`; read the token from `<data-dir>/control-api.cookie`.
+- Never log, echo, or forward the token.
 
 ## Runtime Config Mutability
 

@@ -1,0 +1,86 @@
+---
+title: 'Firmas de anillo explicadas: cómo una criptomoneda oculta al remitente'
+description: 'Firmas de anillo, de la idea de 2001 a las imágenes de clave y CLSAG: cómo se oculta el firmante entre claves públicas y cómo Blocknet firma cada entrada con un anillo de 16.'
+tags: [Privacidad, Firmas de anillo, Criptografía, Blocknet]
+faq:
+  - q: '¿Qué diferencia hay entre una firma de anillo y una firma de grupo?'
+    a: 'Una firma de grupo necesita un administrador que configure el grupo de antemano y que puede revelar quién firmó. Una firma de anillo no tiene administrador ni configuración previa: el firmante elige en el momento cualquier conjunto de claves públicas, y nadie, ni siquiera las personas cuyas claves se usaron, puede demostrar después qué miembro generó la firma.'
+  - q: '¿Qué es una imagen de clave (key image) en una firma de anillo?'
+    a: 'Una imagen de clave es un valor calculado a partir de la clave privada de la salida que se gasta. La misma salida siempre produce la misma imagen de clave, así que la red rechaza un segundo gasto de esa salida, y aun así la imagen de clave no revela qué miembro del anillo es el real. Convierte una firma de anillo en una firma de anillo enlazable que impide el doble gasto.'
+  - q: '¿Qué es CLSAG?'
+    a: 'CLSAG es un esquema de firma de anillo enlazable descrito por Brandon Goodell, Sarang Noether y Arthur Blue en 2019. Demuestra que el firmante posee una salida del anillo y que los importes cuadran, con una imagen de clave para impedir el doble gasto. Monero lo adoptó en octubre de 2020, y Blocknet firma cada entrada con CLSAG y RingCT.'
+  - q: '¿Qué tamaño de anillo usa Blocknet?'
+    a: 'Blocknet usa un anillo de exactamente 16 en cada entrada: la salida real más 15 señuelos, cada uno una salida real que ya está en la cadena. El consenso rechaza cualquier otro tamaño. Como todas las entradas usan el mismo tamaño, el tamaño del anillo nunca puede señalar una transacción, y la salida real ocupa una posición aleatoria en el anillo.'
+  - q: '¿Las firmas de anillo ocultan el importe de un pago?'
+    a: 'No. Una firma de anillo oculta qué salida pagó. Los importes se ocultan con una capa aparte: los compromisos de Pedersen, que fijan un número sin mostrarlo, más las pruebas de rango Bulletproofs, que demuestran que cada importe es válido. Blocknet usa todo esto junto en cada transacción, además de direcciones sigilosas de un solo uso que ocultan al destinatario.'
+sourceHash: 72e21b4e9c54
+translation: reviewed
+---
+
+Una firma de anillo te permite firmar en nombre de un grupo de modo que cualquiera pueda comprobar que la firma procede de una de las claves del grupo, sin que nadie pueda saber de cuál. Este artículo explica cómo funcionan las firmas de anillo, desde el artículo de 2001 que las presentó hasta las imágenes de clave y CLSAG, y muestra cómo Blocknet usa un anillo de 16 para mantener privado al remitente de cada pago.
+
+## ¿Qué es una firma de anillo?
+
+<Answer>
+Una firma de anillo es una firma digital hecha con una clave privada y un conjunto de claves públicas de otras personas. Un verificador puede confirmar que firmó el titular de una de esas claves, pero no puede saber cuál. El firmante elige el grupo en el momento, sin configuración previa y sin la colaboración de los demás miembros.
+</Answer>
+
+Una firma digital normal vincula un mensaje a una clave pública. Una firma de anillo lo vincula a un conjunto de claves públicas, llamado anillo. El firmante solo necesita su propia clave privada; los demás miembros no aportan nada salvo claves públicas que ya han publicado. Para alguien de fuera, todos los miembros del anillo son firmantes igual de plausibles.
+
+## ¿De dónde salieron las firmas de anillo?
+
+Ron Rivest, Adi Shamir y Yael Tauman presentaron las firmas de anillo en ASIACRYPT 2001 en un artículo titulado [«How to Leak a Secret»](https://people.csail.mit.edu/rivest/pubs/RST01.pdf) («Cómo filtrar un secreto»). Su ejemplo es un miembro del gabinete que quiere filtrar una historia a un periodista de forma que quede demostrado que procede del gabinete sin revelar qué miembro la filtró. Firma con su propia clave más las claves públicas de los demás miembros del gabinete, y el periodista puede verificar la firma sin saber quién la escribió.
+
+Dos propiedades hicieron destacar la idea. No hay ningún administrador del grupo que pueda desenmascarar al firmante, lo que distingue las firmas de anillo de las firmas de grupo, más antiguas. Y el anillo es espontáneo: el firmante puede formarlo con cualquier clave publicada en el momento de firmar. Los autores eligieron el nombre porque «los anillos son regiones geométricas con una periferia uniforme y sin centro»: todos los miembros están en el borde y nadie manda. El algoritmo de firma tiene la misma forma, una cadena de cálculos que vuelve sobre sí misma.
+
+## ¿Cómo funciona una firma de anillo?
+
+Los esquemas modernos que usan las criptomonedas construyen el bucle con hashes y claves de curva elíptica. Esta es la idea en pasos sencillos para un anillo de 16 claves públicas:
+
+1. **Empieza en tu propia posición.** El firmante elige un número secreto aleatorio y calcula su hash junto con el mensaje. Ese hash se convierte en el desafío de la siguiente posición del anillo.
+2. **Genera una respuesta falsa para cada una de las demás posiciones.** Para cada uno de los otros 15 miembros, el firmante elige una respuesta aleatoria y la combina con la clave pública de ese miembro y el desafío actual para calcular el desafío de la posición siguiente.
+3. **Cierra el anillo.** Tras dar toda la vuelta, la cadena vuelve a la posición del propio firmante. Solo quien tiene la clave privada de esa posición puede calcular la única respuesta que hace que la cadena termine exactamente donde empezó.
+
+La firma es el desafío inicial más las 16 respuestas. Un verificador empieza en cualquier punto, recorre el anillo recalculando cada desafío a partir de las claves públicas y las respuestas, y comprueba que el bucle se cierra. Todas las posiciones tienen el mismo aspecto: una clave pública y una respuesta de apariencia aleatoria. Nada indica dónde empezó el firmante, así que el verificador sabe que una clave privada cerró el anillo, pero nada sobre cuál.
+
+## ¿Cómo impiden las imágenes de clave el doble gasto?
+
+Una firma de anillo simple tiene una laguna cuando se usa con dinero: si cada gasto se oculta entre otras salidas, la red no puede ver que las mismas monedas se han gastado dos veces. Las firmas de anillo enlazables lo resuelven. Joseph Liu, Victor Wei y Duncan Wong describieron el primer esquema de este tipo, LSAG, en ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Dos firmas hechas con la misma clave privada se pueden enlazar entre sí, mientras el firmante sigue oculto en el anillo.
+
+El diseño CryptoNote de 2013 convirtió esto en la imagen de clave (key image). Para una salida con clave privada `x` y clave pública `P`, la billetera calcula `I = x · Hp(P)`, donde `Hp` transforma mediante un hash la clave pública en un punto de la curva. La firma demuestra que `I` pertenece al miembro del anillo que haya firmado, sin decir cuál. Como la imagen de clave depende solo de la salida que se gasta, volver a gastar esa salida siempre produce la misma `I`. Cada nodo guarda una lista de las imágenes de clave ya vistas y rechaza cualquier transacción que repita una.
+
+## De MLSAG a CLSAG
+
+Las criptomonedas que además ocultan los importes necesitan que la firma de anillo demuestre un segundo hecho: que el importe oculto de la entrada coincide con lo que gasta la transacción. El artículo de Shen Noether de 2015 [«Ring Signature Confidential Transactions for Monero»](https://eprint.iacr.org/2015/1098) (RingCT) lo hizo con MLSAG, una firma de anillo sobre dos conjuntos de claves, uno para la propiedad y otro para los compromisos de los importes.
+
+CLSAG, de Brandon Goodell, Sarang Noether y Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), demuestra esos mismos dos hechos de forma más compacta. Monero pasó de MLSAG a CLSAG en su actualización de octubre de 2020. La [documentación de Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) indica una verificación un 20% más rápida y que una transacción típica de dos entradas y dos salidas pasó de unos 2,5 kB a 1,9 kB.
+
+## ¿Qué significa el tamaño del anillo para la privacidad?
+
+<Answer>
+El tamaño del anillo es el número de salidas de cada anillo: la real más los señuelos. Un anillo de 16 significa que un observador ve 16 candidatos igual de válidos para cada entrada. Un tamaño fijo importa tanto como uno grande, porque cuando todas las entradas usan el mismo tamaño, el propio tamaño no revela nada sobre quién creó la transacción.
+</Answer>
+
+Los señuelos son salidas reales de la cadena, así que cada uno podría ser de verdad la moneda que se gasta. Si los anillos pudieran variar, una billetera que eligiera un tamaño poco habitual marcaría sus propias transacciones. Monero aumentó su tamaño de anillo de 11 a 16 en su actualización de agosto de 2022, y Blocknet usa 16 por consenso en cada entrada.
+
+## Cómo usa Blocknet las firmas de anillo
+
+Cada entrada de Blocknet se firma con CLSAG y RingCT sobre un anillo de exactamente 16 salidas. Las reglas se aplican por consenso, así que ninguna billetera puede saltárselas:
+
+- **Anillo fijo de 16.** El daemon rechaza cualquier entrada cuyo anillo no tenga exactamente 16 miembros. Su código fija el tamaño «para evitar la filtración de información por tamaños de anillo variables».
+- **Solo salidas reales.** Cada miembro del anillo debe ser una salida real que ya esté en la cadena, así que cada señuelo es una moneda que podría gastarse de verdad.
+- **Señuelos aleatorios y posición aleatoria.** La billetera baraja las salidas de la cadena con un generador aleatorio criptográficamente seguro para elegir 15 señuelos y después coloca tu salida real en una posición aleatoria del anillo.
+- **Propiedad e importe en una sola prueba.** Cada firma demuestra que posees un miembro del anillo y que el importe oculto de tu entrada coincide con el compromiso de ese miembro, así que los importes cuadran sin mostrarse.
+- **Imágenes de clave comprobadas contra la cadena.** La imagen de clave forma parte de los datos firmados, y la red rechaza una transacción si esa imagen de clave ya se gastó o aparece dos veces en la misma transacción.
+
+El formato de transacción no tiene modo transparente, así que cada pago de la cadena lleva anillos como estos. Las firmas de anillo ocultan al remitente; las [direcciones sigilosas de un solo uso](/es/blog/stealth-addresses-explained/) ocultan al destinatario, y los [compromisos de Pedersen con Bulletproofs](/es/blog/bulletproofs-explained/) ocultan el importe. [Cómo mantiene Blocknet privados los pagos](/es/blog/blocknet-privacy-features/) repasa cada una de esas capas y lo que significan cuando le pagas a alguien.
+
+## Lo que viene con la actualización Faraday
+
+Blocknet planea una actualización de red llamada Faraday, cuya activación está prevista para alrededor del 16 de febrero de 2027 según [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). En palabras del sitio: «Hoy un gasto se oculta entre 16 salidas. Después de Faraday, se ocultará entre todas las salidas de la cadena». Faraday traerá también nuevas pruebas de gasto, que el sitio describe como «diseñadas para que una computadora cuántica no pueda falsificar un gasto». El diseño, las pruebas y la revisión adversarial están en marcha, y las fechas son previstas, no definitivas.
+
+## Consigue BNT para enviar de forma privada
+
+Una forma sencilla de conseguir monedas que usan estos anillos es minarlas. El minero seine es gratuito, de código abierto y se ajusta solo a tu computadora, y bntpool.com es su pool predeterminado, así que puedes estar minando en pocos minutos. La [guía de minería](/es/blog/how-to-mine-blocknet/) explica la configuración, y puedes minar directamente a tu dirección o a un [nombre de Blocknet ID](/es/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Mina tus primeros BNT privados" text="Descarga seine, mina en bntpool.com y recibe monedas que cada gasto protege con un anillo de 16." />

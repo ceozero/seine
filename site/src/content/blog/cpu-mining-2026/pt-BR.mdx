@@ -1,0 +1,112 @@
+---
+title: 'Mineração com CPU em 2026: o que minerar com uma CPU'
+description: Mineração com CPU em 2026 explicada. Veja por que moedas memory-hard como o Blocknet favorecem computadores comuns, o que deixa uma CPU rápida e como começar com o seine.
+tags: [Mineração com CPU, Argon2id, Guia de mineração, Hardware]
+faq:
+  - q: 'Quais moedas dá para minerar com uma CPU em 2026?'
+    a: 'Procure moedas cuja prova de trabalho foi projetada para processadores de uso geral. O Monero usa o RandomX, que seus autores descrevem como otimizado para CPUs de uso geral, e o Blocknet usa o Argon2id com 2 GiB de memória por hash. Os dois mantêm desktops, notebooks e servidores comuns no jogo, porque cada hash depende da memória, além da aritmética pura.'
+  - q: 'De quanta RAM você precisa para minerar Blocknet com CPU?'
+    a: 'Cada thread de mineração precisa de cerca de 2 GB de RAM, porque cada hash Argon2id preenche seu próprio bloco de 2 GiB de memória. Divida sua RAM por dois para saber o máximo de threads que cabem e deixe um pouco para o sistema. Em um computador com 32 GB, o seine roda cerca de 14 threads, e ele faz essa conta para você ao iniciar.'
+  - q: 'Por que os algoritmos memory-hard favorecem computadores comuns?'
+    a: 'Um hash memory-hard precisa de gigabytes de memória rápida a cada tentativa, então um chip feito só para calcular hashes ainda precisaria de muita RAM ao lado de cada núcleo. Desktops, notebooks e servidores já vêm com bastante RAM e controladores de memória rápidos, o que deixa o hardware que as pessoas já têm perto do que o algoritmo precisa.'
+  - q: 'Dá para minerar com a CPU e a placa de vídeo ao mesmo tempo?'
+    a: 'Sim, ao minerar Blocknet com o seine no Windows ou no Linux. O seine minera com o processador e todas as placas de vídeo NVIDIA que detecta ao mesmo tempo, e os hashrates se somam. Ele ajusta o processador enquanto minera e cada placa na primeira execução, então não há nada para configurar antes de começar.'
+sourceHash: 67d582c389a6
+translation: reviewed
+---
+
+Este guia explica a situação da mineração com CPU em 2026, por que moedas com prova de trabalho memory-hard mantêm os computadores comuns competitivos, o que observar ao escolher uma moeda para minerar com um processador e como começar a minerar Blocknet com o seine em poucos minutos.
+
+## Ainda dá para minerar cripto com CPU em 2026?
+
+<Answer>
+Sim, em moedas cuja prova de trabalho é projetada para processadores de uso geral. O Bitcoin é minerado com chips ASIC especializados e o Ethereum encerrou a mineração em 2022, mas algoritmos memory-hard como o RandomX do Monero e o Argon2id do Blocknet mantêm as CPUs produtivas, porque cada hash precisa de gigabytes de memória rápida, além de aritmética.
+</Answer>
+
+A mineração começou nas CPUs. O whitepaper do Bitcoin descreve a prova de trabalho como "essencialmente uma CPU, um voto". À medida que o Bitcoin cresceu, os mineradores passaram para as placas de vídeo, depois para FPGAs e depois para ASICs: chips que não fazem nada além de calcular o hash SHA-256 do Bitcoin. Hoje, ASICs específicos para Bitcoin são a principal forma de minerar Bitcoin.
+
+O Ethereum concluiu sua mudança de prova de trabalho para prova de participação no Merge, em 15 de setembro de 2022. Desde então, a mineração deixou de ser a forma como o Ethereum produz blocos. O guia de [prova de trabalho vs prova de participação](/pt-br/blog/proof-of-work-vs-proof-of-stake/) explica como os dois designs diferem.
+
+Então a mineração com CPU em 2026 se resume a uma decisão: escolher uma moeda cujo algoritmo foi feito para os processadores e a memória que os computadores comuns já têm.
+
+## Por que as moedas memory-hard favorecem computadores comuns?
+
+<Answer>
+Uma prova de trabalho memory-hard faz cada hash preencher e ler de volta um grande bloco de memória. Um chip feito só para calcular hashes ainda precisaria de gigabytes de RAM rápida ao lado de cada núcleo, enquanto desktops, notebooks e servidores já vêm com essa memória e com os controladores para alimentá-la.
+</Answer>
+
+O SHA-256 do Bitcoin quase não precisa de memória. Cada hash é uma rajada curta de aritmética, então um chip sob medida consegue colocar muitos pequenos circuitos de hashing lado a lado. Um processador de uso geral também carrega caches, previsão de desvios e decodificação de instruções que o SHA-256 nunca usa.
+
+Um algoritmo memory-hard muda o lugar onde o trabalho acontece. A prova de trabalho do Blocknet é o [Argon2id](/pt-br/blog/argon2id-proof-of-work-explained/) com 2 GiB de memória, uma passada e uma única faixa. Cada hash grava cerca de 2 GiB de memória e lê cerca de 2 GiB de volta. Na segunda metade da passada, cada novo bloco lê um bloco anterior escolhido por dados que o minerador não consegue prever com antecedência. O hash só termina quando todo o bloco de 2 GiB foi construído, então a velocidade depende da rapidez com que o sistema de memória movimenta os dados e de quantos blocos de 2 GiB cabem na RAM ao mesmo tempo.
+
+Essa é a parte em que os computadores comuns já são bons. O código do daemon do Blocknet declara a intenção diretamente: uma "PoW memory-hard para resistir a ASICs e garantir uma mineração justa", em que o tamanho de 2 GB torna o "hardware especializado impraticável". O Argon2id é projetado para resistir a ASICs, e a configuração de 2 GiB põe esse design a serviço dos computadores que as pessoas já têm.
+
+## O que minerar com uma CPU?
+
+Em vez de correr atrás de uma lista, avalie a moeda com algumas perguntas:
+
+- **O algoritmo foi projetado para CPUs?** O RandomX do Monero é "um algoritmo de prova de trabalho (PoW) otimizado para CPUs de uso geral", e o Monero o ativou em 30 de novembro de 2019. O Argon2id do Blocknet usa 2 GiB de memória por hash, o que torna a RAM e a largura de banda da memória os recursos decisivos.
+- **O lançamento foi justo?** No Blocknet, o bloco gênese não tem transações, e a recompensa de cada bloco é uma única saída paga ao minerador que o encontrou. Não há premine, tesouraria nem fundo de desenvolvedores no consenso, então toda moeda em circulação foi minerada.
+- **Existe um minerador que conhece seu processador?** Um bom minerador traz caminhos de código separados para cada família de CPU e escolhe o mais rápido para a sua máquina.
+- **Existe um pool com pagamentos regulares?** A mineração em pool junta muitos mineradores pequenos para que as recompensas cheguem com regularidade, e não bloco a bloco. O guia [como funciona a mineração de criptomoedas](/pt-br/blog/how-crypto-mining-works/) explica os pools e os shares.
+
+O Blocknet atende às quatro. É uma moeda de privacidade com [privacidade por padrão](/pt-br/blog/blocknet-privacy-features/), blocos de cinco minutos e pagamento por nome, e foi lançado em fevereiro de 2026. Seu minerador, o seine, é gratuito e de código aberto, e seu pool padrão é o bntpool.com, que paga por PPLNS com uma janela de seis horas. A [visão geral do Blocknet](/pt-br/blog/what-is-blocknet/) fala da moeda em si.
+
+## O que deixa uma CPU rápida na mineração memory-hard?
+
+Três coisas decidem quantos hashes por segundo (H/s) um processador produz no Blocknet.
+
+**Capacidade de RAM.** Cada thread de mineração precisa do seu próprio bloco de 2 GiB para cada hash, então divida sua RAM por dois para saber o máximo de threads que cabem. Um computador com 32 GB comporta 16 blocos no papel. O seine mantém 5% da RAM em reserva e deixa espaço para o sistema operacional, o que leva essa máquina a cerca de 14 threads. A RAM costuma limitar o número de threads antes do número de núcleos. O guia de [mineração em um PC antigo ou notebook](/pt-br/blog/mine-crypto-on-old-pc-or-laptop/) analisa máquinas de 4-16 GB.
+
+**Largura de banda da memória.** Cada hash movimenta gigabytes pelo sistema de memória. A 49,4 H/s, a máquina mais rápida medida com o seine grava cerca de 99 GiB de blocos de memória novos por segundo (49,4 × 2 GiB). Processadores com mais canais de memória e memória mais rápida saem na frente.
+
+**O kernel certo.** O seine traz vários kernels Argon2id: AVX2, AVX-512 e um kernel de streaming no x86, e NEON com um caminho rápido SHA3 no Arm. No mesmo chip, o kernel faz uma grande diferença. No AWS Graviton4, o kernel SHA3 com prefetch minera 56% mais rápido que o NEON simples (de 13,80 para 21,50 H/s), e no AMD EPYC 9R45 o kernel de streaming minera 30% mais rápido que o AVX2 (de 34,47 para 44,74 H/s com 24 threads). O seine compara os kernels enquanto minera e fica com o mais rápido.
+
+Estes são os melhores resultados medidos com o seine em cada geração de hardware:
+
+| Hardware | Chip exato | Threads | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | Servidor EPYC 9R45 | 32 | 49,4 H/s |
+| Servidor Arm | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | Servidor EPYC 9R14 | 32 | 38,2 H/s |
+| Apple M4 Max | MacBook Pro de 48 GB | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+A linha do Apple M4 Max é um notebook, o que mostra como um sistema de memória forte combina bem com o Argon2id. As linhas de servidor rodaram em máquinas da AWS com huge pages de 2 MiB. O [guia de hardware para minerar Blocknet](/pt-br/blog/blocknet-mining-hardware-hashrate/) aprofunda as dicas de compra e o dimensionamento da RAM, e o [guia para Mac](/pt-br/blog/mine-blocknet-on-mac/) cobre o Apple Silicon.
+
+## Como começar a minerar Blocknet com CPU?
+
+O seine não precisa de configuração. Ele se dimensiona de acordo com a sua máquina e começa a calcular hashes na hora:
+
+1. **Crie um endereço.** Instale a carteira oficial do Blocknet e copie seu endereço, ou registre um [shortname do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/) e minere para `@name`. O [guia da carteira](/pt-br/blog/blocknet-wallet-for-mining/) mostra o passo a passo.
+2. **Baixe o seine** para Windows, macOS ou Linux na [seção de download](/pt-br/#download) e descompacte.
+3. **Execute-o** e cole seu endereço quando ele pedir:
+
+```sh
+./seine
+```
+
+4. **Aceite o pool padrão**, `stratum+tcp://bntpool.com:3333`, e você já está minerando.
+
+Enquanto minera, o seine compara números de threads e kernels de CPU em trabalho real de mineração, recua se a memória ficar apertada e lembra o que funcionou para a próxima inicialização. No Windows e no Linux, ele também minera ao mesmo tempo com qualquer placa de vídeo NVIDIA da máquina, e os hashrates se somam. O [guia de mineração passo a passo](/pt-br/blog/how-to-mine-blocknet/) cobre os pagamentos, e no Linux o [guia de huge pages](/pt-br/blog/huge-pages-blocknet-mining/) acrescenta cerca de 4-6% com páginas de 2 MiB e mais 2% com páginas de 1 GiB.
+
+## Quanto a sua CPU vai minerar?
+
+Meça seu hashrate primeiro. O benchmark offline do seine não precisa de pool nem de nó:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Depois faça a conta com os números atuais. O Blocknet busca um bloco a cada cinco minutos, o que dá 288 blocos por dia. A sua parte esperada é:
+
+- **Blocos por dia** = 288 × (seu H/s ÷ H/s da rede)
+- **BNT por dia** = blocos por dia × a recompensa do bloco atual
+
+O hashrate da rede e a recompensa do bloco mudam com o tempo, então consulte os valores atualizados no [bntpool.com](https://bntpool.com) antes de calcular. No pool, você recebe pagamentos PPLNS regulares quando seu saldo chega a 0,1 BNT, em vez de esperar encontrar um bloco inteiro sozinho. O valor desses BNT depende então do preço da moeda e do custo da sua energia elétrica.
+
+<Note>
+Tudo o que está acima descreve a prova de trabalho Argon2id atual do Blocknet. O Blocknet planeja uma atualização de rede chamada Faraday por volta de 16 de fevereiro de 2027, que trará "uma prova de trabalho mais leve", segundo o [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). O seine verifica se há novas versões ao iniciar e a cada 12 horas.
+</Note>
+
+<CTA target="seine" title="Comece a minerar com CPU usando o seine" text="O seine dimensiona as threads de acordo com a sua RAM e escolhe o kernel mais rápido para o seu processador enquanto minera no bntpool.com." />

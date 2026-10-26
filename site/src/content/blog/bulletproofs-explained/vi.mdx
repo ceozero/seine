@@ -1,0 +1,97 @@
+---
+title: 'Giải thích Bulletproofs: số tiền ẩn được xác minh như thế nào'
+description: Giải thích Bulletproofs bằng lời lẽ đơn giản. Tìm hiểu cách Pedersen commitment che giấu số tiền giao dịch và cách range proof cho phép mọi node kiểm tra phép tính.
+tags: [Bulletproofs, Quyền riêng tư, Mật mã học, Blocknet]
+faq:
+  - q: 'Bulletproofs có cần trusted setup không?'
+    a: 'Không. Bulletproofs chỉ dựa vào giả định logarit rời rạc, cũng là giả định đứng sau chữ ký đường cong elliptic, và dùng các tham số công khai mà bất kỳ ai cũng suy ra được. Không có nghi thức thiết lập nào và không có bí mật nào phải bị hủy sau đó, và các đồng coin riêng tư như Monero và Blocknet dùng Bulletproofs cho range proof của chúng.'
+  - q: 'Một range proof Bulletproofs lớn bao nhiêu?'
+    a: 'Một Bulletproof 64 bit chứa 2 × log2(64) + 9 = 21 phần tử. Trên nhóm Ristretto, mỗi phần tử chiếm 32 byte, nên mỗi bằng chứng dài 672 byte, và trình khám phá khối Blocknet hiển thị đúng con số đó cho mỗi output. Kích thước tăng theo logarit của phạm vi, nên tăng gấp đôi độ dài bit chỉ thêm hai phần tử.'
+  - q: 'Ai thấy được số tiền của một giao dịch Blocknet?'
+    a: 'Chỉ người gửi và người nhận. Chuỗi lưu một Pedersen commitment và một range proof cho mỗi output, cùng với số tiền được mã hóa bằng bí mật mà hai ví chia sẻ. Ví của người nhận giải mã nó bằng view key riêng. Phí mạng lưới là con số công khai duy nhất, để các node có thể đưa nó vào phép kiểm tra cân bằng.'
+  - q: 'Nếu số tiền bị ẩn, làm sao node biết không có coin nào được tạo ra?'
+    a: 'Mọi node kiểm tra hai điều cho mỗi giao dịch. Các Pedersen commitment phải cộng lại khớp nhau, nghĩa là đầu vào bằng output cộng phí, và mọi output phải mang một range proof hợp lệ cho thấy số tiền của nó nằm giữa 0 và 2^64. Kết hợp lại, hai điều này loại trừ lạm phát ẩn mà không tiết lộ bất kỳ số tiền nào.'
+sourceHash: e02793933862
+translation: draft
+---
+
+Bulletproofs là các range proof zero-knowledge ngắn gọn, cho phép một đồng tiền mã hóa che giấu mọi số tiền giao dịch trong khi mỗi node vẫn kiểm tra được rằng không có coin nào được tạo ra. Hướng dẫn này giải thích Pedersen commitment, vì sao số tiền ẩn cần range proof, cách Bulletproofs giữ cho các bằng chứng đó nhỏ gọn, và cách Blocknet dùng chúng trên mọi output.
+
+## Bulletproofs là gì?
+
+<Answer>
+Bulletproofs là các bằng chứng zero-knowledge ngắn gọn, được Bünz, Bootle, Boneh, Poelstra, Wuille và Maxwell công bố năm 2018. Trong tiền mã hóa, chúng chứng minh rằng một số tiền ẩn nằm trong một phạm vi hợp lệ, chẳng hạn từ 0 đến 2^64, mà không tiết lộ số tiền đó. Chúng không cần trusted setup, và kích thước chỉ tăng theo logarit của phạm vi.
+</Answer>
+
+Bài báo [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) được trình bày tại IEEE Symposium on Security and Privacy năm 2018. Các tác giả thiết kế Bulletproofs cho giao dịch bảo mật, trong đó số tiền trên blockchain được thay bằng commitment. Để hiểu vì sao cần đến một bằng chứng như vậy, hãy bắt đầu từ commitment.
+
+## Pedersen commitment là gì?
+
+Commitment là phiên bản mật mã của một phong bì dán kín. Bạn đặt một con số vào trong, cho mọi người xem phong bì, và sau đó có thể chứng minh bên trong là gì. Không ai đọc được con số từ phong bì, và bạn không thể tráo một con số khác vào sau đó.
+
+Pedersen commitment, được Torben Pedersen mô tả năm 1991, làm điều này bằng các điểm trên đường cong elliptic. Để tạo commitment cho số tiền `v`, ví chọn một bí mật ngẫu nhiên `r`, gọi là blinding factor (hệ số làm mù), và tính:
+
+```
+C = v·G + r·H
+```
+
+`G` và `H` là hai điểm công khai cố định trên đường cong, được chọn sao cho không ai biết cách viết điểm này thành bội số của điểm kia. Kết quả `C` là một điểm duy nhất dài 32 byte. Nó có hai đặc tính:
+
+- **Che giấu.** Vì `r` ngẫu nhiên, `C` trông như một điểm ngẫu nhiên. Cùng một số tiền được tạo commitment hai lần sẽ cho hai commitment không liên quan gì đến nhau, và riêng commitment không cho người quan sát biết gì về `v`.
+- **Ràng buộc.** Khi `C` đã được công bố, ví không thể mở nó ra thành một số tiền khác. Làm vậy đồng nghĩa với việc giải bài toán logarit rời rạc trên đường cong.
+
+## Làm sao node kiểm tra được một giao dịch mà nó không đọc được?
+
+<Answer>
+Pedersen commitment có thể cộng với nhau. Tổng của hai commitment là commitment cho tổng hai số tiền, với các blinding factor cũng được cộng lại. Một node cộng các commitment đầu vào của giao dịch và các commitment output cộng phí, rồi kiểm tra hai tổng có khớp nhau không, nhờ đó xác nhận sự cân bằng mà không thấy bất kỳ số tiền nào.
+</Answer>
+
+Cộng hai commitment cho `(v1 + v2)·G + (r1 + r2)·H`, bản thân nó là một commitment cho `v1 + v2`. Người gửi sắp xếp các blinding factor sao cho tổng blinding của đầu vào bằng tổng của output. Nếu số tiền cũng cân bằng, hiệu giữa tổng đầu vào và tổng output đúng bằng không, và bất kỳ node nào cũng có thể xác minh điều đó.
+
+Phí mạng lưới là con số công khai duy nhất trong một giao dịch. Các node biến nó thành một commitment với blinding factor bằng không và cộng vào phía output, nên phép kiểm tra trở thành: đầu vào = output + phí.
+
+## Vì sao số tiền ẩn cần range proof?
+
+Phép tính trên commitment được thực hiện theo modulo một số rất lớn, tức bậc của nhóm đường cong, vào khoảng 2^252. Trong phép tính đó, một số tiền “âm” chỉ là một số dương khổng lồ. Ai đó có thể chi tiêu một đầu vào trị giá 10 coin và tạo hai output, một trị giá 11 và một trị giá “âm 1”. Các commitment sẽ cân bằng hoàn hảo, và 1 coin sẽ xuất hiện từ hư không, ẩn khỏi mọi người quan sát.
+
+Range proof bịt kín lỗ hổng đó. Nó chứng minh rằng số tiền bên trong commitment nằm giữa 0 và 2^64 mà không nói đó là bao nhiêu. Khi mọi output đều bị giới hạn như vậy, một vài output không bao giờ có thể cộng lại thành một số đủ lớn để vòng qua bậc của nhóm, nên commitment cân bằng nghĩa là số tiền cân bằng.
+
+Các thiết kế giao dịch bảo mật trước đây dùng range proof tăng tuyến tính theo số bit. Bulletproofs chỉ tăng theo logarit, giúp đưa một bằng chứng 64 bit xuống còn vài trăm byte.
+
+## Bulletproofs hoạt động như thế nào?
+
+Một Bulletproof chứng minh phạm vi qua ba bước.
+
+1. **Tách số tiền thành các bit.** Một số tiền 64 bit trở thành một vector gồm 64 bit. Bên chứng minh tạo commitment cho vector đó và chỉ ra hai sự thật về nó: mỗi phần tử là 0 hoặc 1, và các bit, khi nhân với lũy thừa của hai, cộng lại bằng số tiền đã cam kết.
+2. **Biến các sự thật đó thành một tích vô hướng.** Dùng các thử thách ngẫu nhiên, bên chứng minh gộp tất cả các điều kiện đó thành một khẳng định duy nhất về tích vô hướng của hai vector. Vì các thử thách là ngẫu nhiên, một khẳng định sai chỉ vượt qua với xác suất không đáng kể.
+3. **Chứng minh tích vô hướng bằng cách chia đôi.** Mỗi vòng, bên chứng minh gửi hai điểm trên đường cong, `L` và `R`, và cả hai vector được gập lại còn một nửa độ dài. Sau log2(64) = 6 vòng, chỉ còn lại một cặp số.
+
+Việc chia đôi đó chính là nguồn gốc của kích thước nhỏ. Phần tóm tắt của bài báo cho biết một range proof gồm `2·log2(n) + 9` phần tử nhóm và trường cho phạm vi `n` bit. Với 64 bit, đó là 12 điểm từ sáu vòng cộng thêm 9, tổng cộng 21 phần tử, tức 672 byte khi mỗi phần tử dài 32 byte.
+
+Bằng chứng này không cần tương tác. Thay vì một bên xác minh trực tiếp gửi thử thách, cả hai bên suy ra chúng bằng cách băm bản ghi của bằng chứng, một kỹ thuật tiêu chuẩn gọi là heuristic Fiat-Shamir. Bulletproofs cũng không cần trusted setup: các phần tử sinh là công khai và được suy ra công khai, và tính bảo mật chỉ dựa vào giả định logarit rời rạc. Nhiều bằng chứng có thể được gộp lại, chỉ thêm một số lượng phần tử theo logarit, và việc xác minh có thể thực hiện theo lô.
+
+## Ai dùng Bulletproofs?
+
+Monero bật Bulletproofs trong bản nâng cấp mạng lưới ngày 18 tháng 10 năm 2018 (bản phát hành v0.13.0) để giảm kích thước giao dịch. [Thư viện bulletproofs viết bằng Rust](https://github.com/dalek-cryptography/bulletproofs) của dự án dalek-cryptography triển khai chúng trên nhóm Ristretto của Curve25519, và thư viện mật mã của Blocknet được xây dựng trên thư viện này.
+
+## Blocknet che giấu mọi số tiền như thế nào?
+
+Trên Blocknet, mọi output của mọi giao dịch chứa một Pedersen commitment thay cho số tiền, và mọi output mang một Bulletproof 64 bit riêng. Quyền riêng tư là một phần của định dạng giao dịch, không có chế độ minh bạch, nên không có cách nào gửi một khoản thanh toán với số tiền hiển thị công khai.
+
+Đây là những gì một node kiểm tra trước khi chấp nhận giao dịch:
+
+- **Từng range proof.** Bulletproof của mọi output phải xác minh được với commitment của nó, chứng minh số tiền nằm giữa 0 và 2^64. Các bằng chứng dùng bản ghi được gắn nhãn "Blocknet Range Proof", gắn mỗi bằng chứng với Blocknet.
+- **Sự cân bằng.** Mỗi đầu vào mang một commitment pseudo-output, và chữ ký vòng chứng minh nó cam kết cùng số tiền với coin thật đang được chi tiêu mà không tiết lộ đó là thành viên vòng nào. Sau đó node kiểm tra rằng các pseudo-output cộng lại bằng output cộng phí.
+- **Coin mới.** Phần thưởng của một khối theo một lịch trình công khai, nên với output được đào, node dựng lại commitment mà nó dự kiến cho độ cao khối đó và kiểm tra xem có khớp không.
+
+Bạn có thể thấy điều này trên [trình khám phá khối Blocknet](https://explorer.blocknetcrypto.com). Trang giao dịch liệt kê số tiền là "hidden · Pedersen commitments", và mỗi output hiển thị commitment, một memo được mã hóa và một range proof "672 bytes · Bulletproof", đúng kích thước mà phép tính ở trên dự đoán.
+
+Người nhận vẫn thấy con số thật. Mỗi output mang số tiền được mã hóa bằng bí mật mà ví của người gửi và người nhận chia sẻ, và ví của người nhận giải mã nó bằng view key riêng. Số tiền chỉ hai người trong khoản thanh toán thấy được, ngoài ra không ai khác.
+
+Số tiền ẩn hoạt động cùng các lớp khác của Blocknet: [chữ ký vòng](/vi/blog/ring-signatures-explained/) trên 16 output che giấu người gửi, [địa chỉ ẩn dùng một lần](/vi/blog/stealth-addresses-explained/) che giấu người nhận, và [Dandelion++](/vi/blog/dandelion-plus-plus-explained/) che giấu nơi giao dịch đi vào mạng lưới. [Hướng dẫn về các tính năng riêng tư của Blocknet](/vi/blog/blocknet-privacy-features/) trình bày lần lượt từng lớp.
+
+## Tự sở hữu BNT riêng tư
+
+Một cách đơn giản để có coin với số tiền ẩn là tự đào. Blocknet dùng [Proof of Work Argon2id](/vi/blog/argon2id-proof-of-work-explained/) memory-hard mà bạn có thể đào trên một máy tính thông thường, và seine đào nó trên CPU của bạn, cùng với mọi GPU NVIDIA đi kèm, và tự tinh chỉnh mà không cần thiết lập. Mọi khoản thanh toán bntpool.com gửi cho bạn đều đến dưới dạng một output riêng tư với commitment và Bulletproof. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) đưa bạn từ lúc tải về đến những share được chấp nhận chỉ trong vài phút.
+
+<CTA target="seine" title="Đào BNT riêng tư với seine" text="Tải seine, dán địa chỉ hoặc @name của bạn, và bắt đầu kiếm Blocknet với mọi số tiền được che giấu trên chuỗi." />

@@ -1,3 +1,5 @@
+mod adaptive_cpu;
+mod adaptive_kernel;
 mod auth;
 mod backend_control;
 mod backend_executor;
@@ -11,10 +13,12 @@ mod round_control;
 mod round_driver;
 mod runtime;
 mod scheduler;
+pub(crate) mod session;
 mod solution_cache;
 mod stats;
 mod submit;
 mod template_prefetch;
+pub(crate) mod thread_control;
 mod tip;
 mod tui;
 pub(crate) mod ui;
@@ -40,8 +44,8 @@ use crate::backend::metal::MetalBackend;
 use crate::backend::nvidia::{NvidiaBackend, NvidiaBackendTuningOptions};
 use crate::backend::{
     normalize_backend_capabilities, BackendCapabilities, BackendEvent, BackendExecutionModel,
-    BackendInstanceId, BackendTelemetry, BenchBackend, DeadlineSupport, DynamicShareTarget,
-    MiningSolution, PowBackend, PreemptionGranularity, WORK_ID_MAX,
+    BackendInstanceId, BackendTelemetry, DeadlineSupport, DynamicShareTarget, MiningSolution,
+    PowBackend, PreemptionGranularity, WORK_ID_MAX,
 };
 #[cfg(any(target_os = "linux", test))]
 use crate::config::CpuPageMode;
@@ -57,7 +61,7 @@ use ui::{info, warn};
 const TEMPLATE_RETRY_DELAY: Duration = Duration::from_secs(2);
 const MIN_EVENT_WAIT: Duration = Duration::from_millis(1);
 const BACKEND_EVENT_SOURCE_CAPACITY_MAX: usize = 256;
-const CPU_AUTOTUNE_RECORD_SCHEMA_VERSION: u32 = 7;
+const CPU_AUTOTUNE_RECORD_SCHEMA_VERSION: u32 = 11;
 const CPU_AUTOTUNE_RECORD_MAX_AGE_SECS: u64 = 14 * 24 * 60 * 60;
 const CPU_AUTOTUNE_LINEAR_SCAN_MAX_CANDIDATES: usize = 8;
 const CPU_AUTOTUNE_FINAL_SWEEP_RADIUS: usize = 2;
@@ -66,7 +70,9 @@ const CPU_AUTOTUNE_MAX_SAMPLE_SECS_PER_CANDIDATE: u64 = 30;
 const CPU_AUTOTUNE_RAMP_EARLY_STOP_MIN_SAMPLES: usize = 5;
 const CPU_AUTOTUNE_RAMP_EARLY_STOP_STREAK: usize = 2;
 const CPU_AUTOTUNE_RAMP_EARLY_STOP_FLOOR_FRAC: f64 = 0.985;
-const CPU_AUTOTUNE_BALANCED_PEAK_FLOOR_FRAC: f64 = 0.99;
+// Default mining targets the measured peak. Only the explicit efficiency
+// profile may trade measured hashrate for fewer workers.
+const CPU_AUTOTUNE_BALANCED_PEAK_FLOOR_FRAC: f64 = 1.0;
 const CPU_AUTOTUNE_EFFICIENCY_PEAK_FLOOR_FRAC: f64 = 0.75;
 const CPU_AUTOTUNE_FINAL_CONFIRM_CLOSE_FRAC: f64 = 0.97;
 const CPU_AUTOTUNE_FINAL_CONFIRM_MIN_SECS: u64 = 6;
@@ -174,6 +180,7 @@ struct CpuAutotuneHostFingerprint {
     kernel_version: Option<String>,
     runtime_environment: String,
     build_fingerprint: String,
+    affinity_topology: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,11 +198,18 @@ struct CpuAutotuneRecord {
     #[serde(default)]
     host_fingerprint: CpuAutotuneHostFingerprint,
     timestamp_unix_secs: u64,
+    #[serde(default)]
+    measurements: BTreeMap<usize, CpuAutotuneMeasurement>,
+    #[serde(default)]
+    memory_limited: bool,
+    #[serde(default)]
+    mining_measurement: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct CpuAutotuneMeasurement {
     hashes: u64,
+    elapsed_secs: f64,
     wall_secs: f64,
     hps: f64,
 }
@@ -232,6 +246,50 @@ fn resolve_mining_config(
 }
 
 pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
+    run_with_thread_control(
+        cfg,
+        shutdown,
+        None,
+        Arc::new(session::SessionHistory::new()),
+    )
+}
+
+pub(crate) fn run_with_thread_control(
+    cfg: &Config,
+    shutdown: Arc<AtomicBool>,
+    thread_control: Option<thread_control::ThreadControl>,
+    history: Arc<session::SessionHistory>,
+) -> Result<()> {
+    if cfg.bench {
+        return bench::run_benchmark(cfg, shutdown.as_ref());
+    }
+    // Install before address resolution, backend initialization and autotuning so
+    // failures before productive work are observable too. No network I/O here.
+    let telemetry = cfg
+        .hardware_telemetry
+        .as_ref()
+        .and_then(|options| crate::hardware_telemetry::start(options, cfg).ok());
+    let recorder = telemetry.as_ref().map(|(recorder, _)| recorder.clone());
+    let result = run_with_thread_control_inner(cfg, shutdown, thread_control, history, recorder);
+    if let Err(error) = &result {
+        crate::diagnostics::record(
+            seine_telemetry::DiagnosticCode::RunFailed,
+            crate::diagnostics::classify(&format!("{error:#}")),
+            None,
+        );
+    }
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::ShuttingDown);
+    drop(telemetry);
+    result
+}
+
+fn run_with_thread_control_inner(
+    cfg: &Config,
+    shutdown: Arc<AtomicBool>,
+    thread_control: Option<thread_control::ThreadControl>,
+    history: Arc<session::SessionHistory>,
+    telemetry: Option<crate::hardware_telemetry::Recorder>,
+) -> Result<()> {
     if cfg!(debug_assertions) {
         warn(
             "MINER",
@@ -245,9 +303,23 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
 
     // Pin the destination for this run, including pool reconnects and daemon
     // template requests. Keep the user's saved shortname for the next run.
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::ResolvingAddress);
     let resolved_cfg = resolve_mining_config(cfg, &crate::shortname::ShortnameResolver::default())?;
     let cfg = &resolved_cfg;
 
+    if cfg.cpu_manual_memory_check && !cfg.cpu_autotune_threads {
+        let requested = cfg
+            .backend_specs
+            .iter()
+            .filter(|spec| spec.kind == BackendKind::Cpu)
+            .map(|spec| spec.cpu_threads.unwrap_or(cfg.threads))
+            .max()
+            .unwrap_or(0);
+        let (_, available) = crate::config::cpu_autotune_capacity(cfg, 0);
+        thread_control::validate_headroom(requested, available)?;
+    }
+
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::InitializingBackends);
     // Phase 1: Build NVIDIA backends and start compilation in background threads.
     // NvidiaBackend::new() only depends on NVIDIA-specific config, not CPU autotune.
     let per_backend_event_capacity = cfg
@@ -441,13 +513,18 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     drop(deferred_tx);
 
     // Phase 2: CPU autotune (runs in parallel with NVIDIA compilation).
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::Tuning);
     let runtime_cfg = prepare_runtime_config(cfg, shutdown.as_ref(), RuntimeMode::Mining)?;
     if shutdown.load(Ordering::SeqCst) {
         return Ok(());
     }
     let cfg = &runtime_cfg;
 
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::InitializingBackends);
     let backend_executor = backend_executor::BackendExecutor::new();
+    if let Some(recorder) = telemetry {
+        backend_executor.set_hardware_telemetry(recorder);
+    }
     let daemon_client = if let Some(token) = cfg.token.clone() {
         Some(ApiClient::new(
             cfg.api_url.clone(),
@@ -465,6 +542,8 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
 
     // Phase 3: Build and activate non-NVIDIA backends synchronously.
     // CPU/Metal start is fast. Non-NVIDIA get IDs 1..M, NVIDIA get IDs M+1..M+N.
+    let mut cpu_memory_backends = Vec::new();
+    let mut adaptive_backends = Vec::new();
     let non_nvidia_instances: Vec<(BackendSpec, Arc<dyn PowBackend>)> = cfg
         .backend_specs
         .iter()
@@ -472,17 +551,34 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         .filter(|spec| spec.kind != BackendKind::Nvidia)
         .map(|backend_spec| {
             let backend = match backend_spec.kind {
-                BackendKind::Cpu => Arc::new(CpuBackend::with_tuning(
-                    backend_spec.cpu_threads.unwrap_or(cfg.threads),
-                    backend_spec.cpu_affinity.unwrap_or(cfg.cpu_affinity),
-                    CpuBackendTuning {
+                BackendKind::Cpu => {
+                    let tuning = CpuBackendTuning {
                         hash_batch_size: cfg.cpu_hash_batch_size,
                         control_check_interval_hashes: cfg.cpu_control_check_interval_hashes,
                         hash_flush_interval: cfg.cpu_hash_flush_interval,
                         event_dispatch_capacity: cfg.cpu_event_dispatch_capacity,
                         page_mode: cfg.cpu_page_mode,
-                    },
-                )) as Arc<dyn PowBackend>,
+                        kernel: None,
+                    };
+                    let threads = backend_spec.cpu_threads.unwrap_or(cfg.threads);
+                    let affinity = backend_spec.cpu_affinity.unwrap_or(cfg.cpu_affinity);
+                    let backend = Arc::new(if cfg.cpu_autotune_threads {
+                        CpuBackend::adaptive(
+                            threads,
+                            cfg.cpu_autotune_worker_slots
+                                .expect("automatic slots prepared"),
+                            affinity,
+                            tuning,
+                        )
+                    } else {
+                        CpuBackend::with_tuning(threads, affinity, tuning)
+                    });
+                    cpu_memory_backends.push(Arc::clone(&backend));
+                    if cfg.cpu_autotune_threads {
+                        adaptive_backends.push(Arc::clone(&backend));
+                    }
+                    backend as Arc<dyn PowBackend>
+                }
                 BackendKind::Amd => Arc::new(AmdBackend::new(
                     backend_spec.device_index,
                     AmdBackendTuningOptions {
@@ -515,6 +611,15 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     // for at least one NVIDIA to finish (or we'd start with zero backends).
     if !has_non_nvidia && !has_nvidia_ready {
         if nvidia_index == 0 {
+            crate::diagnostics::record_failure(
+                seine_telemetry::DiagnosticCode::Error,
+                seine_telemetry::DiagnosticKind::General,
+                None,
+                seine_telemetry::FailureDetail::new(
+                    seine_telemetry::FailureReason::NoBackendAvailable,
+                    seine_telemetry::DiagnosticOperation::BackendStartup,
+                ),
+            );
             bail!("no mining backend could be started");
         }
         info(
@@ -556,12 +661,45 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         RuntimeMode::Mining,
         &backend_executor,
     )?;
-    let total_lanes = total_lanes(&backends);
+    let total_lanes: usize = backends.iter().map(|s| s.backend.enabled_lanes()).sum();
     let cpu_lanes = cpu_lane_count(&backends);
     let cpu_ram_gib =
         (cpu_lanes as f64 * CPU_LANE_MEMORY_BYTES as f64) / (1024.0 * 1024.0 * 1024.0);
     let tui_state = if should_enable_tui(cfg) {
         let state = build_tui_state(cfg, &backends);
+        history.attach_tui(&state);
+        if let Ok(mut s) = state.lock() {
+            if let Some(mut control) = thread_control {
+                let cpu_backends: Vec<_> = backends
+                    .iter()
+                    .filter(|slot| slot.backend.name() == "cpu")
+                    .collect();
+                if let Some(first) = cpu_backends.first() {
+                    control.current_threads = cpu_backends
+                        .iter()
+                        .map(|slot| slot.backend.enabled_lanes())
+                        .min()
+                        .unwrap_or(first.backend.enabled_lanes());
+                    // Preserve the ability to reduce an explicit above-auto count.
+                    control.max_threads = if cfg.cpu_autotune_threads {
+                        adaptive_cpu::manual_limit(cfg, &adaptive_backends)
+                    } else {
+                        cfg.cpu_auto_threads_cap.max(
+                            cpu_backends
+                                .iter()
+                                .map(|slot| slot.backend.enabled_lanes())
+                                .min()
+                                .unwrap_or(1),
+                        )
+                    };
+                    control.memory = Some(Arc::new(thread_control::ThreadMemoryGuard::new(
+                        cfg,
+                        cpu_memory_backends.clone(),
+                    )));
+                    s.thread_control = Some(control);
+                }
+            }
+        }
         if pending_nvidia_count > 0 {
             if let Ok(mut s) = state.lock() {
                 s.pending_nvidia = pending_nvidia_count;
@@ -809,6 +947,20 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         None
     };
 
+    let mut adaptive_controller =
+        match adaptive_cpu::Controller::start(cfg.clone(), adaptive_backends, tui_state.clone()) {
+            Ok(controller) => controller,
+            Err(err) => {
+                stop_backend_slots(
+                    &mut backends,
+                    &backend_executor,
+                    cfg.backend_control_timeout,
+                    "BACKEND",
+                );
+                return Err(err.context("starting CPU autotune controller"));
+            }
+        };
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::Mining);
     let result = match cfg.mode {
         MiningMode::Daemon => {
             let client = daemon_client
@@ -824,6 +976,7 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
                     backend_executor: &backend_executor,
                 },
                 tui_state,
+                Arc::clone(&history),
                 tip_listener.as_ref().map(mining::TipListener::signal),
                 deferred_backends,
             )
@@ -838,10 +991,13 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
             },
             daemon_client.clone(),
             tui_state,
+            Arc::clone(&history),
             deferred_backends,
         ),
     };
 
+    crate::diagnostics::set_phase(seine_telemetry::RunPhase::ShuttingDown);
+    adaptive_controller.stop();
     let shutdown_requested = shutdown.load(Ordering::SeqCst);
     info("MINER", "shutting down: stopping backends...");
     let stop_t = Instant::now();
@@ -872,7 +1028,7 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     result
 }
 
-fn should_enable_tui(cfg: &Config) -> bool {
+pub(crate) fn should_enable_tui(cfg: &Config) -> bool {
     match cfg.ui_mode {
         UiMode::Plain => false,
         UiMode::Tui => true,
@@ -881,6 +1037,9 @@ fn should_enable_tui(cfg: &Config) -> bool {
 }
 
 fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
+    // Read before locking the dashboard; the update checker takes these locks
+    // in the opposite order.
+    let update = crate::update_check::for_new_dashboard();
     let tui_state = new_tui_state();
     if let Ok(mut s) = tui_state.lock() {
         s.mode = match cfg.mode {
@@ -893,7 +1052,7 @@ fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
             MiningMode::Pool => cfg.pool_url.clone().unwrap_or_else(|| "---".to_string()),
         };
         s.pool_worker = cfg.pool_worker.clone().unwrap_or_else(|| "---".to_string());
-        s.threads = cfg.threads;
+        s.threads = cpu_lane_count(backends) as usize;
         s.refresh_secs = cfg.refresh_interval.as_secs();
         s.sse_enabled = cfg.sse_enabled;
         s.backends_desc = backend_descriptions(backends);
@@ -903,6 +1062,17 @@ fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
             "relaxed".to_string()
         };
         s.version = crate::version::ui_display_version();
+        if let Some(update) = update {
+            s.update_available = Some(update.latest);
+            if let Some(message) = update.log_message {
+                s.push_log(tui::LogEntry {
+                    elapsed_secs: 0.0,
+                    level: tui::LogLevel::Info,
+                    tag: "UPDATE".to_string(),
+                    message,
+                });
+            }
+        }
         if let Some(hint) = cfg.nvidia_hint {
             s.push_log(tui::LogEntry {
                 elapsed_secs: 0.0,
@@ -940,7 +1110,20 @@ fn maybe_autotune_cpu_threads(
     mode: RuntimeMode,
 ) -> Result<()> {
     if !cfg.cpu_autotune_threads {
+        if cfg
+            .backend_specs
+            .iter()
+            .any(|spec| spec.kind == BackendKind::Cpu)
+        {
+            info(
+                runtime_mode_tag(mode),
+                "cpu-autotune | disabled; using configured thread count",
+            );
+        }
         return Ok(());
+    }
+    if matches!(mode, RuntimeMode::Mining) {
+        return adaptive_cpu::prepare(cfg);
     }
 
     let tag = runtime_mode_tag(mode);
@@ -1015,7 +1198,7 @@ fn maybe_autotune_cpu_threads(
     );
     info(
         tag,
-        "cpu-autotune | this only runs once — results are cached for future launches",
+        "cpu-autotune | results are cached for compatible future launches",
     );
 
     let candidate_count = max_threads.saturating_sub(min_threads).saturating_add(1);
@@ -1292,6 +1475,7 @@ fn maybe_autotune_cpu_threads(
         selection.selected_threads,
         selection.selected_hps,
         autotune_secs,
+        &measurements,
     ) {
         warn(
             tag,
@@ -1523,10 +1707,11 @@ fn measure_cpu_autotune_candidate(
     info(
         tag,
         format!(
-            "cpu-autotune |   -> {} threads: {} ({} hashes in {:.1}s)",
+            "cpu-autotune |   -> {} threads: {} ({} hashes in {:.3}s hashing, {:.3}s total)",
             threads,
             format_hashrate(measurement.hps),
             measurement.hashes,
+            measurement.elapsed_secs,
             measurement.wall_secs,
         ),
     );
@@ -1539,11 +1724,13 @@ fn merge_cpu_autotune_measurements(
     confirmation: CpuAutotuneMeasurement,
 ) -> CpuAutotuneMeasurement {
     let hashes = initial.hashes.saturating_add(confirmation.hashes);
+    let elapsed_secs = initial.elapsed_secs + confirmation.elapsed_secs;
     let wall_secs = initial.wall_secs + confirmation.wall_secs;
     CpuAutotuneMeasurement {
         hashes,
+        elapsed_secs,
         wall_secs,
-        hps: hashes as f64 / wall_secs.max(f64::EPSILON),
+        hps: hashes as f64 / elapsed_secs.max(f64::EPSILON),
     }
 }
 
@@ -1582,10 +1769,11 @@ fn remeasure_cpu_autotune_candidate(
     info(
         tag,
         format!(
-            "cpu-autotune |   -> {} threads confirmed at {} (combined {} hashes in {:.1}s)",
+            "cpu-autotune |   -> {} threads confirmed at {} (combined {} hashes in {:.3}s hashing, {:.3}s total)",
             threads,
             format_hashrate(combined.hps),
             combined.hashes,
+            combined.elapsed_secs,
             combined.wall_secs,
         ),
     );
@@ -1611,12 +1799,14 @@ fn bench_cpu_autotune_candidate(
             hash_flush_interval: cfg.cpu_hash_flush_interval,
             event_dispatch_capacity: cfg.cpu_event_dispatch_capacity,
             page_mode: cfg.cpu_page_mode,
+            kernel: None,
         },
     );
 
     let sample_window_secs = window_secs.max(1);
     let mut sampled_secs = 0u64;
     let mut sampled_hashes = 0u64;
+    let mut elapsed_secs = 0.0f64;
     let mut wall_secs = 0.0f64;
 
     while sampled_secs < CPU_AUTOTUNE_MAX_SAMPLE_SECS_PER_CANDIDATE
@@ -1630,27 +1820,27 @@ fn bench_cpu_autotune_candidate(
             sample_window_secs,
             sampled_secs,
             sampled_hashes,
-            wall_secs,
+            elapsed_secs,
         );
         if chunk_secs == 0 {
             break;
         }
-        let started_at = Instant::now();
-        let chunk_hashes = BenchBackend::kernel_bench(&backend, chunk_secs, shutdown)?;
-        wall_secs += started_at.elapsed().as_secs_f64();
+        let sample = backend.autotune_sample(chunk_secs, shutdown)?;
+        elapsed_secs += sample.elapsed_secs;
+        wall_secs += sample.wall_elapsed_secs;
         sampled_secs = sampled_secs.saturating_add(chunk_secs);
-        sampled_hashes = sampled_hashes.saturating_add(chunk_hashes);
+        sampled_hashes = sampled_hashes.saturating_add(sample.hashes);
     }
 
-    if sampled_secs == 0 {
+    if sampled_secs == 0 || shutdown.load(Ordering::Relaxed) {
         return Ok(None);
     }
 
-    // Use elapsed wall time for throughput so short windows don't overcount hashes
-    // that finish after the target window boundary.
-    let hps = (sampled_hashes as f64) / wall_secs.max(f64::EPSILON);
+    // Include last-hash overrun, but exclude allocation, warmup and arena teardown.
+    let hps = (sampled_hashes as f64) / elapsed_secs.max(f64::EPSILON);
     Ok(Some(CpuAutotuneMeasurement {
         hashes: sampled_hashes,
+        elapsed_secs,
         wall_secs,
         hps,
     }))
@@ -1668,6 +1858,43 @@ fn apply_cpu_threads(cfg: &mut Config, threads: usize) {
     }
 }
 
+// Keep cache diagnostics free of host identifiers and filesystem contents.
+fn read_cpu_autotune_cache(path: &std::path::Path) -> Result<CpuAutotuneRecord, &'static str> {
+    let raw = fs::read(path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            "no saved tuning result"
+        } else {
+            "saved tuning result could not be read"
+        }
+    })?;
+    serde_json::from_slice(&raw).map_err(|_| "saved tuning result is invalid")
+}
+
+fn cpu_autotune_host_change(
+    saved: &CpuAutotuneHostFingerprint,
+    current: &CpuAutotuneHostFingerprint,
+) -> Option<&'static str> {
+    if saved.build_fingerprint != current.build_fingerprint {
+        Some("miner build changed")
+    } else if saved.cpu_brand != current.cpu_brand
+        || saved.cpu_arch != current.cpu_arch
+        || saved.logical_cores != current.logical_cores
+        || saved.physical_cores != current.physical_cores
+        || saved.total_memory_bytes != current.total_memory_bytes
+    {
+        Some("CPU or memory configuration changed")
+    } else if saved.os != current.os
+        || saved.kernel_version != current.kernel_version
+        || saved.runtime_environment != current.runtime_environment
+    {
+        Some("operating system or runtime changed")
+    } else if saved.affinity_topology != current.affinity_topology {
+        Some("CPU affinity or topology changed")
+    } else {
+        None
+    }
+}
+
 fn load_cpu_autotune_record(
     cfg: &Config,
     tag: &str,
@@ -1676,36 +1903,23 @@ fn load_cpu_autotune_record(
     max_threads: usize,
     autotune_secs: u64,
 ) -> Option<CpuAutotuneRecord> {
-    let raw = match fs::read_to_string(&cfg.cpu_autotune_config_path) {
-        Ok(raw) => raw,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(err) => {
-            warn(
-                tag,
-                format!(
-                    "cpu-autotune | failed reading {} ({err})",
-                    cfg.cpu_autotune_config_path.display()
-                ),
-            );
-            return None;
-        }
-    };
-
-    let record = match serde_json::from_str::<CpuAutotuneRecord>(&raw) {
+    let record = match read_cpu_autotune_cache(&cfg.cpu_autotune_config_path) {
         Ok(record) => record,
-        Err(err) => {
-            warn(
-                tag,
-                format!(
-                    "cpu-autotune | invalid config {} ({err})",
-                    cfg.cpu_autotune_config_path.display()
-                ),
-            );
+        Err(reason) => {
+            info(tag, format!("cpu-autotune | {reason}; running autotune"));
             return None;
         }
     };
 
-    if record.schema_version != CPU_AUTOTUNE_RECORD_SCHEMA_VERSION {
+    let reason = if record.schema_version != CPU_AUTOTUNE_RECORD_SCHEMA_VERSION {
+        Some("cache format changed")
+    } else if record.mining_measurement {
+        Some("cached result is from live mining")
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        info(tag, format!("cpu-autotune | {reason}; re-running autotune"));
         return None;
     }
 
@@ -1727,11 +1941,8 @@ fn load_cpu_autotune_record(
     }
 
     let current_host = cpu_autotune_host_fingerprint();
-    if record.host_fingerprint != current_host {
-        info(
-            tag,
-            "cpu-autotune | host fingerprint changed; re-running autotune",
-        );
+    if let Some(reason) = cpu_autotune_host_change(&record.host_fingerprint, &current_host) {
+        info(tag, format!("cpu-autotune | {reason}; re-running autotune"));
         return None;
     }
 
@@ -1743,6 +1954,10 @@ fn load_cpu_autotune_record(
         max_threads,
         autotune_secs,
     ) {
+        info(
+            tag,
+            "cpu-autotune | tuning settings changed; re-running autotune",
+        );
         return None;
     }
 
@@ -1776,6 +1991,7 @@ fn persist_cpu_autotune_record(
     selected_threads: usize,
     measured_hps: f64,
     autotune_secs: u64,
+    measurements: &BTreeMap<usize, CpuAutotuneMeasurement>,
 ) -> Result<()> {
     if let Some(parent) = cfg.cpu_autotune_config_path.parent() {
         if !parent.as_os_str().is_empty() {
@@ -1799,6 +2015,9 @@ fn persist_cpu_autotune_record(
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_secs())
             .unwrap_or(0),
+        measurements: measurements.clone(),
+        memory_limited: max_threads < adaptive_cpu::limits(cfg, 0).1,
+        mining_measurement: false,
     };
     let payload = serde_json::to_string_pretty(&record)?;
     fs::write(&cfg.cpu_autotune_config_path, payload)?;
@@ -1822,6 +2041,7 @@ fn cpu_profile_label(profile: CpuPerformanceProfile) -> &'static str {
 
 fn cpu_affinity_label(affinity: crate::config::CpuAffinityMode) -> &'static str {
     match affinity {
+        crate::config::CpuAffinityMode::Os => "os",
         crate::config::CpuAffinityMode::Off => "off",
         crate::config::CpuAffinityMode::Auto => "auto",
         crate::config::CpuAffinityMode::PcoreOnly => "pcore-only",
@@ -1844,6 +2064,7 @@ fn cpu_autotune_host_fingerprint() -> CpuAutotuneHostFingerprint {
         kernel_version: crate::runtime_identity::runtime_kernel_version(),
         runtime_environment: crate::runtime_identity::runtime_environment(),
         build_fingerprint: crate::runtime_identity::build_fingerprint(),
+        affinity_topology: crate::backend::cpu::affinity_topology_fingerprint(),
     }
 }
 
@@ -1925,10 +2146,7 @@ fn maybe_warn_linux_hugepages_setup(cfg: &Config, mode: RuntimeMode) {
             suggested_pages
         ),
     );
-    info(
-        tag,
-        "hugepages | docs: see README.md -> \"Linux HugePages (CPU Throughput)\"",
-    );
+    info(tag, "hugepages | docs: see docs/guides/linux-hugepages.md");
     info(
         tag,
         "hugepages | if allocation is partial, run: echo 3 | sudo tee /proc/sys/vm/drop_caches && echo 1 | sudo tee /proc/sys/vm/compact_memory",
@@ -1985,7 +2203,7 @@ fn maybe_warn_linux_1g_hugepages_setup(cpu_lanes: u64, mode: RuntimeMode) {
     );
     info(
         tag,
-        "hugepages-1g | docs: see README.md -> \"WSL/Linux HugeTLB provisioning\"",
+        "hugepages-1g | docs: see docs/guides/linux-hugepages.md#1-gib-pages",
     );
 }
 
@@ -2026,6 +2244,7 @@ fn parse_meminfo_u64(value: &str) -> Option<u64> {
     value.split_whitespace().next()?.parse::<u64>().ok()
 }
 
+#[cfg(target_os = "linux")]
 fn div_ceil_u64(numerator: u64, denominator: u64) -> u64 {
     if denominator == 0 {
         return 0;
@@ -2050,6 +2269,7 @@ fn build_backend_instances(cfg: &Config) -> Vec<(BackendSpec, Arc<dyn PowBackend
                         hash_flush_interval: cfg.cpu_hash_flush_interval,
                         event_dispatch_capacity: cfg.cpu_event_dispatch_capacity,
                         page_mode: cfg.cpu_page_mode,
+                        kernel: cfg.bench_cpu_kernel,
                     },
                 )) as Arc<dyn PowBackend>,
                 BackendKind::Nvidia => Arc::new(NvidiaBackend::new(
@@ -2101,7 +2321,7 @@ fn activate_single_backend(
     backend.set_event_sink(backend_event_tx);
     let backend_start_detail = match backend_name {
         "cpu" => {
-            let lanes = backend.lanes();
+            let lanes = backend.enabled_lanes();
             let ram_gib =
                 (lanes as f64 * CPU_LANE_MEMORY_BYTES as f64) / (1024.0 * 1024.0 * 1024.0);
             format!(
@@ -2129,7 +2349,7 @@ fn activate_single_backend(
             .spawn(move || {
                 let _ = tx.send(backend_ref.start());
             })
-            .expect("failed to spawn backend init thread");
+            .map_err(|err| anyhow!("failed to spawn {backend_name} init thread: {err}"))?;
         loop {
             match rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(result) => break result,
@@ -2274,12 +2494,36 @@ fn activate_backends_with_start_id(
                 backend_event_sources.push(activated.event_rx);
             }
             Err(err) => {
+                let mut detail = seine_telemetry::FailureDetail::new(
+                    seine_telemetry::FailureReason::BackendStartFailed,
+                    seine_telemetry::DiagnosticOperation::BackendStartup,
+                );
+                detail.os_error = err
+                    .chain()
+                    .find_map(|e| e.downcast_ref::<std::io::Error>())
+                    .and_then(std::io::Error::raw_os_error)
+                    .map(i64::from);
+                crate::diagnostics::record_failure(
+                    seine_telemetry::DiagnosticCode::Warning,
+                    crate::diagnostics::classify(&format!("{err:#}")),
+                    Some(crate::diagnostics::backend_name(backend_spec.kind)),
+                    detail,
+                );
                 warn("BACKEND", format!("{err:#}"));
             }
         }
     }
 
     if active.is_empty() && extra_event_sources.is_empty() {
+        crate::diagnostics::record_failure(
+            seine_telemetry::DiagnosticCode::Error,
+            seine_telemetry::DiagnosticKind::General,
+            None,
+            seine_telemetry::FailureDetail::new(
+                seine_telemetry::FailureReason::NoBackendAvailable,
+                seine_telemetry::DiagnosticOperation::BackendStartup,
+            ),
+        );
         bail!("no mining backend could be started");
     }
 
@@ -2431,6 +2675,7 @@ fn collect_backend_hashes(
     let runtime_telemetry = backend_executor.take_backend_telemetry_ordered(backends.iter());
     for (slot, runtime) in backends.iter().zip(runtime_telemetry.into_iter()) {
         let slot_hashes = slot.backend.take_hashes();
+        backend_executor.record_hardware_sample(slot, slot_hashes);
         let telemetry = slot.backend.take_telemetry();
         if let Some(per_backend_telemetry) = round_backend_telemetry.as_deref_mut() {
             merge_backend_telemetry(per_backend_telemetry, slot.id, telemetry);
@@ -2478,6 +2723,7 @@ fn collect_round_backend_samples(
     for (slot, runtime) in due_slots.into_iter().zip(runtime_telemetry.into_iter()) {
         let backend_id = slot.id;
         let hashes = slot.backend.take_hashes();
+        backend_executor.record_hardware_sample(slot, hashes);
         let telemetry = slot.backend.take_telemetry();
         merge_backend_telemetry(round_backend_telemetry, backend_id, telemetry);
         merge_backend_telemetry(round_backend_telemetry, backend_id, runtime);
@@ -2706,6 +2952,11 @@ fn remove_backend_by_id(
     };
 
     let slot = backends.remove(idx);
+    crate::diagnostics::record(
+        seine_telemetry::DiagnosticCode::BackendQuarantined,
+        seine_telemetry::DiagnosticKind::General,
+        Some(slot.backend.name()),
+    );
     backend_executor.quarantine_backend(slot.id, Arc::clone(&slot.backend));
     backend_executor.remove_backend_worker(slot.id, &slot.backend);
     backend_executor.prune(backends);
@@ -2852,7 +3103,7 @@ fn cpu_threads_summary(backends: &[BackendSlot]) -> String {
     let cpu_threads: Vec<String> = backends
         .iter()
         .filter(|slot| slot.backend.name() == "cpu")
-        .map(|slot| format!("cpu#{}={}", slot.id, slot.lanes))
+        .map(|slot| format!("cpu#{}={}", slot.id, slot.backend.enabled_lanes()))
         .collect();
     if cpu_threads.is_empty() {
         "none".to_string()
@@ -2874,15 +3125,16 @@ fn backend_descriptions(backends: &[BackendSlot]) -> String {
                 .get(&slot.id)
                 .cloned()
                 .unwrap_or_else(|| format!("{}#{}", slot.backend.name(), slot.id));
+            let lanes = slot.backend.enabled_lanes();
             if slot.backend.name() == "cpu" {
                 let ram_gib =
-                    (slot.lanes as f64 * CPU_LANE_MEMORY_BYTES as f64) / (1024.0 * 1024.0 * 1024.0);
-                format!("{} ({} lanes, ~{:.1} GiB RAM)", name, slot.lanes, ram_gib)
+                    (lanes as f64 * CPU_LANE_MEMORY_BYTES as f64) / (1024.0 * 1024.0 * 1024.0);
+                format!("{} ({} lanes, ~{:.1} GiB RAM)", name, lanes, ram_gib)
             } else if let Some(mem_bytes) = slot.backend.device_memory_bytes() {
                 let mem_gib = mem_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
-                format!("{} ({} lanes, {:.1} GiB VRAM)", name, slot.lanes, mem_gib)
+                format!("{} ({} lanes, {:.1} GiB VRAM)", name, lanes, mem_gib)
             } else {
-                format!("{} ({} lanes)", name, slot.lanes)
+                format!("{} ({} lanes)", name, lanes)
             }
         })
         .collect::<Vec<_>>()
@@ -3035,7 +3287,7 @@ fn cpu_lane_count(backends: &[BackendSlot]) -> u64 {
     backends
         .iter()
         .filter(|slot| slot.backend.name() == "cpu")
-        .map(|slot| slot.lanes)
+        .map(|slot| slot.backend.enabled_lanes() as u64)
         .sum()
 }
 
@@ -3196,7 +3448,7 @@ fn next_work_id(next_id: &mut u64) -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::backend::{NonceChunk, WorkAssignment, WorkTemplate};
     use anyhow::anyhow;
@@ -3544,8 +3796,9 @@ mod tests {
         }
     }
 
-    fn test_config() -> Config {
+    pub(crate) fn test_config() -> Config {
         Config {
+            hardware_telemetry: None,
             mode: MiningMode::Daemon,
             pool_url: None,
             pool_worker: None,
@@ -3571,6 +3824,9 @@ mod tests {
             }],
             threads: 1,
             cpu_auto_threads_cap: 1,
+            cpu_manual_memory_check: false,
+            cpu_autotune_worker_slots: None,
+            cpu_memory_reserve_percent: 5,
             cpu_affinity: crate::config::CpuAffinityMode::Off,
             cpu_page_mode: crate::config::CpuPageMode::Auto,
             cpu_profile: crate::config::CpuPerformanceProfile::Balanced,
@@ -3621,6 +3877,7 @@ mod tests {
             work_allocation: WorkAllocation::Adaptive,
             sub_round_rebalance_interval: None,
             sse_enabled: true,
+            update_check_enabled: false,
             refresh_on_same_height: false,
             ui_mode: crate::config::UiMode::Plain,
             data_dir: std::path::PathBuf::from("./data"),
@@ -3630,10 +3887,13 @@ mod tests {
             service_mode: false,
             api_bind: "127.0.0.1:9977".to_string(),
             api_allow_unsafe_bind: false,
-            api_cors: "*".to_string(),
+            api_cors: String::new(),
+            api_token: None,
+            api_cookie_path: std::path::PathBuf::from("./data/control-api.cookie"),
             allow_wallet_prompt: true,
             bench: false,
             bench_kind: crate::config::BenchKind::Backend,
+            bench_cpu_kernel: None,
             bench_secs: 20,
             bench_rounds: 3,
             bench_warmup_rounds: 0,
@@ -3654,6 +3914,7 @@ mod tests {
                     *threads,
                     CpuAutotuneMeasurement {
                         hashes: 0,
+                        elapsed_secs: 0.0,
                         wall_secs: 0.0,
                         hps: *hps,
                     },
@@ -3687,6 +3948,9 @@ mod tests {
             autotune_secs: 6,
             host_fingerprint: CpuAutotuneHostFingerprint::default(),
             timestamp_unix_secs: 0,
+            measurements: BTreeMap::new(),
+            memory_limited: false,
+            mining_measurement: false,
         };
 
         assert!(cpu_autotune_record_matches_config(
@@ -3814,21 +4078,24 @@ mod tests {
     }
 
     #[test]
-    fn autotune_confirmation_combines_hashes_and_wall_time() {
+    fn autotune_confirmation_scores_hashing_time_without_lifecycle_bias() {
         let combined = merge_cpu_autotune_measurements(
             CpuAutotuneMeasurement {
                 hashes: 100,
-                wall_secs: 4.0,
+                elapsed_secs: 4.0,
+                wall_secs: 8.0,
                 hps: 25.0,
             },
             CpuAutotuneMeasurement {
                 hashes: 300,
-                wall_secs: 10.0,
+                elapsed_secs: 10.0,
+                wall_secs: 18.0,
                 hps: 30.0,
             },
         );
         assert_eq!(combined.hashes, 400);
-        assert_eq!(combined.wall_secs, 14.0);
+        assert_eq!(combined.elapsed_secs, 14.0);
+        assert_eq!(combined.wall_secs, 26.0);
         assert!((combined.hps - (400.0 / 14.0)).abs() < 1e-9);
     }
 
@@ -3856,8 +4123,7 @@ mod tests {
     }
 
     #[test]
-    fn autotune_selection_balanced_biases_lower_when_near_peak() {
-        // 99% of peak (3.3) is 3.267, so 4 threads (3.28) is the first candidate that qualifies.
+    fn autotune_selection_balanced_keeps_peak_even_when_lower_count_is_close() {
         let selection = select_cpu_autotune_candidate(
             CpuPerformanceProfile::Balanced,
             &autotune_measurements(&[(3, 3.0), (4, 3.28), (22, 3.3)]),
@@ -3865,8 +4131,20 @@ mod tests {
         .expect("selection should exist");
 
         assert_eq!(selection.peak_threads, 22);
-        assert_eq!(selection.selected_threads, 4);
+        assert_eq!(selection.selected_threads, 22);
         assert!((selection.peak_floor_frac - CPU_AUTOTUNE_BALANCED_PEAK_FLOOR_FRAC).abs() < 1e-9);
+    }
+
+    #[test]
+    fn autotune_selection_balanced_uses_fewer_workers_only_for_equal_peak() {
+        let selection = select_cpu_autotune_candidate(
+            CpuPerformanceProfile::Balanced,
+            &autotune_measurements(&[(3, 3.0), (4, 3.0), (5, 2.9)]),
+        )
+        .expect("selection should exist");
+
+        assert_eq!(selection.selected_threads, 3);
+        assert_eq!(selection.selected_hps, 3.0);
     }
 
     #[test]

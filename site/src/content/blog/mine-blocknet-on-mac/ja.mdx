@@ -1,0 +1,131 @@
+---
+title: Mac で Blocknet をマイニングする方法
+description: Apple シリコン搭載 Mac と seine で Blocknet をマイニング。ターミナルでの設定、M4 Max の実測 30.9 H/s、動かせるスレッド数を解説します。
+tags: [マイニングガイド, macOS, Apple シリコン, seine]
+faq:
+  - q: 'MacBook Air で Blocknet をマイニングできますか？'
+    a: 'はい。MacBook Air を含むすべての Apple シリコン搭載 Mac で seine が動きます。seine-macos-aarch64.tar.gz をダウンロードし、ターミナルで展開して ./seine を実行します。1 スレッドあたり約 2 GB のメモリが必要なので、16 GB の MacBook Air なら最大 7 スレッドを動かせます。スレッド数は seine が空きメモリから自動で設定します。'
+  - q: 'Mac で Blocknet をマイニングするとき、seine は GPU を使いますか？'
+    a: 'Apple シリコンでは、seine はデフォルトで CPU でマイニングします。それが最も速い選択だからです。CPU とグラフィックスコアは同じユニファイドメモリを共有しており、Blocknet の Argon2id プルーフ・オブ・ワークはメモリ帯域幅に左右されます。M4 Max では CPU のみのマイニングが最も高いハッシュレートを出したため、seine は自動でそれを使います。'
+  - q: 'Blocknet をマイニングするには Mac にどれくらいのメモリが必要ですか？'
+    a: '各マイニングスレッドは 2 GiB のメモリブロックを使って処理するので、1 スレッドあたり約 2 GB を見込んでください。16 GB の Mac なら最大 7 スレッド、32 GB なら最大 15 スレッド、64 GB なら最大 30 スレッドです。seine は空きメモリを数え、スレッド数をコア数にも合わせます。'
+  - q: 'Intel Mac で Blocknet をマイニングできますか？'
+    a: 'はい。seine は Intel Mac 向けに別のアーカイブ seine-macos-x86_64.tar.gz を公開しており、手順は Apple シリコンと同じです。ダウンロードしてターミナルで展開し、./seine を実行して Blocknet アドレスまたは @name を貼り付けます。seine はメモリに合わせてスレッド数を決め、デフォルトで bntpool.com でマイニングを始めます。'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+このガイドでは、**seine** を使って Apple シリコン搭載 Mac で Blocknet をマイニングする方法を説明します。M シリーズのチップが Blocknet のプルーフ・オブ・ワークに向いている理由、M4 Max の実測結果、Mac のメモリで動かせるスレッド数、そして bntpool.com でマイニングを始めるためのターミナルでの具体的な手順を紹介します。
+
+## Mac で Blocknet をマイニングできますか？
+
+<Answer>
+はい。Apple シリコン搭載 Mac は Blocknet のマイニングに強いマシンです。ユニファイドメモリが、メモリハードな Argon2id プルーフ・オブ・ワークに十分な帯域幅を提供するからです。`seine-macos-aarch64.tar.gz` をダウンロードし、ターミナルで展開して `./seine` を実行し、アドレスを貼り付けます。48 GB の M4 Max は CPU だけで 30.9 H/s を記録しました。
+</Answer>
+
+Mac 特有の設定は seine が自分で行います。CPU でマイニングし、スレッドをまず高性能コアに割り当て、スレッド数をメモリに合わせて決めるので、ほとんどの人は `./seine` を実行するだけで済みます。
+
+## Apple シリコン搭載 Mac が Blocknet のマイニングに向いているのはなぜですか？
+
+Blocknet のプルーフ・オブ・ワークは、ハッシュ 1 回あたり 2 GiB のメモリを使う [Argon2id](/ja/blog/argon2id-proof-of-work-explained/) です。1 回のハッシュで 2 GiB のメモリブロックを埋め、その途中で以前に書き込んだ部分を読み返すため、マイニングスレッドの速度は主に、チップがメモリとの間でどれだけ速くデータをやり取りできるかで決まります。seine の各スレッドがそれぞれ約 2 GB の RAM を必要とするのはこのためです。
+
+Apple シリコンはユニファイドメモリを中心に設計されています。[Apple はこれを](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/)、高帯域幅・低レイテンシのメモリを 1 つのプールにまとめたものと説明しています。これによりすべてのマイニングスレッドが十分な帯域幅を得られます。メモリハードなハッシュに必要なのは、まさにこの帯域幅です。その結果、ノートパソコンでもサーバー向けプロセッサと同じ水準で Blocknet をマイニングできます。
+
+## M4 Max は Blocknet をどれくらいの速さでマイニングできますか？
+
+<Answer>
+M4 Max チップを搭載した 48 GB の MacBook Pro は、CPU だけで 16 スレッドを使い、30.94 H/s で Blocknet をマイニングしました。このマシンで seine がデフォルトで使うバランス設定、つまり高性能コア優先のスケジューリングで 14 スレッドの場合は 29.26 H/s で、ほかのアプリ用により多くのメモリが残りました。
+</Answer>
+
+これらの結果は、2026年7月10日 に 48 GB の M4 Max（高性能コア 12 基、高効率コア 4 基）で行った seine の検証テストによるものです。
+
+| 設定 | スレッド数 | ハッシュレート |
+|---|---|---|
+| 最大スループット | 16、`auto` スケジューリング | 30.94 H/s |
+| バランス（この Mac での seine のデフォルト上限） | 14、`pcore-only` スケジューリング | 29.26 H/s |
+
+参考までに、30.9 H/s という結果は、seine の[パフォーマンス表](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)にあるどの Arm サーバーや Intel Xeon の結果よりも上で、これより高かったのは AMD EPYC Zen 5 と Zen 4 のサーバーだけです。[Blocknet マイニングハードウェアガイド](/ja/blog/blocknet-mining-hardware-hashrate/)ではハードウェア世代ごとの最高結果を比較しており、[Apple シリコンガイド](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md)にはチューニングの詳細がまとめられています。
+
+## Mac で動かせるスレッド数は？
+
+各スレッドにはそれぞれ 2 GiB のメモリが必要なので、上限はメモリで決まります。また seine はスレッド数を自動で決める際、Mac のメモリの 5% を余裕として空けておきます。そのため上限は次のようになります。
+
+| Mac のメモリ | メモリで動かせるスレッド数 |
+|---|---|
+| 16 GB | 最大 7 |
+| 24 GB | 最大 11 |
+| 32 GB | 最大 15 |
+| 36 GB | 最大 17 |
+| 48 GB | 最大 22 |
+| 64 GB | 最大 30 |
+
+最終的な数は、次の 2 つの要素でお使いの Mac にちょうど合う値になります。
+
+- **空きメモリ。** seine は起動時に実際に空いているメモリを数えるので、開いているアプリがあると数が少し減ります。実行中にメモリが足りなくなると、seine はスレッドを一時停止してそのメモリを解放します。
+- **コア数。** Mac ではデフォルトで、すべての高性能コアと高効率コアの半分を使います。12+4 コアの M4 Max では 14 スレッドで、上の表のバランス設定にあたります。
+
+これらを自分で計算する必要はありません。seine は起動時にスレッド数を決め、マイニングしながら近いスレッド数を試し続けます。
+
+## macOS での設定手順
+
+### ステップ 1：Blocknet アドレスを用意する
+
+公式の Blocknet ウォレット、つまり[コマンドライン版ウォレット](https://github.com/blocknetprivacy/blocknet/releases/latest)または[デスクトップ版ウォレット](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)をインストールし、アドレスをコピーします。[blocknet.id](https://blocknet.id) で取得した Blocknet ID のショートネームがあれば、代わりに `@name` 宛てにマイニングできます。
+
+### ステップ 2：Apple シリコン版 seine をダウンロードする
+
+[ダウンロードセクション](/ja/#download)から `seine-macos-aarch64.tar.gz` を入手します。中には `seine` プログラム、readme とライセンス、ダウンロードを確認するための `SHA256SUMS.txt` ファイルが入っています。
+
+### ステップ 3：ターミナルで展開する
+
+ターミナル（「アプリケーション」→「ユーティリティ」にあります）を開き、次のコマンドを実行します。ホームフォルダに `seine` フォルダを作り、そこにアーカイブを展開します。
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### ステップ 4：seine を実行する
+
+```sh
+./seine
+```
+
+macOS 版はアドホック署名されています。初回起動時に macOS が実行を止めた場合は、「システム設定」の「プライバシーとセキュリティ」で `seine` を許可します。ターミナルからダウンロードフラグを消して、もう一度実行することもできます。
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### ステップ 5：アドレスを入力してマイニングを始める
+
+seine は受け取りアドレスまたは `@shortname` を尋ね、次にプールを尋ねます。return キーを押すと、デフォルトの `stratum+tcp://bntpool.com:3333` が選ばれます。続いて[ダッシュボード](/ja/blog/seine-dashboard-explained/)にハッシュレートと最初に受理されたシェアが表示されます。bntpool.com プールは残高が 0.1 BNT に達するとアドレスに送金し、[bntpool.com](https://bntpool.com) でアドレスを検索すれば残高を確認できます。
+
+## Mac では seine が CPU だけでマイニングするのはなぜですか？
+
+Apple シリコンでは、CPU とグラフィックスコアが 1 つのユニファイドメモリを共有しています。Argon2id はメモリ帯域幅に左右されるため、CPU とグラフィックスコアは同じ帯域幅を奪い合うことになります。M4 Max での seine のテストでは CPU のみのマイニングが最も高いハッシュレートを出したため、seine はすべての Apple シリコン搭載 Mac でそれを自動的に選びます。フラグを設定しなくても最速の構成になります。
+
+## Mac の性能を最大限に引き出すには？
+
+- **seine に自動でチューニングさせる。** 実際のマイニング作業でスレッド数と CPU カーネルを比較し、効果が確認できたときだけ切り替え、その結果を次回の起動のために記憶します。
+- **Mac をスリープさせない。** macOS は使われていない Mac をスリープさせ、そのあいだマイニングは止まります。標準の `caffeinate` コマンドで seine を起動すると、seine が動いているあいだ Mac はスリープしません。
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **マイニング専用の Mac では最大スループットを狙う。** その Mac でマイニングしかしないなら、M4 Max で 30.94 H/s を記録した設定が使えます。バランス設定のデフォルトと比べて、16 コアすべてとより多くのメモリを使います。
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+すべてのオプションについては[設定ガイド](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)を参照してください。支払いやほかのプラットフォームについては[メインのマイニングガイド](/ja/blog/how-to-mine-blocknet/)で説明しています。
+
+<Note>
+これらの結果は、Blocknet の現在の Argon2id プルーフ・オブ・ワークについてのものです。[blocknetcrypto.com](https://blocknetcrypto.com/#faraday) によると、Blocknet は 2027年2月16日 ごろに Faraday というネットワークアップグレードを予定しており、プルーフ・オブ・ワークが変更される予定です。seine は起動時と 12 時間ごとに新しいリリースを確認するので、常に最新の状態に保ってください。
+</Note>
+
+<CTA target="seine" title="macOS 版 seine をダウンロード" text="Apple シリコン版は Mac の CPU でマイニングし、スレッド数を自動で選びます。" />

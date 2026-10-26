@@ -1,0 +1,112 @@
+---
+title: 'Penambangan CPU 2026: koin yang bisa ditambang dengan CPU'
+description: 'Penambangan CPU di 2026: mengapa koin memory-hard seperti Blocknet berpihak pada komputer biasa, apa yang membuat CPU cepat, dan cara mulai menambang dengan seine.'
+tags: [Penambangan CPU, Argon2id, Panduan penambangan, Perangkat keras]
+faq:
+  - q: 'Koin apa saja yang bisa ditambang dengan CPU di 2026?'
+    a: 'Cari koin yang proof of work-nya dirancang untuk prosesor serbaguna. Monero memakai RandomX, yang oleh pembuatnya digambarkan sebagai dioptimalkan untuk CPU serbaguna, dan Blocknet memakai Argon2id dengan memori 2 GiB per hash. Keduanya membuat desktop, laptop, dan server biasa tetap bisa bersaing karena setiap hash bergantung pada memori selain pada aritmetika mentah.'
+  - q: 'Berapa banyak RAM yang dibutuhkan untuk menambang Blocknet dengan CPU?'
+    a: 'Setiap thread penambangan membutuhkan sekitar 2 GB RAM, karena setiap hash Argon2id mengisi blok memori 2 GiB miliknya sendiri. Bagi RAM Anda dengan dua untuk jumlah thread maksimal yang muat, lalu sisakan sedikit untuk sistem. Di komputer 32 GB, seine menjalankan sekitar 14 thread, dan seine menghitungnya untuk Anda saat dijalankan.'
+  - q: 'Mengapa algoritma memory-hard berpihak pada komputer biasa?'
+    a: 'Hash memory-hard membutuhkan memori cepat bergiga-giga byte untuk setiap percobaan, sehingga chip yang dibuat khusus untuk hashing tetap membutuhkan RAM dalam jumlah besar di samping setiap core. Desktop, laptop, dan server sudah dilengkapi RAM yang banyak dan pengendali memori yang cepat, sehingga perangkat keras yang dimiliki orang sudah dekat dengan kebutuhan algoritma itu.'
+  - q: 'Bisakah menambang dengan CPU dan kartu grafis sekaligus?'
+    a: 'Bisa, saat menambang Blocknet dengan seine di Windows atau Linux. seine menambang dengan prosesor dan setiap kartu grafis NVIDIA yang terdeteksi secara bersamaan, dan hashrate-nya dijumlahkan. seine menyetel prosesor sambil menambang dan setiap kartu pada peluncuran pertamanya, jadi tidak ada yang perlu dikonfigurasi sebelum Anda mulai.'
+sourceHash: 67d582c389a6
+translation: reviewed
+---
+
+Panduan ini menjelaskan posisi penambangan CPU di 2026, mengapa koin dengan proof of work memory-hard membuat komputer biasa tetap kompetitif, apa yang perlu diperhatikan saat memilih koin untuk ditambang dengan prosesor, dan cara mulai menambang Blocknet dengan seine dalam beberapa menit.
+
+## Apakah masih bisa menambang kripto dengan CPU di 2026?
+
+<Answer>
+Bisa, untuk koin yang proof of work-nya dirancang untuk prosesor serbaguna. Bitcoin ditambang dengan chip ASIC khusus dan Ethereum mengakhiri penambangan pada 2022, tetapi algoritma memory-hard seperti RandomX milik Monero dan Argon2id milik Blocknet membuat CPU tetap produktif, karena setiap hash membutuhkan memori cepat bergiga-giga byte selain aritmetika.
+</Answer>
+
+Penambangan berawal di CPU. Whitepaper Bitcoin menggambarkan proof of work sebagai “pada dasarnya satu CPU satu suara.” Seiring Bitcoin tumbuh, penambang beralih ke kartu grafis, lalu ke FPGA, lalu ke ASIC: chip yang tidak melakukan apa pun selain menghitung hash SHA-256 Bitcoin. ASIC khusus Bitcoin kini menjadi cara utama Bitcoin ditambang.
+
+Ethereum menyelesaikan peralihannya dari proof of work ke proof of stake lewat the Merge pada 15 September 2022. Sejak itu, penambangan bukan lagi cara Ethereum menghasilkan blok. Panduan [proof of work vs proof of stake](/id/blog/proof-of-work-vs-proof-of-stake/) menjelaskan perbedaan kedua desain itu.
+
+Jadi penambangan CPU di 2026 bermuara pada satu pilihan: pilih koin yang algoritmanya dibuat untuk prosesor dan memori yang sudah dimiliki komputer biasa.
+
+## Mengapa koin memory-hard berpihak pada komputer biasa?
+
+<Answer>
+Proof of work memory-hard membuat setiap hash mengisi dan membaca kembali blok memori yang besar. Chip yang dibuat khusus untuk hashing tetap membutuhkan RAM cepat bergiga-giga byte di samping setiap core, sementara desktop, laptop, dan server sudah dilengkapi memori itu beserta pengendali untuk melayaninya.
+</Answer>
+
+SHA-256 milik Bitcoin hampir tidak membutuhkan memori. Setiap hash adalah ledakan aritmetika singkat, sehingga chip khusus bisa memuat banyak sirkuit hashing kecil berdampingan. Prosesor serbaguna juga membawa cache, branch prediction, dan decoding instruksi yang tidak pernah dipakai SHA-256.
+
+Algoritma memory-hard mengubah tempat pekerjaan itu terjadi. Proof of work Blocknet adalah [Argon2id](/id/blog/argon2id-proof-of-work-explained/) dengan memori 2 GiB, satu lintasan, dan satu lane. Setiap hash menulis sekitar 2 GiB memori dan membaca sekitar 2 GiB kembali. Di paruh kedua lintasan, setiap blok baru membaca blok terdahulu yang dipilih berdasarkan data yang tidak bisa ditebak penambang sebelumnya. Hash baru selesai setelah seluruh blok 2 GiB terbangun, jadi kecepatannya bergantung pada seberapa cepat sistem memori memindahkan data dan berapa banyak blok 2 GiB yang muat di RAM sekaligus.
+
+Itulah bagian yang sudah dikuasai komputer biasa. Kode daemon Blocknet menyatakan tujuannya secara langsung: “PoW memory-hard untuk menahan ASIC dan memastikan penambangan yang adil,” di mana ukuran 2 GB membuat “perangkat keras khusus tidak praktis.” Argon2id dirancang untuk menahan ASIC, dan pengaturan 2 GiB menerapkan desain itu untuk komputer yang sudah dimiliki orang.
+
+## Apa yang sebaiknya ditambang dengan CPU?
+
+Alih-alih mengejar daftar, uji sebuah koin dengan beberapa pertanyaan:
+
+- **Apakah algoritmanya dirancang untuk CPU?** RandomX milik Monero adalah “algoritma proof of work (PoW) yang dioptimalkan untuk CPU serbaguna,” dan Monero mengaktifkannya pada 30 November 2019. Argon2id milik Blocknet memakai memori 2 GiB per hash, yang menjadikan RAM dan bandwidth memori sebagai sumber daya penentu.
+- **Apakah peluncurannya adil?** Di Blocknet, blok genesis tidak berisi transaksi, dan imbalan setiap blok adalah satu output yang dibayarkan kepada penambang yang menemukannya. Tidak ada premine, treasury, atau dana pengembang di konsensus, jadi setiap koin yang beredar adalah hasil penambangan.
+- **Apakah ada penambang yang mengenal prosesor Anda?** Penambang yang baik membawa jalur kode terpisah untuk setiap keluarga CPU dan memilih yang tercepat untuk komputer Anda.
+- **Apakah ada pool dengan pembayaran yang stabil?** Penambangan di pool menggabungkan banyak penambang kecil sehingga imbalan masuk secara teratur, bukan per blok. Panduan [cara kerja penambangan kripto](/id/blog/how-crypto-mining-works/) menjelaskan pool dan share.
+
+Blocknet menjawab keempatnya. Blocknet adalah koin privasi dengan [privasi secara default](/id/blog/blocknet-privacy-features/), blok lima menit, dan bayar dengan nama, dan diluncurkan pada Februari 2026. Penambangnya, seine, gratis dan sumber terbuka, dan pool bawaannya adalah bntpool.com, yang membayar dengan PPLNS dalam jendela enam jam. [Ulasan tentang Blocknet](/id/blog/what-is-blocknet/) membahas koinnya sendiri.
+
+## Apa yang membuat CPU cepat dalam penambangan memory-hard?
+
+Tiga hal menentukan berapa banyak hash per detik (H/s) yang dihasilkan sebuah prosesor di Blocknet.
+
+**Kapasitas RAM.** Setiap thread penambangan membutuhkan blok 2 GiB miliknya sendiri untuk setiap hash, jadi bagi RAM Anda dengan dua untuk jumlah thread maksimal yang muat. Komputer 32 GB secara teori menampung 16 blok. seine menyisihkan 5% RAM sebagai cadangan dan menyisakan ruang untuk sistem operasi, sehingga komputer itu menjalankan sekitar 14 thread. RAM sering lebih dulu membatasi jumlah thread daripada jumlah core. Panduan [menambang di PC lama atau laptop](/id/blog/mine-crypto-on-old-pc-or-laptop/) membahas komputer 4-16 GB.
+
+**Bandwidth memori.** Setiap hash memindahkan gigabyte data melalui sistem memori. Pada 49,4 H/s, mesin tercepat yang diukur dengan seine menulis sekitar 99 GiB blok memori baru setiap detik (49,4 × 2 GiB). Prosesor dengan lebih banyak kanal memori dan memori yang lebih cepat unggul.
+
+**Kernel yang tepat.** seine membawa beberapa kernel Argon2id: AVX2, AVX-512, dan kernel streaming di x86, serta NEON dengan jalur cepat SHA3 di Arm. Pada chip yang sama, kernel membuat perbedaan besar. Di AWS Graviton4, kernel SHA3 dengan prefetching menambang 56% lebih cepat daripada NEON biasa (dari 13,80 menjadi 21,50 H/s), dan di AMD EPYC 9R45 kernel streaming menambang 30% lebih cepat daripada AVX2 (dari 34,47 menjadi 44,74 H/s dengan 24 thread). seine membandingkan kernel sambil menambang dan mempertahankan yang lebih cepat.
+
+Berikut hasil terbaik yang diukur dengan seine untuk setiap generasi perangkat keras:
+
+| Perangkat keras | Chip spesifik | Thread | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | Server EPYC 9R45 | 32 | 49,4 H/s |
+| Server Arm | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | Server EPYC 9R14 | 32 | 38,2 H/s |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+Baris Apple M4 Max adalah laptop, yang menunjukkan betapa cocoknya sistem memori yang kuat untuk Argon2id. Baris server dijalankan di mesin AWS dengan huge pages 2 MiB. [Panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/) membahas saran pembelian dan ukuran RAM secara mendalam, dan [panduan Mac](/id/blog/mine-blocknet-on-mac/) membahas Apple Silicon.
+
+## Bagaimana cara mulai menambang Blocknet dengan CPU?
+
+seine tidak membutuhkan konfigurasi. seine menyesuaikan diri dengan komputer Anda dan langsung mulai menghitung hash:
+
+1. **Siapkan alamat.** Pasang wallet Blocknet resmi dan salin alamat Anda, atau klaim [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) dan tambang ke `@name`. [Panduan wallet](/id/blog/blocknet-wallet-for-mining/) menjelaskannya.
+2. **Unduh seine** untuk Windows, macOS, atau Linux dari [bagian unduhan](/id/#download) lalu ekstrak.
+3. **Jalankan** dan tempel alamat Anda saat diminta:
+
+```sh
+./seine
+```
+
+4. **Terima pool bawaan**, `stratum+tcp://bntpool.com:3333`, dan Anda sudah menambang.
+
+Sambil menambang, seine membandingkan jumlah thread dan kernel CPU pada pekerjaan penambangan sungguhan, mundur jika memori mulai sesak, dan mengingat pengaturan yang berhasil untuk dipakai saat dijalankan lagi. Di Windows dan Linux seine juga menambang dengan kartu grafis NVIDIA apa pun di komputer secara bersamaan, dan hashrate-nya dijumlahkan. [Panduan penambangan langkah demi langkah](/id/blog/how-to-mine-blocknet/) membahas pembayaran, dan di Linux [panduan huge pages](/id/blog/huge-pages-blocknet-mining/) menambah sekitar 4-6% dengan halaman 2 MiB dan 2% lagi dengan halaman 1 GiB.
+
+## Berapa banyak yang akan ditambang CPU Anda?
+
+Ukur hashrate Anda terlebih dahulu. Benchmark offline seine tidak membutuhkan pool atau node:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Lalu hitung dengan angka terkini. Blocknet menargetkan satu blok setiap lima menit, yaitu 288 blok per hari. Perkiraan bagian Anda adalah:
+
+- **Blok per hari** = 288 × (H/s Anda ÷ H/s jaringan)
+- **BNT per hari** = blok per hari × imbalan blok saat ini
+
+Hashrate jaringan dan imbalan blok sama-sama berubah seiring waktu, jadi baca angka terbarunya dari [bntpool.com](https://bntpool.com) sebelum menghitung. Di pool, Anda dibayar dengan pembayaran PPLNS yang teratur setelah saldo Anda mencapai 0,1 BNT, alih-alih menunggu menemukan satu blok utuh sendiri. Nilai BNT itu kemudian bergantung pada harga koin dan biaya listrik Anda.
+
+<Note>
+Semua hal di atas menggambarkan proof of work Argon2id Blocknet saat ini. Blocknet merencanakan upgrade jaringan bernama Faraday sekitar 16 Februari 2027 yang akan membawa “proof of work yang lebih ringan,” menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). seine memeriksa rilis baru saat dijalankan dan setiap 12 jam.
+</Note>
+
+<CTA target="seine" title="Mulai penambangan CPU dengan seine" text="seine menyesuaikan jumlah thread dengan RAM Anda dan memilih kernel tercepat untuk prosesor Anda sambil menambang di bntpool.com." />

@@ -1,0 +1,143 @@
+---
+title: Blocknet ödemelerinde şifreli memo'lar
+description: 'Her Blocknet ödemesine fatura, sipariş numarası veya not için şifreli memo ekleyin. 124 bayta kadar; gönderen ve alıcı okuyabilir, dolgu sayesinde diğerlerinden ayırt edilmez.'
+tags: [Memo'lar, Gizlilik, Cüzdan, Ödemeler]
+faq:
+  - q: 'Bir Blocknet memo''su ne kadar uzun olabilir?'
+    a: 'Bir memo 124 bayta kadar veri tutar. Düz metin UTF-8 olarak saklanır; bu, İngilizcede 124 harf, rakam veya noktalama işareti, Çincede ise karakter başına üç baytla yaklaşık 41 karakter demektir. Cüzdan daha uzun bir memo''yu işlem oluşturulmadan önce durdurur ve 124 baytlık üst sınırı bildirir.'
+  - q: 'Bir blok gezgini Blocknet memo''sunu okuyabilir mi?'
+    a: 'Hayır. Gezgin, memo alanını şifreli olarak işaretlenmiş 128 baytlık şifreli metin olarak gösterir. Anahtar, o çıktı için gönderen ile alıcının paylaştığı sırdan gelir, bu yüzden onu yalnızca onların cüzdanları açabilir. Her memo tam boyuta doldurulduğu için bir gezgin hangi çıktıların not taşıdığını bile anlayamaz.'
+  - q: 'Memo, bir Blocknet işlemini büyütür mü?'
+    a: 'Hayır. Not yazsanız da boş bıraksanız da her çıktı zaten 128 baytlık şifreli bir memo alanı taşır. Memo eklemek, zaten var olan alanı doldurur; bu yüzden fatura numaralı bir ödeme, aynı ödemenin numarasız haliyle tam olarak aynı boyuttadır ve ikisi zincirde aynı görünür.'
+  - q: 'Bir Blocknet ID adına ödeme yaparken memo ekleyebilir miyim?'
+    a: 'Evet. Adresin yerine adı, tutardan sonra da memo''yu yazın, örneğin send @rock 100 "invoice 1042". Cüzdan adı çözümler, doğrulanmış adresi, ücreti ve memo''yu gösterir ve onaylamanızı ister. Memo, adın işaret ettiği cüzdan için şifrelenir.'
+sourceHash: 6df2e7728647
+translation: reviewed
+---
+
+Her Blocknet ödemesi kısa, şifreli bir not taşıyabilir. Bunu bir fatura numarası, bir sipariş referansı veya ödeme yaptığınız kişiye bir mesaj için kullanabilirsiniz ve onu yalnızca ikiniz okuyabilirsiniz. Bu rehber BNT gönderirken nasıl memo ekleyeceğinizi, onu kimin okuyabileceğini, memo'ların zincirde neden hiç göze batmadığını ve aldığınız memo'ları nerede bulacağınızı gösterir.
+
+## Blocknet memo'su nedir?
+
+Blocknet memo'su, her işlem çıktısına eklenmiş 128 baytlık şifreli bir alandır. Fatura numarası veya kısa bir not gibi kendi metninizden ya da verinizden 124 bayta kadar tutar. Yalnızca gönderen ile alıcının paylaştığı bir sırla şifrelenir ve boş bir memo dolu bir memo gibi görünsün diye doldurulur.
+
+Memo, işlem formatının kendisinin bir parçasıdır. Zincirdeki her çıktıda bir memo vardır; coinleri kendi cüzdanınıza geri döndüren para üstü çıktıları da buna dahildir. Bu, üç kullanışlı özellik sağlar:
+
+- **Varsayılan olarak gizli.** İçerik, o çıktının alıcısı için şifrelenir. Ne yazdığınızı başka kimse görmez.
+- **Sabit boyut.** İçine ne koyarsanız koyun, alan zincirde her zaman 128 bayttır.
+- **Her zaman mevcut.** Her çıktı bir memo taşıdığı için notlu bir ödeme, notsuz bir ödemeyle tamamen aynı görünür.
+
+## Bir memo'ya ne koyabilirsiniz?
+
+124 bayta sığan her şeyi. Düz metin UTF-8 olarak saklanır, bu yüzden İngilizcede bu 124 harf, rakam ve boşluk demektir. Latin alfabesi dışındaki karakterler daha fazla bayt kaplar: bir Çince karakter üç bayt tutar, bu yüzden bir memo'ya yaklaşık 41 tane sığar.
+
+Yaygın kullanımlar:
+
+- **Faturalar.** Fatura numarasını memo'ya yazın; ödemeyi alan kişi sormadan onu doğru faturayla eşleştirebilir.
+- **Sipariş numaraları.** Bir mağaza veya hizmet, müşterilerinden bir sipariş referansı eklemelerini isteyebilir ve bunu doğrudan gelen ödemeden okuyabilir.
+- **Notlar.** “Kasım kirası”, “Yardımın için teşekkürler” veya “Akşam yemeği payı” gibi notlar coinlerle birlikte gider.
+- **İkili veri.** Cüzdan, yazılımın ürettiği ve okuduğu referans kodları için hex olarak yazılmış ham baytları da kabul eder.
+
+## BNT gönderirken nasıl memo eklenir?
+
+<Answer>
+Komut satırı cüzdanında memo'yu tutardan sonra yazın: send @rock 100 "invoice 1042". Cüzdan memo'yu onay ekranında ücretin yanında gösterir, alıcı için şifreler ve siz onayladığınızda ödemeyi gönderir. Ham baytlar da hex: önekiyle çalışır.
+</Answer>
+
+Cüzdanın `send` komutu memo'yu isteğe bağlı son argüman olarak alır:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Bir memo boşluk içerebilir ve etrafındaki tırnaklar isteğe bağlıdır. Cüzdan, metni şifrelemeden önce eşleşen bir tırnak çiftini kaldırır. İşte fatura numarasıyla bir Blocknet ID adına yapılan bir ödeme:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+Onay adımı alıcının okuyacağı memo'yu gösterir, böylece bir şey gönderilmeden önce memo'yu kontrol edebilirsiniz. Bir memo 124 bayttan uzunsa cüzdan işlemi oluşturmadan önce `memo too long: max 124 bytes` mesajıyla durur; memo'yu kısaltıp yeniden deneyebilirsiniz.
+
+Ham bayt göndermek için memo'nun başına `hex:` ekleyin. Cüzdan hex'i çözer ve baytları şifreler:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+[Ödeme bağlantıları](/tr/blog/blocknet-payment-links/) da memo taşıyabilir. Cüzdana bir `blocknet://` bağlantısı veya bir `bntpay.com` bağlantısı yapıştırdığınızda adres, tutar ve memo onaylamanız için doldurulur; böylece ödeme yaptığınız kişi fatura referansını önceden belirleyebilir. Adlar ve bağlantılar hakkında daha fazlasını [Blocknet ID rehberinde](/tr/blog/blocknet-id-pay-by-name/) okuyabilirsiniz.
+
+### Kendi yazılımınızdan memo'lar
+
+Cüzdan API'si bir gönderimin her alıcısı için bir memo alır. `POST /api/wallet/send` isteğinde her alıcıya düz metin için `memo_text` ya da ham baytlar için `memo_hex` verin:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Buradaki tutarlar atomik birimlerdir; 1 BNT 100.000.000 birimdir, bu yüzden örnek 100 BNT ve 25 BNT gönderir. Her alıcı yalnızca kendi cüzdanı için şifrelenmiş kendi memo'sunu alır. Aynı 124 baytlık üst sınır geçerlidir.
+
+## Bir Blocknet memo'sunu kim okuyabilir?
+
+<Answer>
+Gönderen ve alıcı. Her memo, iki cüzdanın o çıktı için paylaştığı sırla şifrelenir; bu, alıcının tek kullanımlık gizli adresini oluşturan sırla aynıdır. Düğüm operatörleri ve blok gezginleri dahil başka herkes 128 baytlık rastgele görünen bir veri görür ve içinde not olup olmadığını anlayamaz.
+</Answer>
+
+Cüzdanınız bir ödeme oluşturduğunda, paylaşılan bir sır elde etmek için yeni ve rastgele bir işlem anahtarını alıcının genel görüntüleme anahtarıyla (view key) birleştirir. Alıcının [tek kullanımlık gizli adresini](/tr/blog/blocknet-privacy-features/) oluşturan bu sırdır ve cüzdan memo'yu şifrelemek için de onu kullanır. Sırrı, çıktının işlemdeki konumu ve ağın tanımlayıcısıyla birlikte SHA3-256 ile hash'leyerek 128 baytlık bir maske oluşturur ve ardından maskeyi memo ile birleştirir. Her çıktı kendi maskesini alır, bu yüzden aynı işlemdeki iki memo ayrı ayrı şifrelenir.
+
+Alıcının cüzdanı, her bloğu tararken özel görüntüleme anahtarını kullanarak aynı sırrı diğer taraftan bulur. Memo'nun şifresini çözer ve onu ödemeyle birlikte saklar. Sizin tarafınızdaysa cüzdan, yazdığınız memo'ları gönderim geçmişinde tutar.
+
+Bilmeye değer iki nokta:
+
+- **Yalnızca görüntüleme amaçlı bir cüzdan da memo'ları gösterir.** Gelen ödemeleri okuyan şey özel görüntüleme anahtarınızdır, bu yüzden ondan oluşturulan yalnızca görüntüleme amaçlı bir cüzdan her ödemenin tutarını ve memo'sunu görür. Bu anahtarı yalnızca gelen ödemelerinizi görmesine izin vereceğiniz kişilerle paylaşın.
+- **Madencilik ödülleri boş memo taşır.** Konsensüs, her blok ödülündeki memo'nun boş olmasını gerektirir; bu yüzden zincirin coinbase çıktıları asla herkese açık bir mesaj kanalı olarak kullanılamaz.
+
+## Her memo zincirde neden aynı görünür
+
+Uzunluğunu gösteren bir memo bir şeyleri ele verirdi. 30 baytlık bir not 100 baytlık bir nottan farklı görünür ve boş bir memo her ikisinden de ayrılırdı. Blocknet'in cüzdanı bu boşluğu sabit bir düzen ve rastgele dolgu ile kapatır.
+
+Cüzdan, şifrelemeden önce memo'yu 128 baytlık bir zarfa yerleştirir:
+
+| Bayt | İçerik |
+|---|---|
+| 1 | Zarf sürümü |
+| 1 | Memo'nuzun uzunluğu |
+| 2 | Memo'nun sağlama toplamı |
+| 0 ila 124 | Memo'nuz |
+| Geri kalanı | Rastgele dolgu |
+
+Dolgu, sistemin kriptografik rastgele sayı üretecinden gelir, bu yüzden kullanılmayan alan tahmin edilemez. Şifrelemeden sonra kısa bir not, tam bir not ve boş bir memo'nun hepsi 128 baytlık rastgele görünen verilerdir. Para üstü çıktıları da kendilerine ait boş ve doldurulmuş bir memo alır, böylece kendinize geri gönderdiğiniz coinler bile diğerlerinden ayırt edilemez.
+
+Sağlama toplamı, alıcının cüzdanının memo'yu göstermeden önce şifresini doğru çözdüğünü teyit etmesini sağlar. Düğümler ayrıca memo alanı tamamen sıfırlardan oluşan bir çıktı içeren her bloğu reddeder, bu yüzden zincirdeki her çıktı düzgün doldurulmuş bir memo taşır.
+
+## Aldığınız memo'ları nerede bulabilirsiniz
+
+Komut satırı cüzdanı, ödemeleri listelediği her yerde memo'ları gösterir:
+
+- **`history`** gelen ve giden ödemeleri listeler; memo taşıyan her ödemenin altında bir `memo:` satırı bulunur.
+- **`outputs tx <txid>`**, cüzdanınızın o işlemde sahip olduğu her çıktıyı memo dahil gösterir. `outputs <n>` aynısını listedeki tek bir çıktı için yapar.
+- **Cüzdan API'si**, `GET /api/wallet/history` üzerinden alınan her çıktının memo'sunu `memo_hex` olarak döndürür; böylece bir sipariş sistemi onu doğrudan faturalarla eşleştirebilir.
+
+Metin memo'ları tırnak içinde görünür. `hex:` ile gönderilen ham baytlar gibi yazdırılabilir metin olmayan bir memo hex olarak görünür.
+
+Bir ödemenin teyit edilmesi gerekirse gönderen ödemeyi kanıtlayabilir. Cüzdanın `prove <txid>` komutu, gönderdiğiniz bir ödemenin işlem anahtarını yazdırır. Bu anahtara, işlem kimliğine ve alıcının adresine sahip olan herkes, cüzdan gerektirmeyen `POST /api/verify-proof` uç noktası üzerinden ödemeyi kontrol edebilir. Bu uç nokta işlemi doğrular ve o adresin aldığı çıktıları, tutarlarını ve memo'larını gösterir.
+
+## Göndereceğiniz BNT'yi kazanın
+
+İlk BNT'nizi edinmenin basit bir yolu madencilik yapmaktır. seine kendi bilgisayarınızda çalışır, madencilik yaparken kendini ayarlar ve bntpool.com üzerinden doğrudan adresinize veya `@name` adınıza ödeme yapar. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) onu birkaç dakika içinde çalıştırmanızı sağlar.
+
+<CTA target="seine" title="seine'i indirin, BNT madenciliği yapın" text="Hiç ayar yapmadan kendi bilgisayarınızda Blocknet madenciliği yapın, ardından cüzdanınızdan memo etiketli gizli ödemeler gönderin." />

@@ -1,0 +1,78 @@
+---
+title: '¿Windows bloqueó tu minero? Verifica la descarga'
+description: 'Comprueba una descarga de seine bloqueada en Windows: identifica el aviso, verifica el ZIP oficial con SHA-256 y reúne los datos para resolver la detección.'
+tags: ["Guía de minería", "Windows", "Descargas"]
+faq:
+  - q: '¿Un hash SHA-256 coincidente demuestra que un minero es seguro?'
+    a: 'Un hash coincidente confirma que el archivo descargado coincide con la suma de comprobación usada como referencia. Obtén ambos de la publicación oficial. Esto comprueba la integridad del archivo; no sustituye la revisión de una detección del antivirus ni demuestra por sí solo que sea seguro ejecutar el programa.'
+  - q: '¿Qué archivo de sumas debo usar para el ZIP de Windows?'
+    a: 'Usa el recurso SHA256SUMS.txt de la misma versión que seine-windows-x86_64.zip. Ese archivo contiene las sumas de los archivos comprimidos. Dentro del ZIP hay otro SHA256SUMS.txt que describe su contenido. Compara el ZIP con el recurso de la publicación y mantén juntas las versiones.'
+  - q: '¿Qué debo incluir al informar de una descarga bloqueada?'
+    a: 'Incluye la versión de seine, URL oficial, nombre del archivo, hash SHA-256, versión de Windows y nombre exacto de la detección o texto del aviso. Indica si afectó al ZIP o a un archivo extraído. Oculta rutas personales y excluye semillas, claves privadas y tokens de API de las capturas.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Si Windows bloquea una descarga de seine o desaparece un archivo extraído, identifica primero el archivo y el aviso exactos. Esta guía explica cómo comprobar la publicación oficial, comparar su suma SHA-256 y reunir datos útiles para un informe. El ejemplo usa seine v0.2.26, comprobado el 25 de octubre de 2026.
+
+## ¿Qué debes comprobar cuando Windows bloquea un minero?
+
+<Answer>
+Anota el texto del aviso, el nombre del archivo afectado y la versión antes de cambiar nada. Abre Seguridad de Windows y revisa el Historial de protección. Después obtén el archivo comprimido y la suma de la publicación oficial de seine. Comprueba el archivo y la versión exactos antes de decidir cómo tratar la alerta.
+</Answer>
+
+Despliega la entrada correspondiente del [Historial de protección](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app). Windows puede pedir permisos de administrador para ver los detalles. Anota si el elemento afectado es el ZIP, `seine.exe` o una DLL. Un ejecutable desaparecido y un aviso del navegador pueden corresponder a etapas distintas: guarda el nombre del archivo junto al mensaje.
+
+## ¿Es un aviso de SmartScreen o una detección del antivirus?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) evalúa las aplicaciones descargadas mediante señales de reputación del archivo y del editor. Un aviso de aplicación desconocida es distinto de una detección de antivirus con nombre. Anota el mensaje real; que el nombre de archivo contenga la palabra minero no identifica la comprobación ni explica el bloqueo.
+
+Microsoft también incluye los programas de minería de criptomonedas en sus [criterios de aplicaciones potencialmente no deseadas](https://learn.microsoft.com/en-us/defender-xdr/criteria), específicamente para entornos empresariales. En un equipo administrado del trabajo o centro educativo, consulta al administrador sobre la política aplicable. Es una categoría de software, no un veredicto sobre tu descarga. Resuelve la alerta concreta sin asumir que todo aviso de un minero es un falso positivo.
+
+## Obtén el ZIP y la suma de la misma versión
+
+Abre las [publicaciones oficiales de seine](https://github.com/zpalmtree/seine/releases) desde la [página de descarga](/es/#download). Confirma que el repositorio es `zpalmtree/seine`. Elige `seine-windows-x86_64.zip` y el recurso independiente `SHA256SUMS.txt` de una misma publicación. Anota la versión. La suma de una versión más reciente o antigua no sirve como referencia para el archivo que descargaste.
+
+![ZIP de Windows y SHA256SUMS.txt entre los recursos oficiales de seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Esta es una captura real de los recursos de v0.2.26. El archivo de sumas de la publicación cubre los archivos comprimidos descargables. Dentro del ZIP hay otro `SHA256SUMS.txt` para los archivos extraídos. Para esta primera comprobación usa el recurso descargado por separado. No mezcles las dos listas aunque tengan el mismo nombre.
+
+Usa directamente el archivo oficial. Un ejecutable renombrado, un paquete de terceros o un archivo recibido por chat no queda verificado al comparar la suma del ZIP oficial. Guarda el ZIP y la suma juntos en una carpeta fácil de localizar y ejecuta allí los comandos siguientes.
+
+## ¿Cómo se compara la suma SHA-256?
+
+Abre PowerShell en la carpeta de los dos archivos. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) calcula el SHA-256 del ZIP. La comparación selecciona la entrada del nombre exacto del archivo de Windows, exige una única coincidencia y termina con un error si el hash calculado difiere. Lee los archivos sin ejecutar el minero ni cambiar la protección de Windows.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+El mensaje de éxito es `PASS: ZIP matches SHA256SUMS.txt`. Si falta un archivo, comprueba la carpeta actual y sus nombres. Si no hay entrada de suma o está duplicada, descarga de nuevo el recurso original. Si el hash no coincide, detente: confirma la versión y vuelve a descargar el archivo oficial y la suma antes de repetir la comparación.
+
+## ¿Qué mostró el ejemplo verificado?
+
+Ejecutamos la comparación en Windows PowerShell 5.1 con el ZIP oficial de Windows v0.2.26. El hash calculado coincidió con la suma de la publicación. La imagen muestra la salida real del comando: es una transcripción renderizada, no una notificación de Seguridad de Windows. El [registro de texto](/assets/blog/seine-v0.2.26-verification.txt) conserva el hash completo y la lista de archivos.
+
+![Resultado real de la comprobación en Windows PowerShell del archivo de Windows de seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+La comparación responde si esos bytes coinciden con la referencia suministrada. No autentica una suma de otra fuente, no demuestra la ausencia de malware ni explica una detección concreta. Si la alerta menciona un ejecutable extraído, registra su nombre y detección por separado; el hash del ZIP identifica el archivo comprimido.
+
+## ¿Qué hacer si la descarga verificada sigue bloqueada?
+
+Mantén el elemento en cuarentena mientras se investiga una detección sin resolver. Reúne la versión, URL de descarga, nombre afectado, valor SHA-256 y aviso exacto. Añade la versión de Windows e indica si ocurrió durante la descarga, extracción o ejecución. Estos datos permiten reproducir el informe sin revelar tu configuración personal.
+
+Usa el [registro de incidencias de seine](https://github.com/zpalmtree/seine/issues) para informar al proyecto y el [portal de envío de archivos de Microsoft](https://www.microsoft.com/en-us/wdsi/filesubmission) si sospechas una detección incorrecta. Revisa los adjuntos antes de enviarlos. Comparte el archivo público o sus identificadores cuando se soliciten, no tu carpeta de datos de minería. Oculta rutas personales, datos de la cartera y tokens de autenticación en las capturas.
+
+Windows ofrece acciones específicas para algunos elementos detectados. Considera permitir un elemento solo tras aclarar su origen y detección y confiar en ese archivo exacto; sigue las instrucciones de la alerta registrada. Mantén activada la protección del sistema. En un dispositivo administrado, el administrador decide lo permitido.
+
+## Continúa con el archivo de Windows verificado
+
+Cuando se autorice el archivo, extrae el ZIP completo en una carpeta con permisos de escritura y conserva las DLL junto a `seine.exe`. La [guía de minería en Windows](/es/blog/mine-blocknet-on-windows/) explica el primer inicio y la dirección de cobro. Para controladores, bibliotecas o selección de dispositivos, consulta la [guía de NVIDIA](/es/blog/mine-blocknet-nvidia-gpu/). Son comprobaciones distintas de verificar la descarga.
+
+<CTA target="seine" title="Obtén la versión oficial de seine" text="Elige el archivo de Windows y verifica la suma de la misma versión antes de configurarlo." />

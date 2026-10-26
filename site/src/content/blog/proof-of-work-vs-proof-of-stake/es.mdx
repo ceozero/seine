@@ -1,0 +1,104 @@
+---
+title: Prueba de trabajo vs. prueba de participación (PoW vs PoS)
+description: 'Prueba de trabajo frente a prueba de participación: cómo elige cada una el siguiente bloque, protege la cadena y emite monedas nuevas, y por qué Blocknet usa prueba de trabajo.'
+tags: [Prueba de trabajo, Prueba de participación, Consenso, Blocknet, Minería]
+faq:
+  - q: '¿Blocknet usa prueba de trabajo o prueba de participación?'
+    a: 'Blocknet usa prueba de trabajo. Los mineros calculan hashes Argon2id que necesitan 2 GiB de memoria cada uno, se encuentra un bloque nuevo aproximadamente cada cinco minutos y toda la recompensa de bloque va al minero que lo encontró. No hay staking. Puedes minarlo con seine en una computadora normal a través del pool bntpool.com.'
+  - q: '¿Cuándo pasó Ethereum de prueba de trabajo a prueba de participación?'
+    a: 'Ethereum pasó a prueba de participación con una actualización llamada The Merge, ejecutada el 15 de septiembre de 2022. Desde entonces, en lugar de mineros, son los validadores que depositan 32 ETH quienes proponen bloques y votan sobre ellos. Bitcoin, Monero y Blocknet siguen usando prueba de trabajo, donde los bloques nuevos salen del trabajo de cálculo.'
+  - q: '¿Qué es un ataque del 51%?'
+    a: 'Un ataque del 51% es un intento de controlar qué bloques acepta una cadena teniendo la mayor parte del recurso que lo decide. En prueba de trabajo, eso significa la mayor parte de la potencia de hash de la red. En prueba de participación, la mayor parte de las monedas en stake. En ambos casos, el atacante tiene que comprometer una mayoría de recursos reales.'
+  - q: '¿Se puede minar una moneda de prueba de participación?'
+    a: 'No. Una moneda de prueba de participación pura no tiene minería. Las monedas nuevas se pagan a los validadores que bloquean monedas existentes como stake, así que necesitas tener monedas antes de poder ganar más. Para ganar monedas nuevas con la computadora que ya tienes, necesitas una moneda de prueba de trabajo como Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: reviewed
+---
+
+Este artículo explica cómo la prueba de trabajo y la prueba de participación deciden quién añade el siguiente bloque a una blockchain, cómo mantiene segura la cadena cada una y cómo crea monedas nuevas cada una. Blocknet, una moneda de prueba de trabajo que puedes minar en una computadora normal, sirve de ejemplo a lo largo de todo el texto.
+
+## ¿Qué diferencia hay entre prueba de trabajo y prueba de participación?
+
+<Answer>
+La prueba de trabajo y la prueba de participación son dos formas que tiene una blockchain de decidir quién añade el siguiente bloque. En la prueba de trabajo, los mineros gastan potencia de cálculo para encontrar un hash válido. En la prueba de participación, los validadores bloquean monedas como depósito y son elegidos para proponer bloques y votar sobre ellos. Ambas hacen que hacer trampa salga caro.
+</Answer>
+
+Toda blockchain tiene que resolver el mismo problema. Miles de computadoras que no confían entre sí necesitan ponerse de acuerdo sobre un único historial de pagos, para que nadie pueda gastar la misma moneda dos veces. Alguien tiene que proponer cada bloque nuevo, y todos los demás necesitan un motivo para aceptarlo. Esa regla se llama mecanismo de consenso, y la prueba de trabajo y la prueba de participación son los dos diseños más conocidos.
+
+| | Prueba de trabajo | Prueba de participación |
+|---|---|---|
+| Quién crea un bloque | El minero que encuentra primero un hash igual o inferior al objetivo de la red | Un validador elegido entre quienes han bloqueado monedas |
+| Qué comprometen | Hardware y electricidad | Monedas depositadas como stake |
+| Qué cadena gana | La cadena con más trabajo acumulado | La cadena respaldada por más votos de validadores, con puntos de control de finalidad |
+| Adónde van las monedas nuevas | Una recompensa de bloque para el minero que encontró el bloque | Recompensas para los validadores por proponer y votar |
+| Qué necesitas para participar | Una computadora que pueda calcular hashes | Monedas para hacer staking (32 ETH para un validador de Ethereum) |
+| Ejemplos | Bitcoin, Monero, Blocknet | Ethereum desde 2022 |
+
+## ¿Cómo elige la prueba de trabajo el siguiente bloque?
+
+En la prueba de trabajo, los mineros compiten por resolver un rompecabezas difícil de resolver y fácil de comprobar. Un minero toma el bloque que quiere publicar, le añade un número llamado nonce y calcula el hash del resultado. Si el hash, leído como número, es igual o inferior al objetivo de la red, el bloque es válido. Si no, el minero cambia el nonce y vuelve a intentarlo. La única forma de ganar es probar muchos nonces, así que la probabilidad de que un minero encuentre el siguiente bloque coincide con su parte de la potencia de hash de la red.
+
+El [artículo de Bitcoin](https://bitcoin.org/bitcoin.pdf) que Satoshi Nakamoto publicó en 2008 lo resumía así: «La prueba de trabajo es, en esencia, una CPU, un voto». Los nodos siguen la cadena en la que se ha invertido el mayor esfuerzo de prueba de trabajo, y un ajuste de dificultad sube o baja el objetivo para que los bloques sigan llegando a un ritmo constante, se sume la potencia de hash que se sume. La guía sobre [cómo funciona la minería de criptomonedas](/es/blog/how-crypto-mining-works/) explica paso a paso los hashes, la dificultad y los pools.
+
+Blocknet funciona igual, con cifras fijadas en su código de consenso:
+
+- **El hash es Argon2id** con 2 GiB de memoria, así que cada hash necesita memoria real además de tiempo de procesador. La [explicación de Argon2id](/es/blog/argon2id-proof-of-work-explained/) muestra cómo funciona.
+- **El objetivo es (2^256 − 1) dividido entre la dificultad**, lo que hace que la dificultad sea aproximadamente el número de hashes que la red necesita para encontrar un bloque.
+- **Llega un bloque aproximadamente cada cinco minutos**, 288 bloques al día. La dificultad sigue los tiempos de bloque recientes mediante una media móvil ponderada de 60 bloques (LWMA).
+- **Los nodos siguen la cadena más pesada.** Cada nodo suma la dificultad de todos los bloques de una cadena y solo cambia a una cadena rival cuando su trabajo total es mayor.
+
+## ¿Cómo elige la prueba de participación el siguiente bloque?
+
+La prueba de participación sustituye el cálculo de hashes por un depósito. Para participar, un validador bloquea monedas en el protocolo, y el protocolo elige validadores para proponer y aprobar bloques. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), lanzada en 2012, fue la primera criptomoneda en usarla, y Ethereum hizo el cambio el 15 de septiembre de 2022 con una actualización llamada [The Merge](https://ethereum.org/en/roadmap/merge/).
+
+El diseño de Ethereum muestra las piezas que intervienen. Según [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Un validador deposita 32 ETH en el contrato de depósito.
+- El tiempo se divide en slots de 12 segundos, agrupados en épocas de 32 slots.
+- En cada slot se elige al azar a un validador para que proponga un bloque, y otros votan sobre él con atestaciones.
+- Los puntos de control pasan a ser definitivos cuando los validadores que tienen al menos dos tercios de todo el ETH en stake votan a su favor.
+- Un validador que propone dos bloques para el mismo slot, o que emite votos contradictorios, sufre slashing: se destruye parte de su stake, hasta la totalidad.
+
+El stake cumple la función que la electricidad cumple en la prueba de trabajo. Saltarse las reglas le cuesta al validador monedas que ya posee.
+
+## ¿Cómo se mantienen seguras la prueba de trabajo y la prueba de participación?
+
+Ambos diseños hacen que un ataque cueste más de lo que podría ganar, y sitúan ese coste en lugares distintos.
+
+**En la prueba de trabajo, el coste es cálculo continuo.** Para reescribir un bloque pasado, un atacante tiene que rehacer el trabajo de ese bloque y de todos los posteriores, y después adelantar a la red honesta. Nakamoto demostró que la probabilidad de que un atacante más lento la alcance disminuye exponencialmente con cada bloque nuevo. Controlar la cadena a partir de ese momento exige tener más potencia de hash que todos los demás juntos durante todo el tiempo que dure el ataque.
+
+**En la prueba de participación, el coste es capital en riesgo.** La documentación de Ethereum dice que un atacante «necesitaría el 51% del ETH en stake» para controlar la cadena, que un tercio del stake basta para impedir que los bloques se vuelvan definitivos y que revertir un bloque finalizado supondría perder al menos un tercio de todo el ETH en stake por slashing.
+
+Blocknet añade además dos umbrales a su prueba de trabajo. La red considera seguras 10 confirmaciones, unos 50 minutos, y los nodos rechazan cualquier reorganización de más de 100 bloques de profundidad, unas ocho horas, así que un bloque con 100 bloques encima es definitivo.
+
+## ¿Cómo emiten monedas nuevas los dos modelos?
+
+<Answer>
+Las monedas de prueba de trabajo pagan las monedas nuevas al minero que encuentra cada bloque, así que cualquiera que aporte potencia de cálculo puede ganar monedas sin tener ninguna antes. Las monedas de prueba de participación pagan las monedas nuevas a los validadores en proporción a su stake, así que las recompensas van a quienes ya tienen monedas. Cada protocolo fija su propio calendario.
+</Answer>
+
+En la prueba de trabajo, la primera transacción de cada bloque crea monedas nuevas para el minero que lo encontró. El artículo de Bitcoin lo describe como «una forma de poner inicialmente las monedas en circulación, ya que no hay ninguna autoridad central que las emita». La recompensa de Bitcoin se reduce a la mitad cada 210.000 bloques, aproximadamente cada cuatro años, y el suministro total se queda justo por debajo de 21 millones.
+
+En la prueba de participación de Ethereum, las recompensas se suman a los saldos de los validadores una vez por época por las atestaciones, las propuestas de bloques y la participación en el comité de sincronización. La [recompensa base](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) se reduce a medida que crece el stake total, mientras que la emisión total aumenta a medida que se unen más validadores.
+
+La emisión de Blocknet funciona por completo a través de la minería. Su bloque génesis no contiene ninguna transacción, así que no existía ninguna moneda antes de que empezara la minería, y el consenso no tiene premine, tesorería ni salida para los fundadores. Cada bloque paga toda su recompensa en una sola salida al minero que lo encontró. La recompensa empezó en 723,25 BNT por bloque, baja cada mes de 30 días siguiendo una curva exponencial durante 48 meses y después se queda en 2 BNT por bloque para siempre.
+
+## ¿Por qué Blocknet usa prueba de trabajo?
+
+Blocknet eligió la prueba de trabajo para que cualquiera con una computadora pudiera ganar monedas nuevas desde el primer bloque, sin tener que comprar ninguna antes. Su daemon describe Argon2id como una «PoW intensiva en memoria para resistir a los ASIC y garantizar una minería justa», y ejecuta cada hash en un solo hilo «por equidad».
+
+El requisito de memoria es lo que mantiene la minería abierta. Cada hash llena 2 GiB de memoria, así que cada hilo de minería necesita unos 2 GB de RAM, y las computadoras que la gente ya tiene, ya sean de escritorio, portátiles o servidores, tienen esa memoria y los controladores para alimentarla. Blocknet forma parte de una familia de monedas de prueba de trabajo diseñadas en torno al hardware de uso general: Monero, por ejemplo, usa desde noviembre de 2019 [RandomX](https://github.com/tevador/RandomX), «optimizado para CPU de uso general».
+
+La prueba de trabajo sigue en los planes de Blocknet. La actualización Faraday, prevista para alrededor de febrero de 2027 según [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), traerá «una prueba de trabajo más ligera» para que los nodos nuevos se pongan al día con la cadena más rápido.
+
+## ¿Cómo empezar a minar una moneda de prueba de trabajo?
+
+Para Blocknet, necesitas una dirección de billetera y seine, el minero gratuito y de código abierto:
+
+1. Consigue una dirección en la billetera oficial. La [guía de la billetera](/es/blog/blocknet-wallet-for-mining/) te lo explica paso a paso.
+2. [Descarga seine](/es/#download) para Windows, macOS o Linux y ejecútalo.
+3. Pega tu dirección o tu `@name` y acepta el pool predeterminado, bntpool.com.
+
+seine elige el número de hilos según tu RAM, compara kernels de CPU mientras mina y se queda con el más rápido, y en Windows y Linux añade cualquier tarjeta gráfica NVIDIA junto al procesador. La [guía de minería](/es/blog/how-to-mine-blocknet/) explica en detalle el hardware y los pagos.
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Descarga seine, pega tu dirección o tu @name, y tu computadora empezará a minar BNT en bntpool.com en pocos minutos." />

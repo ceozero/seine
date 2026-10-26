@@ -1,0 +1,173 @@
+---
+title: Crie uma carteira e um endereço Blocknet para minerar
+description: Configure a carteira oficial do Blocknet, faça backup da seed de recuperação de 12 palavras, copie o endereço para minerar e veja os pagamentos do bntpool.com chegarem ao saldo.
+tags: [Carteira, Guia de mineração, bntpool]
+faq:
+  - q: 'Preciso de uma carteira Blocknet antes de começar a minerar?'
+    a: 'Você precisa de um endereço Blocknet para onde minerar, e a carteira oficial fornece um. Crie uma carteira na versão de linha de comando ou na versão para desktop, copie o endereço e cole-o no seine. A carteira em si fica no seu próprio computador. O seine e o bntpool.com só precisam do endereço, ou de um shortname do Blocknet ID que aponte para ele.'
+  - q: 'Quantas palavras tem uma seed de recuperação do Blocknet?'
+    a: 'Uma seed de recuperação do Blocknet tem 12 palavras. Na carteira de linha de comando, o comando seed a mostra depois de um aviso e da senha da sua carteira. Anote as palavras em papel e guarde-as offline. Com essas 12 palavras, o comando import consegue reconstruir sua carteira em qualquer máquina, mesmo que o arquivo da carteira e a senha se percam.'
+  - q: 'Quando os pagamentos do bntpool.com aparecem na minha carteira?'
+    a: 'Um bloco do pool precisa de 60 confirmações, cerca de cinco horas com o tempo de bloco de cinco minutos do Blocknet, antes que suas recompensas sejam pagas. Quando seu saldo confirmado no pool chega a 0,1 BNT, o pool o envia para o seu endereço. O pagamento aparece no histórico como uma transação comum e fica disponível para gastar depois de 10 confirmações, cerca de 50 minutos.'
+  - q: 'Posso usar o mesmo endereço em várias máquinas de mineração?'
+    a: 'Sim. Toda máquina rodando o seine pode minerar para o mesmo endereço ou shortname do Blocknet ID, e o bntpool.com soma os shares delas em um único saldo. A página de estatísticas do pool lista cada máquina conectada sob o seu endereço. A carteira e a seed de recuperação ficam no seu próprio computador o tempo todo.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Para minerar Blocknet você precisa de um endereço para as suas recompensas, e a carteira oficial fornece um em poucos minutos. Este guia mostra como criar uma carteira com a carteira de linha de comando ou a carteira para desktop, fazer backup da seed de recuperação, encontrar o endereço para colar no seine e conferir seu saldo quando o bntpool.com pagar você.
+
+## Qual carteira Blocknet usar para minerar?
+
+<Answer>
+Use uma das duas carteiras oficiais da Blocknet Privacy: a carteira de linha de comando, que roda no Windows, macOS e Linux, ou a carteira para desktop, para os mesmos sistemas. As duas rodam um nó Blocknet completo no seu computador e fornecem um endereço de recebimento para minerar no bntpool.com com o seine.
+</Answer>
+
+- **Carteira de linha de comando.** O programa `blocknet` instala, inicia e atualiza um core Blocknet, o processo em segundo plano que roda o nó, a carteira e a rede. Você gerencia sua carteira por um shell interativo. Baixe-a nas [versões de linha de comando](https://github.com/blocknetprivacy/blocknet/releases/latest), que têm builds para Windows, macOS e Linux.
+- **Carteira para desktop.** Uma carteira gráfica que já inclui o daemon do Blocknet. Baixe-a nas [versões para desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Escolha a que preferir. Os passos abaixo mostram a carteira de linha de comando, porque todos os comandos estão documentados, e depois cobrem a instalação da versão para desktop.
+
+## Como criar uma carteira com a carteira de linha de comando
+
+1. **Instale e inicie um core.** Descompacte a versão baixada e rode o assistente de configuração:
+
+   ```sh
+   blocknet setup
+   ```
+
+   O assistente pergunta se você quer manter seu nó atualizado automaticamente, baixa o core mais recente e oferece iniciá-lo. No Windows o programa é `blocknet.exe`, então rode `blocknet.exe setup`. Para pular o assistente, rode `blocknet install latest` e depois `blocknet start`.
+
+2. **Abra o shell.** Conecte-se ao core em execução:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Você recebe um prompt `>`. Fechar o shell com `quit` deixa o core rodando, então você pode se conectar de novo a qualquer momento.
+
+3. **Crie a carteira.** Digite `load`. A carteira lista os arquivos de carteira que encontrar e oferece "Create a new wallet". Escolha essa opção, digite um nome e uma senha, e o core cria uma nova carteira com uma seed de recuperação nova:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+A carteira é um único arquivo `.wallet.dat`, e sua senha criptografa a chave de gasto dela. O core lembra o caminho da carteira, então o próximo `blocknet start` a carrega para você. O Blocknet também copia uma carteira carregada para `~/.config/bnt/wallets/`, o que dá a você uma segunda cópia em um lugar conhecido.
+
+## Como fazer backup da sua seed de recuperação?
+
+Sua seed de recuperação é o backup mais importante. Ela tem 12 palavras, e com elas você pode reconstruir a carteira em qualquer computador, mesmo que perca o arquivo da carteira ou esqueça a senha. O Blocknet nunca armazena sua senha, então a seed também é a forma de se recuperar de uma senha esquecida.
+
+Mostre-a com o comando `seed`. A carteira exibe um aviso, pede que você confirme e pede sua senha, e então mostra as palavras:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Anote as 12 palavras em papel e guarde-as em um lugar seguro e offline. O guia da carteira diz para não salvá-las em um arquivo de texto, em um app de notas ou na nuvem, porque quem tiver as palavras controla os fundos. O guia sobre [seed phrases (frases de recuperação)](/pt-br/blog/seed-phrase-explained/) explica como as 12 palavras se tornam suas chaves e como guardá-las bem.
+
+Para restaurar depois, rode `import`, escolha `1) 12-word recovery seed`, digite as palavras e dê um nome e uma senha à nova carteira. O core então examina a blockchain em busca das suas saídas.
+
+## Como encontrar seu endereço Blocknet?
+
+<Answer>
+Na carteira de linha de comando, digite address (ou addr) no prompt do shell. A carteira exibe seu endereço de recebimento, uma sequência de 92 ou 93 caracteres, seguida de uma indicação do blocknet.id para um nome curto. Copie o endereço inteiro e cole-o no seine quando ele pedir um endereço de pagamento.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Este é o endereço que você informa ao seine. Quando você iniciar o [seine](/pt-br/#download) pela primeira vez, ele pede seu endereço de pagamento e depois um pool; cole o endereço e pressione Enter para aceitar o bntpool.com. Você também pode passá-lo diretamente:
+
+```sh
+./seine --address <your-address>
+```
+
+Quando o seine estiver minerando, o quadro de saldo do pool no [painel](/pt-br/blog/seine-dashboard-explained/) do seine mostra os seis primeiros e os seis últimos caracteres do endereço para o qual você está minerando, para você conferir se ele bate com a sua carteira.
+
+Se preferir minerar para algo mais curto, um [shortname do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/) como `@yourname` aponta para este endereço e funciona no seine e no bntpool.com.
+
+## Configurando a carteira para desktop
+
+A versão mais recente da carteira para desktop (v0.22.0, publicada em 15 de outubro de 2026) tem estes downloads:
+
+| Sistema | Arquivo |
+|---|---|
+| Windows x86_64 | instalador `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Toda versão inclui um `SHA256SUMS.txt`, para você conferir o download antes de instalar:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+No Linux, instale o `.deb` ou execute o `.AppImage` diretamente. No macOS, mova o app para Aplicativos e rode isto uma vez no Terminal antes da primeira execução, como o README orienta:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+No Windows, se o Defender mostrar um aviso para o instalador, clique em "Mais informações" e depois em "Executar assim mesmo".
+
+O app roda o daemon do Blocknet que vem com ele no seu computador e conversa com ele por `127.0.0.1`, sem fazer requisições a serviços externos. Crie sua carteira no app, anote a seed de recuperação e copie seu endereço de recebimento para o seine. A carteira para desktop também abre [links de pagamento](/pt-br/blog/blocknet-payment-links/) `blocknet://` e preenche o formulário de envio para você revisar.
+
+## Mantenha suas chaves no seu próprio computador
+
+Uma máquina de mineração só precisa do seu endereço. O seine só precisa de um endereço ou shortname para minerar, então o arquivo da carteira e a seed de recuperação podem ficar no computador em que você confia. Isso importa principalmente para servidores alugados, rigs compartilhados e máquinas que outras pessoas podem acessar.
+
+- **Rode a carteira em casa e minere em qualquer lugar.** Coloque o mesmo endereço em todas as máquinas rodando o seine. O bntpool.com soma os shares delas em um único saldo.
+- **Acompanhe o progresso sem as chaves.** Consulte seu endereço no [bntpool.com](https://bntpool.com) para ver seu hashrate, seus shares e seu saldo em qualquer navegador.
+- **Acesso somente leitura.** Se quiser ver os fundos recebidos em um segundo computador, `viewkeys` exporta chaves somente leitura. Uma carteira somente leitura mostra os fundos recebidos e não consegue enviar nem assinar.
+- **Bloqueie quando se afastar.** `lock` bloqueia os gastos até você usar `unlock` com sua senha.
+
+## Como os pagamentos da mineração aparecem na sua carteira?
+
+O bntpool.com paga as recompensas quando o bloco delas amadurece. Um bloco do pool precisa de 60 confirmações, cerca de cinco horas com o tempo de bloco de cinco minutos do Blocknet. Quando seu saldo confirmado chega ao mínimo de 0,1 BNT, o pool o envia para o seu endereço como uma transação Blocknet normal.
+
+Na carteira, confira `balance` (ou `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Um pagamento novo aparece primeiro em `confirming`. Transações comuns ficam disponíveis para gastar depois de 10 confirmações, cerca de 50 minutos, e então passam para `spendable`. O comando `history` lista as transações recebidas da mais antiga para a mais nova, com o bloco, o valor e o tipo de cada uma: os pagamentos do pool aparecem como `regular`, e os blocos que você mesmo encontra no modo solo aparecem como `coinbase`, que precisam de 60 confirmações antes de poderem ser gastos.
+
+Sua carteira lista um pagamento quando o nó dela termina de sincronizar com a blockchain. `status` mostra `Syncing: false` quando isso acontece, e `sync` examina de novo os blocos baixados em busca das suas saídas.
+
+É novo em mineração? O [guia de mineração de Blocknet](/pt-br/blog/how-to-mine-blocknet/) mostra como baixar o seine, escolher as threads e o que esperar no bntpool.com.
+
+<CTA target="pool" title="Minere para o seu novo endereço" text="Cole seu endereço Blocknet no seine, aceite o bntpool.com e veja os pagamentos chegarem à sua carteira quando seu saldo atingir 0,1 BNT." />

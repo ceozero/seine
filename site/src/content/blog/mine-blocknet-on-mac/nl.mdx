@@ -1,0 +1,131 @@
+---
+title: Blocknet minen op een Mac
+description: Mine Blocknet op een Mac met Apple Silicon met seine. Stel het in via Terminal, bekijk het gemeten resultaat van 30,9 H/s op de M4 Max en zie hoeveel threads je Mac aankan.
+tags: [Mininghandleiding, macOS, Apple Silicon, seine]
+faq:
+  - q: 'Kun je Blocknet minen op een MacBook Air?'
+    a: 'Ja. Elke Mac met Apple Silicon draait seine, ook de MacBook Air. Download seine-macos-aarch64.tar.gz, pak het uit in Terminal en voer ./seine uit. Elke thread heeft ongeveer 2 GB geheugen nodig, dus een MacBook Air met 16 GB kan maximaal zeven threads draaien, en seine stelt het aantal voor je in op basis van het vrije geheugen.'
+  - q: 'Gebruikt seine de GPU bij het minen van Blocknet op een Mac?'
+    a: 'seine minet op Apple Silicon standaard op de CPU, omdat dat de snelste keuze is. De CPU en de grafische cores delen hetzelfde unified memory, en de Argon2id-proof-of-work van Blocknet draait op geheugenbandbreedte. Op de M4 Max leverde minen met alleen de CPU de hoogste hashrate op, dus seine gebruikt dat automatisch.'
+  - q: 'Hoeveel geheugen heeft een Mac nodig om Blocknet te minen?'
+    a: 'Elke mining-thread werkt met een geheugenblok van 2 GiB, dus reken op ongeveer 2 GB per thread. Een Mac met 16 GB kan maximaal zeven threads draaien, een Mac met 32 GB maximaal 15 en een Mac met 64 GB maximaal 30. seine telt het vrije geheugen en stemt de threads ook af op je cores.'
+  - q: 'Kun je Blocknet minen op een Intel-Mac?'
+    a: 'Ja. seine brengt een apart archief uit voor Intel-Macs, seine-macos-x86_64.tar.gz, en de stappen zijn dezelfde als op Apple Silicon. Download het, pak het uit in Terminal, voer ./seine uit en plak je Blocknet-adres of @name. seine stemt het aantal threads af op je geheugen en begint standaard te minen op bntpool.com.'
+sourceHash: 59ec24375f40
+translation: draft
+---
+
+Deze handleiding laat zien hoe je Blocknet minet op een Mac met Apple Silicon met **seine**: waarom chips uit de M-serie goed passen bij de proof of work van Blocknet, wat een M4 Max heeft gemeten, hoeveel threads het geheugen van je Mac aankan en welke stappen je precies in Terminal uitvoert om te beginnen met minen op bntpool.com.
+
+## Kun je Blocknet minen op een Mac?
+
+<Answer>
+Ja. Macs met Apple Silicon zijn sterke Blocknet-miners, omdat hun unified memory de geheugenintensieve Argon2id-proof-of-work volop bandbreedte geeft. Download `seine-macos-aarch64.tar.gz`, pak het uit in Terminal, voer `./seine` uit en plak je adres. Een M4 Max met 48 GB haalde 30,9 H/s met alleen de CPU.
+</Answer>
+
+seine regelt de Mac-specifieke instellingen zelf. Het minet op de CPU, plant zijn threads eerst op de performance-cores en stemt het aantal threads af op je geheugen, dus voor de meeste mensen is een gewone `./seine` genoeg.
+
+## Waarom minen Macs met Apple Silicon Blocknet zo goed?
+
+De proof of work van Blocknet is [Argon2id](/nl/blog/argon2id-proof-of-work-explained/) met 2 GiB geheugen per hash. Elke hash vult een geheugenblok van 2 GiB en leest onderweg eerdere delen ervan terug, dus de snelheid van een mining-thread hangt vooral af van hoe snel de chip data van en naar het geheugen kan verplaatsen. Daarom heeft elke seine-thread ongeveer 2 GB RAM voor zichzelf nodig.
+
+Apple Silicon is gebouwd rond unified memory, dat [Apple omschrijft](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) als geheugen met hoge bandbreedte en lage latentie, samengebracht in één pool. Dat geeft elke mining-thread volop bandbreedte, en dat is precies wat een geheugenintensieve hash nodig heeft. Het resultaat is een laptop die Blocknet in dezelfde klasse minet als serverprocessors.
+
+## Hoe snel minet een M4 Max Blocknet?
+
+<Answer>
+Een MacBook Pro met 48 GB en de M4 Max-chip minede Blocknet met 30,94 H/s met 16 threads op alleen de CPU. Met 14 threads en planning op de performance-cores, de gebalanceerde instelling die seine standaard op die machine gebruikt, haalde hij 29,26 H/s en bleef er meer geheugen vrij voor andere apps.
+</Answer>
+
+Deze resultaten komen uit de validatiereeks van seine op een M4 Max met 48 GB (12 performance-cores en 4 efficiency-cores) op 10 juli 2026:
+
+| Instelling | Threads | Hashrate |
+|---|---|---|
+| Maximale doorvoer | 16, planning `auto` | 30,94 H/s |
+| Gebalanceerd (standaardplafond van seine op deze Mac) | 14, planning `pcore-only` | 29,26 H/s |
+
+Ter vergelijking: het resultaat van 30,9 H/s ligt voor op elk resultaat van Arm-servers en Intel Xeon in de [prestatietabellen](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) van seine; alleen de AMD EPYC-servers met Zen 5 en Zen 4 haalden meer. De [gids over Blocknet-mininghardware](/nl/blog/blocknet-mining-hardware-hashrate/) vergelijkt het beste resultaat per hardwaregeneratie, en de [Apple Silicon-handleiding](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) bevat alle tuningnotities.
+
+## Hoeveel threads kan je Mac draaien?
+
+Elke thread heeft zijn eigen 2 GiB geheugen nodig, dus het geheugen bepaalt het plafond. seine laat bij het bepalen van zijn instellingen ook 5% van het geheugen van je Mac vrij als marge. Dat geeft deze bovengrenzen:
+
+| Geheugen van de Mac | Threads die het geheugen aankan |
+|---|---|
+| 16 GB | maximaal 7 |
+| 24 GB | maximaal 11 |
+| 32 GB | maximaal 15 |
+| 36 GB | maximaal 17 |
+| 48 GB | maximaal 22 |
+| 64 GB | maximaal 30 |
+
+Twee dingen brengen het uiteindelijke aantal op de juiste maat voor je Mac:
+
+- **Vrij geheugen.** seine telt bij het starten het geheugen dat echt vrij is, dus apps die openstaan verlagen het aantal een beetje. Wordt het geheugen krap terwijl het draait, dan parkeert seine threads en geeft het hun geheugen vrij.
+- **Cores.** Op een Mac gebruikt seine standaard alle performance-cores plus de helft van de efficiency-cores. Op de M4 Max met 12+4 cores zijn dat 14 threads, de gebalanceerde instelling in de tabel hierboven.
+
+Je hoeft hier niets van uit te rekenen. seine kiest het aantal threads bij het starten en blijft aantallen in de buurt testen terwijl het minet.
+
+## Stap voor stap instellen op macOS
+
+### Stap 1: zorg voor een Blocknet-adres
+
+Installeer de officiële Blocknet-wallet, de [command-line-wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) of de [desktopwallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), en kopieer je adres. Heb je een korte Blocknet ID-naam van [blocknet.id](https://blocknet.id), dan kun je in plaats daarvan naar `@name` minen.
+
+### Stap 2: download seine voor Apple Silicon
+
+Haal `seine-macos-aarch64.tar.gz` op via de [downloadsectie](/nl/#download). Het bevat het programma `seine`, de readme en licentie, en een bestand `SHA256SUMS.txt` om de download te controleren.
+
+### Stap 3: pak het uit in Terminal
+
+Open Terminal (in Programma's, daarna Hulpprogramma's) en voer deze commando's uit. Ze maken een map `seine` in je thuismap en pakken het archief daarin uit:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### Stap 4: start seine
+
+```sh
+./seine
+```
+
+De macOS-build is ad-hoc ondertekend. Houdt macOS de eerste start tegen, open dan Systeeminstellingen, ga naar Privacy en beveiliging en sta `seine` toe. Je kunt ook de downloadmarkering wissen vanuit Terminal en het opnieuw starten:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### Stap 5: voer je adres in en begin met minen
+
+seine vraagt om je uitbetalingsadres of `@shortname` en daarna om een pool. Druk op Return om de standaard te accepteren, `stratum+tcp://bntpool.com:3333`. [Het dashboard](/nl/blog/seine-dashboard-explained/) toont daarna je hashrate en je eerste geaccepteerde shares. De pool bntpool.com stuurt je saldo naar je adres zodra het 0,1 BNT bereikt, en je kunt het volgen op [bntpool.com](https://bntpool.com) door je adres op te zoeken.
+
+## Waarom minet seine op een Mac alleen op de CPU?
+
+Op Apple Silicon delen de CPU en de grafische cores één pool unified memory. Argon2id draait op geheugenbandbreedte, dus de CPU en de grafische cores zouden om dezelfde bandbreedte concurreren. In de tests van seine op de M4 Max gaf minen met alleen de CPU de hoogste hashrate, dus seine kiest dat automatisch op elke Mac met Apple Silicon. Je krijgt de snelste opzet zonder flags in te stellen.
+
+## Hoe haal je het meeste uit een Mac?
+
+- **Laat seine zichzelf afstemmen.** Het vergelijkt aantallen threads en CPU-kernels op echt miningwerk, schakelt pas over na een bevestigde winst en onthoudt het resultaat voor de volgende start.
+- **Houd de Mac wakker.** macOS zet een inactieve Mac in de sluimerstand, en dan pauzeert het minen. Start seine met het ingebouwde commando `caffeinate` om de Mac wakker te houden zolang seine draait:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Kies maximale doorvoer op een Mac die alleen minet.** Doet de Mac niets anders dan minen, dan gebruikt de instelling die 30,94 H/s haalde op de M4 Max alle 16 cores en meer geheugen dan de gebalanceerde standaard:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Alle opties vind je in de [configuratiehandleiding](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md). De [algemene mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt uitbetalingen en de andere platforms.
+
+<Note>
+Deze resultaten gaan over de huidige Argon2id-proof-of-work van Blocknet. Blocknet plant rond 16 februari 2027 een netwerkupgrade met de naam Faraday, die de proof of work moet veranderen, volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). seine controleert bij het starten en elke 12 uur op nieuwe releases, dus houd het up-to-date.
+</Note>
+
+<CTA target="seine" title="Download seine voor macOS" text="De Apple Silicon-build minet op de CPU van je Mac en kiest automatisch het aantal threads." />

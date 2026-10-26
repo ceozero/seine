@@ -16,7 +16,8 @@ use crate::backend::{
     BackendEvent, BackendInstanceId, DeadlineSupport, KernelBenchSample, PowBackend,
 };
 use crate::config::{
-    BenchBaselinePolicy, BenchKind, Config, CpuAffinityMode, CpuPerformanceProfile, WorkAllocation,
+    BackendKind, BenchBaselinePolicy, BenchKind, Config, CpuAffinityMode, CpuPerformanceProfile,
+    WorkAllocation,
 };
 
 use super::hash_poll::build_backend_poll_state;
@@ -196,6 +197,8 @@ struct BenchConfigFingerprint {
     hash_poll_ms: u64,
     cpu_profile: String,
     cpu_page_mode: String,
+    cpu_kernel: Option<String>,
+    cpu_kernel_requested: Option<String>,
     cpu_hash_batch_size: u64,
     cpu_control_check_interval_hashes: u64,
     cpu_hash_flush_ms: u64,
@@ -269,6 +272,8 @@ struct BenchEnvironment {
     kernel_version: Option<String>,
     cpu_arch: Option<String>,
     cpu_brand: Option<String>,
+    cpu_identity: crate::runtime_identity::CpuIdentity,
+    cpu_kernels_supported: Vec<String>,
     logical_cores: usize,
     physical_cores: Option<usize>,
     total_memory_bytes: u64,
@@ -288,11 +293,15 @@ struct WorkerBenchmarkIdentity {
 }
 
 type BackendEventAction = RuntimeBackendEventAction;
+// Schema 14 records selected/requested CPU kernels and x86 identity. CPU
+// comparisons require known matching kernel paths, including cross-build comparisons.
 // Schema 13 adds the AMD backend fingerprint fields (amd_devices,
 // amd_max_lanes); schema-12 baselines remain comparable because the new
 // fields default to empty/None on load and are only cross-checked when both
 // reports are schema >= 13.
-const BENCH_REPORT_SCHEMA_VERSION: u32 = 13;
+// Schema 15 preserves the CPU kernel hashing timer separately from arena
+// lifecycle time. Older CPU kernel rates are not directly comparable.
+const BENCH_REPORT_SCHEMA_VERSION: u32 = 15;
 const BENCH_REPORT_COMPAT_MIN_SCHEMA_VERSION: u32 = 12;
 const BENCH_SHORT_WINDOW_WARN_SECS: u64 = 10;
 const BENCH_FENCE_JITTER_WARN_SECS: f64 = 0.250;
@@ -360,6 +369,29 @@ impl KernelBenchMode {
 }
 
 pub(super) fn run_benchmark(cfg: &Config, shutdown: &AtomicBool) -> Result<()> {
+    crate::config::validate_benchmark_cpu_kernel(
+        cfg.bench_cpu_kernel,
+        cfg.bench,
+        &cfg.backend_specs
+            .iter()
+            .map(|spec| spec.kind)
+            .collect::<Vec<_>>(),
+        Some(cfg.threads),
+        cfg.cpu_autotune_threads,
+    )?;
+    if let Some(kernel) = selected_cpu_kernel(cfg) {
+        info(
+            "BENCH",
+            format!(
+                "CPU kernel: {kernel} ({})",
+                if cfg.bench_cpu_kernel.is_some() {
+                    "explicit override"
+                } else {
+                    "automatic"
+                }
+            ),
+        );
+    }
     let runtime_cfg = super::prepare_runtime_config(cfg, shutdown, RuntimeMode::Bench)?;
     let cfg = &runtime_cfg;
     let instances = super::build_backend_instances(cfg);
@@ -1360,6 +1392,34 @@ fn baseline_compatibility_issues(
         ));
     }
 
+    let includes_cpu = current
+        .backends
+        .iter()
+        .chain(&baseline.backends)
+        .any(|backend| backend.split('#').next() == Some("cpu"));
+    if includes_cpu
+        && (current.bench_kind == "kernel" || baseline.bench_kind == "kernel")
+        && (current.schema_version < 15 || baseline.schema_version < 15)
+    {
+        issues.push(
+            "CPU kernel timing changed: capture a schema-15 baseline that excludes arena setup and cleanup".to_string(),
+        );
+    }
+    if includes_cpu {
+        match (
+            &baseline.config_fingerprint.cpu_kernel,
+            &current.config_fingerprint.cpu_kernel,
+        ) {
+            (Some(old), Some(new)) if old == new => {}
+            (Some(old), Some(new)) => {
+                issues.push(format!("cpu_kernel mismatch baseline={old} current={new}"))
+            }
+            _ => {
+                issues.push("CPU kernel identity missing; capture a schema-14 baseline".to_string())
+            }
+        }
+    }
+
     if schema_compatible {
         if baseline.config_fingerprint.backend_event_capacity
             != current.config_fingerprint.backend_event_capacity
@@ -1733,6 +1793,9 @@ fn baseline_compatibility_issues(
     }
 
     if policy == BenchBaselinePolicy::Strict {
+        if includes_cpu && baseline.environment.cpu_identity != current.environment.cpu_identity {
+            issues.push("CPU vendor/family/model/stepping identity mismatch".to_string());
+        }
         if !baseline.environment.seine_version.is_empty()
             && !current.environment.seine_version.is_empty()
             && baseline.environment.seine_version != current.environment.seine_version
@@ -1921,6 +1984,12 @@ fn benchmark_environment() -> BenchEnvironment {
         kernel_version: System::kernel_version(),
         cpu_arch: System::cpu_arch(),
         cpu_brand: sys.cpus().first().map(|cpu| cpu.brand().to_string()),
+        cpu_identity: crate::runtime_identity::cpu_identity(),
+        cpu_kernels_supported: blocknet_pow_kernel::CpuKernel::ALL
+            .into_iter()
+            .filter(|kernel| kernel.is_supported())
+            .map(|kernel| kernel.to_string())
+            .collect(),
         logical_cores: std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(0),
@@ -1962,6 +2031,8 @@ fn benchmark_config_fingerprint(
         hash_poll_ms: cfg.hash_poll_interval.as_millis() as u64,
         cpu_profile: cpu_profile_label(cfg.cpu_profile).to_string(),
         cpu_page_mode: cfg.cpu_page_mode.as_str().to_string(),
+        cpu_kernel: selected_cpu_kernel(cfg),
+        cpu_kernel_requested: cfg.bench_cpu_kernel.map(|kernel| kernel.to_string()),
         cpu_hash_batch_size: cfg.cpu_hash_batch_size,
         cpu_control_check_interval_hashes: cfg.cpu_control_check_interval_hashes,
         cpu_hash_flush_ms: cfg.cpu_hash_flush_interval.as_millis() as u64,
@@ -2022,6 +2093,7 @@ fn work_allocation_label(mode: WorkAllocation) -> &'static str {
 
 fn cpu_affinity_label(mode: CpuAffinityMode) -> &'static str {
     match mode {
+        CpuAffinityMode::Os => "os",
         CpuAffinityMode::Off => "off",
         CpuAffinityMode::Auto => "auto",
         CpuAffinityMode::PcoreOnly => "pcore-only",
@@ -2029,6 +2101,9 @@ fn cpu_affinity_label(mode: CpuAffinityMode) -> &'static str {
 }
 
 fn cpu_affinity_strategy_label(mode: CpuAffinityMode) -> &'static str {
+    if mode == CpuAffinityMode::Os {
+        return "os-order";
+    }
     if mode == CpuAffinityMode::Off {
         return "off";
     }
@@ -2038,13 +2113,14 @@ fn cpu_affinity_strategy_label(mode: CpuAffinityMode) -> &'static str {
     }
     #[cfg(target_os = "linux")]
     {
-        "linux-os-order"
+        "linux-numa-l3-physical-first-if-complete"
     }
     #[cfg(target_os = "macos")]
     {
         match mode {
             CpuAffinityMode::PcoreOnly => "macos-limited-affinity-tags-high-qos",
             CpuAffinityMode::Auto => "macos-affinity-tags-high-qos",
+            CpuAffinityMode::Os => "os",
             CpuAffinityMode::Off => "off",
         }
     }
@@ -2350,6 +2426,17 @@ fn drain_benchmark_backend_events(
     Ok(action)
 }
 
+fn selected_cpu_kernel(cfg: &Config) -> Option<String> {
+    cfg.backend_specs
+        .iter()
+        .any(|spec| spec.kind == BackendKind::Cpu)
+        .then(|| {
+            cfg.bench_cpu_kernel
+                .unwrap_or_else(blocknet_pow_kernel::CpuKernel::preferred)
+                .to_string()
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2395,6 +2482,68 @@ mod tests {
         }
     }
 
+    #[test]
+    fn kernel_identity_is_checked_even_when_environment_is_ignored() {
+        let baseline = sample_report();
+        let mut current = baseline.clone();
+        current.config_fingerprint.cpu_kernel = Some("avx2".into());
+        for policy in [
+            BenchBaselinePolicy::Strict,
+            BenchBaselinePolicy::IgnoreEnvironment,
+        ] {
+            assert!(baseline_compatibility_issues(&current, &baseline, policy)
+                .iter()
+                .any(|s| s.contains("cpu_kernel mismatch")));
+        }
+        current.config_fingerprint.cpu_kernel = None;
+        assert!(baseline_compatibility_issues(
+            &current,
+            &baseline,
+            BenchBaselinePolicy::IgnoreEnvironment
+        )
+        .iter()
+        .any(|s| s.contains("kernel identity missing")));
+        current = baseline.clone();
+        current.config_fingerprint.cpu_kernel_requested = Some("avx512".into());
+        assert!(
+            baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn gpu_only_legacy_reports_do_not_require_cpu_kernel_metadata() {
+        let mut baseline = sample_report();
+        baseline.backends = vec!["nvidia#1".into()];
+        baseline.schema_version = 13;
+        baseline.config_fingerprint.cpu_kernel = None;
+        let mut current = baseline.clone();
+        current.schema_version = BENCH_REPORT_SCHEMA_VERSION;
+        current.environment.cpu_identity.family = Some(26);
+        assert!(
+            baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn raw_cpu_identity_is_environment_metadata() {
+        let baseline = sample_report();
+        let mut current = baseline.clone();
+        current.environment.cpu_identity.family = Some(26);
+        assert!(
+            baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict)
+                .iter()
+                .any(|s| s.contains("vendor/family/model"))
+        );
+        assert!(baseline_compatibility_issues(
+            &current,
+            &baseline,
+            BenchBaselinePolicy::IgnoreEnvironment
+        )
+        .is_empty());
+    }
+
     fn sample_report() -> BenchReport {
         BenchReport {
             schema_version: BENCH_REPORT_SCHEMA_VERSION,
@@ -2419,6 +2568,8 @@ mod tests {
                 hash_poll_ms: 200,
                 cpu_profile: "balanced".to_string(),
                 cpu_page_mode: "auto".to_string(),
+                cpu_kernel: Some("avx512".to_string()),
+                cpu_kernel_requested: None,
                 cpu_hash_batch_size: 64,
                 cpu_control_check_interval_hashes: 256,
                 cpu_hash_flush_ms: 50,
@@ -2454,7 +2605,7 @@ mod tests {
                 start_nonce: 7,
                 work_allocation: "adaptive".to_string(),
                 cpu_affinity: "auto".to_string(),
-                cpu_affinity_strategy: "linux-os-order".to_string(),
+                cpu_affinity_strategy: "linux-numa-l3-physical-first-if-complete".to_string(),
                 events_idle_timeout_secs: 90,
                 backend_runtime: vec![BenchBackendRuntimeFingerprint {
                     backend_id: 1,
@@ -2513,7 +2664,7 @@ mod tests {
         #[cfg(target_os = "linux")]
         assert_eq!(
             cpu_affinity_strategy_label(CpuAffinityMode::Auto),
-            "linux-os-order"
+            "linux-numa-l3-physical-first-if-complete"
         );
         #[cfg(target_os = "windows")]
         assert_eq!(
@@ -2569,6 +2720,49 @@ mod tests {
         let issues =
             baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict);
         assert!(issues.iter().any(|issue| issue.contains("schema mismatch")));
+    }
+
+    #[test]
+    fn cpu_kernel_timing_change_cannot_be_ignored_as_environment_drift() {
+        let mut current = sample_report();
+        current.bench_kind = "kernel".into();
+        let mut baseline = current.clone();
+        baseline.schema_version = 14;
+        for policy in [
+            BenchBaselinePolicy::Strict,
+            BenchBaselinePolicy::IgnoreEnvironment,
+        ] {
+            assert!(baseline_compatibility_issues(&current, &baseline, policy)
+                .iter()
+                .any(|issue| issue.contains("CPU kernel timing changed")));
+        }
+        baseline.schema_version = 15;
+        assert!(
+            baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict)
+                .is_empty()
+        );
+
+        // The timing correction changed neither CPU lifecycle measurements
+        // nor GPU kernel samples; compatible older reports still work there.
+        for kind in ["backend", "end_to_end", "kernel_effective"] {
+            current.bench_kind = kind.into();
+            baseline = current.clone();
+            baseline.schema_version = 14;
+            assert!(baseline_compatibility_issues(
+                &current,
+                &baseline,
+                BenchBaselinePolicy::Strict
+            )
+            .is_empty());
+        }
+        current.bench_kind = "kernel".into();
+        current.backends = vec!["nvidia".into()];
+        baseline = current.clone();
+        baseline.schema_version = 14;
+        assert!(
+            baseline_compatibility_issues(&current, &baseline, BenchBaselinePolicy::Strict)
+                .is_empty()
+        );
     }
 
     #[test]

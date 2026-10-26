@@ -1,0 +1,104 @@
+---
+title: Receba pagamentos no seu @name com o Blocknet ID
+description: Registre um shortname no blocknet.id e use seu @name para receber BNT, compartilhar links de pagamento e minerar no bntpool.com sem um endereço de 90+ caracteres.
+tags: [Blocknet ID, Carteira, Pagamentos, bntpool]
+faq:
+  - q: 'Os shortnames do Blocknet ID diferenciam maiúsculas de minúsculas?'
+    a: 'Não. Um shortname não diferencia maiúsculas de minúsculas, então @Alice, @alice e $ALICE chegam todos à mesma carteira. Os nomes usam as letras de a a z, os dígitos de 0 a 9, sublinhado, hífen e ponto, e podem ter até 64 caracteres. Os prefixos @ e $ funcionam em todo lugar onde um nome é aceito.'
+  - q: 'O Blocknet ID é gratuito?'
+    a: 'Em outubro de 2026, nomes com nove caracteres ou mais são gratuitos enquanto durar a promoção do blocknet.id, sem fatura e sem pagamento. Nomes mais curtos têm um preço único que sobe conforme o nome fica mais curto, a partir de 100 BNT para oito caracteres. A página de preços do blocknet.id lista o preço de cada tamanho.'
+  - q: 'Posso minerar para um shortname do Blocknet ID no bntpool.com?'
+    a: 'Sim. Digite seu @name quando o seine pedir um endereço de pagamento, ou passe-o com --address. O seine verifica o registro assinado no blocknet.id, mostra o endereço completo resolvido e minera para esse endereço durante toda a execução. Os shortnames exigem o seine v0.2.16 ou mais recente, e o bntpool.com também os aceita no login.'
+  - q: 'O que acontece com meu saldo no pool se eu apontar meu nome para um novo endereço?'
+    a: 'Seu saldo atual fica com o endereço que o gerou, e o bntpool.com o paga nesse endereço normalmente. O pool registra shares, saldos e pagamentos pelo endereço completo, então uma troca de nome nunca redireciona um saldo existente. Na próxima vez que você começar a minerar, o nome é resolvido de novo e os novos shares vão para o novo endereço.'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+Com um shortname (nome curto) do Blocknet ID, as pessoas podem pagar você em `@yourname`, você pode compartilhar um link de pagamento que cabe em uma mensagem de chat e pode minerar no bntpool.com para o mesmo nome. Este guia explica como os nomes funcionam, como registrar um no blocknet.id e como usá-lo na carteira e no seine.
+
+## O que é um shortname do Blocknet ID?
+
+<Answer>
+Um shortname do Blocknet ID é um nome curto, como @alice ou $alice, que aponta para o endereço da sua carteira Blocknet. Você o registra no blocknet.id. As carteiras, o seine e o bntpool.com consultam o nome, verificam se o blocknet.id assinou o registro e então usam o endereço completo ao qual ele corresponde.
+</Answer>
+
+As regras são as mesmas em todo lugar onde um nome é aceito:
+
+- **Dois prefixos.** `@name` e `$name` são o mesmo nome. Use o que preferir.
+- **Não diferencia maiúsculas de minúsculas.** `@Alice` e `@alice` resolvem para o mesmo endereço.
+- **Caracteres simples.** Letras de a a z, dígitos de 0 a 9, sublinhado, hífen e ponto.
+- **Até 64 caracteres.**
+
+Todo registro no blocknet.id é assinado. Quando a carteira resolve um nome, ela busca o registro e verifica sua assinatura Ed25519 com a chave de assinatura que o blocknet.id publica em `https://blocknet.id/.well-known/blocknet-id.json`. O conteúdo assinado contém o nome, o endereço e a data da última atualização, e a carteira confirma que os três batem antes de usar o endereço. Cada nome também tem uma página pública no blocknet.id que mostra seu endereço, o conteúdo assinado e a assinatura, para que qualquer pessoa possa verificar um registro por conta própria.
+
+## Por que pagar para um nome em vez de um endereço?
+
+Um endereço Blocknet é a codificação base58 da sua chave pública de gasto, da sua chave pública de visualização e de um checksum, o que dá 92 ou 93 caracteres. É muita coisa para copiar entre aplicativos, ler em voz alta ou colocar em um perfil. Um shortname é algo que você pode dizer em uma frase, imprimir em um adesivo ou colocar na bio.
+
+Você também ganha uma etapa de confirmação clara. Quando você envia para um nome, a carteira exibe o endereço resolvido e o marca como verificado antes de você aprovar o pagamento. O nome só substitui o endereço que você compartilharia de qualquer forma. Na blockchain, o pagamento é uma transação Blocknet normal para um [endereço furtivo de uso único](/pt-br/blog/blocknet-privacy-features/), então ele continua tão privado quanto qualquer outro pagamento.
+
+## Como conseguir um Blocknet ID?
+
+<Answer>
+Copie o endereço da sua carteira, abra o blocknet.id e procure o nome que você quer. Se estiver disponível, o site mostra o preço; cole seu endereço e envie. Nomes com nove caracteres ou mais são gratuitos durante a promoção atual. Depois de registrado, seu nome funciona nas carteiras, no seine e no bntpool.com.
+</Answer>
+
+1. **Copie seu endereço.** Na carteira de linha de comando, o comando `address` o exibe, seguido da linha "Get a short name like @name or $name at https://blocknet.id". Baixe a carteira nas [versões de linha de comando](https://github.com/blocknetprivacy/blocknet/releases/latest) ou nas [versões para desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Procure um nome.** Acesse o [blocknet.id](https://blocknet.id), digite um nome na caixa "find a name" e clique em Search. Enquanto você digita, a página avisa se algum caractere não é permitido ou se o nome é longo demais.
+3. **Confira o resultado.** Um nome disponível mostra o preço. Um nome já registrado mostra o endereço, quando foi atualizado pela última vez e um link para sua página pública.
+4. **Registre-o.** Cole o endereço da sua carteira e clique em "Claim free" (ou "Register", para um nome pago).
+
+O preço é uma cobrança única de acordo com o tamanho do nome. No momento em que escrevemos (outubro de 2026), todo nome com nove caracteres ou mais é gratuito por causa de uma promoção, "no invoice, no payment" (sem fatura, sem pagamento), nas palavras do site. Nomes de oito caracteres custam 100 BNT, e nomes mais curtos custam mais, até 6.000 BNT para um único caractere. A [página de preços](https://blocknet.id/pricing) lista todos os tamanhos.
+
+Para gerenciar seus nomes depois, use "sign in" no blocknet.id com seu endereço Blocknet. É na página de gerenciamento que você aponta um nome para outro endereço.
+
+## Como enviar BNT para um nome?
+
+Na carteira de linha de comando, coloque o nome onde iria o endereço:
+
+```
+send @rock 100 "hello"
+```
+
+A carteira resolve `@rock`, exibe `Resolved @rock -> <address>` com uma marca de verificado e então pede sua confirmação. A confirmação mostra o nome, o endereço completo, a taxa e o seu memo. A forma `$rock` funciona do mesmo jeito, e o `send` aceita valores inteiros ou fracionários.
+
+A API da carteira resolve nomes da mesma forma para cada destinatário de uma requisição de envio, então as ferramentas criadas sobre a carteira ganham pagamentos por nome sem trabalho extra.
+
+## Como os links de pagamento funcionam com um nome?
+
+Um [link de pagamento](/pt-br/blog/blocknet-payment-links/) leva o destinatário, o valor e um memo opcional. O Blocknet suporta duas formas:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+O link do bntpay.com funciona com um nome no lugar do endereço, então continua curto. Ao abri-lo, aparece uma página com "Pay $yourname", o valor e o memo, além de um botão "Open in Wallet" que abre o pagamento como um link `blocknet://`. Se você colar qualquer uma das formas na carteira de linha de comando, ela preenche um envio para você confirmar. Inclua o campo `amount`; o memo é opcional e comporta até 124 bytes de texto.
+
+Isso facilita publicar um único link para gorjetas ou enviar uma fatura em uma só mensagem.
+
+## Como minerar para o seu @name?
+
+O seine e o bntpool.com aceitam um shortname como endereço de pagamento. Quando você iniciar o [seine](/pt-br/#download) pela primeira vez, digite `@yourname` quando ele pedir o endereço e aceite o pool padrão. Para passá-lo na linha de comando, coloque-o entre aspas:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Coloque os shortnames entre aspas nos comandos do shell, principalmente na forma `$name`, para que o shell os repasse sem alteração. Os shortnames exigem o seine v0.2.16 ou mais recente.
+</Note>
+
+Veja o que acontece em seguida:
+
+- **O seine resolve o nome ao iniciar.** Ele verifica o registro assinado do blocknet.id, confere o endereço, registra no log o endereço completo resolvido e mantém esse endereço durante toda a execução, inclusive nas reconexões ao pool.
+- **O pool também aceita nomes no login.** O bntpool.com verifica o mapeamento assinado quando um minerador se conecta com um nome e usa o endereço completo resolvido para jobs, shares, saldos e pagamentos.
+- **Você pode buscar seus dados pelo nome.** A página de estatísticas do [bntpool.com](https://bntpool.com) aceita `@name` e `$name`, então você pode acompanhar seu hashrate e seu saldo sem colar o endereço.
+- **Um nome salvo é resolvido de novo na próxima execução.** O seine guarda o nome na configuração, então cada nova inicialização pega o endereço para o qual seu nome aponta naquele momento.
+
+Como os saldos pertencem ao endereço completo, uma troca posterior de nome nunca redireciona um saldo existente. Tudo o que você já ganhou fica com o endereço que o gerou e é pago lá, enquanto a nova mineração vai para o novo endereço. O mesmo nome também funciona no modo solo, apontando para o seu próprio nó.
+
+É novo em mineração? O [guia de mineração de Blocknet](/pt-br/blog/how-to-mine-blocknet/) explica como baixar o seine, que hardware usar e como funcionam os pagamentos no bntpool.com.
+
+<CTA target="pool" title="Minere para o seu @name" text="O bntpool.com aceita seu shortname do Blocknet ID como login de pagamento. Comece a minerar em poucos minutos." />

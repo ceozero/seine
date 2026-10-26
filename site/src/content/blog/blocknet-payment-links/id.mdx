@@ -1,0 +1,121 @@
+---
+title: Minta pembayaran Blocknet dengan tautan
+description: Buat tautan pembayaran blocknet:// atau bntpay.com berisi jumlah, memo, dan $name Anda, agar siapa pun bisa membayar Anda BNT dengan menempelkan satu baris ke wallet mereka.
+tags: [Pembayaran, Tautan pembayaran, Wallet, Blocknet ID]
+faq:
+  - q: 'Apakah tautan pembayaran Blocknet wajib berisi jumlah?'
+    a: 'Ya. Setiap tautan pembayaran membawa kolom amount, ditulis dalam BNT dengan maksimal delapan angka desimal, seperti amount=25 atau amount=0.5. Memo bersifat opsional. Jika tautan yang ditempel tidak berisi jumlah, wallet baris perintah membalas payment link missing amount dan tidak mengirim apa pun, jadi pembayar tidak pernah perlu menebak berapa yang Anda minta.'
+  - q: 'Bisakah saya memasukkan nama pendek Blocknet ID ke tautan pembayaran?'
+    a: 'Bisa. Tulis nama dengan awalan dolar, seperti bntpay.com/$yourname?amount=10 atau blocknet://$yourname?amount=10. Wallet mencari nama itu di blocknet.id, memeriksa catatan bertanda tangan, dan menampilkan alamat lengkap yang ditandai terverifikasi kepada pembayar sebelum mereka mengonfirmasi. Tautan dengan nama selalu membayar ke alamat yang ditunjuk nama Anda.'
+  - q: 'Apa bedanya tautan blocknet:// dan tautan bntpay.com?'
+    a: 'Keduanya membawa tiga kolom yang sama, yaitu penerima, jumlah, dan memo, dan wallet baris perintah membaca keduanya dengan cara yang sama. Bentuk blocknet:// adalah skema URI Blocknet. Bentuk bntpay.com adalah alamat web biasa, yang diubah menjadi tautan yang bisa diklik oleh aplikasi chat, klien email, dan profil media sosial.'
+  - q: 'Apakah menempelkan tautan pembayaran langsung mengirim BNT?'
+    a: 'Tidak. Menempelkan tautan ke wallet menyiapkan pembayaran lalu berhenti di ringkasan yang menampilkan jumlah, penerima, alamat lengkap, biaya, dan memo, diikuti prompt konfirmasi ya atau tidak. BNT baru berpindah setelah pembayar mengetik y. Jawaban lain membatalkan pembayaran dan melepas koin yang sudah dicadangkan.'
+sourceHash: 193a7a6a455c
+translation: reviewed
+---
+
+Tautan pembayaran Blocknet memuat semua yang dibutuhkan pembayar dalam satu baris: siapa yang dibayar, berapa BNT, dan memo opsional seperti nomor invoice. Kirim lewat chat, taruh di invoice atau di profil Anda, lalu pembayar menempelkannya ke wallet dan mengonfirmasi. Panduan ini menunjukkan dua format tautan, cara membuatnya dengan alamat atau `$name` Anda, dan apa persisnya yang dilakukan wallet saat seseorang menempelkannya.
+
+## Apa itu tautan pembayaran Blocknet?
+
+<Answer>
+Tautan pembayaran Blocknet adalah satu baris yang memuat penerima, jumlah, dan memo opsional, ditulis sebagai blocknet://recipient?amount=25&memo=invoice-42 atau bntpay.com/recipient?amount=25&memo=invoice-42. Penerimanya adalah alamat wallet atau nama Blocknet ID. Menempelkannya ke wallet baris perintah mengubahnya menjadi pengiriman yang siap dikonfirmasi.
+</Answer>
+
+Wallet baris perintah Blocknet menerima dua bentuk:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Kedua bentuk membawa kolom yang sama:
+
+| Kolom | Letaknya | Wajib | Isinya |
+|---|---|---|---|
+| Penerima | tepat setelah `blocknet://` atau `bntpay.com/` | Ya | Alamat wallet Anda, atau nama pendek Anda sebagai `$name` |
+| `amount` | query string | Ya | BNT yang diminta, hingga delapan angka desimal |
+| `memo` | query string | Tidak | Teks untuk memo pembayaran, hingga 124 byte |
+
+Wallet tidak rewel soal cara tautan diketik. Wallet mengenali `blocknet://` dan bentuk lebih pendek `blocknet:`, dan untuk bentuk web wallet menerima `bntpay.com/` saja atau dengan `www.`, `http://`, atau `https://` di depannya. Awalan tidak membedakan huruf besar dan kecil, dan urutan `amount` dan `memo` tidak berpengaruh.
+
+Bentuk `bntpay.com` adalah alamat web biasa, jadi sebagian besar aplikasi chat, klien email, dan profil media sosial mengubahnya menjadi tautan yang bisa diketuk. Bentuk `blocknet://` adalah URI Blocknet, praktis di mana pun tautan langsung masuk ke wallet.
+
+## Bagaimana cara membuat tautan pembayaran?
+
+Anda bisa menulis tautan secara manual dalam empat langkah.
+
+1. **Pilih penerima.** Jalankan `address` di wallet baris perintah untuk mencetak alamat Anda, atau pakai [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) Anda dengan awalan `$`. Jika belum punya wallet, [panduan wallet Blocknet](/id/blog/blocknet-wallet-for-mining/) menunjukkan cara membuatnya dan menemukan alamat Anda.
+2. **Tetapkan jumlah.** Tulis dalam BNT. Bilangan bulat dan desimal sama-sama bisa, hingga delapan angka desimal, karena satu BNT sama dengan 100.000.000 satuan atomik.
+3. **Tambahkan memo jika perlu.** Nomor pesanan, ID invoice, atau ucapan terima kasih singkat membantu Anda mencocokkan pembayaran saat masuk. Batasi hingga 124 byte.
+4. **Gabungkan bagian-bagiannya.** Taruh penerima setelah awalan, lalu `?amount=`, lalu `&memo=` jika ada.
+
+Invoice sebesar 25 BNT ke sebuah nama, dalam kedua bentuk:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Permintaan yang sama ke alamat lengkap:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Encoding karakter di memo
+
+Jika memo berisi spasi atau tanda baca, beberapa karakter perlu ditulis dalam URL encoding, karena tautan itu sendiri memakai karakter tersebut. Wallet men-decode-nya kembali sebelum menyusun pembayaran.
+
+| Karakter | Tulis sebagai | Alasan |
+|---|---|---|
+| spasi | `%20` | Menjaga tautan tetap utuh saat dibagikan |
+| `&` | `%26` | `&` memulai kolom berikutnya |
+| `#` | `%23` | `#` mengakhiri query string |
+| `+` | `%2B` | `+` tanpa encoding dibaca sebagai spasi |
+
+Misalnya, `memo=Order%20%231042` diterima sebagai `Order #1042`. Huruf, angka, tanda hubung, garis bawah, dan titik tidak perlu di-encode, itulah sebabnya memo seperti `invoice-42` mudah dipakai apa adanya.
+
+## Sebaiknya tautan memakai alamat atau $name Anda?
+
+Keduanya bisa, dan masing-masing cocok untuk keperluan berbeda.
+
+**Nama** membuat tautan cukup pendek untuk dibaca, diucapkan, atau dimasukkan ke bio. Tulis dengan awalan `$` di tautan: `$yourname` dan `@yourname` adalah nama yang sama, dan `$` adalah bentuk yang diteruskan langsung ke wallet oleh kedua jenis tautan. Saat pembayar menempelkan tautan dengan nama, wallet mencari alamat untuk nama itu melalui blocknet.id, memeriksa tanda tangan Ed25519 pada catatannya, dan mencetak alamat lengkap yang ditandai terverifikasi. Karena alamat untuk nama itu dicari saat pembayaran, tautan yang berumur panjang seperti tautan tip di profil Anda tetap berfungsi jika nanti Anda mengarahkan nama ke wallet baru.
+
+**Alamat lengkap** menetapkan tujuan di dalam tautan itu sendiri. Itu cocok untuk invoice sekali pakai saat Anda ingin tautan menunjuk tepat satu wallet tertentu.
+
+Apa pun pilihannya, pembayaran di blockchain adalah transaksi Blocknet biasa ke [stealth address sekali pakai](/id/blog/blocknet-privacy-features/), dengan privasi yang sama seperti pembayaran lain.
+
+## Apa yang terjadi saat seseorang menempelkan tautan pembayaran?
+
+<Answer>
+Wallet membaca penerima, jumlah, dan memo dari tautan lalu menjalankan pengiriman biasa dengan data itu. Jika ada nama, wallet mengubahnya menjadi alamat, menyusun transaksi, lalu menampilkan jumlah, penerima, alamat lengkap, biaya, dan memo, dan bertanya Confirm [y/N]. BNT baru berpindah saat pembayar mengetik y.
+</Answer>
+
+Berikut urutannya di wallet baris perintah, langkah demi langkah.
+
+1. **Pembayar menempelkan tautan di prompt wallet.** Wallet melihat awalan `blocknet:` atau `bntpay.com/` dan memperlakukan baris itu sebagai pengiriman. Tautan ke `$yourname` sebesar 25 BNT dengan memo `invoice-42` menjadi permintaan yang sama dengan mengetik `send $yourname 25 invoice-42`.
+2. **Nama diubah menjadi alamat.** Untuk tautan dengan nama, wallet mencetak `Resolved $yourname -> <address>` dengan tanda terverifikasi.
+3. **Wallet memeriksa saldo dan menyusun pembayaran.** Wallet memilih koin, menyusun transaksi privat, dan menghitung biayanya.
+4. **Pembayar melihat ringkasan.** Ringkasan menampilkan jumlah dan penerima, biaya, alamat lengkap jika nama dipakai, kembalian jika ada, dan memo, diikuti `Confirm [y/N]`.
+5. **Pembayar mengonfirmasi.** Mengetik `y` mengirim transaksi dan mencetak ID-nya dengan tautan explorer di `explorer.blocknetcrypto.com`. Jawaban lain mencetak `Cancelled` dan melepas koin yang sudah disisihkan wallet.
+
+Ringkasan adalah kesempatan pembayar untuk memeriksa permintaan, jadi tidak ada yang keluar dari wallet mereka sebelum mereka melihatnya. Setiap tautan wajib berisi jumlah: tanpa itu, wallet membalas `payment link missing amount` dan berhenti sebelum menyusun apa pun.
+
+Memo yang Anda taruh di tautan ikut terkirim bersama pembayaran sebagai [memo terenkripsi](/id/blog/blocknet-encrypted-memos/) Blocknet. Saat BNT masuk, perintah `history` di wallet Anda menampilkannya di bawah pembayaran masuk, jadi Anda bisa mencocokkannya dengan invoice atau pesanan.
+
+### Uji tautan Anda sebelum membagikannya
+
+Anda bisa melihat persis apa yang akan dilihat pembayar dengan menempelkan tautan Anda sendiri ke wallet Anda. Jika wallet Anda berisi setidaknya jumlah yang diminta, wallet menampilkan ringkasan lengkap. Periksa penerima, jumlah, dan memo, lalu jawab `n` dan tidak ada yang terkirim.
+
+## Di mana tautan pembayaran paling berguna
+
+- **Invoice.** Taruh tautan dengan nomor invoice sebagai memo di bagian bawah invoice atau di email. Pembayar menempelkan satu baris dan memo memberi tahu Anda invoice mana yang sudah dibayar.
+- **Toko dan halaman pesanan.** Buat satu tautan per pesanan dengan nomor pesanan di memo, sehingga setiap pembayaran masuk sudah berlabel.
+- **Tip dan donasi.** Tautan ke `$yourname` dengan jumlah yang disarankan muat di profil, README, atau overlay siaran langsung.
+- **Patungan tagihan.** Kirim tautan berisi bagian setiap orang dan catatan seperti `dinner%20friday` ke grup chat.
+
+Jika Anda juga mendapatkan BNT dari menambang, Anda bisa memakai nama yang sama untuk itu. seine dan bntpool.com sama-sama menerima nama pendek Blocknet ID sebagai alamat pembayaran, jadi pembayaran hasil menambang dan pembayaran lewat tautan masuk ke satu wallet. [Panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) membahas cara menyiapkannya.
+
+<CTA target="pool" title="Menambang ke nama di tautan Anda" text="bntpool.com menerima nama pendek Blocknet ID Anda sebagai login pembayaran, jadi hasil menambang masuk ke wallet yang sama dengan tujuan tautan pembayaran Anda." />

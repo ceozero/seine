@@ -1,0 +1,98 @@
+---
+title: La proof of work Argon2id spiegata
+description: Come la proof of work Argon2id di Blocknet riempie 2 GiB di memoria per hash, perché RAM e banda di memoria determinano l'hashrate e come la usano i kernel CPU di seine.
+tags: [Argon2id, Proof of work, Blocknet, Mining]
+faq:
+  - q: 'Quali parametri Argon2id usa Blocknet per la proof of work?'
+    a: 'Blocknet usa Argon2id versione 1.3 con 2 GiB di memoria, un''iterazione, parallelismo 1 e un output di 32 byte. Il nonce da 8 byte è la password e l''header del blocco senza il nonce è il salt. Un hash vince un blocco quando è uguale o inferiore al target fissato dalla difficoltà della rete.'
+  - q: 'Perché ogni thread di mining di Blocknet richiede 2 GB di RAM?'
+    a: 'Ogni hash Argon2id riempie un''area di memoria da 2 GiB composta da blocchi da 1 KiB, e nella seconda metà di quel passaggio ogni nuovo blocco legge un blocco precedente scelto da dati che il miner non può prevedere. Un thread deve tenere in memoria tutta la sua area, quindi ogni thread che fai girare richiede circa 2 GB di RAM.'
+  - q: 'Perché Argon2id è progettato per resistere agli ASIC?'
+    a: 'Argon2id rende la memoria la parte costosa di ogni hash. Ogni hash di Blocknet richiede 2 GiB di memoria veloce e vi fa transitare gigabyte di dati, quindi un chip costruito solo per calcolare hash avrebbe comunque bisogno di grandi quantità di RAM per core. Il codice del daemon descrive la scelta come una proof of work memory-hard per resistere agli ASIC e garantire un mining equo.'
+  - q: 'Una scheda grafica può minare l''Argon2id di Blocknet?'
+    a: 'Sì. Su Windows e Linux, seine mina su tutte le schede grafiche NVIDIA del computer contemporaneamente alla CPU, e gli hashrate si sommano. I kernel vengono compilati all''avvio e il primo avvio ottimizza ogni scheda e salva il risultato, quindi non c''è nulla da configurare prima di iniziare.'
+sourceHash: ddc65bcd4eb2
+translation: reviewed
+---
+
+Questo articolo spiega cos'è Argon2id, come Blocknet lo trasforma in una proof of work, perché premia chi ha tanta memoria veloce e come seine ottiene il massimo numero di hash da ogni CPU su cui gira.
+
+## Cos'è Argon2id?
+
+<Answer>
+Argon2id è una funzione di hash memory-hard specificata nella RFC 9106 per l'hashing delle password e la proof of work. Riempie una vasta area di memoria con blocchi da 1 KiB, costruendo ogni blocco a partire da quello precedente e da un blocco anteriore scelto altrove in memoria, quindi calcolare un hash richiede memoria reale oltre al tempo del processore.
+</Answer>
+
+La [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106), pubblicata nel 2021 dal Crypto Forum Research Group dell'IRTF, descrive «la funzione memory-hard Argon2 per l'hashing delle password e le applicazioni di proof of work». Argon2 esiste in tre varianti:
+
+- **Argon2d** sceglie quale blocco precedente leggere in base ai dati che ha già calcolato. La RFC la definisce «adatta alle criptovalute e alle applicazioni di proof of work».
+- **Argon2i** sceglie i blocchi in un ordine che non dipende dai dati, il che si adatta all'hashing delle password.
+- **Argon2id** «funziona come Argon2i per la prima metà del primo passaggio sulla memoria e come Argon2d per il resto». È la variante principale: la RFC dice che ogni implementazione deve supportarla.
+
+Dietro le quinte, Argon2 tratta la memoria come una lunga sequenza di blocchi da 1.024 byte. Ogni nuovo blocco è l'output di una funzione di compressione G applicata a due input: il blocco immediatamente precedente e un blocco di riferimento situato prima in memoria. G si basa sui round di mixing della funzione di hash BLAKE2b, che lavorano su parole a 64 bit con addizioni, XOR e rotazioni.
+
+## Come usa Blocknet Argon2id come proof of work?
+
+Blocknet fissa ogni impostazione di Argon2id nel suo codice di consenso, così ogni miner e ogni nodo calcola esattamente la stessa funzione:
+
+| Parametro | Valore in Blocknet | Significato |
+|---|---|---|
+| Variante | Argon2id, versione 1.3 | La variante principale della RFC 9106 |
+| Memoria | 2 GiB (2.097.152 KiB) | 2.097.152 blocchi da 1 KiB riempiti per hash |
+| Iterazioni | 1 | Un passaggio sulla memoria |
+| Parallelismo | 1 | Una lane, quindi un hash gira su un thread |
+| Output | 32 byte | Il valore confrontato con il target |
+| Password | Nonce da 8 byte, little-endian | Il numero che il miner cambia a ogni tentativo |
+| Salt | Header del blocco senza il nonce | Lega l'hash a un template di blocco |
+
+Il mining è una ricerca. Un miner prende l'header del blocco che vuole pubblicare, sceglie un nonce e calcola l'hash Argon2id. Se il risultato da 32 byte, letto come numero, è uguale o inferiore al target della rete, il blocco è valido. Altrimenti il miner prova il nonce successivo.
+
+Il target deriva direttamente dalla difficoltà: è (2^256 − 1) diviso per la difficoltà. Per questo la difficoltà è all'incirca pari al numero di hash che l'intera rete dovrebbe calcolare per trovare un blocco. Blocknet punta a un blocco ogni cinque minuti, quindi l'hashrate della rete è circa la difficoltà divisa per 300 secondi. La difficoltà stessa segue i tempi dei blocchi recenti tramite una media mobile ponderata su 60 blocchi.
+
+Le pool funzionano allo stesso modo con un target più facile. Su [bntpool.com](https://bntpool.com), seine invia share che soddisfano una difficoltà più bassa per connessione, e ogni share che soddisfa anche il target della rete è un blocco trovato.
+
+## Perché una proof of work memory-hard è adatta ai computer comuni?
+
+Le impostazioni sopra mettono la memoria al centro di ogni hash. Con un passaggio e una lane, la seconda metà del passaggio dipende dai dati: la posizione del riferimento di ogni blocco viene presa dalla prima parola a 64 bit del blocco calcolato subito prima. Un miner non può sapere quale blocco precedente gli servirà fino al momento in cui gli serve, quindi tiene in memoria l'intera area da 2 GiB.
+
+Un miner potrebbe provare a memorizzare meno blocchi e ricalcolare quelli mancanti quando servono. La RFC 9106 li chiama compromessi tempo-memoria: risparmiano memoria «al costo di più chiamate alla funzione di compressione interna». Ogni blocco eliminato dall'area va ripagato con calcoli aggiuntivi.
+
+È questo che rende il design adatto all'hardware comune. Desktop, laptop e server hanno già gigabyte di RAM e controller di memoria costruiti per alimentarla. Un chip progettato solo per calcolare hash avrebbe comunque bisogno di gigabyte di memoria veloce accanto ai suoi core di hashing. La prima impostazione raccomandata dalla RFC 9106 è Argon2id con un passaggio su 2 GiB di memoria, lo stesso numero di passaggi e la stessa dimensione di memoria che usa Blocknet, e la RFC dice che questa impostazione «massimizza i costi per l'avversario sull'hardware dedicato al brute force». Il codice del daemon di Blocknet descrive la sua scelta come una proof of work memory-hard «per resistere agli ASIC e garantire un mining equo». Argon2id è progettato per resistere agli ASIC, e l'impostazione da 2 GiB mette in pratica questo design, così il mining resta aperto ai computer che le persone possiedono già. La guida su [proof of work e proof of stake](/it/blog/proof-of-work-vs-proof-of-stake/) spiega il confronto con lo staking.
+
+## Perché RAM e banda di memoria determinano l'hashrate?
+
+<Answer>
+Ogni thread di mining tiene la propria area da 2 GiB, quindi la tua RAM determina quanti thread puoi far girare. Ogni hash inoltre scrive 2 GiB e ne rilegge circa altrettanti da punti sparsi, quindi velocità e latenza della memoria determinano quanto velocemente quei thread finiscono. La memoria conta quanto il numero di core.
+</Answer>
+
+**La RAM determina il numero di thread.** Parallelismo 1 significa che un hash gira su un thread, e ogni thread ha bisogno di un'intera area da 2 GiB tutta sua. Un computer con 16 GB può far girare circa sei o sette thread lasciando spazio al sistema. seine misura la tua memoria, ne tiene da parte il 5% e sceglie per te il numero di thread.
+
+**Banda e latenza determinano la velocità di ogni thread.** Un hash crea 2.097.152 nuovi blocchi, e ognuno legge un blocco di riferimento da 1 KiB da qualche punto dell'area. In totale sono circa 2 GiB scritti e circa 2 GiB letti per ogni hash. A 10 H/s, un computer fa transitare in memoria circa 40 GiB di dati al secondo. Nella metà che dipende dai dati, ogni indirizzo di lettura è noto solo quando il blocco precedente è completato, quindi il tempo di risposta della memoria conta quanto il throughput puro.
+
+Ecco perché la [pagina delle prestazioni](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) di seine dice che l'hashrate «dipende dalla banda e dalla latenza della memoria tanto quanto dal numero di core». La [guida all'hardware per il mining di Blocknet](/it/blog/blocknet-mining-hardware-hashrate/) mostra il miglior risultato per ogni generazione di hardware.
+
+Le huge pages aiutano per lo stesso motivo. Un'area da 2 GiB occupa 524.288 pagine ordinarie da 4 KiB, oppure 1.024 pagine da 2 MiB. Pagine più grandi e meno numerose significano meno miss nella traduzione degli indirizzi su quelle letture sparse, il che ha aggiunto circa il 4–6% sulla macchina di validazione di seine. La [guida alle huge pages](/it/blog/huge-pages-blocknet-mining/) spiega la configurazione.
+
+## Come fanno i kernel CPU di seine a sfruttare al massimo Argon2id?
+
+Un kernel è il ciclo interno che calcola i blocchi. Le build x86 di seine includono kernel scalari, AVX2 e AVX-512 più una variante streaming, e le build Arm includono NEON con un percorso veloce SHA3. Ognuno affronta in modo diverso il lavoro limitato dalla memoria:
+
+- **AVX2 e AVX-512** eseguono i round in stile BLAKE2b di G su molte parole a 64 bit alla volta in registri vettoriali ampi. AVX-512 ha anche istruzioni di rotazione native, che quei round usano di continuo.
+- **Il prefetching** chiede alla memoria i blocchi di riferimento prima che servano. Nella prima metà del passaggio gli indirizzi sono noti in anticipo, quindi seine richiede i blocchi qualche passo prima. Nella seconda metà, seine richiede il blocco di riferimento successivo non appena la prima parola del blocco corrente è definitiva, e il resto della compressione prosegue mentre i dati arrivano.
+- **Lo streaming** tiene i 64 blocchi più recenti in un piccolo anello in cache e scrive ogni blocco completato nell'area da 2 GiB con streaming store, che vanno direttamente in memoria e lasciano la cache libera per i blocchi che servono ancora all'hash. seine lo confronta automaticamente sui processori AMD EPYC Zen 5.
+- **NEON con SHA3** usa l'istruzione XAR dell'estensione SHA3 di Arm, che esegue uno XOR e una rotazione in un solo passo, insieme a una copertura di prefetch più ampia.
+
+Sull'hardware che abbiamo testato, il kernel giusto ha fatto una grande differenza. Queste sono esecuzioni appaiate sulla stessa macchina con lo stesso numero di thread, dalla pagina delle prestazioni di seine:
+
+| Macchina | Cambio di kernel | Guadagno |
+|---|---|---|
+| AWS Graviton4 (Neoverse V2), 16 thread | Da NEON a SHA3 con prefetch | +56% (da 13,80 a 21,50 H/s) |
+| AWS Graviton3 (Neoverse V1), 16 thread | Da NEON a SHA3 con prefetch | +45% (da 12,52 a 18,17 H/s) |
+| AMD EPYC 9R45 (Zen 5), 24 thread | Da AVX2 a streaming | +30% (da 34,47 a 44,74 H/s) |
+| Intel Xeon 8375C (Ice Lake), 1–4 thread | Da AVX2 ad AVX-512 | +21–29% |
+
+Non devi scegliere nulla di tutto questo. seine confronta i kernel supportati dalla tua CPU su lavoro di mining reale, cambia solo dopo due miglioramenti confermati e salva il vincitore per l'avvio successivo. Il kernel migliore dipende dal numero di thread, dalla dimensione delle pagine e dal posizionamento sulla CPU, ed è per questo che seine misura sul tuo computer invece di fissare una scelta nel codice.
+
+Per mettere al lavoro la tua memoria, [scarica seine](/it/#download), avvialo e incolla il tuo indirizzo. La [guida al mining](/it/blog/how-to-mine-blocknet/) spiega il resto.
+
+<CTA target="seine" title="Metti al lavoro la tua memoria" text="I kernel Argon2id di seine sono ottimizzati per AVX2, AVX-512 e Arm. Scaricalo gratis." />

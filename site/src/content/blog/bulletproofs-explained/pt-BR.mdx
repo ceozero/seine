@@ -1,0 +1,97 @@
+---
+title: 'Bulletproofs explicados: como valores ocultos são verificados'
+description: Bulletproofs explicados em palavras simples. Veja como os compromissos de Pedersen ocultam os valores e como as provas de intervalo deixam cada nó conferir as contas.
+tags: [Bulletproofs, Privacidade, Criptografia, Blocknet]
+faq:
+  - q: 'Os Bulletproofs precisam de uma configuração confiável (trusted setup)?'
+    a: 'Não. Os Bulletproofs dependem apenas da hipótese do logaritmo discreto, a mesma hipótese por trás das assinaturas de curva elíptica, e usam parâmetros públicos que qualquer pessoa pode derivar. Não há cerimônia de configuração nem segredo que alguém precise destruir depois, e moedas de privacidade como o Monero e o Blocknet os usam em suas provas de intervalo.'
+  - q: 'Qual é o tamanho de uma prova de intervalo Bulletproofs?'
+    a: 'Um único Bulletproof de 64 bits contém 2 × log2(64) + 9 = 21 elementos. No grupo Ristretto, cada elemento ocupa 32 bytes, então cada prova tem 672 bytes, e o explorador do Blocknet mostra exatamente isso para cada saída. O tamanho cresce com o logaritmo do intervalo, então dobrar o número de bits acrescenta só dois elementos.'
+  - q: 'Quem pode ver o valor de uma transação Blocknet?'
+    a: 'Só o remetente e o destinatário. A blockchain armazena um compromisso de Pedersen e uma prova de intervalo para cada saída, além do valor criptografado com o segredo que as duas carteiras compartilham. A carteira do destinatário o descriptografa com a chave privada de visualização. A taxa de rede é o único número público, para que os nós possam incluí-la na verificação do saldo.'
+  - q: 'Como os nós sabem que nenhuma moeda foi criada se os valores estão ocultos?'
+    a: 'Cada nó verifica duas coisas em cada transação. Os compromissos de Pedersen precisam fechar a soma, de modo que as entradas sejam iguais às saídas mais a taxa, e cada saída precisa levar uma prova de intervalo válida mostrando que seu valor está entre 0 e 2^64. Juntas, essas verificações descartam qualquer inflação oculta sem revelar um único valor.'
+sourceHash: e02793933862
+translation: reviewed
+---
+
+Bulletproofs são provas de intervalo (range proofs) curtas e de conhecimento zero que permitem a uma criptomoeda ocultar todos os valores das transações enquanto cada nó ainda verifica que nenhuma moeda foi criada. Este guia explica os compromissos de Pedersen, por que valores ocultos precisam de provas de intervalo, como os Bulletproofs mantêm essas provas pequenas e como o Blocknet os usa em todas as saídas.
+
+## O que são Bulletproofs?
+
+<Answer>
+Bulletproofs são provas curtas de conhecimento zero, publicadas por Bünz, Bootle, Boneh, Poelstra, Wuille e Maxwell em 2018. Nas criptomoedas, elas provam que um valor oculto está dentro de um intervalo válido, como de 0 a 2^64, sem revelá-lo. Elas não precisam de configuração confiável, e seu tamanho cresce só com o logaritmo do intervalo.
+</Answer>
+
+O artigo [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) foi apresentado no IEEE Symposium on Security and Privacy em 2018. Os autores os projetaram para transações confidenciais, em que os valores em uma blockchain são substituídos por compromissos. Para entender por que esse tipo de prova é necessário, comece pelo compromisso.
+
+## O que é um compromisso de Pedersen?
+
+Um compromisso (commitment) é a versão criptográfica de um envelope lacrado. Você coloca um número dentro, mostra o envelope a todos e depois pode provar o que havia dentro. Ninguém consegue ler o número pelo envelope, e você não consegue trocá-lo por outro número depois.
+
+Um compromisso de Pedersen, descrito por Torben Pedersen em 1991, faz isso com pontos de curva elíptica. Para se comprometer com um valor `v`, a carteira escolhe um segredo aleatório `r`, chamado fator de cegamento (blinding factor), e calcula:
+
+```
+C = v·G + r·H
+```
+
+`G` e `H` são dois pontos públicos fixos na curva, escolhidos de forma que ninguém saiba escrever um como múltiplo do outro. O resultado `C` é um único ponto de 32 bytes. Ele tem duas propriedades:
+
+- **Ocultação.** Como `r` é aleatório, `C` parece um ponto aleatório. O mesmo valor comprometido duas vezes gera dois compromissos sem relação entre si, e o compromisso sozinho não diz nada a um observador sobre `v`.
+- **Vinculação.** Depois que `C` é publicado, a carteira não consegue abri-lo com um valor diferente. Fazer isso exigiria resolver o problema do logaritmo discreto na curva.
+
+## Como os nós verificam uma transação que não conseguem ler?
+
+<Answer>
+Compromissos de Pedersen podem ser somados. A soma de dois compromissos é um compromisso com a soma dos seus valores, com os fatores de cegamento também somados. Um nó soma os compromissos de entrada de uma transação e os compromissos de saída mais a taxa e verifica se os dois totais batem, então confirma o saldo sem ver nenhum valor.
+</Answer>
+
+Somar dois compromissos dá `(v1 + v2)·G + (r1 + r2)·H`, que é, ele mesmo, um compromisso com `v1 + v2`. O remetente ajusta os fatores de cegamento para que o cegamento total das entradas seja igual ao das saídas. Se os valores também fecham, a diferença entre a soma das entradas e a soma das saídas é exatamente zero, e qualquer nó pode verificar isso.
+
+A taxa de rede é o único número público de uma transação. Os nós a transformam em um compromisso com fator de cegamento zero e a somam ao lado das saídas, então a verificação fica: entradas = saídas + taxa.
+
+## Por que valores ocultos precisam de provas de intervalo?
+
+A aritmética dos compromissos funciona módulo um número muito grande, a ordem do grupo da curva, que é cerca de 2^252. Nessa aritmética, um valor "negativo" é só um valor positivo enorme. Alguém poderia gastar uma entrada de 10 moedas e criar duas saídas, uma de 11 e outra de "menos 1". Os compromissos fechariam perfeitamente, e 1 moeda surgiria do nada, oculta de todo observador.
+
+Uma prova de intervalo fecha essa brecha. Ela prova que o valor dentro de um compromisso está entre 0 e 2^64 sem dizer qual é. Com cada saída limitada dessa forma, um punhado de saídas nunca consegue somar um número grande o bastante para dar a volta na ordem do grupo, então compromissos que fecham significam valores que fecham.
+
+Os designs anteriores de transações confidenciais usavam provas de intervalo que cresciam linearmente com o número de bits. Os Bulletproofs crescem só com o logaritmo, o que reduz uma prova de 64 bits a algumas centenas de bytes.
+
+## Como os Bulletproofs funcionam?
+
+Um Bulletproof prova um intervalo em três etapas.
+
+1. **Dividir o valor em bits.** Um valor de 64 bits vira um vetor de 64 bits. O provador se compromete com esse vetor e mostra dois fatos sobre ele: cada componente é 0 ou 1, e os bits, ponderados por potências de dois, somam o valor comprometido.
+2. **Transformar esses fatos em um único produto interno.** Usando desafios aleatórios, o provador condensa todas essas condições em uma única afirmação sobre o produto interno de dois vetores. Como os desafios são aleatórios, uma afirmação falsa só passa com probabilidade desprezível.
+3. **Provar o produto interno dividindo pela metade.** A cada rodada, o provador envia dois pontos da curva, `L` e `R`, e os dois vetores são dobrados ao meio. Depois de log2(64) = 6 rodadas, sobra um único par de números.
+
+É dessa divisão pela metade que vem o tamanho. O resumo do artigo coloca uma prova de intervalo em `2·log2(n) + 9` elementos de grupo e de corpo para um intervalo de `n` bits. Para 64 bits, isso dá 12 pontos das seis rodadas mais outros 9, 21 elementos no total, ou 672 bytes quando cada elemento tem 32 bytes.
+
+A prova é não interativa. Em vez de um verificador ao vivo enviando desafios, os dois lados os derivam calculando o hash da transcrição da prova, uma técnica padrão conhecida como heurística de Fiat-Shamir. Os Bulletproofs também não precisam de configuração confiável: os geradores são públicos e derivados abertamente, e a segurança depende só da hipótese do logaritmo discreto. Várias provas podem ser agregadas, acrescentando apenas um número logarítmico de elementos, e a verificação pode ser feita em lote.
+
+## Quem usa Bulletproofs?
+
+O Monero ativou os Bulletproofs na atualização de rede de 18 de outubro de 2018 (a versão v0.13.0) para reduzir o tamanho das transações. A [biblioteca bulletproofs em Rust](https://github.com/dalek-cryptography/bulletproofs), do projeto dalek-cryptography, os implementa sobre o grupo Ristretto da Curve25519, e a biblioteca de criptografia do Blocknet é construída sobre ela.
+
+## Como o Blocknet oculta todos os valores?
+
+No Blocknet, cada saída de cada transação contém um compromisso de Pedersen no lugar de um valor, e cada saída leva seu próprio Bulletproof de 64 bits. A privacidade faz parte do formato de transação, sem modo transparente, então não há como enviar um pagamento com valor visível.
+
+Veja o que um nó verifica antes de aceitar uma transação:
+
+- **Cada prova de intervalo.** O Bulletproof de cada saída precisa ser válido para o seu compromisso, provando que o valor está entre 0 e 2^64. As provas usam uma transcrição rotulada "Blocknet Range Proof", que amarra cada prova ao Blocknet.
+- **O saldo.** Cada entrada leva um compromisso de pseudo-saída, e a assinatura em anel prova que ele se compromete com o mesmo valor da moeda verdadeira que está sendo gasta, sem revelar qual membro do anel ela é. O nó então verifica se as pseudo-saídas somam as saídas mais a taxa.
+- **Moedas novas.** A recompensa de um bloco segue um cronograma público, então, para a saída minerada, o nó reconstrói o compromisso que espera para aquela altura e verifica se ele bate.
+
+Você pode ver isso no [explorador do Blocknet](https://explorer.blocknetcrypto.com). A página de uma transação lista seus valores como "hidden · Pedersen commitments", e cada saída mostra seu compromisso, um memo criptografado e uma prova de intervalo de "672 bytes · Bulletproof", o tamanho que as contas acima preveem.
+
+O destinatário continua vendo o valor real. Cada saída leva o valor criptografado com o segredo que as carteiras do remetente e do destinatário compartilham, e a carteira do destinatário o descriptografa com a chave privada de visualização. O valor fica visível para as duas pessoas do pagamento e para mais ninguém.
+
+Os valores ocultos funcionam junto com as outras camadas do Blocknet: as [assinaturas em anel](/pt-br/blog/ring-signatures-explained/) sobre 16 saídas ocultam o remetente, os [endereços furtivos de uso único](/pt-br/blog/stealth-addresses-explained/) ocultam o destinatário e o [Dandelion++](/pt-br/blog/dandelion-plus-plus-explained/) oculta por onde a transação entrou na rede. O [guia dos recursos de privacidade do Blocknet](/pt-br/blog/blocknet-privacy-features/) percorre cada uma delas.
+
+## Consiga seus próprios BNT privados
+
+Um jeito simples de conseguir moedas com valores ocultos é minerá-las. O Blocknet usa uma [prova de trabalho Argon2id](/pt-br/blog/argon2id-proof-of-work-explained/) memory-hard que você pode minerar em um computador comum, e o seine a minera na sua CPU, junto com as GPUs NVIDIA que você tiver, e se ajusta sozinho sem configuração. Todo pagamento que o bntpool.com envia para você chega como uma saída privada com um compromisso e um Bulletproof. O [guia de mineração](/pt-br/blog/how-to-mine-blocknet/) leva você do download aos shares aceitos em poucos minutos.
+
+<CTA target="seine" title="Minere BNT privados com o seine" text="Baixe o seine, cole seu endereço ou @name e comece a ganhar Blocknet com todos os valores ocultos na blockchain." />

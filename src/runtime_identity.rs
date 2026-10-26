@@ -133,3 +133,77 @@ mod tests {
         assert!(fingerprint.contains("rustc="));
     }
 }
+
+/// Guest-visible x86 identity. Raw numeric IDs avoid guessing a generation from
+/// a brand string; on other architectures these fields are absent.
+#[derive(Debug, Clone, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct CpuIdentity {
+    pub vendor: Option<String>,
+    pub family: Option<u32>,
+    pub model: Option<u32>,
+    pub stepping: Option<u32>,
+}
+
+pub(crate) fn cpu_identity() -> CpuIdentity {
+    #[cfg(target_arch = "x86_64")]
+    {
+        // CPUID is available on x86-64. Do not use identity to authorize SIMD;
+        // CpuKernel support checks also require OS vector-state support.
+        let vendor = unsafe { std::arch::x86_64::__cpuid(0) };
+        let mut bytes = Vec::with_capacity(12);
+        bytes.extend_from_slice(&vendor.ebx.to_le_bytes());
+        bytes.extend_from_slice(&vendor.edx.to_le_bytes());
+        bytes.extend_from_slice(&vendor.ecx.to_le_bytes());
+        let mut identity = CpuIdentity {
+            vendor: String::from_utf8(bytes)
+                .ok()
+                .filter(|s| !s.trim_matches('\0').is_empty()),
+            ..CpuIdentity::default()
+        };
+        if vendor.eax >= 1 {
+            let signature = unsafe { std::arch::x86_64::__cpuid(1) }.eax;
+            let (family, model, stepping) = decode_x86_signature(signature);
+            identity.family = Some(family);
+            identity.model = Some(model);
+            identity.stepping = Some(stepping);
+        }
+        identity
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        CpuIdentity::default()
+    }
+}
+
+#[cfg(any(target_arch = "x86_64", test))]
+fn decode_x86_signature(signature: u32) -> (u32, u32, u32) {
+    // Intel SDM CPUID leaf 1: display family/model use extensions only for
+    // base family 0xF (family), and 0x6 or 0xF (model).
+    let base_family = (signature >> 8) & 0xf;
+    let family = base_family
+        + if base_family == 0xf {
+            (signature >> 20) & 0xff
+        } else {
+            0
+        };
+    let model = ((signature >> 4) & 0xf)
+        | if matches!(base_family, 0x6 | 0xf) {
+            (signature >> 12) & 0xf0
+        } else {
+            0
+        };
+    (family, model, signature & 0xf)
+}
+
+#[cfg(test)]
+mod cpu_identity_tests {
+    use super::*;
+
+    #[test]
+    fn cpuid_display_ids_handle_extended_and_legacy_families() {
+        assert_eq!(decode_x86_signature(0x00b40f40), (26, 68, 0));
+        assert_eq!(decode_x86_signature(0x000b0671), (6, 183, 1));
+        assert_eq!(decode_x86_signature(0x00f70523), (5, 2, 3));
+    }
+}

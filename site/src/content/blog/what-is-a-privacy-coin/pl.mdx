@@ -1,0 +1,102 @@
+---
+title: 'Czym jest privacy coin? Jak działają prywatne kryptowaluty'
+description: Kryptowaluta prywatności (privacy coin) ukrywa, kto zapłacił, kto otrzymał zapłatę i ile. Dowiedz się, jak działają takie kryptowaluty i dlaczego ważna jest prywatność domyślna.
+tags: [Prywatność, Kryptowaluty prywatności, Podpisy pierścieniowe, Adresy stealth, Blocknet]
+faq:
+  - q: 'Czym kryptowaluta prywatności różni się od Bitcoina?'
+    a: 'Bitcoin zapisuje każdy adres i każdą kwotę jawnie, więc każdy może śledzić monety od jednego adresu do kolejnego i odczytać każde saldo. Kryptowaluta prywatności używa kryptografii, takiej jak podpisy pierścieniowe, adresy jednorazowe i ukryte kwoty, więc łańcuch nadal dowodzi, że każda płatność jest prawidłowa, a osobom z zewnątrz pokazuje bardzo niewiele o tym, kto komu i ile zapłacił.'
+  - q: 'Czy wszystkie kryptowaluty prywatności wymuszają prywatność?'
+    a: 'Nie, konstrukcje się różnią. Niektóre kryptowaluty, takie jak Monero i Blocknet, stosują prywatność w każdej transakcji, więc nie mają w ogóle trybu publicznego. Zcash oferuje adresy osłonięte (shielded), które ukrywają nadawcę, odbiorcę i kwotę za pomocą dowodów z wiedzą zerową, obok adresów jawnych, działających podobnie jak adresy Bitcoin. Użytkownicy mogą przenosić środki między nimi.'
+  - q: 'Jak sieć może sprawdzać płatności, których nie widzi?'
+    a: 'Kryptografia pozwala węzłom zweryfikować płatność bez odczytywania jej szczegółów. Podpis pierścieniowy dowodzi, że wydano jedno z kilku wyjść, obraz klucza blokuje ponowne wydanie tych samych monet, a zobowiązania kwot sumują się tak, że węzły mogą potwierdzić, iż wejścia są równe wyjściom plus opłata. Dowody zakresu pokazują, że żadna ukryta kwota nie jest ujemna.'
+  - q: 'Czy można kopać kryptowalutę prywatności na zwykłym komputerze?'
+    a: 'Tak, jeśli kryptowaluta używa dowodu pracy wymagającego dużo pamięci. Blocknet używa Argon2id, który potrzebuje około 2 GB pamięci na każdy hash, więc kopią zwykłe komputery stacjonarne, laptopy i serwery. Pobierz seine, podaj mu swój adres Blocknet lub @name, a będzie kopał w puli bntpool.com za pomocą Twojego CPU i ewentualnej karty graficznej NVIDIA.'
+sourceHash: 62f9c81926d6
+translation: draft
+---
+
+Ten poradnik wyjaśnia, czym jest kryptowaluta prywatności (privacy coin), co zwykły blockchain ujawnia o Twoich płatnościach i jakiej kryptografii używają kryptowaluty prywatności, aby ukryć nadawcę, odbiorcę i kwotę. Na koniec pokazuje Blocknet jako przykład i to, jak zdobyć pierwsze prywatne monety przez kopanie.
+
+## Czym jest kryptowaluta prywatności?
+
+<Answer>
+Kryptowaluta prywatności to kryptowaluta zbudowana tak, aby płatności nie wystawiały na widok publiczny nadawcy, odbiorcy ani kwoty. Używa kryptografii, takiej jak podpisy pierścieniowe, jednorazowe adresy stealth i ukryte kwoty, więc każdy węzeł nadal może zweryfikować każdą płatność, a ktoś, kto czyta blockchain, dowiaduje się o niej bardzo niewiele.
+</Answer>
+
+Każda kryptowaluta prowadzi wspólny rejestr, blockchain, który wiele niezależnych komputerów kopiuje i sprawdza. Ta jawność pozwala obcym sobie ludziom zgodzić się co do tego, kto jest właścicielem czego, bez banku pośrodku. Kryptowaluta prywatności odpowiada na pytanie, ile z każdej płatności ten rejestr musi pokazywać.
+
+Bitcoin pokazuje większość. Jego dokument opisuje model prywatności w jednym zdaniu: „Publiczność może zobaczyć, że ktoś wysyła komuś kwotę, ale bez informacji wiążących transakcję z kimkolwiek”. Nazwisk nie ma, ale adresy i kwoty są publiczne. Kryptowaluta prywatności idzie dalej i trzyma szczegóły każdej płatności poza publicznym zapisem, a mimo to dowodzi, że płatność jest zgodna z zasadami.
+
+## Co publiczny blockchain ujawnia o Tobie?
+
+W jawnym łańcuchu, takim jak Bitcoin, każdy, kto zna jeden z Twoich adresów, może go wyszukać w eksploratorze bloków i zobaczyć:
+
+- **Jego saldo**, co do ostatniej jednostki.
+- **Każdą płatność przychodzącą i wychodzącą**, z kwotami i datami.
+- **Dokąd pieniądze trafiły dalej**, bo każda płatność wskazuje adres, z którego pochodzi, i adres, na który trafia.
+
+Twojego nazwiska tam nie ma, ale adresy rzadko długo pozostają niepowiązane. Zapłata w sklepie, wypłata z giełdy czy opublikowanie adresu do darowizn wiąże go z Tobą, a od tej chwili cała historia jest do odczytania. To trochę tak, jakby wydrukować wyciąg bankowy na publicznej tablicy ogłoszeń z numerem konta zamiast nazwiska. Każdy, komu płacisz, widzi, ile masz, a każdy, kto płaci Tobie, może obserwować, co robisz z pieniędzmi.
+
+Kryptowaluta prywatności jest zaprojektowana tak, aby tablica pokazywała tylko to, że odbyły się prawidłowe płatności.
+
+## Jak kryptowaluty prywatności ukrywają nadawcę, odbiorcę i kwotę?
+
+<Answer>
+Wiele kryptowalut prywatności łączy trzy techniki. Podpisy pierścieniowe ukrywają nadawcę, mieszając prawdziwą monetę z wabikami, jednorazowe adresy stealth ukrywają odbiorcę, dając każdej płatności nowy adres, a zobowiązania z dowodami zakresu ukrywają kwotę, jednocześnie dowodząc, że jest prawidłowa. Wiele z nich chroni też warstwę sieciową, aby pochodzenie transakcji pozostało ukryte.
+</Answer>
+
+Każda technika obejmuje jedną część płatności. Oto jak działają, w prostych słowach.
+
+### Podpisy pierścieniowe ukrywają, kto zapłacił
+
+[Podpis pierścieniowy](/pl/blog/ring-signatures-explained/) pozwala podpisać się w imieniu grupy bez ujawniania, który członek podpisał. Ron Rivest, Adi Shamir i Yael Tauman opisali ten pomysł w 2001 roku, a projekt CryptoNote z 2013 roku przeniósł go do kryptowalut. Gdy wydajesz, portfel wybiera z łańcucha inne wyjścia jako wabiki i podpisuje się za całą grupę. Każdy może sprawdzić, że jedno z nich zostało wydane, a podpis nie mówi które.
+
+Kryptowaluty prywatności używają powiązywalnych podpisów pierścieniowych, które dodają obraz klucza: znacznik unikalny dla prawdziwej wydawanej monety, który nie zdradza niczego o tym, który to członek pierścienia. Jeśli ten sam obraz klucza pojawi się dwa razy, sieć odrzuca drugie wydanie, więc prywatnych monet nadal nie da się wydać dwa razy. Monero i Blocknet używają zwięzłej wersji o nazwie CLSAG.
+
+### Adresy stealth ukrywają, kto otrzymał zapłatę
+
+W schemacie [adresów stealth](/pl/blog/stealth-addresses-explained/) adres, który udostępniasz, nigdy nie pojawia się w łańcuchu. Twój adres zawiera dwa klucze publiczne: klucz podglądu i klucz wydawania. Dla każdej płatności portfel nadawcy łączy te klucze z nową wartością losową i wyprowadza adres, który jest używany raz i nigdy więcej. Po Twojej stronie prywatny klucz podglądu pozwala portfelowi skanować łańcuch i wychwytywać wyjścia zaadresowane do Ciebie, a prywatny klucz wydawania pozwala je wydać.
+
+Jeśli dziesięć osób zapłaci na adres podany na Twojej stronie, łańcuch pokaże dziesięć osobnych adresów jednorazowych bez widocznego związku między nimi, więc nikt nie może zsumować tego, co otrzymałeś.
+
+### Zobowiązania i dowody zakresu ukrywają kwotę
+
+Kwoty są zapisywane jako zobowiązania Pedersena, które utrwalają liczbę, nie pokazując jej. Zobowiązania można do siebie dodawać, więc każdy węzeł może potwierdzić, że to, co wchodzi do transakcji, odpowiada temu, co z niej wychodzi, łącznie z opłatą, nie widząc żadnej z tych liczb. Dowód zakresu pokazuje następnie, że żadna ukryta kwota nie jest ujemna, więc nikt nie może stworzyć monet z niczego. [Bulletproofs](/pl/blog/bulletproofs-explained/), opublikowane przez Bünza i współpracowników w 2018 roku, znacznie zmniejszyły te dowody.
+
+### Prywatność sieciowa ukrywa, gdzie płatność się zaczęła
+
+Nawet całkowicie prywatną transakcję można by powiązać z komputerem, który ją rozgłosił, obserwując, który węzeł ogłosił ją jako pierwszy. [Dandelion++](/pl/blog/dandelion-plus-plus-explained/), opublikowany w 2018 roku, przeciwdziała temu, najpierw po cichu przekazując nową transakcję od jednego węzła do następnego wzdłuż „łodygi”, a potem pozwalając jej rozejść się po całej sieci z losowego punktu dalej na tej ścieżce.
+
+Niektóre kryptowaluty prywatności idą inną drogą. Zcash, uruchomiony w 2016 roku, używa dowodów z wiedzą zerową zwanych zk-SNARK: jego adresy osłonięte ukrywają nadawcę, odbiorcę i kwotę, a dowód pokazuje, że transakcja jest prawidłowa, nie ujawniając żadnej z tych informacji.
+
+## Dlaczego prywatność domyślna ma znaczenie?
+
+Gdy prywatność jest funkcją, którą się włącza, transakcje, które z niej korzystają, tworzą mniejszą grupę, a mniejszą grupę łatwiej przeanalizować. Gdy każda transakcja jest zbudowana tak samo, prywatna płatność wygląda jak każda inna płatność w łańcuchu i nikt nie musi pamiętać, by ją chronić.
+
+Prywatność domyślna sprawia też, że każda moneta jest wymienna na każdą inną, co nazywa się zamiennością (fungibility). W jawnym łańcuchu moneta niesie całą swoją historię, a dwie monety o tej samej wartości mogą być traktowane różnie z powodu tego, gdzie wcześniej były. Gdy żadna moneta nie ma widocznej przeszłości, jedna moneta jest tak samo dobra jak każda inna, a tego ludzie oczekują od pieniądza.
+
+Codzienne powody są proste. Firma nie chce, by konkurencja czytała jej płatności dla dostawców. Pracownik nie chce, by jego pensja była widoczna dla każdego, u kogo kupuje kawę. Ktoś, kto wspiera jakąś sprawę, może woleć zachować to dla siebie. Gotówka i zwykłe konta bankowe już dają ludziom taką prywatność, a kryptowaluta prywatności przenosi ją do płatności cyfrowych.
+
+## Blocknet jako przykład kryptowaluty prywatności
+
+Blocknet to kryptowaluta prywatności, która stosuje podpisy pierścieniowe, adresy stealth, ukryte kwoty i prywatność sieciową w każdej płatności. Jego format transakcji nie ma trybu jawnego:
+
+- **Nadawca:** każde wejście jest podpisane pierścieniem CLSAG złożonym z dokładnie 16 wyjść, prawdziwego i 15 wabików, a konsensus odrzuca każdy inny rozmiar.
+- **Odbiorca:** każda płatność trafia na jednorazowy adres stealth.
+- **Kwota:** kwoty to zobowiązania Pedersena z 64-bitowymi dowodami zakresu Bulletproofs.
+- **Sieć:** transakcje przemieszczają się za pomocą Dandelion++, który co 10 minut zmienia trasy łodyg.
+- **Notatka:** każde wyjście ma miejsce na zaszyfrowaną notatkę o długości do 124 bajtów, czytelną tylko dla nadawcy i odbiorcy i dopełnianą do stałych 128 bajtów, więc płatność z notatką wygląda tak samo jak płatność bez niej.
+
+Blocknet pozwala też płacić komuś po nazwie. [Krótka nazwa Blocknet ID](/pl/blog/blocknet-id-pay-by-name/), taka jak `@alice`, zastępuje ponad 90-znakowy adres, a płatności na tę nazwę nadal trafiają na nowe adresy stealth, więc publiczna nazwa nie zdradza niczego o dochodach jej właściciela. Aby poznać każdą warstwę dokładniej, przeczytaj, [jak Blocknet chroni prywatność płatności](/pl/blog/blocknet-privacy-features/), a szerszy obraz daje artykuł [czym jest Blocknet?](/pl/blog/what-is-blocknet/)
+
+Planowana aktualizacja Faraday w Blocknecie poszerzy grupę, w której ukrywa się każde wydanie. Słowami [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): „Dziś wydanie ukrywa się wśród 16 wyjść. Po Faradayu ukryje się wśród wszystkich wyjść w łańcuchu”.
+
+## Jak zdobyć kryptowalutę prywatności?
+
+Możesz ją zarobić, kopiąc. Dowód pracy Blocknetu, [Argon2id](/pl/blog/argon2id-proof-of-work-explained/), potrzebuje około 2 GB pamięci na każdy hash, więc kopią zwykłe procesory i pamięć RAM w komputerach stacjonarnych, laptopach i serwerach. Wypłaty z puli docierają do Ciebie jak każda inna płatność w Blocknecie, na jednorazowe adresy stealth z ukrytymi kwotami.
+
+1. **Załóż portfel.** [Poradnik o portfelu Blocknet do kopania](/pl/blog/blocknet-wallet-for-mining/) pokazuje, jak go utworzyć, zrobić kopię zapasową frazy seed i skopiować adres.
+2. **Pobierz seine.** To darmowy miner Blocknet open source dla systemów Windows, macOS i Linux, dostępny w [sekcji pobierania](/pl/#download). Kopie za pomocą CPU, a w systemach Windows i Linux jednocześnie za pomocą każdej karty graficznej NVIDIA, i stroi się sam podczas pracy.
+3. **Zacznij kopać na bntpool.com.** Wklej swój adres lub `@name`, zaakceptuj domyślną pulę, a wypłaty będą trafiać prywatnie do Twojego portfela. Poradnik [jak kopać Blocknet](/pl/blog/how-to-mine-blocknet/) omawia każdy krok.
+
+<CTA target="seine" title="Kop kryptowalutę prywatności na swoim komputerze" text="seine kopie Blocknet za pomocą Twojego CPU i GPU NVIDIA i wypłaca na bntpool.com na Twój prywatny adres lub @name." />

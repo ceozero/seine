@@ -1,0 +1,101 @@
+---
+title: Cos'è Blocknet? Una criptovaluta privata con cui pagare tramite nome
+description: Blocknet è una criptovaluta che mantiene privato ogni pagamento, ti permette di pagare un @name, aggiunge un memo cifrato e si può minare su un computer comune.
+tags: [Blocknet, Privacy, Blocknet ID, Faraday]
+faq:
+  - q: 'Blocknet è una privacy coin?'
+    a: 'Sì. La privacy è integrata in ogni transazione Blocknet. Ogni spesa è firmata con un anello di 16 output possibili, ogni pagamento va a un indirizzo stealth monouso e gli importi sono nascosti dietro commitment crittografici. Non esiste una modalità trasparente, quindi non devi mai ricordarti di attivare la privacy.'
+  - q: 'Blocknet ha avuto un premine o un fondo per gli sviluppatori?'
+    a: 'No. Il blocco genesi, creato il 15 febbraio 2026, non contiene alcuna transazione, quindi nessuna moneta è stata creata prima dell''inizio del mining. Da allora ogni blocco paga l''intera ricompensa in un unico output al miner che l''ha trovato, e il consenso non prevede tesoreria né output per i fondatori.'
+  - q: 'Qual è il tempo di blocco di Blocknet?'
+    a: 'Blocknet punta a un blocco ogni cinque minuti, cioè 288 blocchi al giorno. Un pagamento di solito compare in un blocco nel giro di pochi minuti, e la rete considera sicure 10 conferme, circa 50 minuti. Le monete appena minate diventano spendibili dopo 60 blocchi, circa cinque ore.'
+  - q: 'Posso minare Blocknet con un computer normale?'
+    a: 'Sì. La proof of work di Blocknet, Argon2id, richiede circa 2 GB di memoria per ogni hash, quindi sono le normali CPU e la RAM di desktop, portatili e server a fare il mining. Scarica seine, incolla il tuo indirizzo o @name e minerà sulla pool bntpool.com con la tua CPU e con qualsiasi scheda grafica NVIDIA.'
+sourceHash: d34f8db6d5ae
+translation: reviewed
+---
+
+Questa pagina spiega cosa rende diverso Blocknet: pagamenti privati per impostazione predefinita, invii a un nome invece che a un lungo indirizzo, un memo cifrato su ogni pagamento, un fair launch (lancio equo) e un mining che puoi fare sul tuo computer. Si conclude con l'aggiornamento Faraday previsto dal progetto e con come iniziare.
+
+## Cos'è Blocknet?
+
+<Answer>
+Blocknet è una criptovaluta, con unità BNT, che mantiene privato ogni pagamento per impostazione predefinita. Mittenti, destinatari e importi sono nascosti in ogni transazione, puoi pagare qualcuno tramite un breve @name, ogni pagamento può contenere una nota cifrata e le nuove monete si minano su computer comuni con la proof of work Argon2id.
+</Answer>
+
+La rete principale di Blocknet è partita il 15 febbraio 2026 senza premine. I blocchi arrivano circa ogni cinque minuti, e chiunque può eseguire un nodo, tenere monete nel [wallet da riga di comando](https://github.com/blocknetprivacy/blocknet/releases/latest) o nel [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) ufficiali e seguire la blockchain sul [block explorer](https://explorer.blocknetcrypto.com). Il sito ufficiale del progetto è [blocknetcrypto.com](https://blocknetcrypto.com).
+
+## Come mantiene privati i pagamenti Blocknet?
+
+<Answer>
+Ogni pagamento Blocknet combina tre protezioni. Un anello di 16 output nasconde quale moneta viene spesa, un indirizzo stealth monouso nasconde chi la riceve e i commitment di Pedersen con Bulletproofs nascondono l'importo. Non esiste una modalità trasparente, quindi ogni transazione ottiene la stessa privacy senza alcuna impostazione da cambiare.
+</Answer>
+
+Ognuna di queste copre una parte di un pagamento, le tre cose che una [privacy coin](/it/blog/what-is-a-privacy-coin/) tiene fuori dal registro pubblico:
+
+- **Il mittente.** Quando spendi, il tuo wallet firma con un anello di 16 output: il tuo e altri 15 presi dalla blockchain. Chiunque controlli la transazione può confermare che uno dei 16 è stato speso, senza scoprire quale. La dimensione dell'anello è fissata a 16 dal consenso, quindi non distingue mai una transazione dall'altra.
+- **Il destinatario.** Il tuo indirizzo pubblicato non compare mai sulla blockchain. Ogni pagamento a te va a un nuovo indirizzo stealth monouso che solo il tuo wallet può riconoscere, quindi due pagamenti alla stessa persona non possono essere collegati guardando la blockchain.
+- **L'importo.** Gli importi sono memorizzati come commitment. La rete può verificare che ciò che entra in una transazione sia pari a ciò che esce, e una range proof mostra che nessun importo è negativo, tutto senza vedere un solo numero.
+
+Poiché la privacy fa parte del formato stesso delle transazioni, non esiste una modalità pubblica in cui un pagamento possa ricadere. Le tue monete e quelle di tutti gli altri condividono la stessa protezione, ed è questo che rende la privacy solida per tutti. Per uno sguardo più da vicino a ogni livello, comprese le key image e l'inoltro Dandelion++, vedi [come Blocknet mantiene privati i pagamenti](/it/blog/blocknet-privacy-features/).
+
+## Si può pagare qualcuno tramite nome?
+
+Sì. Un indirizzo Blocknet è una stringa di oltre 90 caratteri, scomoda da leggere ad alta voce, digitare o controllare. Gli [shortname Blocknet ID](/it/blog/blocknet-id-pay-by-name/) risolvono il problema. Registri un nome come `@alice` su [blocknet.id](https://blocknet.id), e le persone possono pagare `@alice` (o `$alice`) invece dell'indirizzo completo. Il wallet cerca il nome tramite un'associazione firmata da blocknet.id e invia all'indirizzo collegato.
+
+I nomi non distinguono tra maiuscole e minuscole e usano lettere, numeri, `_`, `-` e `.`, fino a 64 caratteri. Il tuo nome è pubblico, e i pagamenti fatti a quel nome restano privati, perché ognuno finisce comunque sul proprio indirizzo stealth. Puoi usare lo stesso nome per il mining: seine e la pool bntpool.com accettano entrambi `@name` come indirizzo di pagamento.
+
+## Cosa puoi scrivere in un memo Blocknet?
+
+Ogni pagamento Blocknet porta con sé un memo da 128 byte, cifrato in modo che solo mittente e destinatario possano leggerlo. Puoi scrivere fino a 124 byte di testo, abbastanza per un numero di fattura, un riferimento d'ordine o un breve ringraziamento. Nel wallet da riga di comando lo aggiungi alla fine dell'invio:
+
+```sh
+send @alice 10 invoice 1042
+```
+
+Il memo viene portato agli stessi 128 byte su ogni output, che tu abbia scritto una nota o no. Dall'esterno, un pagamento con un numero di fattura appare esattamente uguale a uno senza, quindi il campo memo non rivela nulla su chi lo usa. Per un negozio o un freelance, questo significa poter abbinare ogni pagamento in entrata a un ordine senza un sistema separato e senza mettere quel dettaglio in mostra.
+
+## Come funzionano i link di pagamento Blocknet?
+
+Un link di pagamento racchiude tutto ciò che serve per un pagamento in un unico link da condividere: l'indirizzo o il nome, l'importo e un memo facoltativo. Il wallet di Blocknet capisce due forme, un link `blocknet://` e un link web `bntpay.com/`. Un link web per richiedere 10 BNT per una fattura appare così:
+
+```text
+https://bntpay.com/$alice?amount=10&memo=invoice%201042
+```
+
+Quando chi paga incolla il link nel wallet da riga di comando, viene letto come un invio pronto da confermare, con indirizzo, importo e memo già compilati. Puoi mettere un link su una fattura, un sito web o un profilo social e lasciare che le persone ti paghino senza copiare a mano nessun dettaglio.
+
+## Blocknet ha avuto un fair launch?
+
+Sì. Il blocco genesi di Blocknet è stato creato il 15 febbraio 2026 e non contiene transazioni: nessuna coinbase, nessun premine e nessuna moneta messa da parte per qualcuno. Le prime monete sono arrivate dal blocco 1, minato come ogni blocco successivo.
+
+Le regole fanno sì che resti così. La ricompensa di ogni blocco deve essere pagata come esattamente un output, del valore esatto della ricompensa del blocco, al miner che ha trovato il blocco. Nel consenso non esistono tesoreria, ricompensa per i fondatori o fondo per gli sviluppatori, quindi ogni BNT esistente è stato minato da qualcuno che eseguiva la proof of work. Puoi verificarlo tu stesso sull'[explorer](https://explorer.blocknetcrypto.com), partendo dal blocco genesi.
+
+## Come vengono create le nuove monete?
+
+Un nuovo blocco viene trovato circa ogni cinque minuti, cioè 288 blocchi al giorno. La ricompensa del blocco è partita da circa 723 BNT e scende a gradini ogni mese di 30 giorni, emettendo circa 100 milioni di BNT nei primi quattro anni. Dopo, ogni blocco paga una ricompensa di coda permanente di 2 BNT, così i miner continuano a essere pagati per proteggere la blockchain.
+
+## Si può minare Blocknet su un computer comune?
+
+Sì, ed è così che Blocknet è pensato per essere minato. La sua proof of work, [Argon2id](/it/blog/argon2id-proof-of-work-explained/), usa circa 2 GB di memoria per ogni hash. La memoria è qualcosa che ogni desktop, portatile e server ha già, e il design è pensato per resistere all'hardware di mining specializzato, quindi il lavoro va alle macchine comuni. Ogni thread di mining ha bisogno dei propri 2 GB, ed è per questo che è la RAM del tuo computer, più spesso del numero di core, a [stabilire quanti thread può eseguire](/it/blog/blocknet-mining-hardware-hashrate/).
+
+Il modo più semplice per minare è **seine**, il miner gratuito e open source per Blocknet. Funziona su Windows, macOS e Linux, mina con la tua CPU e, su Windows e Linux, con ogni scheda grafica NVIDIA contemporaneamente, e ottimizza da solo il numero di thread e il kernel CPU mentre mina. Puntalo sul tuo indirizzo o `@name`, accetta la pool predefinita, [bntpool.com](https://bntpool.com), e stai già minando. [Come minare Blocknet](/it/blog/how-to-mine-blocknet/) illustra l'intera configurazione, e la [sezione download](/it/#download) ha seine per ogni sistema.
+
+## Cos'è l'aggiornamento Faraday?
+
+Faraday è il prossimo grande aggiornamento di Blocknet, previsto intorno al 16 febbraio 2027, vicino al primo anniversario del blocco 1. Secondo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), porterà l'intera rete a una nuova crittografia con un unico hard fork:
+
+- **Prove di spesa che un computer quantistico non può falsificare.** Le spese saranno dimostrate con prove basate su hash invece che su curve ellittiche, e i wallet rileveranno i pagamenti in entrata usando ML-KEM.
+- **Privacy su tutta la blockchain.** Oggi una spesa si nasconde tra 16 output. Dopo Faraday, si nasconderà tra tutti gli output della blockchain.
+- **Sincronizzazione più veloce e wallet più rapidi.** Una proof of work più leggera permetterà ai nuovi nodi di raggiungere più velocemente la blockchain, e i wallet troveranno prima i loro pagamenti.
+- **La stessa moneta.** Non ci saranno né una nuova moneta né un rilancio, e la tua cronologia resta. Dopo l'aggiornamento avrai un anno per spostare le tue monete nel nuovo formato, e il wallet le scansionerà, mostrerà la commissione e le sposterà quando lo dirai tu.
+
+Il sito descrive Faraday come in fase di progettazione, test e revisione avversariale, e le sue date sono previste e non definitive. Se mini, tieni seine aggiornato: controlla la presenza di nuove versioni all'avvio e ogni 12 ore.
+
+## Come si inizia con Blocknet?
+
+1. **Procurati un wallet.** Scarica il [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) o il [wallet da riga di comando](https://github.com/blocknetprivacy/blocknet/releases/latest) e scrivi su carta la tua frase di recupero.
+2. **Registra un nome.** Registra uno shortname su [blocknet.id](https://blocknet.id) così le persone possono pagarti tramite `@name`.
+3. **Guadagna le tue prime monete minando.** Scarica seine dalla [sezione download](/it/#download), dagli il tuo indirizzo o nome e inizia a minare su bntpool.com.
+
+<CTA target="seine" title="Mina i tuoi primi BNT" text="seine mina Blocknet sul computer che hai già, con la tua CPU e la tua GPU NVIDIA insieme." />

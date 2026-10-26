@@ -1,0 +1,173 @@
+---
+title: 取得用於挖礦的 Blocknet 錢包與地址
+description: 安裝官方 Blocknet 錢包，備份 12 個單字的復原助記詞，複製用於挖礦的地址，並在餘額中看到 bntpool.com 支付的挖礦收益入帳。
+tags: [錢包, 挖礦指南, bntpool]
+faq:
+  - q: '開始挖礦前需要 Blocknet 錢包嗎？'
+    a: '你需要一個用來接收挖礦收益的 Blocknet 地址，官方錢包可以為你產生。在命令列錢包或桌面錢包中建立錢包，複製地址，然後貼到 seine 中。錢包本身始終留在你自己的電腦上。seine 與 bntpool.com 只需要這個地址，或者指向它的 Blocknet ID 短名稱。'
+  - q: 'Blocknet 復原助記詞有幾個單字？'
+    a: 'Blocknet 復原助記詞共 12 個單字。在命令列錢包中，seed 指令會在顯示警告並要求輸入錢包密碼後顯示助記詞。請把這些單字寫在紙上並離線保存。憑這 12 個單字，即使錢包檔案與密碼都遺失了，import 指令也能在任何電腦上重建你的錢包。'
+  - q: 'bntpool.com 的收益什麼時候入帳？'
+    a: '礦池找到的區塊需要 60 個確認才會支付其獎勵，依 Blocknet 五分鐘的出塊時間約為五小時。當你已確認的礦池餘額達到 0.1 BNT 時，礦池會把它發送到你的地址。這筆支付在歷史紀錄中顯示為一般交易，經過 10 個確認（約 50 分鐘）後即可花費。'
+  - q: '可以在多台礦機上使用同一個地址嗎？'
+    a: '可以。每台執行 seine 的機器都可以挖到同一個地址或 Blocknet ID 短名稱，bntpool.com 會把它們的份額計入同一個餘額。礦池的統計頁面會在你的地址下列出每台已連線的機器。錢包及其復原助記詞始終留在你自己的電腦上。'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+挖 Blocknet 需要一個接收獎勵的地址，官方錢包幾分鐘內就能為你產生一個。本指南介紹如何用命令列錢包或桌面錢包建立錢包、備份復原助記詞、找到要貼到 seine 中的地址，以及在 bntpool.com 向你支付時查看餘額。
+
+## 挖礦應該使用哪個 Blocknet 錢包？
+
+<Answer>
+使用 Blocknet Privacy 的兩款官方錢包之一：可在 Windows、macOS 與 Linux 上執行的命令列錢包，或支援相同系統的桌面錢包。兩者都會在你的電腦上執行一個完整的 Blocknet 節點，並提供一個接收地址，讓你用 seine 在 bntpool.com 上挖礦到這個地址。
+</Answer>
+
+- **命令列錢包。** `blocknet` 程式負責安裝、啟動與更新 Blocknet 核心（core），也就是在背景執行節點、錢包與網路的程序。你在一個互動式 shell 中管理錢包。可從[命令列版本發布頁](https://github.com/blocknetprivacy/blocknet/releases/latest)下載，提供 Windows、macOS 與 Linux 版本。
+- **桌面錢包。** 一款內建 Blocknet 背景服務程式的圖形介面錢包。可從[桌面版本發布頁](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)下載。
+
+選擇你喜歡的那一款即可。下面的步驟先介紹命令列錢包（因為它的每個指令都有文件），然後介紹桌面錢包的安裝。
+
+## 如何用命令列錢包建立錢包
+
+1. **安裝並啟動核心。** 解壓縮發布檔，執行設定精靈：
+
+   ```sh
+   blocknet setup
+   ```
+
+   精靈會詢問是否自動更新節點，下載最新的核心，並提供立即啟動的選項。在 Windows 上程式名稱為 `blocknet.exe`，因此請執行 `blocknet.exe setup`。如果不想使用精靈，可以先執行 `blocknet install latest`，再執行 `blocknet start`。
+
+2. **開啟 shell。** 連線到正在執行的核心：
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   你會看到 `>` 提示字元。用 `quit` 關閉 shell 後核心仍會繼續執行，你可以隨時重新連線。
+
+3. **建立錢包。** 輸入 `load`。錢包會列出它找到的錢包檔案，並提供「Create a new wallet」選項。選擇該選項，輸入名稱與密碼，核心就會建立一個帶有全新復原助記詞的新錢包：
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+錢包是一個單獨的 `.wallet.dat` 檔案，你的密碼會加密其中的花費金鑰。核心會記住錢包的路徑，因此下次執行 `blocknet start` 時會自動載入它。Blocknet 還會把已載入的錢包複製到 `~/.config/bnt/wallets/`，讓你在一個固定的位置多一份副本。
+
+## 如何備份復原助記詞？
+
+復原助記詞是最重要的備份。它由 12 個單字組成，憑它你可以在任何電腦上重建錢包，即使遺失了錢包檔案或忘記了密碼也沒問題。Blocknet 從不儲存你的密碼，所以忘記密碼時也要靠助記詞復原。
+
+用 `seed` 指令查看助記詞。錢包會顯示一則警告，請你確認並輸入密碼，然後顯示這些單字：
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+把這 12 個單字寫在紙上，離線存放在安全的地方。錢包指南提醒不要把它們儲存在文字檔、筆記應用程式或雲端儲存空間中，因為任何拿到這些單字的人都能控制資金。[助記詞詳解](/zh-hant/blog/seed-phrase-explained/)說明了這 12 個單字如何變成你的金鑰，以及如何妥善保存它們。
+
+日後要復原錢包時，執行 `import`，選擇 `1) 12-word recovery seed`，輸入這些單字，並為新錢包設定名稱與密碼。接著核心會掃描區塊鏈，找回屬於你的輸出。
+
+## 如何找到你的 Blocknet 地址？
+
+<Answer>
+在命令列錢包中，於 shell 提示字元下輸入 address（或 addr）。錢包會顯示你的接收地址，這是一個 92 或 93 個字元的字串，後面附有一行提示，告訴你可以在 blocknet.id 取得短名稱。複製完整地址，在 seine 詢問收款地址時貼上即可。
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+這就是你要提供給 seine 的地址。第一次啟動 [seine](/zh-hant/#download) 時，它會先詢問收款地址，再詢問礦池；貼上地址，然後按 Enter 接受 bntpool.com。你也可以直接傳入：
+
+```sh
+./seine --address <your-address>
+```
+
+seine 開始挖礦後，它的[儀表板](/zh-hant/blog/seine-dashboard-explained/)上的礦池餘額面板會顯示你正在挖礦的地址的前六個與後六個字元，方便你核對它與錢包是否一致。
+
+如果你想用更短的名稱挖礦，可以使用 [Blocknet ID 短名稱](/zh-hant/blog/blocknet-id-pay-by-name/)，例如 `@yourname`，它指向這個地址，在 seine 與 bntpool.com 上都能使用。
+
+## 安裝桌面錢包
+
+桌面錢包的最新版本（v0.22.0，發布於 2026 年 10 月 15 日）提供以下下載檔案：
+
+| 系統 | 檔案 |
+|---|---|
+| Windows x86_64 | `.exe` 安裝程式 |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`、`.deb`、`.rpm`、`.flatpak` |
+
+每個版本都附帶 `SHA256SUMS.txt`，你可以在安裝前驗證下載的檔案：
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+在 Linux 上，安裝 `.deb` 或直接執行 `.AppImage`。在 macOS 上，依照 README 的說明，把應用程式移到「應用程式」資料夾，並在第一次啟動前於終端機中執行一次以下指令：
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+在 Windows 上，如果 Defender 對安裝程式跳出提示，請按「其他資訊」，然後按「仍要執行」。
+
+這個應用程式會在你的電腦上執行內建的 Blocknet 背景服務程式，並透過 `127.0.0.1` 與它通訊，不會向任何外部服務發出請求。在應用程式中建立錢包，寫下它的復原助記詞，然後把接收地址複製到 seine 中。桌面錢包還能開啟 `blocknet://` [付款連結](/zh-hant/blog/blocknet-payment-links/)，並為你填好發送表單供你核對。
+
+## 把金鑰留在你自己的電腦上
+
+礦機只需要你的地址。seine 挖礦只需要地址或短名稱，因此錢包檔案與復原助記詞可以一直留在你信任的電腦上。這一點對租用的伺服器、共用的礦機以及其他人能接觸到的機器尤其重要。
+
+- **錢包放在家裡，挖礦在任何地方。** 在每台執行 seine 的機器上填寫同一個地址，bntpool.com 會把它們的份額計入同一個餘額。
+- **不需金鑰即可查看進度。** 在 [bntpool.com](https://bntpool.com) 上查詢你的地址，就能在任何瀏覽器中查看算力、份額與餘額。
+- **僅檢視存取。** 如果你想在另一台電腦上查看收到的資金，`viewkeys` 可以匯出僅檢視金鑰。僅檢視錢包能顯示收到的資金，但無法發送或簽章。
+- **離開時鎖定錢包。** `lock` 會阻止花費操作，直到你用密碼 `unlock`。
+
+## 挖礦收益如何顯示在錢包中？
+
+bntpool.com 會在區塊成熟後支付獎勵。礦池找到的區塊需要 60 個確認，依 Blocknet 五分鐘的出塊時間約為五小時。當你已確認的餘額達到 0.1 BNT 的最低支付額時，礦池會以一筆一般 Blocknet 交易把它發送到你的地址。
+
+在錢包中，查看 `balance`（或 `bal`）：
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+新的支付會先出現在 `confirming` 下。一般交易經過 10 個確認（約 50 分鐘）後即可花費，隨後會移到 `spendable`。`history` 指令依從舊到新的順序列出收到的交易，並顯示每筆交易的區塊、金額與類型：礦池支付顯示為 `regular`，你在獨立挖礦（solo）模式下自己找到的區塊顯示為 `coinbase`，這類獎勵需要 60 個確認後才能花費。
+
+節點追上區塊鏈後，錢包就會列出收到的支付。節點同步完成時，`status` 會顯示 `Syncing: false`；`sync` 會重新掃描已下載的區塊，找回屬於你的輸出。
+
+剛開始挖礦？[Blocknet 挖礦指南](/zh-hant/blog/how-to-mine-blocknet/)介紹了如何下載 seine、選擇執行緒數量以及在 bntpool.com 上可以期待什麼。
+
+<CTA target="pool" title="挖礦到你的新地址" text="把你的 Blocknet 地址貼到 seine 中，接受 bntpool.com，餘額達到 0.1 BNT 後即可看到收益支付到你的錢包。" />

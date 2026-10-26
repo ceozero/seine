@@ -1,0 +1,94 @@
+---
+title: 'Stealth-Adressen erklärt: wie Einmal-Adressen funktionieren'
+description: Stealth-Adressen einfach erklärt. Wie Einmal-Adressen, View Keys, Spend Keys und das Scannen der Wallet jede Zahlung an dich privat halten.
+tags: [Privatsphäre, Stealth-Adressen, Wallet, Blocknet]
+faq:
+  - q: 'Ist eine Stealth-Adresse dasselbe wie eine Einmal-Adresse?'
+    a: 'Es sind zwei Hälften eines Systems. Die Stealth-Adresse ist die Adresse, die du veröffentlichst, bestehend aus einem öffentlichen Spend Key und einem öffentlichen View Key. Eine Einmal-Adresse ist der frische Key, den ein Absender daraus für eine einzelne Zahlung ableitet. Auf der Chain erscheinen nur Einmal-Adressen, deine veröffentlichte Adresse nie.'
+  - q: 'Kann jemand mein Guthaben sehen, wenn er meine Stealth-Adresse kennt?'
+    a: 'Nein. Wer deine veröffentlichte Adresse kennt, kann deine Zahlungen nicht finden, denn jede landet auf einem Einmal-Key, der mit ihr nichts zu tun zu haben scheint. Um sie zu finden, braucht man deinen privaten View Key, nur deine Wallet kann also auflisten, was du empfangen hast. Bei Blocknet sind auch die Beträge verborgen, selbst die Outputs zeigen also keinen Wert.'
+  - q: 'Was kann jemand mit meinem privaten View Key anfangen?'
+    a: 'Mit einem privaten View Key findet der Inhaber die Zahlungen, die an dich gesendet wurden, und kann ihre Beträge und Memos lesen. Ausgeben kann er nichts, denn dafür braucht man den privaten Spend Key. Bei Blocknet macht der Befehl viewkeys aus deinem View Key eine View-only-Wallet, praktisch, um Guthaben auf einem zweiten Computer zu beobachten. Teile ihn nur mit Leuten, denen du vertraust.'
+  - q: 'Muss ich Stealth-Adressen bei Blocknet einschalten?'
+    a: 'Nein. Jede Blocknet-Zahlung geht automatisch an eine Einmal-Stealth-Adresse, weil das Transaktionsformat keinen transparenten Modus hat. Deine Wallet erzeugt den Einmal-Key beim Senden und findet eingehende Zahlungen beim Synchronisieren mit deinem View Key. Es gibt nichts zu konfigurieren, egal ob du an eine Adresse oder einen @name zahlst.'
+sourceHash: df06dcbe3a7b
+translation: reviewed
+---
+
+Mit einer Stealth-Adresse veröffentlichst du eine einzige Adresse, und trotzdem landet jede Zahlung an dich an einer neuen Stelle auf der Chain. Diese Anleitung erklärt, wie das funktioniert, was dein View Key und dein Spend Key jeweils tun und wie eine Wallet ihre eigenen Zahlungen findet, mit Blocknet als durchgehendem Beispiel.
+
+## Was ist eine Stealth-Adresse?
+
+<Answer>
+Eine Stealth-Adresse ist eine öffentliche Adresse, die nie auf der Blockchain erscheint. Sie enthält zwei Public Keys, einen Spend Key und einen View Key. Für jede Zahlung kombiniert die Wallet des Absenders sie mit einer frischen Zufallszahl zu einer Einmal-Adresse, die nur der Empfänger erkennen und ausgeben kann.
+</Answer>
+
+In einem öffentlichen Ledger taucht eine gewöhnliche Adresse in jeder Zahlung auf, die sie empfängt. Eine normale Bitcoin-Adresse funktioniert so: Wer sie kennt, kann jede Zahlung nachschlagen und die Summe zusammenrechnen. Deshalb vergeben viele Bitcoin-Wallets für jede Zahlung eine neue Adresse.
+
+Eine Stealth-Adresse übernimmt das für dich. Du teilst eine Adresse, auf einer Website, in einem Profil oder als `@name`, und jeder Absender leitet daraus eine andere Einmal-Adresse ab. Zehn Zahlungen an dich werden zu zehn Outputs, die sichtbar nichts miteinander oder mit der geteilten Adresse gemeinsam haben. Ein Hin und Her ist nicht nötig: Der Absender berechnet die Einmal-Adresse allein, aus deiner öffentlichen Adresse und einer Zufallszahl.
+
+## Woher stammen Stealth-Adressen?
+
+Das Design mit Einmal-Adressen, das Monero, Blocknet und andere Coins nutzen, geht auf das Whitepaper CryptoNote v2.0 von Nicolas van Saberhagen vom 17. Oktober 2013 zurück. Es nennt die Idee „unverknüpfbare Zahlungen“ und beschreibt, wie ein Absender aus der Adresse des Empfängers einen „einmaligen Public Key“ erzeugt. Die Dokumentation von Monero beschreibt Stealth-Adressen so, dass Absender damit „für jede Transaktion im Namen des Empfängers zufällige Einmal-Adressen“ erstellen.
+
+Die Idee hat sich über [Privacy Coins](/de/blog/what-is-a-privacy-coin/) hinaus verbreitet. Mit [BIP 352 „Silent Payments“](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) kann eine statische Bitcoin-Adresse Zahlungen empfangen, die sich on-chain nicht verknüpfen lassen, und [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) von Ethereum, entstanden 2022, standardisiert Stealth-Adressen für Ethereum-Konten. Auf diesen Chains sind beides optionale Funktionen. Bei Blocknet nutzt jede Zahlung eine Einmal-Adresse.
+
+## Wie funktionieren Stealth-Adressen?
+
+<Answer>
+Der Absender wählt eine Zufallszahl r, veröffentlicht R = r·G in der Transaktion und kombiniert r mit dem öffentlichen View Key des Empfängers zu einem gemeinsamen Geheimnis. Addiert man dieses Geheimnis zum öffentlichen Spend Key, ergibt sich der Einmal-Key. Der Empfänger rekonstruiert dasselbe Geheimnis aus R und seinem privaten View Key, also findet nur er die Zahlung.
+</Answer>
+
+Deine Wallet enthält zwei Schlüsselpaare. Jeder Private Key ist eine geheime Zahl (s für Spend, v für View), und jeder Public Key ist diese Zahl mal einem festen Kurvenpunkt G. Deine Adresse besteht nur aus den beiden Public Keys S und V. Hier der gesamte Austausch:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+Der Trick ist ein Diffie-Hellman-Austausch. Der Absender berechnet r·V und der Empfänger v·R, und beide landen auf demselben Punkt, weil jeder davon r·v·G ist. Niemand sonst kennt r oder v, also kann niemand sonst ihn berechnen. Das Hashen dieses Punkts (H) ergibt ein gemeinsames Geheimnis, und der Einmal-Key P ist dieses Geheimnis als Punkt, addiert zu deinem öffentlichen Spend Key.
+
+Beim Scannen berechnest du das Geheimnis aus R und deinem privaten View Key neu und prüfst, ob es P ergibt. Wenn ja, gehört der Output dir. Um ihn auszugeben, addiert deine Wallet dasselbe Geheimnis zu deinem privaten Spend Key, was den Private Key x für genau diesen Output ergibt.
+
+Blocknet folgt diesem Design auf der Ristretto-Gruppe über Curve25519 und hasht mit SHA-256 unter einem Blocknet-spezifischen Domain-Tag. Außerdem fließt die Position jedes Outputs in der Transaktion in den Hash ein, sodass zwei Outputs an dieselbe Person in einer Transaktion trotzdem voneinander unabhängige Keys bekommen. Aus demselben gemeinsamen Geheimnis werden auch der Blinding-Faktor, der den Betrag des Outputs verbirgt, und der Key abgeleitet, der sein Memo verschlüsselt. So liest der Empfänger beides.
+
+## Was machen View Key und Spend Key?
+
+Die Aufteilung der Keys gibt dir zwei Zugriffsstufen:
+
+- **Der private View Key findet Zahlungen.** Mit v und deinem öffentlichen Spend Key kann eine Wallet jeden an dich gesendeten Output erkennen, seinen Betrag entschlüsseln und sein Memo lesen.
+- **Der private Spend Key gibt sie aus.** Nur s macht aus einem gefundenen Output einen Private Key x, der eine Ausgabe signieren kann.
+
+Diese Aufteilung macht Watch-only-Wallets möglich. In der Kommandozeilen-Wallet von Blocknet erstellt `viewkeys` aus deinen View Keys eine separate Wallet-Datei. Die Hilfe der Wallet beschreibt sie als Datei, die „überwachen, aber nicht ausgeben kann“, nützlich, wenn „du Watch-only-Zugriff auf einem anderen Rechner willst“. Beim Ausführen erklärt die Wallet, was sie erstellt:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Gib eine View-only-Wallet nur jemandem, dem du deinen Verlauf zeigen würdest, etwa deinem Steuerberater, oder bewahre sie auf einem zweiten eigenen Computer auf. So oder so kann sie eingehende Zahlungen beobachten, während dein Spend Key auf dem Rechner bleibt, dem du vertraust.
+
+## Wie findet eine Wallet ihre Zahlungen?
+
+Da Einmal-Keys mit deiner Adresse nichts zu tun zu haben scheinen, kennzeichnet nichts auf der Chain, welche Outputs dir gehören. Deine Wallet prüft das selbst. Für jede Transaktion in jedem neuen Block nimmt sie R, berechnet mit deinem privaten View Key das gemeinsame Geheimnis und prüft jeden Output mit der Formel oben. Genau das macht eine Wallet, wenn sie synchronisiert.
+
+Der Scanner von Blocknet hält das schnell. Der aufwendige Schritt, R mit deinem View Key zu multiplizieren, läuft einmal pro Transaktion, und dann wird jeder Output dieser Transaktion gegen das Ergebnis geprüft. Passt ein Output, entschlüsselt die Wallet den Betrag und gleicht ihn mit dem Pedersen-Commitment des Outputs ab, bevor sie ihn deinem Guthaben hinzufügt.
+
+Das Scannen macht auch die Wiederherstellung einfach. Beide Blocknet-Schlüsselpaare stammen aus deinem [Recovery Seed](/de/blog/seed-phrase-explained/) aus 12 Wörtern. Stellst du den Seed auf einem neuen Computer wieder her, werden die Keys neu erzeugt, und die Wallet durchsucht die Chain erneut nach jedem Output, der dir gehört. Die [Anleitung zur Blocknet-Wallet](/de/blog/blocknet-wallet-for-mining/) zeigt, wie du den Seed sicherst und wiederherstellst.
+
+## Stealth-Adressen bei Blocknet
+
+Bei Blocknet ist eine Stealth-Adresse einfach deine Adresse. Sie ist die Base58-Kodierung deines öffentlichen Spend Keys, deines öffentlichen View Keys und einer Prüfsumme von 4 Byte, was 92 oder 93 Zeichen ergibt. Jede Zahlung an dich nutzt sie, weil das Transaktionsformat keinen transparenten Modus hat. Auch Blockbelohnungen gehen an Einmal-Keys, der Coinbase-Output eines Solo-Miners wird also mit demselben Scan gefunden.
+
+Stealth-Adressen wirken mit der übrigen Privatsphäre von Blocknet zusammen: [Ein Ring aus 16](/de/blog/ring-signatures-explained/) verbirgt, aus welchem Output eine Ausgabe stammt, [Commitments](/de/blog/bulletproofs-explained/) verbergen Beträge, und Dandelion++ verbirgt, wo eine Transaktion ins Netzwerk gelangt ist. Der [Privatsphäre-Leitfaden zu Blocknet](/de/blog/blocknet-privacy-features/) geht jede Schicht durch.
+
+Sie funktionieren auch mit Namen. Ein [Blocknet-ID-Kurzname](/de/blog/blocknet-id-pay-by-name/) wie `@yourname` verweist öffentlich auf deine Adresse, sodass Absender ihn auf blocknet.id nachschlagen können. Die Zahlungen selbst gehen trotzdem an frische Einmal-Keys, dein Name verrät also nichts darüber, was du empfangen hast.
+
+Das macht einen Kurznamen zu einer praktischen Auszahlungsadresse fürs Mining. Starte [seine](/de/#download), gib bei der Abfrage deine Adresse oder `@yourname` ein und übernimm den Standard-Pool bntpool.com. Die [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) erklärt den Rest, und deine Wallet findet die verdienten BNT mit demselben View-Key-Scan, der oben beschrieben ist.
+
+<CTA target="seine" title="Mine BNT auf deine eigene Adresse" text="Lade seine herunter, gib deine Blocknet-Adresse oder deinen @name ein und mine in wenigen Minuten auf bntpool.com." />

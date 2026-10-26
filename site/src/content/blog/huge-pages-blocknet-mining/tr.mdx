@@ -1,0 +1,159 @@
+---
+title: Daha hızlı Blocknet madenciliği için huge pages
+description: Linux ve WSL'de huge pages, Windows'ta large pages nasıl açılır? seine her 2 GiB'lık Argon2id alanını daha az TLB ıskalamasıyla eşler, Blocknet madenciliği hızlanır.
+tags: [Madencilik rehberi, Huge pages, Linux, Windows, Performans]
+faq:
+  - q: 'seine ile Blocknet madenciliği yapmak için huge pages gerekli mi?'
+    a: 'Hayır. seine, siz başlattığınız anda normal bellekte madencilik yapar ve Linux''tan transparent huge pages''i kendiliğinden ister. Huge pages ayırmak, son birkaç yüzdelik kazanç için isteğe bağlı bir ektir: doğrulama makinesinde 2 MiB sayfalarla yaklaşık %4 ila %6, 1 GiB sayfalarla da kabaca %2 daha fazla kazanç sağlar.'
+  - q: 'Her seine iş parçacığı kaç huge page gerektirir?'
+    a: 'Her iş parçacığı, 2 GiB Argon2id alanını tam olarak karşılayan 2 MiB''lık 1.024 sayfaya veya iki adet 1 GiB sayfaya ihtiyaç duyar. 2 MiB sayfalar için iş parçacığı sayınızı 1.024 ile çarpın, %5 pay ekleyin ve yukarı yuvarlayın. Sekiz iş parçacığı 8.602 sayfa gerektirir; bu da yaklaşık 16,8 GiB RAM ayırır.'
+  - q: 'seine 1 GiB huge pages''i otomatik olarak kullanır mı?'
+    a: 'seine''in varsayılan sayfa modu önce ayrılmış 2 MiB havuzunu, ardından transparent huge pages''i kullanır. 1 GiB sayfaları kullanmak için iş parçacığı başına iki sayfa ayırın (tercihen açılışta hugepagesz=1G hugepages=N ile) ve seine''i --cpu-page-mode large-1g ile başlatın. Bu mod x86_64 Linux ve WSL''de çalışır ve 2 MiB sayfaların üzerine yaklaşık %2 ekler.'
+  - q: 'Windows''ta seine için large pages nasıl açılır?'
+    a: 'secpol.msc içinde Yerel İlkeler ve Kullanıcı Hakları Ataması altında Windows hesabınıza Bellekteki sayfaları kilitle (Lock pages in memory) hakkını verin, ardından oturumu kapatıp yeniden açın. seine başlangıçta bu hakkı kendisi için etkinleştirir ve her iş parçacığının 2 GiB alanını large pages ile ayırır. Home sürümlerinde bu hakkı ntrights gibi bir araçla verin.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+Huge pages ayırmak, seine'in her madencilik iş parçacığının belleğini yüz binlerce küçük sayfa yerine birkaç büyük sayfayla karşılamasını sağlar. Bu rehber, bunun Blocknet'in Argon2id iş kanıtını neden hızlandırdığını, kaç sayfa ayırmanız gerektiğini ve Linux, WSL2 ve Windows için tam komutları anlatıyor.
+
+## Huge pages Blocknet madenciliğini neden hızlandırır?
+
+<Answer>
+Her seine iş parçacığı 2 GiB'lık bir Argon2id bellek alanında (arena) hash hesaplar ve bu alanın öngörülemeyen yerlerinden bloklar okur. Normal 4 KiB sayfalarla bu alan 524.288 sayfaya yayılır; bu, CPU'nun TLB'sinin önbelleğe alabileceğinden çok daha fazla adres çevirisi demektir. Huge pages alanı 1.024 veya yalnızca 2 sayfayla karşılar, böylece sayfa tablosu taramalarında bekleyen okuma sayısı azalır.
+</Answer>
+
+Her bellek erişimi, CPU'nun fiziksel bir adrese çevirmesi gereken sanal bir adresle başlar. Son çeviriler, [Linux çekirdeği belgelerinin](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) "sanaldan fiziksele çevirilerin önbelleği" ve "işlemcide çok kıt bir kaynak" olarak tanımladığı translation lookaside buffer'da (TLB) tutulur. Bir adres TLB'de yoksa CPU, veriyi getirmeye başlamadan önce bellekteki sayfa tablolarını tarar.
+
+Blocknet'in iş kanıtı bu taramayı sıklaştırır. Her hash, 2 GiB'lık bir alanı 1 KiB'lık bloklarla doldurur ve geçişin ikinci yarısında her yeni blok, konumu bir an önce hesaplanan veriye bağlı olan daha önceki bir bloğu okur. [Argon2id açıklamasında](/tr/blog/argon2id-proof-of-work-explained/) görüldüğü gibi bu da hash başına toplam yaklaşık 2 GiB dağınık okuma demektir. Bu okumaların kaç çeviri gerektireceğini sayfa boyutu belirler:
+
+| Sayfa boyutu | 2 GiB alan başına sayfa |
+|---|---|
+| 4 KiB (normal) | 524.288 |
+| 2 MiB | 1.024 |
+| 1 GiB | 2 |
+
+Huge pages ile tek bir TLB girdisi 512 veya 262.144 kat daha fazla belleği kapsar; böylece alanın çok daha büyük kısmı TLB'nin erişiminde kalır ve her iş parçacığının zamanının daha fazlası hash hesaplamaya gider.
+
+## Huge pages ile madencilik ne kadar hızlanır?
+
+seine'in [huge pages rehberi](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md), bunları Linux'ta CPU madenciliğinde tek başına en etkili ayar olarak tanımlar. Doğrulama makinesinde ayrılmış 2 MiB sayfalar yaklaşık **%4–6** ekledi, 1 GiB sayfalar ise buna yaklaşık **%2** daha ekledi. Rehber ayrıca, çok sayıda iş parçacığı çalışırken huge page kapsamının genellikle komut seti ayarından daha önemli olduğunu belirtir.
+
+seine'in [performans grafiğindeki](/tr/#performance) sunucu sonuçları açıkça ayrılmış 2 MiB huge pages ile ölçüldü. Ekim 2026'da AMD EPYC Zen 5 (EPYC 9R45) üzerinde 32 iş parçacığıyla ölçülen 49,4 H/s, 34.407 ayrılmış sayfayla elde edildi; bu, aşağıdaki tablodaki 32 iş parçacığı satırıyla aynı sayıdır. [Madencilik donanımı rehberi](/tr/blog/blocknet-mining-hardware-hashrate/) nesillere göre tüm sonuçları içerir.
+
+Ayırma yapılmasa bile seine Linux'ta çekirdekten transparent huge pages ister. Ayrılmış havuz ise daha fazlasını sağlar, çünkü sayfalar baştan ayrılır; böylece bellek ne kadar parçalanmış olursa olsun her iş parçacığı bu sayfaları alır.
+
+## seine'in kaç huge page'e ihtiyacı var?
+
+<Answer>
+Her seine iş parçacığının 2 GiB alanını tutmak için 1.024 adet 2 MiB huge page'e veya iki adet 1 GiB sayfaya ihtiyacı vardır. 2 MiB sayfalar için iş parçacığı × 1.024 × 1,05 kadar ayırın ve yukarı yuvarlayın; bu %5 pay bırakır. Sekiz iş parçacığı 8.602 sayfa, yani yaklaşık 16,8 GiB gerektirir. Ayırma yetersiz olduğunda seine başlangıçta tam sayıyı yazdırır.
+</Answer>
+
+İş parçacığı sayısı, seine panelindeki **Threads** değeridir. seine bu sayıyı RAM'inize ve çekirdek sayınıza göre seçer; bu yüzden seine'i bir kez huge pages olmadan başlatın ve sayıyı not edin. Ayırma çok küçükse seine'in başlangıç günlüğü, gereken sayfaları ve bunları ayıracak `sysctl` komutunu içeren bir `hugepages |` satırı yazdırır.
+
+| İş parçacığı | 2 MiB sayfa (%5 payla) | Ayrılan bellek | 1 GiB sayfa |
+|---|---|---|---|
+| 4 | 4.301 | 8,4 GiB | 8 |
+| 8 | 8.602 | 16,8 GiB | 16 |
+| 16 | 17.204 | 33,6 GiB | 32 |
+| 24 | 25.805 | 50,4 GiB | 48 |
+| 32 | 34.407 | 67,2 GiB | 64 |
+
+Ayrılmış sayfalar huge pages isteyen programlar için ayrılır; bu yüzden ayırmayı gerçekten madencilik yaptığınız iş parçacığı sayısına göre boyutlandırın. seine iş parçacıklarını boyutlandırırken ayrılmış havuzu kullanılabilir bellek olarak sayar, bu yüzden sayfa ayırmak iş parçacığı sayınızı değiştirmez.
+
+## Linux'ta 2 MiB huge pages nasıl kurulur?
+
+İş parçacığı sayınıza göre sayfaları ayırın. Bu örnek 4 iş parçacığı içindir:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Çekirdeğin hepsini bulduğunu kontrol edin:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+`HugePages_Total` istediğinizden düşük çıkarsa bellek parçalanmıştır. Önbellekleri boşaltın, belleği sıkıştırın ve yeniden deneyin:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Ayırmayı kalıcı hale getirin:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Büyük ayırmalarda en güvenilir yol, ayarı kalıcı hale getirip makineyi yeniden başlatmaktır, çünkü çekirdek sayfaları açılışın başında, bellek parçalanmadan önce ayırır. Ardından seine'i her zamanki gibi başlatın. Varsayılan sayfa modu olan `auto`, her iş parçacığının alanını ek bayrak gerektirmeden ayrılmış havuzdan eşler.
+
+## 1 GiB sayfalar nasıl eklenir?
+
+1 GiB sayfalar biraz daha fazla kurulum gerektirir ve 2 MiB sayfaların üzerine yaklaşık %2 ekler. Her 2 GiB alan tam olarak iki tane gerektirir, bu yüzden hesaplanacak bir pay yoktur. x86_64 Linux ve WSL'de çalışırlar.
+
+Bunları açılışta çekirdek parametreleriyle ayırın; bu kadar büyük sayfaları almanın en güvenilir yolu budur. 9 iş parçacığı için:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Yeni açılmış bir makinede çalışma zamanında ayırmayı da deneyebilir, ardından boş sayfa sayısını kontrol edebilirsiniz:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+`/proc/meminfo` içindeki `HugePages_*` satırları yalnızca varsayılan 2 MiB boyutunu kapsar; bu yüzden 1 GiB havuzunu `/sys` üzerinden okuyun. Ardından seine'i 1 GiB moduyla başlatın:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+Bu modda her iş parçacığı alanını 1 GiB havuzundan eşler; böylece madencilik boyunca 1 GiB sayfaların kullanıldığından emin olursunuz.
+
+## WSL2'de huge pages nasıl ayrılır?
+
+WSL2 gerçek bir Linux çekirdeği çalıştırır, bu yüzden yukarıdaki Linux komutları WSL2'nin içinde de çalışır. 1 GiB sayfalar için açılış parametrelerini Windows tarafındaki `%UserProfile%\.wslconfig` dosyasıyla verin. Sanal makinenin ayrıca, ayrılan sayfaların yanı sıra Windows ve WSL hizmetlerine yetecek kadar belleği olmalıdır. seine'in doğrulanmış 64 GiB'lık makinesi şunu kullandı:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Dosyayı kaydedin, Windows'ta `wsl --shutdown` çalıştırın ve dağıtımınızı yeniden açın. Madenciliğe başlamadan önce boş sayfa sayısının her iş parçacığını karşıladığını doğrulayın.
+
+## Windows'ta large pages nasıl açılır?
+
+Doğrudan Windows'ta madencilik yapmak, aynı donanımda genellikle WSL'den daha hızlıdır ve seine orada Windows large pages kullanır. Bunun için tek bir izin gerekir, **Bellekteki sayfaları kilitle** (Lock pages in memory):
+
+1. `secpol.msc` dosyasını açın, ardından *Yerel İlkeler* → *Kullanıcı Hakları Ataması*'na gidin.
+2. Kullanıcınızı **Bellekteki sayfaları kilitle** hakkına ekleyin.
+3. Hak yeni oturumlarda geçerli olduğu için oturumu kapatıp yeniden açın.
+
+`secpol.msc`, Windows Pro, Enterprise ve Education ile birlikte gelir. Home sürümlerinde aynı hakkı `ntrights` gibi bir araçla verin.
+
+Kurulumun tamamı bu kadar. Başlangıçta seine bu hakkı kendisi için etkinleştirir ve her iş parçacığının 2 GiB alanını, [Microsoft'un](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) large page belleği için belgelediği yöntem olan `VirtualAlloc` ve `MEM_LARGE_PAGES` ile ayırır. Large pages kullanılamıyorsa seine normal sayfalarla madencilik yapar ve nedenini tam çözümüyle birlikte günlüğe yazar. seine hiçbir zaman hesap haklarını kendisi değiştirmez veya oturumunuzu kapatmaz.
+
+## Hangi sayfa modunu kullanmalısınız?
+
+Varsayılan mod neredeyse herkese uyar. Diğer modlar 1 GiB sayfalar ve ölçüm için vardır:
+
+| Mod | Ne yapar |
+|---|---|
+| `--cpu-page-mode auto` (varsayılan) | Ayrılmış huge pages'i veya Windows large pages'i, ardından transparent huge pages'i, ardından normal sayfaları kullanır |
+| `--cpu-page-mode large` | Her iş parçacığı için ayrılmış huge pages veya Windows large pages gerektirir ve bunlar yoksa başlangıçta durur |
+| `--cpu-page-mode large-1g` | Her iş parçacığı için 1 GiB sayfalar gerektirir (x86_64 Linux ve WSL) |
+| `--cpu-page-mode regular` | Yalnızca normal sayfalar; öncesi/sonrası karşılaştırması için |
+
+Kazancı kendi makinenizde ölçmek için bir süre `--cpu-page-mode regular` ile, ardından `auto` veya `large-1g` ile madencilik yapın ve paneldeki hashrate'i karşılaştırın. Birden fazla NUMA düğümü olan sunucularda ayrılmış sayfaların, iş parçacıklarınızı çalıştıran düğümlerde de bulunması gerekir; [sunucularda madencilik rehberi](/tr/blog/mine-blocknet-on-servers/) bunu anlatır.
+
+<CTA target="seine" title="seine'i indirin ve sayfalarınızı ayırın" text="seine, siz sayfaları ayırır ayırmaz her iş parçacığının 2 GiB alanını ek bayrak gerektirmeden huge pages üzerinde eşler." />

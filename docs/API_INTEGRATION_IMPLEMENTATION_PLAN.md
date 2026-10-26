@@ -10,7 +10,7 @@ Implement a first-class local control API exposing nearly all miner frontend/run
 - Service startup: idle by default; mining starts via API command
 - Config input: sparse patch over defaults
 - Runtime config changes: safe live toggles only
-- Auth default: control API is open (no API key required)
+- Auth default: bearer token required (generated per start into `<data-dir>/control-api.cookie`); only `GET /v1/health` is open
 - Bind default: loopback only; non-loopback requires explicit unsafe flag
 - CORS: configurable allow-origin value
 - Metrics: include `/metrics`

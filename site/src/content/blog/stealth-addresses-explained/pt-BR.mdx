@@ -1,0 +1,95 @@
+---
+title: 'Endereços furtivos (stealth addresses) explicados: como funcionam os endereços de uso único'
+seoTitle: 'Stealth addresses explicados: endereços furtivos de uso único'
+description: 'Stealth addresses explicados: como endereços de uso único, chaves de visualização e de gasto e a varredura da carteira mantêm privado cada pagamento a você.'
+tags: [Privacidade, Endereços furtivos, Carteira, Blocknet]
+faq:
+  - q: 'Um endereço furtivo é a mesma coisa que um endereço de uso único?'
+    a: 'São as duas metades de um mesmo sistema. O endereço furtivo é o endereço que você publica, formado por uma chave pública de gasto e uma chave pública de visualização. Um endereço de uso único é a chave nova que o remetente deriva dele para um único pagamento. Só os endereços de uso único aparecem na blockchain, e o seu endereço publicado nunca aparece.'
+  - q: 'Alguém consegue ver meu saldo se souber meu endereço furtivo?'
+    a: 'Não. Saber o seu endereço publicado não permite que ninguém encontre os seus pagamentos, porque cada um cai em uma chave de uso único que parece não ter relação com ele. Encontrá-los exige a sua chave privada de visualização, então só a sua carteira consegue listar o que você recebeu. No Blocknet os valores também ficam ocultos, então nem as próprias saídas mostram um valor.'
+  - q: 'O que alguém pode fazer com a minha chave privada de visualização?'
+    a: 'Uma chave privada de visualização permite a quem a tem encontrar os pagamentos enviados a você e ler seus valores e memos. Ela não consegue gastar nada, porque gastar exige a chave privada de gasto. No Blocknet, o comando viewkeys transforma a sua chave de visualização em uma carteira somente leitura, útil para acompanhar fundos em um segundo computador. Compartilhe-a apenas com pessoas de confiança.'
+  - q: 'Preciso ativar os endereços furtivos no Blocknet?'
+    a: 'Não. Todo pagamento no Blocknet vai automaticamente para um endereço furtivo de uso único, porque o formato de transação não tem modo transparente. Sua carteira cria a chave de uso único quando você envia e encontra os pagamentos recebidos com a sua chave de visualização quando sincroniza. Não há nada para configurar, seja pagando para um endereço ou para um @name.'
+sourceHash: df06dcbe3a7b
+translation: reviewed
+---
+
+Um endereço furtivo (stealth address) permite que você publique um único endereço e, ainda assim, cada pagamento a você caia em um lugar novo na blockchain. Este guia explica como isso funciona, o que a sua chave de visualização (view key) e a sua chave de gasto (spend key) fazem e como uma carteira encontra os próprios pagamentos, com o Blocknet como exemplo prático.
+
+## O que é um endereço furtivo?
+
+<Answer>
+Um endereço furtivo é um endereço público que nunca aparece na blockchain. Ele contém duas chaves públicas, uma chave de gasto e uma chave de visualização. Para cada pagamento, a carteira do remetente as combina com um número aleatório novo para criar um endereço de uso único que só o destinatário consegue reconhecer e gastar.
+</Answer>
+
+Em um registro público, um endereço comum aparece em todos os pagamentos que recebe. Um endereço padrão do Bitcoin funciona assim: qualquer pessoa que o conheça pode consultar cada pagamento e somar o total. É por isso que muitas carteiras de Bitcoin geram um endereço novo para cada pagamento.
+
+Um endereço furtivo faz esse trabalho por você. Você compartilha um único endereço, em um site, em um perfil ou como um `@name`, e cada remetente deriva dele um endereço de uso único diferente. Dez pagamentos a você viram dez saídas que não têm nada visível em comum entre si nem com o endereço que você compartilhou. Não é preciso nenhuma troca de mensagens: o remetente calcula o endereço de uso único sozinho, a partir do seu endereço público e de um número aleatório.
+
+## De onde vieram os endereços furtivos?
+
+O design de endereço de uso único usado pelo Monero, pelo Blocknet e por outras moedas remonta ao whitepaper CryptoNote v2.0, de Nicolas van Saberhagen, datado de 17 de outubro de 2013. Ele chama a ideia de "pagamentos não vinculáveis" e descreve um remetente gerando uma "chave pública de uso único" a partir do endereço do destinatário. A documentação do Monero descreve os endereços furtivos como uma forma de os remetentes criarem "endereços aleatórios de uso único para cada transação em nome do destinatário".
+
+A ideia se espalhou além das [moedas de privacidade](/pt-br/blog/what-is-a-privacy-coin/). O [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) do Bitcoin permite que um endereço fixo de Bitcoin receba pagamentos que não podem ser vinculados na blockchain, e o [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) do Ethereum, criado em 2022, padroniza endereços furtivos para contas Ethereum. Nessas duas redes, são recursos opcionais. No Blocknet, todo pagamento usa um endereço de uso único.
+
+## Como funcionam os endereços furtivos?
+
+<Answer>
+O remetente escolhe um número aleatório r, publica R = r·G na transação e combina r com a chave pública de visualização do destinatário em um segredo compartilhado. Somar esse segredo à chave pública de gasto dá a chave de uso único. O destinatário reconstrói o mesmo segredo a partir de R e da sua chave privada de visualização, então só ele encontra o pagamento.
+</Answer>
+
+Sua carteira guarda dois pares de chaves. Cada chave privada é um número secreto (s para gasto, v para visualização), e cada chave pública é esse número multiplicado por um ponto fixo da curva, G. Seu endereço é simplesmente as duas chaves públicas, S e V. Esta é a troca inteira:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+O truque é uma troca Diffie-Hellman. O remetente calcula r·V e o destinatário calcula v·R, e os dois chegam ao mesmo ponto, porque cada um é r·v·G. Ninguém mais conhece r ou v, então ninguém mais consegue calculá-lo. O hash desse ponto (H) dá um segredo compartilhado, e a chave de uso único P é esse segredo, como ponto, somado à sua chave pública de gasto.
+
+Quando você faz a varredura, recalcula o segredo a partir de R e da sua chave privada de visualização e confere se ele produz P. Se produzir, a saída é sua. Para gastá-la, sua carteira soma o mesmo segredo à sua chave privada de gasto, o que dá a chave privada x daquela saída específica.
+
+O Blocknet segue esse design no grupo Ristretto sobre a Curve25519, calculando hashes com SHA-256 sob uma tag de domínio específica do Blocknet. Ele também mistura no hash a posição de cada saída na transação, então duas saídas para a mesma pessoa em uma mesma transação ainda recebem chaves sem relação entre si. O mesmo segredo compartilhado também deriva o fator de cegamento (blinding factor) que esconde o valor da saída e a chave que criptografa o memo dela, e é assim que o destinatário lê os dois.
+
+## O que fazem a chave de visualização e a chave de gasto?
+
+Dividir as chaves dá a você dois níveis de acesso:
+
+- **A chave privada de visualização encontra os pagamentos.** Com v e a sua chave pública de gasto, uma carteira consegue reconhecer cada saída enviada a você, descriptografar o valor e ler o memo.
+- **A chave privada de gasto os gasta.** Só s transforma uma saída encontrada em uma chave privada x capaz de assinar um gasto.
+
+Essa divisão torna possíveis as carteiras somente leitura (watch-only). Na carteira de linha de comando do Blocknet, `viewkeys` cria um arquivo de carteira separado a partir das suas chaves de visualização. A ajuda da carteira o descreve como um arquivo que "pode monitorar, mas não pode gastar", útil quando "você quer acesso somente leitura em outra máquina". Quando você o executa, a carteira explica o que está criando:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Entregue uma carteira somente leitura apenas a alguém a quem você mostraria seu histórico, como o seu contador, ou mantenha-a em um segundo computador seu. De qualquer forma, ela consegue acompanhar a chegada dos fundos enquanto a sua chave de gasto fica na máquina em que você confia.
+
+## Como uma carteira encontra seus pagamentos?
+
+Como as chaves de uso único parecem não ter relação com o seu endereço, nada na blockchain indica quais saídas são suas. Sua carteira confere por conta própria. Para cada transação de cada bloco novo, ela pega R, calcula o segredo compartilhado com a sua chave privada de visualização e testa cada saída com a fórmula acima. É isso que uma carteira está fazendo quando sincroniza.
+
+O scanner do Blocknet mantém isso rápido. A etapa cara, multiplicar R pela sua chave de visualização, roda uma vez por transação, e depois cada saída daquela transação é conferida com o resultado. Quando uma saída corresponde, a carteira descriptografa o valor e o confirma com o compromisso de Pedersen da saída antes de somá-lo ao seu saldo.
+
+A varredura também torna a recuperação simples. Os dois pares de chaves do Blocknet vêm da sua [recovery seed](/pt-br/blog/seed-phrase-explained/) de 12 palavras, então restaurar a seed em um computador novo reconstrói as chaves, e a carteira varre a blockchain de novo para encontrar todas as saídas que pertencem a você. O [guia da carteira Blocknet](/pt-br/blog/blocknet-wallet-for-mining/) mostra como fazer o backup da seed e restaurá-la.
+
+## Endereços furtivos no Blocknet
+
+No Blocknet, um endereço furtivo é simplesmente o seu endereço. Ele é a codificação base58 da sua chave pública de gasto, da sua chave pública de visualização e de um checksum de 4 bytes, o que dá 92 ou 93 caracteres. Todo pagamento a você o usa, porque o formato de transação não tem modo transparente. As recompensas de bloco também vão para chaves de uso único, então a saída coinbase de um minerador solo é encontrada pela mesma varredura.
+
+Os endereços furtivos se combinam com o restante da privacidade do Blocknet: [um anel de 16](/pt-br/blog/ring-signatures-explained/) oculta de qual saída vem um gasto, [os compromissos](/pt-br/blog/bulletproofs-explained/) ocultam os valores e o Dandelion++ oculta por onde uma transação entrou na rede. O [guia de privacidade do Blocknet](/pt-br/blog/blocknet-privacy-features/) percorre cada camada.
+
+Eles também funcionam com nomes. Um [shortname do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/) como `@yourname` aponta publicamente para o seu endereço, então os remetentes podem consultá-lo em blocknet.id. Os pagamentos em si continuam indo para chaves de uso único novas, então o seu nome não mostra nada sobre o que você recebeu.
+
+Isso faz de um shortname um endereço de pagamento prático para a mineração. Inicie o [seine](/pt-br/#download), digite seu endereço ou `@yourname` quando ele pedir e aceite o pool padrão, o bntpool.com. O [guia de mineração](/pt-br/blog/how-to-mine-blocknet/) cobre o resto, e sua carteira encontra os BNT que você ganha com a mesma varredura pela chave de visualização descrita acima.
+
+<CTA target="seine" title="Minere BNT para o seu próprio endereço" text="Baixe o seine, digite seu endereço Blocknet ou @name e comece a minerar no bntpool.com em poucos minutos." />

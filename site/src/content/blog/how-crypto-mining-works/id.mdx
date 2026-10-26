@@ -1,0 +1,117 @@
+---
+title: Cara kerja penambangan kripto
+description: 'Cara kerja penambangan kripto dengan bahasa sederhana: blok, hash, tingkat kesulitan, imbalan blok, dan pool penambangan, dengan blok lima menit Blocknet sebagai contoh.'
+tags: [Penambangan, Proof of work, Blocknet, bntpool]
+faq:
+  - q: 'Apa sebenarnya yang dihitung oleh penambang kripto?'
+    a: 'Penambang melakukan hash pada header blok berulang kali, mengubah sebuah angka yang disebut nonce setiap kali, sampai hasilnya sama dengan atau di bawah target jaringan. Di Blocknet setiap percobaan adalah satu hash Argon2id atas memori 2 GiB. Tidak ada yang bisa menebak nonce mana yang menang, jadi satu-satunya cara menemukan blok adalah terus mencoba.'
+  - q: 'Berapa lama waktu yang dibutuhkan untuk menambang satu blok?'
+    a: 'Setiap jaringan menetapkan targetnya sendiri. Bitcoin menargetkan satu blok setiap sepuluh menit, dan Blocknet menargetkan satu blok setiap lima menit, yaitu 288 blok per hari. Tingkat kesulitan menyesuaikan diri untuk menjaga laju itu saat penambang bergabung atau pergi, sehingga waktu blok tetap dekat dengan target berapa pun total hashrate-nya.'
+  - q: 'Apa itu share di pool penambangan?'
+    a: 'Share adalah hash yang memenuhi target lebih mudah yang ditetapkan pool untuk koneksi Anda. Share membuktikan seberapa banyak kerja yang Anda sumbangkan tanpa menunggu satu blok penuh. Di bntpool.com, pool menyesuaikan tingkat kesulitan share untuk setiap koneksi agar menghasilkan sekitar sepuluh share setiap lima menit, dan imbalan blok dibagi berdasarkan share.'
+  - q: 'Bisakah saya menambang mata uang kripto di komputer biasa?'
+    a: 'Bisa, untuk koin yang proof of work-nya dirancang untuk perangkat keras biasa. Blocknet memakai Argon2id yang memory-hard, sehingga desktop, laptop, Mac, atau server dengan RAM yang cukup bisa menambangnya. Setiap thread penambangan membutuhkan sekitar 2 GB memori, dan seine menentukan sendiri jumlah thread yang tepat untuk komputer Anda.'
+sourceHash: d05a84885aae
+translation: reviewed
+---
+
+Panduan ini menjelaskan apa yang dilakukan penambang kripto dan mengapa: bagaimana transaksi menjadi blok, apa itu hash dan nonce, bagaimana tingkat kesulitan menjaga blok tetap sesuai jadwal, dari mana imbalannya berasal, dan mengapa kebanyakan orang menambang di pool. Blocknet menjadi contoh dari awal sampai akhir, jadi setiap angka adalah angka nyata yang bisa Anda periksa.
+
+## Apa itu penambangan kripto?
+
+<Answer>
+Penambangan kripto adalah cara blockchain proof of work menambahkan blok baru. Penambang mengumpulkan transaksi yang menunggu ke dalam sebuah blok, lalu berlomba menemukan hash blok itu yang memenuhi target tingkat kesulitan. Penambang pertama yang menemukannya menyiarkan blok tersebut, setiap node memeriksanya, dan pemenangnya mendapat imbalan blok yang baru dicetak.
+</Answer>
+
+Penambangan mengerjakan dua tugas sekaligus. Ia mengurutkan transaksi, sehingga semua orang sepakat pembayaran mana yang datang lebih dulu, dan ia menerbitkan koin baru menurut jadwal tetap, sehingga tidak ada pihak yang perlu dipercaya untuk mencetaknya. Bitcoin memperkenalkan gagasan ini pada 2008, dan banyak koin memakainya sekarang, termasuk Blocknet. Beberapa blockchain, seperti Ethereum sejak 2022, memakai proof of stake; [proof of work vs proof of stake](/id/blog/proof-of-work-vs-proof-of-stake/) membandingkan keduanya.
+
+## Apa isi sebuah blok?
+
+Blok adalah sekumpulan transaksi ditambah header singkat yang menggambarkannya. Header blok Blocknet memiliki tujuh kolom:
+
+| Kolom | Isinya |
+|---|---|
+| Version | Versi protokol |
+| Height | Posisi blok di dalam blockchain |
+| Previous hash | ID blok sebelumnya |
+| Merkle root | Sidik jari dari setiap transaksi di dalam blok |
+| Timestamp | Kapan blok dibuat |
+| Difficulty | Seberapa sulit blok ini ditemukan |
+| Nonce | Angka yang diubah penambang pada setiap percobaan |
+
+Kolom previous hash inilah yang membentuk rantai. Setiap blok menunjuk ke blok sebelumnya, jadi mengubah transaksi lama mana pun akan mengubah sidik jari blok itu dan memutus setiap tautan sesudahnya. Transaksi pertama di setiap blok adalah coinbase, yaitu transaksi yang membayar imbalan kepada penambang yang menemukan blok tersebut.
+
+## Bagaimana penambang menemukan blok?
+
+<Answer>
+Penambang melakukan hash pada header blok, memeriksa apakah hasilnya sama dengan atau di bawah target jaringan, dan jika tidak, mengubah nonce lalu mencoba lagi. Fungsi hash yang baik membuat hasilnya tidak bisa ditebak, jadi satu-satunya cara menang adalah melakukan banyak percobaan. Hashrate Anda adalah jumlah percobaan yang Anda lakukan per detik.
+</Answer>
+
+Fungsi hash mengubah input apa pun menjadi angka dengan panjang tetap yang tampak acak. Ubah satu bit input dan hasilnya berubah total. Anggap hasil itu sebagai angka yang sangat besar: jika sama dengan atau di bawah target, bloknya valid. Target yang lebih rendah berarti lebih sedikit hash yang menang, sehingga rata-rata dibutuhkan lebih banyak percobaan.
+
+Di Blocknet, setiap percobaan adalah satu hash Argon2id. Nonce 8 byte menjadi password dan sisa header menjadi salt, dan setiap hash bekerja melalui memori 2 GiB sebelum menghasilkan hasil 32 byte. Ketika penambang menemukan hash yang sama dengan atau di bawah target, ia mengirim blok itu ke jaringan. Setiap node mengulang satu hash tersebut untuk memastikannya, yang hanya butuh sebagian kecil dari kerja yang diperlukan untuk menemukannya.
+
+[Penjelasan Argon2id](/id/blog/argon2id-proof-of-work-explained/) menguraikan setiap langkah hash itu dan mengapa ia membutuhkan begitu banyak memori.
+
+## Apa itu tingkat kesulitan penambangan?
+
+Tingkat kesulitan (difficulty) adalah angka yang menentukan target. Di Blocknet targetnya adalah (2^256 − 1) dibagi tingkat kesulitan, artinya tingkat kesulitan kira-kira sama dengan jumlah hash yang rata-rata dibutuhkan seluruh jaringan untuk menemukan satu blok.
+
+Itu memberi Anda cara cepat untuk membaca jaringan. Blocknet menargetkan satu blok setiap 300 detik, jadi hashrate jaringan sekitar tingkat kesulitan ÷ 300. Sebagai contoh, tingkat kesulitan 6.000.000 berarti jaringan menghasilkan sekitar 20.000 hash per detik.
+
+Jaringan menyesuaikan tingkat kesulitan agar blok tetap sesuai jadwal saat penambang datang dan pergi:
+
+- **Bitcoin** menargetkan blok sepuluh menit dan menghitung ulang tingkat kesulitan sekali setiap 2.016 blok, sekitar setiap dua minggu.
+- **Blocknet** menargetkan blok lima menit dan menghitung ulang tingkat kesulitan setelah setiap blok dengan LWMA, rata-rata bergerak berbobot linear. LWMA melihat 60 blok terakhir dan memberi bobot terbesar pada blok terbaru, sehingga cepat mengikuti perubahan hashrate: seluruh jendelanya mencakup sekitar lima jam blok.
+
+LWMA juga membatasi seberapa jauh satu blok yang janggal bisa menggeser hasilnya: waktu penyelesaian setiap blok dihitung minimal 1 detik dan maksimal 1.800 detik, enam kali target. Jika blok datang lebih cepat dari lima menit sekali, tingkat kesulitan naik; jika lebih lambat, tingkat kesulitan turun.
+
+## Bagaimana penambang dibayar?
+
+Setiap blok mencetak koin baru dalam transaksi coinbase-nya. Di Blocknet, coinbase memiliki tepat satu output, senilai tepat imbalan blok, yang dibayarkan ke alamat pilihan penambang. Blok genesis sama sekali tidak berisi transaksi, jadi setiap koin yang beredar adalah hasil penambangan.
+
+Imbalan mengikuti jadwal yang dipublikasikan. Imbalan Blocknet dimulai dari 723,25 BNT per blok dan menurun secara halus, turun satu tingkat setiap bulan 30 hari yang berisi 8.640 blok. Emisi mencapai sekitar 100 juta BNT setelah empat tahun, dan sejak itu setiap blok membayar tail reward permanen sebesar 2 BNT, sehingga penambang selalu punya sesuatu untuk ditambang.
+
+Koin hasil penambangan menunggu 60 blok, sekitar lima jam, sebelum bisa dibelanjakan. Jeda itu memberi waktu bagi percabangan singkat di blockchain untuk selesai sebelum imbalan baru bisa dibelanjakan.
+
+## Mengapa kebanyakan penambang bergabung dengan pool?
+
+Pool menggabungkan hashrate banyak penambang sehingga kelompok itu sering menemukan blok, lalu membagi setiap imbalan sesuai kerja yang disumbangkan setiap anggota. Sendirian, penambang kecil bisa menunggu berhari-hari atau berminggu-minggu untuk satu blok utuh; di pool, hashrate yang sama menghasilkan aliran pembayaran kecil yang stabil.
+
+Hitungannya menunjukkan alasannya. Blocknet menghasilkan 288 blok per hari, jadi perkiraan blok solo Anda per hari adalah 288 × (hashrate Anda ÷ hashrate jaringan). Jika komputer Anda seperseribu jaringan, rata-rata Anda menemukan sekitar 0,29 blok per hari, satu blok setiap tiga setengah hari, meskipun jarak sebenarnya bervariasi dari blok ke blok.
+
+Pool mengukur kerja Anda dengan **share**. Share adalah hash yang memenuhi target lebih mudah yang ditetapkan pool untuk koneksi Anda. Setiap share dihitung untuk bagian imbalan Anda, dan share yang juga memenuhi target penuh jaringan adalah blok sungguhan, yang dikirim pool ke blockchain. Di bntpool.com:
+
+- **Tingkat kesulitan share disesuaikan per koneksi**, dengan sasaran sekitar sepuluh share setiap lima menit, sehingga komputer cepat maupun lambat sama-sama melaporkan kerja secara teratur.
+- **Imbalan dibagi dengan PPLNS** dalam jendela enam jam: imbalan setiap blok diberikan kepada share yang dikirim dalam enam jam sebelum blok itu ditemukan.
+- **Pembayaran dimulai dari 0,1 BNT** setelah blok tersebut mencapai kedalaman 60 blok.
+
+Jika Anda menjalankan node sendiri, Anda juga bisa menambang solo dan menyimpan setiap blok yang Anda temukan. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membahas keduanya.
+
+## Apa yang menentukan kecepatan menambang Anda?
+
+Fungsi hash menentukan perangkat keras mana yang unggul. SHA-256 milik Bitcoin hampir tidak membutuhkan memori, sehingga chip khusus yang disebut ASIC melakukan sebagian besar penambangan Bitcoin saat ini. Blocknet memilih Argon2id, fungsi memory-hard yang dirancang untuk menahan ASIC: setiap hash mengisi 2 GiB RAM, sehingga ukuran memori dan bandwidth memori menentukan kecepatan Anda.
+
+Hal itu mengubah hitungan untuk komputer biasa:
+
+- **RAM menentukan jumlah thread.** Setiap thread penambangan membutuhkan arena 2 GiB miliknya sendiri, jadi komputer 16 GB menjalankan sekitar enam atau tujuh thread setelah menyisakan ruang untuk sistem.
+- **Bandwidth memori menentukan kecepatan total.** Setiap hash menulis sekitar 2 GiB dan membaca sekitar 2 GiB, jadi komputer yang memindahkan memori lebih cepat menyelesaikan lebih banyak hash per detik.
+- **CPU dan GPU sama-sama bisa menambang.** Di Windows dan Linux, seine menambang dengan CPU dan setiap kartu NVIDIA secara bersamaan, dan hashrate-nya dijumlahkan.
+
+Hasil terbaik yang pernah diukur seine adalah 49,4 H/s pada server AMD EPYC Zen 5 (EPYC 9R45, 32 thread), dan MacBook Pro Apple M4 Max mencapai 30,9 H/s. [Panduan perangkat keras](/id/blog/blocknet-mining-hardware-hashrate/) berisi hasil untuk setiap generasi yang diuji, dan panduan [penambangan CPU di 2026](/id/blog/cpu-mining-2026/) menjelaskan mengapa koin memory-hard cocok untuk prosesor biasa.
+
+## Siapa yang menjaga blockchain tetap jujur?
+
+Setiap node memeriksa setiap blok: hash memenuhi target, transaksinya valid, dan imbalannya tepat. Blok yang gagal dalam satu pemeriksaan saja akan ditolak, sebanyak apa pun kerja yang dicurahkan untuknya.
+
+Ketika dua penambang menemukan blok hampir bersamaan, blockchain sempat bercabang. Node Blocknet mengikuti rantai dengan total kerja terbanyak, yaitu jumlah tingkat kesulitan setiap blok, sehingga percabangan selesai begitu blok berikutnya muncul di salah satu sisi. Itulah sebabnya wallet menghitung konfirmasi: di Blocknet, 10 konfirmasi (sekitar 50 menit) dianggap aman, dan tidak ada node yang akan melakukan reorganisasi lebih dari 100 blok ke belakang.
+
+## Coba di komputer Anda sendiri
+
+Menambang Blocknet butuh tiga langkah: siapkan alamat, unduh [seine](/id/#download), jalankan, dan terima pool bawaan, bntpool.com. seine memilih jumlah thread, kernel CPU, dan tata letak memorinya sambil menambang, jadi Anda bisa melihat share pertama masuk dalam hitungan menit.
+
+<Note>
+Blocknet merencanakan upgrade jaringan bernama Faraday sekitar 16 Februari 2027, menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), dan upgrade ini direncanakan membawa proof of work yang lebih ringan. Detail proof of work di atas menggambarkan jaringan sebelum Faraday. seine memeriksa rilis baru saat dijalankan dan setiap 12 jam.
+</Note>
+
+<CTA target="seine" title="Mulai menambang Blocknet" text="Unduh seine untuk Windows, macOS, atau Linux, tempel alamat Anda, dan mulai kirim share ke bntpool.com dalam beberapa menit." />

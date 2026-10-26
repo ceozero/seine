@@ -1,0 +1,121 @@
+---
+title: Vraag een Blocknet-betaling aan met een link
+description: Maak een betaallink met blocknet:// of bntpay.com met een bedrag, een memo en je $name, zodat iedereen je BNT kan betalen door één regel in zijn wallet te plakken.
+tags: [Betalingen, Betaallinks, Wallet, Blocknet ID]
+faq:
+  - q: 'Heeft een Blocknet-betaallink een bedrag nodig?'
+    a: 'Ja. Elke betaallink bevat een veld amount, uitgedrukt in BNT met maximaal acht decimalen, zoals amount=25 of amount=0.5. De memo is optioneel. Heeft een geplakte link geen bedrag, dan antwoordt de commandline-wallet met payment link missing amount en verstuurt hij niets, dus de betaler hoeft nooit te raden wat je hebt gevraagd.'
+  - q: 'Kan ik mijn korte naam van Blocknet ID in een betaallink zetten?'
+    a: 'Ja. Schrijf de naam met het dollarteken ervoor, zoals in bntpay.com/$yourname?amount=10 of blocknet://$yourname?amount=10. De wallet zoekt de naam op bij blocknet.id, controleert het ondertekende record en toont de betaler het volledige adres, gemarkeerd als geverifieerd, voordat hij bevestigt. Een link met een naam betaalt altijd het adres waarnaar je naam verwijst.'
+  - q: 'Wat is het verschil tussen een blocknet://-link en een bntpay.com-link?'
+    a: 'Ze bevatten dezelfde drie velden, ontvanger, bedrag en memo, en de commandline-wallet leest ze allebei op dezelfde manier. De vorm blocknet:// is het URI-schema van Blocknet. De vorm bntpay.com is een gewoon webadres, dat chatapps, e-mailprogramma''s en sociale profielen omzetten in een klikbare link.'
+  - q: 'Verstuurt het plakken van een betaallink meteen BNT?'
+    a: 'Nee. Een link in de wallet plakken bereidt de betaling voor en stopt dan bij een overzicht met het bedrag, de ontvanger, het volledige adres, de fee en de memo, gevolgd door een vraag om met ja of nee te bevestigen. De BNT gaan pas weg als de betaler y typt. Elk ander antwoord annuleert de betaling en geeft de munten vrij die ervoor waren gereserveerd.'
+sourceHash: 193a7a6a455c
+translation: draft
+---
+
+Een Blocknet-betaallink zet alles wat een betaler nodig heeft in één regel: wie hij moet betalen, hoeveel BNT en een optionele memo zoals een factuurnummer. Stuur hem in een chat, zet hem op een factuur of in je profiel, en de betaler plakt hem in zijn wallet en bevestigt. Deze gids laat de twee linkformaten zien, hoe je er een maakt met je adres of je `$name`, en precies wat de wallet doet als iemand hem plakt.
+
+## Wat is een Blocknet-betaallink?
+
+<Answer>
+Een Blocknet-betaallink is één regel met een ontvanger, een bedrag en een optionele memo, geschreven als blocknet://recipient?amount=25&memo=invoice-42 of bntpay.com/recipient?amount=25&memo=invoice-42. De ontvanger is een walletadres of een naam van Blocknet ID. Als je hem in de commandline-wallet plakt, wordt hij een verzending die klaarstaat om te bevestigen.
+</Answer>
+
+De commandline-wallet van Blocknet accepteert twee vormen:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Beide vormen bevatten dezelfde velden:
+
+| Veld | Waar het staat | Verplicht | Wat het bevat |
+|---|---|---|---|
+| Ontvanger | direct na `blocknet://` of `bntpay.com/` | Ja | Je walletadres, of je korte naam als `$name` |
+| `amount` | querystring | Ja | Het aantal BNT dat je vraagt, met maximaal acht decimalen |
+| `memo` | querystring | Nee | Tekst voor de memo van de betaling, tot 124 bytes |
+
+De wallet is soepel in hoe de link wordt getypt. Hij herkent `blocknet://` en het kortere `blocknet:`, en voor de webvorm accepteert hij `bntpay.com/` los of met `www.`, `http://` of `https://` ervoor. Het voorvoegsel is niet hoofdlettergevoelig, en de volgorde van `amount` en `memo` maakt niet uit.
+
+De vorm `bntpay.com` is een normaal webadres, dus de meeste chatapps, e-mailprogramma's en sociale profielen maken er een link van waarop mensen kunnen tikken. De vorm `blocknet://` is de Blocknet-URI, handig overal waar een link rechtstreeks in een wallet terechtkomt.
+
+## Hoe maak je een betaallink?
+
+Je kunt een link in vier stappen met de hand maken.
+
+1. **Kies de ontvanger.** Voer `address` uit in de commandline-wallet om je adres te tonen, of gebruik je [korte naam van Blocknet ID](/nl/blog/blocknet-id-pay-by-name/) met het voorvoegsel `$`. Heb je nog geen wallet, dan laat de [Blocknet-walletgids](/nl/blog/blocknet-wallet-for-mining/) zien hoe je er een aanmaakt en je adres vindt.
+2. **Stel het bedrag in.** Schrijf het in BNT. Hele getallen en decimalen werken allebei, tot acht decimalen, omdat één BNT 100.000.000 atomaire eenheden is.
+3. **Voeg een memo toe als je dat wilt.** Een ordernummer, een factuur-ID of een kort bedankje helpt je om de betaling te herkennen als die binnenkomt. Houd hem binnen 124 bytes.
+4. **Voeg de delen samen.** Zet de ontvanger na het voorvoegsel, daarna `?amount=` en dan `&memo=` als je een memo hebt.
+
+Een factuur van 25 BNT aan een naam, in beide vormen:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Hetzelfde verzoek aan een volledig adres:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Tekens in de memo coderen
+
+Een memo met spaties of leestekens heeft een paar tekens nodig in URL-codering, omdat de link zelf die tekens gebruikt. De wallet decodeert ze weer voordat hij de betaling opbouwt.
+
+| Teken | Schrijf het als | Waarom |
+|---|---|---|
+| spatie | `%20` | Houdt de link in één stuk als hij wordt gedeeld |
+| `&` | `%26` | `&` begint het volgende veld |
+| `#` | `%23` | `#` beëindigt de querystring |
+| `+` | `%2B` | Een losse `+` wordt als spatie gelezen |
+
+Zo komt `memo=Order%20%231042` aan als `Order #1042`. Letters, cijfers, koppeltekens, underscores en punten hoeven niet te worden gecodeerd, en daarom kun je memo's zoals `invoice-42` gewoon gebruiken zoals ze zijn.
+
+## Gebruik je in een link je adres of je $name?
+
+Beide werken, en elk past bij een andere taak.
+
+Een **naam** houdt de link kort genoeg om te lezen, hardop te zeggen of in een bio te passen. Schrijf hem in links met het voorvoegsel `$`: `$yourname` en `@yourname` zijn dezelfde naam, en `$` is de vorm die beide soorten links rechtstreeks doorgeven aan de wallet. Als een betaler een link met een naam plakt, zoekt de wallet de naam op via blocknet.id, controleert hij de Ed25519-handtekening op het record en toont hij het volledige adres, gemarkeerd als geverifieerd. Omdat de naam op het moment van betalen wordt opgezocht, blijft een link die lang meegaat, zoals een fooienlink in je profiel, werken als je je naam later naar een nieuwe wallet laat verwijzen.
+
+Een **volledig adres** legt de bestemming in de link zelf vast. Dat past bij een eenmalige factuur waarbij je wilt dat de link precies één wallet noemt.
+
+Hoe dan ook is de betaling op de chain een gewone Blocknet-transactie naar een [eenmalig stealth-adres](/nl/blog/blocknet-privacy-features/), met dezelfde privacy als elke andere betaling.
+
+## Wat gebeurt er als iemand een betaallink plakt?
+
+<Answer>
+De wallet leest de ontvanger, het bedrag en de memo uit de link en voert daarmee een normale verzending uit. Hij zoekt een eventuele naam op, bouwt de transactie op, toont daarna het bedrag, de ontvanger, het volledige adres, de fee en de memo en vraagt Confirm [y/N]. De BNT gaan pas weg als de betaler y typt.
+</Answer>
+
+Dit is de volgorde in de commandline-wallet, stap voor stap.
+
+1. **De betaler plakt de link bij de prompt van de wallet.** De wallet ziet het voorvoegsel `blocknet:` of `bntpay.com/` en behandelt de regel als een verzending. Een link naar `$yourname` voor 25 BNT met de memo `invoice-42` wordt hetzelfde verzoek als `send $yourname 25 invoice-42` typen.
+2. **De naam wordt opgezocht.** Bij een link met een naam toont de wallet `Resolved $yourname -> <address>` met een verificatievinkje.
+3. **De wallet controleert het saldo en bouwt de betaling op.** Hij selecteert munten, bouwt de privé transactie op en berekent de fee.
+4. **De betaler ziet een overzicht.** Daarin staan het bedrag en de ontvanger, de fee, het volledige adres als er een naam is gebruikt, eventueel wisselgeld en de memo, gevolgd door `Confirm [y/N]`.
+5. **De betaler bevestigt.** Met `y` wordt de transactie ingediend en toont de wallet de ID ervan met een explorerlink naar `explorer.blocknetcrypto.com`. Elk ander antwoord toont `Cancelled` en geeft de munten vrij die de wallet apart had gezet.
+
+Het overzicht is het moment waarop de betaler het verzoek kan controleren, dus er verlaat niets zijn wallet voordat hij het heeft gezien. Elke link heeft een bedrag nodig: zonder bedrag antwoordt de wallet met `payment link missing amount` en stopt hij voordat hij iets opbouwt.
+
+De memo die je in de link zet, reist met de betaling mee als de [versleutelde memo](/nl/blog/blocknet-encrypted-memos/) van Blocknet. Als de BNT binnenkomen, toont het commando `history` van je wallet de memo onder de binnenkomende betaling, zodat je hem aan de factuur of de order kunt koppelen.
+
+### Test je link voordat je hem deelt
+
+Je kunt precies zien wat een betaler te zien krijgt door je eigen link in je wallet te plakken. Staat er in je wallet minstens het gevraagde bedrag, dan toont hij het volledige overzicht. Controleer de ontvanger, het bedrag en de memo, antwoord daarna `n`, en er wordt niets verstuurd.
+
+## Waar betaallinks goed werken
+
+- **Facturen.** Zet een link met het factuurnummer als memo onderaan de factuur of in de e-mail. De betaler plakt één regel en de memo vertelt je welke factuur is betaald.
+- **Winkels en orderpagina's.** Maak per order een link met het ordernummer in de memo, zodat elke betaling al gelabeld binnenkomt.
+- **Fooien en donaties.** Een link naar `$yourname` met een voorgesteld bedrag past in een profiel, een README of een stream-overlay.
+- **Een rekening delen.** Zet in een groepschat een link met ieders deel en een notitie zoals `dinner%20friday`.
+
+Verdien je ook BNT met minen, dan kun je daarvoor dezelfde naam gebruiken. Zowel seine als bntpool.com accepteert een korte naam van Blocknet ID als uitbetalingsadres, dus uitbetalingen van het minen en betalingen via links komen in één wallet binnen. De [gids voor Blocknet minen](/nl/blog/how-to-mine-blocknet/) behandelt de installatie.
+
+<CTA target="pool" title="Mine naar de naam in je links" text="bntpool.com accepteert je korte naam van Blocknet ID als login voor uitbetalingen, dus uitbetalingen van het minen komen in dezelfde wallet als waar je betaallinks naar verwijzen." />

@@ -1,0 +1,17 @@
+[Unit]
+Description=Send confirmed Seine fleet and collector alerts to Discord
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/seine/telemetry-alerts.env
+ExecStart=/usr/bin/python3 /opt/seine/telemetry/alerts.py
+StateDirectory=seine-telemetry-alerts
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=300
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/seine-telemetry-alerts

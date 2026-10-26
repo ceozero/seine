@@ -12,6 +12,7 @@ fn main() {
         PathBuf::from("src"),
         PathBuf::from("pow-kernel"),
         PathBuf::from("pow-spec"),
+        PathBuf::from("telemetry/src/lib.rs"),
     ];
     emit_rerun_inputs(&source_roots);
     emit_git_rerun_inputs();
@@ -24,6 +25,7 @@ fn main() {
         "GITHUB_REF_NAME",
         "GITHUB_SHA",
         "RUSTFLAGS",
+        "SEINE_TELEMETRY_URL",
         "CARGO_ENCODED_RUSTFLAGS",
     ] {
         println!("cargo:rerun-if-env-changed={key}");

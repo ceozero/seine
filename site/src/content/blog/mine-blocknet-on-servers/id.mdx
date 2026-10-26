@@ -1,0 +1,146 @@
+---
+title: Menambang Blocknet di server dan rig
+description: 'Menambang Blocknet di server EPYC dan banyak rig dengan seine: penempatan thread NUMA dan L3 otomatis, mode headless, API kontrol, dan metrik Prometheus.'
+tags: [Panduan penambangan, Server, Linux, seine]
+faq:
+  - q: 'Apakah seine mendukung server NUMA?'
+    a: 'Ya. Di Linux, afinitas otomatis bawaan seine menyebar thread penambangan ke seluruh node NUMA dan grup cache L3, satu per core fisik sebelum sibling SMT, dan setiap thread menyematkan dirinya sebelum mengalokasikan arena 2 GiB miliknya sehingga memorinya berada di dekatnya. Di mesin EPYC dua node, cara ini menaikkan hashrate sebesar 73 persen pada delapan thread.'
+  - q: 'Bisakah seine berjalan tanpa terminal, sebagai layanan latar belakang?'
+    a: 'Bisa. Berikan --address dan --pool-url pada peluncuran pertama, dan seine akan mulai tanpa pertanyaan apa pun, menyimpan keduanya ke seine.config.json di direktori datanya, dan beralih ke baris log biasa jika tidak ada terminal yang terhubung. Dengan begitu seine mudah dijalankan di bawah systemd atau pengelola layanan lain yang memulainya ulang secara otomatis.'
+  - q: 'Apakah seine mengekspor metrik Prometheus?'
+    a: 'Ya. Jalankan seine dengan --api-server atau --service dan seine menyajikan metrik Prometheus di /metrics pada API kontrol lokalnya, yang secara bawaan mendengarkan di 127.0.0.1 port 9977. Metriknya mencakup apakah penambang sedang berjalan, status siklus hidupnya, solusi yang dikirim, diterima, dan basi, serta karantina backend. Setiap scrape mengirim bearer token API.'
+  - q: 'Mengapa API kontrol seine meminta token?'
+    a: 'Sejak seine v0.2.23, setiap endpoint API kontrol kecuali pemeriksaan kesehatan membutuhkan bearer token, yang mencegah situs web yang Anda kunjungi mengubah alamat pembayaran atau pengaturan Anda. seine menulis token baru ke control-api.cookie di direktori datanya setiap kali mulai, atau Anda bisa menetapkan token tetap dengan --api-token.'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+Panduan ini membahas cara menjalankan seine di mesin besar dan di satu rak rig penambangan: bagaimana seine menempatkan thread di server dengan banyak core, cara menjalankannya headless di bawah pengelola layanan, serta cara memulai, menghentikan, dan memantau setiap rig melalui API kontrol lokal, aliran event langsung, dan metrik Prometheus miliknya.
+
+## Bagaimana seine memanfaatkan server besar?
+
+<Answer>
+Di Linux, seine menyebar thread penambangannya ke seluruh node NUMA dan ke grup cache L3 di dalam setiap node, memakai satu thread per core fisik sebelum sibling SMT mana pun. Setiap thread menyematkan dirinya ke core-nya sebelum mengalokasikan arena 2 GiB miliknya, sehingga memorinya berada di dekatnya. Ini adalah perilaku bawaan, jadi tidak ada yang perlu dikonfigurasi.
+</Answer>
+
+Proof of work Argon2id milik Blocknet sebagian besar berupa lalu lintas memori. Setiap thread mengisi dan membaca kembali arena 2 GiB miliknya sendiri untuk setiap hash, sehingga hashrate bergantung pada berapa banyak pengendali memori dan grup cache yang bisa disibukkan thread Anda sekaligus. [Penjelasan Argon2id](/id/blog/argon2id-proof-of-work-explained/) menguraikan alasannya.
+
+Jika thread hanya mengikuti urutan CPU dari sistem operasi, thread akan mengisi core pertama dalam daftar, yang semuanya berada di node yang sama dan di beberapa grup cache yang sama. Di mesin EPYC dua node, delapan thread dalam urutan OS semuanya mendarat di node 0, dengan hampir seluruh 16 GiB arena berada di memori node itu. Penempatan otomatis seine menaruh empat thread di setiap node dan sekitar 8 GiB arena di masing-masing, sehingga memori kedua node terpakai sekaligus. Di EPYC 8434P satu node dengan delapan grup L3, 24 thread dalam urutan OS menumpuk enam per grup di empat grup. seine memakai kedelapan grup dengan masing-masing tiga thread.
+
+Penempatan mengikuti batasan yang Anda berikan pada proses. seine menghormati mask CPU dan memori proses, sehingga berfungsi di dalam `taskset`, cgroups, dan container, dan hanya memakai core yang Anda izinkan. Di Windows native, pengaturan `auto` yang sama mengisi core fisik sebelum sibling SMT.
+
+## Seberapa besar peningkatan dari penempatan yang sadar NUMA?
+
+Pengembang seine mengukurnya pada 24 Oktober 2026 dengan binary yang sama persis, dijalankan dengan dua cara dalam pasangan bergantian: penempatan otomatis seine, dan penyematan dalam urutan OS biasa (`--cpu-affinity os`):
+
+| Mesin | Thread | Halaman memori | Peningkatan dari penempatan otomatis |
+|---|---|---|---|
+| AMD EPYC dua node · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Biasa | **+73%** |
+| AMD EPYC dua node · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Huge pages 2 MiB | **+108%** |
+| Server AMD EPYC (EPYC 8434P, 48 core, delapan grup L3) | 24 | Biasa | **+16,7%** |
+
+Setiap pasangan bergantian dimenangkan penempatan otomatis, dan metode lengkap serta hasil mentahnya ada di [panduan server besar](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) dan [log optimasi CPU](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) milik seine.
+
+Peningkatan ini muncul saat seine menjalankan lebih sedikit thread daripada jumlah core mesin. Itu terjadi setiap kali RAM, bukan jumlah core, yang menentukan jumlah thread: setiap thread membutuhkan sekitar 2 GB, jadi mengisi server 48 core membutuhkan sekitar 96 GB hanya untuk arena. Penempatan memastikan thread yang mampu Anda jalankan tersebar di setiap node NUMA dan grup cache.
+
+Penempatan dan huge pages saling menambah, seperti terlihat di baris kedua. Jika Anda mencadangkan huge pages, cadangkan di setiap node yang menampung thread, karena total yang cukup besar tidak menjamin halaman tersedia secara lokal. [Panduan huge pages](/id/blog/huge-pages-blocknet-mining/) membahas pengaturan halaman, dan di Linux pool 2 MiB setiap node diatur di `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages`.
+
+Untuk memeriksa pengaruhnya di mesin Anda sendiri, bandingkan `auto` dengan `os` pada jumlah thread dan pengaturan halaman yang sama. `--cpu-affinity off` menyerahkan penempatan sepenuhnya kepada scheduler.
+
+### Cadangan memori di server bersama
+
+Penentuan jumlah thread otomatis menyisakan 5% dari total RAM, di luar cadangan untuk GPU. Ubah dengan `--cpu-memory-reserve-percent`. Jika layanan lain mulai memakai memori, thread otomatis seine melepaskan arenanya dan kembali begitu memori lega, sehingga penambangan menyesuaikan diri dengan beban lain di mesin itu. Hasil penyetelan di-cache per mesin, dan cache-nya direset saat set CPU yang diizinkan atau tata letak NUMA dan L3 berubah, misalnya setelah ukuran VM diubah.
+
+## Bagaimana cara menjalankan seine secara headless?
+
+<Answer>
+Berikan alamat pembayaran dan pool Anda di baris perintah, misalnya `--address` dengan alamat atau `@name` Anda dan `--pool-url stratum+tcp://bntpool.com:3333`. seine lalu mulai tanpa pertanyaan, menyimpan pengaturan ke direktori datanya, dan mencetak baris log biasa jika tidak ada terminal yang terhubung, sehingga pengelola layanan bisa menjalankannya.
+</Answer>
+
+Di desktop, seine menanyakan alamat dan pool saat pertama kali dijalankan. Di server tanpa terminal, berikan keduanya sejak awal:
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Nama rig (`rack1-node04` di sini) adalah nama mesin ini di pool. seine menyimpan alamat, pool, dan nama rig ke `seine.config.json` di direktori data (`./seine-data` secara bawaan), sehingga peluncuran berikutnya dengan direktori data yang sama tidak memerlukan flag lain. Dengan `--ui auto` bawaan, seine menampilkan [dasbor](/id/blog/seine-dashboard-explained/) di terminal dan baris log biasa di tempat lain; `--ui plain` memaksa keluaran biasa. Beri tanda kutip pada `@name` dan `$name` di perintah shell.
+
+Di Linux, unit systemd menjalankan seine saat boot dan memulainya ulang jika suatu saat berhenti:
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine me-resolve nama pendek saat mulai, jadi unit ini menunggu jaringan. Setiap rig menyetel dirinya sendiri selama menambang dan menyimpan pilihannya di direktori datanya sendiri untuk peluncuran berikutnya.
+
+## Bagaimana cara mengendalikan seine melalui API-nya?
+
+seine memiliki REST API lokal dengan aliran event langsung dan metrik Prometheus, dibuat untuk dasbor dan alat pengelola armada rig. Ada dua cara untuk memulainya:
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+Mode `--service` memulai API dan membiarkan penambang diam sampai pengendali mengirim `POST /v1/miner/start`, yang bisa membawa alamat, pool, jumlah thread, dan pengaturan lain untuk sesi itu. Pengendali Anda yang memutuskan kapan setiap mesin menambang dan dengan pengaturan apa.
+
+### Token API
+
+Sejak seine v0.2.23, setiap endpoint kecuali `GET /v1/health` membutuhkan `Authorization: Bearer <token>`. seine menulis token acak baru ke `control-api.cookie` di direktori data setiap kali mulai, yang hanya bisa dibaca pemiliknya di Unix, dan menghapusnya saat dimatikan. Untuk alat armada yang membutuhkan nilai tetap, tetapkan dengan `--api-token`, atau pindahkan file-nya dengan `--api-cookie`. API juga tidak mengirim header CORS secara bawaan dan, pada bind loopback, menolak permintaan yang `Host`-nya bukan lokal, yang mencegah situs web yang Anda kunjungi mengubah alamat pembayaran atau pengaturan Anda.
+
+API secara bawaan terikat ke `127.0.0.1:9977`. Untuk bind ke antarmuka lain diperlukan `--api-allow-unsafe-bind`, jadi API tetap berada di mesin itu kecuali Anda memilih sebaliknya.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Event langsung
+
+`GET /v1/events/stream` adalah aliran server-sent events. Aliran ini melaporkan perubahan status, fase backend, kemajuan dan hasil penyetelan otomatis, solusi yang ditemukan, serta hasil pengiriman saat semuanya terjadi, sehingga dasbor bisa menampilkan setiap rig secara langsung. Setelah tersambung ulang, `GET /v1/runtime/state` mengembalikan status lengkap saat ini.
+
+### Metrik Prometheus
+
+`GET /metrics` menyajikan metrik Prometheus, termasuk `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total`, dan `seine_miner_stale_submits_total`. Karena cookie berubah setiap kali mulai dan hanya pengguna seine yang bisa membacanya, berikan token tetap kepada Prometheus: jalankan seine dengan `--api-token`, lalu simpan nilai yang sama di file yang bisa dibaca Prometheus. Job scrape di mesin yang sama kemudian terlihat seperti ini:
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+Daftar endpoint lengkap, skema permintaan, dan katalog event ada di [dokumentasi API kontrol](https://github.com/zpalmtree/seine/blob/master/docs/API.md) seine.
+
+## Memilih mesin untuk rig
+
+Penempatan thread, mode headless, dan API bekerja dengan cara yang sama di satu PC tower maupun di satu rak server. Untuk mengetahui prosesor mana yang menambang paling cepat dan berapa RAM yang perlu dipasang per thread, lihat [panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/). Baru mengenal seine? Mulailah dengan [cara menambang Blocknet](/id/blog/how-to-mine-blocknet/).
+
+<CTA target="seine" title="Unduh seine untuk server Anda" text="seine menempatkan thread di seluruh node NUMA dan grup cache dengan sendirinya, berjalan headless, dan memberi setiap rig API kontrol dengan event langsung dan metrik Prometheus." />

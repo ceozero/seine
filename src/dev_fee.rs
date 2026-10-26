@@ -5,9 +5,7 @@ pub const DEV_ADDRESS: &str =
     "SEiNEceuDyfEY3GKDQAYVuK6382K2Ln2gQSv83ySAFkKhraBxhHnTf2P6PsF8CXtreqywg4T1qwBAjQo3L2VYDYWtsbb9";
 
 /// Dev fee percentage of total mining time.
-pub const DEV_FEE_PERCENT: f64 = 2.5;
-pub const BNTPOOL_DEV_FEE_PERCENT: f64 = 1.0;
-const BNTPOOL_HOST: &str = "bntpool.com";
+pub const DEV_FEE_PERCENT: f64 = 2.0;
 
 /// Mine for the user this long before the first dev round.
 const GRACE_PERIOD: Duration = Duration::from_secs(10 * 60);
@@ -21,11 +19,7 @@ pub struct DevFeeTracker {
 
 impl DevFeeTracker {
     pub fn new() -> Self {
-        Self::with_percent(DEV_FEE_PERCENT)
-    }
-
-    pub fn with_percent(percent: f64) -> Self {
-        let fee_fraction = (percent / 100.0).clamp(0.0, 1.0);
+        let fee_fraction = DEV_FEE_PERCENT / 100.0;
         Self {
             fee_fraction,
             total_elapsed: Duration::ZERO,
@@ -84,56 +78,6 @@ impl DevFeeTracker {
     }
 }
 
-pub fn effective_pool_dev_fee_percent(pool_url: &str) -> f64 {
-    if pool_url_targets_bntpool(pool_url) {
-        BNTPOOL_DEV_FEE_PERCENT
-    } else {
-        DEV_FEE_PERCENT
-    }
-}
-
-fn pool_url_targets_bntpool(pool_url: &str) -> bool {
-    let Some(host) = pool_url_host(pool_url) else {
-        return false;
-    };
-    host == BNTPOOL_HOST || host.ends_with(".bntpool.com")
-}
-
-fn pool_url_host(pool_url: &str) -> Option<String> {
-    let trimmed = pool_url.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let rest = trimmed
-        .strip_prefix("stratum+tcp://")
-        .or_else(|| trimmed.strip_prefix("stratum+ssl://"))
-        .or_else(|| trimmed.strip_prefix("stratum+tls://"))
-        .unwrap_or(trimmed);
-    let authority = rest.split('/').next().unwrap_or(rest).trim();
-    if authority.is_empty() {
-        return None;
-    }
-
-    let host = if authority.starts_with('[') {
-        let close_idx = authority.find(']')?;
-        authority[..=close_idx].to_string()
-    } else {
-        authority
-            .split(':')
-            .next()
-            .unwrap_or(authority)
-            .trim()
-            .to_string()
-    };
-
-    let host = host.trim_matches(['[', ']']).trim().to_ascii_lowercase();
-    if host.is_empty() {
-        None
-    } else {
-        Some(host)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,7 +109,7 @@ mod tests {
         assert!(!tracker.is_dev_round()); // billable=0, owed=0
         tracker.end_round(Duration::from_secs(20));
 
-        // Now billable=20s, owed=0.5s, dev_elapsed=0 => dev round
+        // Now billable=20s, owed=0.4s, dev_elapsed=0 => dev round
         tracker.begin_round();
         assert!(tracker.is_dev_round());
     }
@@ -252,40 +196,13 @@ mod tests {
     }
 
     #[test]
-    fn custom_percent_converges() {
-        let mut tracker = DevFeeTracker::with_percent(BNTPOOL_DEV_FEE_PERCENT);
-        let round_dur = Duration::from_secs(20);
-
-        for _ in 0..1_000 {
+    fn flat_fee_is_two_percent_of_billable_mining_time() {
+        let mut tracker = DevFeeTracker::new();
+        tracker.end_round(GRACE_PERIOD);
+        for _ in 0..10_000 {
             tracker.begin_round();
-            tracker.end_round(round_dur);
+            tracker.end_round(Duration::from_secs(1));
         }
-
-        let billable = (tracker.total_elapsed - GRACE_PERIOD).as_secs_f64();
-        let actual_pct = tracker.dev_elapsed.as_secs_f64() / billable * 100.0;
-        assert!(
-            (actual_pct - BNTPOOL_DEV_FEE_PERCENT).abs() < 0.5,
-            "expected ~{BNTPOOL_DEV_FEE_PERCENT}%, got {actual_pct:.2}%"
-        );
-    }
-
-    #[test]
-    fn effective_pool_dev_fee_is_discounted_for_bntpool_hosts() {
-        assert_eq!(
-            effective_pool_dev_fee_percent("stratum+tcp://bntpool.com:3333"),
-            BNTPOOL_DEV_FEE_PERCENT
-        );
-        assert_eq!(
-            effective_pool_dev_fee_percent("stratum+tcp://eu.bntpool.com:3333"),
-            BNTPOOL_DEV_FEE_PERCENT
-        );
-        assert_eq!(
-            effective_pool_dev_fee_percent("stratum+tcp://BNTPOOL.COM:3333"),
-            BNTPOOL_DEV_FEE_PERCENT
-        );
-        assert_eq!(
-            effective_pool_dev_fee_percent("stratum+tcp://example.com:3333"),
-            DEV_FEE_PERCENT
-        );
+        assert_eq!(tracker.dev_elapsed, Duration::from_secs(200));
     }
 }

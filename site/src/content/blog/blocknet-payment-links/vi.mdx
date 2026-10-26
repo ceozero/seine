@@ -1,0 +1,121 @@
+---
+title: Yêu cầu thanh toán Blocknet bằng liên kết
+description: Tạo liên kết thanh toán blocknet:// hoặc bntpay.com kèm số tiền, memo và $name của bạn, để bất kỳ ai cũng trả BNT cho bạn chỉ bằng cách dán một dòng vào ví.
+tags: [Thanh toán, Liên kết thanh toán, Ví, Blocknet ID]
+faq:
+  - q: 'Liên kết thanh toán Blocknet có cần số tiền không?'
+    a: 'Có. Mọi liên kết thanh toán đều mang trường số tiền, viết bằng BNT với tối đa tám chữ số thập phân, chẳng hạn amount=25 hoặc amount=0.5. Memo là tùy chọn. Nếu liên kết được dán vào không có số tiền, ví dòng lệnh sẽ trả lời payment link missing amount và không gửi gì, nên người trả tiền không bao giờ phải đoán bạn yêu cầu bao nhiêu.'
+  - q: 'Có thể đặt tên ngắn Blocknet ID vào liên kết thanh toán không?'
+    a: 'Có. Viết tên với tiền tố đô la, như bntpay.com/$yourname?amount=10 hoặc blocknet://$yourname?amount=10. Ví tra cứu tên tại blocknet.id, kiểm tra bản ghi đã ký, và hiển thị cho người trả tiền địa chỉ đầy đủ được đánh dấu đã xác minh trước khi họ xác nhận. Liên kết có tên luôn trả tiền tới địa chỉ mà tên của bạn đang trỏ tới.'
+  - q: 'Liên kết blocknet:// và liên kết bntpay.com khác nhau thế nào?'
+    a: 'Chúng mang cùng ba trường là người nhận, số tiền và memo, và ví dòng lệnh đọc cả hai theo cùng một cách. Dạng blocknet:// là lược đồ URI của Blocknet. Dạng bntpay.com là một địa chỉ web thông thường, mà các ứng dụng chat, ứng dụng email và hồ sơ mạng xã hội biến thành liên kết bấm được.'
+  - q: 'Dán liên kết thanh toán có gửi BNT ngay lập tức không?'
+    a: 'Không. Dán liên kết vào ví chỉ chuẩn bị khoản thanh toán rồi dừng ở bản tóm tắt hiển thị số tiền, người nhận, địa chỉ đầy đủ, phí và memo, kèm lời nhắc xác nhận có hoặc không. BNT chỉ được chuyển sau khi người trả tiền gõ y. Mọi câu trả lời khác đều hủy khoản thanh toán và giải phóng số coin đã được giữ lại.'
+sourceHash: 193a7a6a455c
+translation: draft
+---
+
+Liên kết thanh toán Blocknet gói mọi thứ người trả tiền cần vào một dòng: trả cho ai, bao nhiêu BNT, và một memo tùy chọn như số hóa đơn. Gửi nó trong tin nhắn chat, đặt nó trên hóa đơn hoặc trong hồ sơ của bạn, và người trả tiền chỉ cần dán vào ví rồi xác nhận. Hướng dẫn này trình bày hai định dạng liên kết, cách viết liên kết bằng địa chỉ hoặc `$name` của bạn, và chính xác những gì ví làm khi ai đó dán liên kết.
+
+## Liên kết thanh toán Blocknet là gì?
+
+<Answer>
+Liên kết thanh toán Blocknet là một dòng duy nhất chứa người nhận, số tiền và một memo tùy chọn, viết dưới dạng blocknet://recipient?amount=25&memo=invoice-42 hoặc bntpay.com/recipient?amount=25&memo=invoice-42. Người nhận là một địa chỉ ví hoặc một tên Blocknet ID. Dán liên kết vào ví dòng lệnh sẽ biến nó thành một lệnh gửi sẵn sàng để xác nhận.
+</Answer>
+
+Ví dòng lệnh Blocknet chấp nhận hai dạng:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Cả hai dạng mang cùng các trường:
+
+| Trường | Vị trí | Bắt buộc | Nội dung |
+|---|---|---|---|
+| Người nhận | ngay sau `blocknet://` hoặc `bntpay.com/` | Có | Địa chỉ ví của bạn, hoặc tên ngắn dưới dạng `$name` |
+| `amount` | chuỗi truy vấn | Có | Số BNT cần yêu cầu, tối đa tám chữ số thập phân |
+| `memo` | chuỗi truy vấn | Không | Văn bản cho memo thanh toán, tối đa 124 byte |
+
+Ví khá linh hoạt với cách gõ liên kết. Nó nhận diện `blocknet://` và dạng ngắn hơn `blocknet:`, còn với dạng web, nó nhận `bntpay.com/` đứng riêng hoặc có `www.`, `http://` hay `https://` phía trước. Tiền tố không phân biệt chữ hoa chữ thường, và thứ tự của `amount` và `memo` không quan trọng.
+
+Dạng `bntpay.com` là một địa chỉ web bình thường, nên hầu hết ứng dụng chat, ứng dụng email và hồ sơ mạng xã hội biến nó thành liên kết mà mọi người có thể chạm vào. Dạng `blocknet://` là URI của Blocknet, tiện dụng ở bất cứ đâu liên kết được đưa thẳng vào ví.
+
+## Làm sao để viết một liên kết thanh toán?
+
+Bạn có thể tự viết liên kết bằng tay qua bốn bước.
+
+1. **Chọn người nhận.** Chạy `address` trong ví dòng lệnh để in địa chỉ của bạn, hoặc dùng [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) với tiền tố `$`. Nếu bạn chưa có ví, [hướng dẫn ví Blocknet](/vi/blog/blocknet-wallet-for-mining/) chỉ cách tạo ví và tìm địa chỉ của bạn.
+2. **Đặt số tiền.** Viết bằng BNT. Cả số nguyên và số thập phân đều được, tới tám chữ số thập phân, vì một BNT bằng 100.000.000 đơn vị nguyên tử.
+3. **Thêm memo nếu muốn.** Một mã đơn hàng, mã hóa đơn hay lời cảm ơn ngắn giúp bạn đối chiếu khoản thanh toán khi nó đến. Giữ trong giới hạn 124 byte.
+4. **Ghép các phần lại.** Đặt người nhận sau tiền tố, rồi `?amount=`, rồi `&memo=` nếu có.
+
+Một hóa đơn 25 BNT gửi tới một tên, ở cả hai dạng:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Cùng yêu cầu đó gửi tới một địa chỉ đầy đủ:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Mã hóa ký tự trong memo
+
+Memo có dấu cách hoặc dấu câu cần viết một số ký tự theo mã hóa URL, vì bản thân liên kết dùng những ký tự đó. Ví sẽ giải mã chúng trở lại trước khi tạo khoản thanh toán.
+
+| Ký tự | Viết thành | Lý do |
+|---|---|---|
+| dấu cách | `%20` | Giữ liên kết liền một khối khi được chia sẻ |
+| `&` | `%26` | `&` bắt đầu trường tiếp theo |
+| `#` | `%23` | `#` kết thúc chuỗi truy vấn |
+| `+` | `%2B` | Dấu `+` đứng riêng được đọc là dấu cách |
+
+Ví dụ, `memo=Order%20%231042` sẽ đến dưới dạng `Order #1042`. Chữ cái, chữ số, dấu gạch ngang, dấu gạch dưới và dấu chấm không cần mã hóa, đó là lý do các memo như `invoice-42` dễ dùng nguyên dạng.
+
+## Liên kết nên dùng địa chỉ hay $name của bạn?
+
+Cả hai đều dùng được, và mỗi loại hợp với một mục đích khác nhau.
+
+**Tên** giữ liên kết đủ ngắn để đọc, nói to hoặc đặt vừa vào phần giới thiệu. Trong liên kết, hãy viết tên với tiền tố `$`: `$yourname` và `@yourname` là cùng một tên, và `$` là dạng mà cả hai loại liên kết đều chuyển thẳng tới ví. Khi người trả tiền dán liên kết có tên, ví phân giải tên qua blocknet.id, kiểm tra chữ ký Ed25519 trên bản ghi và in ra địa chỉ đầy đủ được đánh dấu đã xác minh. Vì tên được phân giải vào lúc thanh toán, một liên kết dùng lâu dài như liên kết nhận tip trong hồ sơ của bạn vẫn hoạt động nếu sau này bạn trỏ tên sang một ví mới.
+
+**Địa chỉ đầy đủ** cố định đích đến ngay trong liên kết. Cách này hợp với hóa đơn dùng một lần, khi bạn muốn liên kết chỉ đúng một ví cụ thể.
+
+Dù theo cách nào, khoản thanh toán trên chuỗi là một giao dịch Blocknet thông thường tới một [địa chỉ ẩn dùng một lần](/vi/blog/blocknet-privacy-features/), với mức riêng tư như mọi khoản thanh toán khác.
+
+## Điều gì xảy ra khi ai đó dán liên kết thanh toán?
+
+<Answer>
+Ví đọc người nhận, số tiền và memo từ liên kết rồi chạy một lệnh gửi bình thường với các giá trị đó. Nó phân giải tên nếu có, tạo giao dịch, rồi hiển thị số tiền, người nhận, địa chỉ đầy đủ, phí và memo và hỏi Confirm [y/N]. BNT chỉ được chuyển khi người trả tiền gõ y.
+</Answer>
+
+Đây là trình tự trong ví dòng lệnh, từng bước một.
+
+1. **Người trả tiền dán liên kết vào dấu nhắc của ví.** Ví thấy tiền tố `blocknet:` hoặc `bntpay.com/` và coi dòng đó là một lệnh gửi. Liên kết tới `$yourname` cho 25 BNT kèm memo `invoice-42` trở thành cùng một yêu cầu như khi gõ `send $yourname 25 invoice-42`.
+2. **Tên được phân giải.** Với liên kết có tên, ví in ra `Resolved $yourname -> <address>` kèm dấu đã xác minh.
+3. **Ví kiểm tra số dư và tạo khoản thanh toán.** Nó chọn coin, tạo giao dịch riêng tư và tính phí.
+4. **Người trả tiền xem bản tóm tắt.** Bản tóm tắt liệt kê số tiền và người nhận, phí, địa chỉ đầy đủ khi dùng tên, tiền thừa nếu có, và memo, kèm theo `Confirm [y/N]`.
+5. **Người trả tiền xác nhận.** Gõ `y` sẽ gửi giao dịch và in ra mã giao dịch kèm liên kết trình khám phá khối tại `explorer.blocknetcrypto.com`. Mọi câu trả lời khác sẽ in ra `Cancelled` và giải phóng số coin mà ví đã dành riêng.
+
+Bản tóm tắt là cơ hội để người trả tiền kiểm tra yêu cầu, nên không có gì rời khỏi ví của họ cho đến khi họ đã xem nó. Mọi liên kết đều cần số tiền: nếu thiếu, ví trả lời `payment link missing amount` và dừng trước khi tạo bất cứ thứ gì.
+
+Memo bạn đặt trong liên kết đi cùng khoản thanh toán dưới dạng [memo được mã hóa](/vi/blog/blocknet-encrypted-memos/) của Blocknet. Khi BNT đến, lệnh `history` trong ví của bạn liệt kê memo bên dưới khoản thanh toán đến, nên bạn có thể đối chiếu với hóa đơn hoặc đơn hàng.
+
+### Thử liên kết trước khi chia sẻ
+
+Bạn có thể xem chính xác những gì người trả tiền sẽ thấy bằng cách dán liên kết của chính mình vào ví. Nếu ví của bạn có ít nhất số tiền được yêu cầu, nó sẽ hiển thị đầy đủ bản tóm tắt. Kiểm tra người nhận, số tiền và memo, rồi trả lời `n` và không có gì được gửi đi.
+
+## Những nơi liên kết thanh toán phát huy tác dụng
+
+- **Hóa đơn.** Đặt một liên kết với số hóa đơn làm memo ở cuối hóa đơn hoặc trong email. Người trả tiền dán một dòng và memo cho bạn biết hóa đơn nào đã được thanh toán.
+- **Cửa hàng và trang đặt hàng.** Tạo một liên kết cho mỗi đơn hàng với mã đơn hàng trong memo, để mỗi khoản thanh toán đến đều đã được gắn nhãn sẵn.
+- **Tip và quyên góp.** Một liên kết tới `$yourname` với số tiền gợi ý vừa vặn trong hồ sơ, tệp README hoặc lớp phủ khi livestream.
+- **Chia hóa đơn.** Thả vào nhóm chat một liên kết với phần của từng người và ghi chú như `dinner%20friday`.
+
+Nếu bạn cũng kiếm BNT bằng cách đào, bạn có thể dùng cùng tên đó. Cả seine và bntpool.com đều chấp nhận tên ngắn Blocknet ID làm địa chỉ nhận thanh toán, nên khoản thanh toán từ việc đào và khoản thanh toán qua liên kết đều về cùng một ví. [Hướng dẫn đào Blocknet](/vi/blog/how-to-mine-blocknet/) trình bày cách thiết lập.
+
+<CTA target="pool" title="Đào về tên trong liên kết của bạn" text="bntpool.com chấp nhận tên ngắn Blocknet ID của bạn làm tên đăng nhập nhận thanh toán, nên khoản thanh toán từ việc đào về đúng ví mà liên kết thanh toán của bạn trỏ tới." />

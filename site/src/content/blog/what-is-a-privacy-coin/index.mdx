@@ -1,0 +1,102 @@
+---
+title: What is a privacy coin? How private cryptocurrencies work
+description: A privacy coin is a cryptocurrency that hides who paid, who got paid and how much. Learn how privacy coins work and why privacy by default matters.
+date: 2026-10-25
+tags: [Privacy, Privacy coins, Ring signatures, Stealth addresses, Blocknet]
+faq:
+  - q: What is the difference between a privacy coin and Bitcoin?
+    a: Bitcoin records every address and amount in the clear, so anyone can follow coins from one address to the next and read each balance. A privacy coin uses cryptography such as ring signatures, one-time addresses and hidden amounts, so the chain still proves every payment is valid while showing outsiders very little about who paid whom or how much.
+  - q: Do all privacy coins make privacy mandatory?
+    a: No, designs differ. Some coins, such as Monero and Blocknet, apply their privacy to every transaction, so there is no public mode at all. Zcash offers shielded addresses, which hide the sender, receiver and amount with zero-knowledge proofs, alongside transparent addresses that work much like Bitcoin addresses. Users can move funds between the two.
+  - q: How can a network check payments it cannot see?
+    a: The cryptography lets nodes verify a payment without reading its details. A ring signature proves that one of several outputs was spent, a key image blocks a second spend of the same coins, and amount commitments add up so nodes can confirm inputs equal outputs plus the fee. Range proofs show that no hidden amount is negative.
+  - q: Can you mine a privacy coin on a normal computer?
+    a: Yes, if the coin uses a memory-hard proof of work. Blocknet uses Argon2id, which needs about 2 GB of memory for every hash, so ordinary desktops, laptops and servers do the mining. Download seine, give it your Blocknet address or @name, and it mines on the bntpool.com pool with your CPU and any NVIDIA graphics card.
+related: [blocknet-privacy-features, ring-signatures-explained, stealth-addresses-explained]
+---
+
+This guide explains what a privacy coin is, what a normal blockchain reveals about your payments, and the cryptography privacy coins use to hide the sender, the receiver and the amount. It finishes with Blocknet as a worked example and how to earn your first private coins by mining.
+
+## What is a privacy coin?
+
+<Answer>
+A privacy coin is a cryptocurrency built so that payments don't put the sender, the receiver or the amount on public display. It uses cryptography such as ring signatures, one-time stealth addresses and hidden amounts, so every node can still verify each payment while someone reading the blockchain learns very little about it.
+</Answer>
+
+Every cryptocurrency keeps a shared ledger, the blockchain, that many independent computers copy and check. That openness is what lets strangers agree on who owns what without a bank in the middle. The question a privacy coin answers is how much of each payment that ledger has to show.
+
+Bitcoin shows most of it. Its whitepaper describes the privacy model in one line: "The public can see that someone is sending an amount to someone else, but without information linking the transaction to anyone." Names are absent, but addresses and amounts are public. A privacy coin goes further and keeps the details of each payment off the public record while still proving that the payment follows the rules.
+
+## What does a public blockchain reveal about you?
+
+On a transparent chain such as Bitcoin, anyone who knows one of your addresses can look it up in a block explorer and see:
+
+- **Its balance**, down to the last unit.
+- **Every payment in and out**, with amounts and dates.
+- **Where the money went next**, because each payment names the address it came from and the address it goes to.
+
+Your name isn't written there, but addresses rarely stay unlinked for long. Paying a shop, withdrawing from an exchange or posting an address for donations ties it to you, and from that point the whole history is readable. It is a bit like printing your bank statement on a public notice board with your account number in place of your name. Anyone you pay can see what you hold, and anyone who pays you can watch what you do with the money.
+
+A privacy coin is designed so that the notice board shows only that valid payments happened.
+
+## How do privacy coins hide the sender, receiver and amount?
+
+<Answer>
+Many privacy coins combine three techniques. Ring signatures hide the sender by mixing the real coin with decoys, one-time stealth addresses hide the receiver by giving each payment a fresh address, and commitments with range proofs hide the amount while proving it is valid. Many also protect the network layer, so a transaction's origin stays hidden.
+</Answer>
+
+Each technique covers one part of a payment. Here is how they work in plain terms.
+
+### Ring signatures hide who paid
+
+A [ring signature](/blog/ring-signatures-explained/) lets you sign on behalf of a group without revealing which member signed. Ron Rivest, Adi Shamir and Yael Tauman described the idea in 2001, and the CryptoNote design of 2013 brought it to cryptocurrency. When you spend, your wallet picks other outputs from the chain as decoys and signs for the whole group. Anyone can check that one of them was spent, and the signature doesn't say which.
+
+Privacy coins use linkable ring signatures, which add a key image: a tag unique to the real coin being spent that reveals nothing about which ring member it is. If the same key image shows up twice, the network rejects the second spend, so private coins still can't be spent twice. Monero and Blocknet use a compact version called CLSAG.
+
+### Stealth addresses hide who got paid
+
+With a [stealth address](/blog/stealth-addresses-explained/) scheme, the address you share never appears on the chain. Your address holds two public keys, a view key and a spend key. For each payment, the sender's wallet mixes those keys with a new random value and derives an address that is used once and never again. On your side, the private view key lets your wallet scan the chain and spot outputs addressed to you, and the private spend key lets you spend them.
+
+If ten people pay the address on your website, the chain shows ten separate one-time addresses with no visible link between them, so nobody can total what you've received.
+
+### Commitments and range proofs hide the amount
+
+Amounts are stored as Pedersen commitments, which lock in a number without showing it. Commitments can be added together, so every node can confirm that what goes into a transaction matches what comes out, fee included, without seeing any of the figures. A range proof then shows that no hidden amount is negative, so nobody can create coins out of thin air. [Bulletproofs](/blog/bulletproofs-explained/), published by Bünz and colleagues in 2018, made these proofs much smaller.
+
+### Network privacy hides where a payment started
+
+Even a perfectly private transaction could be traced to the computer that broadcast it, by watching which node announced it first. [Dandelion++](/blog/dandelion-plus-plus-explained/), published in 2018, counters this by first passing a new transaction quietly from one peer to the next along a "stem", then letting it spread to the whole network from a random point further along.
+
+Some privacy coins take a different route. Zcash, launched in 2016, uses zero-knowledge proofs called zk-SNARKs: its shielded addresses hide the sender, receiver and amount, and the proof shows the transaction is valid without revealing any of them.
+
+## Why does privacy by default matter?
+
+When privacy is a feature you turn on, the transactions that use it form a smaller group, and a smaller group is easier to study. When every transaction is built the same way, a private payment looks like every other payment on the chain, and nobody has to remember to protect it.
+
+Privacy by default also keeps every coin interchangeable, a property called fungibility. On a transparent chain, a coin carries its full history, and two coins of the same value can be treated differently because of where they've been. When no coin has a visible past, one coin is as good as any other, which is what people expect from money.
+
+The everyday reasons are simple. A business doesn't want competitors reading its supplier payments. An employee doesn't want a salary visible to everyone they buy coffee from. Someone giving to a cause may prefer to keep that to themselves. Cash and ordinary bank accounts already give people this kind of privacy, and a privacy coin brings it to digital payments.
+
+## Blocknet as an example of a privacy coin
+
+Blocknet is a privacy coin that applies ring signatures, stealth addresses, hidden amounts and network privacy to every payment. Its transaction format has no transparent mode:
+
+- **Sender:** each input is signed with a CLSAG ring of exactly 16 outputs, the real one and 15 decoys, and consensus rejects any other size.
+- **Receiver:** every payment goes to a one-time stealth address.
+- **Amount:** amounts are Pedersen commitments with 64-bit Bulletproofs range proofs.
+- **Network:** transactions travel with Dandelion++, rerouting stems every 10 minutes.
+- **Memo:** each output has room for an encrypted note of up to 124 bytes, readable only by the sender and receiver and padded to a fixed 128 bytes, so a payment with a note looks the same as one without.
+
+Blocknet also lets you pay someone by name. A [Blocknet ID shortname](/blog/blocknet-id-pay-by-name/) like `@alice` replaces a 90-plus-character address, and payments to the name still land on fresh stealth addresses, so a public name reveals nothing about its owner's income. For each layer in depth, read [how Blocknet keeps payments private](/blog/blocknet-privacy-features/), and for the wider picture, [what is Blocknet?](/blog/what-is-blocknet/)
+
+Blocknet's planned Faraday upgrade will widen the group each spend hides in. In the words of [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): "Today a spend hides among 16 outputs. After Faraday, it hides among every output on the chain."
+
+## How can you get a privacy coin?
+
+You can earn one by mining. Blocknet's proof of work, [Argon2id](/blog/argon2id-proof-of-work-explained/), needs about 2 GB of memory for every hash, so the ordinary CPUs and RAM in desktops, laptops and servers do the mining. Pool payouts reach you like any other Blocknet payment, on one-time stealth addresses with hidden amounts.
+
+1. **Get a wallet.** The [guide to a Blocknet wallet for mining](/blog/blocknet-wallet-for-mining/) shows how to create one, back up the seed and copy your address.
+2. **Download seine.** It's the free, open-source Blocknet miner for Windows, macOS and Linux, in the [download section](/#download). It mines with your CPU and, on Windows and Linux, any NVIDIA graphics card at the same time, and tunes itself while it runs.
+3. **Start mining on bntpool.com.** Paste your address or `@name`, accept the default pool, and payouts arrive privately in your wallet. [How to mine Blocknet](/blog/how-to-mine-blocknet/) walks through each step.
+
+<CTA target="seine" title="Mine a privacy coin on your computer" text="seine mines Blocknet with your CPU and NVIDIA GPU and pays out on bntpool.com to your private address or @name." />

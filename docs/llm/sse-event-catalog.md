@@ -2,7 +2,7 @@
 
 Endpoint: `GET /v1/events/stream`
 
-Control-plane endpoints are open by default; no API key is required.
+Requires `Authorization: Bearer <token>` (token from `<data-dir>/control-api.cookie`).
 
 Each SSE frame includes:
 - `id`: monotonic event sequence

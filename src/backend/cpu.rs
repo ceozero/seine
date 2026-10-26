@@ -1,7 +1,7 @@
 #[cfg(any(target_os = "windows", test))]
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier, Condvar, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -12,8 +12,8 @@ use crossbeam_channel::{bounded, Sender};
 
 use crate::backend::{
     AssignmentSemantics, BackendCapabilities, BackendEvent, BackendExecutionModel,
-    BackendInstanceId, BackendTelemetry, BenchBackend, DeadlineSupport, PowBackend,
-    PreemptionGranularity, WorkAssignment, WORK_ID_MAX,
+    BackendInstanceId, BackendTelemetry, BenchBackend, DeadlineSupport, KernelBenchSample,
+    PowBackend, PreemptionGranularity, WorkAssignment, WORK_ID_MAX,
 };
 use crate::config::{CpuAffinityMode, CpuPageMode};
 
@@ -21,6 +21,11 @@ use crate::config::{CpuAffinityMode, CpuPageMode};
 mod events;
 #[path = "cpu/kernel.rs"]
 mod kernel;
+#[path = "cpu/sampling.rs"]
+mod sampling;
+#[cfg(target_os = "linux")]
+#[path = "cpu/topology.rs"]
+mod topology;
 
 const DEFAULT_HASH_BATCH_SIZE: u64 = 64;
 const DEFAULT_CONTROL_CHECK_INTERVAL_HASHES: u64 = 1;
@@ -65,6 +70,7 @@ pub struct CpuBackendTuning {
     pub hash_flush_interval: Duration,
     pub event_dispatch_capacity: usize,
     pub page_mode: CpuPageMode,
+    pub kernel: Option<fixed_argon::CpuKernel>,
 }
 
 impl Default for CpuBackendTuning {
@@ -75,6 +81,7 @@ impl Default for CpuBackendTuning {
             hash_flush_interval: DEFAULT_HASH_FLUSH_INTERVAL,
             event_dispatch_capacity: DEFAULT_EVENT_DISPATCH_CAPACITY,
             page_mode: CpuPageMode::Auto,
+            kernel: None,
         }
     }
 }
@@ -87,6 +94,7 @@ impl CpuBackendTuning {
             hash_flush_interval: self.hash_flush_interval.max(Duration::from_millis(1)),
             event_dispatch_capacity: self.event_dispatch_capacity.max(1),
             page_mode: self.page_mode,
+            kernel: self.kernel,
         }
     }
 }
@@ -120,6 +128,12 @@ struct ControlState {
 
 struct Shared {
     started: AtomicBool,
+    adaptive: bool,
+    desired_workers: AtomicUsize,
+    lifetime_hashes: AtomicU64,
+    warmed_workers: AtomicUsize,
+    worker_allocation_failures: AtomicU64,
+    arena_committed_bytes: AtomicU64,
     instance_id: AtomicU64,
     solution_state: AtomicU64,
     error_emitted: AtomicBool,
@@ -135,6 +149,7 @@ struct Shared {
     ready_lock: Mutex<()>,
     ready_cv: Condvar,
     hash_slots: Vec<PaddedAtomicU64>,
+    finished_generations: Vec<AtomicU64>,
     assignment_hashes: AtomicU64,
     assignment_generation: AtomicU64,
     assignment_reported_generation: AtomicU64,
@@ -161,10 +176,16 @@ struct Shared {
     hash_flush_interval: Duration,
     event_dispatch_capacity: usize,
     page_mode: CpuPageMode,
+    kernel: fixed_argon::CpuKernel,
+    // Low byte identifies the path; upper bits identify this particular switch.
+    kernel_request: AtomicU64,
+    kernel_acknowledgements: Vec<AtomicU64>,
 }
 
 pub struct CpuBackend {
     threads: usize,
+    initial_workers: usize,
+    worker_capacity: AtomicUsize,
     affinity_mode: CpuAffinityMode,
     shared: Arc<Shared>,
     worker_handles: Mutex<Vec<JoinHandle<()>>>,
@@ -186,9 +207,17 @@ impl CpuBackend {
         let lanes = threads.max(1);
         Self {
             threads,
+            initial_workers: lanes,
+            worker_capacity: AtomicUsize::new(lanes),
             affinity_mode,
             shared: Arc::new(Shared {
                 started: AtomicBool::new(false),
+                adaptive: false,
+                desired_workers: AtomicUsize::new(lanes),
+                lifetime_hashes: AtomicU64::new(0),
+                warmed_workers: AtomicUsize::new(0),
+                worker_allocation_failures: AtomicU64::new(0),
+                arena_committed_bytes: AtomicU64::new(0),
                 instance_id: AtomicU64::new(0),
                 solution_state: AtomicU64::new(0),
                 error_emitted: AtomicBool::new(false),
@@ -208,6 +237,7 @@ impl CpuBackend {
                 ready_lock: Mutex::new(()),
                 ready_cv: Condvar::new(),
                 hash_slots: (0..lanes).map(|_| PaddedAtomicU64::new(0)).collect(),
+                finished_generations: (0..lanes).map(|_| AtomicU64::new(0)).collect(),
                 assignment_hashes: AtomicU64::new(0),
                 assignment_generation: AtomicU64::new(0),
                 assignment_reported_generation: AtomicU64::new(0),
@@ -234,6 +264,15 @@ impl CpuBackend {
                 hash_flush_interval: tuning.hash_flush_interval,
                 event_dispatch_capacity: tuning.event_dispatch_capacity,
                 page_mode: tuning.page_mode,
+                kernel_request: AtomicU64::new(kernel_id(
+                    tuning
+                        .kernel
+                        .unwrap_or_else(fixed_argon::CpuKernel::preferred),
+                )),
+                kernel_acknowledgements: (0..lanes).map(|_| AtomicU64::new(0)).collect(),
+                kernel: tuning
+                    .kernel
+                    .unwrap_or_else(fixed_argon::CpuKernel::preferred),
             }),
             worker_handles: Mutex::new(Vec::new()),
             event_forward_handle: Mutex::new(None),
@@ -241,6 +280,21 @@ impl CpuBackend {
     }
 
     fn reset_runtime_state(&self) {
+        self.shared.desired_workers.store(
+            self.initial_workers.min(self.worker_capacity()),
+            Ordering::Release,
+        );
+        self.shared.lifetime_hashes.store(0, Ordering::Release);
+        for ack in &self.shared.kernel_acknowledgements {
+            ack.store(0, Ordering::Release);
+        }
+        self.shared.warmed_workers.store(0, Ordering::Release);
+        self.shared
+            .arena_committed_bytes
+            .store(0, Ordering::Release);
+        self.shared
+            .worker_allocation_failures
+            .store(0, Ordering::Release);
         self.shared.solution_state.store(0, Ordering::Release);
         self.shared.error_emitted.store(false, Ordering::Release);
         self.shared.work_generation.store(0, Ordering::Release);
@@ -269,6 +323,9 @@ impl CpuBackend {
         self.shared.dropped_events.store(0, Ordering::Release);
         reset_arena_telemetry(&self.shared);
         reset_hash_slots(&self.shared.hash_slots);
+        for generation in &self.shared.finished_generations {
+            generation.store(0, Ordering::Release);
+        }
         if let Ok(mut started_at) = self.shared.assignment_started_at.lock() {
             *started_at = None;
         }
@@ -326,26 +383,51 @@ impl CpuBackend {
     }
 }
 
-impl PowBackend for CpuBackend {
-    fn name(&self) -> &'static str {
-        "cpu"
+fn resource_spawn_error(err: &std::io::Error) -> bool {
+    if matches!(
+        err.kind(),
+        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::OutOfMemory
+    ) {
+        return true;
+    }
+    #[cfg(target_os = "windows")]
+    if err
+        .raw_os_error()
+        .is_some_and(windows_thread_resource_error)
+    {
+        return true;
+    }
+    false
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_thread_resource_error(code: i32) -> bool {
+    // WinError.h: NOT_ENOUGH_MEMORY/OUTOFMEMORY (8/14), TOO_MANY_TCBS/
+    // MAX_THRDS_REACHED (155/164), and system/pool/working-set/pagefile/commit
+    // exhaustion (1450..=1455). Keep unrelated failures out of the retry path.
+    // https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
+    // https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-
+    matches!(code, 8 | 14 | 155 | 164 | 1450..=1455)
+}
+
+impl CpuBackend {
+    /// Provisioned OS workers. The scheduling lanes/nonce stride stay fixed at
+    /// construction, including when startup must fall back to fewer workers.
+    pub(crate) fn worker_capacity(&self) -> usize {
+        self.worker_capacity.load(Ordering::Acquire)
     }
 
-    fn lanes(&self) -> usize {
-        self.threads.max(1)
-    }
-
-    fn set_instance_id(&self, id: BackendInstanceId) {
-        self.shared.instance_id.store(id, Ordering::Release);
-    }
-
-    fn set_event_sink(&self, sink: Sender<BackendEvent>) {
-        if let Ok(mut slot) = self.shared.event_sink.write() {
-            *slot = Some(sink);
+    fn start_with_spawner(
+        &self,
+        mut spawn: impl FnMut(
+            Arc<Shared>,
+            usize,
+            Option<core_affinity::CoreId>,
+        ) -> std::io::Result<JoinHandle<()>>,
+    ) -> Result<()> {
+        if !self.shared.kernel.is_supported() {
+            return Err(anyhow!("unsupported CPU kernel {}", self.shared.kernel));
         }
-    }
-
-    fn start(&self) -> Result<()> {
         if self.shared.started.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
@@ -361,30 +443,42 @@ impl PowBackend for CpuBackend {
 
         let core_ids = resolve_affinity_core_ids(self.affinity_mode);
 
-        let mut spawned_handles = Vec::with_capacity(self.threads.max(1));
-        let mut spawn_error = None;
-        for thread_idx in 0..self.threads.max(1) {
-            let shared = Arc::clone(&self.shared);
-            let core_id = core_ids
-                .as_ref()
-                .and_then(|ids| ids.get(thread_idx % ids.len()))
-                .copied();
-            let handle = thread::Builder::new()
-                .name(format!("seine-cpu-worker-{thread_idx}"))
-                .spawn(move || cpu_worker_loop(shared, thread_idx, core_id));
-            match handle {
-                Ok(handle) => spawned_handles.push(handle),
-                Err(err) => {
-                    spawn_error = Some((thread_idx, err));
-                    break;
+        let spawned_handles = loop {
+            let capacity = self.worker_capacity();
+            let mut spawned_handles = Vec::with_capacity(capacity);
+            let mut spawn_error = None;
+            for thread_idx in 0..capacity {
+                let core_id = core_ids
+                    .as_ref()
+                    .and_then(|ids| ids.get(thread_idx % ids.len()))
+                    .copied();
+                match spawn(Arc::clone(&self.shared), thread_idx, core_id) {
+                    Ok(handle) => spawned_handles.push(handle),
+                    Err(err) => {
+                        spawn_error = Some((thread_idx, err));
+                        break;
+                    }
                 }
             }
-        }
-
-        if let Some((thread_idx, err)) = spawn_error {
+            let Some((thread_idx, err)) = spawn_error else {
+                break spawned_handles;
+            };
+            // No work has been assigned yet. Tear down the whole attempt before
+            // retrying so no lane/arena leaks and no partially initialized state
+            // reach the scheduler. Halving leaves room for later control/network
+            // threads, even if a limit raced the cgroup snapshot or is not v2.
             request_shutdown(&self.shared);
             for handle in spawned_handles {
                 let _ = handle.join();
+            }
+            if self.shared.adaptive && thread_idx > 0 && resource_spawn_error(&err) {
+                let reduced = (thread_idx / 2).max(1);
+                self.worker_capacity.store(reduced, Ordering::Release);
+                self.reset_runtime_state();
+                emit_warning(&self.shared, format!(
+                    "CPU thread capacity reduced from {capacity} to {reduced} after worker spawn failed: {err}; restart to retry higher capacity"
+                ));
+                continue;
             }
             self.shared.started.store(false, Ordering::SeqCst);
             self.stop_event_forwarder();
@@ -392,7 +486,7 @@ impl PowBackend for CpuBackend {
             return Err(anyhow!(
                 "failed to spawn CPU worker thread {thread_idx}: {err}"
             ));
-        }
+        };
 
         let mut handles = match self.worker_handles.lock() {
             Ok(guard) => guard,
@@ -412,8 +506,8 @@ impl PowBackend for CpuBackend {
 
         if let Err(err) = wait_for_workers_ready(
             &self.shared,
-            self.threads.max(1),
-            startup_ready_timeout(self.threads.max(1)),
+            self.worker_capacity(),
+            startup_ready_timeout(self.worker_capacity()),
         ) {
             request_shutdown(&self.shared);
             let handles = match self.worker_handles.lock() {
@@ -430,6 +524,62 @@ impl PowBackend for CpuBackend {
         }
 
         Ok(())
+    }
+}
+
+impl PowBackend for CpuBackend {
+    fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
+        let snapshot = self.adaptive_snapshot();
+        seine_telemetry::BackendSettings {
+            backend: "cpu".into(),
+            device_model: None,
+            memory_mib: None,
+            lanes: snapshot.threads as u32,
+            cpu_kernel: Some(snapshot.kernel.to_string()),
+            cpu_page_mode: Some(self.shared.page_mode.as_str().into()),
+            gpu_register_cap: None,
+            gpu_launch_depth: None,
+            cpu_backing_mib: Some(snapshot.backing_bytes.map(|bytes| bytes / (1024 * 1024))),
+            cpu_affinity: Some(
+                match self.affinity_mode {
+                    CpuAffinityMode::Auto => "auto",
+                    CpuAffinityMode::Os => "os",
+                    CpuAffinityMode::Off => "off",
+                    CpuAffinityMode::PcoreOnly => "pcore-only",
+                }
+                .into(),
+            ),
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "cpu"
+    }
+
+    fn lanes(&self) -> usize {
+        self.threads.max(1)
+    }
+
+    fn enabled_lanes(&self) -> usize {
+        self.shared.desired_workers.load(Ordering::Acquire)
+    }
+
+    fn set_instance_id(&self, id: BackendInstanceId) {
+        self.shared.instance_id.store(id, Ordering::Release);
+    }
+
+    fn set_event_sink(&self, sink: Sender<BackendEvent>) {
+        if let Ok(mut slot) = self.shared.event_sink.write() {
+            *slot = Some(sink);
+        }
+    }
+
+    fn start(&self) -> Result<()> {
+        self.start_with_spawner(|shared, index, core_id| {
+            thread::Builder::new()
+                .name(format!("seine-cpu-worker-{index}"))
+                .spawn(move || cpu_worker_loop(shared, index, core_id))
+        })
     }
 
     fn stop(&self) {
@@ -467,7 +617,7 @@ impl PowBackend for CpuBackend {
         self.shared.solution_state.store(work_id, Ordering::Release);
         self.shared.error_emitted.store(false, Ordering::Release);
 
-        let generation = {
+        {
             let mut control = self
                 .shared
                 .work_control
@@ -475,13 +625,12 @@ impl PowBackend for CpuBackend {
                 .map_err(|_| anyhow!("CPU control lock poisoned"))?;
             control.generation = control.generation.wrapping_add(1).max(1);
             control.work = Some(work);
-            control.generation
-        };
-
-        self.shared
-            .work_generation
-            .store(generation, Ordering::Release);
-        start_assignment(&self.shared, generation);
+            let generation = control.generation;
+            start_assignment(&self.shared, generation);
+            self.shared
+                .work_generation
+                .store(generation, Ordering::Release);
+        }
         self.shared.work_cv.notify_all();
         Ok(())
     }
@@ -649,107 +798,179 @@ impl PowBackend for CpuBackend {
 
 impl BenchBackend for CpuBackend {
     fn kernel_bench(&self, seconds: u64, shutdown: &AtomicBool) -> Result<u64> {
+        Ok(self.sample_kernel(seconds, false, shutdown)?.hashes)
+    }
+
+    fn kernel_bench_samples(
+        &self,
+        rounds: u32,
+        seconds: u64,
+        shutdown: &AtomicBool,
+    ) -> Result<Vec<KernelBenchSample>> {
+        let mut samples = Vec::with_capacity(rounds as usize);
+        for _ in 0..rounds {
+            if shutdown.load(Ordering::Acquire) {
+                break;
+            }
+            // Preserve the synchronized hashing timer. The trait's fallback
+            // wraps kernel_bench in a wall timer, charging every round's fresh
+            // arenas to the kernel and biasing comparisons against more lanes.
+            // One warm hash per lane stays outside the scored interval.
+            samples.push(self.autotune_sample(seconds, shutdown)?);
+        }
+        Ok(samples)
+    }
+}
+
+impl CpuBackend {
+    /// Allocate only the initial workers' arenas. Parked lanes retain their
+    /// nonce cursors, and keep a fixed stride when the active count changes.
+    pub(crate) fn adaptive(
+        initial: usize,
+        capacity: usize,
+        affinity: CpuAffinityMode,
+        tuning: CpuBackendTuning,
+    ) -> Self {
+        let mut backend = Self::with_tuning(capacity.max(1), affinity, tuning);
+        backend.initial_workers = initial.min(capacity);
+        let shared = Arc::get_mut(&mut backend.shared).expect("new CPU backend is unshared");
+        shared.adaptive = true;
+        shared
+            .desired_workers
+            .store(backend.initial_workers, Ordering::Relaxed);
+        backend
+    }
+
+    pub(crate) fn set_active_threads(&self, count: usize) {
+        if let Ok(_control) = self.shared.work_control.lock() {
+            self.shared
+                .desired_workers
+                .store(count.min(self.worker_capacity()), Ordering::Release);
+            self.shared.work_cv.notify_all();
+        }
+    }
+
+    /// Request a switch at each worker's next hash boundary. Sampling must wait
+    /// for `kernel_ready`, which includes one completed hash on the new path.
+    pub(crate) fn set_active_kernel(&self, kernel: fixed_argon::CpuKernel) -> Result<()> {
+        if !self.shared.adaptive {
+            return Err(anyhow!("kernel switching requires an adaptive CPU backend"));
+        }
+        if !kernel.is_supported() {
+            return Err(anyhow!("unsupported CPU kernel {kernel}"));
+        }
+        self.shared
+            .kernel_request
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+                (kernel_from_request(old) != kernel)
+                    .then(|| (old.wrapping_add(256) & !255) | kernel_id(kernel))
+            })
+            .ok();
+        Ok(())
+    }
+
+    pub(crate) fn adaptive_snapshot(&self) -> CpuAdaptiveSnapshot {
+        let s = &self.shared;
+        let threads = s.desired_workers.load(Ordering::Acquire);
+        let request = s.kernel_request.load(Ordering::Acquire);
+        CpuAdaptiveSnapshot {
+            kernel: kernel_from_request(request),
+            kernel_generation: request,
+            kernel_ready: threads > 0
+                && s.kernel_acknowledgements
+                    .iter()
+                    .take(threads)
+                    .all(|ack| ack.load(Ordering::Acquire) == request),
+            backing_bytes: [
+                s.arena_explicit_large_bytes.load(Ordering::Acquire),
+                s.arena_explicit_large_1g_bytes.load(Ordering::Acquire),
+                s.arena_transparent_huge_bytes.load(Ordering::Acquire),
+                s.arena_regular_bytes.load(Ordering::Acquire),
+                s.arena_heap_bytes.load(Ordering::Acquire),
+            ],
+            running: s.started.load(Ordering::Acquire),
+            threads: s.desired_workers.load(Ordering::Acquire),
+            committed_bytes: s.arena_committed_bytes.load(Ordering::Acquire),
+            resident_bytes: s.arena_explicit_large_bytes.load(Ordering::Acquire)
+                + s.arena_explicit_large_1g_bytes.load(Ordering::Acquire)
+                + s.arena_transparent_huge_bytes.load(Ordering::Acquire)
+                + s.arena_regular_bytes.load(Ordering::Acquire)
+                + s.arena_heap_bytes.load(Ordering::Acquire),
+            hashes: s.lifetime_hashes.load(Ordering::Acquire),
+            hashing: s.active_workers.load(Ordering::Acquire) > 0,
+            allocation_failures: s.worker_allocation_failures.load(Ordering::Acquire),
+            warmed: s.warmed_workers.load(Ordering::Acquire),
+        }
+    }
+
+    /// Warm every arena before scoring steady-state hashing. Keep lifecycle wall
+    /// time available for diagnostics, without penalizing larger arena counts.
+    pub(crate) fn autotune_sample(
+        &self,
+        seconds: u64,
+        shutdown: &AtomicBool,
+    ) -> Result<KernelBenchSample> {
+        self.sample_kernel(seconds, true, shutdown)
+    }
+
+    fn sample_kernel(
+        &self,
+        seconds: u64,
+        warmup: bool,
+        shutdown: &AtomicBool,
+    ) -> Result<KernelBenchSample> {
+        if !self.shared.kernel.is_supported() {
+            return Err(anyhow!("unsupported CPU kernel {}", self.shared.kernel));
+        }
         reset_arena_telemetry(&self.shared);
         let lanes = self.threads.max(1);
-        let sample_duration = Duration::from_secs(seconds.max(1));
-        let total_hashes = AtomicU64::new(0);
-        let setup_barrier = Arc::new(Barrier::new(lanes.saturating_add(1)));
-        let start_barrier = Arc::new(Barrier::new(lanes.saturating_add(1)));
-        let stop_at = Arc::new(OnceLock::<Instant>::new());
-        let setup_error = Arc::new(Mutex::new(None::<String>));
         let core_ids = resolve_affinity_core_ids(self.affinity_mode);
         let page_mode = self.shared.page_mode;
-
-        thread::scope(|scope| {
-            for lane in 0..lanes {
-                let total_hashes = &total_hashes;
-                let setup_barrier = Arc::clone(&setup_barrier);
-                let start_barrier = Arc::clone(&start_barrier);
-                let stop_at = Arc::clone(&stop_at);
-                let setup_error = Arc::clone(&setup_error);
-                let core_id = core_ids
+        sampling::sample(
+            lanes,
+            Duration::from_secs(seconds.max(1)),
+            warmup,
+            shutdown,
+            |lane| {
+                set_thread_high_perf();
+                if let Some(core_id) = core_ids
                     .as_ref()
                     .and_then(|ids| ids.get(lane % ids.len()))
-                    .copied();
-                scope.spawn(move || {
-                    set_thread_high_perf();
-                    if let Some(core_id) = core_id {
-                        let _ = core_affinity::set_for_current(core_id);
-                    }
-                    let hasher = fixed_argon::FixedArgon2id::new(POW_MEMORY_KB);
-                    let block_count = hasher.block_count();
-                    let mut arena = match kernel::PowArena::new(block_count, page_mode) {
-                        Ok(arena) => arena,
-                        Err(err) => {
-                            if let Ok(mut slot) = setup_error.lock() {
-                                if slot.is_none() {
-                                    *slot = Some(format!(
-                                        "cpu lane {lane}: {} page-mode arena allocation failed ({err})",
-                                        page_mode.as_str()
-                                    ));
-                                }
-                            }
-                            setup_barrier.wait();
-                            start_barrier.wait();
-                            return;
-                        }
-                    };
-                    kernel::record_arena_backing(&self.shared, &arena, block_count);
-                    let memory_blocks = arena.as_mut_slice();
-
-                    let mut header_base = [0u8; blocknet_pow_spec::POW_HEADER_BASE_LEN];
-                    for (i, byte) in header_base.iter_mut().enumerate() {
-                        *byte = (i as u8).wrapping_mul(31).wrapping_add(7);
-                    }
-
-                    let mut output = [0u8; POW_OUTPUT_LEN];
-                    let mut nonce = lane as u64;
-                    let mut local_hashes = 0u64;
-                    let stride = lanes as u64;
-                    setup_barrier.wait();
-                    start_barrier.wait();
-
-                    let Some(stop_at) = stop_at.get().copied() else {
-                        return;
-                    };
-
-                    while Instant::now() < stop_at && !shutdown.load(Ordering::Relaxed) {
-                        let nonce_bytes = nonce.to_le_bytes();
-                        if hasher
-                            .hash_password_into_with_memory(
-                                &nonce_bytes,
-                                &header_base,
-                                &mut output,
-                                memory_blocks,
-                            )
-                            .is_err()
-                        {
-                            break;
-                        }
-                        nonce = nonce.wrapping_add(stride);
-                        local_hashes = local_hashes.saturating_add(1);
-                    }
-
-                    total_hashes.fetch_add(local_hashes, Ordering::Relaxed);
-                });
-            }
-
-            setup_barrier.wait();
-            let setup_failed = setup_error.lock().ok().is_some_and(|slot| slot.is_some());
-            let deadline = if setup_failed {
-                Instant::now()
-            } else {
-                Instant::now() + sample_duration
-            };
-            let _ = stop_at.set(deadline);
-            start_barrier.wait();
-        });
-
-        if let Some(err) = setup_error.lock().ok().and_then(|mut slot| slot.take()) {
-            return Err(anyhow!(err));
-        }
-
-        Ok(total_hashes.load(Ordering::Relaxed))
+                    .copied()
+                {
+                    let _ = core_affinity::set_for_current(core_id);
+                }
+                let hasher =
+                    fixed_argon::FixedArgon2id::with_kernel(POW_MEMORY_KB, self.shared.kernel)
+                        .expect("kernel support checked before benchmark workers start");
+                let block_count = hasher.block_count();
+                let mut arena = kernel::PowArena::new(block_count, page_mode).map_err(|err| {
+                    anyhow!(
+                        "cpu lane {lane}: {} page-mode arena allocation failed ({err})",
+                        page_mode.as_str()
+                    )
+                })?;
+                kernel::record_arena_backing(&self.shared, &arena, block_count);
+                let mut header_base = [0u8; blocknet_pow_spec::POW_HEADER_BASE_LEN];
+                for (i, byte) in header_base.iter_mut().enumerate() {
+                    *byte = (i as u8).wrapping_mul(31).wrapping_add(7);
+                }
+                let mut output = [0u8; POW_OUTPUT_LEN];
+                let mut nonce = lane as u64;
+                Ok(move || {
+                    hasher
+                        .hash_password_into_with_memory(
+                            &nonce.to_le_bytes(),
+                            &header_base,
+                            &mut output,
+                            arena.as_mut_slice(),
+                        )
+                        .map_err(|err| anyhow!("cpu lane {lane}: hash failed ({err:?})"))?;
+                    nonce = nonce.wrapping_add(lanes as u64);
+                    Ok(())
+                })
+            },
+        )
     }
 }
 
@@ -788,10 +1009,25 @@ fn resolve_affinity_core_ids(mode: CpuAffinityMode) -> Option<Vec<core_affinity:
         return None;
     }
     let core_ids = core_affinity::get_core_ids().filter(|ids| !ids.is_empty())?;
+    if mode == CpuAffinityMode::Os {
+        return Some(core_ids);
+    }
     // Native Windows exposes reliable processor-core masks and benefits materially from
-    // spreading memory-hard workers across physical cores before SMT siblings. Linux keeps
-    // the OS/core_affinity order: WSL topology experiments were unstable and transparent
-    // huge-page coverage dominated the measured affinity delta.
+    // spreading memory-hard workers across physical cores before SMT siblings.
+    // Linux spreads across NUMA nodes and L3 groups with complete, usable topology;
+    // a single node/cache or incomplete topology retains OS order.
+    #[cfg(target_os = "linux")]
+    let core_ids = {
+        let available = core_ids.iter().map(|cpu| cpu.id).collect();
+        topology::detect(&available)
+            .and_then(|topology| topology.ordered_cpus())
+            .map(|ids| {
+                ids.into_iter()
+                    .map(|id| core_affinity::CoreId { id })
+                    .collect()
+            })
+            .unwrap_or(core_ids)
+    };
     #[cfg(target_os = "windows")]
     let core_ids = order_core_ids_physical_first(core_ids);
     #[cfg(target_os = "macos")]
@@ -812,6 +1048,47 @@ fn resolve_affinity_core_ids(mode: CpuAffinityMode) -> Option<Vec<core_affinity:
     } else {
         Some(core_ids)
     }
+}
+
+pub(crate) fn affinity_topology_fingerprint() -> String {
+    #[cfg(target_os = "linux")]
+    {
+        let available = core_affinity::get_core_ids()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|cpu| cpu.id)
+            .collect();
+        // Cache identity must change on cpuset/NUMA/L3 changes even at equal CPU counts.
+        format!("{available:?}:{:?}", topology::detect(&available))
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let available = core_affinity::get_core_ids()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|cpu| cpu.id)
+            .collect();
+        physical_topology_fingerprint(&available, platform_physical_core_groups(&available))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    String::new()
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn physical_topology_fingerprint(
+    available: &BTreeSet<usize>,
+    groups: Option<Vec<Vec<usize>>>,
+) -> String {
+    let groups = groups.map(|mut groups| {
+        for group in &mut groups {
+            group.sort_unstable();
+        }
+        groups.sort_unstable();
+        groups
+    });
+    // Equal-sized process masks can select different CCDs or SMT siblings.
+    // Keep the mask even when Windows cannot supply complete core topology.
+    format!("{available:?}:{groups:?}")
 }
 
 /// Orders native Windows logical CPUs so one hardware thread from every physical core is used
@@ -969,7 +1246,8 @@ fn lane_quota_for_chunk(nonce_count: u64, lane_idx: u64, lane_stride: u64) -> u6
 fn wait_for_work_update(
     shared: &Shared,
     seen_generation: u64,
-) -> Result<Option<(u64, Arc<WorkAssignment>)>> {
+    thread_idx: usize,
+) -> Result<CpuWorkUpdate> {
     let mut control = shared
         .work_control
         .lock()
@@ -978,13 +1256,16 @@ fn wait_for_work_update(
 
     loop {
         if control.shutdown {
-            return Ok(None);
+            return Ok(CpuWorkUpdate::Shutdown);
+        }
+        if thread_idx >= shared.desired_workers.load(Ordering::Acquire) {
+            return Ok(CpuWorkUpdate::Park);
         }
 
         if control.generation != observed_generation {
             let generation = control.generation;
             if let Some(work) = control.work.clone() {
-                return Ok(Some((generation, work)));
+                return Ok(CpuWorkUpdate::Work(generation, work));
             }
             observed_generation = generation;
         }
@@ -994,6 +1275,55 @@ fn wait_for_work_update(
             .wait(control)
             .map_err(|_| anyhow!("CPU control lock poisoned"))?;
     }
+}
+
+enum CpuWorkUpdate {
+    Work(u64, Arc<WorkAssignment>),
+    Park,
+    Shutdown,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CpuAdaptiveSnapshot {
+    pub kernel: fixed_argon::CpuKernel,
+    pub kernel_generation: u64,
+    pub kernel_ready: bool,
+    /// Explicit large, 1 GiB, transparent huge, regular, and heap bytes.
+    pub backing_bytes: [u64; 5],
+    pub running: bool,
+    pub threads: usize,
+    // Includes allocations in progress, before their backing is observable.
+    pub committed_bytes: u64,
+    pub resident_bytes: u64,
+    pub hashes: u64,
+    pub hashing: bool,
+    pub allocation_failures: u64,
+    pub warmed: usize,
+}
+
+fn kernel_id(kernel: fixed_argon::CpuKernel) -> u64 {
+    fixed_argon::CpuKernel::ALL
+        .iter()
+        .position(|&value| value == kernel)
+        .unwrap() as u64
+        + 1
+}
+
+fn kernel_from_request(request: u64) -> fixed_argon::CpuKernel {
+    fixed_argon::CpuKernel::ALL[((request & 255) - 1) as usize]
+}
+
+fn wait_for_worker_enabled(shared: &Shared, thread_idx: usize) -> bool {
+    let Ok(mut control) = shared.work_control.lock() else {
+        return false;
+    };
+    while !control.shutdown && thread_idx >= shared.desired_workers.load(Ordering::Acquire) {
+        let Ok(next) = shared.work_cv.wait(control) else {
+            return false;
+        };
+        control = next;
+    }
+    !control.shutdown
 }
 
 fn request_work_pause(shared: &Shared) -> Result<()> {
@@ -1163,15 +1493,30 @@ fn has_pending_work(shared: &Shared) -> bool {
     shared
         .work_control
         .lock()
-        .map(|control| control.work.is_some() && !control.shutdown)
+        .map(|control| {
+            if control.work.is_none() || control.shutdown {
+                return false;
+            }
+            let desired = shared.desired_workers.load(Ordering::Acquire);
+            !shared.adaptive
+                || desired == 0
+                || shared
+                    .finished_generations
+                    .iter()
+                    .take(desired)
+                    .any(|finished| finished.load(Ordering::Acquire) != control.generation)
+        })
         .unwrap_or(false)
 }
 fn start_assignment(shared: &Shared, generation: u64) {
+    // Runtime callers hold work_control so the assignment and its published
+    // generation become visible together, even on a resize notification.
+    let _idle_guard = shared.idle_lock.lock().ok();
     let idle = shared.active_workers.load(Ordering::Acquire) == 0;
     if idle {
         // When a reassignment happens while workers are still draining, resetting counters here
         // can drop or misattribute tail hashes. Finalize/reset only after lanes are quiesced.
-        maybe_finalize_assignment(shared);
+        finalize_assignment_counters(shared);
         shared.assignment_hashes.store(0, Ordering::Release);
         if let Ok(mut started_at) = shared.assignment_started_at.lock() {
             *started_at = Some(Instant::now());
@@ -1187,6 +1532,28 @@ fn start_assignment(shared: &Shared, generation: u64) {
 }
 
 fn maybe_finalize_assignment(shared: &Shared) {
+    let mut control = shared.work_control.lock().ok();
+    let _idle_guard = shared.idle_lock.lock().ok();
+    if shared.active_workers.load(Ordering::Acquire) != 0 {
+        return;
+    }
+    finalize_assignment_counters(shared);
+    clear_completed_fixed_work(shared, control.as_deref_mut());
+}
+
+fn clear_completed_fixed_work(shared: &Shared, control: Option<&mut ControlState>) {
+    // Adaptive lanes may be parked with unfinished nonce quotas. Their pending
+    // state is derived from enabled lanes' finished generations instead.
+    if !shared.adaptive {
+        if let Some(control) = control {
+            if control.generation == shared.assignment_generation.load(Ordering::Acquire) {
+                control.work = None;
+            }
+        }
+    }
+}
+
+fn finalize_assignment_counters(shared: &Shared) {
     let generation = shared.assignment_generation.load(Ordering::Acquire);
     if generation == 0 {
         return;
@@ -1218,11 +1585,6 @@ fn maybe_finalize_assignment(shared: &Shared) {
                         .completed_assignment_micros
                         .fetch_add(micros, Ordering::AcqRel);
                 }
-                if let Ok(mut control) = shared.work_control.lock() {
-                    if control.generation == generation {
-                        control.work = None;
-                    }
-                }
                 return;
             }
             Err(current) => seen = current,
@@ -1234,18 +1596,63 @@ fn mark_worker_active(shared: &Shared, worker_active: &mut bool) {
     if *worker_active {
         return;
     }
-    shared.active_workers.fetch_add(1, Ordering::AcqRel);
+    let _idle_guard = shared.idle_lock.lock().ok();
+    let previous = shared.active_workers.fetch_add(1, Ordering::AcqRel);
+    if previous == 0 && shared.adaptive {
+        // A parked lane may resume the same work generation after its earlier
+        // execution interval was finalized. Reopen timing/accounting without
+        // resetting any lane's nonce cursor or cumulative hash counter.
+        if let Ok(mut started) = shared.assignment_started_at.lock() {
+            if started.is_none() {
+                shared.assignment_hashes.store(0, Ordering::Release);
+                let generation = shared.assignment_generation.load(Ordering::Acquire);
+                shared
+                    .assignment_reported_generation
+                    .store(generation.saturating_sub(1), Ordering::Release);
+                *started = Some(Instant::now());
+            }
+        }
+    }
     *worker_active = true;
+}
+
+fn activate_worker(
+    shared: &Shared,
+    thread_idx: usize,
+    generation: u64,
+    active: &mut bool,
+) -> Result<bool> {
+    if *active {
+        return Ok(true);
+    }
+    // Serialize admission with cancel and resize. A fence must not observe zero
+    // workers and return just before a parked lane starts an old assignment.
+    let control = shared
+        .work_control
+        .lock()
+        .map_err(|_| anyhow!("CPU control lock poisoned"))?;
+    if control.shutdown
+        || control.generation != generation
+        || control.work.is_none()
+        || thread_idx >= shared.desired_workers.load(Ordering::Acquire)
+    {
+        return Ok(false);
+    }
+    mark_worker_active(shared, active);
+    Ok(true)
 }
 
 fn mark_worker_inactive(shared: &Shared, worker_active: &mut bool) {
     if !*worker_active {
         return;
     }
+    let mut control = shared.work_control.lock().ok();
+    let _idle_guard = shared.idle_lock.lock().ok();
     let prev = shared.active_workers.fetch_sub(1, Ordering::AcqRel);
     *worker_active = false;
     if prev <= 1 {
-        maybe_finalize_assignment(shared);
+        finalize_assignment_counters(shared);
+        clear_completed_fixed_work(shared, control.as_deref_mut());
         shared.idle_cv.notify_all();
     }
 }
@@ -1266,6 +1673,9 @@ fn flush_hashes(shared: &Shared, thread_idx: usize, pending_hashes: &mut u64) {
     shared
         .assignment_hashes
         .fetch_add(*pending_hashes, Ordering::Relaxed);
+    shared
+        .lifetime_hashes
+        .fetch_add(*pending_hashes, Ordering::Relaxed);
     *pending_hashes = 0;
 }
 
@@ -1278,7 +1688,6 @@ fn should_flush_hashes(
     pending_hashes >= hash_batch_size.max(1) || now >= next_flush_at
 }
 
-#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn emit_warning(shared: &Shared, message: String) {
     events::emit_warning(shared, message);
 }
@@ -1311,6 +1720,115 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
+    fn hardware_report_uses_observed_backing_and_current_worker_count() {
+        let backend =
+            CpuBackend::with_tuning(4, CpuAffinityMode::Os, super::CpuBackendTuning::default());
+        backend.shared.desired_workers.store(2, Ordering::Release);
+        backend
+            .shared
+            .arena_explicit_large_bytes
+            .store(2 * 1024 * 1024 * 1024, Ordering::Release);
+        backend
+            .shared
+            .arena_regular_bytes
+            .store(2 * 1024 * 1024 * 1024, Ordering::Release);
+        let settings = backend.hardware_telemetry();
+        assert_eq!(settings.lanes, 2);
+        assert_eq!(settings.cpu_page_mode.as_deref(), Some("auto"));
+        assert_eq!(settings.cpu_affinity.as_deref(), Some("os"));
+        assert_eq!(settings.cpu_backing_mib, Some([2048, 0, 0, 2048, 0]));
+    }
+
+    #[test]
+    fn windows_thread_resource_codes_are_retryable() {
+        for code in [8, 14, 155, 164, 1450, 1451, 1452, 1453, 1454, 1455] {
+            assert!(
+                super::windows_thread_resource_error(code),
+                "Windows code {code}"
+            );
+            #[cfg(target_os = "windows")]
+            assert!(super::resource_spawn_error(
+                &std::io::Error::from_raw_os_error(code)
+            ));
+        }
+        // Permission/parameter errors and adjacent unrelated WinError values.
+        for code in [
+            0, 5, 6, 7, 9, 13, 15, 87, 154, 156, 163, 165, 1449, 1456, -1,
+        ] {
+            assert!(
+                !super::windows_thread_resource_error(code),
+                "Windows code {code}"
+            );
+        }
+    }
+
+    #[test]
+    fn spawn_error_retry_excludes_non_resource_failures() {
+        use std::io::ErrorKind;
+        for kind in [ErrorKind::WouldBlock, ErrorKind::OutOfMemory] {
+            assert!(super::resource_spawn_error(&kind.into()));
+        }
+        for kind in [
+            ErrorKind::PermissionDenied,
+            ErrorKind::InvalidInput,
+            ErrorKind::Unsupported,
+            ErrorKind::Other,
+        ] {
+            assert!(!super::resource_spawn_error(&kind.into()));
+        }
+        #[cfg(not(target_os = "windows"))]
+        assert!(
+            !super::resource_spawn_error(&std::io::Error::from_raw_os_error(1455)),
+            "do not interpret another OS's raw error codes as Windows errors"
+        );
+    }
+
+    #[test]
+    fn adaptive_resume_reopens_accounting_without_resetting_hash_totals() {
+        let backend = CpuBackend::adaptive(
+            1,
+            2,
+            CpuAffinityMode::Off,
+            super::CpuBackendTuning::default(),
+        );
+        let s = &backend.shared;
+        start_assignment(s, 1);
+        let mut active = false;
+        super::mark_worker_active(s, &mut active);
+        let mut hashes = 2;
+        super::flush_hashes(s, 0, &mut hashes);
+        super::mark_worker_inactive(s, &mut active);
+        super::mark_worker_active(s, &mut active);
+        hashes = 3;
+        super::flush_hashes(s, 0, &mut hashes);
+        super::mark_worker_inactive(s, &mut active);
+        assert_eq!(s.completed_assignment_hashes.load(Ordering::Acquire), 5);
+        assert_eq!(s.completed_assignments.load(Ordering::Acquire), 2);
+        assert_eq!(backend.take_hashes(), 5);
+        assert_eq!(backend.adaptive_snapshot().hashes, 5);
+    }
+
+    #[test]
+    fn adaptive_failures_exclude_successful_page_mode_fallbacks() {
+        let backend = CpuBackend::adaptive(
+            1,
+            2,
+            CpuAffinityMode::Off,
+            super::CpuBackendTuning::default(),
+        );
+        backend
+            .shared
+            .arena_allocation_failures
+            .store(1, Ordering::Release);
+        assert_eq!(backend.adaptive_snapshot().allocation_failures, 0);
+        backend
+            .shared
+            .worker_allocation_failures
+            .store(1, Ordering::Release);
+        assert_eq!(backend.adaptive_snapshot().allocation_failures, 1);
+    }
+
+    #[test]
     fn lane_quota_even_chunk_distribution() {
         assert_eq!(lane_quota_for_chunk(40, 0, 4), 10);
         assert_eq!(lane_quota_for_chunk(40, 1, 4), 10);
@@ -1336,6 +1854,76 @@ mod tests {
             .map(|core| core.id)
             .collect::<Vec<_>>();
         assert_eq!(ordered, vec![0, 2, 4, 6, 1, 3, 5, 7]);
+    }
+
+    #[test]
+    fn affinity_fingerprint_distinguishes_equal_sized_cpu_masks() {
+        let left = [0, 2, 4, 6].into_iter().collect();
+        let right = [16, 18, 20, 22].into_iter().collect();
+        assert_ne!(
+            super::physical_topology_fingerprint(&left, None),
+            super::physical_topology_fingerprint(&right, None),
+        );
+    }
+
+    #[test]
+    fn affinity_fingerprint_distinguishes_smt_layout_and_canonicalizes_order() {
+        let cpus = [0, 1, 2, 3].into_iter().collect();
+        let paired =
+            super::physical_topology_fingerprint(&cpus, Some(vec![vec![0, 1], vec![2, 3]]));
+        assert_eq!(
+            paired,
+            super::physical_topology_fingerprint(&cpus, Some(vec![vec![3, 2], vec![1, 0]]),),
+        );
+        assert_ne!(
+            paired,
+            super::physical_topology_fingerprint(
+                &cpus,
+                Some(vec![vec![0], vec![1], vec![2], vec![3]]),
+            ),
+        );
+        assert_ne!(paired, super::physical_topology_fingerprint(&cpus, None));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "changes this test process's CPU mask; run alone with --test-threads=1"]
+    fn windows_fingerprint_changes_with_process_cpu_mask() {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcess, GetProcessAffinityMask, SetProcessAffinityMask,
+        };
+        let process = unsafe { GetCurrentProcess() };
+        let mut original = 0usize;
+        let mut system = 0usize;
+        assert_ne!(
+            unsafe { GetProcessAffinityMask(process, &mut original, &mut system) },
+            0
+        );
+        if original.count_ones() < 2 {
+            eprintln!("requires two available logical CPUs; native mask check skipped");
+            return;
+        }
+        struct RestoreMask(usize);
+        impl Drop for RestoreMask {
+            fn drop(&mut self) {
+                assert_ne!(
+                    unsafe { SetProcessAffinityMask(GetCurrentProcess(), self.0) },
+                    0
+                );
+            }
+        }
+        let restore = RestoreMask(original);
+        let before = super::affinity_topology_fingerprint();
+        let first = 1usize << original.trailing_zeros();
+        let last = 1usize << (usize::BITS - 1 - original.leading_zeros());
+        assert_ne!(unsafe { SetProcessAffinityMask(process, first) }, 0);
+        let first_fingerprint = super::affinity_topology_fingerprint();
+        assert_ne!(unsafe { SetProcessAffinityMask(process, last) }, 0);
+        let last_fingerprint = super::affinity_topology_fingerprint();
+        drop(restore);
+        assert_eq!(before, super::affinity_topology_fingerprint());
+        assert_ne!(first_fingerprint, last_fingerprint);
+        println!("native masks {first:#x} => {first_fingerprint}; {last:#x} => {last_fingerprint}; restored {original:#x}");
     }
 
     #[test]
@@ -1735,5 +2323,89 @@ mod tests {
         assert!(!backend.shared.error_emitted.load(Ordering::Acquire));
         assert_eq!(backend.shared.work_generation.load(Ordering::Acquire), 0);
         assert_eq!(backend.shared.assignment_hashes.load(Ordering::Acquire), 0);
+    }
+}
+
+#[cfg(test)]
+mod kernel_selection_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "allocates one real 2 GiB arena; run explicitly on an idle host"]
+    fn cpu_kernel_samples_preserve_hashing_and_lifecycle_timers() {
+        let backend = CpuBackend::new(1, CpuAffinityMode::Off);
+        let samples = backend
+            .kernel_bench_samples(1, 1, &AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(samples.len(), 1);
+        assert!(samples[0].hashes > 0);
+        assert!(samples[0].elapsed_secs >= 1.0);
+        assert!(samples[0].wall_elapsed_secs > samples[0].elapsed_secs);
+    }
+
+    #[test]
+    fn cancelled_cpu_kernel_samples_do_not_allocate_arenas() {
+        let backend = CpuBackend::new(1, CpuAffinityMode::Off);
+        assert!(backend
+            .kernel_bench_samples(3, 1, &AtomicBool::new(true))
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn live_kernel_requests_reject_fixed_backends_and_unsupported_paths() {
+        let fixed = CpuBackend::new(1, CpuAffinityMode::Off);
+        assert!(fixed
+            .set_active_kernel(fixed_argon::CpuKernel::preferred())
+            .is_err());
+        let adaptive =
+            CpuBackend::adaptive(1, 1, CpuAffinityMode::Off, CpuBackendTuning::default());
+        let initial = adaptive.shared.kernel_request.load(Ordering::Acquire);
+        for kernel in fixed_argon::CpuKernel::ALL
+            .into_iter()
+            .filter(|k| !k.is_supported())
+        {
+            assert!(adaptive.set_active_kernel(kernel).is_err());
+            assert_eq!(
+                adaptive.shared.kernel_request.load(Ordering::Acquire),
+                initial
+            );
+        }
+        adaptive
+            .set_active_kernel(fixed_argon::CpuKernel::preferred())
+            .unwrap();
+        assert_eq!(
+            adaptive.shared.kernel_request.load(Ordering::Acquire),
+            initial,
+            "requesting the same path must not invalidate a measurement window"
+        );
+    }
+
+    #[test]
+    fn unsupported_kernel_fails_before_worker_or_arena_startup() {
+        for kernel in fixed_argon::CpuKernel::ALL
+            .into_iter()
+            .filter(|k| !k.is_supported())
+        {
+            let backend = CpuBackend::with_tuning(
+                1,
+                CpuAffinityMode::Off,
+                CpuBackendTuning {
+                    kernel: Some(kernel),
+                    ..CpuBackendTuning::default()
+                },
+            );
+            assert!(backend
+                .start()
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported CPU kernel"));
+            assert!(!backend.shared.started.load(Ordering::Relaxed));
+            assert!(backend
+                .kernel_bench(1, &AtomicBool::new(false))
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported CPU kernel"));
+        }
     }
 }

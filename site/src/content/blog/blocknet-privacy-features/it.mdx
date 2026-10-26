@@ -1,0 +1,97 @@
+---
+title: Come Blocknet mantiene privati i pagamenti
+description: Blocknet rende privato ogni pagamento di default con firme ad anello da 16, indirizzi stealth monouso, importi nascosti, inoltro Dandelion++ e memo cifrati.
+tags: [Privacy, Blocknet, Firme ad anello, Indirizzi stealth, Memo]
+faq:
+  - q: 'Blocknet è privato di default?'
+    a: 'Sì. Ogni transazione Blocknet usa una firma ad anello su 16 output, un indirizzo stealth monouso per ogni destinatario, importi nascosti con range proof Bulletproofs e un memo cifrato da 128 byte su ogni output. Il formato delle transazioni non ha una modalità trasparente, quindi non c''è nessuna impostazione da attivare e nessun modo per un pagamento di saltare queste protezioni.'
+  - q: 'Quale dimensione del ring usa Blocknet?'
+    a: 'Ogni input di una transazione Blocknet è firmato con un ring CLSAG di esattamente 16 output: quello reale e 15 decoy (output esca) presi dalla chain. Il consenso rifiuta qualsiasi altra dimensione, e ogni membro del ring deve essere un output reale già presente sulla chain. Poiché ogni input usa la stessa dimensione, la dimensione del ring non può mai identificare un wallet.'
+  - q: 'Chi può leggere un memo di Blocknet?'
+    a: 'Solo il mittente e il destinatario. Ogni memo è cifrato con il segreto che i due wallet condividono per quell''output, e occupa sempre esattamente 128 byte sulla chain, con spazio per un massimo di 124 byte di testo. I memo brevi o vuoti vengono riempiti con dati casuali, quindi nessun altro può capire quali pagamenti contengono una nota.'
+  - q: 'Le persone possono vedere quanto ha ricevuto il mio indirizzo Blocknet?'
+    a: 'No. Ogni pagamento al tuo indirizzo finisce su un nuovo indirizzo stealth monouso, quindi i pagamenti non possono essere raggruppati sotto l''indirizzo che hai condiviso. Gli importi sono salvati come commitment di Pedersen con range proof, quindi la chain non mostra mai cosa contiene ogni output. Solo il tuo wallet, usando la tua chiave di visualizzazione privata (view key), trova e somma i tuoi pagamenti.'
+  - q: 'Blocknet usa la stessa crittografia di Monero?'
+    a: 'Blocknet usa la stessa collaudata famiglia crittografica di Monero: firme ad anello CLSAG con un ring da 16, indirizzi stealth monouso, commitment di Pedersen con range proof Bulletproofs e inoltro delle transazioni Dandelion++. In più aggiunge il pagamento tramite nome con gli shortname Blocknet ID e un memo cifrato da 128 byte su ogni output.'
+sourceHash: 2732784d0db4
+translation: reviewed
+---
+
+Questo articolo va più a fondo del riepilogo sulla privacy in [Cos'è Blocknet?](/it/blog/what-is-blocknet/) e analizza ogni livello di privacy di una transazione Blocknet: cosa nasconde, come funziona e cosa significa la prossima volta che invii o ricevi BNT.
+
+## Come mantiene Blocknet privati i pagamenti?
+
+<Answer>
+Blocknet nasconde il mittente con firme ad anello CLSAG su 16 output, il destinatario con indirizzi stealth monouso e l'importo con commitment di Pedersen e range proof Bulletproofs. L'inoltro Dandelion++ nasconde il punto in cui una transazione è entrata nella rete, e ogni output porta un memo cifrato da 128 byte. Tutto è obbligatorio, senza modalità trasparente.
+</Answer>
+
+Blocknet usa la stessa collaudata famiglia crittografica di Monero: firme ad anello, indirizzi stealth e range proof Bulletproofs, costruiti sul gruppo Ristretto su Curve25519. In più aggiunge il pagamento tramite nome e i memo cifrati. Ogni livello copre una parte diversa di un pagamento, e insieme lasciano a chi legge la chain ben poco su cui basarsi.
+
+## Le firme ad anello nascondono chi ha pagato
+
+Quando spendi monete, il tuo wallet firma per un gruppo di 16 output: quello che possiedi e altri 15 scelti dalla chain come esche (decoy). La firma è una [firma ad anello CLSAG](/it/blog/ring-signatures-explained/). Chiunque può verificare che un membro del ring abbia firmato, e la firma non rivela quale.
+
+Il consenso impone la dimensione del ring. Ogni input deve contenere esattamente 16 membri del ring, ognuno un output reale già presente sulla chain, e la rete rifiuta qualsiasi altra cosa. Poiché ogni input sulla rete usa la stessa dimensione, la dimensione del ring non può identificare una transazione né il wallet che l'ha costruita. Il codice del daemon fissa la dimensione «per prevenire fughe di informazioni da dimensioni del ring variabili».
+
+Per impedire che le stesse monete vengano spese due volte, ogni input contiene anche una key image. È unica per l'output reale che viene speso, ma non rivela quale membro del ring sia. Se una key image compare una seconda volta, la rete rifiuta la transazione come doppia spesa.
+
+## Gli indirizzi stealth nascondono chi è stato pagato
+
+Un indirizzo Blocknet contiene due chiavi pubbliche, una chiave di spesa (spend key) e una chiave di visualizzazione (view key). Quando qualcuno ti paga, il suo wallet combina le tue chiavi con un nuovo numero casuale per creare un [indirizzo monouso](/it/blog/stealth-addresses-explained/) usato solo per quell'output. L'indirizzo che hai condiviso non compare mai sulla chain.
+
+Il tuo wallet usa la tua chiave di visualizzazione privata per scansionare le nuove transazioni e individuare gli output che ti appartengono, e la tua chiave di spesa per spenderli in seguito. Dieci pagamenti allo stesso indirizzo finiscono su dieci indirizzi monouso non collegati tra loro, quindi un osservatore non può sommare quanto ha ricevuto un indirizzo né capire che due pagamenti sono andati alla stessa persona.
+
+Lo stesso vale per i [nomi Blocknet ID](/it/blog/blocknet-id-pay-by-name/). Uno shortname come `@name` è pubblico per scelta, perché chi invia lo cerca su [blocknet.id](https://blocknet.id) per pagarti. I pagamenti verso di esso vanno comunque a nuovi indirizzi monouso, quindi il nome non dice nulla su quanto hai ricevuto.
+
+## Come nasconde Blocknet gli importi delle transazioni?
+
+Gli importi sono salvati come commitment di Pedersen. Un commitment fissa un numero senza mostrarlo, e i commitment si possono sommare tra loro. Questo permette a ogni nodo di verificare che gli input di una transazione siano uguali ai suoi output più la commissione senza conoscere nessuno degli importi.
+
+Un commitment da solo potrebbe nascondere un importo negativo, il che creerebbe monete dal nulla. Ogni output è quindi accompagnato da una [range proof Bulletproofs](/it/blog/bulletproofs-explained/) che dimostra che il suo importo si trova in un intervallo a 64 bit che parte da zero. La prova convince ogni nodo che l'importo è valido e non rivela nient'altro.
+
+Il destinatario vede comunque la cifra reale. Il suo wallet la recupera con lo stesso segreto condiviso che usa per trovare l'output, quindi l'importo è visibile alle due persone coinvolte nel pagamento e a nessun altro.
+
+## Dandelion++ nasconde dove è partita una transazione
+
+Se un nodo annunciasse la propria transazione a tutti i suoi peer contemporaneamente, qualcuno che osserva molti nodi potrebbe indovinarne l'origine notando chi l'ha ricevuta per primo. Blocknet inoltra le transazioni con [Dandelion++](/it/blog/dandelion-plus-plus-explained/) per impedirlo.
+
+Una nuova transazione viaggia prima lungo uno «stem», passando da un peer a un unico peer successivo. A ogni passaggio c'è una probabilità del 90% che prosegua lungo lo stem; altrimenti passa alla fase «fluff» e si diffonde a tutta la rete da quel punto. Quando la maggior parte dei nodi vede la transazione, questa sembra provenire da un nodo che può trovarsi a molti passaggi di distanza dal tuo. I percorsi stem vengono rimescolati ogni 10 minuti.
+
+## Chi può leggere un memo di Blocknet?
+
+Ogni output porta un memo cifrato da 128 byte con spazio per un massimo di 124 byte di testo. È cifrato con lo stesso segreto che mittente e destinatario condividono per quell'output, quindi solo voi due potete leggerlo. Usalo per un numero di fattura, un riferimento d'ordine o una breve nota alla persona che stai pagando. La [guida ai memo cifrati](/it/blog/blocknet-encrypted-memos/) mostra come aggiungerne uno e dove trovare i memo che ricevi.
+
+Il memo ha sempre la stessa dimensione, che tu scriva una nota completa o niente del tutto. Quando un memo è breve o vuoto, il wallet riempie il resto con dati casuali prima di cifrarlo, quindi un output con una nota appare esattamente come uno senza. I memo non spiccano mai, e nessun altro può nemmeno capire quali pagamenti contengono un messaggio.
+
+## La privacy è facoltativa su Blocknet?
+
+<Answer>
+No. Su Blocknet la privacy è obbligatoria. Il formato delle transazioni non ha una modalità trasparente, e il consenso richiede che ogni input contenga un ring di esattamente 16 membri, quindi ogni pagamento usa ring, indirizzi stealth, importi nascosti e un memo cifrato. Poiché nessuno può rinunciarvi, i pagamenti privati appaiono come tutti gli altri pagamenti sulla chain.
+</Answer>
+
+Quando la privacy è un'impostazione, chi la attiva forma un piccolo gruppo più facile da individuare. Su Blocknet ogni transazione è costruita allo stesso modo, quindi ognuna si confonde con tutte le altre, e non devi mai ricordarti di proteggere un pagamento.
+
+## Cosa significa quando paghi qualcuno
+
+Quando invii BNT a un indirizzo o a un `@name`, il tuo wallet gestisce ogni passaggio per te, senza nulla da attivare:
+
+1. Sceglie 15 decoy dalla chain e firma il tuo input con un ring da 16.
+2. Crea un nuovo indirizzo monouso per il destinatario.
+3. Crea un commitment sull'importo e allega una range proof.
+4. Cifra il tuo memo, o dati casuali di riempimento se lasci il memo vuoto.
+5. Affida la transazione a Dandelion++ per l'inoltro.
+
+Chi legge la chain vede input che puntano ciascuno a 16 possibili output, output inviati a indirizzi monouso mai visti prima, commitment al posto degli importi e un campo memo di byte dall'aspetto casuale. La persona che hai pagato vede il pagamento, l'importo e la tua nota nel proprio wallet.
+
+Se vuoi guadagnare i tuoi primi BNT, puoi minarli sul tuo computer. La [guida al mining](/it/blog/how-to-mine-blocknet/) ti fa partire con seine su bntpool.com in pochi minuti, e puoi minare direttamente verso il tuo indirizzo o il tuo `@name`.
+
+## Cosa arriva con l'aggiornamento Faraday
+
+Secondo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet prevede un aggiornamento di rete chiamato Faraday, con attivazione prevista intorno al 16 febbraio 2027. Il sito elenca due cambiamenti che porteranno la privacy ancora più avanti:
+
+- **Ogni output della chain in ogni spesa.** Con le parole del sito: «Oggi una spesa si nasconde tra 16 output. Dopo Faraday, si nasconderà tra tutti gli output della chain».
+- **Prove di spesa pensate per restare sicure contro i computer quantistici.** Faraday porterà le prove di spesa a prove basate su hash al posto delle curve ellittiche, e il rilevamento dei pagamenti userà ML-KEM.
+
+Il sito dice anche che Faraday non porterà nessuna nuova moneta e nessun nuovo lancio, e che la tua cronologia resta. Progettazione, test e revisione avversariale sono in corso, e le date sono previste e non definitive, quindi segui [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) per gli aggiornamenti.
+
+<CTA target="seine" title="Guadagna BNT con il mining" text="Mina Blocknet con seine e ricevi pagamenti privati direttamente al tuo indirizzo o al tuo @name." />

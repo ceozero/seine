@@ -1,0 +1,146 @@
+---
+title: Kopanie Blocknetu na serwerach i koparkach
+description: Kop Blocknet na serwerach EPYC i w zestawach wielu koparek za pomocą seine. Automatyczne rozmieszczenie wątków według NUMA i L3, praca bez terminala, API sterowania i metryki Prometheus.
+tags: [Poradnik kopania, Serwery, Linux, seine]
+faq:
+  - q: 'Czy seine obsługuje serwery NUMA?'
+    a: 'Tak. W systemie Linux domyślne automatyczne przypisanie w seine rozkłada wątki kopiące na węzły NUMA i grupy pamięci podręcznej L3, po jednym na rdzeń fizyczny, zanim sięgnie po rdzenie SMT, a każdy wątek przypina się do rdzenia przed przydzieleniem swojej areny 2 GiB, więc pamięć trafia blisko niego. Na dwuwęzłowej maszynie EPYC podniosło to hashrate o 73 procent przy ośmiu wątkach.'
+  - q: 'Czy seine może działać bez terminala, jako usługa w tle?'
+    a: 'Tak. Podaj --address i --pool-url przy pierwszym uruchomieniu, a seine wystartuje bez żadnych pytań, zapisze oba ustawienia w seine.config.json w swoim katalogu danych i przełączy się na zwykłe wiersze logu, gdy nie ma podłączonego terminala. Dzięki temu łatwo go uruchomić pod systemd lub innym menedżerem usług, który automatycznie go restartuje.'
+  - q: 'Czy seine eksportuje metryki Prometheus?'
+    a: 'Tak. Uruchom seine z --api-server lub --service, a udostępni metryki Prometheus pod /metrics w swoim lokalnym API sterowania, które domyślnie nasłuchuje na 127.0.0.1, port 9977. Metryki pokazują, czy miner działa, jego stan cyklu życia, wysłane, zaakceptowane i nieaktualne rozwiązania oraz kwarantanny backendów. Zapytania Prometheus wysyłają token API typu bearer.'
+  - q: 'Dlaczego API sterowania seine wymaga tokenu?'
+    a: 'Od wersji seine v0.2.23 każdy endpoint API sterowania poza sprawdzeniem stanu wymaga tokenu typu bearer, co uniemożliwia odwiedzanym stronom internetowym zmianę Twojego adresu do wypłat lub ustawień. seine przy każdym starcie zapisuje nowy token do control-api.cookie w swoim katalogu danych, a stały token możesz ustawić przez --api-token.'
+sourceHash: 186b1dc3c49e
+translation: draft
+---
+
+Ten poradnik opisuje uruchamianie seine na dużych maszynach i na całej szafie koparek: jak rozmieszcza wątki na serwerach z wieloma rdzeniami, jak uruchomić go bez terminala pod menedżerem usług oraz jak uruchamiać, zatrzymywać i obserwować każdą koparkę przez lokalne API sterowania, strumień zdarzeń na żywo i metryki Prometheus.
+
+## Jak seine wykorzystuje duży serwer?
+
+<Answer>
+W systemie Linux seine rozkłada wątki kopiące na węzły NUMA i na grupy pamięci podręcznej L3 wewnątrz każdego węzła, używając jednego wątku na rdzeń fizyczny, zanim sięgnie po jakikolwiek rdzeń SMT. Każdy wątek przypina się do swojego rdzenia przed przydzieleniem areny 2 GiB, więc pamięć trafia blisko niego. To ustawienie domyślne, więc nie trzeba nic konfigurować.
+</Answer>
+
+Dowód pracy Argon2id w Blocknecie to głównie ruch w pamięci. Każdy wątek dla każdego hasha wypełnia i odczytuje własną arenę 2 GiB, więc hashrate zależy od tego, ile kontrolerów pamięci i grup pamięci podręcznej Twoje wątki jednocześnie zajmują. [Artykuł o Argon2id](/pl/blog/argon2id-proof-of-work-explained/) wyjaśnia dlaczego.
+
+Jeśli wątki po prostu idą za kolejnością CPU w systemie operacyjnym, zapełniają pierwsze rdzenie z listy, które leżą na tym samym węźle i w tych samych kilku grupach pamięci podręcznej. Na dwuwęzłowej maszynie EPYC osiem wątków w kolejności systemu trafiło na węzeł 0, a prawie całe 16 GiB aren znalazło się w pamięci tego węzła. Automatyczne rozmieszczenie seine umieściło po cztery wątki na każdym węźle i po około 8 GiB aren na każdym, więc pamięć obu węzłów pracowała jednocześnie. Na jednowęzłowym EPYC 8434P z ośmioma grupami L3 24 wątki w kolejności systemu upakowały się po sześć w czterech grupach. seine wykorzystał wszystkie osiem grup, po trzy wątki w każdej.
+
+Rozmieszczenie respektuje limity, które nadajesz procesowi. Uwzględnia maski CPU i pamięci procesu, więc działa w `taskset`, cgroups i kontenerach i używa tylko rdzeni, na które pozwolisz. W natywnym systemie Windows to samo ustawienie `auto` zapełnia rdzenie fizyczne przed rdzeniami SMT.
+
+## O ile szybsze jest rozmieszczenie z uwzględnieniem NUMA?
+
+Twórcy seine zmierzyli to 24 października 2026, uruchamiając identyczny plik binarny na dwa sposoby w naprzemiennych parach: z automatycznym rozmieszczeniem seine oraz z przypięciem w zwykłej kolejności systemu (`--cpu-affinity os`):
+
+| Maszyna | Wątki | Strony pamięci | Zysk z automatycznego rozmieszczenia |
+|---|---|---|---|
+| Dwuwęzłowy AMD EPYC · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Zwykłe | **+73%** |
+| Dwuwęzłowy AMD EPYC · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Huge pages 2 MiB | **+108%** |
+| Serwer AMD EPYC (EPYC 8434P, 48 rdzeni, osiem grup L3) | 24 | Zwykłe | **+16,7%** |
+
+Każda naprzemienna para wypadła na korzyść automatycznego rozmieszczenia, a pełna metoda i surowe wyniki są w [poradniku o dużych serwerach](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) i w [dzienniku optymalizacji CPU](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) seine.
+
+Zysk pojawia się, gdy seine uruchamia mniej wątków, niż maszyna ma rdzeni. Dzieje się tak zawsze, gdy liczbę wątków wyznacza RAM, a nie liczba rdzeni: każdy wątek potrzebuje około 2 GB, więc zapełnienie serwera z 48 rdzeniami wymaga około 96 GB na same areny. Rozmieszczenie sprawia, że wątki, na które Cię stać, są rozłożone na wszystkie węzły NUMA i grupy pamięci podręcznej.
+
+Rozmieszczenie i huge pages sumują się, co pokazuje drugi wiersz. Jeśli rezerwujesz huge pages, zarezerwuj je na każdym węźle, na którym działają wątki, bo wystarczająco duża suma nie gwarantuje stron lokalnych. [Poradnik o huge pages](/pl/blog/huge-pages-blocknet-mining/) opisuje konfigurację stron, a w systemie Linux pulę stron 2 MiB każdego węzła ustawia się w `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages`.
+
+Aby sprawdzić efekt na własnej maszynie, porównaj `auto` z `os` przy tej samej liczbie wątków i tej samej konfiguracji stron. `--cpu-affinity off` zostawia rozmieszczenie całkowicie planiście systemu.
+
+### Zapas pamięci na współdzielonych serwerach
+
+Automatyczny dobór liczby wątków zostawia wolne 5% całkowitej pamięci RAM, ponad ewentualną rezerwację dla GPU. Zmienisz to przez `--cpu-memory-reserve-percent`. Jeśli inne usługi zaczną używać pamięci, automatyczne wątki seine zwalniają swoje areny i wracają, gdy pamięć się zwolni, więc kopanie dopasowuje się do reszty maszyny. Wyniki strojenia są zapisywane w pamięci podręcznej osobno dla każdej maszyny, a ta pamięć podręczna się resetuje, gdy zmieni się dozwolony zestaw CPU albo układ NUMA i L3, na przykład po zmianie rozmiaru maszyny wirtualnej.
+
+## Jak uruchomić seine bez terminala?
+
+<Answer>
+Podaj adres do wypłat i pulę w wierszu poleceń, na przykład `--address` ze swoim adresem lub `@name` oraz `--pool-url stratum+tcp://bntpool.com:3333`. seine wystartuje wtedy bez pytań, zapisze ustawienia w swoim katalogu danych i będzie wypisywał zwykłe wiersze logu, gdy nie ma podłączonego terminala, więc może go uruchamiać menedżer usług.
+</Answer>
+
+Na komputerze stacjonarnym seine przy pierwszym uruchomieniu pyta o adres i pulę. Na serwerze bez podłączonego terminala podaj oba z góry:
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Nazwa koparki (tutaj `rack1-node04`) to nazwa, pod którą ta maszyna widnieje w puli. seine zapisuje adres, pulę i nazwę koparki w `seine.config.json` w katalogu danych (domyślnie `./seine-data`), więc kolejne uruchomienia z tym samym katalogiem danych nie wymagają innych flag. Przy domyślnym `--ui auto` w terminalu pokazuje [panel](/pl/blog/seine-dashboard-explained/), a wszędzie indziej zwykłe wiersze logu; `--ui plain` wymusza zwykły tekst. W poleceniach powłoki ujmuj `@name` i `$name` w cudzysłów.
+
+W systemie Linux jednostka systemd uruchamia seine przy starcie systemu i restartuje go, jeśli kiedykolwiek się zakończy:
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine rozwiązuje krótką nazwę przy starcie, więc jednostka czeka na sieć. Każda koparka stroi się sama podczas kopania i zapisuje swoje wybory we własnym katalogu danych na następny start.
+
+## Jak sterować seine przez API?
+
+seine ma lokalne API REST ze strumieniem zdarzeń na żywo i metrykami Prometheus, przygotowane z myślą o panelach i narzędziach do zarządzania flotą. Można je uruchomić na dwa sposoby:
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+Tryb `--service` uruchamia API i zostawia miner bezczynny, dopóki kontroler nie wyśle `POST /v1/miner/start`, które może zawierać adres, pulę, liczbę wątków i inne ustawienia dla danego uruchomienia. To Twój kontroler decyduje, kiedy każda maszyna kopie i z jakimi ustawieniami.
+
+### Token API
+
+Od wersji seine v0.2.23 każdy endpoint poza `GET /v1/health` wymaga nagłówka `Authorization: Bearer <token>`. seine przy każdym starcie zapisuje nowy losowy token do `control-api.cookie` w katalogu danych, w systemach Unix czytelny tylko dla właściciela, i usuwa go przy zamknięciu. Dla narzędzi do zarządzania flotą, które potrzebują stałej wartości, ustaw ją przez `--api-token` albo przenieś plik przez `--api-cookie`. API domyślnie nie wysyła też nagłówków CORS, a przy powiązaniu z interfejsem loopback odrzuca żądania, których `Host` nie jest lokalny, co uniemożliwia odwiedzanym stronom internetowym zmianę Twojego adresu do wypłat lub ustawień.
+
+API domyślnie nasłuchuje na `127.0.0.1:9977`. Powiązanie z innym interfejsem wymaga `--api-allow-unsafe-bind`, więc API pozostaje na maszynie, chyba że zdecydujesz inaczej.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Zdarzenia na żywo
+
+`GET /v1/events/stream` to strumień zdarzeń typu server-sent events. Na bieżąco raportuje zmiany stanu, fazy backendów, postęp i wyniki autostrojenia, znalezione rozwiązania i wyniki ich wysyłania, więc panel może pokazywać każdą koparkę na żywo. Po ponownym połączeniu `GET /v1/runtime/state` zwraca pełny bieżący stan.
+
+### Metryki Prometheus
+
+`GET /metrics` udostępnia metryki Prometheus, w tym `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total` i `seine_miner_stale_submits_total`. Ponieważ plik cookie zmienia się przy każdym starcie i może go czytać tylko użytkownik seine, daj Prometheusowi stały token: uruchom seine z `--api-token` i zapisz tę samą wartość w pliku, który Prometheus może odczytać. Zadanie zbierania metryk na tej samej maszynie wygląda wtedy tak:
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+Pełna lista endpointów, schematy żądań i katalog zdarzeń są w [dokumentacji API sterowania](https://github.com/zpalmtree/seine/blob/master/docs/API.md) seine.
+
+## Wybór maszyn do koparki
+
+Rozmieszczenie wątków, praca bez terminala i API działają tak samo na pojedynczym komputerze typu tower, jak i na szafie serwerów. Które procesory kopią najszybciej i ile RAM zapewnić na wątek, opisuje [poradnik o sprzęcie do kopania Blocknetu](/pl/blog/blocknet-mining-hardware-hashrate/). Dopiero zaczynasz z seine? Zacznij od poradnika [jak kopać Blocknet](/pl/blog/how-to-mine-blocknet/).
+
+<CTA target="seine" title="Pobierz seine na swoje serwery" text="seine sam rozmieszcza wątki na węzłach NUMA i w grupach pamięci podręcznej, działa bez terminala i daje każdej koparce API sterowania ze zdarzeniami na żywo i metrykami Prometheus." />

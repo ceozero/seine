@@ -1,0 +1,104 @@
+---
+title: Laat je betalen op @name met Blocknet ID
+description: Claim een korte naam van Blocknet ID op blocknet.id en ontvang BNT, deel betaallinks en mine op bntpool.com met @name in plaats van een adres van 90+ tekens.
+tags: [Blocknet ID, Wallet, Betalingen, bntpool]
+faq:
+  - q: 'Zijn korte namen van Blocknet ID hoofdlettergevoelig?'
+    a: 'Nee. Een korte naam is niet hoofdlettergevoelig, dus @Alice, @alice en $ALICE komen allemaal bij dezelfde wallet uit. Namen gebruiken de letters a tot en met z, de cijfers 0 tot en met 9, underscore, koppelteken en punt, en mogen tot 64 tekens lang zijn. Zowel het voorvoegsel @ als $ werkt overal waar een naam wordt geaccepteerd.'
+  - q: 'Is een Blocknet ID gratis?'
+    a: 'Per oktober 2026 zijn namen van negen tekens of meer gratis zolang de actie van blocknet.id loopt, zonder factuur en zonder betaling. Kortere namen hebben een eenmalige prijs die oploopt naarmate de naam korter wordt, vanaf 100 BNT voor acht tekens. De prijspagina op blocknet.id toont de prijs voor elke lengte.'
+  - q: 'Kan ik op bntpool.com naar een korte naam van Blocknet ID minen?'
+    a: 'Ja. Voer je @name in als seine om een uitbetalingsadres vraagt, of geef hem mee met --address. seine controleert het ondertekende record op blocknet.id, toont het volledige adres waarnaar de naam verwijst en minet de hele sessie naar dat adres. Korte namen vereisen seine v0.2.16 of nieuwer, en bntpool.com accepteert ze ook bij het inloggen.'
+  - q: 'Wat gebeurt er met mijn poolsaldo als ik mijn naam naar een nieuw adres laat verwijzen?'
+    a: 'Je bestaande saldo blijft bij het adres dat het heeft verdiend, en bntpool.com betaalt het daar zoals gewoonlijk uit. De pool houdt shares, saldi en uitbetalingen bij per volledig adres, dus een naamwijziging leidt een bestaand saldo nooit om. De volgende keer dat je begint met minen, wordt de naam opnieuw opgezocht en gaan nieuwe shares naar het nieuwe adres.'
+sourceHash: ec25796b2073
+translation: draft
+---
+
+Met een korte naam van Blocknet ID kunnen mensen je betalen op `@yourname`, kun je een betaallink delen die in een chatbericht past en kun je op bntpool.com naar dezelfde naam minen. Deze gids legt uit hoe namen werken, hoe je er een claimt op blocknet.id en hoe je hem gebruikt in de wallet en in seine.
+
+## Wat is een korte naam van Blocknet ID?
+
+<Answer>
+Een korte naam van Blocknet ID is een korte naam zoals @alice of $alice die naar het adres van je Blocknet-wallet verwijst. Je registreert hem op blocknet.id. Wallets, seine en bntpool.com zoeken de naam op, controleren of blocknet.id het record heeft ondertekend en gebruiken dan het volledige adres waarnaar hij verwijst.
+</Answer>
+
+De regels zijn overal waar een naam wordt geaccepteerd hetzelfde:
+
+- **Twee voorvoegsels.** `@name` en `$name` zijn dezelfde naam. Gebruik wat je het fijnst vindt.
+- **Niet hoofdlettergevoelig.** `@Alice` en `@alice` verwijzen naar hetzelfde adres.
+- **Eenvoudige tekens.** Letters a tot en met z, cijfers 0 tot en met 9, underscore, koppelteken en punt.
+- **Tot 64 tekens.**
+
+Elk record op blocknet.id is ondertekend. Als de wallet een naam opzoekt, haalt hij het record op en controleert hij de Ed25519-handtekening met de ondertekeningssleutel die blocknet.id publiceert op `https://blocknet.id/.well-known/blocknet-id.json`. De ondertekende payload bevat de naam, het adres en het tijdstip van de laatste wijziging, en de wallet controleert of alle drie kloppen voordat hij het adres gebruikt. Elke naam heeft ook een openbare pagina op blocknet.id met het adres, de ondertekende payload en de handtekening, zodat iedereen een record zelf kan controleren.
+
+## Waarom een naam betalen in plaats van een adres?
+
+Een Blocknet-adres is de base58-codering van je publieke spend key, je publieke view key en een checksum, en komt uit op 92 of 93 tekens. Dat is veel om tussen apps te kopiëren, hardop voor te lezen of in een profiel te passen. Een korte naam kun je in een zin noemen, op een sticker drukken of in een bio zetten.
+
+Je krijgt ook een duidelijke bevestigingsstap. Als je naar een naam verstuurt, toont de wallet het adres waarnaar de naam verwijst en markeert hij het als geverifieerd voordat je de betaling goedkeurt. De naam vervangt alleen het adres dat je anders toch had gedeeld. Op de chain is de betaling een normale Blocknet-transactie naar een [eenmalig stealth-adres](/nl/blog/blocknet-privacy-features/), dus hij blijft net zo privé als elke andere betaling.
+
+## Hoe kom je aan een Blocknet ID?
+
+<Answer>
+Kopieer je walletadres, open blocknet.id en zoek de naam die je wilt. Is hij beschikbaar, dan toont de site de prijs; plak je adres en verstuur. Namen van negen of meer tekens zijn gratis tijdens de huidige actie. Zodra je naam is geregistreerd, werkt hij in wallets, seine en bntpool.com.
+</Answer>
+
+1. **Kopieer je adres.** In de commandline-wallet toont het commando `address` je adres, gevolgd door de regel "Get a short name like @name or $name at https://blocknet.id". Haal de wallet op bij de [commandline-releases](https://github.com/blocknetprivacy/blocknet/releases/latest) of de [desktopreleases](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Zoek een naam.** Ga naar [blocknet.id](https://blocknet.id), typ een naam in het vak "find a name" en druk op Search. Terwijl je typt, laat de pagina weten of een teken niet is toegestaan of de naam te lang is.
+3. **Bekijk het resultaat.** Een beschikbare naam toont zijn prijs. Een naam die al is geregistreerd, toont zijn adres, wanneer hij voor het laatst is gewijzigd en een link naar zijn openbare pagina.
+4. **Registreer hem.** Plak je walletadres en druk op "Claim free" (of "Register" voor een naam met een prijs).
+
+De prijs is een eenmalig bedrag op basis van de lengte van de naam. Op het moment van schrijven (oktober 2026) is elke naam van negen tekens of meer gratis dankzij een actie, "no invoice, no payment" in de woorden van de site. Namen van acht tekens kosten 100 BNT, en kortere namen kosten meer, tot 6.000 BNT voor één teken. De [prijspagina](https://blocknet.id/pricing) toont elke lengte.
+
+Om je namen later te beheren, gebruik je "sign in" op blocknet.id met je Blocknet-adres. Op de beheerpagina laat je een naam naar een ander adres verwijzen.
+
+## Hoe verstuur je BNT naar een naam?
+
+Zet in de commandline-wallet de naam op de plek van het adres:
+
+```
+send @rock 100 "hello"
+```
+
+De wallet zoekt `@rock` op, toont `Resolved @rock -> <address>` met een verificatievinkje en vraagt je daarna te bevestigen. De bevestiging toont de naam, het volledige adres, de fee en je memo. De vorm `$rock` werkt op dezelfde manier, en `send` accepteert hele bedragen en bedragen met decimalen.
+
+De API van de wallet zoekt namen op dezelfde manier op voor elke ontvanger van een verzendrequest, dus tools die op de wallet zijn gebouwd, ondersteunen betalingen naar namen zonder extra werk.
+
+## Hoe werken betaallinks met een naam?
+
+Een [betaallink](/nl/blog/blocknet-payment-links/) bevat de ontvanger, het bedrag en een optionele memo. Blocknet ondersteunt twee vormen:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+De bntpay.com-link werkt met een naam in plaats van een adres, dus hij blijft kort. Als je hem opent, zie je een pagina met "Pay $yourname", het bedrag en de memo, plus een knop "Open in Wallet" die de betaling als `blocknet://`-link opent. Plak je een van beide vormen in de commandline-wallet, dan vult die een verzending voor je in die je alleen nog hoeft te bevestigen. Neem het veld `amount` op; de memo is optioneel en bevat tot 124 bytes tekst.
+
+Zo kun je makkelijk één link plaatsen voor fooien of een factuur in één bericht versturen.
+
+## Hoe mine je naar je @name?
+
+seine en bntpool.com accepteren allebei een korte naam als uitbetalingsadres. Als je [seine](/nl/#download) voor het eerst start, voer je `@yourname` in bij de vraag om een adres en accepteer je de standaardpool. Wil je de naam op de commandline meegeven, zet hem dan tussen aanhalingstekens:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Zet korte namen in shellcommando's tussen aanhalingstekens, vooral de vorm `$name`, zodat de shell ze ongewijzigd doorgeeft. Korte namen vereisen seine v0.2.16 of nieuwer.
+</Note>
+
+Dit gebeurt er daarna:
+
+- **seine zoekt de naam op bij het starten.** Het verifieert het ondertekende record van blocknet.id, controleert het adres, logt het volledige adres waarnaar de naam verwijst en houdt dat adres de hele sessie aan, ook als de verbinding met de pool opnieuw wordt opgezet.
+- **De pool accepteert namen ook bij het inloggen.** bntpool.com verifieert de ondertekende koppeling als een miner met een naam verbinding maakt, en gebruikt het opgezochte volledige adres voor jobs, shares, saldi en uitbetalingen.
+- **Je kunt jezelf op naam opzoeken.** De statistiekenpagina op [bntpool.com](https://bntpool.com) accepteert `@name` en `$name`, dus je kunt je hashrate en saldo volgen zonder het adres te plakken.
+- **Een opgeslagen naam wordt bij de volgende start opnieuw opgezocht.** seine bewaart de naam in zijn config, dus bij elke nieuwe start pakt het het adres waarnaar je naam op dat moment verwijst.
+
+Omdat saldi bij het volledige adres horen, leidt een latere naamwijziging een bestaand saldo nooit om. Alles wat je al hebt verdiend, blijft bij het adres dat het heeft verdiend en wordt daar uitbetaald, terwijl nieuw minen naar het nieuwe adres gaat. Dezelfde naam werkt ook in solomodus tegen je eigen node.
+
+Nieuw met minen? De [gids voor Blocknet minen](/nl/blog/how-to-mine-blocknet/) behandelt het downloaden van seine, hardware en uitbetalingen op bntpool.com.
+
+<CTA target="pool" title="Mine naar je @name" text="bntpool.com accepteert je korte naam van Blocknet ID als login voor uitbetalingen. Begin binnen een paar minuten met minen." />

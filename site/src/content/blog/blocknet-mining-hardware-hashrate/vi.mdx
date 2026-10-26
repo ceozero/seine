@@ -1,0 +1,134 @@
+---
+title: Phần cứng tốt nhất để đào Blocknet
+description: "So sánh phần cứng đào Blocknet bằng kết quả đo: EPYC 9355P đạt 68,3 H/s. Xem chính xác RAM, số luồng, thiết lập trang nhớ và dữ liệu benchmark."
+tags: [Phần cứng, Hashrate, Hướng dẫn đào coin, Argon2id, NVIDIA]
+faq:
+  - q: 'PC chơi game có đào được Blocknet không?'
+    a: 'Có. Trên Windows và Linux, seine đào trên bộ xử lý và mọi card đồ họa NVIDIA trong máy cùng lúc, và hashrate được cộng dồn. Nó chọn số luồng theo RAM của bạn, nên một PC chơi game 32 GB chạy được tối đa khoảng 14 luồng, và nó tự động tinh chỉnh bộ xử lý và từng card trong khi đào.'
+  - q: '32 GB RAM chạy được bao nhiêu luồng đào Blocknet?'
+    a: 'Khoảng 14. Mỗi luồng cần một khối bộ nhớ 2 GiB cho mỗi lần băm, nên trên lý thuyết 32 GB chứa được 16 khối. seine giữ lại 5% RAM dự phòng và chừa chỗ cho hệ điều hành, nên một máy 32 GB chạy được khoảng 14 luồng. Nó tự tính toán việc này cho bạn khi khởi động.'
+  - q: 'seine dùng card đồ họa nào để đào Blocknet?'
+    a: 'seine đào trên card đồ họa NVIDIA với bản tải cho Windows và Linux, dùng mọi card nó phát hiện được cùng với bộ xử lý. Trên Windows, CUDA runtime đã được kèm sẵn, nên bạn chỉ cần driver NVIDIA. Trên Linux, hãy cài driver và các thư viện NVRTC. Lần chạy đầu tiên tinh chỉnh từng card và ghi nhớ kết quả.'
+  - q: 'Vì sao băng thông bộ nhớ quan trọng khi đào Blocknet?'
+    a: 'Mỗi lần băm Blocknet ghi trọn một khối bộ nhớ 2 GiB và đọc lại dữ liệu từ khắp khối đó, lớn hơn rất nhiều so với dung lượng cache của bất kỳ bộ xử lý nào. Vì thế hashrate phụ thuộc vào tốc độ hệ thống bộ nhớ chuyển dữ liệu. Những máy có băng thông bộ nhớ cao hơn và đủ RAM cho nhiều luồng sẽ đào nhanh nhất.'
+sourceHash: 53fb803e5db6
+translation: draft
+---
+
+Hướng dẫn này cho bạn biết máy nào đào Blocknet nhanh nhất với seine, RAM của bạn cho phép bao nhiêu luồng và nên kỳ vọng hashrate bao nhiêu, để bạn chọn phần cứng hoặc đánh giá chiếc máy tính bạn đang có.
+
+[Ước tính phần thưởng BNT của bạn](https://bntpool.com/blog/vi/estimate-blocknet-mining-rewards/#mining-calculator)
+
+## Phần cứng tốt nhất để đào Blocknet là gì?
+
+<Answer>
+Cấu hình nhanh nhất trong các phép đo này là AMD EPYC 9355P đạt 68,3 H/s: 64 luồng đào, 192 GiB RAM và huge pages 1 GiB được chuẩn bị thủ công trên Linux. Đào Blocknet hưởng lợi từ băng thông bộ nhớ và đủ RAM cho 2 GiB mỗi luồng. Card NVIDIA có thể cộng thêm tốc độ băm cùng CPU.
+</Answer>
+
+Proof of Work của Blocknet là Argon2id với một khối bộ nhớ 2 GiB cho mỗi lần băm. Điều đó khiến nó [memory-hard](/vi/blog/argon2id-proof-of-work-explained/): hashrate phụ thuộc vào băng thông và độ trễ bộ nhớ nhiều như vào số nhân, và vào việc RAM chứa được bao nhiêu khối 2 GiB cùng lúc. Một hệ thống bộ nhớ mạnh là điểm chung của những máy đứng đầu bảng dưới đây.
+
+## Phép đo mới trên máy chủ vật lý: EPYC 9355P
+
+Ngày 25 tháng 10 năm 2026, EPYC 9355P có 32 lõi/64 luồng phần cứng với 192 GiB trên mười hai kênh nhớ DDR5-4800 đạt **68,256 H/s**, làm tròn thành **68,3 H/s**. Cấu hình thủ công cố định này dùng 64 luồng đào, kernel streaming, huge pages 1 GiB và giới hạn công suất package 280 W. Tốc độ được tính bằng tổng số hash hoàn thành chia cho tổng thời gian của bốn lần chạy mới, mỗi lần 120 giây, bao gồm cả khởi động và tắt.
+
+[Thử nghiệm kích thước trang](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) ghi lại chính xác phiên bản mã nguồn, SHA-256 của tệp thực thi, các kiểm tra cấp phát trang và phương pháp đo. [Các bản ghi máy đọc được](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) lưu cấu hình cùng tử số và mẫu số thô. Đây là toàn bộ một socket được cấu hình thủ công; các phép đo cloud và Mac bên dưới mô tả máy và thiết lập riêng của chúng.
+
+## RTX 5090 nhanh đến mức nào trong thử nghiệm của chúng tôi?
+
+Chúng tôi thử nghiệm vào ngày 25 tháng 10 năm 2026 với Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, 125,4 GiB RAM khả dụng, seine v0.2.26 và trình điều khiển NVIDIA `610.88`. Chúng tôi chạy ba cặp thử nghiệm xen kẽ với `--bench-kind backend`. Mỗi lần chạy có một vòng làm nóng 20 giây và ba vòng đo 20 giây, nghỉ 20 giây giữa các lần chạy. Thiết lập kernel, giới hạn thanh ghi, lane và luồng đều tự động.
+
+| Chế độ | H/s trung bình |
+|---|---|
+| Chỉ RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Bảng lấy trung bình ba lần chạy mỗi chế độ trên máy tính này, với các ứng dụng đang có vẫn mở. Cả hai chế độ dùng GPU `0` và cùng bộ nhớ đệm tự động tinh chỉnh NVIDIA. Đây là tốc độ băm đo cục bộ; share được chấp nhận xác nhận pool đã ghi nhận công việc. [Ghi chú đo lường](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) ghi lại thiết lập và kết quả từng lần chạy.
+
+## So sánh kết quả đo máy chủ cloud và Mac
+
+Các kết quả trên máy chủ đám mây và Mac này dùng máy và thiết lập được mô tả bên dưới. Bộ nhớ đào là dung lượng các khối nhớ của luồng: số luồng × 2 GiB.
+
+| Phần cứng | Chip cụ thể | Luồng | Hashrate | Bộ nhớ đào |
+|---|---|---|---|---|
+| AMD EPYC · Zen 5 | Máy chủ EPYC 9R45 | 32 | 49,4 H/s | 64 GiB |
+| Máy chủ Arm | AWS Graviton4 | 32 | 39,3 H/s | 64 GiB |
+| AMD EPYC · Zen 4 | Máy chủ EPYC 9R14 | 32 | 38,2 H/s | 64 GiB |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s | 32 GiB |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s | 64 GiB |
+
+Các dòng máy chủ chạy trên máy đám mây AWS với huge pages 2 MiB, còn dòng M4 Max chạy trên MacBook Pro 48 GB. Mỗi con số là số lần băm hoàn thành chia cho thời gian đã trôi qua, lấy trung bình qua nhiều lần chạy lặp lại, đo trong khoảng từ tháng 7 đến tháng 10 năm 2026. Kết quả Zen 5 là trung bình của bốn lần chạy với seine v0.2.22 trên AWS m8a.8xlarge, một máy EPYC 9R45 32 nhân với 128 GiB RAM.
+
+Kết quả của mọi bộ xử lý đã thử nghiệm, kèm bằng chứng cho từng dòng, có trên [trang hiệu năng](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md).
+
+## Vì sao băng thông bộ nhớ quyết định hashrate
+
+Mỗi lần băm Argon2id lấp đầy toàn bộ khối 2 GiB của nó một lần và, trong lúc đó, đọc lại các phần trước của khối. Cache L3 của bộ xử lý được tính bằng megabyte: trên máy chủ Zen 5, mỗi nhóm tám nhân dùng chung 32 MiB, nên một lần băm xử lý lượng bộ nhớ gấp 64 lần dung lượng cache đó. Phần lớn công việc là lưu lượng bộ nhớ.
+
+Các con số cho thấy điều đó. Ở 49,4 H/s, máy chủ Zen 5 ghi khoảng 99 GiB khối bộ nhớ mới mỗi giây (49,4 × 2 GiB). Hashrate tăng theo số luồng cho đến khi hệ thống bộ nhớ chạy hết công suất: trên máy đó, 16 luồng đào được 37,8 H/s và 32 luồng đào được 49,4 H/s. seine đo đường cong đó trên máy của bạn và chọn số luồng tốt nhất.
+
+Ba điều rút ra khi bạn chọn phần cứng:
+
+- **Băng thông bộ nhớ quan trọng như số nhân.** Khi so sánh các máy, hãy coi trọng hệ thống bộ nhớ ngang với số nhân.
+- **RAM quyết định trần số luồng.** Mỗi luồng cần khối 2 GiB riêng, nên RAM thường giới hạn số luồng trước cả số nhân.
+- **Kernel tạo khác biệt trên cùng một chip.** seine có nhiều kernel Argon2id cho mỗi dòng bộ xử lý. Trên EPYC 9R45, kernel streaming đào nhanh hơn 30% so với AVX2 (từ 34,47 lên 44,74 H/s ở 24 luồng). Trên AWS Graviton4, kernel SHA3 có prefetch đào nhanh hơn 56% so với NEON thông thường (từ 13,80 lên 21,50 H/s). seine chọn kernel nhanh hơn trong khi đào.
+
+## Mỗi luồng đào cần bao nhiêu RAM?
+
+<Answer>
+Mỗi luồng đào cần khoảng 2 GB RAM, vì mỗi lần băm lấp đầy khối bộ nhớ 2 GiB của riêng nó. Chia dung lượng RAM cho hai để biết số luồng tối đa có thể chạy, rồi trừ đi một chút cho hệ điều hành. seine tự làm phép tính này cho bạn và giữ lại 5% RAM dự phòng.
+</Answer>
+
+Đây là phép tính cho các dung lượng phổ biến. “Trên lý thuyết” là RAM ÷ 2 GiB. Cột cuối trừ đi 5% dự phòng của seine và khoảng 2-3 GB cho hệ điều hành, nên hãy coi đó là con số ước lượng. Với laptop và PC cũ có 4-12 GB, xem hướng dẫn [đào coin trên PC cũ hoặc laptop](/vi/blog/mine-crypto-on-old-pc-or-laptop/).
+
+| RAM | Số khối bộ nhớ trên lý thuyết | Số luồng seine chạy được, ước lượng |
+|---|---|---|
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+| 64 GB | 32 | 29 |
+| 128 GB | 64 | 59 |
+
+seine cũng giới hạn số luồng ở số nhân logic của bộ xử lý, nên giới hạn thực tế là thứ nào hết trước. Lấy ví dụ một bộ xử lý desktop 16 nhân với 32 luồng phần cứng. Với 32 GB RAM, nó chạy khoảng 14 luồng đào, và với 64 GB thì khoảng 29. Để chạy 32 luồng, bạn cần 64 GiB chỉ riêng cho các khối bộ nhớ cộng thêm phần dư cho hệ thống, đó là lý do kết quả Zen 5 với 32 luồng đến từ một máy có 128 GiB.
+
+Nếu bạn mua RAM để đào, hãy chọn theo số luồng bạn muốn: khoảng 2 GB mỗi luồng, cộng thêm vài gigabyte cho hệ thống.
+
+## Có thể đào Blocknet bằng CPU và GPU NVIDIA cùng lúc không?
+
+Có. Trên Windows và Linux, seine đào trên mọi nhân CPU và mọi card đồ họa NVIDIA mà nó phát hiện cùng một lúc, và hashrate được cộng dồn. Bạn không cần flag nào cho việc này; đây là mặc định.
+
+- **Windows:** bản tải đã kèm các thư viện CUDA runtime, nên bạn chỉ cần driver NVIDIA mới nhất.
+- **Linux:** cài driver NVIDIA và các thư viện NVRTC từ bản phân phối của bạn hoặc từ NVIDIA.
+- **Lần chạy đầu tiên:** seine tinh chỉnh thiết lập kernel cho từng card và lưu kết quả vào bộ nhớ đệm, nên những lần khởi động sau chỉ mất vài giây.
+
+Trên [máy Mac Apple Silicon](/vi/blog/mine-blocknet-on-mac/), seine đào bằng CPU theo mặc định, cấu hình nhanh nhất đo được trên M4 Max. [Hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/) trình bày về dàn máy đào nhiều GPU và các yêu cầu.
+
+## seine tự động tinh chỉnh những gì?
+
+Để đào hằng ngày, chạy seine, dán địa chỉ hoặc `@name` rồi chấp nhận pool mặc định bntpool.com. [Hướng dẫn đào](/vi/blog/how-to-mine-blocknet/) trình bày từng bước. Kết quả EPYC thủ công phía trên dùng thiết lập riêng; quá trình đào tự động thực hiện những việc sau:
+
+- **Chọn số luồng** theo RAM và số nhân của bạn, rồi so sánh các số luồng trên công việc đào thực tế và giữ số tốt nhất.
+- **Chọn kernel CPU**, chẳng hạn AVX2, AVX-512, kernel streaming trên EPYC Zen 5 hoặc SHA3 trên Arm, chỉ chuyển đổi sau hai lần xác nhận có cải thiện.
+- **Phân bổ luồng trên máy chủ lớn.** Trên Linux, nó trải luồng trên các node NUMA và nhóm cache L3, giúp tăng 16,7% trên một máy EPYC 8434P thuê ngoài ở 24 luồng. [Hướng dẫn đào trên máy chủ](/vi/blog/mine-blocknet-on-servers/) có chi tiết.
+- **Bảo vệ bộ nhớ của bạn.** Nó giữ 5% dự phòng, tạm dừng luồng nếu RAM sắp hết và cho chúng chạy lại khi bộ nhớ được giải phóng.
+- **Ghi nhớ thiết lập hiệu quả**, nên lần khởi động sau bắt đầu từ các thiết lập đã tinh chỉnh.
+
+Không bước nào trong số này cần kết nối lại pool, nên việc tinh chỉnh không làm bạn mất thời gian đào. [Hướng dẫn tự tinh chỉnh](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) giải thích từng bước.
+
+Có một bước tùy chọn đáng làm trên Linux và WSL: dành sẵn huge pages giúp tăng khoảng 4–6% với trang 2 MiB và thêm 2% với trang 1 GiB trên máy kiểm thử. [Hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) có sẵn các lệnh, và [hướng dẫn máy chủ lớn](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) trình bày về máy EPYC và Xeon.
+
+## Làm sao để kiểm tra hashrate của chính bạn?
+
+Cách nhanh nhất là [tải seine](/vi/#download) và bắt đầu đào: bảng điều khiển hiển thị hashrate của bạn chỉ trong giây lát, và bạn có thể tra cứu địa chỉ của mình trên [bntpool.com](https://bntpool.com) để xem pool ghi nhận được gì. Hãy cho bộ tinh chỉnh một chút thời gian để ổn định trước khi đọc con số.
+
+Để đo bộ xử lý mà không cần kết nối pool, hãy chạy benchmark ngoại tuyến của seine:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Nó báo cáo số lần băm hoàn thành mỗi giây, cùng thước đo mà bảng trên sử dụng, nên bạn có thể so sánh máy của mình với [kết quả đã công bố](/vi/#performance).
+
+<Note>
+Các kết quả này dành cho Proof of Work Argon2id hiện tại của Blocknet. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến nâng cấp mạng lưới mang tên Faraday vào khoảng ngày 16 tháng 2 năm 2027, mang đến một Proof of Work nhẹ hơn. Hãy luôn cập nhật seine: nó kiểm tra bản phát hành mới khi khởi động và mỗi 12 giờ.
+</Note>
+
+<CTA target="seine" title="Xem máy của bạn đào được bao nhiêu" text="seine tự tinh chỉnh theo phần cứng của bạn trong khi đào. Tải về và theo dõi hashrate của bạn." />

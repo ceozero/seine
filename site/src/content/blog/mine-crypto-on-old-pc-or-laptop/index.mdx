@@ -1,0 +1,118 @@
+---
+title: How to mine crypto on an old PC or laptop
+description: Mine crypto on an old PC or laptop. Learn why RAM, cooling and power matter most, how many threads your memory allows, and how to start mining safely.
+date: 2026-10-25
+tags: [Mining guide, Laptop, CPU mining, Hardware]
+faq:
+  - q: Can a laptop with 8 GB of RAM mine crypto?
+    a: Yes, on a memory-hard coin like Blocknet. Each Blocknet mining thread needs about 2 GB of free RAM, so an 8 GB laptop usually runs about two threads once the operating system has its share. Seine measures your free memory when it starts and picks a safe thread count for you.
+  - q: Is it safe to mine crypto on an old laptop?
+    a: Yes, with good airflow. Mining keeps the processor busy, much like a long video export or a game, and processors slow themselves down when they get too hot. Keep the vents clean, put a laptop on a hard surface, and use seine's efficiency profile if you want less heat and noise.
+  - q: Does seine work on processors without AVX2?
+    a: Yes. Seine's x86 builds include a portable kernel that runs on any 64-bit x86 processor, alongside AVX2 and AVX-512 kernels for chips that have them. It checks which instruction sets your processor supports and picks the kernel to match, comparing kernels while it mines on chips that have both AVX2 and AVX-512.
+  - q: How much electricity does mining on an old PC use?
+    a: It depends on the machine. Measure it with a plug-in power meter while seine runs, then multiply the watts by 24 and divide by 1,000 for kilowatt-hours per day. Multiply that by your electricity rate for the daily cost, and compare it with your expected coins per day.
+related: [cpu-mining-2026, blocknet-mining-hardware-hashrate, how-to-mine-blocknet]
+---
+
+This guide shows you how to put an old desktop or laptop to work mining crypto: what decides whether a machine can mine, how many mining threads its memory allows, how to keep it cool, and how to start safely with seine on bntpool.com.
+
+## Can you mine crypto on an old PC or laptop?
+
+<Answer>
+Yes, if you pick a coin whose proof of work suits ordinary computers. Memory-hard coins such as Blocknet are mined with regular processors and RAM, so an old desktop or laptop can join a pool and earn a share of each block. RAM decides how many threads you run, and cooling keeps them running.
+</Answer>
+
+Coins differ in what their proof of work rewards. Bitcoin's SHA-256 is mined almost entirely by ASICs, chips built for that one hash, so a general-purpose computer adds little there. Memory-hard designs work the other way. Monero's RandomX is built for general-purpose CPUs, and Blocknet uses Argon2id with a 2 GiB block of memory for every hash, an approach designed to resist ASICs. On a coin like Blocknet, the parts every computer already has, a processor and RAM, do the mining. The guide to [CPU mining in 2026](/blog/cpu-mining-2026/) covers what to look for in a coin you mine with a processor.
+
+The [Argon2id explainer](/blog/argon2id-proof-of-work-explained/) covers how that proof of work fills and reads its memory, and why memory bandwidth sets the pace.
+
+## What matters most on older hardware?
+
+Four things decide how well an older machine mines a memory-hard coin:
+
+- **RAM.** Each Blocknet mining thread holds its own 2 GiB block of memory while it hashes, so free RAM sets how many threads fit.
+- **Memory bandwidth.** Every hash writes 2 GiB and reads data back from across it, so the memory system does most of the work. Dual-channel memory (two matching sticks) helps an older desktop.
+- **Cooling.** Mining keeps the processor busy for hours. A cool processor holds its clock speed, and a hot one slows itself down to protect itself.
+- **Power.** Mining draws steady power, so a power meter and your electricity rate tell you what the machine costs to run.
+
+Core count matters less than you might expect. A quad-core desktop with 16 GB of RAM can run more threads than an eight-core laptop with 8 GB, because the RAM runs out first.
+
+## How much RAM does each mining thread need?
+
+<Answer>
+Each Blocknet mining thread needs about 2 GB of free RAM, because every hash fills its own 2 GiB block of memory. Divide your free memory by two to estimate threads. Seine does this when it starts, keeps 5% of RAM in reserve, and caps the count at your processor's logical cores.
+</Answer>
+
+Seine's automatic sizing takes the RAM that is free when it starts, subtracts a 5% reserve, divides by 2 GiB, and uses that number or the processor's logical core count, whichever is lower. Here is the arithmetic for common sizes, assuming the operating system and a few background apps use about 2-3 GB:
+
+| RAM | Memory blocks on paper | Threads seine can run, roughly |
+|---|---|---|
+| 4 GB | 2 | 1, if the system leaves 2 GB free |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Close the browser and other large apps before you start seine, and its sizing sees more free memory. If you open apps while it mines, seine checks free RAM every second, lets threads finish their current hash and park, and brings them back when memory frees up. You can keep using the computer.
+
+Adding RAM is the most direct upgrade for an old desktop: each extra 2 GB of free memory is room for one more thread, up to your core count. The [hardware guide](/blog/blocknet-mining-hardware-hashrate/) has measured hashrates and sizing for bigger machines.
+
+## Does an old processor still work?
+
+Yes. Seine's x86 builds carry a portable kernel that runs on any 64-bit x86 processor, plus AVX2 and AVX-512 kernels. AVX2 arrived with Intel's Haswell processors in 2013 and AMD's Excavator in 2015, and seine's AVX2 kernel has been measured on Haswell and Broadwell server chips. Processors without AVX2 run the portable kernel. Arm builds carry NEON with a SHA3 fast path. Seine checks what your processor supports and compares kernels while it mines, switching only after confirmed gains.
+
+There are downloads for most machines you might find in a cupboard:
+
+| System | Archive |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 or newer) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+If the PC has an NVIDIA graphics card, the Windows and Linux builds try it too and mine on it alongside the processor. If the card can't start, seine carries on mining on the processor. On an Apple Silicon MacBook, seine mines on the processor by default; the [Mac guide](/blog/mine-blocknet-on-mac/) covers thread sizing by Mac memory.
+
+## How do you keep a laptop cool while mining?
+
+A few habits keep a laptop at full speed:
+
+- **Give it air.** Put it on a desk or a laptop stand and keep the vents clear. Blowing dust out of an old machine's fan and heatsink can bring back lost speed.
+- **Keep it plugged in.** Mining on battery drains it quickly, and many laptops run slower on battery power.
+- **Stop it from sleeping.** Mining stops while the computer sleeps, so set the power plan to stay awake while plugged in.
+- **Run fewer threads for less heat.** Start seine with the efficiency profile:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+The default profile settles on the fewest threads that reach 99% of the best hashrate it measures. The efficiency profile keeps the fewest threads that reach 75% of that best hashrate, so the machine runs cooler and quieter. You can also set a fixed count with `--threads 2`, or press `-` and `+` in the dashboard to remove or add a thread while it runs.
+
+## How do you start mining safely?
+
+1. **Get a wallet address.** Install the official Blocknet wallet on your main computer and copy your address. The [wallet guide](/blog/blocknet-wallet-for-mining/) walks through it. The miner needs only your address, so keep the wallet and its recovery phrase off the spare mining machine.
+2. **Download seine from the official release.** Get it from the [download section](/#download). Each release publishes a `SHA256SUMS.txt` file so you can check the archive matches.
+3. **Run it.** On Windows, double-click `seine.exe`. On macOS or Linux, run `./seine` in the unzipped folder.
+4. **Enter your address and accept the default pool.** Paste your address or `@name`, then press Enter for `stratum+tcp://bntpool.com:3333`.
+5. **Watch the dashboard.** Your hashrate and first shares appear within moments, and seine keeps tuning threads and kernels while it mines.
+
+The [step-by-step mining guide](/blog/how-to-mine-blocknet/) covers the same steps with payouts in more detail. To measure the machine without connecting to a pool first, run the offline benchmark:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## Why mine on a pool with a small machine?
+
+A pool pays you for your share of the work on every block it finds, so a small machine is paid from each pool block instead of waiting to find a whole block itself. The guide to [how crypto mining works](/blog/how-crypto-mining-works/) explains pools and shares in more depth. On bntpool.com, rewards are shared among the shares submitted in the six hours before each block, and your balance is paid once it reaches 0.1 BNT. You can follow your hashrate and balance by looking up your address or `@name` on [bntpool.com](https://bntpool.com).
+
+To estimate your output, use the network hashrate shown on the bntpool.com dashboard. At five-minute blocks, Blocknet finds 288 blocks a day, so your expected share of the network's new coins is 288 × (your H/s ÷ network H/s) × the block reward per day, which steps down each month.
+
+Then work out what the machine costs to run. Measure it with a plug-in power meter while seine mines. A machine drawing 65 W around the clock uses 65 × 24 = 1,560 Wh, or 1.56 kWh a day; multiply by your electricity rate. Comparing the two numbers gives you the full picture for your machine.
+
+<Note>
+These figures describe Blocknet's current Argon2id proof of work. Blocknet plans a network upgrade called Faraday around 2027-02-16 that will bring a lighter proof of work, according to [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Keep seine up to date: it checks for new releases when it starts and every 12 hours.
+</Note>
+
+<CTA target="seine" title="Put your old PC to work" text="seine sizes its threads to your RAM and tunes itself while it mines. Download it, paste your address and start mining on bntpool.com." />

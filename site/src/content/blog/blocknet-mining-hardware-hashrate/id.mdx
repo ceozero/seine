@@ -1,0 +1,134 @@
+---
+title: Perangkat keras terbaik untuk menambang Blocknet
+description: "Bandingkan perangkat keras penambangan Blocknet berdasarkan pengukuran: EPYC 9355P mencapai 68,3 H/s. Lihat RAM, thread, pengaturan halaman, dan bukti benchmark."
+tags: [Perangkat keras, Hashrate, Panduan penambangan, Argon2id, NVIDIA]
+faq:
+  - q: 'Bisakah PC gaming menambang Blocknet?'
+    a: 'Bisa. Di Windows dan Linux, seine menambang dengan prosesor dan setiap kartu grafis NVIDIA di PC secara bersamaan, dan hashrate-nya dijumlahkan. seine menyesuaikan jumlah thread dengan RAM Anda, jadi PC gaming 32 GB menjalankan hingga sekitar 14 thread, dan seine menyetel prosesor serta setiap kartu secara otomatis sambil menambang.'
+  - q: 'Berapa banyak thread penambangan Blocknet yang bisa dijalankan dengan RAM 32 GB?'
+    a: 'Sekitar 14. Setiap thread membutuhkan blok memori 2 GiB untuk setiap hash, jadi 32 GB secara teori menampung 16 blok. seine menyisihkan 5% RAM sebagai cadangan dan menyisakan ruang untuk sistem operasi, sehingga komputer 32 GB menjalankan sekitar 14 thread. seine menghitungnya untuk Anda saat dijalankan.'
+  - q: 'Kartu grafis apa yang dipakai seine untuk menambang Blocknet?'
+    a: 'seine menambang dengan kartu grafis NVIDIA pada unduhan Windows dan Linux, memakai setiap kartu yang terdeteksi bersama prosesor. Di Windows, runtime CUDA sudah disertakan, jadi Anda hanya butuh driver NVIDIA. Di Linux, pasang driver dan pustaka NVRTC. Peluncuran pertama menyetel setiap kartu dan mengingat hasilnya.'
+  - q: 'Mengapa bandwidth memori penting untuk menambang Blocknet?'
+    a: 'Setiap hash Blocknet menulis satu blok memori 2 GiB penuh dan membaca kembali data dari seluruh bagiannya, jauh lebih banyak dari yang bisa ditampung cache prosesor mana pun. Karena itu hashrate bergantung pada seberapa cepat sistem memori memindahkan data. Komputer dengan bandwidth memori lebih besar dan RAM yang cukup untuk banyak thread menambang paling cepat.'
+sourceHash: 53fb803e5db6
+translation: draft
+---
+
+Panduan ini menunjukkan komputer mana yang menambang Blocknet paling cepat dengan seine, berapa banyak thread yang muat di RAM Anda, dan hashrate yang bisa diharapkan, sehingga Anda bisa memilih perangkat keras atau menilai komputer yang sudah Anda punya.
+
+[Perkirakan imbalan BNT Anda](https://bntpool.com/blog/id/estimate-blocknet-mining-rewards/#mining-calculator)
+
+## Apa perangkat keras terbaik untuk menambang Blocknet?
+
+<Answer>
+Konfigurasi tercepat dalam pengukuran ini adalah AMD EPYC 9355P pada 68,3 H/s: 64 thread penambangan, RAM 192 GiB, dan huge pages 1 GiB yang disiapkan secara manual di Linux. Penambangan Blocknet mendapat manfaat dari bandwidth memori dan RAM yang cukup untuk 2 GiB per thread. Kartu NVIDIA dapat menambahkan hashrate di samping CPU.
+</Answer>
+
+Proof of work Blocknet adalah Argon2id dengan blok memori 2 GiB per hash. Itu membuatnya [memory-hard](/id/blog/argon2id-proof-of-work-explained/): hashrate bergantung pada bandwidth dan latensi memori sama besarnya dengan jumlah core, dan pada berapa banyak blok 2 GiB itu yang muat di RAM sekaligus. Sistem memori yang kuat adalah kesamaan komputer-komputer teratas di tabel berikut.
+
+## Pengukuran baru pada server fisik: EPYC 9355P
+
+Pada 25 Oktober 2026, EPYC 9355P dengan 32 inti/64 thread dan 192 GiB yang tersebar di dua belas kanal memori DDR5-4800 menghasilkan **68,256 H/s**, dibulatkan menjadi **68,3 H/s**. Konfigurasi manual tetap ini memakai 64 thread penambangan, kernel streaming, huge pages 1 GiB, dan batas daya paket 280 W. Hashrate dihitung dari total hash yang selesai dibagi total waktu berlalu dalam empat proses baru yang masing-masing berjalan selama 120 detik, termasuk startup dan shutdown.
+
+[Eksperimen ukuran halaman](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) mencatat revisi kode sumber yang tepat, SHA-256 file executable, pemeriksaan alokasi halaman, dan metode pengukuran. [Catatan yang dapat dibaca mesin](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) menyimpan konfigurasi serta pembilang dan penyebut mentah. Pengukuran ini memakai satu soket penuh yang dikonfigurasi secara manual; pengukuran cloud dan Mac di bawah menjelaskan mesin dan pengaturannya masing-masing.
+
+## Seberapa cepat RTX 5090 dalam pengujian kami?
+
+Kami menguji pada 25 Oktober 2026 menggunakan Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, RAM yang dapat digunakan sebesar 125,4 GiB, seine v0.2.26, dan driver NVIDIA `610.88`. Kami menjalankan tiga pasang pengujian berselang-seling dengan `--bench-kind backend`. Setiap pengujian menggunakan satu pemanasan 20 detik dan tiga putaran pengukuran masing-masing 20 detik, dengan jeda 20 detik antar-pengujian. Pengaturan kernel, batas register, lane, dan thread berlangsung otomatis.
+
+| Mode | Rata-rata H/s |
+|---|---|
+| RTX 5090 saja | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Tabel menampilkan rata-rata tiga pengujian per mode pada desktop ini dengan aplikasi yang sebelumnya terbuka tetap berjalan. Kedua mode menggunakan GPU `0` dan cache penyetelan otomatis NVIDIA yang sama. Angka ini merupakan hashrate benchmark lokal; share yang diterima mengonfirmasi kredit dari pool. [Catatan pengukuran](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) mencatat pengaturan dan hasil setiap pengujian.
+
+## Perbandingan hasil pengukuran server cloud dan Mac
+
+Hasil cloud dan Mac ini memakai mesin dan pengaturan yang dijelaskan di bawah. Memori penambangan adalah ruang untuk blok memori thread: jumlah thread × 2 GiB.
+
+| Perangkat keras | Chip spesifik | Thread | Hashrate | Memori penambangan |
+|---|---|---|---|---|
+| AMD EPYC · Zen 5 | Server EPYC 9R45 | 32 | 49,4 H/s | 64 GiB |
+| Server Arm | AWS Graviton4 | 32 | 39,3 H/s | 64 GiB |
+| AMD EPYC · Zen 4 | Server EPYC 9R14 | 32 | 38,2 H/s | 64 GiB |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s | 32 GiB |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s | 64 GiB |
+
+Baris server dijalankan di mesin cloud AWS dengan huge pages 2 MiB, dan baris M4 Max di MacBook Pro 48 GB. Setiap angka adalah jumlah hash yang selesai dibagi waktu yang berlalu, dirata-ratakan dari beberapa kali pengujian, diukur antara Juli dan Oktober 2026. Hasil Zen 5 adalah rata-rata empat kali pengujian dengan seine v0.2.22 di AWS m8a.8xlarge, mesin EPYC 9R45 32 core dengan RAM 128 GiB.
+
+Hasil untuk setiap prosesor yang diuji, beserta bukti untuk setiap baris, ada di [halaman performa](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md).
+
+## Mengapa bandwidth memori menentukan hashrate Anda
+
+Setiap hash Argon2id mengisi seluruh blok 2 GiB miliknya sekali dan, selama itu, membaca kembali bagian-bagian sebelumnya. Cache L3 prosesor diukur dalam megabyte: di server Zen 5, setiap kelompok delapan core berbagi 32 MiB, jadi satu hash bekerja melalui memori 64 kali lebih besar dari yang bisa ditampung cache itu. Sebagian besar pekerjaannya adalah lalu lintas memori.
+
+Angka-angkanya menunjukkan hal itu. Pada 49,4 H/s, server Zen 5 menulis sekitar 99 GiB blok memori baru setiap detik (49,4 × 2 GiB). Hashrate naik seiring jumlah thread sampai sistem memori sibuk: di mesin itu, 16 thread menambang 37,8 H/s dan 32 thread menambang 49,4 H/s. seine mengukur kurva itu di komputer Anda dan menetapkan jumlah thread terbaik.
+
+Tiga hal berlaku saat Anda memilih perangkat keras:
+
+- **Bandwidth memori sama pentingnya dengan core.** Timbang sistem memori sama beratnya dengan jumlah core saat membandingkan komputer.
+- **RAM menentukan batas thread.** Setiap thread membutuhkan blok 2 GiB miliknya sendiri, jadi RAM sering lebih dulu membatasi jumlah thread daripada core.
+- **Kernel berpengaruh pada chip yang sama.** seine membawa beberapa kernel Argon2id untuk setiap keluarga prosesor. Di EPYC 9R45, kernel streaming menambang 30% lebih cepat daripada AVX2 (dari 34,47 menjadi 44,74 H/s dengan 24 thread). Di AWS Graviton4, kernel SHA3 dengan prefetching menambang 56% lebih cepat daripada NEON biasa (dari 13,80 menjadi 21,50 H/s). seine memilih yang lebih cepat sambil menambang.
+
+## Berapa banyak RAM yang dibutuhkan untuk setiap thread penambangan?
+
+<Answer>
+Setiap thread penambangan membutuhkan sekitar 2 GB RAM, karena setiap hash mengisi blok memori 2 GiB miliknya sendiri. Bagi RAM Anda dengan dua untuk jumlah thread maksimal yang muat, lalu kurangi sedikit untuk sistem operasi. seine menghitung ini untuk Anda dan menyisihkan 5% RAM sebagai cadangan.
+</Answer>
+
+Berikut hitungan untuk ukuran yang umum. "Secara teori" adalah RAM ÷ 2 GiB. Kolom terakhir dikurangi cadangan 5% seine dan sekitar 2-3 GB untuk sistem operasi, jadi anggap sebagai perkiraan kasar. Untuk laptop dan PC lama dengan 4-12 GB, lihat panduan [menambang di PC lama atau laptop](/id/blog/mine-crypto-on-old-pc-or-laptop/).
+
+| RAM | Blok memori secara teori | Thread yang bisa dijalankan seine, kira-kira |
+|---|---|---|
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+| 64 GB | 32 | 29 |
+| 128 GB | 64 | 59 |
+
+seine juga membatasi thread sesuai jumlah core logis prosesor, jadi batas sebenarnya adalah mana yang habis lebih dulu. Ambil contoh prosesor desktop 16 core dengan 32 thread perangkat keras. Dengan RAM 32 GB prosesor ini menjalankan sekitar 14 thread penambangan, dan dengan 64 GB sekitar 29. Untuk menjalankan 32 thread Anda membutuhkan 64 GiB hanya untuk blok memorinya ditambah ruang cadangan, itulah sebabnya hasil Zen 5 dengan 32 thread berasal dari mesin dengan 128 GiB.
+
+Jika Anda membeli RAM untuk menambang, sesuaikan dengan jumlah thread yang Anda inginkan: sekitar 2 GB per thread, ditambah beberapa gigabyte untuk sistem.
+
+## Bisakah Anda menambang Blocknet dengan CPU dan GPU NVIDIA bersamaan?
+
+Bisa. Di Windows dan Linux, seine menambang dengan setiap core CPU dan setiap kartu grafis NVIDIA yang terdeteksi secara bersamaan, dan hashrate-nya dijumlahkan. Anda tidak butuh flag untuk ini; ini adalah perilaku default.
+
+- **Windows:** unduhan sudah menyertakan pustaka runtime CUDA, jadi Anda hanya butuh driver NVIDIA terbaru.
+- **Linux:** pasang driver NVIDIA dan pustaka NVRTC dari distribusi Anda atau dari NVIDIA.
+- **Peluncuran pertama:** seine menyetel pengaturan kernel untuk setiap kartu dan menyimpan hasilnya, jadi saat dijalankan berikutnya hanya butuh beberapa detik.
+
+Di [Mac Apple Silicon](/id/blog/mine-blocknet-on-mac/), seine menambang dengan CPU secara default, pengaturan tercepat yang terukur di M4 Max. [Panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/) membahas rig multi-GPU dan persyaratannya.
+
+## Apa saja yang disetel seine secara otomatis?
+
+Untuk penambangan sehari-hari, jalankan seine, tempel alamat atau `@name`, lalu terima pool default, bntpool.com. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) menjelaskan langkah-langkah tersebut. Hasil EPYC manual di atas menggunakan pengaturannya sendiri; penambangan otomatis melakukan hal berikut:
+
+- **Menentukan jumlah thread** sesuai RAM dan core Anda, lalu membandingkan berbagai jumlah thread pada pekerjaan penambangan sungguhan dan mempertahankan yang terbaik.
+- **Memilih kernel CPU**, seperti AVX2, AVX-512, kernel streaming di EPYC Zen 5, atau SHA3 di Arm, dan hanya beralih setelah dua peningkatan terkonfirmasi.
+- **Menempatkan thread di server besar.** Di Linux, seine menyebarkan thread ke seluruh node NUMA dan grup cache L3, yang menambah 16,7% di EPYC 8434P sewaan dengan 24 thread. [Panduan menambang di server](/id/blog/mine-blocknet-on-servers/) berisi detailnya.
+- **Melindungi memori Anda.** seine menyisihkan cadangan 5%, memarkir thread jika RAM mulai sesak, dan mengaktifkannya kembali saat RAM kembali longgar.
+- **Mengingat pengaturan yang berhasil**, jadi saat dijalankan lagi, seine mulai dari pengaturan yang sudah disetel.
+
+Semua ini dilakukan tanpa menyambung ulang ke pool, jadi penyetelan tidak memakan waktu menambang Anda. [Panduan penyetelan otomatis](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) menjelaskan setiap langkahnya.
+
+Satu tambahan opsional layak dilakukan di Linux dan WSL: menyiapkan huge pages menambah sekitar 4-6% dengan halaman 2 MiB dan 2% lagi dengan halaman 1 GiB di mesin validasi. [Panduan huge pages](/id/blog/huge-pages-blocknet-mining/) berisi perintah-perintahnya, dan [panduan server besar](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) membahas mesin EPYC dan Xeon.
+
+## Bagaimana cara memeriksa hashrate Anda sendiri?
+
+Cara tercepat adalah [mengunduh seine](/id/#download) dan mulai menambang: dasbor menampilkan hashrate Anda dalam sekejap, dan Anda bisa mencari alamat Anda di [bntpool.com](https://bntpool.com) untuk melihat apa yang dicatat pool. Beri tuner sedikit waktu untuk stabil sebelum Anda membaca angkanya.
+
+Untuk mengukur prosesor tanpa terhubung ke pool, jalankan benchmark offline seine:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Benchmark ini melaporkan jumlah hash yang selesai per detik, ukuran yang sama dengan yang dipakai tabel di atas, jadi Anda bisa membandingkan komputer Anda dengan [hasil yang dipublikasikan](/id/#performance).
+
+<Note>
+Hasil ini berlaku untuk proof of work Argon2id Blocknet saat ini. Blocknet merencanakan upgrade jaringan bernama Faraday sekitar 16 Februari 2027 yang akan membawa proof of work yang lebih ringan, menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Pastikan seine selalu terbaru: seine memeriksa rilis baru saat dijalankan dan setiap 12 jam.
+</Note>
+
+<CTA target="seine" title="Lihat kemampuan komputer Anda" text="seine menyetel dirinya sesuai perangkat keras Anda sambil menambang. Unduh dan lihat hashrate Anda." />

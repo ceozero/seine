@@ -49,6 +49,8 @@ pub enum MiningMode {
 pub enum CpuAffinityMode {
     Off,
     Auto,
+    /// Pin workers in OS CPU order without topology-based reordering.
+    Os,
     PcoreOnly,
 }
 
@@ -117,6 +119,7 @@ const DEFAULT_CPU_HASH_FLUSH_MS: u64 = 50;
 const DEFAULT_CPU_EVENT_DISPATCH_CAPACITY: usize = 256;
 const DEFAULT_CPU_AUTOTUNE_SECS: u64 = 6;
 const DEFAULT_CPU_AUTOTUNE_CONFIG_FILE: &str = "seine.cpu-autotune.json";
+const DEFAULT_CONTROL_API_COOKIE_FILE: &str = "control-api.cookie";
 #[cfg(target_os = "macos")]
 const DEFAULT_CPU_AFFINITY: CpuAffinityMode = CpuAffinityMode::PcoreOnly;
 #[cfg(not(target_os = "macos"))]
@@ -177,7 +180,6 @@ struct DaemonContext {
     source: DaemonContextSource,
     running: bool,
     manager_config_path: Option<PathBuf>,
-    pidfile_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -295,6 +297,12 @@ pub struct BackendSpec {
     pub assign_timeout_strikes_override: Option<u32>,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum TelemetryChoice {
+    On,
+    Off,
+}
+
 #[derive(Debug, Parser)]
 #[command(
     name = "seine",
@@ -302,6 +310,13 @@ pub struct BackendSpec {
     about = "Seine net miner for Blocknet"
 )]
 struct Cli {
+    /// Save hardware telemetry preference. Requires a collector URL on first opt-in.
+    #[arg(long, value_enum)]
+    telemetry: Option<TelemetryChoice>,
+
+    /// Hardware telemetry collector (HTTPS). An explicit opt-out is preserved across destinations.
+    #[arg(long)]
+    telemetry_url: Option<String>,
     /// Mining mode. Default is pool mode.
     #[arg(long, value_enum)]
     mode: Option<MiningMode>,
@@ -380,6 +395,11 @@ struct Cli {
     #[arg(long, alias = "cpu-threads")]
     threads: Option<usize>,
 
+    /// Percentage of effective total RAM left unused by automatic CPU sizing/autotuning.
+    /// Explicit thread counts override this reserve. Set 0 to disable headroom.
+    #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(0..=99))]
+    cpu_memory_reserve_percent: u8,
+
     /// CPU affinity/scheduler-hint policy for CPU mining workers.
     /// Default: `pcore-only` on macOS Apple Silicon, otherwise `auto`.
     #[arg(long, value_enum, default_value_t = DEFAULT_CPU_AFFINITY)]
@@ -457,11 +477,11 @@ struct Cli {
     #[arg(long)]
     cpu_event_dispatch_capacity: Option<usize>,
 
-    /// Enable startup CPU kernel autotuning and select the best thread count by measured H/s.
+    /// Enable adaptive CPU tuning while mining (offline kernel search in benchmark mode).
     #[arg(long, action = ArgAction::SetTrue)]
     cpu_autotune_threads: bool,
 
-    /// Disable startup CPU kernel autotuning.
+    /// Disable adaptive CPU thread/kernel tuning; keep a fixed count and the default ISA.
     #[arg(long, action = ArgAction::SetTrue)]
     disable_cpu_autotune_threads: bool,
 
@@ -473,8 +493,8 @@ struct Cli {
     #[arg(long)]
     cpu_autotune_max_threads: Option<usize>,
 
-    /// Base benchmark window (seconds) per CPU autotune sample.
-    /// Candidate samples may run longer to collect a stable minimum hash count.
+    /// Base CPU autotune sample window; mining uses max(30, 5 * seconds).
+    /// Samples may run longer to collect a stable minimum hash count.
     #[arg(long, default_value_t = DEFAULT_CPU_AUTOTUNE_SECS)]
     cpu_autotune_secs: u64,
 
@@ -632,6 +652,10 @@ struct Cli {
     #[arg(long, action = ArgAction::SetTrue)]
     disable_sse: bool,
 
+    /// Disable the background check for newer seine releases on GitHub.
+    #[arg(long, action = ArgAction::SetTrue)]
+    disable_update_check: bool,
+
     /// Refresh on same-height new_block hash changes (disabled by default to avoid replay churn).
     #[arg(long, action = ArgAction::SetTrue)]
     refresh_on_same_height: bool,
@@ -656,9 +680,19 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     api_allow_unsafe_bind: bool,
 
-    /// CORS allow-origin value for control API responses.
-    #[arg(long, default_value = "*")]
+    /// CORS allow-origin value for control API responses. Empty (default) sends no CORS
+    /// headers, so web pages on other origins cannot call the API from a browser.
+    #[arg(long, default_value = "")]
     api_cors: String,
+
+    /// Bearer token required by the control API. When omitted, Seine generates a random
+    /// token at startup and writes it to --api-cookie.
+    #[arg(long)]
+    api_token: Option<String>,
+
+    /// File the generated control API token is written to (default: <data-dir>/control-api.cookie).
+    #[arg(long)]
+    api_cookie: Option<PathBuf>,
 
     /// Run local performance benchmark instead of mining over API.
     #[arg(long, default_value_t = false)]
@@ -669,6 +703,11 @@ struct Cli {
     /// target/eval path enabled so results are directly comparable to backend-mode overhead.
     #[arg(long, value_enum, default_value_t = BenchKind::Backend)]
     bench_kind: BenchKind,
+
+    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, neon, neon-sha3).
+    /// Requires --bench, CPU-only backends, fixed --threads, and no CPU autotuning.
+    #[arg(long, requires_all = ["bench", "threads"])]
+    bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
 
     /// Per-round benchmark duration in seconds.
     #[arg(long, default_value_t = 20)]
@@ -702,6 +741,7 @@ struct Cli {
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub(crate) hardware_telemetry: Option<crate::hardware_telemetry::Options>,
     pub mode: MiningMode,
     pub pool_url: Option<String>,
     pub pool_worker: Option<String>,
@@ -719,6 +759,12 @@ pub struct Config {
     pub backend_specs: Vec<BackendSpec>,
     pub threads: usize,
     pub cpu_auto_threads_cap: usize,
+    /// Recheck RAM after teardown for interactive/API thread overrides.
+    pub cpu_manual_memory_check: bool,
+    /// Frozen automatic worker slots for this run; distinct from the RAM-safe
+    /// manual/offline ceiling and the CPU-only cache/search maximum.
+    pub cpu_autotune_worker_slots: Option<usize>,
+    pub cpu_memory_reserve_percent: u8,
     pub cpu_affinity: CpuAffinityMode,
     pub cpu_page_mode: CpuPageMode,
     pub cpu_profile: CpuPerformanceProfile,
@@ -767,6 +813,7 @@ pub struct Config {
     pub work_allocation: WorkAllocation,
     pub sub_round_rebalance_interval: Option<Duration>,
     pub sse_enabled: bool,
+    pub update_check_enabled: bool,
     pub refresh_on_same_height: bool,
     pub ui_mode: UiMode,
     pub data_dir: PathBuf,
@@ -777,9 +824,12 @@ pub struct Config {
     pub api_bind: String,
     pub api_allow_unsafe_bind: bool,
     pub api_cors: String,
+    pub api_token: Option<String>,
+    pub api_cookie_path: PathBuf,
     pub allow_wallet_prompt: bool,
     pub bench: bool,
     pub bench_kind: BenchKind,
+    pub bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
     pub bench_secs: u64,
     pub bench_rounds: u32,
     pub bench_warmup_rounds: u32,
@@ -802,6 +852,11 @@ impl Config {
         );
         let mut cli =
             Cli::from_arg_matches(&matches).expect("clap matches should deserialize into Cli");
+        if let Some(kernel) = cli.bench_cpu_kernel {
+            if !kernel.is_supported() {
+                bail!("CPU kernel {kernel} is not supported by this host/build");
+            }
+        }
         let user_config_path = cli.data_dir.join(DEFAULT_USER_CONFIG_FILE);
         let user_cfg = read_user_config(&user_config_path)?;
         let user_config_exists = user_cfg.is_some();
@@ -1074,16 +1129,25 @@ impl Config {
                 gpu_memory_reservation,
                 cli.cpu_affinity,
                 cli.cpu_page_mode,
+                cli.cpu_memory_reserve_percent,
             ),
         };
         let profile_defaults = cpu_profile_defaults(cli.cpu_profile, auto_threads_cap);
         let resolved_threads = cli.threads.unwrap_or(profile_defaults.threads);
-        let cpu_autotune_default_enabled = cli.threads.is_none() && cpu_backend_instances > 0;
-        let cpu_autotune_threads = if cli.disable_cpu_autotune_threads {
-            false
-        } else {
-            cli.cpu_autotune_threads || cpu_autotune_default_enabled
-        };
+        let cpu_autotune_threads = cpu_autotune_enabled(&cli, cpu_backend_instances);
+        validate_benchmark_cpu_kernel(
+            cli.bench_cpu_kernel,
+            cli.bench,
+            &backends,
+            cli.threads,
+            cpu_autotune_threads,
+        )?;
+        if cpu_backend_instances > 0 && (cli.threads.is_none() || cpu_autotune_threads) {
+            startup_notices.push(format!(
+                "CPU automatic sizing reserves {}% of effective RAM; cap={} thread(s) per instance (--cpu-memory-reserve-percent 0 disables the reserve)",
+                cli.cpu_memory_reserve_percent, auto_threads_cap,
+            ));
+        }
         let cpu_autotune_config_path = cli
             .cpu_autotune_config
             .clone()
@@ -1124,13 +1188,17 @@ impl Config {
             },
         )?;
 
-        validate_cpu_memory(
-            &backend_specs,
-            resolved_threads,
-            cli.allow_oversubscribe,
-            gpu_memory_reservation,
-            cli.cpu_page_mode,
-        )?;
+        // Automatic mining starts within a fresh budget and can wait for RAM.
+        // Explicit counts and offline benchmarks retain fail-fast validation.
+        if !cpu_autotune_threads || cli.bench {
+            validate_cpu_memory(
+                &backend_specs,
+                resolved_threads,
+                cli.allow_oversubscribe,
+                gpu_memory_reservation,
+                cli.cpu_page_mode,
+            )?;
+        }
 
         let mode = cli.mode.unwrap_or(MiningMode::Pool);
         let requested_network = cli_requested_daemon_network(&cli);
@@ -1146,6 +1214,16 @@ impl Config {
                 cli.api_bind
             );
         }
+
+        let api_token = match cli.api_token.as_deref().map(str::trim) {
+            Some("") => bail!("--api-token is empty"),
+            Some(token) => Some(token.to_string()),
+            None => None,
+        };
+        let api_cookie_path = cli
+            .api_cookie
+            .clone()
+            .unwrap_or_else(|| cli.data_dir.join(DEFAULT_CONTROL_API_COOKIE_FILE));
 
         let (token, token_cookie_path) = if cli.bench {
             (None, None)
@@ -1179,7 +1257,8 @@ impl Config {
             NvidiaTemplateStopPolicy::Off => false,
         };
 
-        Ok(Self {
+        let mut cfg = Self {
+            hardware_telemetry: None,
             mode,
             pool_url: cli.pool_url.as_deref().and_then(normalize_pool_url),
             pool_worker: cli
@@ -1200,6 +1279,9 @@ impl Config {
             backend_specs,
             threads: resolved_threads,
             cpu_auto_threads_cap: auto_threads_cap,
+            cpu_manual_memory_check: false,
+            cpu_autotune_worker_slots: None,
+            cpu_memory_reserve_percent: cli.cpu_memory_reserve_percent,
             cpu_affinity: cli.cpu_affinity,
             cpu_page_mode: cli.cpu_page_mode,
             cpu_profile: cli.cpu_profile,
@@ -1256,6 +1338,7 @@ impl Config {
             work_allocation: cli.work_allocation,
             sub_round_rebalance_interval: optional_duration_from_millis(cli.sub_round_rebalance_ms),
             sse_enabled: !cli.disable_sse,
+            update_check_enabled: !cli.disable_update_check,
             refresh_on_same_height: cli.refresh_on_same_height,
             ui_mode: cli.ui,
             data_dir: cli.data_dir,
@@ -1266,9 +1349,12 @@ impl Config {
             api_bind: cli.api_bind,
             api_allow_unsafe_bind: cli.api_allow_unsafe_bind,
             api_cors: cli.api_cors,
+            api_token,
+            api_cookie_path,
             allow_wallet_prompt: true,
             bench: cli.bench,
             bench_kind: cli.bench_kind,
+            bench_cpu_kernel: cli.bench_cpu_kernel,
             bench_secs: cli.bench_secs.max(1),
             bench_rounds: cli.bench_rounds.max(1),
             bench_warmup_rounds: cli.bench_warmup_rounds,
@@ -1278,7 +1364,20 @@ impl Config {
             bench_baseline_policy: cli.bench_baseline_policy,
             nvidia_hint,
             startup_notices,
-        })
+        };
+        if cfg.cpu_autotune_threads && !cfg.bench {
+            cfg.cpu_auto_threads_cap = cpu_autotune_capacity(&cfg, 0).0;
+        }
+        cfg.hardware_telemetry = match crate::hardware_telemetry::resolve(
+            &cfg.data_dir,
+            cli.telemetry.map(|v| v == TelemetryChoice::On),
+            cli.telemetry_url.as_deref(),
+        ) {
+            Ok(options) => options,
+            Err(err) if cli.telemetry.is_some() || cli.telemetry_url.is_some() => return Err(err),
+            Err(_) => None,
+        };
+        Ok(cfg)
     }
 }
 
@@ -1730,7 +1829,7 @@ fn detect_daemon_context(preferred_network: Option<DaemonNetwork>) -> Option<Dae
         }
 
         let pid = process.pid().as_u32();
-        if let Some((network, pidfile_path)) =
+        if let Some((network, _pidfile_path)) =
             managed_dir.and_then(|config_dir| daemon_pidfile_match(config_dir, pid))
         {
             let data_dir = daemon_data_dir_from_cmdline(&cmd)
@@ -1754,7 +1853,6 @@ fn detect_daemon_context(preferred_network: Option<DaemonNetwork>) -> Option<Dae
                 manager_config_path: managed_config
                     .as_ref()
                     .map(|config| config.config_path.clone()),
-                pidfile_path: Some(pidfile_path),
             });
         }
 
@@ -1785,7 +1883,6 @@ fn detect_daemon_context(preferred_network: Option<DaemonNetwork>) -> Option<Dae
             manager_config_path: managed_config
                 .as_ref()
                 .map(|config| config.config_path.clone()),
-            pidfile_path: None,
         });
     }
 
@@ -1802,7 +1899,6 @@ fn detect_daemon_context(preferred_network: Option<DaemonNetwork>) -> Option<Dae
             source: DaemonContextSource::WrapperConfig,
             running: false,
             manager_config_path: Some(config.config_path.clone()),
-            pidfile_path: None,
         }
     })
 }
@@ -2737,24 +2833,42 @@ fn cpu_parallelism_cap(affinity: CpuAffinityMode) -> usize {
     logical_parallelism
 }
 
+fn cpu_autotune_enabled(cli: &Cli, instances: usize) -> bool {
+    !cli.disable_cpu_autotune_threads
+        && (cli.cpu_autotune_threads
+            || (instances > 0 && cli.threads.is_none() && cli.cpu_threads_per_instance.is_empty()))
+}
+
 fn auto_cpu_threads(
     cpu_backend_instances: usize,
     gpu_memory_reservation: u64,
     affinity: CpuAffinityMode,
     page_mode: CpuPageMode,
+    reserve_percent: u8,
 ) -> usize {
     let cpu_parallelism = cpu_parallelism_cap(affinity);
     let memory_cap_total = detect_memory_budget_bytes(page_mode)
         .map(|budget| {
-            let available = budget
-                .effective_available
-                .saturating_sub(gpu_memory_reservation);
+            let available = auto_cpu_memory_bytes(budget, gpu_memory_reservation, reserve_percent);
             (available / CPU_LANE_MEMORY_BYTES) as usize
         })
         .unwrap_or(cpu_parallelism)
         .max(1);
     let total_lanes_cap = cpu_parallelism.min(memory_cap_total).max(1);
     distribute_auto_cpu_threads(total_lanes_cap, cpu_backend_instances)
+}
+
+fn auto_cpu_memory_bytes(
+    budget: MemoryBudgetBytes,
+    gpu_memory_reservation: u64,
+    reserve_percent: u8,
+) -> u64 {
+    // Reserve a share of the effective (including cgroup) total, not just free RAM.
+    let reserve = budget.effective_total / 100 * u64::from(reserve_percent);
+    budget
+        .effective_available
+        .saturating_sub(gpu_memory_reservation)
+        .saturating_sub(reserve)
 }
 
 fn distribute_auto_cpu_threads(total_lanes_cap: usize, cpu_backend_instances: usize) -> usize {
@@ -2827,6 +2941,87 @@ struct MemoryBudgetBytes {
     effective_available: u64,
 }
 
+/// Search/cache maximum from CPU availability and instance count only.
+/// Dynamic RAM limits govern active arenas, never the fixed nonce-lane stride.
+pub(crate) fn cpu_autotune_worker_ceiling(cfg: &Config) -> usize {
+    let instances = cfg
+        .backend_specs
+        .iter()
+        .filter(|s| s.kind == BackendKind::Cpu)
+        .count()
+        .max(1);
+    (cpu_parallelism_cap(cfg.cpu_affinity) / instances).max(1)
+}
+
+/// Total capacity is stable across temporary RAM use; available capacity includes
+/// only arenas this miner already owns, so they are not subtracted twice.
+pub(crate) fn cpu_autotune_capacity(cfg: &Config, owned_bytes: u64) -> (usize, usize) {
+    let instances = cfg
+        .backend_specs
+        .iter()
+        .filter(|s| s.kind == BackendKind::Cpu)
+        .count()
+        .max(1);
+    let cpu_cap = cpu_parallelism_cap(cfg.cpu_affinity) / instances;
+    let gpu_reserve = if cfg
+        .backend_specs
+        .iter()
+        .any(|s| s.kind == BackendKind::Metal)
+    {
+        estimate_metal_memory_bytes(cfg.metal_max_lanes)
+    } else {
+        0
+    };
+    match detect_memory_budget_bytes(cfg.cpu_page_mode) {
+        Some(budget) => cpu_capacity_from_budget(
+            budget,
+            owned_bytes,
+            gpu_reserve,
+            cfg.cpu_memory_reserve_percent,
+            instances,
+            cpu_cap,
+        ),
+        // Unknown headroom must not authorize additional 2 GiB allocations.
+        None => (
+            cpu_cap.max(1),
+            (owned_bytes / CPU_LANE_MEMORY_BYTES) as usize / instances,
+        ),
+    }
+}
+
+fn cpu_capacity_from_budget(
+    budget: MemoryBudgetBytes,
+    owned_bytes: u64,
+    gpu_reserve: u64,
+    reserve_percent: u8,
+    instances: usize,
+    cpu_cap: usize,
+) -> (usize, usize) {
+    let reserve = budget.effective_total / 100 * u64::from(reserve_percent);
+    let per_count = CPU_LANE_MEMORY_BYTES.saturating_mul(instances.max(1) as u64);
+    let usable = |bytes: u64| bytes.saturating_sub(reserve).saturating_sub(gpu_reserve) / per_count;
+    let capacity = (usable(budget.effective_total) as usize).min(cpu_cap);
+    let available = budget
+        .effective_available
+        .saturating_add(owned_bytes)
+        .min(budget.effective_total);
+    // Keep RAM headroom separate from CPU/user ceilings. Pressure handling must
+    // not mistake a two-core machine for a machine with room for only two arenas.
+    (capacity.max(1), usable(available) as usize)
+}
+
+/// Report-time headroom using the same cgroup-aware budget as CPU sizing.
+/// Regular mode deliberately excludes reserved HugeTLB pools from free memory.
+pub(crate) fn telemetry_memory_budget_gib() -> (Option<u32>, Option<u32>) {
+    detect_memory_budget_bytes(CpuPageMode::Regular).map_or((None, None), |budget| {
+        let gib = 1024 * 1024 * 1024;
+        (
+            Some(budget.effective_total.div_ceil(gib) as u32),
+            Some((budget.effective_available / gib) as u32),
+        )
+    })
+}
+
 fn detect_memory_budget_bytes(page_mode: CpuPageMode) -> Option<MemoryBudgetBytes> {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
@@ -2837,9 +3032,6 @@ fn detect_memory_budget_bytes(page_mode: CpuPageMode) -> Option<MemoryBudgetByte
     } else {
         let mut effective_total = total;
         let mut effective_available = sys.available_memory();
-        if effective_available == 0 {
-            effective_available = total;
-        }
         if page_mode != CpuPageMode::Regular {
             if let Some(hugetlb_unreserved_bytes) = linux_hugetlb_unreserved_bytes() {
                 // HugeTLB pools are typically excluded from MemAvailable even though CPU workers
@@ -2857,13 +3049,17 @@ fn detect_memory_budget_bytes(page_mode: CpuPageMode) -> Option<MemoryBudgetByte
             }
         }
 
-        if let Some(cgroup) = sys.cgroup_limits() {
+        if let Some(budget) = linux_cgroup_v2_memory_budget(MemoryBudgetBytes {
+            effective_total,
+            effective_available,
+        }) {
+            effective_total = budget.effective_total;
+            effective_available = budget.effective_available;
+        } else if let Some(cgroup) = sys.cgroup_limits() {
             if cgroup.total_memory > 0 {
                 effective_total = effective_total.min(cgroup.total_memory);
             }
-            if cgroup.free_memory > 0 {
-                effective_available = effective_available.min(cgroup.free_memory);
-            }
+            effective_available = effective_available.min(cgroup.free_memory);
         }
 
         effective_available = effective_available.min(effective_total);
@@ -2871,6 +3067,151 @@ fn detect_memory_budget_bytes(page_mode: CpuPageMode) -> Option<MemoryBudgetByte
             effective_total,
             effective_available,
         })
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_cgroup_v2_memory_budget(budget: MemoryBudgetBytes) -> Option<MemoryBudgetBytes> {
+    let root = std::path::Path::new("/sys/fs/cgroup");
+    let current = linux_cgroup_v2_path()?;
+    cgroup_v2_budget_at(budget, root, current.strip_prefix(root).ok()?.to_str()?)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn linux_cgroup_v2_path() -> Option<PathBuf> {
+    let membership = fs::read_to_string("/proc/self/cgroup").ok()?;
+    let relative = membership
+        .lines()
+        .find_map(|line| line.strip_prefix("0::/"))?;
+    if std::path::Path::new(relative).components().any(|part| {
+        !matches!(
+            part,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    }) {
+        return None;
+    }
+    let dir = std::path::Path::new("/sys/fs/cgroup").join(relative);
+    dir.is_dir().then_some(dir)
+}
+
+/// Remaining tasks in the tightest ancestor, including sibling/descendant use.
+/// This is a startup hint, not a reservation: clone() can still fail afterward.
+pub(crate) fn cpu_task_headroom() -> Option<usize> {
+    #[cfg(target_os = "linux")]
+    {
+        cgroup_v2_pid_headroom_at(Path::new("/sys/fs/cgroup"), &linux_cgroup_v2_path()?)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn cgroup_v2_pid_headroom_at(root: &Path, current: &Path) -> Option<usize> {
+    let relative = current.strip_prefix(root).ok()?;
+    if relative.components().any(|part| {
+        !matches!(
+            part,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    }) {
+        return None;
+    }
+    let mut headroom = None;
+    for dir in current.ancestors().take_while(|dir| dir.starts_with(root)) {
+        let raw = match fs::read_to_string(dir.join("pids.max")) {
+            Ok(raw) => raw,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => continue,
+            Err(_) => return Some(0),
+        };
+        if raw.trim() == "max" {
+            continue;
+        }
+        // A present but unreadable/malformed finite budget cannot authorize
+        // more threads. Missing controller files mean this level has no limit.
+        let limit = raw.trim().parse::<u64>().unwrap_or(0);
+        let used = fs::read_to_string(dir.join("pids.current"))
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(limit);
+        let remaining = usize::try_from(limit.saturating_sub(used)).unwrap_or(usize::MAX);
+        headroom = Some(headroom.map_or(remaining, |old: usize| old.min(remaining)));
+    }
+    headroom
+}
+
+#[cfg(target_os = "linux")]
+fn cgroup_v2_budget_at(
+    mut budget: MemoryBudgetBytes,
+    root: &std::path::Path,
+    relative: &str,
+) -> Option<MemoryBudgetBytes> {
+    if std::path::Path::new(relative).components().any(|part| {
+        !matches!(
+            part,
+            std::path::Component::Normal(_) | std::path::Component::CurDir
+        )
+    }) {
+        return None;
+    }
+    let current = root.join(relative);
+    if !current.is_dir() {
+        return None;
+    }
+    let number = |path| fs::read_to_string(path).ok()?.trim().parse::<u64>().ok();
+    // sysinfo 0.31 reads only the mount root. Systemd services and other nested
+    // groups also inherit limits from every ancestor of their actual membership.
+    for dir in current.ancestors().take_while(|dir| dir.starts_with(root)) {
+        let limit = [
+            number(dir.join("memory.max")),
+            number(dir.join("memory.high")),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        if let Some(limit) = limit {
+            let usage = number(dir.join("memory.current")).unwrap_or(limit);
+            let stats = fs::read_to_string(dir.join("memory.stat")).unwrap_or_default();
+            let stat = |key| {
+                stats
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(' ')?;
+                        (name == key)
+                            .then(|| value.trim().parse::<u64>().ok())
+                            .flatten()
+                    })
+                    .unwrap_or(0)
+            };
+            // Clean inactive file cache can be reclaimed. Dirty/writeback pages
+            // are conservatively excluded from the credit.
+            let reclaimable = stat("inactive_file")
+                .saturating_sub(stat("file_dirty").saturating_add(stat("file_writeback")));
+            budget = constrain_cgroup_budget(budget, limit, usage, reclaimable);
+        }
+    }
+    Some(budget)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn linux_cgroup_v2_memory_budget(_budget: MemoryBudgetBytes) -> Option<MemoryBudgetBytes> {
+    None
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn constrain_cgroup_budget(
+    budget: MemoryBudgetBytes,
+    limit: u64,
+    usage: u64,
+    reclaimable: u64,
+) -> MemoryBudgetBytes {
+    let total = budget.effective_total.min(limit);
+    let available = limit.saturating_sub(usage.saturating_sub(reclaimable));
+    MemoryBudgetBytes {
+        effective_total: total,
+        effective_available: budget.effective_available.min(available).min(total),
     }
 }
 
@@ -2975,6 +3316,34 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[test]
+    fn pid_headroom_uses_tightest_ancestor_and_fails_closed_on_bad_usage() {
+        let root = unique_temp_dir();
+        let group = root.join("service/worker");
+        fs::create_dir_all(&group).unwrap();
+        fs::write(root.join("pids.max"), "max\n").unwrap();
+        fs::write(root.join("service/pids.max"), "64\n").unwrap();
+        fs::write(root.join("service/pids.current"), "60\n").unwrap();
+        fs::write(group.join("pids.max"), "32\n").unwrap();
+        fs::write(group.join("pids.current"), "10\n").unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), Some(4));
+        fs::write(group.join("pids.current"), "34\n").unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), Some(0));
+        fs::write(group.join("pids.current"), "bad\n").unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), Some(0));
+        fs::remove_file(group.join("pids.current")).unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), Some(0));
+        fs::write(group.join("pids.max"), "max\n").unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), Some(4));
+        fs::write(root.join("service/pids.max"), "max\n").unwrap();
+        assert_eq!(cgroup_v2_pid_headroom_at(&root, &group), None);
+        assert_eq!(
+            cgroup_v2_pid_headroom_at(&root, &root.join("../outside")),
+            None
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn unique_temp_dir() -> PathBuf {
         let mut dir = std::env::temp_dir();
         let now = SystemTime::now()
@@ -3008,6 +3377,8 @@ mod tests {
 
     fn sample_cli() -> Cli {
         Cli {
+            telemetry: None,
+            telemetry_url: None,
             mode: Some(MiningMode::Daemon),
             testnet: false,
             pool_url: None,
@@ -3029,6 +3400,7 @@ mod tests {
             cpu_profile: CpuPerformanceProfile::Balanced,
             cpu_threads_per_instance: Vec::new(),
             cpu_affinity_per_instance: Vec::new(),
+            cpu_memory_reserve_percent: 5,
             allow_oversubscribe: false,
             refresh_secs: 20,
             request_timeout_secs: 10,
@@ -3078,15 +3450,19 @@ mod tests {
             work_allocation: WorkAllocation::Adaptive,
             sub_round_rebalance_ms: 0,
             disable_sse: false,
+            disable_update_check: false,
             refresh_on_same_height: false,
             ui: UiMode::Auto,
             api_server: false,
             service: false,
             api_bind: "127.0.0.1:9977".to_string(),
             api_allow_unsafe_bind: false,
-            api_cors: "*".to_string(),
+            api_cors: String::new(),
+            api_token: None,
+            api_cookie: None,
             bench: false,
             bench_kind: BenchKind::Backend,
+            bench_cpu_kernel: None,
             bench_secs: 20,
             bench_rounds: 3,
             bench_warmup_rounds: 0,
@@ -3198,7 +3574,6 @@ HugePages_Rsvd:          0
             api_addr: Some("127.0.0.1:9000".to_string()),
             source: DaemonContextSource::ProcessScan,
             running: true,
-            pidfile_path: None,
             manager_config_path: None,
         };
         assert_eq!(
@@ -3215,7 +3590,6 @@ HugePages_Rsvd:          0
             api_addr: Some("192.168.1.5:9100".to_string()),
             source: DaemonContextSource::ProcessScan,
             running: true,
-            pidfile_path: None,
             manager_config_path: None,
         };
         assert_eq!(
@@ -3232,7 +3606,6 @@ HugePages_Rsvd:          0
             api_addr: Some("not-an-endpoint".to_string()),
             source: DaemonContextSource::ProcessScan,
             running: true,
-            pidfile_path: None,
             manager_config_path: None,
         };
         assert_eq!(resolve_api_url(None, Some(&daemon)), DEFAULT_API_URL);
@@ -3313,7 +3686,6 @@ HugePages_Rsvd:          0
             api_addr: Some("127.0.0.1:8332".to_string()),
             source: DaemonContextSource::ProcessScan,
             running: true,
-            pidfile_path: None,
             manager_config_path: None,
         };
 
@@ -3873,8 +4245,8 @@ HugePages_Rsvd:          0
 
     #[test]
     fn auto_cpu_threads_is_never_zero_and_scales_per_instance() {
-        let single_instance = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto);
-        let dual_instance = auto_cpu_threads(2, 0, CpuAffinityMode::Auto, CpuPageMode::Auto);
+        let single_instance = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
+        let dual_instance = auto_cpu_threads(2, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
 
         assert!(single_instance >= 1);
         assert!(dual_instance >= 1);
@@ -3882,13 +4254,164 @@ HugePages_Rsvd:          0
     }
 
     #[test]
+    fn cgroup_headroom_credits_reclaimable_cache_and_keeps_zero_limits() {
+        let budget = MemoryBudgetBytes {
+            effective_total: 100,
+            effective_available: 50,
+        };
+        let child = constrain_cgroup_budget(budget, 80, 70, 20);
+        assert_eq!((child.effective_total, child.effective_available), (80, 30));
+        let parent = constrain_cgroup_budget(child, 60, 55, 5);
+        assert_eq!(
+            (parent.effective_total, parent.effective_available),
+            (60, 10)
+        );
+        let exhausted = constrain_cgroup_budget(budget, 50, 80, 10);
+        assert_eq!(exhausted.effective_available, 0);
+        let zero = constrain_cgroup_budget(budget, 0, 0, 100);
+        assert_eq!((zero.effective_total, zero.effective_available), (0, 0));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn nested_cgroup_budget_inherits_high_and_max_and_excludes_dirty_cache() {
+        let root = std::env::temp_dir().join(format!(
+            "seine-cgroup-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let child = root.join("service/worker");
+        fs::create_dir_all(&child).unwrap();
+        for (dir, max, high, current, stats) in [
+            (
+                root.clone(),
+                "100",
+                "max",
+                "90",
+                "inactive_file 20\nfile_dirty 3\nfile_writeback 2\n",
+            ),
+            (
+                root.join("service"),
+                "90",
+                "80",
+                "70",
+                "inactive_file 20\nfile_dirty 0\nfile_writeback 0\n",
+            ),
+            (child, "max", "max", "40", "inactive_file 0\n"),
+        ] {
+            for (name, value) in [
+                ("memory.max", max),
+                ("memory.high", high),
+                ("memory.current", current),
+                ("memory.stat", stats),
+            ] {
+                fs::write(dir.join(name), value).unwrap();
+            }
+        }
+        let budget = MemoryBudgetBytes {
+            effective_total: 200,
+            effective_available: 100,
+        };
+        let result = cgroup_v2_budget_at(budget, &root, "service/worker").unwrap();
+        assert_eq!(
+            (result.effective_total, result.effective_available),
+            (80, 25)
+        );
+        assert!(cgroup_v2_budget_at(budget, &root, "../outside").is_none());
+        assert!(cgroup_v2_budget_at(budget, &root, "/outside").is_none());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn adaptive_memory_budget_counts_owned_arenas_once_and_allows_zero() {
+        let gib = 1024 * 1024 * 1024;
+        let budget = MemoryBudgetBytes {
+            effective_total: 32 * gib,
+            effective_available: 8 * gib,
+        };
+        let calculate = |owned| cpu_capacity_from_budget(budget, owned, 0, 5, 1, 16);
+        assert_eq!(calculate(0), (15, 3));
+        assert_eq!(calculate(8 * gib), (15, 7));
+        assert_eq!(
+            cpu_capacity_from_budget(budget, 8 * gib, 0, 5, 1, 2),
+            (2, 7)
+        );
+        assert_eq!(
+            cpu_capacity_from_budget(
+                MemoryBudgetBytes {
+                    effective_total: 32 * gib,
+                    effective_available: 0
+                },
+                0,
+                0,
+                5,
+                1,
+                16
+            ),
+            (15, 0)
+        );
+        assert_eq!(
+            cpu_capacity_from_budget(budget, 8 * gib, 0, 5, 2, 8),
+            (7, 3)
+        );
+        assert_eq!(
+            cpu_capacity_from_budget(budget, u64::MAX, 0, 5, 1, 16),
+            (15, 15)
+        );
+    }
+
+    #[test]
+    fn automatic_memory_headroom_respects_effective_total_and_gpu_reservation() {
+        let gib = 1024 * 1024 * 1024;
+        let budget = MemoryBudgetBytes {
+            effective_total: 512 * gib,
+            effective_available: 490 * gib,
+        };
+        let usable = auto_cpu_memory_bytes(budget, 8 * gib, 5);
+        assert_eq!(usable, 482 * gib - (512 * gib / 100 * 5));
+        assert_eq!(usable / CPU_LANE_MEMORY_BYTES, 228);
+        assert_eq!(auto_cpu_memory_bytes(budget, 0, 0), 490 * gib);
+        let constrained = MemoryBudgetBytes {
+            effective_total: 16 * gib,
+            effective_available: gib / 2,
+        };
+        assert_eq!(auto_cpu_memory_bytes(constrained, 0, 5), 0);
+        assert_eq!(auto_cpu_memory_bytes(constrained, 20 * gib, 0), 0);
+    }
+
+    #[test]
+    fn automatic_memory_reserve_cli_default_and_opt_out() {
+        assert_eq!(
+            Cli::try_parse_from(["seine"])
+                .unwrap()
+                .cpu_memory_reserve_percent,
+            5
+        );
+        let cli = Cli::try_parse_from([
+            "seine",
+            "--cpu-memory-reserve-percent",
+            "0",
+            "--cpu-affinity",
+            "os",
+        ])
+        .unwrap();
+        assert_eq!(cli.cpu_memory_reserve_percent, 0);
+        assert_eq!(cli.cpu_affinity, CpuAffinityMode::Os);
+        assert!(Cli::try_parse_from(["seine", "--cpu-memory-reserve-percent", "100"]).is_err());
+    }
+
+    #[test]
     fn auto_cpu_threads_reduced_by_gpu_reservation() {
-        let without_gpu = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto);
+        let without_gpu = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
         let with_gpu = auto_cpu_threads(
             1,
             4 * CPU_LANE_MEMORY_BYTES,
             CpuAffinityMode::Auto,
             CpuPageMode::Auto,
+            5,
         );
 
         assert!(with_gpu >= 1);
@@ -3939,17 +4462,27 @@ HugePages_Rsvd:          0
             0,
             cli.cpu_affinity,
             cli.cpu_page_mode,
+            cli.cpu_memory_reserve_percent,
         );
         let defaults = cpu_profile_defaults(cli.cpu_profile, auto_threads_cap);
-        let cpu_autotune_default_enabled = cli.threads.is_none() && cpu_backend_instances > 0;
-        let cpu_autotune_threads = if cli.disable_cpu_autotune_threads {
-            false
-        } else {
-            cli.cpu_autotune_threads || cpu_autotune_default_enabled
-        };
+        let cpu_autotune_threads = cpu_autotune_enabled(&cli, cpu_backend_instances);
         let resolved_threads = cli.threads.unwrap_or(defaults.threads);
         assert!(cpu_autotune_threads);
         assert!(resolved_threads >= 1);
+    }
+
+    #[test]
+    fn explicit_cpu_counts_disable_adaptation_unless_forced() {
+        let mut cli = sample_cli();
+        cli.threads = None;
+        cli.cpu_threads_per_instance = vec![2, 4];
+        assert!(!cpu_autotune_enabled(&cli, 2));
+        cli.cpu_autotune_threads = true;
+        assert!(cpu_autotune_enabled(&cli, 2));
+        cli.cpu_autotune_threads = false;
+        cli.cpu_threads_per_instance.clear();
+        cli.threads = Some(2);
+        assert!(!cpu_autotune_enabled(&cli, 1));
     }
 
     #[test]
@@ -3962,12 +4495,7 @@ HugePages_Rsvd:          0
             .iter()
             .filter(|kind| matches!(kind, BackendKind::Cpu))
             .count();
-        let cpu_autotune_default_enabled = cli.threads.is_none() && cpu_backend_instances > 0;
-        let cpu_autotune_threads = if cli.disable_cpu_autotune_threads {
-            false
-        } else {
-            cli.cpu_autotune_threads || cpu_autotune_default_enabled
-        };
+        let cpu_autotune_threads = cpu_autotune_enabled(&cli, cpu_backend_instances);
         assert!(!cpu_autotune_threads);
     }
 
@@ -4026,5 +4554,94 @@ HugePages_Rsvd:          0
     fn resolve_backend_selection_skips_cuda_hint_on_macos() {
         let (_, hint) = resolve_backend_selection(&[], &[], false);
         assert!(hint.is_none());
+    }
+}
+
+/// Kept separate from config persistence so the restrictions can be tested
+/// without creating a user config or probing GPU drivers.
+pub(crate) fn validate_benchmark_cpu_kernel(
+    kernel: Option<blocknet_pow_kernel::CpuKernel>,
+    bench: bool,
+    backends: &[BackendKind],
+    threads: Option<usize>,
+    autotune: bool,
+) -> Result<()> {
+    let Some(kernel) = kernel else {
+        return Ok(());
+    };
+    if !bench {
+        bail!("--bench-cpu-kernel requires --bench");
+    }
+    if backends.is_empty() || backends.iter().any(|kind| *kind != BackendKind::Cpu) {
+        bail!("--bench-cpu-kernel requires CPU-only backends (--backend cpu)");
+    }
+    if threads.is_none() || threads == Some(0) || autotune {
+        bail!("--bench-cpu-kernel requires fixed --threads and CPU autotuning disabled");
+    }
+    if !kernel.is_supported() {
+        bail!("CPU kernel {kernel} is not supported by this host/build");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod benchmark_kernel_tests {
+    use super::*;
+    use blocknet_pow_kernel::CpuKernel;
+
+    #[test]
+    fn explicit_kernel_requires_offline_fixed_cpu_benchmark() {
+        let kernel = Some(CpuKernel::Scalar);
+        for (bench, backends, threads, autotune) in [
+            (false, vec![BackendKind::Cpu], Some(1), false),
+            (true, vec![], Some(1), false),
+            (true, vec![BackendKind::Nvidia], Some(1), false),
+            (
+                true,
+                vec![BackendKind::Cpu, BackendKind::Nvidia],
+                Some(1),
+                false,
+            ),
+            (true, vec![BackendKind::Cpu], None, false),
+            (true, vec![BackendKind::Cpu], Some(0), false),
+            (true, vec![BackendKind::Cpu], Some(1), true),
+        ] {
+            assert!(
+                validate_benchmark_cpu_kernel(kernel, bench, &backends, threads, autotune).is_err()
+            );
+        }
+        assert!(
+            validate_benchmark_cpu_kernel(kernel, true, &[BackendKind::Cpu], Some(1), false)
+                .is_ok()
+        );
+        assert!(validate_benchmark_cpu_kernel(None, false, &[], None, true).is_ok());
+        for unsupported in CpuKernel::ALL.into_iter().filter(|k| !k.is_supported()) {
+            assert!(validate_benchmark_cpu_kernel(
+                Some(unsupported),
+                true,
+                &[BackendKind::Cpu],
+                Some(1),
+                false
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn cli_requires_bench_and_explicit_threads_for_kernel_override() {
+        assert!(Cli::try_parse_from(["seine", "--bench-cpu-kernel", "scalar"]).is_err());
+        assert!(Cli::try_parse_from(["seine", "--bench", "--bench-cpu-kernel", "scalar"]).is_err());
+        let cli = Cli::try_parse_from([
+            "seine",
+            "--bench",
+            "--threads",
+            "1",
+            "--backend",
+            "cpu",
+            "--bench-cpu-kernel",
+            "scalar",
+        ])
+        .unwrap();
+        assert_eq!(cli.bench_cpu_kernel, Some(CpuKernel::Scalar));
     }
 }

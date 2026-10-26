@@ -37,10 +37,11 @@ Behavior:
 
 ## Security and Binding
 
-- Control API endpoints are open by default (no API key required).
-- Default bind is loopback only: `127.0.0.1:9977`.
+- Every endpoint except `GET /v1/health` requires `Authorization: Bearer <token>`.
+- Seine generates a random token at startup, writes it to `<data-dir>/control-api.cookie` (owner-only permissions on Unix), and deletes the file on shutdown. Use `--api-cookie <path>` to move the file or `--api-token <token>` to set a fixed token instead.
+- Default bind is loopback only: `127.0.0.1:9977`. On a loopback bind, requests whose `Host` header is not `localhost` or a loopback IP are rejected with `403`, which blocks DNS-rebinding pages.
 - Non-loopback bind requires `--api-allow-unsafe-bind`.
-- CORS allow-origin is configurable via `--api-cors` (default `*`).
+- No CORS headers are sent by default, so web pages on other origins cannot call the API. Pass `--api-cors <origin>` to allow a browser frontend.
 
 ## Mode-Specific Start Requirements
 
@@ -163,12 +164,14 @@ Prometheus metrics exposed by the control API:
 ```bash
 ./seine --service --api-bind 127.0.0.1:9977
 curl -s http://127.0.0.1:9977/v1/health
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
 ```
 
 ### 2. Start Mining with Sparse Overrides
 
 ```bash
 curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
   -H 'content-type: application/json' \
   -d '{
     "mode":"pool",
@@ -184,13 +187,14 @@ curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
 ### 3. Watch Live Events
 
 ```bash
-curl -N http://127.0.0.1:9977/v1/events/stream
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
 ```
 
 ### 4. Queue Config Patch
 
 ```bash
 curl -s -X PATCH http://127.0.0.1:9977/v1/miner/live-config \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"ui_mode":"plain","stats_secs":3}'
 ```
@@ -201,6 +205,7 @@ Check `requires_restart` in the response.
 
 ```bash
 curl -s -X POST http://127.0.0.1:9977/v1/wallet/unlock \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"password":"<wallet-password>"}'
 ```
@@ -209,6 +214,7 @@ curl -s -X POST http://127.0.0.1:9977/v1/wallet/unlock \
 
 ```bash
 curl -s -X POST http://127.0.0.1:9977/v1/miner/stop \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"wait_ms":10000}'
 ```

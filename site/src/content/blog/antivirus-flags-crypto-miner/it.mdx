@@ -1,0 +1,78 @@
+---
+title: 'Windows blocca il miner? Verifica il download'
+description: 'Controlla un download di seine bloccato su Windows: identifica l’avviso, verifica lo ZIP ufficiale con SHA-256 e raccogli i dettagli della rilevazione.'
+tags: ["Guida al mining", "Windows", "Download"]
+faq:
+  - q: 'Un hash SHA-256 corrispondente dimostra che un miner è sicuro?'
+    a: 'Un hash corrispondente conferma che il file scaricato coincide con la somma usata per il confronto. Procurati entrambi dalla pubblicazione ufficiale. Questo verifica l’integrità del file, ma non sostituisce l’esame di una rilevazione antivirus né dimostra autonomamente che il programma sia sicuro da eseguire.'
+  - q: 'Quale file di checksum devo usare per lo ZIP Windows?'
+    a: 'Usa l’asset SHA256SUMS.txt della stessa versione di seine-windows-x86_64.zip. Elenca i checksum degli archivi. Un secondo SHA256SUMS.txt all’interno dello ZIP descrive i file estratti. Confronta l’archivio con l’asset della pubblicazione, mantenendo le versioni corrispondenti.'
+  - q: 'Cosa includere nella segnalazione di un download bloccato?'
+    a: 'Indica versione di seine, URL ufficiale, nome del file, hash SHA-256, versione di Windows e nome esatto della rilevazione o testo dell’avviso. Specifica se riguarda lo ZIP o un file estratto. Oscura percorsi personali ed escludi seed del wallet, chiavi private e token API dalle immagini.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Se Windows blocca un download di seine o un file estratto scompare, identifica prima il file e l’avviso esatti. Questa guida spiega come controllare la pubblicazione ufficiale, confrontare il checksum SHA-256 e raccogliere informazioni utili per una segnalazione. L’esempio usa seine v0.2.26, verificato il 25 ottobre 2026.
+
+## Cosa controllare quando Windows blocca un miner?
+
+<Answer>
+Annota testo dell’avviso, nome del file coinvolto e versione prima di modificare qualsiasi cosa. Apri Sicurezza di Windows e controlla Cronologia della protezione. Poi recupera archivio e checksum dalla pubblicazione ufficiale di seine. Verifica file e versione esatti prima di decidere come gestire l’avviso.
+</Answer>
+
+Espandi la voce pertinente nella [Cronologia della protezione](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app). Windows può richiedere autorizzazioni di amministratore per mostrare i dettagli. Annota se riguarda lo ZIP scaricato, `seine.exe` o una DLL. Un eseguibile mancante e un avviso del browser possono verificarsi in fasi diverse: conserva il nome del file insieme al messaggio.
+
+## Avviso SmartScreen o rilevazione antivirus?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) valuta le applicazioni scaricate tramite segnali di reputazione del file e dell’autore. Un’app sconosciuta è diversa da una rilevazione antivirus con un nome preciso. Registra il messaggio effettivo: la parola miner nel nome non identifica il controllo intervenuto né il motivo del blocco.
+
+Microsoft include anche i programmi di mining nei [criteri delle applicazioni potenzialmente indesiderate](https://learn.microsoft.com/en-us/defender-xdr/criteria), specificamente negli ambienti aziendali. Su computer gestiti da scuola o azienda, chiedi all’amministratore quale criterio si applica. È una categoria di software, non un verdetto sul tuo download. Chiarisci l’avviso specifico senza presumere che ogni avviso sui miner sia un falso positivo.
+
+## Scarica ZIP e checksum dalla stessa versione
+
+Apri le [pubblicazioni ufficiali di seine](https://github.com/zpalmtree/seine/releases) dalla [pagina di download](/it/#download). Verifica che il repository sia `zpalmtree/seine`. Scegli `seine-windows-x86_64.zip` e l’asset separato `SHA256SUMS.txt` della stessa pubblicazione. Annota la versione: il checksum di una versione precedente o successiva non è il riferimento per l’archivio scaricato.
+
+![ZIP Windows e SHA256SUMS.txt negli asset ufficiali di seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Questa è una cattura reale degli asset di v0.2.26. Il file di checksum della pubblicazione copre gli archivi scaricabili. Un altro `SHA256SUMS.txt` dentro lo ZIP copre i file estratti. Per questo primo controllo usa l’asset scaricato separatamente. Non confondere i due elenchi anche se hanno nomi identici.
+
+Usa direttamente l’archivio ufficiale. Il confronto del checksum dello ZIP ufficiale non verifica un eseguibile rinominato, un pacchetto modificato da terzi o un file ricevuto in chat. Salva ZIP e checksum insieme in una cartella facile da trovare ed esegui lì i comandi seguenti.
+
+## Come confrontare il checksum SHA-256?
+
+Apri PowerShell nella cartella dei due file. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) calcola lo SHA-256 dell’archivio. Il confronto seleziona il nome esatto dell’archivio Windows, richiede una sola voce corrispondente e si interrompe con errore se l’hash differisce. Legge i file senza avviare il miner né cambiare la protezione di Windows.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Il messaggio di successo è `PASS: ZIP matches SHA256SUMS.txt`. Se manca un file, controlla la cartella corrente e i nomi. Se la voce del checksum manca o è duplicata, scarica nuovamente l’asset originale. In caso di differenza, fermati: verifica la versione e riscarica archivio ufficiale e checksum prima di ripetere il confronto.
+
+## Cosa ha mostrato l’esempio verificato?
+
+Abbiamo eseguito il confronto in Windows PowerShell 5.1 sullo ZIP Windows ufficiale v0.2.26. L’hash calcolato corrispondeva al checksum pubblicato. L’immagine mostra l’output reale come trascrizione impaginata, non una notifica di Sicurezza di Windows. Il [registro di testo](/assets/blog/seine-v0.2.26-verification.txt) conserva hash completo ed elenco dei file.
+
+![Risultato reale di Windows PowerShell per il checksum dell’archivio Windows di seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+Il confronto indica se quei byte corrispondono al riferimento fornito. Non autentica checksum da fonti estranee, non dimostra l’assenza di malware e non spiega una rilevazione specifica. Se l’avviso riguarda un eseguibile estratto, annota separatamente nome e rilevazione: l’hash dello ZIP identifica l’archivio.
+
+## E se il download verificato resta bloccato?
+
+Mantieni l’elemento in quarantena mentre si indaga una rilevazione irrisolta. Prepara versione, URL, nome coinvolto, valore SHA-256 e avviso esatto. Aggiungi la versione di Windows e indica se il blocco è avvenuto durante download, estrazione o avvio. Questi dati rendono riproducibile la segnalazione senza esporre la configurazione personale.
+
+Usa il [registro dei problemi di seine](https://github.com/zpalmtree/seine/issues) per il progetto e il [portale Microsoft per l’invio di file](https://www.microsoft.com/en-us/wdsi/filesubmission) per una sospetta rilevazione errata. Controlla gli allegati prima dell’invio. Condividi su richiesta il file pubblico o i suoi identificatori, non la cartella dei dati di mining. Rimuovi percorsi personali, dati del wallet e token di autenticazione dalle immagini.
+
+Windows offre azioni specifiche per alcune rilevazioni. Valuta di consentire un elemento solo dopo aver chiarito origine e rilevazione e se ti fidi proprio di quel file; segui le istruzioni dell’avviso registrato. Mantieni attiva la protezione generale. Sui dispositivi gestiti decide l’amministratore cosa è consentito.
+
+## Prosegui con l’archivio Windows verificato
+
+Quando il file è autorizzato, estrai tutto lo ZIP in una cartella scrivibile e conserva le DLL accanto a `seine.exe`. La [guida al mining su Windows](/it/blog/mine-blocknet-on-windows/) copre il primo avvio e la richiesta dell’indirizzo di pagamento. Per driver, librerie o selezione dei dispositivi, segui la [guida NVIDIA](/it/blog/mine-blocknet-nvidia-gpu/). Questi controlli sono distinti dalla verifica del download.
+
+<CTA target="seine" title="Scarica la versione ufficiale di seine" text="Scegli l’archivio Windows e verifica il checksum della stessa versione prima della configurazione." />

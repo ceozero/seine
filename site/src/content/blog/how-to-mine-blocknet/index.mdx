@@ -1,0 +1,103 @@
+---
+title: How to mine Blocknet
+description: Start mining Blocknet on Windows, macOS or Linux in a few minutes. Get an address, download seine, and mine on bntpool.com with your CPU and NVIDIA GPU.
+date: 2026-10-25
+tags: [Mining guide, Blocknet, Argon2id, bntpool]
+faq:
+  - q: How much RAM do I need to mine Blocknet?
+    a: Each mining thread needs about 2 GB of RAM, because every Argon2id hash works through a 2 GiB block of memory. A machine with 16 GB can therefore run roughly six to seven threads after leaving room for the system. Seine measures your memory and picks a safe thread count automatically.
+  - q: When do Blocknet mining payouts arrive on bntpool.com?
+    a: The bntpool.com pool pays with PPLNS over a six-hour window. A block's reward can only be paid after it is 60 blocks deep, about five hours at five-minute blocks, and balances are sent once they reach 0.1 BNT. Expect the first payment several hours after your first accepted shares.
+  - q: Can I mine Blocknet with my CPU and GPU at the same time?
+    a: Yes. On Windows and Linux, seine mines on every CPU core and every NVIDIA graphics card in the machine at once, and the two hashrates add up. It tunes the processor and each card separately while it runs, so you get the most from all of your hardware without changing a setting.
+related: [blocknet-mining-hardware-hashrate, what-is-blocknet, blocknet-id-pay-by-name]
+---
+
+This guide takes you from downloading **seine** to your first accepted shares and payouts on the bntpool.com pool, on Windows, macOS or Linux. New to mining? [How crypto mining works](/blog/how-crypto-mining-works/) explains blocks, difficulty and pools first.
+
+## How do you mine Blocknet?
+
+<Answer>
+Get a Blocknet address or a Blocknet ID shortname, download seine for your system, run it, and paste your address when asked. Accept the default pool, bntpool.com, and you are mining. Seine starts hashing right away and keeps tuning thread count and CPU kernel while it runs.
+</Answer>
+
+## What do you need before you start?
+
+- **A Blocknet address.** Install the official Blocknet wallet, either the [command-line wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) or the [desktop wallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), and copy your address. The [wallet guide](/blog/blocknet-wallet-for-mining/) walks through it step by step. Keep the wallet and its recovery phrase on your own computer; don't put them on a shared mining rig.
+- **Or a shortname.** If you have a [Blocknet ID shortname](/blog/blocknet-id-pay-by-name/) from [blocknet.id](https://blocknet.id), you can mine to `@name` instead of pasting the long address.
+- **About 2 GB of RAM per mining thread.** Seine sizes itself to your machine and leaves headroom for the system, so you don't need to work this out first.
+- **Windows, macOS or Linux.** On Windows and Linux, NVIDIA graphics cards are used automatically when a recent driver is installed.
+
+## Step 1: download seine
+
+Get the archive for your system from the [download section](/#download). There is nothing to install: unzip it and you're ready.
+
+| System | Archive | Graphics cards |
+|---|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; the CUDA runtime is included |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, with the driver installed |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 or newer) |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
+
+Each release also publishes a `SHA256SUMS.txt` file, so you can check that your download matches the release.
+
+## Step 2: run it
+
+On Windows, double-click `seine.exe`. On macOS or Linux, open a terminal in the unzipped folder and run:
+
+```sh
+./seine
+```
+
+## Step 3: enter your address and start mining
+
+Seine asks for your payout address or `@shortname`, then for a pool. Press Enter to accept the default, `stratum+tcp://bntpool.com:3333`. Within moments [the dashboard](/blog/seine-dashboard-explained/) shows your hashrate and your first shares.
+
+From here seine keeps tuning while it mines. It compares thread counts and CPU kernels on real mining work, switches only after a confirmed gain, backs off if memory gets tight, and remembers what worked for the next start. It never reconnects to the pool to do this, so tuning costs you no mining time.
+
+## How long until you get paid?
+
+The bntpool.com pool uses PPLNS: each block's reward is shared among the shares submitted in the six hours before it was found. A reward can't be spent until its block is 60 blocks deep, which is about five hours at Blocknet's five-minute block time. Once your confirmed balance reaches 0.1 BNT, the pool sends it to your address.
+
+You can follow your hashrate, shares and balance on [bntpool.com](https://bntpool.com) by looking up your address. The pool shows rewards from blocks that haven't confirmed yet separately, because those can still change.
+
+## How fast will your computer mine?
+
+Hashrate depends mostly on memory bandwidth and the number of threads your RAM allows. These are the best results measured with seine for each generation:
+
+| Hardware | Threads | Hashrate |
+|---|---|---|
+| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49.4 H/s |
+| Arm server (AWS Graviton4) | 32 | 39.3 H/s |
+| AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38.2 H/s |
+| Apple M4 Max (48 GB MacBook Pro) | 16 | 30.9 H/s |
+| Intel Xeon (Sapphire Rapids 8488C) | 32 | 26.0 H/s |
+
+Results for every CPU tested are on the [performance page](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), and the [Blocknet mining hardware guide](/blog/blocknet-mining-hardware-hashrate/) explains how RAM and memory bandwidth set these numbers.
+
+## How does seine get more from the same CPU?
+
+Seine ships several Argon2id kernels for each processor family and measures them on your machine while it mines. On the hardware we tested, the right kernel made a large difference:
+
+- **AWS Graviton4:** the SHA3 kernel with prefetching mines 56% faster than plain NEON (13.80 to 21.50 H/s).
+- **AMD EPYC 9R45 (Zen 5):** the streaming kernel mines 30% faster than AVX2 (34.47 to 44.74 H/s at 24 threads).
+
+You don't have to choose any of this. Seine switches kernels only after a confirmed gain and remembers the result for the next start.
+
+## How can you get more hashrate?
+
+- **Mine on CPU and GPU together.** Seine does this by default on Windows and Linux, and the two hashrates add up.
+- **Reserve huge pages on Linux and WSL.** Backing each thread's memory with 2 MiB pages added about 4–6% on the validation machine, and 1 GiB pages about 2% more. The [huge pages guide](/blog/huge-pages-blocknet-mining/) has the commands.
+- **Let big servers spread out.** On Linux, seine places threads across NUMA nodes and cache groups automatically. The [large servers guide](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) covers the details.
+- **Use CPU-only mining on Apple Silicon.** It is the fastest choice on M-series Macs, which is what seine does by default.
+
+## Can you mine Blocknet solo?
+
+Yes. If you run your own synced Blocknet node, start seine with `./seine --mode daemon` and it mines directly against the node instead of a pool. You keep every block you find, but payouts arrive only when you find a whole block, so most people start on a pool. The [solo mining guide](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md) explains the setup.
+
+<Note>
+Blocknet plans a network upgrade called Faraday around 2027-02-16, according to [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). It is planned to change the proof of work, so keep seine up to date: it checks for new releases when it starts and every 12 hours.
+</Note>
+
+<CTA target="seine" title="Download seine" text="Free for Windows, macOS and Linux. Run it, paste your address and you are mining on bntpool.com." />

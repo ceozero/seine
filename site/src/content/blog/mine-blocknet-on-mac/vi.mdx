@@ -1,0 +1,131 @@
+---
+title: Cách đào Blocknet trên máy Mac
+description: Đào Blocknet trên Mac Apple Silicon bằng seine. Thiết lập trong Terminal, xem kết quả đo 30,9 H/s của M4 Max và biết Mac của bạn chạy được bao nhiêu luồng.
+tags: [Hướng dẫn đào coin, macOS, Apple Silicon, seine]
+faq:
+  - q: 'Có thể đào Blocknet trên MacBook Air không?'
+    a: 'Có. Mọi máy Mac Apple Silicon đều chạy được seine, kể cả MacBook Air. Tải seine-macos-aarch64.tar.gz, giải nén trong Terminal rồi chạy ./seine. Mỗi luồng cần khoảng 2 GB bộ nhớ, nên một chiếc MacBook Air 16 GB chạy được tối đa bảy luồng, và seine tự đặt số luồng dựa trên bộ nhớ còn trống.'
+  - q: 'seine có dùng GPU khi đào Blocknet trên Mac không?'
+    a: 'Trên Apple Silicon, seine mặc định đào bằng CPU vì đó là lựa chọn nhanh nhất. CPU và các nhân đồ họa dùng chung bộ nhớ hợp nhất, còn Proof of Work Argon2id của Blocknet phụ thuộc vào băng thông bộ nhớ. Trên M4 Max, đào chỉ bằng CPU cho hashrate cao nhất, nên seine tự động dùng cách này.'
+  - q: 'Mac cần bao nhiêu bộ nhớ để đào Blocknet?'
+    a: 'Mỗi luồng đào xử lý một vùng nhớ 2 GiB, nên hãy tính khoảng 2 GB cho mỗi luồng. Mac 16 GB chạy được tối đa bảy luồng, Mac 32 GB tối đa 15 và Mac 64 GB tối đa 30. seine tính bộ nhớ còn trống và đồng thời khớp số luồng với số nhân của bạn.'
+  - q: 'Có thể đào Blocknet trên Mac Intel không?'
+    a: 'Có. seine phát hành một gói riêng cho Mac Intel, seine-macos-x86_64.tar.gz, và các bước giống hệt trên Apple Silicon. Tải về, giải nén trong Terminal, chạy ./seine rồi dán địa chỉ Blocknet hoặc @name của bạn. seine chọn số luồng theo bộ nhớ của bạn và mặc định bắt đầu đào trên bntpool.com.'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+Bài hướng dẫn này chỉ cho bạn cách đào Blocknet trên máy Mac Apple Silicon bằng **seine**: vì sao chip dòng M phù hợp với Proof of Work của Blocknet, M4 Max đo được bao nhiêu, bộ nhớ của Mac chạy được bao nhiêu luồng, và các bước cụ thể trong Terminal để bắt đầu đào trên bntpool.com.
+
+## Có thể đào Blocknet trên Mac không?
+
+<Answer>
+Có. Mac Apple Silicon là máy đào Blocknet mạnh vì bộ nhớ hợp nhất mang lại nhiều băng thông cho Proof of Work Argon2id vốn memory-hard (tốn nhiều bộ nhớ). Tải `seine-macos-aarch64.tar.gz`, giải nén trong Terminal, chạy `./seine` rồi dán địa chỉ của bạn. Một chiếc M4 Max 48 GB đo được 30,9 H/s chỉ với CPU.
+</Answer>
+
+seine tự lo phần thiết lập riêng cho Mac. Nó đào bằng CPU, ưu tiên xếp luồng lên các nhân hiệu năng và chọn số luồng theo bộ nhớ của bạn, nên với hầu hết mọi người, chỉ cần `./seine` là đủ.
+
+## Vì sao Mac Apple Silicon đào Blocknet tốt?
+
+Proof of Work của Blocknet là [Argon2id](/vi/blog/argon2id-proof-of-work-explained/) với 2 GiB bộ nhớ cho mỗi lần băm. Mỗi lần băm lấp đầy một vùng nhớ 2 GiB và đọc lại các phần trước đó trong lúc chạy, nên tốc độ của một luồng đào chủ yếu phụ thuộc vào việc chip đưa dữ liệu vào và ra khỏi bộ nhớ nhanh đến đâu. Đó là lý do mỗi luồng seine cần khoảng 2 GB RAM riêng.
+
+Apple Silicon được xây dựng quanh bộ nhớ hợp nhất, mà [Apple mô tả](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) là bộ nhớ băng thông cao, độ trễ thấp được gom vào một khối duy nhất. Nhờ đó mọi luồng đào đều có nhiều băng thông, đúng thứ mà một thuật toán băm memory-hard cần. Kết quả là một chiếc laptop đào Blocknet ở cùng tầm với bộ xử lý máy chủ.
+
+## M4 Max đào Blocknet nhanh đến đâu?
+
+<Answer>
+Một chiếc MacBook Pro 48 GB với chip M4 Max đào Blocknet ở 30,94 H/s với 16 luồng chỉ trên CPU. Ở 14 luồng với cách xếp lịch ưu tiên nhân hiệu năng, thiết lập cân bằng mà seine mặc định chạy trên máy này, nó đào được 29,26 H/s và chừa nhiều bộ nhớ hơn cho các ứng dụng khác.
+</Answer>
+
+Các kết quả này đến từ đợt kiểm chứng của seine trên một chiếc M4 Max 48 GB (12 nhân hiệu năng và 4 nhân tiết kiệm điện) vào ngày 10 tháng 7 năm 2026:
+
+| Thiết lập | Số luồng | Hashrate |
+|---|---|---|
+| Thông lượng tối đa | 16, xếp lịch `auto` | 30,94 H/s |
+| Cân bằng (mức trần mặc định của seine trên máy Mac này) | 14, xếp lịch `pcore-only` | 29,26 H/s |
+
+Để so sánh, kết quả 30,9 H/s vượt mọi kết quả máy chủ Arm và Intel Xeon trong [bảng hiệu năng](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) của seine; chỉ có máy chủ AMD EPYC Zen 5 và Zen 4 đo được cao hơn. [Hướng dẫn phần cứng đào Blocknet](/vi/blog/blocknet-mining-hardware-hashrate/) so sánh kết quả tốt nhất của từng thế hệ phần cứng, và [hướng dẫn Apple Silicon](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) có đầy đủ ghi chú tinh chỉnh.
+
+## Mac của bạn chạy được bao nhiêu luồng?
+
+Mỗi luồng cần 2 GiB bộ nhớ riêng, nên bộ nhớ quyết định mức trần. seine cũng chừa 5% bộ nhớ của Mac làm dự phòng khi tự chọn cấu hình. Từ đó có các giới hạn trên sau:
+
+| Bộ nhớ Mac | Số luồng bộ nhớ chứa được |
+|---|---|
+| 16 GB | tối đa 7 |
+| 24 GB | tối đa 11 |
+| 32 GB | tối đa 15 |
+| 36 GB | tối đa 17 |
+| 48 GB | tối đa 22 |
+| 64 GB | tối đa 30 |
+
+Hai yếu tố đưa con số cuối cùng về mức phù hợp với Mac của bạn:
+
+- **Bộ nhớ còn trống.** seine tính bộ nhớ thực sự còn trống khi khởi động, nên các ứng dụng bạn đang mở sẽ làm giảm số luồng một chút. Nếu bộ nhớ trở nên chật trong lúc chạy, seine tạm dừng bớt luồng và giải phóng bộ nhớ của chúng.
+- **Số nhân.** Mặc định trên Mac, seine dùng tất cả nhân hiệu năng cộng với một nửa số nhân tiết kiệm điện. Trên M4 Max 12+4 nhân, đó là 14 luồng, tức thiết lập cân bằng trong bảng ở trên.
+
+Bạn không cần tự tính bất kỳ điều gì ở đây. seine chọn số luồng khi khởi động và tiếp tục thử các số luồng lân cận trong lúc đào.
+
+## Thiết lập từng bước trên macOS
+
+### Bước 1: tạo địa chỉ Blocknet
+
+Cài ví Blocknet chính thức, có thể là [ví dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) hoặc [ví desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), rồi sao chép địa chỉ của bạn. Nếu bạn có tên ngắn Blocknet ID từ [blocknet.id](https://blocknet.id), bạn có thể đào về `@name` thay cho địa chỉ.
+
+### Bước 2: tải seine cho Apple Silicon
+
+Từ [mục tải xuống](/vi/#download), tải `seine-macos-aarch64.tar.gz`. Gói này chứa chương trình `seine`, tệp readme và giấy phép, cùng tệp `SHA256SUMS.txt` để kiểm tra bản tải về.
+
+### Bước 3: giải nén trong Terminal
+
+Mở Terminal (trong Applications, rồi Utilities) và chạy các lệnh sau. Chúng tạo một thư mục `seine` trong thư mục người dùng của bạn và giải nén gói vào đó:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### Bước 4: chạy seine
+
+```sh
+./seine
+```
+
+Bản macOS được ký ad-hoc. Nếu macOS chặn lần chạy đầu tiên, hãy mở System Settings, vào Privacy & Security và cho phép `seine`. Bạn cũng có thể xóa cờ tải xuống từ Terminal rồi chạy lại:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### Bước 5: nhập địa chỉ và bắt đầu đào
+
+seine hỏi địa chỉ nhận thanh toán hoặc `@shortname` của bạn, rồi hỏi pool. Nhấn Return để chấp nhận pool mặc định, `stratum+tcp://bntpool.com:3333`. Sau đó [bảng điều khiển](/vi/blog/seine-dashboard-explained/) hiển thị hashrate và những share đầu tiên được chấp nhận. Pool bntpool.com gửi số dư về địa chỉ của bạn khi đạt 0,1 BNT, và bạn có thể theo dõi trên [bntpool.com](https://bntpool.com) bằng cách tra địa chỉ của mình.
+
+## Vì sao seine chỉ đào bằng CPU trên Mac?
+
+Trên Apple Silicon, CPU và các nhân đồ họa dùng chung một khối bộ nhớ hợp nhất. Argon2id phụ thuộc vào băng thông bộ nhớ, nên CPU và các nhân đồ họa sẽ tranh nhau cùng một băng thông. Trong thử nghiệm của seine trên M4 Max, đào chỉ bằng CPU cho hashrate cao nhất, nên seine tự động chọn cách này trên mọi máy Mac Apple Silicon. Bạn có thiết lập nhanh nhất mà không cần đặt cờ nào.
+
+## Làm sao tận dụng tối đa máy Mac?
+
+- **Để seine tự tinh chỉnh.** Nó so sánh số luồng và kernel CPU trên công việc đào thực tế, chỉ chuyển đổi sau khi xác nhận có cải thiện, và ghi nhớ kết quả cho lần khởi động sau.
+- **Giữ Mac luôn thức.** macOS đưa Mac đang rảnh vào chế độ ngủ, việc này làm tạm dừng đào. Hãy chạy seine với lệnh có sẵn `caffeinate` để giữ Mac thức suốt thời gian seine chạy:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Chọn thông lượng tối đa trên Mac chuyên đào.** Nếu máy Mac không làm gì khác ngoài đào, thiết lập đã đo được 30,94 H/s trên M4 Max sẽ dùng cả 16 nhân và nhiều bộ nhớ hơn mức cân bằng mặc định:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Để xem mọi tùy chọn, hãy đọc [hướng dẫn cấu hình](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md). [Hướng dẫn đào chính](/vi/blog/how-to-mine-blocknet/) trình bày về thanh toán và các nền tảng khác.
+
+<Note>
+Các kết quả này mô tả Proof of Work Argon2id hiện tại của Blocknet. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến có một bản nâng cấp mạng tên là Faraday vào khoảng ngày 16 tháng 2 năm 2027, dự kiến sẽ thay đổi Proof of Work. seine kiểm tra bản phát hành mới khi khởi động và cứ mỗi 12 giờ, vì vậy hãy luôn cập nhật nó.
+</Note>
+
+<CTA target="seine" title="Tải seine cho macOS" text="Bản Apple Silicon đào bằng CPU của Mac và tự động chọn số luồng." />

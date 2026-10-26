@@ -1,0 +1,143 @@
+---
+title: Verschlüsselte Memos bei Blocknet-Zahlungen
+description: 'Verschlüsseltes Memo für jede Blocknet-Zahlung: Rechnung, Bestellnummer oder Notiz. Bis zu 124 Byte, lesbar für Sender und Empfänger, zur Tarnung aufgefüllt.'
+tags: [Memos, Privatsphäre, Wallet, Zahlungen]
+faq:
+  - q: 'Wie lang darf ein Blocknet-Memo sein?'
+    a: 'Ein Memo fasst bis zu 124 Byte. Klartext wird als UTF-8 gespeichert, das sind also 124 Buchstaben, Ziffern oder Satzzeichen im Englischen oder etwa 41 chinesische Schriftzeichen zu je drei Byte. Ein längeres Memo weist die Wallet zurück, bevor sie die Transaktion erstellt, und nennt dir das Maximum von 124 Byte.'
+  - q: 'Kann ein Block-Explorer ein Blocknet-Memo lesen?'
+    a: 'Nein. Ein Explorer zeigt das Memo-Feld als 128 Byte Chiffretext, markiert als verschlüsselt. Der Schlüssel stammt aus dem Geheimnis, das Sender und Empfänger für diesen Output teilen, daher können nur ihre Wallets es öffnen. Weil jedes Memo auf volle Größe aufgefüllt wird, kann ein Explorer nicht einmal erkennen, welche Outputs eine Notiz enthalten.'
+  - q: 'Macht ein Memo eine Blocknet-Transaktion größer?'
+    a: 'Nein. Jeder Output trägt bereits ein verschlüsseltes Memo-Feld von 128 Byte, egal ob du eine Notiz schreibst oder es leer lässt. Ein Memo füllt Platz, der ohnehin da ist, eine Zahlung mit Rechnungsnummer ist also genau so groß wie dieselbe Zahlung ohne, und beide sehen auf der Chain identisch aus.'
+  - q: 'Kann ich ein Memo hinzufügen, wenn ich an einen Blocknet-ID-Namen zahle?'
+    a: 'Ja. Schreib den Namen dorthin, wo die Adresse steht, und das Memo hinter den Betrag, zum Beispiel send @rock 100 "invoice 1042". Die Wallet löst den Namen auf, zeigt die verifizierte Adresse, die Gebühr und das Memo und bittet dich um Bestätigung. Das Memo wird für die Wallet verschlüsselt, auf die der Name zeigt.'
+sourceHash: 6df2e7728647
+translation: reviewed
+---
+
+Jede Blocknet-Zahlung kann eine kurze verschlüsselte Notiz mitführen. Du kannst sie für eine Rechnungsnummer, eine Bestellreferenz oder eine Nachricht an die Person nutzen, die du bezahlst, und nur ihr beide könnt sie lesen. Diese Anleitung zeigt, wie du beim Senden von BNT ein Memo hinzufügst, wer es lesen kann, warum Memos auf der Chain nie auffallen und wo du die Memos findest, die du empfängst.
+
+## Was ist ein Blocknet-Memo?
+
+Ein Blocknet-Memo ist ein verschlüsseltes Feld von 128 Byte, das an jedem Transaktions-Output hängt. Es fasst bis zu 124 Byte deines eigenen Textes oder deiner Daten, etwa eine Rechnungsnummer oder eine kurze Notiz. Es wird mit einem Geheimnis verschlüsselt, das nur Sender und Empfänger teilen, und so aufgefüllt, dass ein leeres Memo wie ein volles aussieht.
+
+Das Memo ist Teil des Transaktionsformats selbst. Jeder Output auf der Chain hat eines, auch Wechselgeld-Outputs, die Coins an deine eigene Wallet zurückgeben. Daraus ergeben sich drei nützliche Eigenschaften:
+
+- **Standardmäßig privat.** Der Inhalt wird für den Empfänger dieses Outputs verschlüsselt. Niemand sonst sieht, was du geschrieben hast.
+- **Feste Größe.** Das Feld ist auf der Chain immer 128 Byte groß, egal was du hineinschreibst.
+- **Immer vorhanden.** Da jeder Output ein Memo trägt, sieht eine Zahlung mit Notiz genau so aus wie eine Zahlung ohne.
+
+## Was kannst du in ein Memo schreiben?
+
+Alles, was in 124 Byte passt. Klartext wird als UTF-8 gespeichert, im Englischen sind das also 124 Buchstaben, Ziffern und Leerzeichen. Zeichen außerhalb des lateinischen Alphabets belegen mehr Byte: Ein chinesisches Schriftzeichen braucht drei, ein Memo fasst also etwa 41 davon.
+
+Übliche Anwendungen:
+
+- **Rechnungen.** Schreib die Rechnungsnummer ins Memo, und wer die Zahlung empfängt, kann sie ohne Nachfrage der richtigen Rechnung zuordnen.
+- **Bestellnummern.** Ein Shop oder Dienst kann Kunden bitten, eine Bestellreferenz anzugeben, und sie direkt aus der eingehenden Zahlung lesen.
+- **Notizen.** „Miete für November“, „Danke für die Hilfe“ oder „Anteil fürs Abendessen“ reisen mit den Coins.
+- **Binärdaten.** Die Wallet akzeptiert auch rohe Bytes in Hex-Schreibweise, für Referenzcodes, die Software erzeugt und liest.
+
+## Wie fügst du beim Senden von BNT ein Memo hinzu?
+
+<Answer>
+Tippe in der Kommandozeilen-Wallet das Memo hinter den Betrag: send @rock 100 "invoice 1042". Die Wallet zeigt das Memo auf dem Bestätigungsbildschirm neben der Gebühr, verschlüsselt es für den Empfänger und sendet die Zahlung, sobald du bestätigst. Rohe Bytes funktionieren auch, mit dem Präfix hex:.
+</Answer>
+
+Der Befehl `send` der Wallet nimmt das Memo als optionales letztes Argument:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Ein Memo darf Leerzeichen enthalten, und Anführungszeichen darum sind optional. Die Wallet entfernt ein passendes Paar Anführungszeichen, bevor sie den Text verschlüsselt. Hier eine Zahlung an einen Blocknet-ID-Namen mit Rechnungsnummer:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+Der Bestätigungsschritt zeigt das Memo, das der Empfänger lesen wird, sodass du es prüfen kannst, bevor etwas gesendet wird. Ist ein Memo länger als 124 Byte, bricht die Wallet noch vor dem Erstellen der Transaktion mit `memo too long: max 124 bytes` ab, und du kannst es kürzen und es noch einmal versuchen.
+
+Um rohe Bytes zu senden, stellst du dem Memo `hex:` voran. Die Wallet dekodiert das Hex und verschlüsselt die Bytes:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+Auch [Zahlungslinks](/de/blog/blocknet-payment-links/) können ein Memo enthalten. Wenn du einen `blocknet://`-Link oder einen `bntpay.com`-Link in die Wallet einfügst, füllt sie Adresse, Betrag und Memo aus, damit du nur noch bestätigst. So kann die Person, die du bezahlst, die Rechnungsreferenz im Voraus festlegen. Mehr über Namen und Links erfährst du in der [Blocknet-ID-Anleitung](/de/blog/blocknet-id-pay-by-name/).
+
+### Memos aus deiner eigenen Software
+
+Die Wallet-API nimmt für jeden Empfänger einer Sendung ein Memo an. Gib in einer Anfrage an `POST /api/wallet/send` für jeden Empfänger entweder `memo_text` für Klartext oder `memo_hex` für rohe Bytes an:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Die Beträge sind hier in atomaren Einheiten angegeben, wobei 1 BNT 100.000.000 Einheiten entspricht, das Beispiel sendet also 100 BNT und 25 BNT. Jeder Empfänger bekommt sein eigenes Memo, nur für die eigene Wallet verschlüsselt. Es gilt dasselbe Maximum von 124 Byte.
+
+## Wer kann ein Blocknet-Memo lesen?
+
+<Answer>
+Sender und Empfänger. Jedes Memo wird mit dem Geheimnis verschlüsselt, das die beiden Wallets für diesen Output teilen, demselben Geheimnis, aus dem die Einmal-Stealth-Adresse des Empfängers entsteht. Alle anderen, auch Node-Betreiber und Block-Explorer, sehen 128 Byte zufällig aussehender Daten und können nicht erkennen, ob darin eine Notiz steckt.
+</Answer>
+
+Wenn deine Wallet eine Zahlung erstellt, kombiniert sie einen frischen, zufälligen Transaktionsschlüssel mit dem öffentlichen View Key des Empfängers zu einem gemeinsamen Geheimnis. Aus diesem Geheimnis entsteht die [Einmal-Stealth-Adresse](/de/blog/blocknet-privacy-features/) des Empfängers, und die Wallet nutzt es auch, um das Memo zu verschlüsseln. Sie hasht das Geheimnis mit SHA3-256, zusammen mit der Position des Outputs in der Transaktion und der Kennung des Netzwerks, zu einer 128-Byte-Maske und kombiniert diese Maske dann mit dem Memo. Jeder Output bekommt eine eigene Maske, zwei Memos in derselben Transaktion werden also getrennt verschlüsselt.
+
+Die Wallet des Empfängers findet dasselbe Geheimnis von der anderen Seite aus, mit ihrem privaten View Key, während sie jeden Block durchsucht. Sie entschlüsselt das Memo und speichert es mit der Zahlung. Auf deiner Seite bewahrt die Wallet die Memos, die du geschrieben hast, in ihrem Sendeverlauf auf.
+
+Zwei Dinge solltest du wissen:
+
+- **Auch eine View-only-Wallet zeigt Memos.** Dein privater View Key liest eingehende Zahlungen, daher sieht eine daraus erstellte View-only-Wallet Betrag und Memo jeder Zahlung. Teile diesen Schlüssel nur mit Personen, die deine eingehenden Zahlungen sehen dürfen.
+- **Mining-Belohnungen tragen leere Memos.** Der Konsens verlangt, dass das Memo jeder Blockbelohnung leer ist, sodass die Coinbase-Outputs der Chain nie als öffentlicher Nachrichtenkanal dienen können.
+
+## Warum jedes Memo auf der Chain gleich aussieht
+
+Ein Memo, dessen Länge sichtbar wäre, würde etwas verraten. Eine Notiz mit 30 Byte sieht anders aus als eine mit 100 Byte, und ein leeres Memo würde sich von beiden abheben. Die Wallet von Blocknet schließt diese Lücke mit einem festen Aufbau und zufälligem Padding.
+
+Vor dem Verschlüsseln packt die Wallet das Memo in einen 128-Byte-Umschlag:
+
+| Byte | Inhalt |
+|---|---|
+| 1 | Version des Umschlags |
+| 1 | Länge deines Memos |
+| 2 | Prüfsumme des Memos |
+| 0 bis 124 | Dein Memo |
+| Der Rest | Zufälliges Padding |
+
+Das Padding stammt aus dem kryptografischen Zufallszahlengenerator des Systems, der ungenutzte Platz ist also unvorhersehbar. Nach der Verschlüsselung sind eine kurze Notiz, eine volle Notiz und ein leeres Memo alle 128 Byte zufällig aussehender Daten. Wechselgeld-Outputs bekommen ein eigenes leeres, aufgefülltes Memo, sodass selbst die Coins, die du an dich selbst zurückschickst, nicht auffallen.
+
+Mit der Prüfsumme kann die Wallet des Empfängers bestätigen, dass sie das Memo korrekt entschlüsselt hat, bevor sie es anzeigt. Nodes lehnen außerdem jeden Block ab, der einen Output enthält, dessen Memo-Feld nur aus Nullen besteht, sodass jeder Output auf der Chain ein korrekt gefülltes Memo trägt.
+
+## Wo du empfangene Memos findest
+
+Die Kommandozeilen-Wallet zeigt Memos überall dort, wo sie Zahlungen auflistet:
+
+- **`history`** listet eingehende und ausgehende Zahlungen, mit einer Zeile `memo:` unter jeder Zahlung, die eines enthielt.
+- **`outputs tx <txid>`** zeigt jeden Output, der deiner Wallet in dieser Transaktion gehört, samt Memo. `outputs <n>` macht dasselbe für einen einzelnen Output aus der Liste.
+- **Die Wallet-API** gibt das Memo jedes empfangenen Outputs als `memo_hex` aus `GET /api/wallet/history` zurück, bereit für ein Bestellsystem, das es mit Rechnungen abgleicht.
+
+Text-Memos erscheinen in Anführungszeichen. Ein Memo, das kein druckbarer Text ist, etwa rohe Bytes, die mit `hex:` gesendet wurden, erscheint als Hex.
+
+Gibt es bei einer Zahlung einmal Klärungsbedarf, kann der Sender sie nachweisen. Der Befehl `prove <txid>` der Wallet gibt den Transaktionsschlüssel für eine von dir gesendete Zahlung aus. Jeder mit diesem Schlüssel, der Transaktions-ID und der Adresse des Empfängers kann die Zahlung über den Endpunkt `POST /api/verify-proof` prüfen, ganz ohne Wallet. Er bestätigt die Transaktion und zeigt die Outputs, die diese Adresse empfangen hat, samt Beträgen und Memos.
+
+## Verdiene die BNT, die du senden wirst
+
+Ein einfacher Weg zu deinen ersten BNT ist, sie zu minen. seine läuft auf deinem eigenen Computer, optimiert sich beim Mining selbst und zahlt über bntpool.com direkt an deine Adresse oder deinen `@name` aus. Mit der [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) läuft es in wenigen Minuten.
+
+<CTA target="seine" title="seine herunterladen und BNT minen" text="Mine Blocknet ohne Einrichtung auf deinem eigenen Computer und bezahle dann mit privaten Zahlungen samt Memo aus deiner Wallet." />

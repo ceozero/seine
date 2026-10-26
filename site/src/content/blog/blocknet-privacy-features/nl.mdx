@@ -1,0 +1,97 @@
+---
+title: Hoe Blocknet betalingen privé houdt
+description: Blocknet houdt elke betaling standaard privé met rings van 16, eenmalige stealth-adressen, verborgen bedragen, Dandelion++-doorgifte en versleutelde memo's.
+tags: [Privacy, Blocknet, Ringhandtekeningen, Stealth-adressen, Memo's]
+faq:
+  - q: 'Is Blocknet standaard privé?'
+    a: 'Ja. Elke Blocknet-transactie gebruikt een ringhandtekening over 16 outputs, een eenmalig stealth-adres voor elke ontvanger, verborgen bedragen met range proofs van Bulletproofs en een versleutelde memo van 128 bytes op elke output. Het transactieformaat heeft geen transparante modus, dus er is geen instelling om aan te zetten en geen manier waarop een betaling deze bescherming kan overslaan.'
+  - q: 'Welke ringgrootte gebruikt Blocknet?'
+    a: 'Elke input in een Blocknet-transactie wordt ondertekend met een CLSAG-ring van precies 16 outputs: de echte en 15 decoys uit de chain. De consensus weigert elke andere grootte, en elk lid van de ring moet een echte output zijn die al op de chain staat. Omdat elke input dezelfde grootte gebruikt, kan de ringgrootte nooit een wallet aanwijzen.'
+  - q: 'Wie kan een Blocknet-memo lezen?'
+    a: 'Alleen de verzender en de ontvanger. Elke memo wordt versleuteld met het geheim dat de twee wallets voor die output delen, en neemt op de chain altijd precies 128 bytes in, met ruimte voor tot 124 bytes tekst. Korte of lege memo''s worden aangevuld met willekeurige opvulling, dus niemand anders kan zien welke betalingen een notitie bevatten.'
+  - q: 'Kunnen mensen zien hoeveel mijn Blocknet-adres heeft ontvangen?'
+    a: 'Nee. Elke betaling aan je adres komt terecht op een nieuw eenmalig stealth-adres, dus betalingen kunnen niet worden gegroepeerd onder het adres dat je hebt gedeeld. Bedragen worden opgeslagen als Pedersen-commitments met range proofs, dus de chain toont nooit wat elke output bevat. Alleen je wallet vindt en telt je betalingen op, met je privé view key.'
+  - q: 'Gebruikt Blocknet dezelfde cryptografie als Monero?'
+    a: 'Blocknet gebruikt dezelfde beproefde familie van cryptografie als Monero: CLSAG-ringhandtekeningen met een ring van 16, eenmalige stealth-adressen, Pedersen-commitments met range proofs van Bulletproofs en Dandelion++ voor het doorgeven van transacties. Daarbovenop voegt het betalen op naam toe via korte namen van Blocknet ID en een versleutelde memo van 128 bytes op elke output.'
+sourceHash: 2732784d0db4
+translation: draft
+---
+
+Dit artikel gaat dieper dan de samenvatting over privacy in [Wat is Blocknet?](/nl/blog/what-is-blocknet/) en loopt elke privacylaag in een Blocknet-transactie door: wat ze verbergt, hoe ze werkt en wat ze betekent als je de volgende keer BNT verstuurt of ontvangt.
+
+## Hoe houdt Blocknet betalingen privé?
+
+<Answer>
+Blocknet verbergt de verzender met CLSAG-ringhandtekeningen over 16 outputs, de ontvanger met eenmalige stealth-adressen en het bedrag met Pedersen-commitments en range proofs van Bulletproofs. Doorgifte via Dandelion++ verbergt waar een transactie het netwerk binnenkwam, en elke output heeft een versleutelde memo van 128 bytes. Alles is verplicht, zonder transparante modus.
+</Answer>
+
+Blocknet gebruikt dezelfde beproefde familie van cryptografie als Monero: ringhandtekeningen, stealth-adressen en range proofs van Bulletproofs, gebouwd op de Ristretto-groep over Curve25519. Daarbovenop voegt het betalen op naam en versleutelde memo's toe. Elke laag dekt een ander deel van een betaling af, en samen laten ze iemand die de chain leest weinig houvast.
+
+## Ringhandtekeningen verbergen wie heeft betaald
+
+Als je munten uitgeeft, ondertekent je wallet voor een groep van 16 outputs: de output die jij bezit en 15 andere die als decoys uit de chain zijn gekozen. De handtekening is een [CLSAG-ringhandtekening](/nl/blog/ring-signatures-explained/). Iedereen kan controleren dat één lid van de ring heeft ondertekend, en de handtekening verraadt niet welk.
+
+De consensus dwingt de ringgrootte af. Elke input moet precies 16 ringleden hebben, die elk een echte output zijn die al op de chain staat, en het netwerk weigert al het andere. Omdat elke input op het netwerk dezelfde grootte gebruikt, kan de ringgrootte geen transactie aanwijzen, en ook niet de wallet die haar heeft opgebouwd. De code van de daemon legt de grootte vast "to prevent information leakage from variable ring sizes".
+
+Om te voorkomen dat dezelfde munten twee keer worden uitgegeven, heeft elke input ook een key image. Dat is uniek voor de echte output die wordt uitgegeven, maar verraadt niet welk ringlid dat is. Verschijnt een key image een tweede keer, dan weigert het netwerk de transactie als dubbele uitgave.
+
+## Stealth-adressen verbergen wie is betaald
+
+Een Blocknet-adres bevat twee publieke sleutels, een spend key en een view key. Als iemand je betaalt, combineert zijn wallet je sleutels met een nieuw willekeurig getal tot een [eenmalig adres](/nl/blog/stealth-addresses-explained/) dat alleen voor die output wordt gebruikt. Het adres dat je hebt gedeeld, verschijnt nooit op de chain.
+
+Je wallet gebruikt je privé view key om nieuwe transacties te scannen en de outputs te herkennen die van jou zijn, en je spend key om ze later uit te geven. Tien betalingen aan hetzelfde adres komen terecht op tien losse eenmalige adressen, dus een waarnemer kan niet optellen wat een adres heeft ontvangen of zien dat twee betalingen naar dezelfde persoon gingen.
+
+Hetzelfde geldt voor [namen van Blocknet ID](/nl/blog/blocknet-id-pay-by-name/). Een korte naam zoals `@name` is bewust openbaar, omdat een verzender hem opzoekt op [blocknet.id](https://blocknet.id) om je te betalen. Betalingen eraan gaan nog steeds naar nieuwe eenmalige adressen, dus de naam zegt niets over wat je hebt ontvangen.
+
+## Hoe verbergt Blocknet transactiebedragen?
+
+Bedragen worden opgeslagen als Pedersen-commitments. Een commitment legt een getal vast zonder het te tonen, en commitments kunnen bij elkaar worden opgeteld. Daardoor kan elke node controleren dat de inputs van een transactie gelijk zijn aan de outputs plus de fee, zonder een van de bedragen te leren kennen.
+
+Een commitment op zich zou een negatief bedrag kunnen verbergen, waarmee munten uit het niets zouden ontstaan. Elke output krijgt daarom een [range proof van Bulletproofs](/nl/blog/bulletproofs-explained/) dat het bedrag binnen een bereik van 64 bits ligt dat bij nul begint. Het bewijs overtuigt elke node ervan dat het bedrag geldig is en verraadt er verder niets over.
+
+De ontvanger ziet nog steeds het echte bedrag. Zijn wallet haalt het terug met hetzelfde gedeelde geheim waarmee hij de output vindt, dus het bedrag is zichtbaar voor de twee mensen in de betaling en voor niemand anders.
+
+## Dandelion++ verbergt waar een transactie begon
+
+Als een node zijn eigen transactie tegelijk aan al zijn peers zou aankondigen, zou iemand die veel nodes in de gaten houdt kunnen raden waar ze vandaan kwam door te noteren wie haar het eerst hoorde. Blocknet geeft transacties door met [Dandelion++](/nl/blog/dandelion-plus-plus-explained/) om dat te voorkomen.
+
+Een nieuwe transactie reist eerst langs een "stem", waarbij ze van de ene peer naar telkens één volgende peer wordt doorgegeven. Bij elke stap is er 90% kans dat ze langs de stem verdergaat; anders gaat ze over in de "fluff"-fase en verspreidt ze zich vanaf dat punt over het hele netwerk. Tegen de tijd dat de meeste nodes de transactie zien, lijkt ze te komen van een node die vele stappen van de jouwe verwijderd kan zijn. De stem-routes worden elke 10 minuten opnieuw geschud.
+
+## Wie kan een Blocknet-memo lezen?
+
+Elke output heeft een versleutelde memo van 128 bytes met ruimte voor tot 124 bytes tekst. Die wordt versleuteld met hetzelfde geheim dat de verzender en de ontvanger voor die output delen, dus alleen jullie tweeën kunnen hem lezen. Gebruik hem voor een factuurnummer, een orderreferentie of een korte notitie aan de persoon die je betaalt. De [gids over versleutelde memo's](/nl/blog/blocknet-encrypted-memos/) laat zien hoe je er een toevoegt en waar je de memo's vindt die je ontvangt.
+
+De memo is altijd even groot, of je nu een volle notitie schrijft of helemaal niets. Is een memo kort of leeg, dan vult de wallet de rest aan met willekeurige opvulling voordat hij hem versleutelt, dus een output met notitie ziet er precies hetzelfde uit als een zonder. Memo's vallen nooit op, en niemand anders kan zelfs maar zien welke betalingen een bericht bevatten.
+
+## Is privacy optioneel bij Blocknet?
+
+<Answer>
+Nee. Privacy is verplicht bij Blocknet. Het transactieformaat heeft geen transparante modus, en de consensus vereist dat elke input een ring van precies 16 leden heeft, dus elke betaling gebruikt rings, stealth-adressen, verborgen bedragen en een versleutelde memo. Omdat niemand zich kan afmelden, zien privé betalingen er hetzelfde uit als elke andere betaling op de chain.
+</Answer>
+
+Als privacy een instelling is, vormen de mensen die haar aanzetten een kleine groep die makkelijker te herkennen is. Bij Blocknet wordt elke transactie op dezelfde manier opgebouwd, dus elke transactie gaat op in alle andere, en je hoeft er nooit aan te denken een betaling te beschermen.
+
+## Wat dit betekent als je iemand betaalt
+
+Als je BNT verstuurt naar een adres of een `@name`, regelt je wallet elke stap voor je, zonder dat je iets hoeft aan te zetten:
+
+1. Hij kiest 15 decoys uit de chain en ondertekent je input met een ring van 16.
+2. Hij maakt een nieuw eenmalig adres voor de ontvanger.
+3. Hij legt het bedrag vast in een commitment en voegt een range proof toe.
+4. Hij versleutelt je memo, of willekeurige opvulling als je de memo leeg laat.
+5. Hij geeft de transactie aan Dandelion++ om door te sturen.
+
+Iemand die de chain leest, ziet inputs die elk naar 16 mogelijke outputs wijzen, outputs die naar eenmalige adressen zijn gestuurd die niemand eerder heeft gezien, commitments in plaats van bedragen en een memoveld met willekeurig ogende bytes. De persoon die je hebt betaald, ziet de betaling, het bedrag en je notitie in zijn eigen wallet.
+
+Wil je je eerste BNT verdienen, dan kun je ze minen op je eigen computer. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) laat seine binnen een paar minuten op bntpool.com draaien, en je kunt rechtstreeks naar je adres of je `@name` minen.
+
+## Wat er komt met de Faraday-upgrade
+
+Volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet een netwerkupgrade met de naam Faraday, met activering gepland rond 16 februari 2027. De site noemt twee veranderingen die de privacy verder brengen:
+
+- **Elke output op de chain bij elke uitgave.** In de woorden van de site: "Today a spend hides among 16 outputs. After Faraday, it hides among every output on the chain."
+- **Spend proofs die veilig moeten blijven tegen quantumcomputers.** Faraday zal spend proofs overzetten naar proofs op basis van hashes in plaats van elliptische curves, en het herkennen van betalingen zal ML-KEM gebruiken.
+
+De site zegt ook dat Faraday geen nieuwe munt en geen herstart brengt, en dat je geschiedenis blijft. Ontwerp, tests en adversarial review zijn bezig, en de data zijn gepland en niet definitief, dus volg [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) voor updates.
+
+<CTA target="seine" title="Verdien BNT met minen" text="Mine Blocknet met seine en ontvang privé betalingen rechtstreeks op je adres of @name." />

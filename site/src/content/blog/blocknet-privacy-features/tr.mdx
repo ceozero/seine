@@ -1,0 +1,97 @@
+---
+title: Blocknet ödemeleri nasıl gizli tutar
+description: Blocknet, 16'lık halkalar, tek kullanımlık gizli adresler, gizlenmiş tutarlar, Dandelion++ aktarımı ve şifreli memo'larla her ödemeyi varsayılan olarak gizli tutar.
+tags: [Gizlilik, Blocknet, Halka imzalar, Gizli adresler, Memo'lar]
+faq:
+  - q: 'Blocknet varsayılan olarak gizli mi?'
+    a: 'Evet. Her Blocknet işlemi 16 çıktı üzerinde bir halka imza, her alıcı için tek kullanımlık bir gizli adres, Bulletproofs aralık kanıtlarıyla gizlenmiş tutarlar ve her çıktıda 128 baytlık şifreli bir memo kullanır. İşlem formatında şeffaf bir mod yoktur, bu yüzden açılacak bir ayar da, bir ödemenin bu korumaları atlamasının bir yolu da yoktur.'
+  - q: 'Blocknet hangi halka boyutunu kullanır?'
+    a: 'Bir Blocknet işlemindeki her girdi, tam olarak 16 çıktıdan oluşan bir CLSAG halkasıyla imzalanır: gerçek çıktı ve zincirden alınan 15 sahte girdi (decoy). Konsensüs başka her boyutu reddeder ve halkanın her üyesi zincirde zaten bulunan gerçek bir çıktı olmalıdır. Her girdi aynı boyutu kullandığından halka boyutu hiçbir zaman bir cüzdanı ele veremez.'
+  - q: 'Bir Blocknet memo''sunu kim okuyabilir?'
+    a: 'Yalnızca gönderen ve alıcı. Her memo, iki cüzdanın o çıktı için paylaştığı sırla şifrelenir ve zincirde her zaman tam 128 bayt yer kaplar; 124 bayta kadar metne yer vardır. Kısa veya boş memo''lar rastgele dolguyla doldurulur, bu yüzden başka hiç kimse hangi ödemelerin not taşıdığını anlayamaz.'
+  - q: 'İnsanlar Blocknet adresimin ne kadar aldığını görebilir mi?'
+    a: 'Hayır. Adresinize yapılan her ödeme yeni bir tek kullanımlık gizli adrese gider, bu yüzden ödemeler paylaştığınız adres altında gruplanamaz. Tutarlar aralık kanıtlarıyla birlikte Pedersen taahhütleri olarak saklanır, bu yüzden zincir hiçbir zaman her çıktının ne tuttuğunu göstermez. Ödemelerinizi yalnızca cüzdanınız, özel görüntüleme anahtarınızı kullanarak bulur ve toplar.'
+  - q: 'Blocknet, Monero ile aynı kriptografiyi mi kullanır?'
+    a: 'Blocknet, Monero ile aynı kanıtlanmış kriptografi ailesini kullanır: 16''lık halkayla CLSAG halka imzaları, tek kullanımlık gizli adresler, Bulletproofs aralık kanıtlarıyla Pedersen taahhütleri ve Dandelion++ işlem aktarımı. Bunun üzerine Blocknet ID kısa adlarıyla isimle ödeme ve her çıktıda 128 baytlık şifreli bir memo ekler.'
+sourceHash: 2732784d0db4
+translation: reviewed
+---
+
+Bu yazı, [Blocknet nedir?](/tr/blog/what-is-blocknet/) yazısındaki gizlilik özetinden daha derine iner ve bir Blocknet işlemindeki her gizlilik katmanını ele alır: neyi gizlediğini, nasıl çalıştığını ve bir sonraki BNT gönderişinizde veya alışınızda bunun ne anlama geldiğini.
+
+## Blocknet ödemeleri nasıl gizli tutar?
+
+<Answer>
+Blocknet göndereni 16 çıktı üzerinde CLSAG halka imzalarıyla, alıcıyı tek kullanımlık gizli adreslerle, tutarı ise Pedersen taahhütleri ve Bulletproofs aralık kanıtlarıyla gizler. Dandelion++ aktarımı bir işlemin ağa nereden girdiğini gizler ve her çıktı 128 baytlık şifreli bir memo taşır. Bunların hepsi zorunludur; şeffaf bir mod yoktur.
+</Answer>
+
+Blocknet, Monero ile aynı kanıtlanmış kriptografi ailesini kullanır: Curve25519 üzerindeki Ristretto grubuna dayanan halka imzalar, gizli adresler ve Bulletproofs aralık kanıtları. Bunun üzerine isimle ödeme ve şifreli memo'lar ekler. Her katman bir ödemenin farklı bir bölümünü kapsar ve birlikte, zinciri okuyan birine üzerinde çalışabileceği çok az şey bırakır.
+
+## Halka imzalar kimin ödediğini gizler
+
+Coin harcadığınızda cüzdanınız 16 çıktıdan oluşan bir grup için imza atar: sahip olduğunuz çıktı ve zincirden sahte girdi olarak seçilen 15 çıktı daha. Bu imza bir [CLSAG halka imzasıdır](/tr/blog/ring-signatures-explained/). Herkes halkanın bir üyesinin imzaladığını doğrulayabilir, ancak imza hangisi olduğunu açığa çıkarmaz.
+
+Halka boyutunu konsensüs zorunlu kılar. Her girdi, her biri zincirde zaten bulunan gerçek bir çıktı olan tam olarak 16 halka üyesi taşımalıdır ve ağ başka her şeyi reddeder. Ağdaki her girdi aynı boyutu kullandığı için halka boyutu bir işlemi veya onu oluşturan cüzdanı ele veremez. Daemon kodu boyutu “değişken halka boyutlarından kaynaklanan bilgi sızıntısını önlemek için” sabitler.
+
+Aynı coinlerin iki kez harcanmasını önlemek için her girdi ayrıca bir anahtar görüntüsü (key image) taşır. Bu, harcanan gerçek çıktıya özgüdür ama onun hangi halka üyesi olduğunu açığa çıkarmaz. Bir anahtar görüntüsü ikinci kez görünürse ağ işlemi çifte harcama olarak reddeder.
+
+## Gizli adresler kime ödeme yapıldığını gizler
+
+Bir Blocknet adresi iki genel anahtar tutar: bir harcama anahtarı (spend key) ve bir görüntüleme anahtarı (view key). Biri size ödeme yaptığında cüzdanı, yalnızca o çıktı için kullanılan bir [tek kullanımlık adres](/tr/blog/stealth-addresses-explained/) oluşturmak üzere anahtarlarınızı yeni bir rastgele sayıyla birleştirir. Paylaştığınız adres zincirde hiçbir zaman görünmez.
+
+Cüzdanınız yeni işlemleri taramak ve size ait çıktıları bulmak için özel görüntüleme anahtarınızı, onları daha sonra harcamak için de harcama anahtarınızı kullanır. Aynı adrese yapılan on ödeme birbiriyle ilgisiz on tek kullanımlık adrese gider, bu yüzden bir gözlemci bir adresin ne aldığını toplayamaz ya da iki ödemenin aynı kişiye gittiğini anlayamaz.
+
+Aynısı [Blocknet ID adları](/tr/blog/blocknet-id-pay-by-name/) için de geçerlidir. `@name` gibi bir kısa ad tasarım gereği herkese açıktır, çünkü gönderen size ödeme yapmak için onu [blocknet.id](https://blocknet.id)'de sorgular. Ona yapılan ödemeler yine yeni tek kullanımlık adreslere gider, bu yüzden ad ne aldığınız hakkında hiçbir şey söylemez.
+
+## Blocknet işlem tutarlarını nasıl gizler?
+
+Tutarlar Pedersen taahhütleri olarak saklanır. Bir taahhüt bir sayıyı göstermeden sabitler ve taahhütler birbirine eklenebilir. Bu, her düğümün tutarların hiçbirini öğrenmeden bir işlemin girdilerinin çıktılarına ücret eklenmiş haline eşit olduğunu kontrol etmesini sağlar.
+
+Tek başına bir taahhüt negatif bir tutarı gizleyebilir ve bu da yoktan coin yaratırdı. Bu yüzden her çıktı, tutarının sıfırdan başlayan 64 bitlik bir aralıkta olduğunu gösteren bir [Bulletproofs aralık kanıtıyla](/tr/blog/bulletproofs-explained/) gelir. Kanıt her düğümü tutarın geçerli olduğuna ikna eder ve onun hakkında başka hiçbir şey açığa çıkarmaz.
+
+Alıcı yine de gerçek rakamı görür. Cüzdanı, çıktıyı bulmak için kullandığı aynı paylaşılan sırla tutarı elde eder; bu yüzden tutar ödemedeki iki kişiye görünür, başka hiç kimseye görünmez.
+
+## Dandelion++ bir işlemin nereden başladığını gizler
+
+Bir düğüm kendi işlemini tüm eşlerine aynı anda duyursaydı, birçok düğümü izleyen biri onu ilk kimin duyduğuna bakarak işlemin nereden geldiğini tahmin edebilirdi. Blocknet bunu önlemek için işlemleri [Dandelion++](/tr/blog/dandelion-plus-plus-explained/) ile aktarır.
+
+Yeni bir işlem önce bir eşten tek bir sonraki eşe aktarılarak bir “stem” (gövde) boyunca ilerler. Her adımda gövde boyunca devam etme olasılığı %90'dır; aksi halde “fluff” aşamasına geçer ve o noktadan tüm ağa yayılır. Düğümlerin çoğu işlemi gördüğünde, işlem sizinkinden birçok adım uzakta olabilecek bir düğümden geliyormuş gibi görünür. Gövde rotaları her 10 dakikada bir yeniden karıştırılır.
+
+## Bir Blocknet memo'sunu kim okuyabilir?
+
+Her çıktı, 124 bayta kadar metne yer olan 128 baytlık şifreli bir memo taşır. Memo, gönderen ile alıcının o çıktı için paylaştığı aynı sırla şifrelenir, bu yüzden onu yalnızca ikiniz okuyabilirsiniz. Onu bir fatura numarası, bir sipariş referansı veya ödeme yaptığınız kişiye kısa bir not için kullanın. [Şifreli memo'lar rehberi](/tr/blog/blocknet-encrypted-memos/) nasıl memo ekleneceğini ve aldığınız memo'ları nerede bulacağınızı gösterir.
+
+Tam bir not da yazsanız hiçbir şey yazmasanız da memo her zaman aynı boyuttadır. Bir memo kısa veya boş olduğunda cüzdan, şifrelemeden önce geri kalanını rastgele dolguyla doldurur; böylece notlu bir çıktı notsuz bir çıktıyla tamamen aynı görünür. Memo'lar asla göze batmaz ve başka hiç kimse hangi ödemelerin mesaj taşıdığını bile anlayamaz.
+
+## Blocknet'te gizlilik isteğe bağlı mı?
+
+<Answer>
+Hayır. Blocknet'te gizlilik zorunludur. İşlem formatında şeffaf bir mod yoktur ve konsensüs her girdinin tam olarak 16 üyeli bir halka taşımasını gerektirir; bu yüzden her ödeme halkalar, gizli adresler, gizlenmiş tutarlar ve şifreli bir memo kullanır. Kimse bunun dışında kalamayacağı için gizli ödemeler zincirdeki diğer tüm ödemeler gibi görünür.
+</Answer>
+
+Gizlilik bir ayar olduğunda, onu açan kişiler ayırt edilmesi daha kolay küçük bir grup oluşturur. Blocknet'te her işlem aynı şekilde oluşturulur, bu yüzden her biri diğerlerinin arasına karışır ve bir ödemeyi korumayı hatırlamak zorunda kalmazsınız.
+
+## Birine ödeme yaptığınızda bunun anlamı
+
+Bir adrese veya bir `@name` adına BNT gönderdiğinizde cüzdanınız, açmanız gereken hiçbir şey olmadan her adımı sizin için halleder:
+
+1. Zincirden 15 sahte girdi seçer ve girdinizi 16'lık bir halkayla imzalar.
+2. Alıcı için yeni bir tek kullanımlık adres oluşturur.
+3. Tutarı taahhüde bağlar ve bir aralık kanıtı ekler.
+4. Memo'nuzu, memo'yu boş bırakırsanız da rastgele dolguyu şifreler.
+5. İşlemi aktarım için Dandelion++'a teslim eder.
+
+Zinciri okuyan biri; her biri 16 olası çıktıya işaret eden girdiler, daha önce kimsenin görmediği tek kullanımlık adreslere gönderilen çıktılar, tutarların yerinde taahhütler ve rastgele görünen baytlardan oluşan bir memo alanı görür. Ödeme yaptığınız kişi ise ödemeyi, tutarı ve notunuzu kendi cüzdanında görür.
+
+İlk BNT'nizi kazanmak isterseniz, kendi bilgisayarınızda madencilik yapabilirsiniz. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) seine'i birkaç dakika içinde bntpool.com'da çalıştırmanızı sağlar ve doğrudan adresinize veya `@name` adınıza madencilik yapabilirsiniz.
+
+## Faraday yükseltmesiyle sırada ne var
+
+[blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, Faraday adlı bir ağ yükseltmesi planlıyor; etkinleşmesi 16 Şubat 2027 civarında olacak şekilde planlandı. Site, gizliliği daha da ileri taşıyacak iki değişiklik listeliyor:
+
+- **Her harcamada zincirdeki her çıktı.** Sitenin ifadesiyle: “Bugün bir harcama 16 çıktı arasında gizlenir. Faraday'den sonra zincirdeki her çıktı arasında gizlenecek.”
+- **Kuantum bilgisayarlara karşı güvenli kalması amaçlanan harcama kanıtları.** Faraday, harcama kanıtlarını eliptik eğriler yerine hash tabanlı kanıtlara taşıyacak ve ödeme tespiti ML-KEM kullanacak.
+
+Site ayrıca Faraday'in yeni bir coin ya da yeniden başlatma getirmeyeceğini ve geçmişinizin korunacağını söylüyor. Tasarım, test ve saldırgan gözüyle inceleme sürüyor ve tarihler kesin değil planlanmış tarihler; bu yüzden güncellemeler için [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'u takip edin.
+
+<CTA target="seine" title="Madencilikle BNT kazanın" text="seine ile Blocknet madenciliği yapın ve gizli ödemeleri doğrudan adresinize veya @name adınıza alın." />

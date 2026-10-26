@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
+#[cfg(test)]
 use std::io::Write;
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+#[cfg(test)]
+use std::net::TcpStream;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,11 +16,18 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader as TokioBufReader};
 use tokio::net::TcpStream as TokioTcpStream;
 use tokio::sync::mpsc;
 
+mod submit_retry;
+
+use submit_retry::{
+    is_retryable_submit_reject, AbandonedSubmit, ScheduleOutcome, SubmitRetryQueue,
+};
+
 const LOGIN_REQUEST_ID: u64 = 1;
 const RECONNECT_DELAY: Duration = Duration::from_secs(2);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const CHANNEL_CAPACITY: usize = 4096;
 const MAX_SUBMITS_PER_IO_CYCLE: usize = 32;
+const MAX_RETRY_SUBMITS_PER_IO_CYCLE: usize = 4;
 const SUBMIT_POLL_INTERVAL: Duration = Duration::from_millis(10);
 const LOCAL_POOL_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(10);
 const MAX_POOL_MESSAGE_BYTES: usize = 8 * 1024;
@@ -78,6 +88,21 @@ pub struct PoolSubmitAck {
     pub accepted: bool,
     pub difficulty: Option<u64>,
     pub error: Option<String>,
+    /// How many times this share was resubmitted after retryable pool
+    /// rejects before this final outcome (0 = first submit was final).
+    pub retries: u32,
+}
+
+/// A share the pool rejected as overloaded and that will be resubmitted
+/// unchanged after `delay`. The final outcome arrives later as `SubmitAck`.
+#[derive(Debug, Clone)]
+pub struct PoolSubmitRetry {
+    pub nonce: u64,
+    pub reason: String,
+    pub retry_number: u32,
+    pub max_retries: u32,
+    pub delay: Duration,
+    pub block_candidate: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +133,7 @@ pub enum PoolEvent {
     LoginRejected(String),
     Job(PoolJob),
     SubmitAck(PoolSubmitAck),
+    SubmitRetry(PoolSubmitRetry),
     Notification(PoolNotification),
 }
 
@@ -117,6 +143,8 @@ struct PoolSubmit {
     nonce: u64,
     claimed_hash: Option<[u8; 32]>,
     backend: Option<String>,
+    /// Resubmits already sent for this share after retryable rejects.
+    retries: u32,
 }
 
 #[derive(Debug)]
@@ -189,6 +217,7 @@ impl PoolClient {
                 nonce,
                 claimed_hash,
                 backend: backend.map(str::to_string),
+                retries: 0,
             })
             .map_err(|_| anyhow!("pool submit channel closed"))
     }
@@ -419,6 +448,7 @@ async fn run_pool_client_loop(
                 }
 
                 let mut pending_submits = HashMap::<u64, PoolSubmit>::new();
+                let mut retry_queue = SubmitRetryQueue::new();
                 let mut login_confirmed = false;
                 let mut submit_claimed_hash_enabled = true;
                 let mut last_outbound = Instant::now();
@@ -434,6 +464,7 @@ async fn run_pool_client_loop(
                         reject_pending_submits(
                             &event_tx,
                             &mut pending_submits,
+                            &mut retry_queue,
                             SUBMIT_REJECT_REASON_RESYNC,
                         );
                         reject_queued_submits(&event_tx, &submit_rx, SUBMIT_REJECT_REASON_RESYNC);
@@ -456,6 +487,7 @@ async fn run_pool_client_loop(
                                         reject_pending_submits(
                                             &event_tx,
                                             &mut pending_submits,
+                                            &mut retry_queue,
                                             SUBMIT_REJECT_REASON_SEND_FAILED,
                                         );
                                         reject_queued_submits(
@@ -481,9 +513,27 @@ async fn run_pool_client_loop(
                                     break;
                                 }
 
-                                for _ in 0..MAX_SUBMITS_PER_IO_CYCLE {
-                                    let Ok(submit) = submit_rx.try_recv() else {
-                                        break;
+                                // Due busy-retries go first but are capped per
+                                // cycle (and the retry queue is bounded), so fresh
+                                // shares are never starved.
+                                let (due_retries, abandoned) = retry_queue
+                                    .take_due(Instant::now(), MAX_RETRY_SUBMITS_PER_IO_CYCLE);
+                                reject_abandoned_submits(&event_tx, abandoned);
+                                let mut due_retries = due_retries.into_iter();
+                                let mut fresh_sent = 0usize;
+                                loop {
+                                    let submit = match due_retries.next() {
+                                        Some(submit) => submit,
+                                        None => {
+                                            if fresh_sent >= MAX_SUBMITS_PER_IO_CYCLE {
+                                                break;
+                                            }
+                                            let Ok(submit) = submit_rx.try_recv() else {
+                                                break;
+                                            };
+                                            fresh_sent += 1;
+                                            submit
+                                        }
                                     };
                                     let request_id = next_request_id;
                                     next_request_id =
@@ -505,9 +555,17 @@ async fn run_pool_client_loop(
                                         .is_err()
                                     {
                                         reject_submit(&event_tx, submit, SUBMIT_REJECT_REASON_SEND_FAILED);
+                                        for submit in due_retries.by_ref() {
+                                            reject_submit(
+                                                &event_tx,
+                                                submit,
+                                                SUBMIT_REJECT_REASON_SEND_FAILED,
+                                            );
+                                        }
                                         reject_pending_submits(
                                             &event_tx,
                                             &mut pending_submits,
+                                            &mut retry_queue,
                                             SUBMIT_REJECT_REASON_SEND_FAILED,
                                         );
                                         reject_queued_submits(
@@ -543,6 +601,7 @@ async fn run_pool_client_loop(
                                     reject_pending_submits(
                                         &event_tx,
                                         &mut pending_submits,
+                                        &mut retry_queue,
                                         SUBMIT_REJECT_REASON_DISCONNECTED,
                                     );
                                     reject_queued_submits(
@@ -564,6 +623,7 @@ async fn run_pool_client_loop(
                                     reject_pending_submits(
                                         &event_tx,
                                         &mut pending_submits,
+                                        &mut retry_queue,
                                         SUBMIT_REJECT_REASON_DISCONNECTED,
                                     );
                                     reject_queued_submits(
@@ -590,11 +650,29 @@ async fn run_pool_client_loop(
                             if trimmed.is_empty() {
                                 continue;
                             }
-                            if let Some(mut event) = decode_pool_message(
-                                trimmed,
-                                &mut login_confirmed,
-                                &mut pending_submits,
-                            ) {
+                            if let Some((mut event, acked_submit)) =
+                                decode_pool_message_with_submit(
+                                    trimmed,
+                                    &mut login_confirmed,
+                                    &mut pending_submits,
+                                )
+                            {
+                                let decoded_at = Instant::now();
+                                if let (PoolEvent::SubmitAck(ack), Some(submit)) =
+                                    (&event, acked_submit)
+                                {
+                                    event = route_submit_ack(
+                                        &event_tx,
+                                        &mut retry_queue,
+                                        ack.clone(),
+                                        submit,
+                                        decoded_at,
+                                    );
+                                }
+                                if let PoolEvent::Job(job) = &event {
+                                    let abandoned = retry_queue.observe_job(job, decoded_at);
+                                    reject_abandoned_submits(&event_tx, abandoned);
+                                }
                                 if let PoolEvent::LoginAccepted(ack) = &event {
                                     match evaluate_login_ack(ack) {
                                         Ok(include_claimed_hash) => {
@@ -635,9 +713,14 @@ async fn run_pool_client_loop(
                                 let login_rejected = matches!(&event, PoolEvent::LoginRejected(_));
                                 let _ = event_tx.try_send(event);
                                 if login_rejected {
+                                    crate::diagnostics::record_failure(seine_telemetry::DiagnosticCode::Warning,
+                                        seine_telemetry::DiagnosticKind::Authentication, None,
+                                        seine_telemetry::FailureDetail::new(seine_telemetry::FailureReason::LoginRejected,
+                                            seine_telemetry::DiagnosticOperation::PoolLogin));
                                     reject_pending_submits(
                                         &event_tx,
                                         &mut pending_submits,
+                                        &mut retry_queue,
                                         SUBMIT_REJECT_REASON_LOGIN_REJECTED,
                                     );
                                     reject_queued_submits(
@@ -704,6 +787,15 @@ async fn connect_pool_tcp_stream(endpoint: &PoolEndpoint) -> Result<TokioTcpStre
     let addrs = resolve_pool_addrs(&endpoint.authority)
         .with_context(|| format!("failed to resolve pool endpoint {}", endpoint.display()))?;
     if addrs.is_empty() {
+        crate::diagnostics::record_failure(
+            seine_telemetry::DiagnosticCode::Warning,
+            seine_telemetry::DiagnosticKind::Connection,
+            None,
+            seine_telemetry::FailureDetail::new(
+                seine_telemetry::FailureReason::DnsFailed,
+                seine_telemetry::DiagnosticOperation::PoolResolve,
+            ),
+        );
         bail!(
             "pool endpoint resolved to no addresses: {}",
             endpoint.display()
@@ -711,6 +803,10 @@ async fn connect_pool_tcp_stream(endpoint: &PoolEndpoint) -> Result<TokioTcpStre
     }
 
     let mut last_err: Option<String> = None;
+    let mut failure = seine_telemetry::FailureDetail::new(
+        seine_telemetry::FailureReason::ConnectionFailed,
+        seine_telemetry::DiagnosticOperation::PoolConnect,
+    );
     for addr in addrs {
         match tokio::time::timeout(CONNECT_TIMEOUT, TokioTcpStream::connect(addr)).await {
             Ok(Ok(stream)) => {
@@ -718,14 +814,28 @@ async fn connect_pool_tcp_stream(endpoint: &PoolEndpoint) -> Result<TokioTcpStre
                 return Ok(stream);
             }
             Ok(Err(err)) => {
+                failure = crate::diagnostics::io_detail(
+                    seine_telemetry::DiagnosticOperation::PoolConnect,
+                    &err,
+                );
                 last_err = Some(err.to_string());
             }
             Err(_) => {
+                failure = seine_telemetry::FailureDetail::new(
+                    seine_telemetry::FailureReason::ConnectionTimedOut,
+                    seine_telemetry::DiagnosticOperation::PoolConnect,
+                );
                 last_err = Some(format!("connection timed out to {addr}"));
             }
         }
     }
 
+    crate::diagnostics::record_failure(
+        seine_telemetry::DiagnosticCode::Warning,
+        seine_telemetry::DiagnosticKind::Connection,
+        None,
+        failure,
+    );
     Err(anyhow!(
         "failed to connect to pool at {}: {}",
         endpoint.display(),
@@ -734,7 +844,12 @@ async fn connect_pool_tcp_stream(endpoint: &PoolEndpoint) -> Result<TokioTcpStre
 }
 
 fn resolve_pool_addrs(authority: &str) -> Result<Vec<SocketAddr>> {
-    let mut addrs: Vec<SocketAddr> = authority.to_socket_addrs()?.collect();
+    let mut addrs: Vec<SocketAddr> = authority
+        .to_socket_addrs()
+        .inspect_err(|err| {
+            crate::diagnostics::record_io(seine_telemetry::DiagnosticOperation::PoolResolve, err);
+        })?
+        .collect();
     addrs.sort_by_key(|addr| !addr.is_ipv4());
     Ok(addrs)
 }
@@ -750,8 +865,25 @@ async fn run_tcp_reader(
                     break;
                 }
             }
-            Ok(None) => break,
+            Ok(None) => {
+                crate::diagnostics::record_failure(
+                    seine_telemetry::DiagnosticCode::Warning,
+                    seine_telemetry::DiagnosticKind::Connection,
+                    None,
+                    seine_telemetry::FailureDetail::new(
+                        seine_telemetry::FailureReason::ConnectionClosed,
+                        seine_telemetry::DiagnosticOperation::PoolRead,
+                    ),
+                );
+                break;
+            }
             Err(err) => {
+                if let Some(io) = err.downcast_ref::<std::io::Error>() {
+                    crate::diagnostics::record_io(
+                        seine_telemetry::DiagnosticOperation::PoolRead,
+                        io,
+                    );
+                }
                 let _ = inbound_tx.send(InboundFrame::ReadError(err.to_string()));
                 break;
             }
@@ -772,7 +904,8 @@ where
             }
             ClientOutbound::Keepalive => writer.write_all(b"\n").await,
         };
-        if result.is_err() {
+        if let Err(error) = result {
+            crate::diagnostics::record_io(seine_telemetry::DiagnosticOperation::PoolWrite, &error);
             break;
         }
     }
@@ -874,10 +1007,7 @@ fn friendly_pool_disconnect_message(endpoint: &PoolEndpoint) -> String {
     format!("pool offline at {}", endpoint.display())
 }
 
-fn should_enable_idle_keepalive(endpoint: &str) -> bool {
-    !endpoint.trim().is_empty()
-}
-
+#[cfg(test)]
 fn send_login(
     stream: &mut TcpStream,
     address: &str,
@@ -888,6 +1018,7 @@ fn send_login(
     write_text_line(stream, &payload)
 }
 
+#[cfg(test)]
 fn send_submit(
     stream: &mut TcpStream,
     request_id: u64,
@@ -898,6 +1029,7 @@ fn send_submit(
     write_text_line(stream, &payload)
 }
 
+#[cfg(test)]
 fn write_text_line(stream: &mut TcpStream, payload: &str) -> Result<()> {
     let mut line = payload.as_bytes().to_vec();
     line.push(b'\n');
@@ -906,22 +1038,33 @@ fn write_text_line(stream: &mut TcpStream, payload: &str) -> Result<()> {
         .context("failed writing stratum payload")
 }
 
+#[cfg(test)]
 fn decode_pool_message(
     raw: &str,
     login_confirmed: &mut bool,
     pending_submits: &mut HashMap<u64, PoolSubmit>,
 ) -> Option<PoolEvent> {
+    decode_pool_message_with_submit(raw, login_confirmed, pending_submits).map(|(event, _)| event)
+}
+
+/// Decodes one pool line. For submit acks the matching in-flight submit is
+/// returned too, so a retryable reject can be resubmitted unchanged.
+fn decode_pool_message_with_submit(
+    raw: &str,
+    login_confirmed: &mut bool,
+    pending_submits: &mut HashMap<u64, PoolSubmit>,
+) -> Option<(PoolEvent, Option<PoolSubmit>)> {
     let msg: StratumMessage = serde_json::from_str(raw).ok()?;
 
     if let Some(method) = msg.method.as_deref() {
         if method == "job" {
             let params = msg.params?;
             let job: PoolJob = serde_json::from_value(params).ok()?;
-            return Some(PoolEvent::Job(job));
+            return Some((PoolEvent::Job(job), None));
         }
         if method == STRATUM_METHOD_NOTIFICATION {
             let notification = parse_pool_notification(msg.params)?;
-            return Some(PoolEvent::Notification(notification));
+            return Some((PoolEvent::Notification(notification), None));
         }
     }
 
@@ -929,7 +1072,7 @@ fn decode_pool_message(
     if id == LOGIN_REQUEST_ID {
         if let Some(err) = msg.error {
             *login_confirmed = false;
-            return Some(PoolEvent::LoginRejected(err));
+            return Some((PoolEvent::LoginRejected(err), None));
         }
         let status_ok = msg
             .status
@@ -939,10 +1082,13 @@ fn decode_pool_message(
         if status_ok {
             *login_confirmed = true;
             let ack = parse_login_result(msg.result);
-            return Some(PoolEvent::LoginAccepted(ack));
+            return Some((PoolEvent::LoginAccepted(ack), None));
         }
         *login_confirmed = false;
-        return Some(PoolEvent::LoginRejected("pool rejected login".to_string()));
+        return Some((
+            PoolEvent::LoginRejected("pool rejected login".to_string()),
+            None,
+        ));
     }
 
     let submit = pending_submits.remove(&id)?;
@@ -982,13 +1128,15 @@ fn decode_pool_message(
         )
     };
 
-    Some(PoolEvent::SubmitAck(PoolSubmitAck {
-        job_id: submit.job_id,
+    let ack = PoolSubmitAck {
+        job_id: submit.job_id.clone(),
         nonce: submit.nonce,
         accepted,
         difficulty,
         error,
-    }))
+        retries: submit.retries,
+    };
+    Some((PoolEvent::SubmitAck(ack), Some(submit)))
 }
 
 fn parse_pool_notification(params: Option<Value>) -> Option<PoolNotification> {
@@ -1089,16 +1237,73 @@ fn reject_submit(event_tx: &Sender<PoolEvent>, submit: PoolSubmit, reason: &str)
         accepted: false,
         difficulty: None,
         error: Some(reason.to_string()),
+        retries: submit.retries,
     }));
+}
+
+fn reject_abandoned_submits(event_tx: &Sender<PoolEvent>, abandoned: Vec<AbandonedSubmit>) {
+    for AbandonedSubmit { submit, reason } in abandoned {
+        reject_submit(event_tx, submit, &reason);
+    }
 }
 
 fn reject_pending_submits(
     event_tx: &Sender<PoolEvent>,
     pending_submits: &mut HashMap<u64, PoolSubmit>,
+    retry_queue: &mut SubmitRetryQueue,
     reason: &str,
 ) {
     for (_, submit) in pending_submits.drain() {
         reject_submit(event_tx, submit, reason);
+    }
+    // Busy-rejected shares waiting for a resubmit are tied to this session's
+    // job ids, so they cannot survive a disconnect either.
+    for submit in retry_queue.drain() {
+        reject_submit(event_tx, submit, reason);
+    }
+}
+
+/// Turns a submit ack into the event to report. Retryable rejects are kept in
+/// `retry_queue` instead and reported as `SubmitRetry`.
+fn route_submit_ack(
+    event_tx: &Sender<PoolEvent>,
+    retry_queue: &mut SubmitRetryQueue,
+    mut ack: PoolSubmitAck,
+    submit: PoolSubmit,
+    now: Instant,
+) -> PoolEvent {
+    ack.retries = submit.retries;
+    if ack.accepted {
+        return PoolEvent::SubmitAck(ack);
+    }
+    let reason = ack.error.clone().unwrap_or_default();
+    if !is_retryable_submit_reject(&reason) {
+        return PoolEvent::SubmitAck(ack);
+    }
+    match retry_queue.schedule(submit, &reason, now) {
+        ScheduleOutcome::Scheduled {
+            retry_number,
+            max_retries,
+            delay,
+            block_candidate,
+            evicted,
+        } => {
+            if let Some(evicted) = evicted {
+                reject_abandoned_submits(event_tx, vec![evicted]);
+            }
+            PoolEvent::SubmitRetry(PoolSubmitRetry {
+                nonce: ack.nonce,
+                reason,
+                retry_number,
+                max_retries,
+                delay,
+                block_candidate,
+            })
+        }
+        ScheduleOutcome::GaveUp(abandoned) => {
+            ack.error = Some(abandoned.reason);
+            PoolEvent::SubmitAck(ack)
+        }
     }
 }
 
@@ -1164,6 +1369,37 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn refused_connection_retains_typed_cause_without_endpoint() {
+        let guard = crate::diagnostics::install(crate::diagnostics::test_context());
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        drop(listener);
+        let endpoint = parse_pool_endpoint(&format!("stratum+tcp://{address}")).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        assert!(runtime
+            .block_on(connect_pool_tcp_stream(&endpoint))
+            .is_err());
+        let snapshot = guard.0.snapshot(false);
+        assert_eq!(snapshot.events.len(), 1);
+        let detail = snapshot.events[0].detail.as_ref().unwrap();
+        assert_eq!(
+            detail.operation,
+            seine_telemetry::DiagnosticOperation::PoolConnect
+        );
+        assert_eq!(
+            detail.reason,
+            seine_telemetry::FailureReason::ConnectionRefused
+        );
+        assert!(detail.os_error.is_some());
+        assert!(!serde_json::to_string(&snapshot)
+            .unwrap()
+            .contains(&address.to_string()));
+    }
 
     fn capture_payload<F>(writer: F) -> Value
     where
@@ -1269,6 +1505,7 @@ mod tests {
                 nonce: 42,
                 claimed_hash: Some([0xAB; 32]),
                 backend: Some("nvidia#1".to_string()),
+                retries: 0,
             },
             99,
             true,
@@ -1325,6 +1562,7 @@ mod tests {
                 nonce: 7,
                 claimed_hash: Some([0xCD; 32]),
                 backend: None,
+                retries: 0,
             },
             100,
             false,
@@ -1428,6 +1666,7 @@ mod tests {
                 nonce: 17,
                 claimed_hash: None,
                 backend: None,
+                retries: 0,
             },
         );
         let raw = r#"{"id":42,"status":"ok","result":{"accepted":true,"difficulty":128}}"#;
@@ -1490,6 +1729,7 @@ mod tests {
                 nonce: 88,
                 claimed_hash: None,
                 backend: None,
+                retries: 0,
             },
         );
         let raw = r#"{"id":9,"result":{}}"#;
@@ -1806,13 +2046,6 @@ mod tests {
     }
 
     #[test]
-    fn idle_keepalive_is_enabled_for_remote_endpoints() {
-        assert!(should_enable_idle_keepalive("127.0.0.1:3333"));
-        assert!(should_enable_idle_keepalive("pool.example.com:3333"));
-        assert!(!should_enable_idle_keepalive("   "));
-    }
-
-    #[test]
     fn parse_pool_endpoint_rejects_websocket_schemes() {
         let ws = parse_pool_endpoint("stratum+ws://pool.example.com:3334")
             .expect_err("ws endpoints should be rejected");
@@ -2098,5 +2331,254 @@ mod tests {
         server.join().expect("server thread should finish");
         shutdown.store(true, Ordering::Relaxed);
         assert_eq!(login_acks, 2, "expected reconnect login accepted event");
+    }
+
+    enum ScriptedReply {
+        Error(&'static str),
+        Accept,
+        ErrorThenNewBlock(&'static str),
+        ErrorThenClose(&'static str),
+    }
+
+    /// Fake pool: logs the client in, sends one job, then answers each submit
+    /// with the next scripted reply. Returns every submit payload it read.
+    fn spawn_scripted_pool(
+        replies: Vec<ScriptedReply>,
+        linger_for_extra_submit: Duration,
+    ) -> (u16, thread::JoinHandle<Vec<Value>>) {
+        let listener =
+            TcpListener::bind("127.0.0.1:0").expect("test listener should bind to loopback");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().expect("server should accept client");
+            let mut reader = BufReader::new(socket.try_clone().expect("clone socket"));
+            reader
+                .get_mut()
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .expect("set read timeout");
+            let write_line = |socket: &mut TcpStream, value: Value| {
+                let mut bytes = serde_json::to_vec(&value).expect("serialize reply");
+                bytes.push(b'\n');
+                socket.write_all(&bytes).expect("write reply");
+            };
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("read login");
+            write_line(
+                &mut socket,
+                serde_json::json!({
+                    "id": LOGIN_REQUEST_ID,
+                    "status": "ok",
+                    "result": {
+                        "protocol_version": 2,
+                        "capabilities": ["submit_claimed_hash", "same_template_rebind_v1"],
+                        "required_capabilities": []
+                    }
+                }),
+            );
+            let job = |job_id: &str, height: u64| {
+                serde_json::json!({
+                    "method": "job",
+                    "params": {
+                        "job_id": job_id,
+                        "template_id": format!("tpl-{height}"),
+                        "header_base": "00".repeat(92),
+                        "target": "ff".repeat(32),
+                        "difficulty": 1,
+                        "network_target": "00".repeat(32),
+                        "height": height,
+                        "nonce_start": 0,
+                        "nonce_end": 999
+                    }
+                })
+            };
+            write_line(&mut socket, job("job-1", 10));
+
+            let mut submits = Vec::new();
+            for reply in replies {
+                line.clear();
+                reader.read_line(&mut line).expect("read submit");
+                let submit: Value = serde_json::from_str(line.trim()).expect("submit json");
+                let id = submit.get("id").and_then(Value::as_u64).expect("submit id");
+                submits.push(submit);
+                match reply {
+                    ScriptedReply::Accept => write_line(
+                        &mut socket,
+                        serde_json::json!({"id": id, "status": "ok", "result": {"accepted": true}}),
+                    ),
+                    ScriptedReply::Error(error) => {
+                        write_line(&mut socket, serde_json::json!({"id": id, "error": error}))
+                    }
+                    ScriptedReply::ErrorThenNewBlock(error) => {
+                        write_line(&mut socket, serde_json::json!({"id": id, "error": error}));
+                        write_line(&mut socket, job("job-2", 11));
+                    }
+                    ScriptedReply::ErrorThenClose(error) => {
+                        write_line(&mut socket, serde_json::json!({"id": id, "error": error}));
+                        let _ = socket.shutdown(std::net::Shutdown::Both);
+                        return submits;
+                    }
+                }
+            }
+            if !linger_for_extra_submit.is_zero() {
+                reader
+                    .get_mut()
+                    .set_read_timeout(Some(linger_for_extra_submit))
+                    .expect("set linger timeout");
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => {}
+                    Ok(_) => panic!("unexpected extra submit: {}", line.trim()),
+                    Err(err)
+                        if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+                    Err(err) => panic!("unexpected read error: {err}"),
+                }
+            }
+            submits
+        });
+        (port, server)
+    }
+
+    fn connect_and_submit(port: u16, nonce: u64) -> (PoolClient, Arc<AtomicBool>) {
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let client = PoolClient::connect(
+            &format!("127.0.0.1:{port}"),
+            "BTestAddress".to_string(),
+            "rig01".to_string(),
+            Arc::clone(&shutdown),
+        )
+        .expect("pool client should connect");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut saw_job = false;
+        while Instant::now() < deadline && !saw_job {
+            if let Some(PoolEvent::Job(_)) = client.recv_event_timeout(Duration::from_millis(100)) {
+                saw_job = true;
+            }
+        }
+        assert!(saw_job, "expected job before submitting");
+        client
+            .submit_share("job-1".to_string(), nonce, Some([0xAB; 32]))
+            .expect("submit should enqueue");
+        (client, shutdown)
+    }
+
+    /// Collects share events until the final ack (or timeout).
+    fn wait_for_final_ack(client: &PoolClient) -> (Vec<PoolSubmitRetry>, Option<PoolSubmitAck>) {
+        let mut retries = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline {
+            match client.recv_event_timeout(Duration::from_millis(100)) {
+                Some(PoolEvent::SubmitRetry(retry)) => retries.push(retry),
+                Some(PoolEvent::SubmitAck(ack)) => return (retries, Some(ack)),
+                _ => {}
+            }
+        }
+        (retries, None)
+    }
+
+    #[test]
+    fn pool_client_resubmits_busy_reject_with_identical_params() {
+        let (port, server) = spawn_scripted_pool(
+            vec![
+                ScriptedReply::Error("server busy, retry"),
+                ScriptedReply::Error("rate limited, retry"),
+                ScriptedReply::Accept,
+            ],
+            Duration::ZERO,
+        );
+        let (client, shutdown) = connect_and_submit(port, 4242);
+        let (retries, ack) = wait_for_final_ack(&client);
+        let submits = server.join().expect("server thread should finish");
+        shutdown.store(true, Ordering::Relaxed);
+
+        let ack = ack.expect("expected a final submit ack");
+        assert!(ack.accepted, "resubmitted share should be accepted");
+        assert_eq!(ack.nonce, 4242);
+        assert_eq!(ack.retries, 2);
+        assert_eq!(
+            retries
+                .iter()
+                .map(|retry| retry.retry_number)
+                .collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        assert_eq!(retries[0].reason, "server busy, retry");
+        assert_eq!(retries[1].reason, "rate limited, retry");
+        assert!(!retries[0].block_candidate);
+
+        assert_eq!(submits.len(), 3);
+        let params = |submit: &Value| submit.get("params").cloned().expect("submit params");
+        for submit in &submits[1..] {
+            assert_eq!(
+                params(submit),
+                params(&submits[0]),
+                "retry must resend the same params"
+            );
+            assert_ne!(
+                submit.get("id"),
+                submits[0].get("id"),
+                "retry uses a fresh request id"
+            );
+        }
+    }
+
+    #[test]
+    fn pool_client_does_not_retry_duplicate_share_rejects() {
+        let (port, server) = spawn_scripted_pool(
+            vec![ScriptedReply::Error("duplicate share")],
+            Duration::from_millis(800),
+        );
+        let (client, shutdown) = connect_and_submit(port, 7);
+        let (retries, ack) = wait_for_final_ack(&client);
+        let submits = server.join().expect("server thread should finish");
+        shutdown.store(true, Ordering::Relaxed);
+
+        let ack = ack.expect("expected a final submit ack");
+        assert!(!ack.accepted);
+        assert_eq!(ack.error.as_deref(), Some("duplicate share"));
+        assert_eq!(ack.retries, 0);
+        assert!(retries.is_empty());
+        assert_eq!(submits.len(), 1);
+    }
+
+    #[test]
+    fn pool_client_abandons_busy_retry_after_new_block() {
+        let (port, server) = spawn_scripted_pool(
+            vec![ScriptedReply::ErrorThenNewBlock("server busy, retry")],
+            Duration::from_millis(800),
+        );
+        let (client, shutdown) = connect_and_submit(port, 9);
+        let (retries, ack) = wait_for_final_ack(&client);
+        let submits = server.join().expect("server thread should finish");
+        shutdown.store(true, Ordering::Relaxed);
+
+        assert_eq!(retries.len(), 1);
+        let ack = ack.expect("expected a final submit ack");
+        assert!(!ack.accepted);
+        assert_eq!(ack.retries, 1);
+        let reason = ack.error.unwrap_or_default();
+        assert!(reason.contains("new block"), "unexpected reason: {reason}");
+        assert_eq!(submits.len(), 1, "stale share must not be resubmitted");
+    }
+
+    #[test]
+    fn pool_client_drops_busy_retry_on_disconnect() {
+        let (port, server) = spawn_scripted_pool(
+            vec![ScriptedReply::ErrorThenClose("server busy, retry")],
+            Duration::ZERO,
+        );
+        let (client, shutdown) = connect_and_submit(port, 11);
+        let (retries, ack) = wait_for_final_ack(&client);
+        let submits = server.join().expect("server thread should finish");
+        shutdown.store(true, Ordering::Relaxed);
+
+        assert_eq!(retries.len(), 1);
+        let ack = ack.expect("expected a final submit ack");
+        assert!(!ack.accepted);
+        assert_eq!(
+            ack.error.as_deref(),
+            Some(SUBMIT_REJECT_REASON_DISCONNECTED)
+        );
+        assert_eq!(ack.retries, 1);
+        assert_eq!(submits.len(), 1);
     }
 }

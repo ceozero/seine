@@ -1,0 +1,101 @@
+---
+title: Blocknet là gì? Đồng coin riêng tư thanh toán được bằng tên
+description: Blocknet là đồng tiền mã hóa giữ riêng tư mọi khoản thanh toán, cho phép trả tiền tới một @name, kèm memo được mã hóa và có thể đào trên máy tính thông thường.
+tags: [Blocknet, Quyền riêng tư, Blocknet ID, Faraday]
+faq:
+  - q: 'Blocknet có phải là privacy coin không?'
+    a: 'Đúng vậy. Quyền riêng tư được tích hợp vào mọi giao dịch Blocknet. Mỗi lần chi tiêu được ký bằng một vòng gồm 16 output khả dĩ, mỗi khoản thanh toán đến một địa chỉ ẩn dùng một lần, và số tiền được che giấu sau các commitment mật mã. Không có chế độ minh bạch, nên bạn không bao giờ phải nhớ bật quyền riêng tư.'
+  - q: 'Blocknet có premine hay quỹ phát triển không?'
+    a: 'Không. Khối genesis, được tạo ngày 2026-02-15, hoàn toàn không chứa giao dịch nào, nên không có coin nào được tạo ra trước khi việc đào bắt đầu. Mọi khối kể từ đó trả toàn bộ phần thưởng trong một output duy nhất cho thợ đào tìm ra nó, và đồng thuận không có output nào cho quỹ dự trữ hay nhà sáng lập.'
+  - q: 'Thời gian khối của Blocknet là bao lâu?'
+    a: 'Blocknet nhắm tới một khối mỗi năm phút, tức 288 khối mỗi ngày. Một khoản thanh toán thường xuất hiện trong một khối chỉ sau vài phút, và mạng coi 10 xác nhận, khoảng 50 phút, là an toàn. Coin mới đào được có thể chi tiêu sau 60 khối, khoảng năm giờ.'
+  - q: 'Có thể đào Blocknet bằng máy tính thông thường không?'
+    a: 'Có. Proof of Work của Blocknet, Argon2id, cần khoảng 2 GB bộ nhớ cho mỗi lần băm, nên CPU và RAM thông thường trong máy để bàn, laptop và máy chủ làm việc đào. Tải seine, dán địa chỉ hoặc @name của bạn, và nó sẽ đào trên pool bntpool.com bằng CPU cùng bất kỳ card đồ họa NVIDIA nào bạn có.'
+sourceHash: d34f8db6d5ae
+translation: draft
+---
+
+Trang này trình bày những điểm khiến Blocknet khác biệt: các khoản thanh toán riêng tư theo mặc định, gửi tiền tới một cái tên thay vì một địa chỉ dài, memo được mã hóa trên mọi khoản thanh toán, fair launch (ra mắt công bằng), và việc đào bạn có thể tự làm trên máy tính của mình. Cuối bài là bản nâng cấp Faraday mà dự án đã lên kế hoạch và cách bắt đầu.
+
+## Blocknet là gì?
+
+<Answer>
+Blocknet là một đồng tiền mã hóa, với đơn vị BNT, giữ riêng tư mọi khoản thanh toán theo mặc định. Người gửi, người nhận và số tiền được che giấu trên mọi giao dịch, bạn có thể trả tiền cho ai đó bằng một @name ngắn, mỗi khoản thanh toán có thể kèm một ghi chú được mã hóa, và coin mới được đào trên máy tính thông thường bằng Proof of Work Argon2id.
+</Answer>
+
+Mạng chính của Blocknet khởi chạy ngày 2026-02-15 mà không có premine. Khoảng năm phút lại có một khối, và bất kỳ ai cũng có thể chạy node, giữ coin trong [ví dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) hoặc [ví máy tính](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) chính thức, và theo dõi chuỗi trên [block explorer](https://explorer.blocknetcrypto.com). Trang chủ của dự án là [blocknetcrypto.com](https://blocknetcrypto.com).
+
+## Blocknet giữ riêng tư cho các khoản thanh toán như thế nào?
+
+<Answer>
+Mọi khoản thanh toán Blocknet kết hợp ba lớp bảo vệ. Một vòng 16 output che giấu đồng coin nào đang được chi tiêu, một địa chỉ ẩn dùng một lần che giấu ai nhận nó, và Pedersen commitment cùng Bulletproofs che giấu số tiền. Không có chế độ minh bạch, nên mọi giao dịch đều có cùng mức riêng tư mà không cần thay đổi thiết lập nào.
+</Answer>
+
+Mỗi lớp bao phủ một phần của khoản thanh toán, ba thứ mà một [đồng coin riêng tư](/vi/blog/what-is-a-privacy-coin/) giữ ngoài hồ sơ công khai:
+
+- **Người gửi.** Khi bạn chi tiêu, ví ký bằng một vòng 16 output: output của bạn và 15 output khác lấy từ chuỗi. Bất kỳ ai kiểm tra giao dịch đều xác nhận được rằng một trong 16 output đã được chi tiêu, mà không biết là cái nào. Kích thước vòng được đồng thuận cố định ở 16, nên kích thước vòng không bao giờ làm một giao dịch khác biệt với giao dịch khác.
+- **Người nhận.** Địa chỉ bạn công bố không bao giờ xuất hiện trên chuỗi. Mỗi khoản thanh toán cho bạn đến một địa chỉ ẩn dùng một lần mới mà chỉ ví của bạn nhận ra được, nên hai khoản thanh toán cho cùng một người không thể bị gắn với nhau khi nhìn vào chuỗi.
+- **Số tiền.** Số tiền được lưu dưới dạng commitment. Mạng có thể kiểm tra những gì đi vào một giao dịch bằng những gì đi ra, và range proof cho thấy không có số tiền nào là số âm, tất cả mà không cần thấy một con số nào.
+
+Vì quyền riêng tư là một phần của chính định dạng giao dịch, không có chế độ công khai nào để một khoản thanh toán rơi vào. Coin của bạn và của mọi người khác có cùng một lớp bảo vệ, đó là điều giúp quyền riêng tư vững chắc cho tất cả. Để xem kỹ hơn từng lớp, gồm cả key image và cơ chế chuyển tiếp Dandelion++, hãy đọc [cách Blocknet giữ riêng tư cho các khoản thanh toán](/vi/blog/blocknet-privacy-features/).
+
+## Có thể thanh toán cho ai đó bằng tên không?
+
+Có. Một địa chỉ Blocknet là chuỗi hơn 90 ký tự, khó đọc to, khó gõ và khó kiểm tra. [Tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) giải quyết điều đó. Bạn đăng ký một cái tên như `@alice` trên [blocknet.id](https://blocknet.id), và mọi người có thể trả tiền cho `@alice` (hoặc `$alice`) thay vì địa chỉ đầy đủ. Ví tra cứu tên thông qua một ánh xạ có chữ ký từ blocknet.id và gửi tới địa chỉ đằng sau nó.
+
+Tên không phân biệt chữ hoa chữ thường và dùng chữ cái, chữ số, `_`, `-` và `.`, dài tối đa 64 ký tự. Tên của bạn là công khai, còn các khoản thanh toán tới nó vẫn riêng tư, vì mỗi khoản vẫn đến địa chỉ ẩn riêng của nó. Bạn có thể dùng cùng cái tên đó để đào coin: seine và pool bntpool.com đều chấp nhận `@name` làm địa chỉ nhận thanh toán.
+
+## Có thể ghi gì trong memo của Blocknet?
+
+Mọi khoản thanh toán Blocknet đều mang một memo 128 byte, được mã hóa để chỉ người gửi và người nhận đọc được. Bạn có thể viết tối đa 124 byte văn bản, đủ cho một số hóa đơn, mã đơn hàng hay một lời cảm ơn ngắn. Trong ví dòng lệnh, bạn thêm nó vào cuối lệnh gửi:
+
+```sh
+send @alice 10 invoice 1042
+```
+
+Memo được đệm thành cùng 128 byte trên mọi output, dù bạn có viết ghi chú hay không. Nhìn từ bên ngoài, một khoản thanh toán có số hóa đơn trông giống hệt một khoản không có, nên trường memo không tiết lộ gì về việc ai dùng nó. Với một cửa hàng hay người làm tự do, điều này có nghĩa bạn có thể đối chiếu từng khoản thanh toán nhận vào với một đơn hàng mà không cần hệ thống riêng và không phơi bày chi tiết đó.
+
+## Liên kết thanh toán Blocknet hoạt động như thế nào?
+
+Liên kết thanh toán gói mọi thứ cần cho một khoản thanh toán vào một liên kết bạn có thể chia sẻ: địa chỉ hoặc tên, số tiền và một memo tùy chọn. Ví Blocknet hiểu hai dạng, liên kết `blocknet://` và liên kết web `bntpay.com/`. Một liên kết web yêu cầu 10 BNT cho một hóa đơn trông như sau:
+
+```text
+https://bntpay.com/$alice?amount=10&memo=invoice%201042
+```
+
+Khi người trả tiền dán liên kết vào ví dòng lệnh, nó được đọc thành một lệnh gửi sẵn sàng để xác nhận với địa chỉ, số tiền và memo đã điền sẵn. Bạn có thể đặt một liên kết trên hóa đơn, trang web hay hồ sơ mạng xã hội và để mọi người trả tiền cho bạn mà không phải tự tay sao chép bất kỳ chi tiết nào.
+
+## Blocknet có ra mắt công bằng không?
+
+Có. Khối genesis của Blocknet được tạo ngày 2026-02-15 và không chứa giao dịch nào: không coinbase, không premine và không có coin nào được để dành cho ai. Những đồng coin đầu tiên đến từ khối 1, được đào như mọi khối từ đó đến nay.
+
+Các quy tắc giữ nguyên điều đó. Phần thưởng của mỗi khối phải được trả bằng đúng một output, trị giá đúng bằng phần thưởng khối, cho thợ đào tìm ra khối đó. Không có quỹ dự trữ, phần thưởng nhà sáng lập hay quỹ phát triển nào trong đồng thuận, nên mọi đồng BNT đang tồn tại đều được ai đó đào ra bằng Proof of Work. Bạn có thể tự kiểm tra điều này trên [explorer](https://explorer.blocknetcrypto.com), bắt đầu từ khối genesis.
+
+## Coin mới được tạo ra như thế nào?
+
+Khoảng năm phút lại có một khối mới, tức 288 khối mỗi ngày. Phần thưởng khối bắt đầu ở khoảng 723 BNT và giảm dần mỗi tháng 30 ngày, phát hành khoảng 100 triệu BNT trong bốn năm đầu. Sau đó, mọi khối trả một phần thưởng đuôi vĩnh viễn 2 BNT, nên thợ đào luôn được trả để bảo vệ chuỗi.
+
+## Có thể đào Blocknet trên máy tính thông thường không?
+
+Có, và đó chính là cách Blocknet được thiết kế để đào. Proof of Work của nó, [Argon2id](/vi/blog/argon2id-proof-of-work-explained/), dùng khoảng 2 GB bộ nhớ cho mỗi lần băm. Bộ nhớ là thứ mọi máy để bàn, laptop và máy chủ đều có sẵn, và thiết kế này nhằm chống lại phần cứng đào chuyên dụng, nên công việc thuộc về các máy tính thông thường. Mỗi luồng đào cần 2 GB riêng, đó là lý do RAM của máy tính, thường hơn là số nhân, [quyết định nó chạy được bao nhiêu luồng](/vi/blog/blocknet-mining-hardware-hashrate/).
+
+Cách đào dễ nhất là **seine**, trình đào miễn phí, mã nguồn mở cho Blocknet. Nó chạy trên Windows, macOS và Linux, đào bằng CPU của bạn và, trên Windows và Linux, cùng lúc với mọi card đồ họa NVIDIA, đồng thời tự tinh chỉnh số luồng và kernel CPU trong lúc đào. Trỏ nó về địa chỉ hoặc `@name` của bạn, chấp nhận pool mặc định, [bntpool.com](https://bntpool.com), và bạn đã bắt đầu đào. [Cách đào Blocknet](/vi/blog/how-to-mine-blocknet/) trình bày toàn bộ quá trình thiết lập, và [mục tải xuống](/vi/#download) có seine cho mọi hệ điều hành.
+
+## Bản nâng cấp Faraday là gì?
+
+Faraday là bản nâng cấp lớn tiếp theo của Blocknet, dự kiến vào khoảng ngày 2027-02-16, gần kỷ niệm một năm khối 1. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), nó sẽ chuyển toàn bộ mạng sang mật mã mới trong một hard fork duy nhất:
+
+- **Bằng chứng chi tiêu mà máy tính lượng tử không thể giả mạo.** Các lần chi tiêu sẽ được chứng minh bằng bằng chứng dựa trên hàm băm thay vì đường cong elliptic, và ví sẽ phát hiện các khoản thanh toán nhận vào bằng ML-KEM.
+- **Quyền riêng tư trên toàn chuỗi.** Hiện nay, một lần chi tiêu ẩn giữa 16 output. Sau Faraday, nó sẽ ẩn giữa mọi output trên chuỗi.
+- **Đồng bộ nhanh hơn và ví nhanh hơn.** Một Proof of Work nhẹ hơn sẽ giúp các node mới bắt kịp chuỗi nhanh hơn, và ví sẽ tìm ra các khoản thanh toán sớm hơn.
+- **Vẫn là đồng coin đó.** Sẽ không có coin mới và không ra mắt lại, và lịch sử của bạn được giữ nguyên. Sau bản nâng cấp, bạn sẽ có một năm để chuyển coin sang định dạng mới, và ví sẽ quét, hiển thị phí và chuyển chúng khi bạn yêu cầu.
+
+Trang này mô tả Faraday đang trong giai đoạn thiết kế, kiểm thử và đánh giá đối kháng, và các mốc thời gian là dự kiến chứ chưa phải cuối cùng. Nếu bạn đào, hãy luôn cập nhật seine: nó kiểm tra bản phát hành mới khi khởi động và cứ mỗi 12 giờ.
+
+## Làm sao bắt đầu với Blocknet?
+
+1. **Tạo ví.** Tải [ví máy tính](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) hoặc [ví dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) và chép lại cụm từ khôi phục của bạn.
+2. **Đăng ký tên.** Đăng ký một tên ngắn trên [blocknet.id](https://blocknet.id) để mọi người có thể trả tiền cho bạn bằng `@name`.
+3. **Kiếm những đồng coin đầu tiên bằng việc đào.** Tải seine từ [mục tải xuống](/vi/#download), cung cấp địa chỉ hoặc tên của bạn, và bắt đầu đào trên bntpool.com.
+
+<CTA target="seine" title="Đào những đồng BNT đầu tiên" text="seine đào Blocknet trên chiếc máy tính bạn đang có, bằng cả CPU và GPU NVIDIA." />

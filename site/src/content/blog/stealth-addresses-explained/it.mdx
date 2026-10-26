@@ -1,0 +1,94 @@
+---
+title: 'Gli indirizzi stealth spiegati: come funzionano gli indirizzi monouso'
+description: 'Indirizzi stealth spiegati in parole semplici: come indirizzi monouso, view key, spend key e scansione del wallet rendono privato ogni pagamento che ricevi.'
+tags: [Privacy, Indirizzi stealth, Wallet, Blocknet]
+faq:
+  - q: 'Un indirizzo stealth è la stessa cosa di un indirizzo monouso?'
+    a: 'Sono le due metà di un unico sistema. L''indirizzo stealth è l''indirizzo che pubblichi, composto da una chiave di spesa pubblica e da una chiave di visualizzazione pubblica. Un indirizzo monouso è la chiave nuova che un mittente ne ricava per un singolo pagamento. Sulla blockchain compaiono solo indirizzi monouso, mai il tuo indirizzo pubblicato.'
+  - q: 'Qualcuno può vedere il mio saldo se conosce il mio indirizzo stealth?'
+    a: 'No. Conoscere il tuo indirizzo pubblicato non permette a nessuno di trovare i tuoi pagamenti, perché ognuno finisce su una chiave monouso che non sembra collegata all''indirizzo. Per trovarli serve la tua chiave di visualizzazione privata, quindi solo il tuo wallet può elencare ciò che hai ricevuto. In Blocknet anche gli importi sono nascosti, quindi nemmeno gli output stessi mostrano un valore.'
+  - q: 'Cosa può fare qualcuno con la mia chiave di visualizzazione privata?'
+    a: 'Una chiave di visualizzazione privata permette a chi la possiede di trovare i pagamenti inviati a te e di leggerne importi e memo. Non può spendere nulla, perché per spendere serve la chiave di spesa privata. In Blocknet, il comando viewkeys trasforma la tua chiave di visualizzazione in un wallet di sola visualizzazione, comodo per seguire i fondi su un secondo computer. Condividila solo con persone di cui ti fidi.'
+  - q: 'Devo attivare gli indirizzi stealth in Blocknet?'
+    a: 'No. Ogni pagamento Blocknet va automaticamente a un indirizzo stealth monouso, perché il formato delle transazioni non ha una modalità trasparente. Il tuo wallet crea la chiave monouso quando invii e trova i pagamenti in entrata con la tua chiave di visualizzazione quando si sincronizza. Non c''è nulla da configurare, sia che paghi un indirizzo sia che paghi un @name.'
+sourceHash: df06dcbe3a7b
+translation: reviewed
+---
+
+Un indirizzo stealth ti permette di pubblicare un solo indirizzo e far comunque arrivare ogni pagamento in un punto nuovo della blockchain. Questa guida spiega come funziona, cosa fanno la chiave di visualizzazione e la chiave di spesa e come un wallet trova i propri pagamenti, con Blocknet come esempio concreto.
+
+## Cos'è un indirizzo stealth?
+
+<Answer>
+Un indirizzo stealth è un indirizzo pubblico che non compare mai sulla blockchain. Contiene due chiavi pubbliche, una chiave di spesa (spend key) e una chiave di visualizzazione (view key). Per ogni pagamento, il wallet del mittente le combina con un nuovo numero casuale per creare un indirizzo monouso che solo il destinatario può riconoscere e spendere.
+</Answer>
+
+Su un registro pubblico, un indirizzo normale compare in ogni pagamento che riceve. Un indirizzo Bitcoin standard funziona così: chiunque lo conosca può cercare ogni pagamento e sommare il totale. Per questo molti wallet Bitcoin generano un nuovo indirizzo per ogni pagamento.
+
+Un indirizzo stealth fa questo lavoro al posto tuo. Condividi un solo indirizzo, su un sito web, in un profilo o come `@name`, e ogni mittente ne ricava un indirizzo monouso diverso. Dieci pagamenti a te diventano dieci output che non hanno nulla di visibile in comune tra loro né con l'indirizzo che hai condiviso. Non serve alcuno scambio di messaggi: il mittente calcola da solo l'indirizzo monouso, a partire dal tuo indirizzo pubblico e da un numero casuale.
+
+## Da dove vengono gli indirizzi stealth?
+
+Il design a indirizzi monouso usato da Monero, Blocknet e altre monete risale al whitepaper CryptoNote v2.0 di Nicolas van Saberhagen, datato 17 ottobre 2013. Chiama l'idea «pagamenti non collegabili» e descrive un mittente che genera una «chiave pubblica monouso» dall'indirizzo del destinatario. La documentazione di Monero descrive gli indirizzi stealth come un modo che permette ai mittenti di creare «indirizzi monouso casuali per ogni transazione per conto del destinatario».
+
+L'idea si è diffusa oltre le [privacy coin](/it/blog/what-is-a-privacy-coin/). Il [BIP 352 «Silent Payments»](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) di Bitcoin permette a un indirizzo Bitcoin statico di ricevere pagamenti che non possono essere collegati sulla blockchain, ed [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) di Ethereum, creato nel 2022, standardizza gli indirizzi stealth per gli account Ethereum. Su quelle blockchain entrambe sono funzioni opzionali. In Blocknet, ogni pagamento usa un indirizzo monouso.
+
+## Come funzionano gli indirizzi stealth?
+
+<Answer>
+Il mittente sceglie un numero casuale r, pubblica R = r·G nella transazione e combina r con la chiave di visualizzazione pubblica del destinatario in un segreto condiviso. Sommando quel segreto alla chiave di spesa pubblica si ottiene la chiave monouso. Il destinatario ricostruisce lo stesso segreto da R e dalla propria chiave di visualizzazione privata, quindi solo lui trova il pagamento.
+</Answer>
+
+Il tuo wallet contiene due coppie di chiavi. Ogni chiave privata è un numero segreto (s per la spesa, v per la visualizzazione), e ogni chiave pubblica è quel numero moltiplicato per un punto fisso della curva, G. Il tuo indirizzo è semplicemente l'insieme delle due chiavi pubbliche, S e V. Ecco l'intero scambio:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+Il trucco è uno scambio Diffie-Hellman. Il mittente calcola r·V e il destinatario calcola v·R, ed entrambi arrivano allo stesso punto, perché ciascuno è r·v·G. Nessun altro conosce r o v, quindi nessun altro può calcolarlo. L'hash di quel punto (H) dà un segreto condiviso, e la chiave monouso P è quel segreto, come punto, sommato alla tua chiave di spesa pubblica.
+
+Durante la scansione, ricalcoli il segreto da R e dalla tua chiave di visualizzazione privata e controlli se produce P. Se sì, l'output è tuo. Per spenderlo, il tuo wallet somma lo stesso segreto alla tua chiave di spesa privata, ottenendo la chiave privata x di quel singolo output.
+
+Blocknet segue questo design sul gruppo Ristretto sopra Curve25519, con hash SHA-256 sotto un tag di dominio specifico di Blocknet. Inserisce inoltre nell'hash la posizione di ogni output nella transazione, così due output alla stessa persona nella stessa transazione ricevono comunque chiavi non collegate. Lo stesso segreto condiviso genera anche il fattore di blinding che nasconde l'importo dell'output e la chiave che cifra il suo memo, ed è così che il destinatario legge entrambi.
+
+## Cosa fanno la chiave di visualizzazione e la chiave di spesa?
+
+Separare le chiavi ti dà due livelli di accesso:
+
+- **La chiave di visualizzazione privata trova i pagamenti.** Con v e la tua chiave di spesa pubblica, un wallet può riconoscere ogni output inviato a te, decifrarne l'importo e leggerne il memo.
+- **La chiave di spesa privata li spende.** Solo s trasforma un output trovato in una chiave privata x in grado di firmare una spesa.
+
+Questa separazione rende possibili i wallet di sola visualizzazione. Nel wallet Blocknet da riga di comando, `viewkeys` crea un file di wallet separato dalle tue chiavi di visualizzazione. L'aiuto del wallet lo descrive come un file che «può monitorare ma non può spendere», utile quando «vuoi un accesso di sola visualizzazione su un'altra macchina». Quando lo esegui, il wallet spiega cosa sta creando:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Dai un wallet di sola visualizzazione solo a qualcuno a cui mostreresti la tua cronologia, come il tuo commercialista, oppure tienilo su un tuo secondo computer. In entrambi i casi può seguire l'arrivo dei fondi mentre la tua chiave di spesa resta sulla macchina di cui ti fidi.
+
+## Come trova i suoi pagamenti un wallet?
+
+Poiché le chiavi monouso non sembrano collegate al tuo indirizzo, nulla sulla blockchain indica quali output sono tuoi. È il tuo wallet a controllare. Per ogni transazione di ogni nuovo blocco, prende R, calcola il segreto condiviso con la tua chiave di visualizzazione privata e verifica ogni output con la formula qui sopra. È questo che fa un wallet quando si sincronizza.
+
+Lo scanner di Blocknet mantiene questo processo veloce. Il passaggio costoso, moltiplicare R per la tua chiave di visualizzazione, avviene una volta per transazione, e poi ogni output di quella transazione viene confrontato con il risultato. Quando un output corrisponde, il wallet decifra l'importo e lo conferma rispetto al commitment di Pedersen dell'output prima di aggiungerlo al tuo saldo.
+
+La scansione rende anche semplice il recupero. Entrambe le coppie di chiavi di Blocknet derivano dalla tua [seed di recupero](/it/blog/seed-phrase-explained/) di 12 parole, quindi ripristinare la seed su un nuovo computer ricostruisce le chiavi, e il wallet riscansiona la blockchain per trovare ogni output che ti appartiene. La [guida al wallet Blocknet](/it/blog/blocknet-wallet-for-mining/) mostra come fare il backup della seed e come ripristinarla.
+
+## Gli indirizzi stealth in Blocknet
+
+In Blocknet, un indirizzo stealth è semplicemente il tuo indirizzo. È la codifica base58 della tua chiave di spesa pubblica, della tua chiave di visualizzazione pubblica e di un checksum da 4 byte, per un totale di 92 o 93 caratteri. Ogni pagamento che ricevi lo usa, perché il formato delle transazioni non ha una modalità trasparente. Anche le ricompense dei blocchi vanno a chiavi monouso, quindi l'output coinbase di chi mina in solo viene trovato con la stessa scansione.
+
+Gli indirizzi stealth si combinano con il resto della privacy di Blocknet: [un anello di 16](/it/blog/ring-signatures-explained/) nasconde da quale output proviene una spesa, i [commitment](/it/blog/bulletproofs-explained/) nascondono gli importi e Dandelion++ nasconde il punto in cui una transazione è entrata nella rete. La [guida alla privacy di Blocknet](/it/blog/blocknet-privacy-features/) illustra ogni livello.
+
+Funzionano anche con i nomi. Uno [shortname Blocknet ID](/it/blog/blocknet-id-pay-by-name/) come `@yourname` è associato pubblicamente al tuo indirizzo, quindi i mittenti possono cercarlo su blocknet.id. I pagamenti però vanno comunque a nuove chiavi monouso, quindi il tuo nome non rivela nulla di ciò che hai ricevuto.
+
+Questo rende uno shortname un comodo indirizzo di pagamento per il mining. Avvia [seine](/it/#download), inserisci il tuo indirizzo o `@yourname` quando richiesto e accetta la pool predefinita, bntpool.com. La [guida al mining](/it/blog/how-to-mine-blocknet/) spiega il resto, e il tuo wallet trova i BNT che guadagni con la stessa scansione tramite chiave di visualizzazione descritta qui sopra.
+
+<CTA target="seine" title="Mina BNT verso il tuo indirizzo" text="Scarica seine, inserisci il tuo indirizzo Blocknet o @name e mina su bntpool.com in pochi minuti." />

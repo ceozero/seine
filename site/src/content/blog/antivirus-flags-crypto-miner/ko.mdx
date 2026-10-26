@@ -1,0 +1,78 @@
+---
+title: 'Windows가 채굴기를 차단했나요?'
+description: 'Windows가 차단한 seine 다운로드를 확인하세요. 경고를 구분하고 공식 ZIP의 SHA-256을 대조한 뒤 탐지 내용을 조사하는 데 필요한 정보를 모읍니다.'
+tags: ["채굴 가이드", "Windows", "다운로드"]
+faq:
+  - q: 'SHA-256이 일치하면 채굴기가 안전하다는 뜻인가요?'
+    a: '해시 일치는 다운로드한 파일이 비교에 사용한 체크섬과 같다는 뜻입니다. 두 파일 모두 공식 릴리스에서 받으세요. 이는 파일 무결성 확인이며, 백신 탐지 내용 검토를 대신하거나 프로그램 실행이 안전하다는 사실을 독립적으로 증명하지 않습니다.'
+  - q: 'Windows ZIP에는 어떤 체크섬 파일을 사용하나요?'
+    a: 'seine-windows-x86_64.zip과 같은 릴리스에 별도로 첨부된 SHA256SUMS.txt를 사용하세요. 이 파일은 압축 파일의 체크섬을 나열합니다. ZIP 내부의 다른 SHA256SUMS.txt는 압축을 푼 파일을 설명합니다. 릴리스 첨부 파일과 ZIP을 비교하고 버전을 맞추세요.'
+  - q: '차단된 다운로드를 신고할 때 무엇을 포함하나요?'
+    a: 'seine 버전, 공식 다운로드 URL, 파일명, SHA-256, Windows 버전, 정확한 탐지 이름이나 경고 문구를 포함하세요. ZIP과 압축 해제 파일 중 무엇이 영향을 받았는지도 밝히세요. 개인 경로를 가리고 지갑 시드, 개인 키, API 토큰을 캡처에서 제외하세요.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Windows가 seine 다운로드를 차단하거나 압축을 푼 파일이 사라지면 정확한 파일과 경고부터 확인하세요. 이 가이드는 공식 릴리스 확인, SHA-256 체크섬 대조, 신고에 필요한 정보 수집 방법을 설명합니다. 예시는 2026년 10월 25일 확인한 seine v0.2.26을 사용합니다.
+
+## Windows가 채굴기를 차단하면 무엇을 확인하나요?
+
+<Answer>
+변경하기 전에 경고 문구, 대상 파일명, 릴리스 버전을 기록하세요. Windows 보안을 열고 보호 기록에서 탐지 항목을 확인합니다. 다음으로 공식 seine 릴리스에서 압축 파일과 체크섬을 받으세요. 경고 처리 방법을 결정하기 전에 정확한 파일과 버전을 대조합니다.
+</Answer>
+
+[보호 기록](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app)에서 해당 항목을 펼쳐 자세히 읽으세요. 위협 세부 정보를 보려면 관리자 권한이 필요할 수 있습니다. 대상이 다운로드한 ZIP인지, `seine.exe`인지, DLL인지 기록하세요. 실행 파일이 사라지는 상황과 브라우저 다운로드 경고는 서로 다른 단계에서 발생할 수 있으므로 파일명과 메시지를 함께 보관합니다.
+
+## SmartScreen 경고인가요, 백신 탐지인가요?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)은 파일과 게시자의 평판 신호를 바탕으로 다운로드한 앱을 평가합니다. 알 수 없는 앱이라는 메시지는 특정 이름이 있는 백신 탐지와 다릅니다. 실제 문구를 기록하세요. 파일명에 miner가 있다고 해서 어떤 검사가 개입했거나 왜 차단되었는지 알 수는 없습니다.
+
+Microsoft는 특히 기업 환경에 적용되는 [사용자 동의 없이 설치될 수 있는 앱 기준](https://learn.microsoft.com/en-us/defender-xdr/criteria)에 암호화폐 채굴 소프트웨어도 포함합니다. 직장이나 학교가 관리하는 PC에서는 관리자에게 정책을 확인하세요. 이는 소프트웨어 분류이며 특정 다운로드에 대한 판정이 아닙니다. 모든 채굴기 경고를 오탐으로 가정하지 말고 해당 경고를 조사하세요.
+
+## 같은 릴리스의 ZIP과 체크섬 받기
+
+[다운로드 페이지](/ko/#download)를 통해 [공식 seine 릴리스](https://github.com/zpalmtree/seine/releases)를 여세요. 저장소가 `zpalmtree/seine`인지 확인합니다. 같은 릴리스에서 `seine-windows-x86_64.zip`과 별도 첨부된 `SHA256SUMS.txt`를 선택하세요. 버전을 기록합니다. 이전이나 이후 릴리스의 체크섬은 받은 압축 파일의 비교 기준이 아닙니다.
+
+![seine v0.2.26 공식 릴리스 파일 목록의 Windows ZIP과 SHA256SUMS.txt](/assets/blog/seine-release-assets.png)
+
+이것은 v0.2.26 첨부 파일 목록의 실제 캡처입니다. 릴리스에 첨부된 체크섬 파일은 다운로드 가능한 압축 파일을 대상으로 합니다. ZIP 안에는 압축 해제 파일을 위한 또 다른 `SHA256SUMS.txt`가 있습니다. 첫 검사에는 별도로 받은 릴리스 첨부 파일을 사용하세요. 이름이 같아도 두 목록을 혼동하지 마세요.
+
+공식 압축 파일을 직접 사용하세요. 이름이 바뀐 실행 파일, 제삼자가 다시 묶은 패키지, 채팅으로 받은 파일은 공식 ZIP 체크섬을 비교해서 검증할 수 없습니다. ZIP과 릴리스 체크섬을 찾기 쉬운 같은 폴더에 저장하고 그곳에서 다음 명령을 실행하세요.
+
+## SHA-256 체크섬은 어떻게 비교하나요?
+
+두 파일이 있는 폴더에서 PowerShell을 여세요. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash)가 압축 파일의 SHA-256을 계산합니다. 아래 비교는 정확한 Windows 압축 파일 이름의 항목을 선택하고 일치 항목이 하나뿐인지 확인하며 해시가 다르면 오류로 멈춥니다. 채굴기를 실행하거나 Windows 보호 설정을 바꾸지 않고 파일을 읽습니다.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+성공 메시지는 `PASS: ZIP matches SHA256SUMS.txt`입니다. 파일이 없으면 현재 폴더와 파일명을 확인하세요. 체크섬 항목이 없거나 중복되면 원본 체크섬 첨부 파일을 다시 받으세요. 불일치하면 멈추고 릴리스 버전을 확인한 뒤 공식 압축 파일과 체크섬을 다시 다운로드하여 비교하세요.
+
+## 검증한 예시에서는 어떤 결과가 나왔나요?
+
+Windows PowerShell 5.1에서 공식 v0.2.26 Windows ZIP을 비교했습니다. 계산한 해시가 릴리스 체크섬과 일치했습니다. 이미지는 실제 명령 출력을 읽기 좋게 표시한 기록이며 Windows 보안 알림이 아닙니다. [텍스트 기록](/assets/blog/seine-v0.2.26-verification.txt)에는 전체 해시와 압축 파일 내부 목록이 보존되어 있습니다.
+
+![seine v0.2.26 Windows 압축 파일의 실제 PowerShell 체크섬 결과](/assets/blog/seine-checksum-result.png)
+
+해시 비교는 해당 바이트가 제공된 기준과 일치하는지 알려줍니다. 다른 출처의 체크섬을 인증하거나 악성코드 부재를 증명하거나 특정 탐지를 설명하지 않습니다. 경고가 압축을 푼 실행 파일을 가리키면 이름과 탐지 내용을 별도로 기록하세요. ZIP 해시는 압축 파일의 식별 정보입니다.
+
+## 검증한 다운로드가 계속 차단되면 어떻게 하나요?
+
+해결되지 않은 탐지를 조사하는 동안 해당 항목을 격리 상태로 두세요. 릴리스 버전, URL, 대상 파일명, SHA-256, 정확한 경고 문구를 준비합니다. Windows 버전과 다운로드·압축 해제·실행 중 어느 단계에서 차단됐는지도 적으세요. 개인 설정을 노출하지 않고 재현 가능한 신고를 만들 수 있습니다.
+
+프로젝트 신고에는 [seine 이슈 추적기](https://github.com/zpalmtree/seine/issues), 오탐이 의심되면 [Microsoft 파일 제출 포털](https://www.microsoft.com/en-us/wdsi/filesubmission)을 사용하세요. 보내기 전에 첨부 파일을 검토하세요. 요청받으면 공개 릴리스 파일이나 식별 정보를 공유하고 채굴 데이터 폴더는 보내지 마세요. 개인 경로, 지갑 정보, 인증 토큰을 캡처에서 제거합니다.
+
+Windows는 일부 탐지에 항목별 작업을 제공합니다. 출처와 탐지가 해명되고 정확히 그 파일을 신뢰할 때만 허용을 검토하고 기록한 경고의 안내를 따르세요. 시스템 전체 보호는 켜 두세요. 관리되는 장치에서는 관리자가 허용 여부를 결정합니다.
+
+## 검증한 Windows 압축 파일로 계속하기
+
+파일 사용이 허용되면 쓰기 가능한 폴더에 ZIP 전체를 풀고 포함된 DLL을 `seine.exe` 옆에 두세요. [Windows 채굴 안내](/ko/blog/mine-blocknet-on-windows/)는 첫 실행과 지급 주소 입력을 설명합니다. 드라이버, 런타임, 장치 선택은 [NVIDIA 설정 가이드](/ko/blog/mine-blocknet-nvidia-gpu/)를 참조하세요. 이는 다운로드 검증과 별개의 확인입니다.
+
+<CTA target="seine" title="공식 seine 릴리스 받기" text="Windows 압축 파일을 선택하고 설정 전에 같은 릴리스의 체크섬을 확인하세요." />

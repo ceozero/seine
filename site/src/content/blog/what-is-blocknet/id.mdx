@@ -1,0 +1,101 @@
+---
+title: Apa itu Blocknet? Koin privat yang bisa dibayar dengan nama
+description: Blocknet adalah mata uang kripto yang menjaga privasi setiap pembayaran, memungkinkan Anda membayar ke @name, menambahkan memo terenkripsi, dan bisa ditambang di komputer biasa.
+tags: [Blocknet, Privasi, Blocknet ID, Faraday]
+faq:
+  - q: 'Apakah Blocknet koin privasi?'
+    a: 'Ya. Privasi tertanam di setiap transaksi Blocknet. Setiap pembelanjaan ditandatangani dengan ring berisi 16 kemungkinan output, setiap pembayaran masuk ke stealth address sekali pakai, dan jumlahnya disembunyikan di balik commitment kriptografis. Tidak ada mode transparan, jadi Anda tidak pernah perlu ingat untuk mengaktifkan privasi.'
+  - q: 'Apakah Blocknet punya premine atau dana pengembang?'
+    a: 'Tidak. Blok genesis, yang dibuat pada 2026-02-15, sama sekali tidak berisi transaksi, jadi tidak ada koin yang dibuat sebelum penambangan dimulai. Setiap blok sejak itu membayar seluruh imbalannya dalam satu output kepada penambang yang menemukannya, dan konsensusnya tidak memiliki treasury atau output untuk pendiri.'
+  - q: 'Berapa waktu blok Blocknet?'
+    a: 'Blocknet menargetkan satu blok setiap lima menit, yaitu 288 blok sehari. Pembayaran biasanya masuk ke blok dalam hitungan menit, dan jaringan menganggap 10 konfirmasi, sekitar 50 menit, sebagai aman. Koin yang baru ditambang bisa dibelanjakan setelah 60 blok, kira-kira lima jam.'
+  - q: 'Bisakah saya menambang Blocknet dengan komputer biasa?'
+    a: 'Bisa. Proof of work Blocknet, Argon2id, membutuhkan sekitar 2 GB memori untuk setiap hash, sehingga CPU dan RAM biasa di desktop, laptop, dan server yang melakukan penambangan. Unduh seine, tempel alamat atau @name Anda, dan seine menambang di pool bntpool.com dengan CPU Anda dan kartu grafis NVIDIA apa pun.'
+sourceHash: d34f8db6d5ae
+translation: draft
+---
+
+Halaman ini membahas apa yang membuat Blocknet berbeda: pembayaran yang privat secara bawaan, mengirim ke nama alih-alih alamat yang panjang, memo terenkripsi di setiap pembayaran, fair launch, dan penambangan yang bisa Anda lakukan di komputer sendiri. Di akhir, halaman ini membahas upgrade Faraday yang direncanakan proyek ini dan cara memulai.
+
+## Apa itu Blocknet?
+
+<Answer>
+Blocknet adalah mata uang kripto, dengan satuan BNT, yang menjaga privasi setiap pembayaran secara bawaan. Pengirim, penerima, dan jumlah disembunyikan di setiap transaksi, Anda bisa membayar seseorang dengan @name yang pendek, setiap pembayaran bisa membawa catatan terenkripsi, dan koin baru ditambang di komputer biasa memakai proof of work Argon2id.
+</Answer>
+
+Jaringan utama Blocknet dimulai pada 2026-02-15 tanpa premine. Blok datang sekitar setiap lima menit, dan siapa pun bisa menjalankan node, menyimpan koin di [wallet baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) atau [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) resmi, dan memantau rantai di [block explorer](https://explorer.blocknetcrypto.com). Rumah proyek ini adalah [blocknetcrypto.com](https://blocknetcrypto.com).
+
+## Bagaimana Blocknet menjaga privasi pembayaran?
+
+<Answer>
+Setiap pembayaran Blocknet menggabungkan tiga perlindungan. Ring berisi 16 output menyembunyikan koin mana yang dibelanjakan, stealth address sekali pakai menyembunyikan siapa yang menerimanya, dan Pedersen commitment dengan Bulletproofs menyembunyikan jumlahnya. Tidak ada mode transparan, jadi setiap transaksi mendapat privasi yang sama tanpa pengaturan apa pun yang perlu diubah.
+</Answer>
+
+Masing-masing menangani satu bagian pembayaran, yaitu tiga hal yang dijaga [koin privasi](/id/blog/what-is-a-privacy-coin/) agar tidak masuk catatan publik:
+
+- **Pengirim.** Saat Anda membelanjakan, wallet Anda menandatangani dengan ring berisi 16 output: milik Anda dan 15 lainnya yang diambil dari rantai. Siapa pun yang memeriksa transaksi itu bisa memastikan bahwa salah satu dari 16 telah dibelanjakan, tanpa tahu yang mana. Ukuran ring ditetapkan 16 oleh konsensus, sehingga ukuran ring tidak pernah membedakan satu transaksi dari yang lain.
+- **Penerima.** Alamat yang Anda terbitkan tidak pernah muncul di rantai. Setiap pembayaran kepada Anda masuk ke stealth address sekali pakai yang baru yang hanya bisa dikenali wallet Anda, sehingga dua pembayaran ke orang yang sama tidak bisa dihubungkan dengan melihat rantai.
+- **Jumlah.** Jumlah disimpan sebagai commitment. Jaringan bisa memeriksa bahwa yang masuk ke transaksi sama dengan yang keluar, dan range proof menunjukkan bahwa tidak ada jumlah yang negatif, semuanya tanpa melihat satu angka pun.
+
+Karena privasi adalah bagian dari format transaksi itu sendiri, tidak ada mode publik yang bisa menjadi tempat jatuhnya sebuah pembayaran. Koin Anda dan koin semua orang lain mendapat perlindungan yang sama, dan itulah yang membuat privasinya kokoh bagi semua orang. Untuk melihat setiap lapisan lebih dekat, termasuk key image dan relay Dandelion++, lihat [cara Blocknet menjaga privasi pembayaran](/id/blog/blocknet-privacy-features/).
+
+## Bisakah membayar seseorang dengan nama?
+
+Bisa. Alamat Blocknet adalah rangkaian lebih dari 90 karakter, yang merepotkan untuk dibacakan, diketik, atau diperiksa. [Nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) mengatasi hal itu. Anda mendaftarkan nama seperti `@alice` di [blocknet.id](https://blocknet.id), dan orang bisa membayar ke `@alice` (atau `$alice`) alih-alih alamat lengkap. Wallet mencari nama itu melalui pemetaan bertanda tangan dari blocknet.id dan mengirim ke alamat di baliknya.
+
+Nama tidak membedakan huruf besar dan kecil, dan memakai huruf, angka, `_`, `-`, dan `.`, hingga 64 karakter. Nama Anda bersifat publik, sedangkan pembayaran ke nama itu tetap privat, karena masing-masing tetap masuk ke stealth address-nya sendiri. Anda bisa memakai nama yang sama untuk menambang: seine dan pool bntpool.com sama-sama menerima `@name` sebagai alamat pembayaran Anda.
+
+## Apa yang bisa Anda tulis di memo Blocknet?
+
+Setiap pembayaran Blocknet membawa memo 128 byte, yang dienkripsi sehingga hanya pengirim dan penerima yang bisa membacanya. Anda bisa menulis teks hingga 124 byte, cukup untuk nomor faktur, referensi pesanan, atau ucapan terima kasih singkat. Di wallet baris perintah, Anda menambahkannya di akhir perintah kirim:
+
+```sh
+send @alice 10 invoice 1042
+```
+
+Memo diberi padding hingga 128 byte yang sama di setiap output, baik Anda menulis catatan maupun tidak. Dari luar, pembayaran dengan nomor faktur terlihat persis sama dengan pembayaran tanpa nomor faktur, sehingga kolom memo tidak mengungkap apa pun tentang siapa yang memakainya. Bagi toko atau pekerja lepas, ini berarti Anda bisa mencocokkan setiap pembayaran masuk dengan pesanan tanpa sistem terpisah dan tanpa memamerkan detail itu.
+
+## Bagaimana cara kerja tautan pembayaran Blocknet?
+
+Tautan pembayaran mengemas semua yang dibutuhkan untuk sebuah pembayaran ke dalam satu tautan yang bisa Anda bagikan: alamat atau nama, jumlah, dan memo opsional. Wallet Blocknet memahami dua bentuk, tautan `blocknet://` dan tautan web `bntpay.com/`. Tautan web untuk meminta 10 BNT untuk sebuah faktur terlihat seperti ini:
+
+```text
+https://bntpay.com/$alice?amount=10&memo=invoice%201042
+```
+
+Saat pembayar menempelkan tautan itu ke wallet baris perintah, tautan dibaca sebagai pengiriman siap dikonfirmasi dengan alamat, jumlah, dan memo yang sudah terisi. Anda bisa memasang satu tautan di faktur, situs web, atau profil media sosial dan membiarkan orang membayar Anda tanpa menyalin detail apa pun secara manual.
+
+## Apakah Blocknet diluncurkan secara adil?
+
+Ya. Blok genesis Blocknet dibuat pada 2026-02-15 dan tidak berisi transaksi: tidak ada coinbase, tidak ada premine, dan tidak ada koin yang disisihkan untuk siapa pun. Koin pertama berasal dari blok 1, yang ditambang seperti setiap blok sesudahnya.
+
+Aturannya menjaga hal itu tetap begitu. Imbalan setiap blok harus dibayarkan sebagai tepat satu output, senilai tepat imbalan blok, kepada penambang yang menemukan blok itu. Tidak ada treasury, imbalan pendiri, atau dana pengembang di konsensus, jadi setiap BNT yang ada ditambang oleh seseorang yang menjalankan proof of work. Anda bisa memeriksanya sendiri di [explorer](https://explorer.blocknetcrypto.com), mulai dari blok genesis.
+
+## Bagaimana koin baru diciptakan?
+
+Blok baru ditemukan sekitar setiap lima menit, atau 288 blok sehari. Imbalan blok dimulai dari sekitar 723 BNT dan turun bertahap setiap bulan 30 hari, menerbitkan kira-kira 100 juta BNT selama empat tahun pertama. Setelah itu, setiap blok membayar tail reward permanen sebesar 2 BNT, sehingga penambang terus dibayar untuk mengamankan rantai.
+
+## Bisakah menambang Blocknet di komputer biasa?
+
+Bisa, dan memang begitulah Blocknet dimaksudkan untuk ditambang. Proof of work-nya, [Argon2id](/id/blog/argon2id-proof-of-work-explained/), memakai sekitar 2 GB memori untuk setiap hash. Memori adalah sesuatu yang sudah dimiliki setiap desktop, laptop, dan server, dan desainnya dimaksudkan untuk menahan perangkat keras penambangan khusus, sehingga pekerjaannya jatuh ke mesin biasa. Setiap thread penambangan membutuhkan 2 GB sendiri, dan karena itulah RAM komputer Anda, lebih sering daripada jumlah core-nya, [menentukan berapa thread yang bisa dijalankan](/id/blog/blocknet-mining-hardware-hashrate/).
+
+Cara termudah untuk menambang adalah **seine**, penambang gratis dan sumber terbuka untuk Blocknet. seine berjalan di Windows, macOS, dan Linux, menambang dengan CPU Anda dan, di Windows dan Linux, setiap kartu grafis NVIDIA secara bersamaan, serta menyetel jumlah thread dan kernel CPU-nya sendiri selama menambang. Arahkan ke alamat atau `@name` Anda, terima pool bawaan, [bntpool.com](https://bntpool.com), dan Anda sudah menambang. [Cara menambang Blocknet](/id/blog/how-to-mine-blocknet/) menjelaskan seluruh pengaturannya, dan [bagian unduhan](/id/#download) menyediakan seine untuk setiap sistem.
+
+## Apa itu upgrade Faraday?
+
+Faraday adalah upgrade besar berikutnya untuk Blocknet, yang direncanakan sekitar 2027-02-16, mendekati ulang tahun pertama blok 1. Menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), upgrade ini akan memindahkan seluruh jaringan ke kriptografi baru dalam satu hard fork:
+
+- **Spend proof yang tidak bisa dipalsukan komputer kuantum.** Pembelanjaan akan dibuktikan dengan bukti berbasis hash alih-alih kurva eliptik, dan wallet akan mendeteksi pembayaran masuk memakai ML-KEM.
+- **Privasi di seluruh rantai.** Saat ini sebuah pembelanjaan bersembunyi di antara 16 output. Setelah Faraday, pembelanjaan akan bersembunyi di antara setiap output di rantai.
+- **Sinkronisasi dan wallet yang lebih cepat.** Proof of work yang lebih ringan akan membuat node baru lebih cepat menyusul rantai, dan wallet akan menemukan pembayarannya lebih cepat.
+- **Koin yang sama.** Tidak akan ada koin baru dan tidak ada peluncuran ulang, dan riwayat Anda tetap ada. Setelah upgrade, Anda punya waktu satu tahun untuk memindahkan koin ke format baru, dan wallet akan memindai, menampilkan biaya, dan memindahkannya saat Anda memintanya.
+
+Situs itu menggambarkan Faraday sedang dalam tahap desain, pengujian, dan tinjauan adversarial, dan tanggalnya masih rencana, belum final. Jika Anda menambang, selalu perbarui seine: seine memeriksa rilis baru saat mulai dan setiap 12 jam.
+
+## Bagaimana cara mulai dengan Blocknet?
+
+1. **Dapatkan wallet.** Unduh [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) atau [wallet baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) dan tuliskan frasa pemulihan Anda.
+2. **Klaim nama.** Daftarkan nama pendek di [blocknet.id](https://blocknet.id) agar orang bisa membayar Anda dengan `@name`.
+3. **Dapatkan koin pertama Anda dengan menambang.** Unduh seine dari [bagian unduhan](/id/#download), berikan alamat atau nama Anda, dan mulai menambang di bntpool.com.
+
+<CTA target="seine" title="Tambang BNT pertama Anda" text="seine menambang Blocknet di komputer yang sudah Anda miliki, dengan CPU dan GPU NVIDIA Anda sekaligus." />

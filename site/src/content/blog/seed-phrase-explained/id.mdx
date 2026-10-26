@@ -1,0 +1,103 @@
+---
+title: Seed phrase dijelaskan, dan cara menyimpannya dengan aman
+description: Seed phrase adalah daftar kata yang bisa memulihkan wallet kripto Anda. Pelajari cara kerjanya, cara menyimpannya secara offline, dan mengapa tidak boleh dibagikan.
+tags: [Wallet, Seed phrase, Keamanan]
+faq:
+  - q: 'Apa perbedaan seed phrase dan private key?'
+    a: 'Private key mengendalikan dana secara langsung, sedangkan seed phrase adalah cadangan yang bisa dibaca manusia yang diubah wallet menjadi private key-nya. Di wallet Blocknet, 12 kata itu menghasilkan spend key sekaligus view key, sehingga frasa itu saja sudah cukup untuk memulihkan wallet dan semua yang bisa dilakukannya.'
+  - q: 'Bisakah saya memulihkan wallet jika kehilangan seed phrase?'
+    a: 'Anda tetap bisa memakai wallet selama masih punya file wallet dan kata sandinya. Seed phrase adalah cadangan untuk saat file atau kata sandinya hilang. Selama wallet masih bisa dibuka, tampilkan lagi frasanya dengan perintah seed atau View Recovery Seed, lalu tuliskan.'
+  - q: 'Apakah aman menyimpan seed phrase di pengelola kata sandi?'
+    a: 'Panduan wallet Blocknet meminta Anda menyimpan seed secara offline di kertas dan tidak menaruhnya di file teks, aplikasi catatan, atau penyimpanan cloud, karena siapa pun yang membaca 12 kata itu mengendalikan dananya. Salinan kertas yang disimpan di dua tempat aman yang terpisah memberi Anda cadangan yang tidak pernah tersentuh internet.'
+  - q: 'Apakah seed phrase bisa dipakai di aplikasi wallet apa pun?'
+    a: 'Daftar katanya adalah standar bersama, tetapi setiap koin mengubah kata-kata itu menjadi kunci dengan caranya sendiri. Pulihkan seed Blocknet di wallet baris perintah atau wallet desktop Blocknet resmi. Keduanya menerima 12 kata itu dan memulihkan alamat dan saldo yang sama setelah wallet memindai rantai.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Seed phrase adalah daftar kata pendek yang bisa memulihkan wallet kripto Anda di komputer mana pun. Panduan ini menjelaskan apa kata-kata itu, bagaimana wallet mengubahnya menjadi kunci, cara menyimpannya agar Anda tidak pernah kehilangan akses, dan mengapa tidak boleh ada orang lain yang melihatnya. Contoh-contohnya memakai wallet Blocknet dan seed pemulihan 12 katanya.
+
+## Apa itu seed phrase?
+
+<Answer>
+Seed phrase, yang juga disebut frasa pemulihan atau mnemonic, adalah daftar kata biasa, umumnya 12 atau 24, yang menyandikan rahasia asal kunci-kunci wallet Anda. Ketik kata-kata itu ke wallet yang kompatibel dan wallet akan memulihkan kunci, alamat, dan saldo yang sama, bahkan jika komputer dan file wallet Anda sudah tidak ada.
+</Answer>
+
+Setiap wallet kripto dibangun di atas kunci rahasia. Kunci adalah angka acak yang panjang, yang sulit disalin dengan tangan dan mudah salah. Seed phrase menuliskan rahasia yang sama sebagai kata-kata dari daftar tetap, sehingga Anda bisa menyalinnya ke kertas, membacanya kembali, dan mengetikkannya bertahun-tahun kemudian.
+
+Wallet Blocknet menyebut frasanya **seed pemulihan** (recovery seed). Panjangnya 12 kata, dan wallet membuatnya saat Anda membuat wallet baru. Simpan dengan aman dan Anda selalu bisa mendapatkan wallet Anda kembali.
+
+## Bagaimana cara kerja seed phrase?
+
+Banyak wallet mengikuti BIP39, standar yang ditulis untuk Bitcoin pada 2013 oleh Marek Palatinus, Pavol Rusnak, Aaron Voisine, dan Sean Bowe. Cara kerjanya terdiri dari tiga langkah.
+
+1. **Bit acak.** Wallet mengambil 128 sampai 256 bit acak. Frasa 12 kata memuat 128 bit dan frasa 24 kata memuat 256 bit.
+2. **Checksum, lalu kata.** Wallet menghitung hash bit-bit itu dengan SHA-256 dan menambahkan beberapa bit pertama dari hash sebagai checksum (4 bit untuk 12 kata). Lalu hasilnya dipecah menjadi potongan 11 bit. Setiap potongan adalah angka dari 0 sampai 2.047 yang memilih satu kata dari daftar berisi 2.048 kata.
+3. **Seed untuk kunci.** Untuk memakai frasa itu, wallet menjalankannya melalui PBKDF2 dengan HMAC-SHA512 sebanyak 2.048 putaran dan mendapatkan seed 64 byte. Kunci-kuncinya berasal dari seed itu.
+
+Checksum inilah yang membuat wallet bisa memberi tahu bahwa sebuah frasa salah. Hanya 1 dari 16 kombinasi 12 kata acak yang punya checksum valid, sehingga sebagian besar salah ketik dan kata yang tertukar terdeteksi sebelum terjadi apa-apa. Daftar bahasa Inggrisnya juga disusun agar empat huruf pertama setiap kata unik, yang membantu jika tulisan tangan Anda sulit dibaca.
+
+### Arti 12 kata di Blocknet
+
+Wallet Blocknet memakai daftar BIP39 bahasa Inggris standar dan 128 bit keacakan, jadi setiap seed pemulihan berisi 12 kata. Wallet mengubah kata-kata itu menjadi seed 64 byte dengan langkah PBKDF2 dari BIP39 tanpa passphrase tambahan. 32 byte pertama menjadi **spend key** Anda dan 32 byte terakhir menjadi **view key** Anda. Alamat Anda dibangun dari bagian publik kedua kunci itu, sehingga 12 kata yang sama selalu mengarah kembali ke alamat yang sama. Panduan [stealth address](/id/blog/stealth-addresses-explained/) menjelaskan bagaimana spend key dan view key bekerja sama untuk menerima pembayaran secara privat.
+
+Seberapa besar 128 bit? Ada 2^128 kemungkinan seed, sekitar 3,4 × 10^38. Tidak ada yang bisa menemukan wallet Anda dengan menebak kata. Satu-satunya cara praktis untuk membobolnya adalah melihat frasa Anda, dan karena itulah sisa panduan ini membahas cara menyimpannya dengan baik.
+
+## Seed phrase, kata sandi, dan file wallet: apa bedanya?
+
+Orang sering mencampuradukkan tiga hal yang melindungi wallet. Berikut fungsi masing-masing di wallet Blocknet.
+
+| | Apa itu | Apa yang diberikannya |
+|---|---|---|
+| Seed pemulihan | 12 kata yang Anda tuliskan | Kendali penuh atas wallet di komputer mana pun |
+| Kata sandi wallet | Kata sandi yang Anda pilih | Membuka file wallet di komputer ini |
+| File wallet | Satu file `.wallet.dat` | Kunci dan riwayat Anda, terenkripsi dengan kata sandi Anda |
+
+Kata sandi Anda mengenkripsi file wallet (wallet menurunkan kunci enkripsi dengan Argon2id dan mengenkripsi dengan AES-GCM), dan Blocknet tidak pernah menyimpannya di mana pun. Kata sandi tidak berperan dalam pembuatan kunci Anda. Saat Anda memulihkan dari 12 kata, Anda memilih kata sandi baru untuk file wallet yang baru. Karena itu seed adalah cadangan yang paling penting: seed tetap berfungsi bahkan jika Anda kehilangan file dan lupa kata sandinya.
+
+## Bagaimana sebaiknya menyimpan seed phrase?
+
+<Answer>
+Tuliskan kata-katanya di kertas secara berurutan, periksa setiap kata dengan yang ada di layar, dan simpan kertasnya di tempat yang aman dan offline. Buat salinan kedua dan simpan di tempat lain. Jangan simpan frasa itu di foto, file teks, aplikasi catatan, email, atau penyimpanan cloud, karena siapa pun yang membacanya mengendalikan dananya.
+</Answer>
+
+Kebiasaan berikut menjaga seed phrase tetap aman sekaligus bisa dipakai:
+
+- **Utamakan kertas.** Panduan wallet Blocknet menyarankan menulis seed di kertas dan menyimpannya di tempat aman. Beri nomor 1 sampai 12 pada kata-katanya, karena urutannya penting.
+- **Periksa sekali.** Bandingkan setiap kata dengan layar sebelum Anda menutupnya. Ejaan itu penting, dan empat huruf pertama setiap kata sudah cukup untuk membedakannya.
+- **Dua salinan, dua tempat.** Satu salinan di rumah dan satu di tempat lain yang Anda percayai melindungi Anda dari kebakaran, banjir, atau laci yang hilang. Sebagian orang juga mencetak kata-katanya di pelat logam untuk alasan yang sama.
+- **Simpan secara offline.** Tangkapan layar, foto ponsel, aplikasi catatan, dan folder cloud semuanya tersinkron atau dicadangkan ke tempat yang tidak Anda kendalikan. Panduan wallet menyebut file teks, aplikasi catatan, dan penyimpanan cloud sebagai tempat yang tidak boleh dipakai untuk seed.
+- **Jaga kerahasiaannya.** Simpan di tempat yang tidak akan ditemukan tamu, rekan kerja, atau tempat servis.
+
+## Mengapa Anda tidak boleh membagikan seed phrase?
+
+12 kata itu adalah wallet Anda. Siapa pun yang memilikinya bisa memulihkannya di komputer mereka sendiri dan mengirim semua isinya, dan transaksi tidak bisa dibatalkan setelah masuk ke rantai. Wallet Blocknet mencetak peringatan ini setiap kali Anda meminta untuk melihat seed:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Anggap setiap permintaan atas seed Anda sebagai penipuan, seresmi apa pun kelihatannya. Pengembang wallet, exchange, pool, dan staf dukungan tidak pernah membutuhkannya. Situs web atau aplikasi yang meminta Anda "memverifikasi" atau "menyinkronkan" wallet dengan mengetikkan kata-kata itu sedang berusaha mengambil koin Anda.
+
+Anda tidak pernah perlu membagikan seed untuk menyelesaikan urusan apa pun:
+
+- **Untuk menerima pembayaran**, bagikan alamat Anda, atau [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) seperti `@yourname` yang mengarah ke alamat itu.
+- **Agar seseorang bisa melihat dana masuk**, perintah `viewkeys` mengekspor kunci view-only. Wallet view-only menampilkan pembayaran masuk dan tidak bisa mengirim. [Panduan privasi](/id/blog/blocknet-privacy-features/) menjelaskan apa yang diungkap view key.
+- **Untuk menambang**, seine dan bntpool.com hanya membutuhkan alamat atau nama pendek Anda. Wallet dan seed-nya bisa tetap berada di satu komputer yang Anda percayai, sementara setiap mesin tambang membayar ke alamat yang sama.
+
+## Bagaimana cara melihat dan memulihkan seed pemulihan Blocknet?
+
+Di wallet baris perintah, ketik `seed` di prompt shell. Wallet menampilkan peringatan di atas, meminta konfirmasi, meminta kata sandi Anda, lalu mencetak 12 kata dalam baris bernomor. Di wallet desktop, buka pengaturan dan pilih "View Recovery Seed", yang juga meminta kata sandi Anda terlebih dahulu.
+
+Untuk memulihkan, pakai salah satu wallet:
+
+- **Baris perintah:** jalankan `import`, pilih `1) 12-word recovery seed`, ketik 12 kata itu, lalu beri wallet baru sebuah nama dan kata sandi.
+- **Desktop:** pilih "Restore from Seed" dan masukkan frasa 12 kata Anda.
+
+Wallet memeriksa kata-kata dan checksum, memulihkan kunci Anda, dan memindai rantai untuk mencari output Anda, sehingga saldo dan riwayat Anda kembali dengan alamat yang sama. [Panduan wallet Blocknet](/id/blog/blocknet-wallet-for-mining/) menjelaskan langkah demi langkah cara membuat wallet, mencadangkan seed, dan menemukan alamat Anda.
+
+Setelah seed Anda tersimpan aman di kertas, Anda siap memanfaatkan alamatnya. [Panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) menunjukkan cara mengarahkan [seine](/id/#download) ke alamat itu dan mulai menambang di bntpool.com.
+
+<CTA target="pool" title="Tambang ke wallet Anda yang sudah dicadangkan dengan aman" text="Tempel alamat Blocknet atau @name Anda ke seine, terima bntpool.com, dan simpan seed pemulihan Anda di kertas di rumah." />

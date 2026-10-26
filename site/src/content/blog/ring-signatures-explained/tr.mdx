@@ -1,0 +1,86 @@
+---
+title: 'Halka imza nedir: kripto para göndereni nasıl gizler'
+description: '2001''deki fikirden anahtar görüntülerine ve CLSAG''ye halka imzalar: imzalayan açık anahtarlar arasında nasıl gizlenir ve Blocknet her girdiyi 16''lık bir halkayla nasıl imzalar.'
+tags: [Gizlilik, Halka imzalar, Kriptografi, Blocknet]
+faq:
+  - q: 'Halka imza ile grup imzası arasındaki fark nedir?'
+    a: 'Grup imzası, grubu önceden kuran ve kimin imzaladığını açığa çıkarabilen bir yönetici gerektirir. Halka imzanın yöneticisi ve kurulumu yoktur: imzalayan, o anda istediği açık anahtar kümesini seçer ve anahtarları kullanılan kişiler dahil hiç kimse, imzayı hangi üyenin oluşturduğunu sonradan kanıtlayamaz.'
+  - q: 'Halka imzada anahtar görüntüsü (key image) nedir?'
+    a: 'Anahtar görüntüsü, harcanan çıktının özel anahtarından hesaplanan bir değerdir. Aynı çıktı her zaman aynı anahtar görüntüsünü üretir, bu yüzden ağ o çıktının ikinci kez harcanmasını reddeder; yine de anahtar görüntüsü halkanın hangi üyesinin gerçek olduğunu açığa çıkarmaz. Halka imzayı, çift harcamayı önleyen bağlanabilir bir halka imzaya dönüştürür.'
+  - q: 'CLSAG nedir?'
+    a: 'CLSAG, Brandon Goodell, Sarang Noether ve Arthur Blue tarafından 2019''da tanımlanan bağlanabilir bir halka imza şemasıdır. İmzalayanın halkadaki bir çıktının sahibi olduğunu ve tutarların dengelendiğini kanıtlar; çift harcamayı durdurmak için de bir anahtar görüntüsü kullanır. Monero bunu Ekim 2020''de benimsedi; Blocknet de her girdiyi CLSAG ve RingCT ile imzalar.'
+  - q: 'Blocknet hangi halka boyutunu kullanır?'
+    a: 'Blocknet her girdi için tam olarak 16''lık bir halka kullanır: gerçek çıktı artı her biri zincirde zaten bulunan gerçek bir çıktı olan 15 sahte girdi (decoy). Konsensüs başka her boyutu reddeder. Her girdi aynı boyutu kullandığı için halka boyutu hiçbir zaman bir işlemi öne çıkaramaz ve gerçek çıktı halkada rastgele bir konumda durur.'
+  - q: 'Halka imzalar ödemenin tutarını gizler mi?'
+    a: 'Hayır. Halka imza hangi çıktının ödeme yaptığını gizler. Tutarlar ayrı bir katmanla gizlenir: bir sayıyı göstermeden sabitleyen Pedersen taahhütleri ve her tutarın geçerli olduğunu kanıtlayan Bulletproofs aralık kanıtları. Blocknet bunların hepsini, alıcıyı gizleyen tek kullanımlık gizli adreslerle birlikte her işlemde kullanır.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Halka imza, bir grup adına imza atmanızı sağlar; böylece herkes imzanın grubun anahtarlarından birinden geldiğini kontrol edebilir, ama hangisinden geldiğini kimse söyleyemez. Bu yazı, halka imzaların nasıl çalıştığını, onları tanıtan 2001 tarihli makaleden anahtar görüntülerine ve CLSAG'ye kadar açıklıyor ve Blocknet'in her ödemenin göndericisini gizli tutmak için 16'lık bir halkayı nasıl kullandığını gösteriyor.
+
+## Halka imza nedir?
+
+<Answer>
+Halka imza, bir özel anahtar ve diğer kişilerin açık anahtarlarından oluşan bir kümeyle oluşturulan dijital bir imzadır. Doğrulayıcı, bu anahtarlardan birinin sahibinin imzaladığını teyit edebilir, ama hangisi olduğunu söyleyemez. İmzalayan grubu o anda, herhangi bir kurulum ve diğer üyelerin işbirliği olmadan seçer.
+</Answer>
+
+Sıradan bir dijital imza, bir mesajı tek bir açık anahtara bağlar. Halka imza ise onu halka adı verilen bir açık anahtar kümesine bağlar. İmzalayanın yalnızca kendi özel anahtarına ihtiyacı vardır; diğer üyeler zaten yayınlamış oldukları açık anahtarlar dışında hiçbir şey katmaz. Dışarıdan bakan biri için halkanın her üyesi eşit derecede olası bir imzalayandır.
+
+## Halka imzalar nereden çıktı?
+
+Ron Rivest, Adi Shamir ve Yael Tauman, halka imzaları ASIACRYPT 2001'de ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf) (Bir sır nasıl sızdırılır) başlıklı bir makaleyle tanıttı. Örnekleri, bir haberi bir gazeteciye kabineden geldiğini kanıtlayacak ama hangi üyeden geldiğini açığa çıkarmayacak şekilde sızdırmak isteyen bir kabine üyesidir. Bu kişi kendi anahtarı artı diğer kabine üyelerinin açık anahtarlarıyla imzalar ve gazeteci imzayı kimin yazdığını öğrenmeden doğrulayabilir.
+
+Fikri öne çıkaran iki özellik vardı. İmzalayanın maskesini düşürebilecek bir grup yöneticisi yoktur; bu, halka imzaları daha eski grup imzalarından ayırır. Halka ayrıca kendiliğindendir: imzalayan onu imzalama anında yayınlanmış herhangi bir anahtardan oluşturabilir. Yazarlar adı, "halkalar çevresi tekdüze olan ve merkezi olmayan geometrik bölgeler" olduğu için seçti: her üye kenarda durur ve kimse yönetici değildir. İmzalama algoritması da aynı şekle sahiptir: kendi üzerine geri dönen bir hesaplama zinciri.
+
+## Halka imza nasıl çalışır?
+
+Kripto paralarda kullanılan modern şemalar bu döngüyü hash'lerden ve eliptik eğri anahtarlarından kurar. 16 açık anahtarlı bir halka için fikir sade adımlarla şöyledir:
+
+1. **Kendi yuvanızdan başlayın.** İmzalayan rastgele gizli bir sayı seçer ve onu mesajla birlikte hash'ler. Bu hash, halkadaki sonraki yuvanın meydan okuması (challenge) olur.
+2. **Diğer her yuva için bir yanıt uydurun.** Diğer 15 üyenin her biri için imzalayan rastgele bir yanıt seçer ve onu o üyenin açık anahtarı ve mevcut meydan okumayla birleştirerek bir sonraki yuvanın meydan okumasını hesaplar.
+3. **Halkayı kapatın.** Tüm halka dolaşıldıktan sonra zincir imzalayanın kendi yuvasına geri gelir. Zincirin tam olarak başladığı yere varmasını sağlayan tek yanıtı yalnızca o yuvanın özel anahtarına sahip biri hesaplayabilir.
+
+İmza, başlangıç meydan okuması artı 16 yanıttan oluşur. Doğrulayıcı herhangi bir yerden başlar, açık anahtarlardan ve yanıtlardan her meydan okumayı yeniden hesaplayarak halkayı dolaşır ve döngünün kapandığını kontrol eder. Her yuva aynı görünür: bir açık anahtar ve rastgele görünen bir yanıt. İmzalayanın nereden başladığını hiçbir şey işaretlemez; bu yüzden doğrulayıcı, halkayı bir özel anahtarın kapattığını öğrenir, hangisi olduğuna dair ise hiçbir şey öğrenmez.
+
+## Anahtar görüntüleri çift harcamayı nasıl durdurur?
+
+Düz bir halka imzanın para için bir açığı vardır: her harcama diğer çıktılar arasında gizlenirse ağ aynı coinlerin iki kez harcandığını göremez. Bağlanabilir halka imzalar bunu çözer. Joseph Liu, Victor Wei ve Duncan Wong bu türden ilk şema olan LSAG'yi ACISP 2004'te tanımladı ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Aynı özel anahtarla oluşturulan iki imza birbirine bağlanabilir, imzalayan ise halka içinde gizli kalmaya devam eder.
+
+2013 tarihli CryptoNote tasarımı bunu anahtar görüntüsüne (key image) dönüştürdü. Özel anahtarı `x` ve açık anahtarı `P` olan bir çıktı için cüzdan `I = x · Hp(P)` değerini hesaplar; burada `Hp`, açık anahtarı eğri üzerinde bir noktaya hash'ler. İmza, `I`'nın imzalayan halka üyesine ait olduğunu, hangisi olduğunu söylemeden kanıtlar. Anahtar görüntüsü yalnızca harcanan çıktıya bağlı olduğu için o çıktıyı yeniden harcamak her zaman aynı `I`'yı üretir. Her düğüm daha önce görülmüş anahtar görüntülerinin bir listesini tutar ve bunlardan birini tekrarlayan her işlemi reddeder.
+
+## MLSAG'den CLSAG'ye
+
+Tutarları da gizleyen kripto paralar, halka imzanın ikinci bir gerçeği de kanıtlamasına ihtiyaç duyar: gizli girdi tutarının işlemin harcadığı tutarla eşleştiğini. Shen Noether'in 2015 tarihli ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT) makalesi bunu, biri sahiplik, diğeri tutar taahhütleri için olmak üzere iki anahtar kümesi üzerinde çalışan bir halka imza olan MLSAG ile yaptı.
+
+Brandon Goodell, Sarang Noether ve Arthur Blue'nun CLSAG'si ([ePrint 2019/654](https://eprint.iacr.org/2019/654)) aynı iki gerçeği daha kompakt biçimde kanıtlar. Monero, Ekim 2020 yükseltmesinde MLSAG'den CLSAG'ye geçti. [Monero belgeleri](https://www.getmonero.org/resources/moneropedia/clsag.html) yaklaşık %20 daha hızlı doğrulama bildirir ve tipik iki girdili, iki çıktılı bir işlemin yaklaşık 2,5 kB'tan 1,9 kB'a küçüldüğünü belirtir.
+
+## Halka boyutu gizlilik için ne anlama gelir?
+
+<Answer>
+Halka boyutu, her halkadaki çıktı sayısıdır: gerçek çıktı artı sahte girdiler. 16'lık bir halka, gözlemcinin her girdi için eşit derecede geçerli 16 aday gördüğü anlamına gelir. Sabit bir boyut, büyük bir boyut kadar önemlidir; çünkü her girdi aynı boyutu kullandığında boyutun kendisi işlemi kimin oluşturduğu hakkında hiçbir şey açığa çıkarmaz.
+</Answer>
+
+Sahte girdiler zincirdeki gerçek çıktılardır, bu yüzden her biri gerçekten harcanan coin olabilir. Halkalar değişebilseydi, alışılmadık bir boyut seçen cüzdan kendi işlemlerini işaretlemiş olurdu. Monero, Ağustos 2022 yükseltmesinde halka boyutunu 11'den 16'ya çıkardı; Blocknet ise her girdi için konsensüs gereği 16 kullanır.
+
+## Blocknet halka imzaları nasıl kullanır
+
+Her Blocknet girdisi, tam olarak 16 çıktıdan oluşan bir halka üzerinde CLSAG ve RingCT ile imzalanır. Kurallar konsensüs tarafından uygulanır, bu yüzden hiçbir cüzdan bunun dışında kalamaz:
+
+- **Sabit 16'lık halka.** Daemon, halkası tam olarak 16 üyeden oluşmayan her girdiyi reddeder. Kodu boyutu "değişken halka boyutlarından kaynaklanan bilgi sızıntısını önlemek için" sabitler.
+- **Yalnızca gerçek çıktılar.** Her halka üyesi zincirde zaten bulunan gerçek bir çıktı olmalıdır; bu yüzden her sahte girdi gerçekten harcanabilecek bir coindir.
+- **Rastgele sahte girdiler ve rastgele konum.** Cüzdan, 15 sahte girdi seçmek için zincirin çıktılarını kriptografik olarak güvenli bir rastgele sayı üreteciyle karıştırır, ardından gerçek çıktınızı halkada rastgele bir konuma yerleştirir.
+- **Sahiplik ve tutar tek kanıtta.** Her imza, bir halka üyesinin sahibi olduğunuzu ve girdinizin gizli tutarının o üyenin taahhüdüyle eşleştiğini kanıtlar; böylece tutarlar gösterilmeden dengelenir.
+- **Anahtar görüntüleri zincire karşı kontrol edilir.** Anahtar görüntüsü imzalanan verinin bir parçasıdır ve ağ, o anahtar görüntüsü daha önce harcanmışsa veya aynı işlemde iki kez görünüyorsa işlemi reddeder.
+
+İşlem formatında şeffaf bir mod yoktur, bu yüzden zincirdeki her ödeme bunun gibi halkalar taşır. Halka imzalar göndericiyi gizler; [tek kullanımlık gizli adresler](/tr/blog/stealth-addresses-explained/) alıcıyı, [Bulletproofs ile Pedersen taahhütleri](/tr/blog/bulletproofs-explained/) ise tutarı gizler. [Blocknet ödemeleri nasıl gizli tutar](/tr/blog/blocknet-privacy-features/) yazısı bu katmanların her birini ve birine ödeme yaptığınızda ne anlama geldiklerini anlatır.
+
+## Faraday yükseltmesiyle sırada ne var
+
+[blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, etkinleştirilmesi 2027-02-16 civarı için planlanan Faraday adlı bir ağ yükseltmesi planlıyor. Sitenin ifadesiyle: "Bugün bir harcama 16 çıktı arasında gizleniyor. Faraday'den sonra zincirdeki her çıktı arasında gizlenecek." Faraday ayrıca sitenin "Bir kuantum bilgisayarın harcama sahteleyemeyeceği şekilde tasarlandı" diye tanımladığı yeni harcama kanıtları da getirecek. Tasarım, test ve saldırgan gözüyle inceleme sürüyor; tarihler kesin değil, planlanan tarihlerdir.
+
+## Gizli ödemeler için biraz BNT edinin
+
+Bu halkaları kullanan coinler edinmenin basit bir yolu onları kazmaktır. seine madencisi ücretsiz ve açık kaynaktır ve kendini bilgisayarınıza göre boyutlandırır; bntpool.com da varsayılan havuzudur, böylece birkaç dakika içinde madenciliğe başlayabilirsiniz. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) kurulumu anlatır; doğrudan adresinize veya bir [Blocknet ID adına](/tr/blog/blocknet-id-pay-by-name/) madencilik yapabilirsiniz.
+
+<CTA target="seine" title="İlk gizli BNT'nizi kazın" text="seine'i indirin, bntpool.com'da madencilik yapın ve her harcamanın 16'lık bir halkayla koruduğu coinler alın." />

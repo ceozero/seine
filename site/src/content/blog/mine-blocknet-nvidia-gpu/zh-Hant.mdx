@@ -1,0 +1,112 @@
+---
+title: '如何使用 NVIDIA GPU 挖掘 Blocknet'
+description: '使用 seine 在 NVIDIA GPU 上挖掘 Blocknet。了解 Windows 或 Linux 的設定方式、CPU 與 GPU 同時挖礦、裝置算力檢查及啟動問題排查。'
+tags: ['挖礦指南', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'seine 能同時使用 CPU 和 NVIDIA GPU 嗎？'
+    a: '可以。不設定 backend 選項時，seine 會自動選擇 CPU 和偵測到的 NVIDIA GPU。Devices 面板會分別顯示各個後端。若要在保留 CPU 挖礦的同時選擇特定顯示卡，請同時選擇 cpu 和 nvidia，再指定 NVIDIA 裝置索引。'
+  - q: 'Windows 上需要安裝 CUDA Toolkit 嗎？'
+    a: '官方 Windows 壓縮檔包含 seine 編譯 GPU 運算核心程式所需的 NVRTC 執行階段程式庫。安裝相容的 NVIDIA 顯示驅動程式，並將解壓縮後的 DLL 保留在 seine.exe 旁邊。使用這個已封裝的 Windows 版本時，不必另外安裝 CUDA Toolkit。'
+  - q: '如何只用 NVIDIA GPU 挖礦而不使用 CPU？'
+    a: '啟動 seine 時，將 backend 選項設為 nvidia。程式會為每張偵測到的顯示卡建立一個 NVIDIA 後端。加入 nvidia-devices 選項即可選擇特定裝置索引。啟動後檢查 Devices 面板，確認所選 GPU 已顯示且正在計算雜湊。'
+  - q: '在哪裡查看 GPU 提交的份額是否被接受？'
+    a: '挖礦儀表板顯示已提交、遭拒絕和已接受的份額，日誌則標明份額事件所屬的後端。先查看 NVIDIA 裝置列中的本機算力，再尋找該後端的份額接受訊息。若要確認礦池計入的工作量，請參閱礦池追蹤指南。'
+---
+
+seine 可以讓 NVIDIA GPU 與 CPU 一起挖掘 Blocknet。本指南介紹 Windows 和 Linux 的設定、顯示卡選擇、已接受的份額，以及 RTX 5090 的實測比較。文中命令適用於 seine v0.2.26，以及截至 2026 年 10 月的現行 Argon2id 網路。
+
+## 如何開始使用 NVIDIA GPU 挖掘 Blocknet？
+
+<Answer>
+下載 Windows x86_64 或 Linux x86_64 版 seine 壓縮檔，為所用平台準備 NVIDIA 驅動程式及執行階段程式庫，然後啟動挖礦軟體。輸入收款地址並接受預設礦池。seine 會自動選擇 CPU 和偵測到的 NVIDIA 顯示卡，接著準備並調校各個 GPU 後端。
+</Answer>
+
+在[下載區域](/zh-hant/#download)選擇壓縮檔：Windows 使用 `seine-windows-x86_64.zip`，Linux x86_64 使用 `seine-linux-x86_64.tar.gz`。[一般挖礦指南](/zh-hant/blog/how-to-mine-blocknet/)介紹如何取得收款地址並完成首次連線。
+
+先使用預設設定。不要指定運算核心程式、暫存器上限、GPU 通道數或 CPU 執行緒數，讓 seine 自行選擇組態。初始化完成後，Devices 面板會顯示哪些後端正在參與挖礦。
+
+## 在 Windows 或 Linux 上準備 NVIDIA 執行環境
+
+| 平台 | 需要準備的內容 | 啟動命令 |
+|---|---|---|
+| Windows x86_64 | NVIDIA 顯示驅動程式；隨附的執行階段 DLL，放在執行檔旁邊 | `.\seine.exe` |
+| Linux x86_64 | NVIDIA 驅動程式及相容的 NVRTC 執行階段程式庫 | `./seine` |
+
+在 Windows 上，將整個 ZIP 解壓縮至可寫入的資料夾。將 `nvrtc64_120_0.dll` 和 `nvrtc-builtins64_128.dll` 保留在 `seine.exe` 旁邊。封裝發行的版本使用這些隨附程式庫，不必另外安裝 CUDA Toolkit。
+
+![seine 官方下載列表中的 Windows 壓縮檔](/assets/blog/windows-download.png)
+
+從 [NVIDIA 驅動程式頁面](https://www.nvidia.com/en-us/drivers/)安裝適用於顯示卡和作業系統的驅動程式。[Windows 設定指南](/zh-hant/blog/mine-blocknet-on-windows/)詳細介紹下載、校驗碼檢查及解壓縮步驟。
+
+在 Linux 上，安裝適用於發行版的 NVIDIA 驅動程式和相容的 NVRTC 套件。NVRTC 會在執行時編譯 seine 的 CUDA 運算核心程式。NVIDIA 的 [NVRTC 文件](https://docs.nvidia.com/cuda/nvrtc/)介紹編譯器及配套的 builtins 程式庫；[seine 的 NVIDIA 要求](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)則說明挖礦軟體所需的執行環境。
+
+從執行檔所在的資料夾啟動程式。繼續使用同一個工作目錄，以保留 `seine-data` 中儲存的設定。首次啟動時，輸入接收地址，並接受 `stratum+tcp://bntpool.com:3333` 作為礦池地址。
+
+## 能否選擇一張 NVIDIA 顯示卡，同時保留 CPU 挖礦？
+
+選擇兩個後端並指定裝置索引。在 PowerShell 中，下列命令會保留 CPU 挖礦，並選擇 NVIDIA 裝置 `0`：
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+對 Linux 執行檔使用相同選項：
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+這些命令使用已儲存的地址和礦池，或在啟動時要求輸入。若要明確指定連線資訊，請使用 `--address` 加入公開的接收地址，使用 `--pool-url` 加入礦池 URL。
+
+索引識別 NVIDIA 執行環境列舉出的 GPU。啟動後請確認裝置清單。`--nvidia-devices 0,1` 選擇這兩張顯示卡；省略選擇選項則會使用所有偵測到的 NVIDIA 裝置。
+
+若只要使用 GPU 挖礦，選擇 `nvidia`：
+
+```bash
+./seine --backend nvidia
+```
+
+在 PowerShell 中，使用 `.\seine.exe --backend nvidia`。若要使用兩類硬體，請在後端清單中加入 `cpu`。變更選擇後，使用所需命令重新啟動 seine。
+
+## 如何確認 GPU 正在挖礦？
+
+<Answer>
+在 Devices 面板中尋找 NVIDIA 後端列，查看目前和平均算力。初始化期間，程式準備 CUDA 運算核心程式時，該列可能會顯示啟動進度。開始計算雜湊後，檢查日誌中該後端的份額事件，並在 Mining 面板查看已接受的份額。
+</Answer>
+
+NVIDIA 後端顯示為 `nvidia#1`、`nvidia#2` 等，CPU 則有獨立的一列。總算力包含所有作用中的後端。[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)介紹其他面板與日誌標籤。
+
+![使用 RTX 5090 的實際 seine 工作階段，顯示裝置算力與已接受的份額](/assets/blog/nvidia-rtx5090-session.png)
+
+這張截圖展示 RTX 5090 實際連線至礦池的工作階段。下方的定時效能測試另外進行。裝置算力衡量本機活動；已接受的份額則確認礦池已計入提交的工作。使用[礦工追蹤指南](https://bntpool.com/blog/track-your-miner-on-bntpool/)查看礦池計入的工作量。
+
+首次啟動會準備並調校 GPU 運算核心程式。seine 將 NVIDIA 自動調校結果儲存至 `seine-data/seine.nvidia-autotune.json`。繼續使用該資料目錄，後續啟動即可載入相容的已儲存結果；也可以透過 `--data-dir` 明確指定目錄。
+
+## RTX 5090 在我們的測試中有多快？
+
+我們於 2026 年 10 月 25 日進行測試，使用 Windows 11、NVIDIA GeForce RTX 5090、AMD Ryzen 9 9950X3D、125.4 GiB 可用 RAM、seine v0.2.26 和 NVIDIA 驅動程式 `610.88`。透過 `--bench-kind backend`，我們交替執行兩種模式，共完成三組配對測試。每次執行包含一輪 20 秒暖機和三輪各 20 秒的測量，執行之間間隔 20 秒。運算核心程式、暫存器上限、通道及執行緒均使用自動設定。
+
+| 模式 | 平均 H/s |
+|---|---|
+| 僅 RTX 5090 | 7.3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12.9 |
+
+表中數值是這台桌上型電腦每種模式執行三次的平均值，測試時原有應用程式保持開啟。兩種模式都使用 GPU `0` 和相同的 NVIDIA 自動調校快取。這些是本機效能測試速率；已接受的份額用來確認礦池計入了工作。[測量紀錄](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md)列出設定及各次結果。
+
+## 如果沒有 NVIDIA 列，應該檢查什麼？
+
+首先檢查解壓縮後的執行檔和執行階段程式庫。在 Windows 上，將隨附的 NVRTC DLL 保留在 `seine.exe` 旁邊。在 Linux 上，在啟動挖礦軟體的環境中安裝驅動程式和 NVRTC 程式庫。
+
+接著檢查命令。`--backend cpu` 只選擇 CPU。若要同時使用兩者，請使用預設命令或 `--backend cpu,nvidia`。如果設定了 `--nvidia-devices`，請確認這些索引存在於你的電腦上。
+
+閱讀該後端的啟動日誌：它可以區分正在準備與初始化錯誤。修正日誌回報的執行環境或裝置選擇問題，然後重新啟動。[NVIDIA 指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)也介紹從原始碼建置的要求。
+
+對於目前的 Argon2id 工作負載，每個作用中的 GPU 通道需要 2 GiB 記憶體區域，以及額外的執行階段開銷。seine 根據可用裝置記憶體及記憶體配置檢查來決定 GPU 工作規模。不要手動覆寫通道數；僅憑標示的 VRAM 容量，無法判斷使用桌面期間有多少通道可用。
+
+如果裝置正在計算雜湊，但礦池顯示為零，請按照[礦池算力檢查清單](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate)檢查地址、連線及已接受的份額。
+
+[Windows 封鎖挖礦程式？驗證下載檔案](/zh-hant/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="下載 seine，使用 NVIDIA 挖礦" text="選擇 Windows 或 Linux x86_64 壓縮檔，從自動選擇 CPU 和 NVIDIA GPU 開始。" />

@@ -1,0 +1,134 @@
+---
+title: Die beste Hardware für Blocknet-Mining
+description: "Blocknet-Mining-Hardware im Messvergleich: EPYC 9355P erreicht 68,3 H/s. Mit genauer RAM-Ausstattung, Threads, Seitengröße und Benchmark-Belegen."
+tags: [Hardware, Hashrate, Mining-Anleitung, Argon2id, NVIDIA]
+faq:
+  - q: 'Kann ein Gaming-PC Blocknet minen?'
+    a: 'Ja. seine mint unter Windows und Linux gleichzeitig auf dem Prozessor und jeder NVIDIA-Grafikkarte im PC, und die Hashraten addieren sich. Die Thread-Anzahl richtet sich nach deinem RAM, ein Gaming-PC mit 32 GB führt also bis zu etwa 14 Threads aus, und Prozessor und jede Karte werden während des Minings automatisch optimiert.'
+  - q: 'Wie viele Blocknet-Mining-Threads schaffen 32 GB RAM?'
+    a: 'Etwa 14. Jeder Thread braucht für jeden Hash einen 2-GiB-Speicherblock, auf dem Papier passen in 32 GB also 16 davon. seine hält 5 % des RAM in Reserve und lässt Platz für das Betriebssystem, womit ein Rechner mit 32 GB auf etwa 14 Threads kommt. seine rechnet das beim Start für dich aus.'
+  - q: 'Welche Grafikkarten nutzt seine für Blocknet-Mining?'
+    a: 'seine mint mit den Downloads für Windows und Linux auf NVIDIA-Grafikkarten und nutzt jede erkannte Karte zusätzlich zum Prozessor. Unter Windows ist die CUDA-Runtime enthalten, du brauchst also nur den NVIDIA-Treiber. Unter Linux installierst du den Treiber und die NVRTC-Bibliotheken. Der erste Start optimiert jede Karte und merkt sich das Ergebnis.'
+  - q: 'Warum ist die Speicherbandbreite beim Blocknet-Mining wichtig?'
+    a: 'Jeder Blocknet-Hash schreibt einen kompletten 2-GiB-Speicherblock und liest Daten von überall daraus zurück, weit mehr, als irgendein Prozessor-Cache fasst. Die Hashrate hängt daher davon ab, wie schnell das Speichersystem Daten bewegt. Am schnellsten minen Rechner mit hoher Speicherbandbreite und genug RAM für viele Threads.'
+sourceHash: 53fb803e5db6
+translation: draft
+---
+
+Diese Anleitung zeigt, welche Rechner Blocknet mit seine am schnellsten minen, wie viele Threads dein RAM zulässt und welche Hashrate du erwarten kannst, damit du Hardware auswählen oder deinen vorhandenen Computer einschätzen kannst.
+
+[Deine BNT-Belohnungen schätzen](https://bntpool.com/blog/de/estimate-blocknet-mining-rewards/#mining-calculator)
+
+## Was ist die beste Hardware für Blocknet-Mining?
+
+<Answer>
+Die schnellste hier gemessene Konfiguration ist ein AMD EPYC 9355P mit 68,3 H/s: 64 Mining-Threads, 192 GiB RAM und manuell vorbereitete 1-GiB-Huge-Pages unter Linux. Blocknet-Mining profitiert von Speicherbandbreite und ausreichend RAM für 2 GiB pro Thread. NVIDIA-Karten können ihre Hashrate zusätzlich zur CPU beitragen.
+</Answer>
+
+Blocknets Proof of Work ist Argon2id mit einem 2-GiB-Speicherblock pro Hash. Das macht ihn [speicherintensiv](/de/blog/argon2id-proof-of-work-explained/): Die Hashrate hängt genauso stark von Speicherbandbreite und Latenz ab wie von der Anzahl der Kerne, und davon, wie viele dieser 2-GiB-Blöcke gleichzeitig in den RAM passen. Ein starkes Speichersystem ist das, was die Spitzenrechner in der Tabelle unten gemeinsam haben.
+
+## Neue Bare-Metal-Messung: EPYC 9355P
+
+Am 25. Oktober 2026 erreichte ein EPYC 9355P mit 32 Kernen und 64 Hardware-Threads sowie 192 GiB auf zwölf DDR5-4800-Speicherkanälen **68,256 H/s**, gerundet **68,3 H/s**. Diese feste manuelle Konfiguration nutzte 64 Mining-Threads, den Streaming-Kernel, 1-GiB-Huge-Pages und ein Package-Leistungslimit von 280 W. Die Rate ist die Summe der abgeschlossenen Hashes geteilt durch die gesamte Laufzeit von vier frischen 120-Sekunden-Aufrufen einschließlich Start und Beenden.
+
+Das [Seitengrößenexperiment](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) dokumentiert die genaue Quellcode-Revision, den SHA-256-Wert der ausführbaren Datei, Prüfungen der Seitenzuweisung und die Messmethode. Die [maschinenlesbaren Datensätze](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) enthalten Konfiguration sowie ursprüngliche Zähler und Nenner. Gemessen wurde ein manuell konfigurierter vollständiger Sockel; die folgenden Cloud- und Mac-Messungen haben jeweils eigene Maschinen und Einstellungen.
+
+## Wie schnell war die RTX 5090 in unserem Test?
+
+Wir haben am 25. Oktober 2026 mit Windows 11, einer NVIDIA GeForce RTX 5090, einem AMD Ryzen 9 9950X3D, 125,4 GiB nutzbarem RAM, seine v0.2.26 und dem NVIDIA-Treiber `610.88` getestet. Wir haben drei abwechselnde Testpaare mit `--bench-kind backend` ausgeführt. Jeder Durchlauf bestand aus einer Aufwärmphase von 20 Sekunden und drei Messrunden von jeweils 20 Sekunden, mit 20 Sekunden zwischen den Durchläufen. Kernel, Registerlimit, Lanes und Threads wurden automatisch eingestellt.
+
+| Modus | Durchschnittliche H/s |
+|---|---|
+| Nur RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Die Tabelle zeigt den Mittelwert von drei Durchläufen pro Modus auf diesem Desktop, während die bereits geöffneten Apps geöffnet blieben. Beide Modi verwendeten GPU `0` und denselben NVIDIA-Autotune-Cache. Dies sind lokale Benchmark-Hashraten; angenommene Shares bestätigen die Anrechnung durch den Pool. Die [Messnotizen](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) dokumentieren die Einstellungen und Einzelergebnisse.
+
+## Gemessener Vergleich von Cloud-Servern und Mac
+
+Diese Cloud- und Mac-Ergebnisse nutzen die unten beschriebenen Maschinen und Einstellungen. Der Mining-Speicher ist der Platz für die Speicherblöcke der Threads: Threads × 2 GiB.
+
+| Hardware | Genauer Chip | Threads | Hashrate | Mining-Speicher |
+|---|---|---|---|---|
+| AMD EPYC · Zen 5 | EPYC-9R45-Server | 32 | 49,4 H/s | 64 GiB |
+| Arm-Server | AWS Graviton4 | 32 | 39,3 H/s | 64 GiB |
+| AMD EPYC · Zen 4 | EPYC-9R14-Server | 32 | 38,2 H/s | 64 GiB |
+| Apple M4 Max | MacBook Pro mit 48 GB | 16 | 30,9 H/s | 32 GiB |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s | 64 GiB |
+
+Die Server-Zeilen liefen auf AWS-Cloud-Rechnern mit 2-MiB-Huge-Pages, die M4-Max-Zeile auf einem MacBook Pro mit 48 GB. Jeder Wert ist die Zahl der fertigen Hashes geteilt durch die verstrichene Zeit, gemittelt über wiederholte Läufe, gemessen zwischen Juli und Oktober 2026. Das Zen-5-Ergebnis ist der Mittelwert aus vier Läufen mit seine v0.2.22 auf einer AWS m8a.8xlarge, einem EPYC-9R45-Rechner mit 32 Kernen und 128 GiB RAM.
+
+Ergebnisse für jeden getesteten Prozessor, mit den Belegen für jede Zeile, stehen auf der [Leistungsseite](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md).
+
+## Warum die Speicherbandbreite deine Hashrate bestimmt
+
+Jeder Argon2id-Hash füllt seinen gesamten 2-GiB-Block einmal und liest dabei frühere Teile davon zurück. Der L3-Cache eines Prozessors wird in Megabyte gemessen: Auf dem Zen-5-Server teilt sich jede Gruppe aus acht Kernen 32 MiB, ein einzelner Hash arbeitet sich also durch 64-mal mehr Speicher, als dieser Cache fasst. Der größte Teil der Arbeit ist Speicherverkehr.
+
+Die Zahlen zeigen es. Bei 49,4 H/s schreibt der Zen-5-Server jede Sekunde etwa 99 GiB an frischen Speicherblöcken (49,4 × 2 GiB). Die Hashrate steigt mit den Threads, bis das Speichersystem ausgelastet ist: Auf diesem Rechner kamen 16 Threads auf 37,8 H/s und 32 Threads auf 49,4 H/s. seine misst diese Kurve auf deinem Rechner und bleibt bei der besten Thread-Anzahl.
+
+Für die Wahl der Hardware folgen daraus drei Dinge:
+
+- **Speicherbandbreite zählt so viel wie Kerne.** Gewichte beim Vergleich von Rechnern das Speichersystem genauso stark wie die Anzahl der Kerne.
+- **Der RAM legt die Obergrenze für Threads fest.** Jeder Thread braucht seinen eigenen 2-GiB-Block, daher begrenzt oft der RAM die Thread-Anzahl, bevor es die Kerne tun.
+- **Der Kernel macht auf demselben Chip einen Unterschied.** seine bringt pro Prozessorfamilie mehrere Argon2id-Kernel mit. Auf dem EPYC 9R45 mint der Streaming-Kernel 30 % schneller als AVX2 (34,47 auf 44,74 H/s bei 24 Threads). Auf AWS Graviton4 mint der SHA3-Kernel mit Prefetching 56 % schneller als reines NEON (13,80 auf 21,50 H/s). seine wählt während des Minings den schnelleren.
+
+## Wie viel RAM brauchst du pro Mining-Thread?
+
+<Answer>
+Jeder Mining-Thread braucht etwa 2 GB RAM, weil jeder Hash seinen eigenen 2-GiB-Speicherblock füllt. Teile deinen RAM durch zwei, um die maximale Thread-Anzahl zu erhalten, und ziehe ein wenig für das Betriebssystem ab. seine rechnet das für dich aus und hält 5 % des RAM in Reserve.
+</Answer>
+
+Hier die Rechnung für gängige Größen. „Auf dem Papier“ ist RAM ÷ 2 GiB. Die letzte Spalte zieht die 5-%-Reserve von seine und etwa 2–3 GB für das Betriebssystem ab, nimm sie also als grobe Orientierung. Für Laptops und ältere PCs mit 4–12 GB gibt es die Anleitung zum [Mining auf einem alten PC oder Laptop](/de/blog/mine-crypto-on-old-pc-or-laptop/).
+
+| RAM | Speicherblöcke auf dem Papier | Threads mit seine, ungefähr |
+|---|---|---|
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+| 64 GB | 32 | 29 |
+| 128 GB | 64 | 59 |
+
+seine begrenzt die Threads außerdem auf die Zahl der logischen Kerne des Prozessors, das echte Limit ist also das, was zuerst ausgeht. Nimm einen Desktop-Prozessor mit 16 Kernen und 32 Hardware-Threads. Mit 32 GB RAM führt er etwa 14 Mining-Threads aus, mit 64 GB etwa 29. Für 32 Threads brauchst du allein 64 GiB für die Speicherblöcke plus Reserve, deshalb stammt das Zen-5-Ergebnis mit 32 Threads von einem Rechner mit 128 GiB.
+
+Wenn du RAM fürs Mining kaufst, richte ihn nach den gewünschten Threads: etwa 2 GB pro Thread plus ein paar Gigabyte für das System.
+
+## Kannst du Blocknet mit CPU und NVIDIA-GPU zusammen minen?
+
+Ja. seine mint unter Windows und Linux gleichzeitig auf jedem CPU-Kern und jeder erkannten NVIDIA-Grafikkarte, und die Hashraten addieren sich. Dafür brauchst du kein Flag; das ist der Standard.
+
+- **Windows:** Der Download enthält die CUDA-Runtime-Bibliotheken, du brauchst also nur einen aktuellen NVIDIA-Treiber.
+- **Linux:** Installiere den NVIDIA-Treiber und die NVRTC-Bibliotheken aus deiner Distribution oder von NVIDIA.
+- **Erster Start:** seine optimiert die Kernel-Einstellungen für jede Karte und speichert das Ergebnis, spätere Starts dauern also nur Sekunden.
+
+Auf [Macs mit Apple Silicon](/de/blog/mine-blocknet-on-mac/) mint seine standardmäßig auf der CPU, dem schnellsten auf dem M4 Max gemessenen Setup. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) behandelt Multi-GPU-Rigs und Voraussetzungen.
+
+## Was optimiert seine automatisch?
+
+Für den täglichen Mining-Betrieb startest du seine, fügst deine Adresse oder `@name` ein und bestätigst den Standardpool bntpool.com. Die [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) erklärt die Schritte. Das manuelle EPYC-Ergebnis oben hat eigene Einstellungen; beim automatischen Mining geschieht Folgendes:
+
+- **Es legt die Thread-Anzahl** nach RAM und Kernen fest, vergleicht dann Thread-Anzahlen an echter Mining-Arbeit und behält die beste.
+- **Es wählt den CPU-Kernel**, etwa AVX2, AVX-512, den Streaming-Kernel auf Zen-5-EPYC oder SHA3 auf Arm, und wechselt erst nach zwei bestätigten Gewinnen.
+- **Es verteilt Threads auf großen Servern.** Unter Linux verteilt es Threads auf NUMA-Nodes und L3-Cache-Gruppen, was auf einem gemieteten EPYC 8434P bei 24 Threads 16,7 % brachte. Die [Anleitung zum Mining auf Servern](/de/blog/mine-blocknet-on-servers/) enthält die Details.
+- **Es schützt deinen Arbeitsspeicher.** Es hält eine Reserve von 5 %, pausiert Threads, wenn der RAM knapp wird, und holt sie zurück, sobald wieder Platz frei ist.
+- **Es merkt sich, was funktioniert hat**, sodass der nächste Start mit den optimierten Einstellungen beginnt.
+
+Nichts davon verbindet sich neu mit dem Pool, das Tuning kostet dich also keine Mining-Zeit. Die [Anleitung zum automatischen Tuning](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) erklärt jeden Schritt.
+
+Ein optionales Extra lohnt sich unter Linux und WSL: Reservierte Huge Pages brachten auf dem Validierungsrechner etwa 4–6 % mit 2-MiB-Seiten und weitere 2 % mit 1-GiB-Seiten. Die [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) enthält die Befehle, und die [Anleitung für große Server](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) behandelt EPYC- und Xeon-Rechner.
+
+## Wie prüfst du deine eigene Hashrate?
+
+Am schnellsten geht es, wenn du [seine herunterlädst](/de/#download) und mit dem Mining beginnst: Das Dashboard zeigt deine Hashrate nach wenigen Augenblicken, und auf [bntpool.com](https://bntpool.com) kannst du deine Adresse nachschlagen und sehen, was der Pool erfasst. Gib dem Tuner etwas Zeit, sich einzupendeln, bevor du die Zahl abliest.
+
+Um den Prozessor ohne Verbindung zu einem Pool zu messen, starte den Offline-Benchmark von seine:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Er meldet fertige Hashes pro Sekunde, dasselbe Maß wie die Tabelle oben, du kannst deinen Rechner also mit den [veröffentlichten Ergebnissen](/de/#performance) vergleichen.
+
+<Note>
+Diese Ergebnisse gelten für Blocknets aktuellen Argon2id-Proof-of-Work. Laut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet um den 16. Februar 2027 ein Netzwerk-Upgrade namens Faraday, das einen leichteren Proof of Work bringen wird. Nutze immer die aktuelle Version von seine: Der Miner sucht beim Start und alle 12 Stunden nach neuen Releases.
+</Note>
+
+<CTA target="seine" title="Sieh, was dein Rechner schafft" text="seine optimiert sich beim Mining selbst für deine Hardware. Lade es herunter und beobachte deine Hashrate." />

@@ -1,0 +1,131 @@
+---
+title: 如何在 Mac 上挖 Blocknet
+description: 用 seine 在 Apple 芯片 Mac 上挖 Blocknet：在终端中完成设置，了解 M4 Max 实测 30.9 H/s 的结果，并算出你的 Mac 能运行多少个线程。
+tags: [挖矿指南, macOS, Apple 芯片, seine]
+faq:
+  - q: '可以用 MacBook Air 挖 Blocknet 吗？'
+    a: '可以。每台 Apple 芯片 Mac 都能运行 seine，包括 MacBook Air。下载 seine-macos-aarch64.tar.gz，在终端中解压并运行 ./seine。每个线程约需 2 GB 内存，所以一台 16 GB 的 MacBook Air 最多可容纳七个线程，seine 会根据空闲内存自动为你设定线程数。'
+  - q: '在 Mac 上挖 Blocknet 时，seine 会使用 GPU 吗？'
+    a: '在 Apple 芯片上，seine 默认用 CPU 挖矿，因为这是最快的选择。CPU 和图形核心共用同一块统一内存，而 Blocknet 的 Argon2id 工作量证明取决于内存带宽。在 M4 Max 上，只用 CPU 挖矿得到的算力最高，所以 seine 会自动采用这种方式。'
+  - q: 'Mac 需要多少内存才能挖 Blocknet？'
+    a: '每个挖矿线程都要处理一块 2 GiB 的内存，所以每个线程大约按 2 GB 计算。16 GB 的 Mac 最多可容纳七个线程，32 GB 最多 15 个，64 GB 最多 30 个。seine 会计算空闲内存，并让线程数与你的核心数相匹配。'
+  - q: '可以在 Intel Mac 上挖 Blocknet 吗？'
+    a: '可以。seine 为 Intel Mac 单独发布了一个压缩包 seine-macos-x86_64.tar.gz，步骤与 Apple 芯片相同。下载后在终端中解压，运行 ./seine，并粘贴你的 Blocknet 地址或 @name。seine 会根据内存确定线程数，并默认在 bntpool.com 上开始挖矿。'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+本指南介绍如何用 **seine** 在 Apple 芯片 Mac 上挖 Blocknet：为什么 M 系列芯片适合 Blocknet 的工作量证明，M4 Max 的实测结果，你的 Mac 内存能容纳多少个线程，以及在 bntpool.com 上开始挖矿的具体终端步骤。
+
+## 可以在 Mac 上挖 Blocknet 吗？
+
+<Answer>
+可以。Apple 芯片 Mac 是很强的 Blocknet 矿机，因为它们的统一内存为内存密集型的 Argon2id 工作量证明提供了充足的带宽。下载 `seine-macos-aarch64.tar.gz`，在终端中解压，运行 `./seine` 并粘贴你的地址即可。一台 48 GB 的 M4 Max 仅用 CPU 就实测达到 30.9 H/s。
+</Answer>
+
+seine 会自己处理 Mac 上的特定设置。它用 CPU 挖矿，优先把线程调度到性能核心上，并根据你的内存确定线程数，所以大多数人只需要运行 `./seine`。
+
+## 为什么 Apple 芯片 Mac 挖 Blocknet 表现出色？
+
+Blocknet 的工作量证明是 [Argon2id](/zh-hans/blog/argon2id-proof-of-work-explained/)，每次哈希使用 2 GiB 内存。每次哈希都会填满一块 2 GiB 的内存，并在过程中回读其中较早的部分，所以挖矿线程的速度主要取决于芯片与内存之间传输数据的速度。这就是 seine 每个线程都需要约 2 GB 独立内存的原因。
+
+Apple 芯片围绕统一内存构建，[Apple 的描述](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/)是把高带宽、低延迟的内存整合到单一的内存池中。这为每个挖矿线程提供了充足的带宽，而这正是内存密集型哈希所需要的。结果就是一台笔记本电脑挖 Blocknet 的速度可以与服务器处理器处于同一水平。
+
+## M4 Max 挖 Blocknet 有多快？
+
+<Answer>
+一台搭载 M4 Max 芯片的 48 GB MacBook Pro 仅用 CPU、以 16 个线程挖 Blocknet，达到 30.94 H/s。以性能核心优先调度运行 14 个线程时（这是 seine 在这台机器上默认运行的均衡设置），它达到 29.26 H/s，并为其他应用留出了更多内存。
+</Answer>
+
+这些结果来自 seine 于 2026-07-10 在一台 48 GB M4 Max（12 个性能核心和 4 个能效核心）上进行的验证测试：
+
+| 设置 | 线程数 | 算力 |
+|---|---|---|
+| 最大吞吐量 | 16，`auto` 调度 | 30.94 H/s |
+| 均衡（seine 在这台 Mac 上的默认上限） | 14，`pcore-only` 调度 | 29.26 H/s |
+
+作为参考，30.9 H/s 的结果高于 seine [性能表](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)中所有 Arm 服务器和 Intel Xeon 的结果，只有 AMD EPYC Zen 5 和 Zen 4 服务器测得更高。[Blocknet 挖矿硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)对比了各代硬件的最佳结果，完整的调优说明见 [Apple 芯片指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md)。
+
+## 你的 Mac 能运行多少个线程？
+
+每个线程都需要独立的 2 GiB 内存，所以内存决定了上限。seine 在确定线程数时还会保留 Mac 内存的 5% 作为余量。由此得出以下上限：
+
+| Mac 内存 | 内存可容纳的线程数 |
+|---|---|
+| 16 GB | 最多 7 个 |
+| 24 GB | 最多 11 个 |
+| 32 GB | 最多 15 个 |
+| 36 GB | 最多 17 个 |
+| 48 GB | 最多 22 个 |
+| 64 GB | 最多 30 个 |
+
+有两点会让最终的线程数恰好适合你的 Mac：
+
+- **空闲内存。** seine 在启动时计算实际空闲的内存，所以你打开的应用会让线程数略微减少。如果运行中内存变得紧张，seine 会暂停部分线程并释放它们占用的内存。
+- **核心数。** 在 Mac 上，seine 默认使用全部性能核心加上一半的能效核心。在 12+4 核的 M4 Max 上，就是 14 个线程，即上表中的均衡设置。
+
+这些都无需你自己计算。seine 会在启动时选好线程数，并在挖矿过程中持续测试相近的线程数。
+
+## 在 macOS 上的分步设置
+
+### 第 1 步：准备一个 Blocknet 地址
+
+安装官方 Blocknet 钱包，即[命令行钱包](https://github.com/blocknetprivacy/blocknet/releases/latest)或[桌面钱包](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)，然后复制你的地址。如果你在 [blocknet.id](https://blocknet.id) 注册了 Blocknet ID 短名称，也可以直接挖到 `@name`。
+
+### 第 2 步：下载适用于 Apple 芯片的 seine
+
+在[下载区](/zh-hans/#download)获取 `seine-macos-aarch64.tar.gz`。压缩包里有 `seine` 程序、说明文件和许可证，以及一个用于核对下载文件的 `SHA256SUMS.txt`。
+
+### 第 3 步：在终端中解压
+
+打开“终端”（在“应用程序”下的“实用工具”中）并运行以下命令。它们会在你的个人文件夹中创建一个 `seine` 文件夹，并把压缩包解压到里面：
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### 第 4 步：运行 seine
+
+```sh
+./seine
+```
+
+macOS 版本采用临时（ad-hoc）签名。如果 macOS 阻止了首次启动，请打开“系统设置”，进入“隐私与安全性”，允许 `seine` 运行。你也可以在终端中清除下载标记，然后再次运行：
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### 第 5 步：输入地址并开始挖矿
+
+seine 会先询问你的收款地址或 `@shortname`，然后询问矿池。按回车接受默认矿池 `stratum+tcp://bntpool.com:3333`。随后[仪表盘](/zh-hans/blog/seine-dashboard-explained/)会显示你的算力和第一批被接受的份额。bntpool.com 矿池会在你的余额达到 0.1 BNT 时把它发送到你的地址，你可以在 [bntpool.com](https://bntpool.com) 上查询自己的地址来跟踪余额。
+
+## 为什么 seine 在 Mac 上只用 CPU 挖矿？
+
+在 Apple 芯片上，CPU 和图形核心共用同一个统一内存池。Argon2id 取决于内存带宽，所以 CPU 和图形核心会争用同一份带宽。在 seine 对 M4 Max 的测试中，只用 CPU 挖矿得到的算力最高，因此 seine 会在每台 Apple 芯片 Mac 上自动选择这种方式。你无需设置任何参数，就能得到最快的配置。
+
+## 如何让 Mac 发挥最大算力？
+
+- **让 seine 自动调优。** 它用真实的挖矿任务比较不同的线程数和 CPU 计算内核，只有在确认有提升后才会切换，并记住结果供下次启动使用。
+- **让 Mac 保持唤醒。** macOS 会让闲置的 Mac 进入睡眠，这会暂停挖矿。用系统自带的 `caffeinate` 命令启动 seine，就能在 seine 运行期间让 Mac 保持唤醒：
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **在专用 Mac 上追求最大吞吐量。** 如果这台 Mac 只用来挖矿，在 M4 Max 上实测达到 30.94 H/s 的设置会使用全部 16 个核心，占用的内存也比默认的均衡设置更多：
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+所有选项见[配置指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)。[挖矿主指南](/zh-hans/blog/how-to-mine-blocknet/)介绍了收益发放和其他平台。
+
+<Note>
+以上结果针对 Blocknet 当前的 Argon2id 工作量证明。根据 [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)，Blocknet 计划在 2027-02-16 前后进行名为 Faraday 的网络升级，届时工作量证明算法预计会改变。seine 会在启动时以及每 12 小时检查一次新版本，请保持它为最新版本。
+</Note>
+
+<CTA target="seine" title="下载 macOS 版 seine" text="Apple 芯片版本使用 Mac 的 CPU 挖矿，并自动选择线程数。" />

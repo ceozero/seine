@@ -1,0 +1,104 @@
+---
+title: 用 Blocknet ID 透過 @name 收款
+description: 在 blocknet.id 註冊 Blocknet ID 短名稱，然後用 @name 收取 BNT、分享付款連結、在 bntpool.com 挖礦，不必再貼上 90 多個字元的地址。
+tags: [Blocknet ID, 錢包, 付款, bntpool]
+faq:
+  - q: 'Blocknet ID 短名稱有區分大小寫嗎？'
+    a: '沒有。短名稱不區分大小寫，所以 @Alice、@alice 與 $ALICE 都指向同一個錢包。名稱可使用字母 a 到 z、數字 0 到 9、底線、連字號與點，最長 64 個字元。凡是接受名稱的地方，@ 與 $ 兩種前綴都能使用。'
+  - q: 'Blocknet ID 是免費的嗎？'
+    a: '截至 2026 年 10 月，在 blocknet.id 的優惠活動期間，九個字元以上的名稱免費，不需要帳單，也不需要付款。更短的名稱需要一次性付費，名稱越短價格越高，八個字元的名稱為 100 BNT。blocknet.id 的價格頁面列出了每種長度的價格。'
+  - q: '可以在 bntpool.com 上挖礦到 Blocknet ID 短名稱嗎？'
+    a: '可以。在 seine 詢問收款地址時輸入你的 @name，或者用 --address 傳入。seine 會檢查 blocknet.id 上的簽章紀錄，顯示解析得到的完整地址，並在整個執行期間都挖到該地址。短名稱需要 seine v0.2.16 或更新版本，bntpool.com 在登入時也接受短名稱。'
+  - q: '如果我把名稱指向新地址，礦池餘額會怎樣？'
+    a: '你現有的餘額仍屬於賺得它的那個地址，bntpool.com 會照常支付到該地址。礦池依完整地址記錄份額、餘額與付款，所以變更名稱絕不會轉移既有餘額。下次開始挖礦時，名稱會重新解析，新的份額會計入新地址。'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+有了 Blocknet ID 短名稱，別人可以向 `@yourname` 付款，你可以分享一則放得進聊天訊息的付款連結，還可以用同一個名稱在 bntpool.com 挖礦。本指南介紹名稱如何運作、如何在 blocknet.id 註冊，以及如何在錢包與 seine 中使用它。
+
+## 什麼是 Blocknet ID 短名稱？
+
+<Answer>
+Blocknet ID 短名稱是 @alice 或 $alice 這樣的短名稱，指向你的 Blocknet 錢包地址。你在 blocknet.id 註冊它。錢包、seine 與 bntpool.com 會查詢該名稱，檢查紀錄是否由 blocknet.id 簽章，然後使用它所對應的完整地址。
+</Answer>
+
+凡是接受名稱的地方，規則都相同：
+
+- **兩種前綴。** `@name` 與 `$name` 是同一個名稱，用哪個都可以。
+- **不區分大小寫。** `@Alice` 與 `@alice` 解析到同一個地址。
+- **簡單的字元。** 字母 a 到 z、數字 0 到 9、底線、連字號與點。
+- **最長 64 個字元。**
+
+blocknet.id 上的每筆紀錄都帶有簽章。錢包解析名稱時，會取得這筆紀錄，然後用 blocknet.id 在 `https://blocknet.id/.well-known/blocknet-id.json` 公布的簽章公鑰檢查它的 Ed25519 簽章。簽章內容包含名稱、地址與最後更新時間，錢包確認三者都相符後才會使用該地址。每個名稱在 blocknet.id 上還有一個公開頁面，顯示它的地址、簽章內容與簽章，任何人都可以自行核對。
+
+## 為什麼要付款給名稱而不是地址？
+
+Blocknet 地址是公開花費金鑰、公開檢視金鑰與檢查碼的 base58 編碼，長度為 92 或 93 個字元。要在應用程式之間複製、大聲唸出來或放進個人檔案，這都太長了。短名稱則可以在一句話裡說出來、印在貼紙上或寫進個人簡介。
+
+你還會得到一個清楚的確認步驟。向名稱付款時，錢包會顯示它解析得到的地址，並在你核准付款前標示為已驗證。名稱只是取代你原本就要分享的地址。在鏈上，這筆付款是一筆一般的 Blocknet 交易，發送到[一次性隱身地址](/zh-hant/blog/blocknet-privacy-features/)，因此和其他付款一樣私密。
+
+## 如何取得 Blocknet ID？
+
+<Answer>
+複製你的錢包地址，開啟 blocknet.id，搜尋你想要的名稱。如果名稱可用，網站會顯示價格，貼上你的地址並送出即可。目前優惠活動期間，九個字元以上的名稱免費。註冊完成後，你的名稱就能在錢包、seine 與 bntpool.com 中使用。
+</Answer>
+
+1. **複製你的地址。** 在命令列錢包中，`address` 指令會顯示地址，後面接著一行「Get a short name like @name or $name at https://blocknet.id」。錢包可從[命令列版本發布頁](https://github.com/blocknetprivacy/blocknet/releases/latest)或[桌面版本發布頁](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)下載。
+2. **搜尋名稱。** 開啟 [blocknet.id](https://blocknet.id)，在「find a name」輸入框中輸入名稱，然後按 Search。輸入時，如果出現不允許的字元或名稱過長，頁面會提示你。
+3. **查看結果。** 可用的名稱會顯示價格。已被註冊的名稱會顯示它的地址、最後更新時間，以及連到其公開頁面的連結。
+4. **註冊。** 貼上你的錢包地址，按「Claim free」（付費名稱為「Register」）。
+
+價格依名稱長度一次性收取。截至撰寫本文時（2026 年 10 月），九個字元以上的名稱在優惠活動中全部免費，用網站的話說就是「no invoice, no payment」（不需要帳單，不需要付款）。八個字元的名稱為 100 BNT，更短的名稱價格更高，單一字元的名稱最高 6,000 BNT。[價格頁面](https://blocknet.id/pricing)列出了每種長度的價格。
+
+之後要管理你的名稱，可在 blocknet.id 按「sign in」，用你的 Blocknet 地址登入。在管理頁面中可以把名稱指向另一個地址。
+
+## 如何向名稱發送 BNT？
+
+在命令列錢包中，把名稱填在原本填地址的位置：
+
+```
+send @rock 100 "hello"
+```
+
+錢包會解析 `@rock`，顯示 `Resolved @rock -> <address>` 並帶有已驗證標記，然後請你確認。確認資訊會顯示名稱、完整地址、手續費與你的備註。`$rock` 的寫法效果相同，`send` 可以發送整數或小數金額。
+
+錢包的 API 會以同樣方式解析發送請求中每個收款人的名稱，因此以錢包為基礎開發的工具不需額外工作就能支援向名稱付款。
+
+## 付款連結如何搭配名稱使用？
+
+[付款連結](/zh-hant/blog/blocknet-payment-links/)包含收款人、金額與選填的備註。Blocknet 支援兩種形式：
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+bntpay.com 連結可以用名稱取代地址，所以連結很短。開啟它會看到一個頁面，顯示「Pay $yourname」、金額與備註，並有一個「Open in Wallet」按鈕，以 `blocknet://` 連結的形式開啟這筆付款。把任一形式貼到命令列錢包中，它都會為你填好一筆待確認的發送。請包含 `amount` 欄位；備註是選填的，最多可容納 124 位元組的文字。
+
+這樣就能輕鬆發布一則用於打賞的連結，或在一則訊息裡送出帳單。
+
+## 如何挖礦到你的 @name？
+
+seine 與 bntpool.com 都接受短名稱作為收款地址。第一次啟動 [seine](/zh-hant/#download) 時，在地址提示處輸入 `@yourname`，並接受預設礦池。如果要在命令列中傳入，請加上引號：
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+在 shell 指令中請替短名稱加上引號，尤其是 `$name` 形式，這樣 shell 才會原樣傳遞。短名稱需要 seine v0.2.16 或更新版本。
+</Note>
+
+接下來會發生這些事：
+
+- **seine 在啟動時解析名稱。** 它驗證來自 blocknet.id 的簽章紀錄，檢查地址，在日誌中記錄解析得到的完整地址，並在整個執行期間（包括重新連線礦池時）都使用這個地址。
+- **礦池在登入時也接受名稱。** 礦工用名稱連線時，bntpool.com 會驗證簽章對應，並在工作、份額、餘額與付款中使用解析得到的完整地址。
+- **你可以用名稱查詢自己。** [bntpool.com](https://bntpool.com) 的統計頁面接受 `@name` 與 `$name`，所以不必貼上地址就能查看算力與餘額。
+- **儲存的名稱會在下次執行時重新解析。** seine 會把名稱儲存在設定中，因此每次重新啟動都會使用名稱當時指向的地址。
+
+由於餘額屬於完整地址，之後變更名稱絕不會轉移既有餘額。你已經賺得的收益仍屬於賺得它的地址並支付到那裡，而新的挖礦收益會計入新地址。同一個名稱在對接自己節點的獨立挖礦（solo）模式下也能使用。
+
+剛開始挖礦？[Blocknet 挖礦指南](/zh-hant/blog/how-to-mine-blocknet/)介紹了如何下載 seine、硬體選擇以及 bntpool.com 的收益支付。
+
+<CTA target="pool" title="挖礦收益直達你的 @name" text="bntpool.com 接受 Blocknet ID 短名稱作為收款登入名稱。幾分鐘內即可開始挖礦。" />

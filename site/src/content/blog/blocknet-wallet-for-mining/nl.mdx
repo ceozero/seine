@@ -1,0 +1,173 @@
+---
+title: Een Blocknet-wallet en -adres om te minen
+description: Installeer de officiële Blocknet-wallet, maak een back-up van je herstelzin van 12 woorden, kopieer je miningadres en zie uitbetalingen van bntpool.com binnenkomen.
+tags: [Wallet, Mininghandleiding, bntpool]
+faq:
+  - q: 'Heb ik een Blocknet-wallet nodig voordat ik begin met minen?'
+    a: 'Je hebt een Blocknet-adres nodig om naar te minen, en de officiële wallet geeft je er een. Maak een wallet aan in de commandline- of desktopwallet, kopieer het adres en plak het in seine. De wallet zelf blijft op je eigen computer. seine en bntpool.com hebben alleen het adres nodig, of een korte naam van Blocknet ID die ernaar verwijst.'
+  - q: 'Uit hoeveel woorden bestaat een Blocknet-herstelzin?'
+    a: 'Een Blocknet-herstelzin (recovery seed) bestaat uit 12 woorden. In de commandline-wallet toont het commando seed hem na een waarschuwing en je walletwachtwoord. Schrijf de woorden op papier en bewaar ze offline. Met die 12 woorden kan het commando import je wallet op elke computer herstellen, zelfs als het walletbestand en het wachtwoord verloren zijn.'
+  - q: 'Wanneer verschijnen uitbetalingen van bntpool.com in mijn wallet?'
+    a: 'Een poolblok heeft 60 bevestigingen nodig, ongeveer vijf uur bij de bloktijd van vijf minuten van Blocknet, voordat de beloningen worden uitbetaald. Zodra je bevestigde poolsaldo 0,1 BNT bereikt, stuurt de pool het naar je adres. De uitbetaling verschijnt in history als gewone transactie en is uitgeefbaar na 10 bevestigingen, ongeveer 50 minuten.'
+  - q: 'Kan ik hetzelfde adres op meerdere miningcomputers gebruiken?'
+    a: 'Ja. Elke computer met seine kan naar hetzelfde adres of dezelfde korte naam van Blocknet ID minen, en bntpool.com telt hun shares op in één saldo. De statistiekenpagina van de pool toont elke verbonden computer onder je adres. De wallet en de herstelzin blijven de hele tijd op je eigen computer.'
+sourceHash: 4954bfd74d20
+translation: draft
+---
+
+Om Blocknet te minen heb je een adres nodig voor je beloningen, en de officiële wallet geeft je er binnen een paar minuten een. Deze gids laat zien hoe je een wallet aanmaakt met de commandline- of desktopwallet, een back-up maakt van de herstelzin, het adres vindt dat je in seine plakt en je saldo controleert als bntpool.com je uitbetaalt.
+
+## Welke Blocknet-wallet gebruik je om te minen?
+
+<Answer>
+Gebruik een van de twee officiële wallets van Blocknet Privacy: de commandline-wallet, die draait op Windows, macOS en Linux, of de desktopwallet voor dezelfde systemen. Beide draaien een volledige Blocknet-node op je computer en geven je een ontvangstadres om met seine naar te minen op bntpool.com.
+</Answer>
+
+- **Commandline-wallet.** Het programma `blocknet` installeert, start en werkt een Blocknet-core bij, het achtergrondproces dat de node, de wallet en het netwerk draait. Je beheert je wallet vanuit een interactieve shell. Download hem bij de [commandline-releases](https://github.com/blocknetprivacy/blocknet/releases/latest), met builds voor Windows, macOS en Linux.
+- **Desktopwallet.** Een grafische wallet waarin de Blocknet-daemon is meegeleverd. Download hem bij de [desktopreleases](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Kies wat je het fijnst vindt. De stappen hieronder lopen de commandline-wallet door, omdat elk commando gedocumenteerd is, en behandelen daarna de installatie van de desktopwallet.
+
+## Een wallet aanmaken met de commandline-wallet
+
+1. **Installeer en start een core.** Pak de release uit en start de installatiewizard:
+
+   ```sh
+   blocknet setup
+   ```
+
+   De wizard vraagt of je node automatisch moet worden bijgewerkt, downloadt de nieuwste core en biedt aan hem te starten. Op Windows heet het programma `blocknet.exe`, dus voer je `blocknet.exe setup` uit. Wil je de wizard overslaan, voer dan `blocknet install latest` en daarna `blocknet start` uit.
+
+2. **Open de shell.** Koppel aan de draaiende core:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Je krijgt een `>`-prompt. Als je de shell sluit met `quit`, blijft de core draaien, dus je kunt op elk moment opnieuw koppelen.
+
+3. **Maak de wallet aan.** Typ `load`. De wallet toont alle walletbestanden die hij vindt en biedt "Create a new wallet" aan. Kies die optie, voer een naam en een wachtwoord in, en de core maakt een nieuwe wallet met een nieuwe herstelzin:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+De wallet is één `.wallet.dat`-bestand, en je wachtwoord versleutelt de spend key erin. De core onthoudt het pad van de wallet, dus de volgende `blocknet start` laadt hem voor je. Blocknet kopieert een geladen wallet ook naar `~/.config/bnt/wallets/`, zodat je een tweede kopie op een bekende plek hebt.
+
+## Hoe maak je een back-up van je herstelzin?
+
+Je herstelzin is de back-up die het meest telt. Hij bestaat uit 12 woorden, en daarmee kun je de wallet op elke computer herstellen, zelfs als je het walletbestand kwijtraakt of het wachtwoord vergeet. Blocknet slaat je wachtwoord nooit op, dus de herstelzin is ook de manier om een vergeten wachtwoord op te vangen.
+
+Toon hem met het commando `seed`. De wallet toont een waarschuwing, vraagt je te bevestigen en vraagt om je wachtwoord, en toont daarna de woorden:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Schrijf de 12 woorden op papier en bewaar ze op een veilige plek, offline. De walletgids zegt ze niet op te slaan in een tekstbestand, een notitie-app of cloudopslag, omdat iedereen die de woorden heeft de tegoeden beheert. De gids over [seedphrases](/nl/blog/seed-phrase-explained/) legt uit hoe de 12 woorden je sleutels worden en hoe je ze goed bewaart.
+
+Om later te herstellen, voer je `import` uit, kies je `1) 12-word recovery seed`, typ je de woorden en geef je de nieuwe wallet een naam en een wachtwoord. De core scant daarna de chain op je outputs.
+
+## Hoe vind je je Blocknet-adres?
+
+<Answer>
+Typ in de commandline-wallet address (of addr) bij de prompt van de shell. De wallet toont je ontvangstadres, een reeks van 92 of 93 tekens, gevolgd door een verwijzing naar blocknet.id voor een korte naam. Kopieer het hele adres en plak het in seine als het om een uitbetalingsadres vraagt.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Dit is het adres dat je aan seine geeft. Als je [seine](/nl/#download) voor het eerst start, vraagt het om je uitbetalingsadres en daarna om een pool; plak het adres en druk op Enter om bntpool.com te accepteren. Je kunt het ook direct meegeven:
+
+```sh
+./seine --address <your-address>
+```
+
+Zodra seine aan het minen is, toont het paneel met het poolsaldo op het [dashboard](/nl/blog/seine-dashboard-explained/) de eerste en laatste zes tekens van het adres waarnaar je minet, zodat je kunt controleren of het overeenkomt met je wallet.
+
+Wil je liever naar iets korters minen, dan verwijst een [korte naam van Blocknet ID](/nl/blog/blocknet-id-pay-by-name/) zoals `@yourname` naar dit adres, en die werkt in seine en op bntpool.com.
+
+## De desktopwallet installeren
+
+De nieuwste release van de desktopwallet (v0.22.0, uitgebracht op 15 oktober 2026) heeft deze downloads:
+
+| Systeem | Bestand |
+|---|---|
+| Windows x86_64 | `.exe`-installatieprogramma |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Elke release bevat een `SHA256SUMS.txt`, zodat je je download kunt controleren voordat je installeert:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Installeer op Linux het `.deb`-pakket of start de `.AppImage` direct. Zet op macOS de app in Programma's en voer dit eenmalig uit in Terminal vóór de eerste start, zoals de README aangeeft:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Toont Defender op Windows een melding bij het installatieprogramma, klik dan op "Meer informatie" en daarna op "Toch uitvoeren".
+
+De app draait de meegeleverde Blocknet-daemon op je computer en praat ermee via `127.0.0.1`, en hij doet geen verzoeken naar externe diensten. Maak je wallet aan in de app, schrijf de herstelzin op en kopieer je ontvangstadres naar seine. De desktopwallet opent ook `blocknet://`-[betaallinks](/nl/blog/blocknet-payment-links/) en vult het verzendformulier in zodat jij het kunt nakijken.
+
+## Houd je sleutels op je eigen computer
+
+Een miningcomputer heeft alleen je adres nodig. seine heeft alleen een adres of korte naam nodig om te minen, dus het walletbestand en de herstelzin kunnen op de computer blijven die je vertrouwt. Dat telt het zwaarst bij gehuurde servers, gedeelde rigs en computers waar anderen bij kunnen.
+
+- **Draai de wallet thuis en mine overal.** Zet hetzelfde adres op elke computer met seine. bntpool.com telt hun shares op in één saldo.
+- **Volg de voortgang zonder sleutels.** Zoek je adres op [bntpool.com](https://bntpool.com) op om je hashrate, shares en saldo te zien vanuit elke browser.
+- **Watch-only toegang.** Wil je binnenkomende tegoeden op een tweede computer zien, dan exporteert `viewkeys` view-only sleutels. Een view-only wallet toont binnenkomende tegoeden en kan niet versturen of ondertekenen.
+- **Vergrendel als je wegloopt.** `lock` blokkeert uitgaven tot je `unlock` gebruikt met je wachtwoord.
+
+## Hoe verschijnen miningbetalingen in je wallet?
+
+bntpool.com betaalt beloningen uit zodra hun blok volgroeid is. Een poolblok heeft 60 bevestigingen nodig, ongeveer vijf uur bij de bloktijd van vijf minuten van Blocknet. Als je bevestigde saldo het minimum van 0,1 BNT bereikt, stuurt de pool het als normale Blocknet-transactie naar je adres.
+
+Controleer in de wallet `balance` (of `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Een nieuwe uitbetaling verschijnt eerst onder `confirming`. Gewone transacties zijn uitgeefbaar na 10 bevestigingen, ongeveer 50 minuten, en gaan dan naar `spendable`. Het commando `history` toont binnenkomende transacties van oud naar nieuw, elk met blok, bedrag en type: pooluitbetalingen verschijnen als `regular`, en blokken die je zelf in solomodus vindt verschijnen als `coinbase`, die 60 bevestigingen nodig hebben voordat je ze kunt uitgeven.
+
+Je wallet toont een uitbetaling zodra de node de chain heeft ingehaald. `status` toont dan `Syncing: false`, en `sync` scant de gedownloade blokken opnieuw op je outputs.
+
+Nieuw met minen? De [gids voor Blocknet minen](/nl/blog/how-to-mine-blocknet/) behandelt het downloaden van seine, het kiezen van threads en wat je op bntpool.com kunt verwachten.
+
+<CTA target="pool" title="Mine naar je nieuwe adres" text="Plak je Blocknet-adres in seine, accepteer bntpool.com en zie uitbetalingen in je wallet binnenkomen zodra je saldo 0,1 BNT bereikt." />

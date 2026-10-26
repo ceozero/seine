@@ -1,0 +1,104 @@
+---
+title: 'Proof of work vs proof of stake: la differenza spiegata'
+description: 'Differenza tra proof of work e proof of stake: come scelgono il blocco successivo, proteggono la catena ed emettono nuove monete, e perché Blocknet usa la proof of work.'
+tags: [Proof of work, Proof of stake, Consenso, Blocknet, Mining]
+faq:
+  - q: 'Blocknet è proof of work o proof of stake?'
+    a: 'Blocknet usa la proof of work. I miner calcolano hash Argon2id che richiedono ciascuno 2 GiB di memoria, un nuovo blocco viene trovato circa ogni cinque minuti e l''intera ricompensa del blocco va al miner che l''ha trovato. Non c''è staking. Puoi minarlo con seine su un computer comune tramite la pool bntpool.com.'
+  - q: 'Quando Ethereum è passato dalla proof of work alla proof of stake?'
+    a: 'Ethereum è passato alla proof of stake con un aggiornamento chiamato Merge, eseguito il 15 settembre 2022. Da allora sono i validatori che depositano 32 ETH, e non più i miner, a proporre i blocchi e a votarli. Bitcoin, Monero e Blocknet usano ancora la proof of work, in cui i nuovi blocchi nascono da lavoro di calcolo.'
+  - q: 'Cos''è un attacco del 51%?'
+    a: 'Un attacco del 51% è un tentativo di controllare quali blocchi una blockchain accetta detenendo la maggior parte della risorsa che lo decide. Nella proof of work significa la maggior parte della potenza di hashing della rete. Nella proof of stake significa la maggior parte delle monete in stake. In entrambi i casi l''attaccante deve impegnare la maggioranza di risorse reali.'
+  - q: 'Si può minare una moneta proof of stake?'
+    a: 'No. Una moneta proof of stake pura non prevede mining. Le nuove monete vengono pagate ai validatori che bloccano monete esistenti come stake, quindi devi possedere monete prima di poterne guadagnare. Per guadagnare nuove monete con il computer che hai già, ti serve una moneta proof of work come Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: reviewed
+---
+
+Questo articolo spiega come proof of work e proof of stake decidono chi aggiunge il blocco successivo a una blockchain, come ciascuna mantiene sicura la catena e come ciascuna crea nuove monete. Blocknet, una moneta proof of work che puoi minare su un computer comune, fa da esempio concreto per tutto l'articolo.
+
+## Qual è la differenza tra proof of work e proof of stake?
+
+<Answer>
+Proof of work e proof of stake sono due modi in cui una blockchain decide chi aggiunge il blocco successivo. Nella proof of work, i miner spendono potenza di calcolo per trovare un hash valido. Nella proof of stake, i validatori bloccano monete come deposito e vengono scelti per proporre i blocchi e votarli. Entrambe rendono costoso imbrogliare.
+</Answer>
+
+Ogni blockchain deve risolvere lo stesso problema. Migliaia di computer che non si fidano l'uno dell'altro devono mettersi d'accordo su un'unica storia dei pagamenti, così che nessuno possa spendere due volte la stessa moneta. Qualcuno deve proporre ogni nuovo blocco, e tutti gli altri hanno bisogno di un motivo per accettarlo. Questa regola si chiama meccanismo di consenso, e proof of work e proof of stake sono i due design più noti.
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Chi crea un blocco | Il miner che per primo trova un hash pari o inferiore al target della rete | Un validatore scelto tra quelli che hanno bloccato monete |
+| Cosa impegna | Hardware ed elettricità | Monete depositate come stake |
+| Quale catena vince | La catena con più lavoro accumulato | La catena sostenuta dal maggior numero di voti dei validatori, con checkpoint di finalità |
+| Dove vanno le nuove monete | Una ricompensa del blocco al miner che ha trovato il blocco | Ricompense ai validatori per proporre e votare |
+| Cosa serve per partecipare | Un computer in grado di calcolare hash | Monete da mettere in stake (32 ETH per un validatore Ethereum) |
+| Esempi | Bitcoin, Monero, Blocknet | Ethereum dal 2022 |
+
+## Come sceglie il blocco successivo la proof of work?
+
+Nella proof of work, i miner competono per risolvere un enigma difficile da risolvere e facile da verificare. Un miner prende il blocco che vuole pubblicare, aggiunge un numero chiamato nonce e calcola l'hash del risultato. Se l'hash, letto come numero, è pari o inferiore al target della rete, il blocco è valido. Altrimenti il miner cambia il nonce e riprova. L'unico modo per vincere è provare molti nonce, quindi la probabilità che un miner trovi il blocco successivo corrisponde alla sua quota della potenza di hashing della rete.
+
+Il [paper di Bitcoin](https://bitcoin.org/bitcoin.pdf) di Satoshi Nakamoto del 2008 lo riassumeva così: «La proof-of-work è essenzialmente una CPU, un voto». I nodi seguono la catena in cui è stato investito il maggiore sforzo di proof of work, e un'impostazione di difficoltà sposta il target in su o in giù in modo che i blocchi continuino ad arrivare a ritmo costante, qualunque sia la potenza di hashing che si aggiunge. La guida a [come funziona il mining di criptovalute](/it/blog/how-crypto-mining-works/) spiega passo per passo hash, difficoltà e pool.
+
+Blocknet funziona allo stesso modo, con valori fissati nel suo codice di consenso:
+
+- **L'hash è Argon2id** con 2 GiB di memoria, quindi ogni hash richiede memoria reale oltre al tempo del processore. La [guida ad Argon2id](/it/blog/argon2id-proof-of-work-explained/) mostra come funziona.
+- **Il target è (2^256 − 1) diviso per la difficoltà**, il che rende la difficoltà pari all'incirca al numero di hash che servono alla rete per trovare un blocco.
+- **Un blocco arriva circa ogni cinque minuti**, 288 blocchi al giorno. La difficoltà segue i tempi dei blocchi recenti tramite una media mobile ponderata su 60 blocchi (LWMA).
+- **I nodi seguono la catena più pesante.** Ogni nodo somma la difficoltà di ogni blocco di una catena e passa a una catena concorrente solo quando il suo lavoro totale è maggiore.
+
+## Come sceglie il blocco successivo la proof of stake?
+
+La proof of stake sostituisce l'hashing con un deposito. Per partecipare, un validatore blocca monete presso il protocollo, e il protocollo sceglie i validatori che propongono e approvano i blocchi. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), lanciata nel 2012, è stata la prima criptovaluta a usarla, ed Ethereum è passato a questo modello il 15 settembre 2022 con un aggiornamento chiamato [Merge](https://ethereum.org/en/roadmap/merge/).
+
+Il design di Ethereum mostra i vari componenti. Da [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Un validatore deposita 32 ETH nel contratto di deposito.
+- Il tempo è diviso in slot da 12 secondi, raggruppati in epoche da 32 slot.
+- In ogni slot, un validatore viene scelto a caso per proporre un blocco, e gli altri lo votano con le attestazioni.
+- I checkpoint diventano definitivi quando li votano validatori che detengono almeno due terzi di tutto l'ETH in stake.
+- Un validatore che propone due blocchi per lo stesso slot, o esprime voti contraddittori, subisce lo slashing: parte del suo stake, fino alla totalità, viene distrutta.
+
+Lo stake svolge il ruolo che nella proof of work svolge l'elettricità. Violare le regole costa al validatore monete che possiede già.
+
+## Come restano sicure la proof of work e la proof of stake?
+
+Entrambi i design fanno sì che un attacco costi più di quanto potrebbe rendere, e collocano quel costo in posti diversi.
+
+**Nella proof of work, il costo è il calcolo continuo.** Per riscrivere un blocco passato, un attaccante deve rifare il lavoro di quel blocco e di tutti i blocchi successivi, poi superare la rete onesta. Nakamoto ha dimostrato che la probabilità che un attaccante più lento recuperi si riduce in modo esponenziale a ogni nuovo blocco. Prendere il controllo della catena da quel momento in poi significa far girare più potenza di hashing di tutti gli altri messi insieme, per tutta la durata dell'attacco.
+
+**Nella proof of stake, il costo è il capitale a rischio.** La documentazione di Ethereum dice che un attaccante «avrebbe bisogno del 51% dell'ETH in stake» per controllare la catena, che un terzo dello stake basta a impedire ai blocchi di diventare definitivi e che annullare un blocco finalizzato significherebbe perdere per slashing almeno un terzo di tutto l'ETH in stake.
+
+Blocknet aggiunge anche due soglie alla sua proof of work. La rete considera sicure 10 conferme, circa 50 minuti, e i nodi rifiutano qualsiasi riorganizzazione più profonda di 100 blocchi, circa otto ore, quindi un blocco a 100 blocchi di profondità è definitivo.
+
+## Come emettono nuove monete i due modelli?
+
+<Answer>
+Le monete proof of work pagano le nuove monete al miner che trova ogni blocco, quindi chiunque contribuisca con potenza di calcolo può guadagnare monete senza possederne prima. Le monete proof of stake pagano le nuove monete ai validatori in proporzione al loro stake, quindi le ricompense vanno a chi detiene già monete. Ogni protocollo fissa il proprio calendario.
+</Answer>
+
+Nella proof of work, la prima transazione di ogni blocco crea nuove monete per il miner che l'ha trovato. Il paper di Bitcoin la descrive come «un modo per distribuire inizialmente le monete in circolazione, poiché non esiste un'autorità centrale che le emetta». La ricompensa di Bitcoin si dimezza ogni 210.000 blocchi, circa ogni quattro anni, e l'offerta totale resta appena sotto i 21 milioni.
+
+Nella proof of stake di Ethereum, le ricompense vengono aggiunte ai saldi dei validatori una volta per epoca per attestazioni, proposte di blocchi e partecipazione al sync committee. La [ricompensa base](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) diminuisce man mano che cresce lo stake totale, mentre l'emissione totale aumenta con l'ingresso di nuovi validatori.
+
+L'emissione di Blocknet passa interamente dal mining. Il suo blocco genesi non contiene alcuna transazione, quindi nessuna moneta esisteva prima dell'inizio del mining, e il consenso non prevede premine, tesoreria né output per i fondatori. Ogni blocco paga l'intera ricompensa in un unico output al miner che l'ha trovato. La ricompensa è partita da 723,25 BNT per blocco, scende a gradini a ogni mese di 30 giorni lungo una curva esponenziale per 48 mesi e poi resta per sempre a 2 BNT per blocco.
+
+## Perché Blocknet usa la proof of work?
+
+Blocknet ha scelto la proof of work perché chiunque abbia un computer possa guadagnare nuove monete fin dal primo blocco, senza doverne comprare prima. Il suo daemon descrive Argon2id come «PoW memory-hard per resistere agli ASIC e garantire un mining equo» ed esegue ogni hash su un singolo thread «per equità».
+
+È il requisito di memoria a mantenere il mining aperto. Ogni hash riempie 2 GiB di memoria, quindi ogni thread di mining ha bisogno di circa 2 GB di RAM, e i computer che le persone possiedono già, desktop, portatili e server, hanno quella memoria e i controller per alimentarla. Blocknet fa parte di una famiglia di monete proof of work costruite attorno all'hardware generico: Monero, per esempio, usa dal novembre 2019 [RandomX](https://github.com/tevador/RandomX), «ottimizzato per CPU generiche».
+
+La proof of work resta nei piani di Blocknet. L'aggiornamento Faraday, previsto intorno a febbraio 2027 secondo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), porterà «una proof of work più leggera» in modo che i nuovi nodi raggiungano più velocemente la catena.
+
+## Come si inizia a minare una moneta proof of work?
+
+Per Blocknet ti servono un indirizzo di wallet e seine, il miner gratuito e open source:
+
+1. Ottieni un indirizzo dal wallet ufficiale. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) ti accompagna passo per passo.
+2. [Scarica seine](/it/#download) per Windows, macOS o Linux e avvialo.
+3. Incolla il tuo indirizzo o `@name` e accetta la pool predefinita, bntpool.com.
+
+seine sceglie il numero di thread in base alla RAM, confronta i kernel CPU mentre mina e mantiene il più veloce, e su Windows e Linux aggiunge qualsiasi scheda grafica NVIDIA accanto al processore. La [guida al mining](/it/blog/how-to-mine-blocknet/) tratta in dettaglio hardware e pagamenti.
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Scarica seine, incolla il tuo indirizzo o @name, e in pochi minuti il tuo computer inizia a minare BNT su bntpool.com." />

@@ -1,0 +1,103 @@
+---
+title: Seedphrase uitgelegd, en hoe je de jouwe veilig bewaart
+description: Een seedphrase is de lijst woorden waarmee je je cryptowallet opnieuw kunt opbouwen. Lees hoe het werkt, hoe je hem offline bewaart en waarom je hem nooit deelt.
+tags: [Wallet, Seedphrase, Beveiliging]
+faq:
+  - q: 'Wat is het verschil tussen een seedphrase en een privésleutel?'
+    a: 'Een privésleutel heeft rechtstreeks zeggenschap over geld, terwijl een seedphrase een leesbare back-up is die een wallet omzet in zijn privésleutels. In een Blocknet-wallet leveren de 12 woorden zowel de spend key als de view key op, dus de zin alleen is genoeg om de wallet en alles wat hij kan opnieuw op te bouwen.'
+  - q: 'Kan ik een wallet herstellen als ik de seedphrase kwijt ben?'
+    a: 'Je kunt de wallet blijven gebruiken zolang je het walletbestand en het wachtwoord nog hebt. De seedphrase is de back-up voor als het bestand of het wachtwoord weg is. Zolang de wallet nog opent, toon je de zin opnieuw met het commando seed of View Recovery Seed en schrijf je hem op.'
+  - q: 'Is het veilig om een seedphrase in een wachtwoordmanager te bewaren?'
+    a: 'De Blocknet-walletgids vraagt je de seed offline op papier te bewaren en hem buiten tekstbestanden, notitie-apps en cloudopslag te houden, omdat iedereen die de 12 woorden leest het geld in handen heeft. Papieren kopieën op twee aparte veilige plekken geven je een back-up die nooit met internet in aanraking komt.'
+  - q: 'Werkt een seedphrase in elke wallet-app?'
+    a: 'De woordenlijst is een gedeelde standaard, maar elke coin zet de woorden op zijn eigen manier om in sleutels. Herstel een Blocknet-seed in de officiële command-line- of desktopwallet van Blocknet. Beide accepteren de 12 woorden en bouwen hetzelfde adres en saldo opnieuw op nadat de wallet de chain heeft gescand.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Een seedphrase is het korte lijstje woorden waarmee je je cryptowallet op elke computer opnieuw kunt opbouwen. Deze gids legt uit wat die woorden zijn, hoe een wallet ze omzet in sleutels, hoe je ze bewaart zodat je nooit de toegang verliest en waarom niemand anders ze ooit mag zien. De voorbeelden gebruiken de Blocknet-wallet en zijn recovery seed van 12 woorden.
+
+## Wat is een seedphrase?
+
+<Answer>
+Een seedphrase, ook wel herstelzin of mnemonic genoemd, is een lijst gewone woorden, meestal 12 of 24, die het geheim bevat waaruit de sleutels van je wallet voortkomen. Typ de woorden in een compatibele wallet en die bouwt dezelfde sleutels, adressen en hetzelfde saldo opnieuw op, ook als je computer en walletbestand weg zijn.
+</Answer>
+
+Elke cryptowallet is gebouwd op geheime sleutels. Een sleutel is een lang willekeurig getal, dat lastig met de hand over te schrijven is en waarbij je makkelijk een fout maakt. Een seedphrase schrijft hetzelfde geheim als woorden uit een vaste lijst, zodat je het op papier kunt overschrijven, kunt teruglezen en jaren later kunt intypen.
+
+De Blocknet-wallet noemt zijn zin een **recovery seed**. Die is 12 woorden lang, en de wallet maakt hem aan wanneer je een nieuwe wallet aanmaakt. Bewaar hem veilig en je kunt je wallet altijd terugkrijgen.
+
+## Hoe werkt een seedphrase?
+
+Veel wallets volgen BIP39, een standaard die in 2013 voor Bitcoin is geschreven door Marek Palatinus, Pavol Rusnak, Aaron Voisine en Sean Bowe. Die werkt in drie stappen.
+
+1. **Willekeurige bits.** De wallet trekt 128 tot 256 willekeurige bits. Een zin van 12 woorden bevat 128 bits en een zin van 24 woorden 256.
+2. **Een checksum, daarna woorden.** De wallet hasht die bits met SHA-256 en voegt de eerste paar bits van de hash toe als checksum (4 bits bij 12 woorden). Daarna splitst hij het resultaat in stukken van 11 bits. Elk stuk is een getal van 0 tot 2.047 dat één woord kiest uit een lijst van 2.048 woorden.
+3. **Een seed voor de sleutels.** Om de zin te gebruiken, haalt de wallet hem 2.048 rondes door PBKDF2 met HMAC-SHA512 en krijgt hij een seed van 64 bytes. De sleutels komen uit die seed.
+
+Door de checksum kan een wallet je vertellen dat een zin niet klopt. Slechts 1 op de 16 willekeurige combinaties van 12 woorden heeft een geldige checksum, dus de meeste typefouten en verwisselde woorden worden opgemerkt voordat er iets gebeurt. De Engelse lijst is bovendien zo opgebouwd dat de eerste vier letters van elk woord uniek zijn, wat helpt als je handschrift lastig te lezen is.
+
+### Wat 12 woorden betekenen in Blocknet
+
+De Blocknet-wallet gebruikt de standaard Engelse BIP39-lijst en 128 bits willekeur, dus elke recovery seed is 12 woorden. Hij zet die woorden om in zijn seed van 64 bytes met de PBKDF2-stap van BIP39 en zonder extra passphrase. De eerste 32 bytes worden je **spend key** en de laatste 32 bytes je **view key**. Je adres wordt gebouwd uit de publieke helften van die twee sleutels, dus dezelfde 12 woorden leiden altijd terug naar hetzelfde adres. De gids over [stealth-adressen](/nl/blog/stealth-addresses-explained/) legt uit hoe de spend key en view key samenwerken om betalingen privé te ontvangen.
+
+Hoe groot is 128 bits? Er zijn 2^128 mogelijke seeds, ongeveer 3,4 × 10^38. Niemand vindt je wallet door woorden te raden. De enige praktische manier om erin te komen, is je zin te zien, en daarom gaat de rest van deze gids over het goed bewaren ervan.
+
+## Seedphrase, wachtwoord en walletbestand: wat is het verschil?
+
+Mensen halen vaak de drie dingen door elkaar die een wallet beschermen. Dit is wat elk ervan doet in de Blocknet-wallet.
+
+| | Wat het is | Wat het je geeft |
+|---|---|---|
+| Recovery seed | 12 woorden die je opschrijft | Volledige controle over de wallet op elke computer |
+| Walletwachtwoord | Een wachtwoord dat je zelf kiest | Opent het walletbestand op deze computer |
+| Walletbestand | Eén bestand `.wallet.dat` | Je sleutels en geschiedenis, versleuteld met je wachtwoord |
+
+Je wachtwoord versleutelt het walletbestand (de wallet leidt de versleutelingssleutel af met Argon2id en versleutelt met AES-GCM), en Blocknet slaat het nergens op. Het wachtwoord speelt geen rol bij het maken van je sleutels. Als je herstelt vanuit de 12 woorden, kies je een nieuw wachtwoord voor het nieuwe walletbestand. Daardoor is de seed de back-up die het meest telt: hij werkt zelfs als je het bestand kwijtraakt en het wachtwoord vergeet.
+
+## Hoe bewaar je een seedphrase?
+
+<Answer>
+Schrijf de woorden op volgorde op papier, controleer elk woord met het scherm en bewaar het papier op een veilige plek, offline. Maak een tweede kopie en bewaar die op een andere plek. Houd de zin buiten foto's, tekstbestanden, notitie-apps, e-mail en cloudopslag, omdat iedereen die hem leest het geld in handen heeft.
+</Answer>
+
+Deze gewoontes houden een seedphrase veilig en bruikbaar:
+
+- **Eerst papier.** De Blocknet-walletgids zegt dat je de seed op papier schrijft en op een veilige plek bewaart. Nummer de woorden van 1 tot 12, want de volgorde telt.
+- **Controleer hem één keer.** Vergelijk elk woord met het scherm voordat je het sluit. De spelling telt, en de eerste vier letters van elk woord zijn genoeg om het te onderscheiden.
+- **Twee kopieën, twee plekken.** Eén kopie thuis en één op een andere plek die je vertrouwt, beschermt je tegen brand, een overstroming of een kwijtgeraakte la. Sommige mensen slaan de woorden om dezelfde reden ook in een metalen plaatje.
+- **Houd hem offline.** Screenshots, foto's met je telefoon, notitie-apps en cloudmappen synchroniseren allemaal of maken ergens een back-up waar jij geen controle over hebt. De walletgids noemt tekstbestanden, notitie-apps en cloudopslag als plekken waar de seed nooit terecht mag komen.
+- **Houd hem privé.** Bewaar hem waar gasten, collega's en reparateurs hem niet tegenkomen.
+
+## Waarom deel je je seedphrase nooit?
+
+De 12 woorden zijn je wallet. Wie ze heeft, kan hem op zijn eigen computer opnieuw opbouwen en alles erin versturen, en een transactie kan niet worden teruggedraaid zodra hij op de chain staat. De Blocknet-wallet toont deze waarschuwing elke keer dat je vraagt om de seed te zien:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Behandel elk verzoek om je seed als oplichting, hoe officieel het er ook uitziet. Walletontwikkelaars, exchanges, pools en supportmedewerkers hebben hem nooit nodig. Een website of app die je vraagt je wallet te "verifiëren" of te "synchroniseren" door de woorden in te typen, probeert je coins af te pakken.
+
+Je hoeft de seed nooit te delen om iets voor elkaar te krijgen:
+
+- **Om betaald te worden**, deel je je adres, of een [korte Blocknet ID-naam](/nl/blog/blocknet-id-pay-by-name/) zoals `@yourname` die ernaar verwijst.
+- **Om iemand inkomend geld te laten zien**, exporteert het commando `viewkeys` view-only sleutels. Een view-only wallet toont inkomende betalingen en kan niets versturen. De [privacygids](/nl/blog/blocknet-privacy-features/) legt uit wat view keys laten zien.
+- **Om te minen** hebben seine en bntpool.com alleen je adres of korte naam nodig. De wallet en de seed kunnen op de ene computer blijven die je vertrouwt, terwijl elke machine waarop je minet naar hetzelfde adres uitbetaalt.
+
+## Hoe bekijk en herstel je een Blocknet-recovery seed?
+
+Typ in de command-line-wallet `seed` bij de shellprompt. De wallet toont de waarschuwing hierboven, vraagt je te bevestigen, vraagt om je wachtwoord en toont daarna de 12 woorden in genummerde rijen. Open in de desktopwallet de instellingen en kies "View Recovery Seed", dat ook eerst om je wachtwoord vraagt.
+
+Herstellen doe je met een van beide wallets:
+
+- **Command line:** voer `import` uit, kies `1) 12-word recovery seed`, typ de 12 woorden en geef de nieuwe wallet daarna een naam en een wachtwoord.
+- **Desktop:** kies "Restore from Seed" en voer je zin van 12 woorden in.
+
+De wallet controleert de woorden en de checksum, bouwt je sleutels opnieuw op en scant de chain op je outputs, zodat je saldo en geschiedenis terugkomen met hetzelfde adres. De [Blocknet-walletgids](/nl/blog/blocknet-wallet-for-mining/) loopt stap voor stap door het aanmaken van een wallet, het maken van een back-up van de seed en het vinden van je adres.
+
+Zodra je seed veilig op papier staat, kun je het adres aan het werk zetten. De [gids voor Blocknet minen](/nl/blog/how-to-mine-blocknet/) laat zien hoe je [seine](/nl/#download) erop richt en begint met minen op bntpool.com.
+
+<CTA target="pool" title="Mine naar je veilig geback-upte wallet" text="Plak je Blocknet-adres of @name in seine, accepteer bntpool.com en bewaar je recovery seed thuis op papier." />

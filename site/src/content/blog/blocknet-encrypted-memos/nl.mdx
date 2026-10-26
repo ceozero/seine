@@ -1,0 +1,143 @@
+---
+title: Versleutelde memo's bij Blocknet-betalingen
+description: 'Zet een versleutelde memo bij elke Blocknet-betaling: factuur, ordernummer of notitie. Tot 124 bytes, leesbaar voor verzender en ontvanger, opgevuld om niet op te vallen.'
+tags: [Memo's, Privacy, Wallet, Betalingen]
+faq:
+  - q: 'Hoe lang mag een Blocknet-memo zijn?'
+    a: 'Een memo bevat tot 124 bytes. Platte tekst wordt opgeslagen als UTF-8, dus dat zijn 124 letters, cijfers of leestekens in het Engels, of ongeveer 41 Chinese tekens van drie bytes per stuk. De wallet houdt een langere memo tegen voordat de transactie wordt opgebouwd en meldt het maximum van 124 bytes.'
+  - q: 'Kan een block explorer een Blocknet-memo lezen?'
+    a: 'Nee. Een explorer toont het memoveld als 128 bytes ciphertext, gemarkeerd als versleuteld. De sleutel komt uit het geheim dat de verzender en de ontvanger voor die output delen, dus alleen hun wallets kunnen hem openen. Omdat elke memo tot de volledige grootte wordt opgevuld, kan een explorer niet eens zien welke outputs een notitie bevatten.'
+  - q: 'Maakt een memo een Blocknet-transactie groter?'
+    a: 'Nee. Elke output heeft al een versleuteld memoveld van 128 bytes, of je nu een notitie schrijft of het leeg laat. Een memo toevoegen vult ruimte die er toch al is, dus een betaling met een factuurnummer is precies even groot als dezelfde betaling zonder, en de twee zien er op de chain identiek uit.'
+  - q: 'Kan ik een memo toevoegen als ik een Blocknet ID-naam betaal?'
+    a: 'Ja. Zet de naam waar het adres hoort en de memo na het bedrag, bijvoorbeeld send @rock 100 "invoice 1042". De wallet zoekt de naam op, toont het geverifieerde adres, de fee en de memo, en vraagt je te bevestigen. De memo wordt versleuteld voor de wallet waar de naam naar verwijst.'
+sourceHash: 6df2e7728647
+translation: draft
+---
+
+Elke Blocknet-betaling kan een korte versleutelde notitie meenemen. Je kunt die gebruiken voor een factuurnummer, een orderreferentie of een bericht aan de persoon die je betaalt, en alleen jullie tweeën kunnen hem lezen. Deze gids laat zien hoe je een memo toevoegt als je BNT verstuurt, wie hem kan lezen, waarom memo's nooit opvallen op de chain en waar je de memo's vindt die je ontvangt.
+
+## Wat is een Blocknet-memo?
+
+Een Blocknet-memo is een versleuteld veld van 128 bytes dat aan elke transactie-output hangt. Het bevat tot 124 bytes aan eigen tekst of gegevens, zoals een factuurnummer of een korte notitie. Het wordt versleuteld met een geheim dat alleen de verzender en de ontvanger delen, en opgevuld zodat een lege memo er hetzelfde uitziet als een volle.
+
+De memo maakt deel uit van het transactieformaat zelf. Elke output op de chain heeft er een, ook wisselgeldoutputs die munten terugsturen naar je eigen wallet. Dat levert drie handige eigenschappen op:
+
+- **Standaard privé.** De inhoud is versleuteld voor de ontvanger van die output. Niemand anders ziet wat je hebt geschreven.
+- **Vaste grootte.** Het veld is op de chain altijd 128 bytes, wat je er ook in zet.
+- **Altijd aanwezig.** Omdat elke output een memo heeft, ziet een betaling met notitie er precies hetzelfde uit als een betaling zonder.
+
+## Wat kun je in een memo zetten?
+
+Alles wat in 124 bytes past. Platte tekst wordt opgeslagen als UTF-8, dus in het Engels zijn dat 124 letters, cijfers en spaties. Tekens buiten het Latijnse alfabet nemen meer bytes in: een Chinees teken neemt er drie, dus een memo past er ongeveer 41.
+
+Veelvoorkomend gebruik:
+
+- **Facturen.** Zet het factuurnummer in de memo, en wie de betaling ontvangt, kan hem zonder te vragen aan de juiste rekening koppelen.
+- **Ordernummers.** Een winkel of dienst kan klanten vragen een orderreferentie mee te sturen en die direct uit de binnenkomende betaling lezen.
+- **Notities.** "Huur november", "Bedankt voor de hulp" of "Mijn deel van het etentje" reizen mee met de munten.
+- **Binaire gegevens.** De wallet accepteert ook ruwe bytes, geschreven als hex, voor referentiecodes die software aanmaakt en uitleest.
+
+## Hoe voeg je een memo toe als je BNT verstuurt?
+
+<Answer>
+Typ in de commandline-wallet de memo na het bedrag: send @rock 100 "invoice 1042". De wallet toont de memo op het bevestigingsscherm naast de fee, versleutelt hem voor de ontvanger en verstuurt de betaling zodra je bevestigt. Ruwe bytes werken ook, met het voorvoegsel hex:.
+</Answer>
+
+Het commando `send` van de wallet neemt de memo als optioneel laatste argument:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Een memo mag spaties bevatten, en aanhalingstekens eromheen zijn optioneel. De wallet haalt een bij elkaar horend paar aanhalingstekens weg voordat hij de tekst versleutelt. Hier is een betaling aan een Blocknet ID-naam met een factuurnummer:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+De bevestigingsstap toont de memo die de ontvanger zal lezen, zodat je de memo kunt controleren voordat er iets wordt verstuurd. Is een memo langer dan 124 bytes, dan stopt de wallet vóór het opbouwen van de transactie met `memo too long: max 124 bytes`, en kun je hem inkorten en het opnieuw proberen.
+
+Om ruwe bytes te versturen, zet je `hex:` voor de memo. De wallet decodeert de hex en versleutelt de bytes:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+Ook [betaallinks](/nl/blog/blocknet-payment-links/) kunnen een memo bevatten. Als je een `blocknet://`-link of een `bntpay.com`-link in de wallet plakt, vult hij het adres, het bedrag en de memo in zodat jij ze kunt bevestigen, en zo kan de persoon die je betaalt de factuurreferentie van tevoren instellen. Meer over namen en links lees je in de [Blocknet ID-gids](/nl/blog/blocknet-id-pay-by-name/).
+
+### Memo's vanuit je eigen software
+
+De wallet-API neemt een memo per ontvanger van een verzending. Geef in een request naar `POST /api/wallet/send` elke ontvanger `memo_text` voor platte tekst of `memo_hex` voor ruwe bytes:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Bedragen staan hier in atomaire eenheden, waarbij 1 BNT gelijk is aan 100.000.000 eenheden, dus het voorbeeld verstuurt 100 BNT en 25 BNT. Elke ontvanger krijgt een eigen memo, alleen voor zijn eigen wallet versleuteld. Hetzelfde maximum van 124 bytes geldt.
+
+## Wie kan een Blocknet-memo lezen?
+
+<Answer>
+De verzender en de ontvanger. Elke memo wordt versleuteld met het geheim dat de twee wallets voor die output delen, hetzelfde geheim dat het eenmalige stealth-adres van de ontvanger maakt. Ieder ander, ook node-operators en block explorers, ziet 128 bytes aan willekeurig ogende gegevens en kan niet zien of er een notitie in zit.
+</Answer>
+
+Als je wallet een betaling opbouwt, combineert hij een nieuwe willekeurige transactiesleutel met de publieke view key van de ontvanger tot een gedeeld geheim. Dat geheim maakt het [eenmalige stealth-adres](/nl/blog/blocknet-privacy-features/) van de ontvanger, en de wallet gebruikt het ook om de memo te versleutelen. Hij hasht het geheim met SHA3-256, samen met de positie van de output in de transactie en de identificatie van het netwerk, tot een masker van 128 bytes, en combineert dat masker met de memo. Elke output krijgt een eigen masker, dus twee memo's in dezelfde transactie worden apart versleuteld.
+
+De wallet van de ontvanger vindt hetzelfde geheim van de andere kant, met zijn privé view key, terwijl hij elk blok scant. Hij ontsleutelt de memo en slaat hem op bij de betaling. Aan jouw kant bewaart de wallet de memo's die je hebt geschreven in de verzendgeschiedenis.
+
+Twee punten om te weten:
+
+- **Een view-only wallet toont ook memo's.** Je privé view key leest binnenkomende betalingen, dus een view-only wallet die daarmee is gemaakt, ziet het bedrag en de memo van elke betaling. Deel die sleutel alleen met mensen die je binnenkomende betalingen mogen zien.
+- **Miningbeloningen hebben lege memo's.** De consensus vereist dat de memo bij elke blokbeloning leeg is, zodat de coinbase-outputs van de chain nooit als openbaar berichtenkanaal kunnen worden gebruikt.
+
+## Waarom elke memo er op de chain hetzelfde uitziet
+
+Een memo die zijn lengte toont, zou iets verraden. Een notitie van 30 bytes ziet er anders uit dan een van 100 bytes, en een lege memo zou van allebei afsteken. De wallet van Blocknet dicht dat gat met een vaste indeling en willekeurige opvulling.
+
+Voor het versleutelen verpakt de wallet de memo in een envelop van 128 bytes:
+
+| Bytes | Inhoud |
+|---|---|
+| 1 | Versie van de envelop |
+| 1 | Lengte van je memo |
+| 2 | Checksum van de memo |
+| 0 tot 124 | Je memo |
+| De rest | Willekeurige opvulling |
+
+De opvulling komt uit de cryptografische randomgenerator van het systeem, dus de ongebruikte ruimte is onvoorspelbaar. Na versleuteling zijn een korte notitie, een volle notitie en een lege memo allemaal 128 bytes aan willekeurig ogende gegevens. Wisselgeldoutputs krijgen een eigen lege, opgevulde memo, dus zelfs de munten die je naar jezelf terugstuurt, vallen niet op.
+
+Met de checksum kan de wallet van de ontvanger bevestigen dat hij de memo goed heeft ontsleuteld voordat hij hem toont. Nodes weigeren ook elk blok met een output waarvan het memoveld helemaal uit nullen bestaat, dus elke output op de chain heeft een correct gevulde memo.
+
+## Waar je ontvangen memo's vindt
+
+De commandline-wallet toont memo's overal waar hij betalingen opsomt:
+
+- **`history`** toont binnenkomende en uitgaande betalingen, met een regel `memo:` onder elke betaling die er een had.
+- **`outputs tx <txid>`** toont elke output die je wallet in die transactie bezit, inclusief memo. `outputs <n>` doet hetzelfde voor één output uit de lijst.
+- **De wallet-API** geeft de memo van elke ontvangen output terug als `memo_hex` via `GET /api/wallet/history`, klaar om door een ordersysteem met facturen te worden vergeleken.
+
+Tekstmemo's verschijnen tussen aanhalingstekens. Een memo die geen afdrukbare tekst is, zoals ruwe bytes die met `hex:` zijn verstuurd, verschijnt als hex.
+
+Moet een betaling ooit worden afgehandeld, dan kan de verzender hem bewijzen. Het commando `prove <txid>` van de wallet toont de transactiesleutel van een betaling die je hebt verstuurd. Iedereen met die sleutel, de transactie-ID en het adres van de ontvanger kan de betaling controleren via het endpoint `POST /api/verify-proof`, waarvoor geen wallet nodig is. Het bevestigt de transactie en toont de outputs die dat adres heeft ontvangen, met hun bedragen en hun memo's.
+
+## Verdien de BNT die je gaat versturen
+
+Een eenvoudige manier om je eerste BNT te krijgen, is ze te minen. seine draait op je eigen computer, stemt zichzelf af terwijl het minet en betaalt via bntpool.com rechtstreeks uit naar je adres of je `@name`. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) laat het binnen een paar minuten draaien.
+
+<CTA target="seine" title="Download seine en mine BNT" text="Mine Blocknet op je eigen computer zonder enige configuratie en betaal daarna vanuit je wallet met privé betalingen met memo." />

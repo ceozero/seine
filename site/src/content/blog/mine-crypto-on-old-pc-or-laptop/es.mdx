@@ -1,0 +1,118 @@
+---
+title: Cómo minar criptomonedas en un PC o portátil antiguo
+description: 'Mina criptomonedas en un PC o portátil antiguo: por qué importan la RAM, la refrigeración y el consumo, cuántos hilos admite tu memoria y cómo empezar con seguridad.'
+tags: [Guía de minería, Portátil, Minería con CPU, Hardware]
+faq:
+  - q: '¿Puede un portátil con 8 GB de RAM minar criptomonedas?'
+    a: 'Sí, en una moneda intensiva en memoria como Blocknet. Cada hilo de minería de Blocknet necesita unos 2 GB de RAM libre, así que un portátil de 8 GB suele ejecutar unos dos hilos después de que el sistema operativo tome su parte. seine mide tu memoria libre al iniciarse y elige por ti un número de hilos seguro.'
+  - q: '¿Es seguro minar criptomonedas en un portátil antiguo?'
+    a: 'Sí, con buena ventilación. Minar mantiene ocupado el procesador, igual que exportar un video largo o jugar, y los procesadores reducen su velocidad por sí solos cuando se calientan demasiado. Mantén limpias las rejillas, pon el portátil sobre una superficie dura y usa el perfil de eficiencia de seine si quieres menos calor y ruido.'
+  - q: '¿Funciona seine en procesadores sin AVX2?'
+    a: 'Sí. Las versiones x86 de seine incluyen un kernel portable que funciona en cualquier procesador x86 de 64 bits, junto con kernels AVX2 y AVX-512 para los chips que los admiten. seine comprueba qué conjuntos de instrucciones admite tu procesador y elige el kernel adecuado, y compara kernels mientras mina en los chips que tienen tanto AVX2 como AVX-512.'
+  - q: '¿Cuánta electricidad gasta minar en un PC antiguo?'
+    a: 'Depende de la máquina. Mídelo con un medidor de consumo de enchufe mientras seine funciona; luego multiplica los vatios por 24 y divide entre 1000 para obtener los kilovatios hora al día. Multiplica eso por tu tarifa eléctrica para saber el coste diario y compáralo con las monedas que esperas obtener al día.'
+sourceHash: 6643bf6169d4
+translation: reviewed
+---
+
+Esta guía te enseña a poner a minar criptomonedas un PC de escritorio o un portátil antiguo: qué determina si una máquina puede minar, cuántos hilos de minería admite su memoria, cómo mantenerla fresca y cómo empezar con seguridad con seine en bntpool.com.
+
+## ¿Se pueden minar criptomonedas en un PC o portátil antiguo?
+
+<Answer>
+Sí, si eliges una moneda cuya prueba de trabajo se adapte a las computadoras normales. Las monedas intensivas en memoria como Blocknet se minan con procesadores y RAM normales, así que un PC de escritorio o un portátil antiguo puede unirse a un pool y ganar una parte de cada bloque. La RAM decide cuántos hilos ejecutas, y la refrigeración hace que sigan funcionando.
+</Answer>
+
+Las monedas se diferencian en lo que premia su prueba de trabajo. El SHA-256 de Bitcoin se mina casi por completo con ASIC, chips fabricados para ese único hash, así que una computadora de uso general aporta poco ahí. Los diseños intensivos en memoria funcionan al revés. RandomX, de Monero, está hecho para CPU de uso general, y Blocknet usa Argon2id con un bloque de memoria de 2 GiB por cada hash, un enfoque diseñado para resistir a los ASIC. En una moneda como Blocknet, las piezas que ya tiene cualquier computadora, un procesador y RAM, son las que minan. La guía de [minería con CPU en 2026](/es/blog/cpu-mining-2026/) explica qué buscar en una moneda que se mina con procesador.
+
+La [explicación de Argon2id](/es/blog/argon2id-proof-of-work-explained/) cuenta cómo esa prueba de trabajo llena y lee su memoria, y por qué el ancho de banda de memoria marca el ritmo.
+
+## ¿Qué importa más en el hardware antiguo?
+
+Cuatro factores deciden lo bien que mina una máquina antigua una moneda intensiva en memoria:
+
+- **RAM.** Cada hilo de minería de Blocknet ocupa su propio bloque de memoria de 2 GiB mientras calcula hashes, así que la RAM libre determina cuántos hilos caben.
+- **Ancho de banda de memoria.** Cada hash escribe 2 GiB y vuelve a leer datos de todo ese bloque, así que el sistema de memoria hace la mayor parte del trabajo. La memoria de doble canal (dos módulos iguales) ayuda a un PC de escritorio antiguo.
+- **Refrigeración.** Minar mantiene ocupado el procesador durante horas. Un procesador fresco mantiene su velocidad de reloj, y uno caliente se ralentiza para protegerse.
+- **Consumo.** Minar consume energía de forma constante, así que un medidor de consumo y tu tarifa eléctrica te dicen lo que cuesta mantener la máquina en marcha.
+
+El número de núcleos importa menos de lo que podrías pensar. Un PC de escritorio de cuatro núcleos con 16 GB de RAM puede ejecutar más hilos que un portátil de ocho núcleos con 8 GB, porque la RAM se agota antes.
+
+## ¿Cuánta RAM necesita cada hilo de minería?
+
+<Answer>
+Cada hilo de minería de Blocknet necesita unos 2 GB de RAM libre, porque cada hash llena su propio bloque de memoria de 2 GiB. Divide tu memoria libre entre dos para estimar los hilos. seine lo hace al iniciarse, reserva un 5% de la RAM y limita el número a los núcleos lógicos de tu procesador.
+</Answer>
+
+El dimensionado automático de seine toma la RAM libre al iniciarse, resta una reserva del 5%, divide entre 2 GiB y usa ese número o el número de núcleos lógicos del procesador, el que sea menor. Este es el cálculo para tamaños habituales, suponiendo que el sistema operativo y algunas aplicaciones en segundo plano usan unos 2-3 GB:
+
+| RAM | Bloques de memoria sobre el papel | Hilos que puede ejecutar seine, aproximadamente |
+|---|---|---|
+| 4 GB | 2 | 1, si el sistema deja 2 GB libres |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Cierra el navegador y otras aplicaciones grandes antes de iniciar seine, y su dimensionado verá más memoria libre. Si abres aplicaciones mientras mina, seine comprueba la RAM libre cada segundo, deja que los hilos terminen su hash actual y se aparquen, y los recupera cuando se libera memoria. Puedes seguir usando la computadora.
+
+Añadir RAM es la mejora más directa para un PC de escritorio antiguo: cada 2 GB adicionales de memoria libre dan espacio para un hilo más, hasta tu número de núcleos. La [guía de hardware](/es/blog/blocknet-mining-hardware-hashrate/) incluye tasas de hash medidas y el dimensionado para máquinas más grandes.
+
+## ¿Sigue sirviendo un procesador antiguo?
+
+Sí. Las versiones x86 de seine llevan un kernel portable que funciona en cualquier procesador x86 de 64 bits, además de kernels AVX2 y AVX-512. AVX2 llegó con los procesadores Haswell de Intel en 2013 y con Excavator de AMD en 2015, y el kernel AVX2 de seine se ha medido en chips de servidor Haswell y Broadwell. Los procesadores sin AVX2 usan el kernel portable. Las versiones para Arm llevan NEON con una ruta rápida SHA3. seine comprueba lo que admite tu procesador y compara kernels mientras mina, y solo cambia tras confirmar una mejora.
+
+Hay descargas para la mayoría de las máquinas que podrías encontrar en un armario:
+
+| Sistema | Archivo |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 o posterior) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+Si el PC tiene una tarjeta gráfica NVIDIA, las versiones para Windows y Linux también la prueban y minan con ella junto al procesador. Si la tarjeta no puede arrancar, seine sigue minando con el procesador. En un MacBook con Apple Silicon, seine mina con el procesador de forma predeterminada; la [guía para Mac](/es/blog/mine-blocknet-on-mac/) explica el número de hilos según la memoria del Mac.
+
+## ¿Cómo mantener fresco un portátil mientras mina?
+
+Unos pocos hábitos mantienen un portátil a plena velocidad:
+
+- **Dale aire.** Ponlo sobre una mesa o un soporte para portátil y mantén despejadas las rejillas. Quitar el polvo del ventilador y el disipador de una máquina antigua puede recuperar la velocidad perdida.
+- **Mantenlo enchufado.** Minar con batería la agota rápidamente, y muchos portátiles funcionan más despacio con batería.
+- **Impide que entre en reposo.** La minería se detiene mientras la computadora está en reposo, así que configura el plan de energía para que no se suspenda mientras esté enchufado.
+- **Ejecuta menos hilos para generar menos calor.** Inicia seine con el perfil de eficiencia:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+El perfil predeterminado se queda con el menor número de hilos que alcanza el 99% de la mejor tasa de hash que mide. El perfil de eficiencia mantiene el menor número de hilos que alcanza el 75% de esa mejor tasa de hash, así que la máquina funciona más fresca y silenciosa. También puedes fijar un número con `--threads 2`, o pulsar `-` y `+` en el panel para quitar o añadir un hilo mientras funciona.
+
+## ¿Cómo empezar a minar con seguridad?
+
+1. **Consigue una dirección de billetera.** Instala la billetera oficial de Blocknet en tu computadora principal y copia tu dirección. La [guía de la billetera](/es/blog/blocknet-wallet-for-mining/) te lo explica paso a paso. El minero solo necesita tu dirección, así que no guardes la billetera ni su frase de recuperación en la máquina que dedicas a minar.
+2. **Descarga seine desde la versión oficial.** Consíguelo en la [sección de descargas](/es/#download). Cada versión publica un archivo `SHA256SUMS.txt` para que puedas comprobar que el archivo coincide.
+3. **Ejecútalo.** En Windows, haz doble clic en `seine.exe`. En macOS o Linux, ejecuta `./seine` en la carpeta descomprimida.
+4. **Escribe tu dirección y acepta el pool predeterminado.** Pega tu dirección o tu `@name` y pulsa Intro para usar `stratum+tcp://bntpool.com:3333`.
+5. **Mira el panel.** Tu tasa de hash y tus primeros shares aparecen en unos instantes, y seine sigue ajustando hilos y kernels mientras mina.
+
+La [guía de minería paso a paso](/es/blog/how-to-mine-blocknet/) cubre los mismos pasos y explica los pagos con más detalle. Para medir la máquina sin conectarte antes a un pool, ejecuta la prueba de rendimiento sin conexión:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## ¿Por qué minar en un pool con una máquina pequeña?
+
+Un pool te paga por tu parte del trabajo en cada bloque que encuentra, así que a una máquina pequeña se le paga con cada bloque del pool en lugar de tener que esperar a encontrar un bloque entero por sí misma. La guía sobre [cómo funciona la minería de criptomonedas](/es/blog/how-crypto-mining-works/) explica los pools y los shares con más detalle. En bntpool.com, las recompensas se reparten entre los shares enviados en las seis horas anteriores a cada bloque, y tu saldo se paga cuando llega a 0,1 BNT. Puedes seguir tu tasa de hash y tu saldo buscando tu dirección o tu `@name` en [bntpool.com](https://bntpool.com).
+
+Para estimar tu producción, usa la tasa de hash de la red que muestra el panel de bntpool.com. Con bloques de cinco minutos, Blocknet encuentra 288 bloques al día, así que tu parte diaria esperada de las monedas nuevas de la red es 288 × (tus H/s ÷ H/s de la red) × la recompensa de bloque, que baja cada mes.
+
+Después calcula lo que cuesta mantener la máquina en marcha. Mídela con un medidor de consumo de enchufe mientras seine mina. Una máquina que consume 65 W las 24 horas usa 65 × 24 = 1560 Wh, o 1,56 kWh al día; multiplícalo por tu tarifa eléctrica. Comparar las dos cifras te da la imagen completa para tu máquina.
+
+<Note>
+Estas cifras corresponden a la prueba de trabajo Argon2id actual de Blocknet. Según [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet planea una actualización de red llamada Faraday hacia el 16 de febrero de 2027 que traerá una prueba de trabajo más ligera. Mantén seine actualizado: busca nuevas versiones al iniciarse y cada 12 horas.
+</Note>
+
+<CTA target="seine" title="Pon a trabajar tu PC antiguo" text="seine ajusta sus hilos a tu RAM y se optimiza solo mientras mina. Descárgalo, pega tu dirección y empieza a minar en bntpool.com." />

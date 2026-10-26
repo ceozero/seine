@@ -82,6 +82,13 @@ pub(super) fn handle_runtime_backend_event(
             backend,
             message,
         } => {
+            if matches!(mode, RuntimeMode::Mining) {
+                crate::diagnostics::record(
+                    seine_telemetry::DiagnosticCode::BackendWarning,
+                    crate::diagnostics::classify(&message),
+                    Some(backend),
+                );
+            }
             let tag = match mode {
                 RuntimeMode::Mining => "BACKEND",
                 RuntimeMode::Bench => "BENCH",
@@ -94,6 +101,13 @@ pub(super) fn handle_runtime_backend_event(
             backend,
             message,
         } => {
+            if matches!(mode, RuntimeMode::Mining) {
+                crate::diagnostics::record(
+                    seine_telemetry::DiagnosticCode::BackendError,
+                    crate::diagnostics::classify(&message),
+                    Some(backend),
+                );
+            }
             match mode {
                 RuntimeMode::Mining => {
                     error(

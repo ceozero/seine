@@ -1,0 +1,103 @@
+---
+title: Cách đào Blocknet
+description: 'Bắt đầu đào Blocknet trên Windows, macOS hoặc Linux chỉ trong vài phút: chuẩn bị địa chỉ, tải seine và đào trên bntpool.com bằng CPU và GPU NVIDIA.'
+tags: [Hướng dẫn đào coin, Blocknet, Argon2id, bntpool]
+faq:
+  - q: 'Cần bao nhiêu RAM để đào Blocknet?'
+    a: 'Mỗi luồng đào cần khoảng 2 GB RAM, vì mỗi lần băm Argon2id phải xử lý một khối bộ nhớ 2 GiB. Vì vậy, một máy có 16 GB có thể chạy khoảng sáu đến bảy luồng sau khi chừa chỗ cho hệ thống. seine đo bộ nhớ của bạn và tự động chọn số luồng an toàn.'
+  - q: 'Khi nào nhận được thanh toán khi đào Blocknet trên bntpool.com?'
+    a: 'Pool bntpool.com trả theo PPLNS với cửa sổ sáu giờ. Phần thưởng của một khối chỉ được trả khi khối đó đã sâu 60 khối, khoảng năm giờ với thời gian khối năm phút, và số dư được gửi khi đạt 0,1 BNT. Khoản thanh toán đầu tiên thường đến vài giờ sau khi những share đầu tiên của bạn được chấp nhận.'
+  - q: 'Có thể đào Blocknet bằng CPU và GPU cùng lúc không?'
+    a: 'Có. Trên Windows và Linux, seine đào trên mọi nhân CPU và mọi card đồ họa NVIDIA trong máy cùng một lúc, và hashrate của hai bên được cộng dồn. Nó tinh chỉnh bộ xử lý và từng card riêng biệt trong khi chạy, nên bạn khai thác tối đa toàn bộ phần cứng mà không phải thay đổi thiết lập nào.'
+sourceHash: ad835df628e2
+translation: draft
+---
+
+Hướng dẫn này đưa bạn từ lúc tải **seine** đến những share đầu tiên được chấp nhận và các khoản thanh toán trên pool bntpool.com, trên Windows, macOS hoặc Linux. Mới làm quen với đào coin? Bài [Đào coin hoạt động như thế nào](/vi/blog/how-crypto-mining-works/) giải thích trước về khối, độ khó và pool.
+
+## Làm thế nào để đào Blocknet?
+
+<Answer>
+Chuẩn bị một địa chỉ Blocknet hoặc một tên ngắn Blocknet ID, tải seine cho hệ thống của bạn, chạy nó và dán địa chỉ khi được hỏi. Chấp nhận pool mặc định là bntpool.com, vậy là bạn đã bắt đầu đào. seine bắt đầu băm ngay lập tức và tiếp tục tinh chỉnh số luồng và kernel CPU trong khi chạy.
+</Answer>
+
+## Bạn cần chuẩn bị gì trước khi bắt đầu?
+
+- **Một địa chỉ Blocknet.** Cài ví Blocknet chính thức, gồm [ví dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) hoặc [ví desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), rồi sao chép địa chỉ của bạn. [Hướng dẫn về ví](/vi/blog/blocknet-wallet-for-mining/) hướng dẫn từng bước. Hãy giữ ví và cụm từ khôi phục trên máy tính của riêng bạn; đừng để chúng trên một dàn máy đào dùng chung.
+- **Hoặc một tên ngắn.** Nếu bạn có [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) từ [blocknet.id](https://blocknet.id), bạn có thể đào về `@name` thay vì dán địa chỉ dài.
+- **Khoảng 2 GB RAM cho mỗi luồng đào.** seine tự điều chỉnh theo máy của bạn và chừa khoảng trống cho hệ thống, nên bạn không cần tính trước.
+- **Windows, macOS hoặc Linux.** Trên Windows và Linux, card đồ họa NVIDIA được dùng tự động khi đã cài driver mới.
+
+## Bước 1: tải seine
+
+Tải gói nén cho hệ thống của bạn từ [mục tải xuống](/vi/#download). Không cần cài đặt gì: giải nén là dùng được.
+
+| Hệ thống | Gói nén | Card đồ họa |
+|---|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; đã kèm CUDA runtime |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, khi đã cài driver |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 trở lên) |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
+
+Mỗi bản phát hành cũng có tệp `SHA256SUMS.txt`, để bạn kiểm tra tệp đã tải có khớp với bản phát hành hay không.
+
+## Bước 2: chạy chương trình
+
+Trên Windows, nhấp đúp vào `seine.exe`. Trên macOS hoặc Linux, mở terminal trong thư mục đã giải nén và chạy:
+
+```sh
+./seine
+```
+
+## Bước 3: nhập địa chỉ và bắt đầu đào
+
+seine hỏi địa chỉ nhận thanh toán hoặc `@shortname` của bạn, sau đó hỏi pool. Nhấn Enter để chấp nhận mặc định, `stratum+tcp://bntpool.com:3333`. Chỉ trong giây lát, [bảng điều khiển](/vi/blog/seine-dashboard-explained/) sẽ hiển thị hashrate và những share đầu tiên của bạn.
+
+Từ đây seine tiếp tục tinh chỉnh trong khi đào. Nó so sánh các số luồng và kernel CPU trên công việc đào thực tế, chỉ chuyển đổi sau khi đã xác nhận có cải thiện, giảm bớt nếu bộ nhớ bị chật, và ghi nhớ thiết lập hiệu quả cho lần khởi động sau. Nó không bao giờ phải kết nối lại pool để làm việc này, nên việc tinh chỉnh không làm bạn mất thời gian đào.
+
+## Bao lâu thì bạn nhận được thanh toán?
+
+Pool bntpool.com dùng PPLNS: phần thưởng của mỗi khối được chia cho các share đã gửi trong sáu giờ trước khi khối được tìm thấy. Phần thưởng chỉ có thể chi tiêu khi khối của nó đã sâu 60 khối, tức khoảng năm giờ với thời gian khối năm phút của Blocknet. Khi số dư đã xác nhận của bạn đạt 0,1 BNT, pool sẽ gửi nó về địa chỉ của bạn.
+
+Bạn có thể theo dõi hashrate, share và số dư trên [bntpool.com](https://bntpool.com) bằng cách tra cứu địa chỉ của mình. Pool hiển thị riêng phần thưởng từ các khối chưa được xác nhận, vì những phần thưởng đó vẫn có thể thay đổi.
+
+## Máy tính của bạn sẽ đào nhanh đến đâu?
+
+Hashrate phụ thuộc chủ yếu vào băng thông bộ nhớ và số luồng mà RAM của bạn cho phép. Đây là kết quả tốt nhất đo được với seine cho từng thế hệ:
+
+| Phần cứng | Luồng | Hashrate |
+|---|---|---|
+| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| Máy chủ Arm (AWS Graviton4) | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
+| Apple M4 Max (MacBook Pro 48 GB) | 16 | 30,9 H/s |
+| Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Kết quả của mọi CPU đã thử nghiệm có trên [trang hiệu năng](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), và [hướng dẫn phần cứng đào Blocknet](/vi/blog/blocknet-mining-hardware-hashrate/) giải thích cách RAM và băng thông bộ nhớ quyết định những con số này.
+
+## seine làm thế nào để khai thác nhiều hơn từ cùng một CPU?
+
+seine đi kèm nhiều kernel Argon2id cho mỗi dòng bộ xử lý và đo chúng trên máy của bạn trong khi đào. Trên phần cứng chúng tôi đã thử, chọn đúng kernel tạo ra khác biệt lớn:
+
+- **AWS Graviton4:** kernel SHA3 có prefetch đào nhanh hơn 56% so với NEON thông thường (từ 13,80 lên 21,50 H/s).
+- **AMD EPYC 9R45 (Zen 5):** kernel streaming đào nhanh hơn 30% so với AVX2 (từ 34,47 lên 44,74 H/s ở 24 luồng).
+
+Bạn không phải chọn bất kỳ điều gì trong số này. seine chỉ chuyển kernel sau khi đã xác nhận có cải thiện và ghi nhớ kết quả cho lần khởi động sau.
+
+## Làm sao để tăng hashrate?
+
+- **Đào bằng CPU và GPU cùng lúc.** seine làm điều này theo mặc định trên Windows và Linux, và hashrate của hai bên được cộng dồn.
+- **Dành sẵn huge pages trên Linux và WSL.** Dùng trang 2 MiB cho bộ nhớ của mỗi luồng giúp tăng khoảng 4–6% trên máy kiểm thử, và trang 1 GiB tăng thêm khoảng 2%. [Hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) có sẵn các lệnh.
+- **Để máy chủ lớn tự phân bổ.** Trên Linux, seine tự động phân bổ luồng trên các node NUMA và nhóm cache. [Hướng dẫn máy chủ lớn](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) trình bày chi tiết.
+- **Chỉ đào bằng CPU trên Apple Silicon.** Đây là lựa chọn nhanh nhất trên máy Mac dòng M, và cũng là điều seine làm theo mặc định.
+
+## Có thể đào Blocknet solo không?
+
+Có. Nếu bạn chạy node Blocknet của riêng mình đã đồng bộ, hãy khởi động seine bằng `./seine --mode daemon` và nó sẽ đào trực tiếp với node thay vì pool. Bạn giữ trọn mọi khối tìm được, nhưng chỉ nhận thanh toán khi tìm được nguyên một khối, nên phần lớn mọi người bắt đầu với pool. [Hướng dẫn đào solo](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md) giải thích cách thiết lập.
+
+<Note>
+Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến nâng cấp mạng lưới mang tên Faraday vào khoảng 2027-02-16. Bản nâng cấp này dự kiến thay đổi Proof of Work, vì vậy hãy luôn cập nhật seine: nó kiểm tra bản phát hành mới khi khởi động và mỗi 12 giờ.
+</Note>
+
+<CTA target="seine" title="Tải seine" text="Miễn phí cho Windows, macOS và Linux. Chạy chương trình, dán địa chỉ của bạn là bắt đầu đào trên bntpool.com." />

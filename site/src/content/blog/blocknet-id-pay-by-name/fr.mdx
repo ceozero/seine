@@ -1,0 +1,104 @@
+---
+title: 'Recevez vos paiements sur @name avec Blocknet ID'
+description: 'Réservez un nom court sur blocknet.id : recevez des BNT, partagez des liens de paiement et minez sur bntpool.com avec @name au lieu d''une adresse de plus de 90 caractères.'
+tags: [Blocknet ID, Portefeuille, Paiements, bntpool]
+faq:
+  - q: 'Les noms courts Blocknet ID sont-ils sensibles à la casse ?'
+    a: 'Non. Un nom court n''est pas sensible à la casse : @Alice, @alice et $ALICE mènent tous au même portefeuille. Les noms utilisent les lettres de a à z, les chiffres de 0 à 9, le tiret bas, le trait d''union et le point, et peuvent compter jusqu''à 64 caractères. Les préfixes @ et $ fonctionnent tous deux partout où un nom est accepté.'
+  - q: 'Un Blocknet ID est-il gratuit ?'
+    a: 'En octobre 2026, les noms de neuf caractères ou plus sont gratuits tant que dure la promotion de blocknet.id, sans facture ni paiement. Les noms plus courts ont un prix unique qui augmente à mesure que le nom raccourcit, à partir de 100 BNT pour huit caractères. La page des tarifs de blocknet.id indique le prix pour chaque longueur.'
+  - q: 'Puis-je miner vers un nom court Blocknet ID sur bntpool.com ?'
+    a: 'Oui. Saisissez votre @name quand seine demande une adresse de paiement, ou passez-le avec --address. seine vérifie l''enregistrement signé sur blocknet.id, affiche l''adresse complète obtenue et mine vers cette adresse pendant toute la session. Les noms courts nécessitent seine v0.2.16 ou plus récent, et bntpool.com les accepte aussi à la connexion.'
+  - q: 'Qu''advient-il de mon solde sur le pool si je fais pointer mon nom vers une nouvelle adresse ?'
+    a: 'Votre solde existant reste attaché à l''adresse qui l''a gagné, et bntpool.com le verse sur cette adresse comme d''habitude. Le pool suit les shares, les soldes et les paiements par adresse complète, donc un changement de nom ne redirige jamais un solde existant. Au prochain démarrage du minage, le nom est résolu à nouveau et les nouveaux shares vont vers la nouvelle adresse.'
+sourceHash: ec25796b2073
+translation: draft
+---
+
+Avec un nom court Blocknet ID, on peut vous payer sur `@yourname`, vous pouvez partager un lien de paiement qui tient dans un message de chat, et vous pouvez miner sur bntpool.com vers ce même nom. Ce guide explique comment fonctionnent les noms, comment en réserver un sur blocknet.id et comment l'utiliser dans le portefeuille et dans seine.
+
+## Qu'est-ce qu'un nom court Blocknet ID ?
+
+<Answer>
+Un nom court Blocknet ID est un nom bref, comme @alice ou $alice, qui pointe vers l'adresse de votre portefeuille Blocknet. Vous l'enregistrez sur blocknet.id. Les portefeuilles, seine et bntpool.com recherchent le nom, vérifient que blocknet.id a signé l'enregistrement, puis utilisent l'adresse complète à laquelle il correspond.
+</Answer>
+
+Les règles sont les mêmes partout où un nom est accepté :
+
+- **Deux préfixes.** `@name` et `$name` désignent le même nom. Utilisez celui que vous préférez.
+- **Insensible à la casse.** `@Alice` et `@alice` mènent à la même adresse.
+- **Caractères simples.** Lettres de a à z, chiffres de 0 à 9, tiret bas, trait d'union et point.
+- **Jusqu'à 64 caractères.**
+
+Chaque enregistrement sur blocknet.id est signé. Quand le portefeuille résout un nom, il récupère l'enregistrement, puis vérifie sa signature Ed25519 avec la clé de signature que blocknet.id publie à l'adresse `https://blocknet.id/.well-known/blocknet-id.json`. Les données signées contiennent le nom, l'adresse et la date de dernière mise à jour, et le portefeuille confirme que les trois correspondent avant d'utiliser l'adresse. Chaque nom a aussi une page publique sur blocknet.id qui affiche son adresse, les données signées et la signature, pour que chacun puisse vérifier un enregistrement par lui-même.
+
+## Pourquoi payer un nom plutôt qu'une adresse ?
+
+Une adresse Blocknet est l'encodage base58 de votre clé de dépense publique, de votre clé de visualisation publique et d'une somme de contrôle, soit 92 ou 93 caractères. C'est beaucoup à copier d'une application à l'autre, à lire à voix haute ou à faire tenir dans un profil. Un nom court se dit dans une phrase, s'imprime sur un autocollant ou se place dans une bio.
+
+Vous bénéficiez aussi d'une étape de confirmation claire. Quand vous envoyez vers un nom, le portefeuille affiche l'adresse obtenue et la marque comme vérifiée avant que vous approuviez le paiement. Le nom ne fait que remplacer l'adresse que vous auriez partagée de toute façon. Sur la chaîne, le paiement est une transaction Blocknet normale vers une [adresse furtive à usage unique](/fr/blog/blocknet-privacy-features/) : il reste donc aussi confidentiel que n'importe quel autre paiement.
+
+## Comment obtenir un Blocknet ID ?
+
+<Answer>
+Copiez l'adresse de votre portefeuille, ouvrez blocknet.id et recherchez le nom que vous voulez. S'il est disponible, le site affiche son prix ; collez votre adresse et validez. Les noms de neuf caractères ou plus sont gratuits pendant la promotion en cours. Une fois enregistré, votre nom fonctionne dans les portefeuilles, dans seine et sur bntpool.com.
+</Answer>
+
+1. **Copiez votre adresse.** Dans le portefeuille en ligne de commande, la commande `address` l'affiche, suivie de la ligne « Get a short name like @name or $name at https://blocknet.id ». Téléchargez le portefeuille depuis les [versions en ligne de commande](https://github.com/blocknetprivacy/blocknet/releases/latest) ou les [versions de bureau](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Recherchez un nom.** Rendez-vous sur [blocknet.id](https://blocknet.id), tapez un nom dans le champ « find a name » et appuyez sur Search. Pendant la saisie, la page vous indique si un caractère n'est pas autorisé ou si le nom est trop long.
+3. **Vérifiez le résultat.** Un nom disponible affiche son prix. Un nom déjà enregistré affiche son adresse, la date de sa dernière mise à jour et un lien vers sa page publique.
+4. **Enregistrez-le.** Collez l'adresse de votre portefeuille et appuyez sur « Claim free » (ou « Register » pour un nom payant).
+
+Le tarif est un paiement unique qui dépend de la longueur du nom. Au moment de la rédaction (octobre 2026), tous les noms de neuf caractères ou plus sont gratuits dans le cadre d'une promotion, « no invoice, no payment » (sans facture ni paiement) selon les termes du site. Les noms de huit caractères coûtent 100 BNT, et les noms plus courts coûtent davantage, jusqu'à 6 000 BNT pour un seul caractère. La [page des tarifs](https://blocknet.id/pricing) détaille chaque longueur.
+
+Pour gérer vos noms par la suite, utilisez « sign in » sur blocknet.id avec votre adresse Blocknet. C'est sur la page de gestion que vous faites pointer un nom vers une autre adresse.
+
+## Comment envoyer des BNT à un nom ?
+
+Dans le portefeuille en ligne de commande, mettez le nom à la place de l'adresse :
+
+```
+send @rock 100 "hello"
+```
+
+Le portefeuille résout `@rock`, affiche `Resolved @rock -> <address>` avec une marque de vérification, puis vous demande de confirmer. La confirmation affiche le nom, l'adresse complète, les frais et votre mémo. La forme `$rock` fonctionne de la même façon, et `send` accepte des montants entiers ou décimaux.
+
+L'API du portefeuille résout les noms de la même manière pour chaque destinataire d'une requête d'envoi : les outils construits sur le portefeuille gèrent donc les paiements par nom sans travail supplémentaire.
+
+## Comment fonctionnent les liens de paiement avec un nom ?
+
+Un [lien de paiement](/fr/blog/blocknet-payment-links/) transporte le destinataire, le montant et un mémo facultatif. Blocknet prend en charge deux formes :
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+Le lien bntpay.com accepte un nom à la place d'une adresse, il reste donc court. En l'ouvrant, on obtient une page avec « Pay $yourname », le montant et le mémo, ainsi qu'un bouton « Open in Wallet » qui ouvre le paiement sous forme de lien `blocknet://`. Si vous collez l'une ou l'autre forme dans le portefeuille en ligne de commande, il prépare un envoi que vous n'avez plus qu'à confirmer. Incluez le champ `amount` ; le mémo est facultatif et contient jusqu'à 124 octets de texte.
+
+Il devient ainsi facile de publier un seul lien pour les pourboires ou d'envoyer une facture en un seul message.
+
+## Comment miner vers votre @name ?
+
+seine et bntpool.com acceptent tous deux un nom court comme adresse de paiement. Quand vous lancez [seine](/fr/#download) pour la première fois, saisissez `@yourname` à la demande d'adresse et acceptez le pool par défaut. Pour le passer en ligne de commande, mettez-le entre guillemets :
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Mettez les noms courts entre guillemets dans les commandes shell, surtout la forme `$name`, pour que le shell les transmette sans modification. Les noms courts nécessitent seine v0.2.16 ou plus récent.
+</Note>
+
+Voici ce qui se passe ensuite :
+
+- **seine résout le nom au démarrage.** Il vérifie l'enregistrement signé de blocknet.id, contrôle l'adresse, inscrit dans le journal l'adresse complète obtenue et conserve cette adresse pendant toute la session, y compris lors des reconnexions au pool.
+- **Le pool accepte aussi les noms à la connexion.** bntpool.com vérifie la correspondance signée quand un mineur se connecte avec un nom, et utilise l'adresse complète obtenue pour les jobs, les shares, les soldes et les paiements.
+- **Vous pouvez vous retrouver par votre nom.** La page de statistiques de [bntpool.com](https://bntpool.com) accepte `@name` et `$name` : vous pouvez suivre votre hashrate et votre solde sans coller l'adresse.
+- **Un nom enregistré est résolu à nouveau à chaque lancement.** seine stocke le nom dans sa configuration, si bien que chaque nouveau démarrage récupère l'adresse vers laquelle pointe votre nom à ce moment-là.
+
+Comme les soldes appartiennent à l'adresse complète, un changement de nom ultérieur ne redirige jamais un solde existant. Tout ce que vous avez déjà gagné reste attaché à l'adresse qui l'a gagné et y est versé, tandis que le nouveau minage va vers la nouvelle adresse. Le même nom fonctionne aussi en mode solo avec votre propre nœud.
+
+Vous débutez dans le minage ? Le [guide pour miner Blocknet](/fr/blog/how-to-mine-blocknet/) vous accompagne pour télécharger seine, choisir le matériel et recevoir vos paiements sur bntpool.com.
+
+<CTA target="pool" title="Minez vers votre @name" text="bntpool.com accepte votre nom court Blocknet ID comme identifiant de paiement. Commencez à miner en quelques minutes." />

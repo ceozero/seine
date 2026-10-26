@@ -1,0 +1,159 @@
+---
+title: 用大分頁記憶體加快 Blocknet 挖礦
+description: 在 Linux 與 WSL 上預留大分頁，或在 Windows 上啟用大型分頁，讓 seine 以更少的 TLB 未命中對應每塊 2 GiB 的 Argon2id 區域，更快地挖 Blocknet。
+tags: [挖礦指南, 大分頁記憶體, Linux, Windows, 效能]
+faq:
+  - q: '用 seine 挖 Blocknet 一定要使用大分頁嗎？'
+    a: '不用。seine 一啟動就能用一般記憶體挖礦，並且會自行向 Linux 要求透明大分頁。預留大分頁是一項選用設定，用來榨出最後幾個百分點：在驗證機上，2 MiB 大分頁帶來約 4% 到 6% 的提升，1 GiB 大分頁再多約 2%。'
+  - q: 'seine 的每個執行緒需要多少個大分頁？'
+    a: '每個執行緒需要 1,024 個 2 MiB 大分頁，剛好容納它的 2 GiB Argon2id 區域，或者兩個 1 GiB 大分頁。使用 2 MiB 大分頁時，用執行緒數乘以 1,024，再加 5% 餘裕並無條件進位。八個執行緒需要 8,602 個大分頁，約占用 16.8 GiB 記憶體。'
+  - q: 'seine 會自動使用 1 GiB 大分頁嗎？'
+    a: 'seine 的預設分頁模式會先使用預留的 2 MiB 大分頁池，然後使用透明大分頁。要使用 1 GiB 大分頁，請為每個執行緒預留兩個，最好在開機時用 hugepagesz=1G hugepages=N 預留，並以 --cpu-page-mode large-1g 啟動 seine。此模式適用於 x86_64 Linux 與 WSL，在 2 MiB 大分頁之上再提升約 2%。'
+  - q: '如何在 Windows 上為 seine 啟用大型分頁？'
+    a: '在 secpol.msc 的「本機原則」與「使用者權限指派」中，把「鎖定記憶體分頁」（Lock pages in memory）權限授予你的 Windows 帳戶，然後登出再重新登入。seine 啟動時會為自己啟用該權限，並以大型分頁配置每個執行緒的 2 GiB 區域。家用版可用 ntrights 等工具授予該權限。'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+預留大分頁後，seine 可以用少量大型分頁承載每個挖礦執行緒的記憶體，而不是幾十萬個小分頁。本指南說明這為什麼能加快 Blocknet 的 Argon2id 工作量證明、需要預留多少分頁，以及 Linux、WSL2 與 Windows 上的具體指令。
+
+## 為什麼大分頁能加快 Blocknet 挖礦？
+
+<Answer>
+seine 的每個執行緒都在一塊 2 GiB 的 Argon2id 區域中計算雜湊，並從其中無法預測的位置讀取資料區塊。使用一般的 4 KiB 分頁時，這塊區域橫跨 524,288 個分頁，所需的位址轉換遠超過 CPU 的 TLB 能快取的數量。大分頁只需 1,024 個甚至 2 個分頁就能涵蓋它，因此因分頁表查找而停頓的讀取更少。
+</Answer>
+
+每次記憶體存取都從一個虛擬位址開始，CPU 必須把它轉換成實體位址。最近用過的轉換保存在轉譯後備緩衝區（TLB）中，[Linux 核心文件](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html)把它描述為「a cache of virtual-to-physical translations」（虛擬位址到實體位址轉換的快取），並稱它「a very scarce resource on processor」（是處理器上非常稀少的資源）。如果某個位址不在 TLB 中，CPU 要先查找記憶體中的分頁表，然後才能開始讀取資料。
+
+Blocknet 的工作量證明讓這種查找變得頻繁。每次雜湊都會用 1 KiB 的資料區塊填滿一塊 2 GiB 的區域，在這一輪的後半段，每個新資料區塊都要讀取一個較早的資料區塊，而它的位置取決於前一刻才算出的資料。正如 [Argon2id 詳解](/zh-hant/blog/argon2id-proof-of-work-explained/)所示，每次雜湊累計約有 2 GiB 的分散讀取。分頁大小決定了這些讀取需要多少次位址轉換：
+
+| 分頁大小 | 每塊 2 GiB 區域的分頁數 |
+|---|---|
+| 4 KiB（一般） | 524,288 |
+| 2 MiB | 1,024 |
+| 1 GiB | 2 |
+
+使用大分頁時，一個 TLB 項目涵蓋的記憶體是原本的 512 倍或 262,144 倍，所以區域中更多的部分都在 TLB 的涵蓋範圍內，每個執行緒也有更多時間用於計算雜湊。
+
+## 使用大分頁後挖礦能快多少？
+
+seine 的[大分頁指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md)稱它是 Linux 上 CPU 挖礦最重要的單項調校設定。在驗證機上，預留的 2 MiB 大分頁帶來約 **4–6%** 的提升，1 GiB 大分頁再多約 **2%**。指南也指出，當執行的執行緒很多時，大分頁的涵蓋程度通常比指令集調校更重要。
+
+seine [效能圖表](/zh-hant/#performance)中的伺服器結果都是在明確預留的 2 MiB 大分頁下測得的。AMD EPYC Zen 5（EPYC 9R45）在 32 個執行緒下跑出的 49.4 H/s 測於 2026 年 10 月，當時預留了 34,407 個分頁，與下表中 32 執行緒那一列的數字相同。[挖礦硬體指南](/zh-hant/blog/blocknet-mining-hardware-hashrate/)列出了各代硬體的完整結果。
+
+即使沒有預留，seine 在 Linux 上也會向核心要求透明大分頁。預留的大分頁池效果更好，因為這些分頁是事先保留的，無論記憶體碎片化到什麼程度，每個執行緒都能取得。
+
+## seine 需要多少個大分頁？
+
+<Answer>
+seine 的每個執行緒需要 1,024 個 2 MiB 大分頁來容納它的 2 GiB 區域，或者兩個 1 GiB 大分頁。使用 2 MiB 大分頁時，預留 執行緒數 × 1,024 × 1.05 並無條件進位，保留 5% 餘裕。八個執行緒需要 8,602 個分頁，約 16.8 GiB。預留不足時，seine 會在啟動時顯示確切數字。
+</Answer>
+
+執行緒數就是 seine 儀表板上的 **Threads** 數字。seine 會依你的記憶體與核心數自動選擇它，所以先在不使用大分頁的情況下啟動一次 seine，記下這個數字。如果預留太少，seine 的啟動日誌會顯示一行 `hugepages |`，列出所需的分頁數與預留它們的 `sysctl` 指令。
+
+| 執行緒數 | 2 MiB 分頁（含 5% 餘裕） | 預留記憶體 | 1 GiB 分頁 |
+|---|---|---|---|
+| 4 | 4,301 | 8.4 GiB | 8 |
+| 8 | 8,602 | 16.8 GiB | 16 |
+| 16 | 17,204 | 33.6 GiB | 32 |
+| 24 | 25,805 | 50.4 GiB | 48 |
+| 32 | 34,407 | 67.2 GiB | 64 |
+
+預留的分頁專供要求大分頁的程式使用，所以請依你實際挖礦時的執行緒數決定預留量。seine 在決定執行緒數時會把預留的大分頁池計入可用記憶體，因此預留大分頁後執行緒數維持不變。
+
+## 如何在 Linux 上設定 2 MiB 大分頁？
+
+依你的執行緒數預留分頁。下面的例子適用於 4 個執行緒：
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+檢查核心是否全部配置成功：
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+如果 `HugePages_Total` 比你要求的少，代表記憶體已經碎片化。清除快取、整理記憶體後再試一次：
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+讓預留永久生效：
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+預留量較大時，儲存設定後重新開機是最可靠的做法，因為核心會在開機初期、記憶體尚未碎片化時預留分頁。然後照常啟動 seine。它的預設分頁模式 `auto` 會從預留的大分頁池對應每個執行緒的區域，不需要額外參數。
+
+## 如何加入 1 GiB 大分頁？
+
+1 GiB 大分頁的設定稍多一些，在 2 MiB 大分頁之上再提升約 2%。每塊 2 GiB 區域剛好需要兩個 1 GiB 大分頁，所以不必計算餘裕。它們適用於 x86_64 Linux 與 WSL。
+
+用核心開機參數在開機時預留，這是取得這麼大分頁最可靠的方法。以 9 個執行緒為例：
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+在剛開機的機器上，你也可以嘗試在執行期間預留，然後查看可用數量：
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+`/proc/meminfo` 中的 `HugePages_*` 各行只統計預設的 2 MiB 大小，所以請從 `/sys` 讀取 1 GiB 大分頁池。然後以 1 GiB 模式啟動 seine：
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+在這個模式下，每個執行緒都從 1 GiB 大分頁池對應它的區域，因此可以確定整個執行過程都使用了 1 GiB 大分頁。
+
+## 如何在 WSL2 上預留大分頁？
+
+WSL2 執行的是真正的 Linux 核心，所以上面的 Linux 指令在其中同樣適用。對於 1 GiB 大分頁，請在 Windows 端透過 `%UserProfile%\.wslconfig` 傳入開機參數。虛擬機器還需要足夠的記憶體，用於預留的大分頁以及 Windows 與 WSL 服務。seine 驗證用的 64 GiB 主機使用了以下設定：
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+儲存檔案，在 Windows 中執行 `wsl --shutdown`，然後重新開啟你的發行版。開始挖礦前，確認可用分頁數足以涵蓋每個執行緒。
+
+## 如何在 Windows 上啟用大型分頁？
+
+在同一台硬體上，原生 Windows 挖礦通常比 WSL 更快，而 seine 在 Windows 上會使用大型分頁（large pages）。它只需要一項權限：**鎖定記憶體分頁**（Lock pages in memory）：
+
+1. 開啟 `secpol.msc`，進入 *本機原則* → *使用者權限指派*。
+2. 把你的使用者加入 **鎖定記憶體分頁**。
+3. 登出再重新登入，因為該權限只對新的登入工作階段生效。
+
+`secpol.msc` 隨附於 Windows 專業版、企業版與教育版。家用版可用 `ntrights` 等工具授予同一權限。
+
+設定就這麼多。啟動時，seine 會為自己啟用該權限，並以 `VirtualAlloc` 與 `MEM_LARGE_PAGES` 配置每個執行緒的 2 GiB 區域，這正是 [Microsoft 文件](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support)介紹的大型分頁記憶體配置方式。如果無法使用大型分頁，seine 會改用一般分頁挖礦，並在日誌中記錄原因與具體的解決方法。seine 從不自行變更帳戶權限，也不會替你登出。
+
+## 應該使用哪種分頁模式？
+
+預設模式適合幾乎所有人。其他模式用於 1 GiB 大分頁與效能量測：
+
+| 模式 | 作用 |
+|---|---|
+| `--cpu-page-mode auto`（預設） | 先使用預留的大分頁或 Windows 大型分頁，然後是透明大分頁，最後是一般分頁 |
+| `--cpu-page-mode large` | 要求每個執行緒都使用預留的大分頁或 Windows 大型分頁，缺少時在啟動階段停止 |
+| `--cpu-page-mode large-1g` | 要求每個執行緒都使用 1 GiB 大分頁（x86_64 Linux 與 WSL） |
+| `--cpu-page-mode regular` | 只用一般分頁，用於前後對照的基準測試 |
+
+要在自己的機器上量測提升幅度，先用 `--cpu-page-mode regular` 挖一段時間，再用 `auto` 或 `large-1g` 挖一段時間，然後比較儀表板上的算力。對於有多個 NUMA 節點的伺服器，預留的大分頁還需要位於執行執行緒的節點上；[伺服器挖礦指南](/zh-hant/blog/mine-blocknet-on-servers/)介紹了這一點。
+
+<CTA target="seine" title="下載 seine，預留你的大分頁" text="只要預留好大分頁，seine 就會以大分頁對應每個執行緒的 2 GiB 區域，不需要額外參數。" />

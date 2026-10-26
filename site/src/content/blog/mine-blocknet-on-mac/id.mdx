@@ -1,0 +1,131 @@
+---
+title: Cara menambang Blocknet di Mac
+description: 'Cara menambang Blocknet di Mac Apple Silicon dengan seine: penyiapan lewat Terminal, hasil terukur 30,9 H/s M4 Max, dan jumlah thread yang muat di Mac Anda.'
+tags: [Panduan penambangan, macOS, Apple Silicon, seine]
+faq:
+  - q: 'Bisakah menambang Blocknet di MacBook Air?'
+    a: 'Bisa. Setiap Mac Apple Silicon bisa menjalankan seine, termasuk MacBook Air. Unduh seine-macos-aarch64.tar.gz, ekstrak di Terminal, lalu jalankan ./seine. Setiap thread membutuhkan sekitar 2 GB memori, jadi MacBook Air 16 GB bisa menampung hingga tujuh thread, dan seine menentukan jumlahnya untuk Anda berdasarkan memori yang kosong.'
+  - q: 'Apakah seine memakai GPU saat menambang Blocknet di Mac?'
+    a: 'Di Apple Silicon, seine secara bawaan menambang di CPU, karena itulah pilihan tercepat. CPU dan core grafis berbagi memori terpadu yang sama, dan proof of work Argon2id milik Blocknet bergantung pada bandwidth memori. Di M4 Max, penambangan dengan CPU saja menghasilkan hashrate tertinggi, sehingga seine memakainya secara otomatis.'
+  - q: 'Berapa memori yang dibutuhkan Mac untuk menambang Blocknet?'
+    a: 'Setiap thread penambangan mengolah satu blok memori 2 GiB, jadi rencanakan sekitar 2 GB per thread. Mac 16 GB bisa menampung hingga tujuh thread, Mac 32 GB hingga 15, dan Mac 64 GB hingga 30. seine menghitung memori yang kosong dan juga menyesuaikan jumlah thread dengan core Anda.'
+  - q: 'Bisakah menambang Blocknet di Mac Intel?'
+    a: 'Bisa. seine menerbitkan arsip terpisah untuk Mac Intel, seine-macos-x86_64.tar.gz, dan langkahnya sama seperti di Apple Silicon. Unduh, ekstrak di Terminal, jalankan ./seine, lalu tempel alamat Blocknet atau @name Anda. seine menyesuaikan jumlah thread dengan memori Anda dan secara bawaan mulai menambang di bntpool.com.'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+Panduan ini menunjukkan cara menambang Blocknet di Mac Apple Silicon dengan **seine**: mengapa chip seri M cocok untuk proof of work Blocknet, berapa hasil terukur M4 Max, berapa thread yang bisa ditampung memori Mac Anda, dan langkah persis di Terminal untuk mulai menambang di bntpool.com.
+
+## Bisakah menambang Blocknet di Mac?
+
+<Answer>
+Bisa. Mac Apple Silicon adalah penambang Blocknet yang kuat karena memori terpadunya menyediakan bandwidth melimpah bagi proof of work Argon2id yang memory-hard. Unduh `seine-macos-aarch64.tar.gz`, ekstrak di Terminal, jalankan `./seine`, lalu tempel alamat Anda. M4 Max 48 GB terukur 30,9 H/s hanya dengan CPU-nya.
+</Answer>
+
+seine menangani sendiri pengaturan khusus Mac. Ia menambang di CPU, menjadwalkan thread-nya di performance core terlebih dahulu, dan menyesuaikan jumlah thread dengan memori Anda, jadi `./seine` biasa sudah cukup bagi kebanyakan orang.
+
+## Mengapa Mac Apple Silicon bagus untuk menambang Blocknet?
+
+Proof of work Blocknet adalah [Argon2id](/id/blog/argon2id-proof-of-work-explained/) dengan memori 2 GiB per hash. Setiap hash mengisi satu blok memori 2 GiB sambil membaca kembali bagian-bagian sebelumnya, sehingga kecepatan thread penambangan terutama bergantung pada seberapa cepat chip memindahkan data ke dan dari memori. Karena itulah setiap thread seine membutuhkan sekitar 2 GB RAM sendiri.
+
+Apple Silicon dibangun di sekitar memori terpadu, yang [digambarkan Apple](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) sebagai memori berbandwidth tinggi dan berlatensi rendah yang disatukan dalam satu pool. Ini memberi setiap thread penambangan bandwidth yang melimpah, persis yang dibutuhkan hash memory-hard. Hasilnya, sebuah laptop bisa menambang Blocknet di kisaran yang sama dengan prosesor server.
+
+## Seberapa cepat M4 Max menambang Blocknet?
+
+<Answer>
+MacBook Pro 48 GB dengan chip M4 Max menambang Blocknet pada 30,94 H/s dengan 16 thread hanya di CPU-nya. Dengan 14 thread dan penjadwalan performance core, pengaturan seimbang yang dijalankan seine secara bawaan di mesin itu, hasilnya 29,26 H/s dan menyisakan lebih banyak memori untuk aplikasi lain.
+</Answer>
+
+Hasil ini berasal dari pengujian validasi seine pada M4 Max 48 GB (12 performance core dan 4 efficiency core) pada 10 Juli 2026:
+
+| Pengaturan | Thread | Hashrate |
+|---|---|---|
+| Throughput maksimum | 16, penjadwalan `auto` | 30,94 H/s |
+| Seimbang (batas bawaan seine di Mac ini) | 14, penjadwalan `pcore-only` | 29,26 H/s |
+
+Sebagai perbandingan, hasil 30,9 H/s itu berada di atas semua hasil server Arm dan Intel Xeon di [tabel performa](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) seine; hanya server AMD EPYC Zen 5 dan Zen 4 yang terukur lebih tinggi. [Panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/) membandingkan hasil terbaik untuk setiap generasi perangkat keras, dan [panduan Apple Silicon](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) memuat catatan penyetelan lengkapnya.
+
+## Berapa thread yang bisa dijalankan Mac Anda?
+
+Setiap thread membutuhkan memori 2 GiB sendiri, jadi memori menentukan batas atasnya. seine juga menyisakan 5% memori Mac Anda sebagai cadangan saat menyesuaikan diri. Hasilnya adalah batas atas berikut:
+
+| Memori Mac | Thread yang bisa ditampung memori |
+|---|---|
+| 16 GB | hingga 7 |
+| 24 GB | hingga 11 |
+| 32 GB | hingga 15 |
+| 36 GB | hingga 17 |
+| 48 GB | hingga 22 |
+| 64 GB | hingga 30 |
+
+Dua hal lalu menentukan angka akhir yang pas untuk Mac Anda:
+
+- **Memori kosong.** seine menghitung memori yang benar-benar kosong saat mulai, jadi aplikasi yang sedang terbuka sedikit mengurangi jumlahnya. Jika memori menipis saat berjalan, seine memarkir thread dan melepaskan memorinya.
+- **Core.** Secara bawaan di Mac, seine memakai semua performance core ditambah separuh efficiency core. Di M4 Max dengan 12+4 core, itu berarti 14 thread, pengaturan seimbang di tabel di atas.
+
+Anda tidak perlu menghitung semua ini. seine memilih jumlah thread saat mulai dan terus menguji jumlah di sekitarnya selama menambang.
+
+## Penyiapan langkah demi langkah di macOS
+
+### Langkah 1: dapatkan alamat Blocknet
+
+Instal wallet Blocknet resmi, baik [wallet baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) maupun [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), lalu salin alamat Anda. Jika Anda punya nama pendek Blocknet ID dari [blocknet.id](https://blocknet.id), Anda bisa menambang ke `@name` sebagai gantinya.
+
+### Langkah 2: unduh seine untuk Apple Silicon
+
+Dari [bagian unduhan](/id/#download), ambil `seine-macos-aarch64.tar.gz`. Isinya program `seine`, readme dan lisensinya, serta file `SHA256SUMS.txt` untuk memeriksa unduhan.
+
+### Langkah 3: ekstrak di Terminal
+
+Buka Terminal (di Applications, lalu Utilities) dan jalankan perintah berikut. Perintah ini membuat folder `seine` di folder home Anda dan membongkar arsip ke dalamnya:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### Langkah 4: jalankan seine
+
+```sh
+./seine
+```
+
+Build macOS ditandatangani secara ad-hoc. Jika macOS menghentikan peluncuran pertama, buka System Settings, masuk ke Privacy & Security, lalu izinkan `seine`. Anda juga bisa menghapus tanda unduhan dari Terminal lalu menjalankannya lagi:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### Langkah 5: masukkan alamat Anda dan mulai menambang
+
+seine menanyakan alamat pembayaran atau `@shortname` Anda, lalu pool. Tekan Return untuk menerima pool bawaan, `stratum+tcp://bntpool.com:3333`. [Dasbor](/id/blog/seine-dashboard-explained/) kemudian menampilkan hashrate dan share pertama Anda yang diterima. Pool bntpool.com mengirim saldo ke alamat Anda begitu mencapai 0,1 BNT, dan Anda bisa memantaunya di [bntpool.com](https://bntpool.com) dengan mencari alamat Anda.
+
+## Mengapa seine hanya menambang di CPU pada Mac?
+
+Di Apple Silicon, CPU dan core grafis berbagi satu pool memori terpadu. Argon2id bergantung pada bandwidth memori, sehingga CPU dan core grafis akan berebut bandwidth yang sama. Dalam pengujian seine di M4 Max, penambangan dengan CPU saja memberi hashrate tertinggi, sehingga seine memilihnya secara otomatis di setiap Mac Apple Silicon. Anda mendapatkan pengaturan tercepat tanpa flag apa pun.
+
+## Bagaimana cara mendapatkan hasil maksimal dari Mac?
+
+- **Biarkan seine menyetel dirinya sendiri.** seine membandingkan jumlah thread dan kernel CPU pada pekerjaan penambangan sungguhan, beralih hanya setelah peningkatan terkonfirmasi, dan mengingat hasilnya untuk peluncuran berikutnya.
+- **Cegah Mac tertidur.** macOS menidurkan Mac yang menganggur, dan itu menjeda penambangan. Jalankan seine dengan perintah bawaan `caffeinate` agar Mac tetap terjaga selama seine berjalan:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Kejar throughput maksimum di Mac khusus.** Jika Mac tidak dipakai untuk apa pun selain menambang, pengaturan yang terukur 30,94 H/s di M4 Max memakai ke-16 core dan lebih banyak memori daripada pengaturan seimbang bawaan:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Untuk semua opsi, lihat [panduan konfigurasi](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md). [Panduan utama penambangan](/id/blog/how-to-mine-blocknet/) membahas pembayaran dan platform lainnya.
+
+<Note>
+Hasil ini menggambarkan proof of work Argon2id Blocknet saat ini. Blocknet merencanakan upgrade jaringan bernama Faraday sekitar 16 Februari 2027 yang direncanakan akan mengubah proof of work, menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). seine memeriksa rilis baru saat mulai dan setiap 12 jam, jadi selalu perbarui seine.
+</Note>
+
+<CTA target="seine" title="Unduh seine untuk macOS" text="Build Apple Silicon menambang di CPU Mac Anda dan memilih jumlah thread-nya secara otomatis." />

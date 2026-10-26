@@ -1,0 +1,78 @@
+---
+title: 'Windows blokkeert je miner? Controleer de download'
+description: 'Controleer een geblokkeerde seine-download in Windows: herken de melding, verifieer de officiële ZIP met SHA-256 en verzamel gegevens over de detectie.'
+tags: ["Mininggids", "Windows", "Downloads"]
+faq:
+  - q: 'Bewijst een overeenkomende SHA-256-hash dat een miner veilig is?'
+    a: 'Een gelijke hash bevestigt dat je gedownloade bestand overeenkomt met de gebruikte controlesom. Haal beide uit de officiële release. Dit controleert de bestandsintegriteit, maar vervangt geen onderzoek naar een antivirusdetectie en bewijst op zichzelf niet dat de software veilig kan worden uitgevoerd.'
+  - q: 'Welk controlesombestand gebruik ik voor de Windows-ZIP?'
+    a: 'Gebruik het losse SHA256SUMS.txt-bestand uit dezelfde release als seine-windows-x86_64.zip. Het bevat controlesommen van de archieven. Een tweede SHA256SUMS.txt in de uitgepakte ZIP beschrijft de inhoud. Vergelijk het archief met het releasebestand en houd de versies bij elkaar.'
+  - q: 'Wat hoort in een melding over een geblokkeerde download?'
+    a: 'Vermeld de seine-versie, officiële download-URL, bestandsnaam, SHA-256-hash, Windows-versie en exacte detectienaam of waarschuwing. Geef aan of het de ZIP of een uitgepakt bestand betreft. Scherm persoonlijke paden af en laat wallet-seeds, privésleutels en API-tokens weg uit screenshots.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Als Windows een seine-download blokkeert of een uitgepakt bestand verdwijnt, bepaal dan eerst het exacte bestand en de melding. Deze gids laat zien hoe je de officiële release controleert, de SHA-256-controlesom vergelijkt en bruikbare informatie verzamelt. Het voorbeeld gebruikt seine v0.2.26, gecontroleerd op 25 oktober 2026.
+
+## Wat controleer je als Windows een miner blokkeert?
+
+<Answer>
+Noteer meldingstekst, getroffen bestandsnaam en releaseversie voordat je iets wijzigt. Open Windows-beveiliging en bekijk de Beveiligingsgeschiedenis voor een detectie. Haal vervolgens archief en controlesom uit de officiële seine-release. Controleer het exacte bestand en de versie voordat je beslist hoe je met de waarschuwing omgaat.
+</Answer>
+
+Klap de betreffende vermelding in de [Beveiligingsgeschiedenis](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app) open. Windows kan beheerdersrechten vragen om dreigingsdetails te tonen. Noteer of het om de gedownloade ZIP, `seine.exe` of een DLL gaat. Een verdwenen programma en een browserwaarschuwing kunnen op verschillende momenten ontstaan; bewaar de bestandsnaam bij de melding.
+
+## SmartScreen-waarschuwing of antivirusdetectie?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) beoordeelt gedownloade apps op reputatiesignalen van bestand en uitgever. Een onbekende-appmelding verschilt van een antivirusdetectie met een specifieke naam. Schrijf de echte melding op: het woord miner in een bestandsnaam vertelt niet welke controle ingreep of waarom het bestand werd geblokkeerd.
+
+Microsoft noemt cryptominingsoftware ook in de [criteria voor mogelijk ongewenste toepassingen](https://learn.microsoft.com/en-us/defender-xdr/criteria), specifiek voor bedrijfsomgevingen. Vraag op een beheerde werk- of schoolcomputer naar het toepasselijke beleid. Dit beschrijft een softwarecategorie, geen oordeel over jouw download. Onderzoek de exacte melding in plaats van iedere minerwaarschuwing als fout-positief te behandelen.
+
+## Haal ZIP en controlesom uit dezelfde release
+
+Open de [officiële seine-releases](https://github.com/zpalmtree/seine/releases) via de [downloadpagina](/nl/#download). Controleer dat de repository `zpalmtree/seine` is. Kies `seine-windows-x86_64.zip` en het losse `SHA256SUMS.txt` uit dezelfde release. Noteer de versie. Een controlesom van een nieuwere of oudere release is niet de referentie voor jouw gedownloade archief.
+
+![Windows-ZIP en SHA256SUMS.txt in de officiële releasebestanden van seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Dit is een echte opname van de bestandenlijst van v0.2.26. Het controlesombestand bij de release geldt voor de downloadbare archieven. In de ZIP zit nog een `SHA256SUMS.txt` voor de uitgepakte bestanden. Gebruik voor deze eerste controle het afzonderlijk gedownloade releasebestand. Verwar de lijsten niet, ook al hebben ze dezelfde naam.
+
+Gebruik rechtstreeks het officiële archief. Een hernoemd programma, opnieuw verpakt bestand van derden of bestand uit een chat wordt niet gecontroleerd door de controlesom van de officiële ZIP te vergelijken. Bewaar ZIP en controlesom samen in een herkenbare map en voer daar de onderstaande opdrachten uit.
+
+## Hoe vergelijk je de SHA-256-controlesom?
+
+Open PowerShell in de map met beide downloads. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) berekent de SHA-256 van het archief. De vergelijking selecteert de exacte naam van het Windows-archief, vereist precies één passende vermelding en stopt met een fout als de hash afwijkt. Ze leest de bestanden zonder de miner te starten of Windows-beveiliging te wijzigen.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+De succesmelding is `PASS: ZIP matches SHA256SUMS.txt`. Controleer bij een ontbrekend bestand je huidige map en bestandsnamen. Ontbreekt de controlesomvermelding of staat die er dubbel, download dan het oorspronkelijke bestand opnieuw. Stop bij een afwijking: controleer de releaseversie en download het officiële archief en de controlesom opnieuw voordat je de vergelijking herhaalt.
+
+## Wat liet het gecontroleerde voorbeeld zien?
+
+We voerden deze vergelijking uit in Windows PowerShell 5.1 met de officiële Windows-ZIP van v0.2.26. De berekende hash kwam overeen met de gepubliceerde controlesom. De afbeelding toont de echte opdrachtuitvoer als opgemaakte transcriptie, niet als melding van Windows-beveiliging. Het [tekstverslag](/assets/blog/seine-v0.2.26-verification.txt) bewaart de volledige hash en bestandslijst.
+
+![Werkelijk Windows-PowerShell-resultaat voor het Windows-archief van seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+Een hashvergelijking bepaalt of deze bytes bij de opgegeven referentie passen. Ze authenticeert geen controlesom uit een andere bron, bewijst niet dat malware ontbreekt en verklaart geen specifieke detectie. Gaat de waarschuwing over een uitgepakt programma, noteer dan diens naam en detectie apart; de ZIP-hash identificeert het archief.
+
+## Wat als de gecontroleerde download geblokkeerd blijft?
+
+Laat het betrokken bestand in quarantaine terwijl een onopgeloste detectie wordt onderzocht. Verzamel releaseversie, download-URL, bestandsnaam, SHA-256 en exacte melding. Vermeld Windows-versie en of de blokkade bij downloaden, uitpakken of starten ontstond. Daarmee is de melding reproduceerbaar zonder je persoonlijke configuratie te delen.
+
+Gebruik de [seine-issuetracker](https://github.com/zpalmtree/seine/issues) voor een projectmelding en Microsofts [portaal voor bestandsinzendingen](https://www.microsoft.com/en-us/wdsi/filesubmission) bij een vermoedelijk onjuiste detectie. Controleer bijlagen voor verzending. Deel op verzoek het publieke releasebestand of de identificatiegegevens, niet je miningdatamap. Verwijder persoonlijke paden, walletgegevens en authenticatietokens uit screenshots.
+
+Windows biedt voor sommige detecties acties per item. Overweeg een item alleen toe te staan wanneer herkomst en detectie zijn opgehelderd en je dat exacte bestand vertrouwt; volg de instructies bij de vastgelegde waarschuwing. Laat de algemene beveiliging ingeschakeld. Op beheerde apparaten bepaalt de beheerder wat is toegestaan.
+
+## Verder met het gecontroleerde Windows-archief
+
+Pak de hele ZIP na vrijgave uit naar een beschrijfbare map en houd de meegeleverde DLLs naast `seine.exe`. De [Windows-mininggids](/nl/blog/mine-blocknet-on-windows/) behandelt de eerste start en het uitbetalingsadres. Voor drivers, runtimebibliotheken en apparaatkeuze volg je de [NVIDIA-gids](/nl/blog/mine-blocknet-nvidia-gpu/). Dat zijn afzonderlijke controles naast downloadverificatie.
+
+<CTA target="seine" title="Download de officiële seine-release" text="Kies het Windows-archief en controleer de bijbehorende releasecontrolesom vóór de installatie." />

@@ -1,0 +1,112 @@
+---
+title: 'Cara menambang Blocknet dengan GPU NVIDIA'
+description: 'Tambang Blocknet dengan GPU NVIDIA memakai seine. Siapkan Windows atau Linux, gunakan CPU dan GPU, periksa hashrate, dan atasi masalah saat memulai.'
+tags: ['Panduan penambangan', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'Bisakah seine menggunakan CPU dan GPU NVIDIA bersamaan?'
+    a: 'Ya. seine otomatis memilih CPU dan GPU NVIDIA yang terdeteksi jika opsi backend tidak diatur. Panel Devices menampilkan setiap backend secara terpisah. Untuk memilih kartu tertentu sambil tetap menambang dengan CPU, pilih cpu dan nvidia, lalu tentukan indeks perangkat NVIDIA.'
+  - q: 'Apakah saya memerlukan CUDA Toolkit di Windows?'
+    a: 'Arsip Windows resmi menyertakan pustaka runtime NVRTC yang digunakan seine untuk mengompilasi kernel GPU. Instal driver tampilan NVIDIA yang kompatibel dan simpan DLL hasil ekstraksi di samping seine.exe. Rilis Windows dalam paket tersebut tidak memerlukan instalasi CUDA Toolkit terpisah.'
+  - q: 'Bagaimana cara menambang dengan GPU NVIDIA tanpa CPU?'
+    a: 'Jalankan seine dengan opsi backend diatur ke nvidia. Program membuat satu backend NVIDIA untuk setiap kartu yang terdeteksi. Tambahkan opsi nvidia-devices untuk memilih indeks perangkat tertentu. Periksa panel Devices setelah program dimulai untuk memastikan GPU yang diinginkan muncul dan menghitung hash.'
+  - q: 'Di mana saya bisa melihat apakah share GPU diterima?'
+    a: 'Dasbor penambangan menampilkan share yang dikirim, ditolak, dan diterima, sementara log mengidentifikasi backend untuk setiap peristiwa share. Periksa hashrate lokal pada baris perangkat NVIDIA, lalu cari pesan share diterima dari backend tersebut. Gunakan panduan pelacakan pool untuk memeriksa pekerjaan yang dikreditkan.'
+---
+
+seine menambang Blocknet dengan GPU NVIDIA bersama CPU Anda. Panduan ini membahas penyiapan Windows dan Linux, pemilihan kartu, share yang diterima, serta perbandingan terukur dengan RTX 5090. Perintahnya berlaku untuk seine v0.2.26 dan jaringan Argon2id saat ini per Oktober 2026.
+
+## Bagaimana cara mulai menambang Blocknet dengan GPU NVIDIA?
+
+<Answer>
+Unduh arsip seine untuk Windows x86_64 atau Linux x86_64, siapkan driver NVIDIA dan pustaka runtime untuk platform Anda, lalu jalankan penambang. Masukkan alamat pembayaran dan terima pool bawaan. seine otomatis memilih CPU dan kartu NVIDIA yang terdeteksi, kemudian menyiapkan serta menyetel setiap backend GPU.
+</Answer>
+
+Pilih arsip di [bagian unduhan](/id/#download): `seine-windows-x86_64.zip` untuk Windows atau `seine-linux-x86_64.tar.gz` untuk Linux x86_64. [Panduan umum penambangan](/id/blog/how-to-mine-blocknet/) menjelaskan cara mendapatkan alamat pembayaran dan membuat koneksi pertama.
+
+Mulailah dengan pengaturan bawaan. Jangan atur kernel, batas register, jumlah lane GPU, dan jumlah thread CPU agar seine dapat memilih konfigurasinya. Panel Devices menunjukkan backend yang berkontribusi setelah inisialisasi selesai.
+
+## Menyiapkan runtime NVIDIA di Windows atau Linux
+
+| Platform | Yang perlu disiapkan | Perintah mulai |
+|---|---|---|
+| Windows x86_64 | Driver tampilan NVIDIA; DLL runtime bawaan di samping berkas program | `.\seine.exe` |
+| Linux x86_64 | Driver NVIDIA dan pustaka runtime NVRTC yang kompatibel | `./seine` |
+
+Di Windows, ekstrak seluruh ZIP ke folder yang dapat ditulisi. Simpan `nvrtc64_120_0.dll` dan `nvrtc-builtins64_128.dll` di samping `seine.exe`. Rilis dalam paket menggunakan pustaka bawaan ini; instalasi CUDA Toolkit terpisah tidak diperlukan.
+
+![Arsip Windows dalam tabel unduhan resmi seine](/assets/blog/windows-download.png)
+
+Instal driver untuk kartu dan sistem operasi Anda dari [halaman driver NVIDIA](https://www.nvidia.com/en-us/drivers/). [Panduan penyiapan Windows](/id/blog/mine-blocknet-on-windows/) menjelaskan langkah unduhan, checksum, dan ekstraksi.
+
+Di Linux, instal driver NVIDIA dan paket NVRTC yang kompatibel dengan distribusi Anda. NVRTC mengompilasi kernel CUDA seine saat program berjalan. [Dokumentasi NVRTC](https://docs.nvidia.com/cuda/nvrtc/) NVIDIA menjelaskan kompiler dan pustaka builtins yang sesuai; [persyaratan NVIDIA seine](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) mendokumentasikan kebutuhan runtime penambang.
+
+Jalankan berkas biner dari foldernya. Gunakan kembali direktori kerja yang sama agar pengaturan tersimpan tetap berada di `seine-data`. Pada peluncuran pertama, masukkan alamat penerimaan Anda dan terima `stratum+tcp://bntpool.com:3333` sebagai pool.
+
+## Bisakah memilih satu kartu NVIDIA sambil tetap menambang dengan CPU?
+
+Pilih kedua backend dan indeks perangkat. Di PowerShell, perintah ini mempertahankan penambangan CPU dan memilih perangkat NVIDIA `0`:
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Gunakan opsi yang sama dengan program Linux:
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+Perintah ini menggunakan alamat dan pool yang tersimpan atau memintanya saat program dimulai. Untuk menentukan koneksi secara eksplisit, tambahkan alamat penerimaan publik dengan `--address` dan URL pool dengan `--pool-url`.
+
+Indeks mengidentifikasi GPU yang didaftarkan oleh runtime NVIDIA. Pastikan daftar perangkat sudah benar setelah program dimulai. `--nvidia-devices 0,1` memilih kedua kartu tersebut; tanpa pemilih ini, semua perangkat NVIDIA yang terdeteksi akan digunakan.
+
+Untuk menambang hanya dengan GPU, pilih `nvidia`:
+
+```bash
+./seine --backend nvidia
+```
+
+Di PowerShell, gunakan `.\seine.exe --backend nvidia`. Sertakan `cpu` dalam daftar backend jika ingin menggunakan kedua jenis perangkat keras. Mulai ulang seine dengan perintah yang diinginkan ketika mengubah pilihan tersebut.
+
+## Bagaimana memastikan GPU sedang menambang?
+
+<Answer>
+Lihat baris backend NVIDIA di panel Devices beserta hashrate saat ini dan rata-ratanya. Selama inisialisasi, suatu baris dapat menampilkan kemajuan saat kernel CUDA disiapkan. Setelah penghitungan hash dimulai, periksa log untuk peristiwa share dari backend tersebut dan panel Mining untuk share yang diterima.
+</Answer>
+
+Backend NVIDIA tampil sebagai `nvidia#1`, `nvidia#2`, dan seterusnya; CPU memiliki baris tersendiri. Hashrate keseluruhan mencakup semua backend aktif. [Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan panel lainnya dan label log.
+
+![Sesi seine nyata dengan RTX 5090, hashrate perangkat, dan share yang diterima](/assets/blog/nvidia-rtx5090-session.png)
+
+Tangkapan ini menunjukkan sesi pool langsung dengan RTX 5090. Benchmark berwaktu di bawah dijalankan secara terpisah. Hashrate perangkat mengukur aktivitas lokal; share yang diterima mengonfirmasi bahwa pool mengkreditkan pekerjaan yang dikirim. Ikuti pekerjaan yang dikreditkan dengan [panduan pelacakan penambang](https://bntpool.com/blog/track-your-miner-on-bntpool/).
+
+Peluncuran pertama menyiapkan dan menyetel kernel GPU. seine menyimpan hasil penyetelan otomatis NVIDIA di `seine-data/seine.nvidia-autotune.json`. Gunakan kembali direktori data tersebut agar peluncuran berikutnya dapat memuat hasil tersimpan yang kompatibel, atau pilih direktori secara eksplisit dengan `--data-dir`.
+
+## Seberapa cepat RTX 5090 dalam pengujian kami?
+
+Kami menguji pada 25 Oktober 2026 menggunakan Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, RAM yang dapat digunakan sebesar 125,4 GiB, seine v0.2.26, dan driver NVIDIA `610.88`. Kami menjalankan tiga pasang pengujian berselang-seling dengan `--bench-kind backend`. Setiap pengujian menggunakan satu pemanasan 20 detik dan tiga putaran pengukuran masing-masing 20 detik, dengan jeda 20 detik antar-pengujian. Pengaturan kernel, batas register, lane, dan thread berlangsung otomatis.
+
+| Mode | Rata-rata H/s |
+|---|---|
+| RTX 5090 saja | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Tabel menampilkan rata-rata tiga pengujian per mode pada desktop ini dengan aplikasi yang sebelumnya terbuka tetap berjalan. Kedua mode menggunakan GPU `0` dan cache penyetelan otomatis NVIDIA yang sama. Angka ini merupakan hashrate benchmark lokal; share yang diterima mengonfirmasi kredit dari pool. [Catatan pengukuran](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) mencatat pengaturan dan hasil setiap pengujian.
+
+## Apa yang perlu diperiksa jika baris NVIDIA tidak muncul?
+
+Periksa terlebih dahulu berkas program hasil ekstraksi dan pustaka runtime. Di Windows, simpan DLL NVRTC bawaan di samping `seine.exe`. Di Linux, instal driver dan pustaka NVRTC dalam lingkungan tempat Anda menjalankan penambang.
+
+Kemudian periksa perintah Anda. `--backend cpu` hanya memilih CPU. Gunakan perintah bawaan atau `--backend cpu,nvidia` untuk keduanya. Jika menetapkan `--nvidia-devices`, pastikan indeks tersebut ada di komputer Anda.
+
+Baca log awal backend tersebut: log membedakan persiapan yang masih berjalan dengan kesalahan inisialisasi. Perbaiki masalah runtime atau pemilihan yang dilaporkan, lalu mulai ulang. [Panduan NVIDIA](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) juga membahas persyaratan kompilasi dari kode sumber.
+
+Untuk beban Argon2id saat ini, setiap lane GPU aktif membutuhkan area 2 GiB ditambah kebutuhan tambahan runtime. seine menentukan ukuran pekerjaan GPU berdasarkan memori perangkat yang tersedia dan pemeriksaan alokasi. Biarkan pengaturan manual lane tidak ditetapkan; kapasitas VRAM yang diiklankan saja tidak menentukan jumlah lane yang tersedia selama sesi desktop.
+
+Jika perangkat menghitung hash tetapi pool menunjukkan nol, ikuti [daftar pemeriksaan hashrate pool](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate) untuk memeriksa alamat, koneksi, dan share yang diterima.
+
+[Windows memblokir miner? Periksa unduhannya](/id/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="Unduh seine untuk menambang dengan NVIDIA" text="Pilih arsip Windows atau Linux x86_64 dan mulai dengan pemilihan CPU serta GPU NVIDIA secara otomatis." />

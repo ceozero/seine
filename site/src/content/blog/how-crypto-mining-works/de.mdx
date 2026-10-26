@@ -1,0 +1,117 @@
+---
+title: Wie funktioniert Krypto-Mining? Einfach erklärt
+description: Krypto-Mining einfach erklärt, von Blöcken, Hashes und Difficulty bis zu Blockbelohnungen und Mining-Pools, mit Blocknets Fünf-Minuten-Blöcken als Beispiel.
+tags: [Mining, Proof of Work, Blocknet, bntpool]
+faq:
+  - q: 'Was berechnet ein Krypto-Miner eigentlich?'
+    a: 'Ein Miner hasht einen Block-Header immer wieder und ändert dabei jedes Mal eine Zahl namens Nonce, bis das Ergebnis auf oder unter dem Zielwert des Netzwerks liegt. Bei Blocknet ist jeder Versuch ein Argon2id-Hash über 2 GiB Speicher. Niemand kann vorhersagen, welche Nonce gewinnt, also findet man einen Block nur, indem man es weiter versucht.'
+  - q: 'Wie lange dauert es, einen Block zu minen?'
+    a: 'Jedes Netzwerk legt sein eigenes Ziel fest. Bitcoin strebt einen Block alle zehn Minuten an, Blocknet einen alle fünf Minuten, also 288 Blöcke pro Tag. Die Difficulty passt sich an, um dieses Tempo zu halten, wenn Miner dazukommen oder gehen, sodass die Blockzeit unabhängig von der Gesamt-Hashrate nahe am Ziel bleibt.'
+  - q: 'Was ist ein Share in einem Mining-Pool?'
+    a: 'Ein Share ist ein Hash, der einen leichteren Zielwert erfüllt, den der Pool für deine Verbindung festlegt. Shares belegen, wie viel Arbeit du beigetragen hast, ohne dass du auf einen ganzen Block warten musst. Auf bntpool.com passt der Pool die Share-Difficulty jeder Verbindung so an, dass etwa zehn Shares alle fünf Minuten entstehen, und Blockbelohnungen werden nach Shares aufgeteilt.'
+  - q: 'Kann ich Kryptowährungen auf einem normalen Computer minen?'
+    a: 'Ja, bei Coins, deren Proof of Work für normale Hardware ausgelegt ist. Blocknet nutzt das speicherintensive Argon2id, daher kann ein Desktop-PC, Laptop, Mac oder Server mit genug RAM es minen. Jeder Mining-Thread braucht etwa 2 GB Arbeitsspeicher, und seine ermittelt selbst die richtige Thread-Anzahl für deinen Rechner.'
+sourceHash: d05a84885aae
+translation: reviewed
+---
+
+Diese Anleitung erklärt, was Krypto-Miner tun und warum: wie Transaktionen zu Blöcken werden, was ein Hash und eine Nonce sind, wie die Difficulty die Blöcke im Takt hält, woher die Belohnung kommt und warum die meisten in einem Pool minen. Blocknet dient durchgehend als Beispiel, jede Zahl ist also echt und nachprüfbar.
+
+## Was ist Krypto-Mining?
+
+<Answer>
+Krypto-Mining ist der Weg, auf dem eine Proof-of-Work-Blockchain neue Blöcke hinzufügt. Miner bündeln wartende Transaktionen zu einem Block und suchen dann um die Wette nach einem Hash dieses Blocks, der einen Difficulty-Zielwert erfüllt. Der erste Miner, der einen findet, verbreitet den Block, jeder Node prüft ihn, und der Gewinner erhält eine neu geschaffene Blockbelohnung.
+</Answer>
+
+Mining erledigt zwei Aufgaben gleichzeitig. Es bringt Transaktionen in eine Reihenfolge, sodass sich alle einig sind, welche Zahlung zuerst kam, und es gibt neue Coins nach einem festen Zeitplan aus, sodass man niemandem vertrauen muss, sie zu erschaffen. Bitcoin hat die Idee 2008 eingeführt, und heute nutzen sie viele Coins, darunter Blocknet. Manche Chains, etwa Ethereum seit 2022, setzen stattdessen auf Proof of Stake; [Proof of Work vs. Proof of Stake](/de/blog/proof-of-work-vs-proof-of-stake/) vergleicht beides.
+
+## Was steckt in einem Block?
+
+Ein Block ist ein Bündel von Transaktionen plus ein kurzer Header, der ihn beschreibt. Der Block-Header von Blocknet hat sieben Felder:
+
+| Feld | Inhalt |
+|---|---|
+| Version | Die Protokollversion |
+| Höhe | Die Position des Blocks in der Chain |
+| Vorheriger Hash | Die ID des Blocks davor |
+| Merkle-Root | Ein Fingerabdruck aller Transaktionen im Block |
+| Zeitstempel | Wann der Block erstellt wurde |
+| Difficulty | Wie schwer dieser Block zu finden ist |
+| Nonce | Die Zahl, die der Miner bei jedem Versuch ändert |
+
+Das Feld mit dem vorherigen Hash macht daraus eine Kette. Jeder Block verweist auf den vorherigen, sodass jede Änderung an einer alten Transaktion den Fingerabdruck dieses Blocks ändern und jedes Glied danach brechen würde. Die erste Transaktion in jedem Block ist die Coinbase, die dem Miner, der den Block gefunden hat, die Belohnung auszahlt.
+
+## Wie findet ein Miner einen Block?
+
+<Answer>
+Ein Miner hasht den Block-Header, prüft, ob das Ergebnis auf oder unter dem Zielwert des Netzwerks liegt, und wenn nicht, ändert er die Nonce und versucht es erneut. Eine gute Hashfunktion macht die Ausgabe unvorhersehbar, also gewinnt man nur durch viele Versuche. Deine Hashrate ist die Anzahl der Versuche pro Sekunde.
+</Answer>
+
+Eine Hashfunktion verwandelt jede Eingabe in eine zufällig aussehende Zahl fester Länge. Ändert sich ein einziges Bit der Eingabe, ändert sich die Ausgabe komplett. Betrachte diese Ausgabe als riesige Zahl: Liegt sie auf oder unter dem Zielwert, ist der Block gültig. Ein niedrigerer Zielwert bedeutet weniger gewinnende Hashes und damit im Schnitt mehr Versuche.
+
+Bei Blocknet ist jeder Versuch ein Argon2id-Hash. Die 8-Byte-Nonce ist das Passwort, der Rest des Headers das Salt, und jeder Hash arbeitet sich durch 2 GiB Speicher, bevor er ein 32-Byte-Ergebnis liefert. Findet ein Miner einen Hash auf oder unter dem Zielwert, sendet er den Block ans Netzwerk. Jeder Node wiederholt diesen einen Hash zur Bestätigung, was nur einen Bruchteil der Arbeit kostet, die in die Suche geflossen ist.
+
+Die [Argon2id-Erklärung](/de/blog/argon2id-proof-of-work-explained/) geht jeden Schritt dieses Hashes durch und zeigt, warum er so viel Speicher braucht.
+
+## Was ist die Mining-Difficulty?
+
+Die Difficulty (Schwierigkeit) ist die Zahl, die den Zielwert festlegt. Bei Blocknet ist der Zielwert (2^256 − 1) geteilt durch die Difficulty. Die Difficulty entspricht also ungefähr der Anzahl an Hashes, die das ganze Netzwerk im Schnitt braucht, um einen Block zu finden.
+
+Damit kannst du das Netzwerk schnell einschätzen. Blocknet strebt einen Block alle 300 Sekunden an, die Netzwerk-Hashrate beträgt also etwa Difficulty ÷ 300. Ein Beispiel: Eine Difficulty von 6.000.000 würde bedeuten, dass das Netzwerk etwa 20.000 Hashes pro Sekunde berechnet.
+
+Das Netzwerk passt die Difficulty an, um die Blöcke im Takt zu halten, wenn Miner kommen und gehen:
+
+- **Bitcoin** zielt auf Zehn-Minuten-Blöcke und berechnet die Difficulty alle 2.016 Blöcke neu, also etwa alle zwei Wochen.
+- **Blocknet** zielt auf Fünf-Minuten-Blöcke und berechnet die Difficulty nach jedem Block mit LWMA neu, einem linear gewichteten gleitenden Durchschnitt. Er betrachtet die letzten 60 Blöcke und gewichtet die jüngsten am stärksten, folgt Änderungen der Hashrate also schnell: Das ganze Fenster umfasst etwa fünf Stunden an Blöcken.
+
+LWMA begrenzt außerdem, wie stark ein einzelner Ausreißer-Block das Ergebnis verschieben kann: Die Lösungszeit jedes Blocks zählt mit mindestens 1 Sekunde und höchstens 1.800 Sekunden, dem Sechsfachen des Ziels. Kommen Blöcke schneller als alle fünf Minuten, steigt die Difficulty; kommen sie langsamer, sinkt sie.
+
+## Wie werden Miner bezahlt?
+
+Jeder Block erzeugt in seiner Coinbase-Transaktion neue Coins. Bei Blocknet hat die Coinbase genau einen Output im Wert von genau der Blockbelohnung, ausgezahlt an die Adresse, die der Miner gewählt hat. Der Genesis-Block enthielt überhaupt keine Transaktionen, jeder Coin im Umlauf wurde also gemint.
+
+Die Belohnung folgt einem veröffentlichten Zeitplan. Bei Blocknet begann sie mit 723,25 BNT pro Block und sinkt gleichmäßig, in Stufen einmal pro 30-Tage-Monat von 8.640 Blöcken. Nach vier Jahren erreicht die Ausgabe etwa 100 Millionen BNT, und ab dann zahlt jeder Block eine dauerhafte Tail-Belohnung von 2 BNT, sodass es für Miner immer etwas zu minen gibt.
+
+Geminte Coins warten 60 Blöcke, etwa fünf Stunden, bevor sie ausgegeben werden können. In dieser Pause kann sich eine kurze Aufspaltung der Chain auflösen, bevor eine neue Belohnung ausgegeben werden kann.
+
+## Warum treten die meisten Miner einem Pool bei?
+
+Ein Pool bündelt die Hashrate vieler Miner, sodass die Gruppe oft Blöcke findet, und teilt dann jede Belohnung nach der Arbeit auf, die jedes Mitglied beigetragen hat. Solo wartet ein kleiner Miner unter Umständen Tage oder Wochen auf einen ganzen Block; in einem Pool bringt dieselbe Hashrate einen gleichmäßigen Strom kleinerer Zahlungen.
+
+Die Rechnung zeigt, warum. Blocknet erzeugt 288 Blöcke pro Tag, deine erwarteten Solo-Blöcke pro Tag sind also 288 × (deine Hashrate ÷ Netzwerk-Hashrate). Macht dein Rechner ein Tausendstel des Netzwerks aus, findest du im Schnitt etwa 0,29 Blöcke pro Tag, also einen Block alle dreieinhalb Tage, wobei der tatsächliche Abstand von Block zu Block schwankt.
+
+Ein Pool misst deine Arbeit mit **Shares**. Ein Share ist ein Hash, der einen leichteren Zielwert erfüllt, den der Pool für deine Verbindung festlegt. Jeder Share zählt für deinen Anteil an der Belohnung, und ein Share, der zusätzlich den vollen Zielwert des Netzwerks erfüllt, ist ein echter Block, den der Pool an die Blockchain übermittelt. Auf bntpool.com gilt:
+
+- **Die Share-Difficulty passt sich pro Verbindung an** und zielt auf etwa zehn Shares alle fünf Minuten, sodass schnelle wie langsame Rechner regelmäßig Arbeit melden.
+- **Belohnungen werden per PPLNS** über ein Sechs-Stunden-Fenster aufgeteilt: Die Belohnung jedes Blocks geht an die Shares, die in den sechs Stunden vor dem Fund eingereicht wurden.
+- **Auszahlungen beginnen ab 0,1 BNT**, sobald ein Block 60 Blöcke tief in der Chain liegt.
+
+Wenn du einen eigenen Node betreibst, kannst du auch solo minen und jeden gefundenen Block behalten. Die [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) behandelt beides.
+
+## Was bestimmt, wie schnell du minst?
+
+Die Hashfunktion entscheidet, welche Hardware gut abschneidet. Bitcoins SHA-256 braucht fast keinen Speicher, deshalb erledigen spezialisierte Chips namens ASICs heute den größten Teil des Bitcoin-Minings. Blocknet hat Argon2id gewählt, eine speicherintensive (memory-hard) Funktion, die darauf ausgelegt ist, ASICs zu widerstehen: Jeder Hash füllt 2 GiB RAM, also bestimmen Speichergröße und Speicherbandbreite deine Geschwindigkeit.
+
+Das ändert die Rechnung für einen normalen Computer:
+
+- **Der RAM bestimmt die Thread-Anzahl.** Jeder Mining-Thread braucht seinen eigenen 2-GiB-Speicherbereich, ein Rechner mit 16 GB führt also etwa sechs oder sieben Threads aus und lässt dabei Platz für das System.
+- **Die Speicherbandbreite bestimmt die Gesamtgeschwindigkeit.** Jeder Hash schreibt etwa 2 GiB und liest etwa 2 GiB, ein Rechner mit schnellerem Speicherdurchsatz schafft also mehr Hashes pro Sekunde.
+- **CPUs und GPUs können beide minen.** seine mint unter Windows und Linux gleichzeitig auf der CPU und jeder NVIDIA-Karte, und die Hashraten addieren sich.
+
+Das beste mit seine gemessene Ergebnis sind 49,4 H/s auf einem AMD-EPYC-Zen-5-Server (EPYC 9R45, 32 Threads), und ein MacBook Pro mit Apple M4 Max erreicht 30,9 H/s. Der [Hardware-Leitfaden](/de/blog/blocknet-mining-hardware-hashrate/) enthält Ergebnisse für jede getestete Generation, und der Artikel über [CPU-Mining 2026](/de/blog/cpu-mining-2026/) erklärt, warum speicherintensive Coins zu normalen Prozessoren passen.
+
+## Wer hält die Chain ehrlich?
+
+Jeder Node prüft jeden Block: Der Hash erfüllt den Zielwert, die Transaktionen sind gültig und die Belohnung stimmt exakt. Ein Block, der eine Prüfung nicht besteht, wird abgelehnt, egal wie viel Arbeit darin steckt.
+
+Finden zwei Miner fast im selben Moment einen Block, spaltet sich die Chain kurz auf. Blocknet-Nodes folgen der Chain mit der meisten Gesamtarbeit, der Summe der Difficulty aller Blöcke, sodass sich die Aufspaltung auflöst, sobald der nächste Block auf einer Seite landet. Deshalb zählen Wallets Bestätigungen: Bei Blocknet gelten 10 Bestätigungen (etwa 50 Minuten) als sicher, und kein Node reorganisiert mehr als 100 Blöcke tief.
+
+## Probier es auf deinem eigenen Computer aus
+
+Blocknet minen geht in drei Schritten: Adresse besorgen, [seine](/de/#download) herunterladen, starten und den Standard-Pool bntpool.com übernehmen. seine wählt Thread-Anzahl, CPU-Kernel und Speicheraufteilung während des Minings selbst, du kannst also schon nach wenigen Minuten zusehen, wie deine ersten Shares ankommen.
+
+<Note>
+Laut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet um den 16. Februar 2027 ein Netzwerk-Upgrade namens Faraday, das einen leichteren Proof of Work bringen soll. Die Angaben zum Proof of Work oben beschreiben das Netzwerk vor Faraday. seine sucht beim Start und alle 12 Stunden nach neuen Releases.
+</Note>
+
+<CTA target="seine" title="Blocknet minen" text="Lade seine für Windows, macOS oder Linux herunter, füge deine Adresse ein und sende in wenigen Minuten Shares an bntpool.com." />

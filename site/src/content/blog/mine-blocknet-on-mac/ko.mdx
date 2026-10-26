@@ -1,0 +1,131 @@
+---
+title: Mac에서 Blocknet 채굴하는 방법
+description: Apple 실리콘 Mac에서 seine로 Blocknet을 채굴합니다. 터미널 설정, M4 Max 실측 30.9 H/s, Mac별 스레드 수를 확인하십시오.
+tags: [채굴 가이드, macOS, Apple 실리콘, seine]
+faq:
+  - q: 'MacBook Air에서 Blocknet을 채굴할 수 있습니까?'
+    a: '네. MacBook Air를 포함한 모든 Apple 실리콘 Mac에서 seine가 실행됩니다. seine-macos-aarch64.tar.gz를 다운로드하고 터미널에서 압축을 푼 뒤 ./seine를 실행하십시오. 스레드 하나에 약 2 GB의 메모리가 필요하므로 16 GB MacBook Air는 최대 7개의 스레드를 실행할 수 있으며, seine가 남은 메모리를 보고 스레드 수를 알아서 정합니다.'
+  - q: 'Mac에서 Blocknet을 채굴할 때 seine는 GPU를 사용합니까?'
+    a: 'Apple 실리콘에서 seine는 기본적으로 CPU로 채굴합니다. 그것이 가장 빠른 선택이기 때문입니다. CPU와 그래픽 코어는 같은 통합 메모리를 공유하며, Blocknet의 Argon2id 작업 증명은 메모리 대역폭에 좌우됩니다. M4 Max에서는 CPU만으로 채굴할 때 해시레이트가 가장 높았기 때문에 seine가 자동으로 이 방식을 사용합니다.'
+  - q: 'Mac으로 Blocknet을 채굴하려면 메모리가 얼마나 필요합니까?'
+    a: '채굴 스레드 하나는 2 GiB 메모리 블록을 처리하므로 스레드당 약 2 GB로 계획하십시오. 16 GB Mac은 최대 7개, 32 GB Mac은 최대 15개, 64 GB Mac은 최대 30개의 스레드를 실행할 수 있습니다. seine는 남은 메모리를 계산하고 코어 수에도 스레드 수를 맞춥니다.'
+  - q: 'Intel Mac에서 Blocknet을 채굴할 수 있습니까?'
+    a: '네. seine는 Intel Mac용으로 별도의 아카이브인 seine-macos-x86_64.tar.gz를 제공하며, 과정은 Apple 실리콘과 같습니다. 다운로드하고 터미널에서 압축을 푼 뒤 ./seine를 실행하고 Blocknet 주소나 @name을 붙여넣으십시오. seine가 메모리에 맞게 스레드 수를 정하고 기본값인 bntpool.com에서 채굴을 시작합니다.'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+이 가이드는 Apple 실리콘 Mac에서 **seine**로 Blocknet을 채굴하는 방법을 설명합니다. M 시리즈 칩이 Blocknet의 작업 증명에 잘 맞는 이유, M4 Max의 측정 결과, Mac의 메모리로 실행할 수 있는 스레드 수, 그리고 bntpool.com에서 채굴을 시작하기 위한 터미널 단계를 정확히 다룹니다.
+
+## Mac에서 Blocknet을 채굴할 수 있습니까?
+
+<Answer>
+네. Apple 실리콘 Mac은 통합 메모리가 메모리 하드 Argon2id 작업 증명에 충분한 대역폭을 제공하므로 Blocknet 채굴 성능이 뛰어납니다. `seine-macos-aarch64.tar.gz`를 다운로드하고 터미널에서 압축을 푼 뒤 `./seine`를 실행하고 주소를 붙여넣으십시오. 48 GB M4 Max는 CPU만으로 30.9 H/s를 기록했습니다.
+</Answer>
+
+Mac 전용 설정은 seine가 스스로 처리합니다. CPU로 채굴하고, 성능 코어에 스레드를 먼저 배치하며, 메모리에 맞게 스레드 수를 정하므로 대부분의 사람에게는 `./seine` 하나면 충분합니다.
+
+## Apple 실리콘 Mac은 왜 Blocknet 채굴을 잘합니까?
+
+Blocknet의 작업 증명은 해시 하나당 2 GiB의 메모리를 쓰는 [Argon2id](/ko/blog/argon2id-proof-of-work-explained/)입니다. 해시 하나를 계산할 때마다 2 GiB 메모리 블록을 채우면서 앞서 쓴 부분을 다시 읽기 때문에, 채굴 스레드의 속도는 주로 칩이 메모리와 데이터를 얼마나 빨리 주고받는지에 달려 있습니다. 그래서 seine 스레드마다 약 2 GB의 전용 RAM이 필요합니다.
+
+Apple 실리콘은 통합 메모리를 중심으로 설계되었으며, [Apple은](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) 이를 고대역폭, 저지연 메모리를 하나의 풀로 통합한 것이라고 설명합니다. 덕분에 모든 채굴 스레드가 충분한 대역폭을 얻으며, 이는 메모리 하드 해시에 꼭 필요한 조건입니다. 그 결과 노트북으로도 서버 프로세서와 비슷한 수준으로 Blocknet을 채굴할 수 있습니다.
+
+## M4 Max는 Blocknet을 얼마나 빠르게 채굴합니까?
+
+<Answer>
+M4 Max 칩을 탑재한 48 GB MacBook Pro는 CPU만으로 16스레드에서 30.94 H/s로 Blocknet을 채굴했습니다. seine가 이 머신에서 기본으로 사용하는 균형 설정인 성능 코어 스케줄링 14스레드에서는 29.26 H/s를 기록했으며, 다른 앱을 위한 메모리도 더 많이 남겼습니다.
+</Answer>
+
+다음 결과는 2026년 7월 10일에 48 GB M4 Max(성능 코어 12개, 효율 코어 4개)에서 seine의 검증 측정으로 얻은 것입니다.
+
+| 설정 | 스레드 | 해시레이트 |
+|---|---|---|
+| 최대 처리량 | 16, `auto` 스케줄링 | 30.94 H/s |
+| 균형 (이 Mac에서 seine의 기본 상한) | 14, `pcore-only` 스케줄링 | 29.26 H/s |
+
+참고로 30.9 H/s는 seine [성능 표](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)의 모든 Arm 서버와 Intel Xeon 결과보다 높으며, 이보다 높은 것은 AMD EPYC Zen 5와 Zen 4 서버뿐입니다. [Blocknet 채굴 하드웨어 가이드](/ko/blog/blocknet-mining-hardware-hashrate/)에서 하드웨어 세대별 최고 결과를 비교하며, [Apple 실리콘 가이드](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md)에 전체 튜닝 내용이 있습니다.
+
+## Mac은 스레드를 몇 개 실행할 수 있습니까?
+
+스레드마다 2 GiB의 전용 메모리가 필요하므로 메모리가 상한을 정합니다. seine는 스레드 수를 정할 때 Mac 메모리의 5%를 여유분으로 남깁니다. 따라서 상한은 다음과 같습니다.
+
+| Mac 메모리 | 메모리로 실행 가능한 스레드 |
+|---|---|
+| 16 GB | 최대 7 |
+| 24 GB | 최대 11 |
+| 32 GB | 최대 15 |
+| 36 GB | 최대 17 |
+| 48 GB | 최대 22 |
+| 64 GB | 최대 30 |
+
+최종 스레드 수는 다음 두 가지에 따라 Mac에 맞게 정해집니다.
+
+- **남은 메모리.** seine는 시작할 때 실제로 비어 있는 메모리를 계산하므로, 열어 둔 앱이 있으면 스레드 수가 조금 줄어듭니다. 실행 중에 메모리가 부족해지면 seine는 일부 스레드를 쉬게 하고 그 메모리를 반환합니다.
+- **코어.** Mac에서 seine는 기본적으로 모든 성능 코어와 효율 코어의 절반을 사용합니다. 12+4 코어 M4 Max에서는 14스레드이며, 위 표의 균형 설정입니다.
+
+이 계산을 직접 할 필요는 없습니다. seine가 시작할 때 스레드 수를 정하고, 채굴하는 동안 그 근처의 스레드 수를 계속 테스트합니다.
+
+## macOS 단계별 설정
+
+### 1단계: Blocknet 주소 준비
+
+공식 Blocknet 지갑인 [명령줄 지갑](https://github.com/blocknetprivacy/blocknet/releases/latest) 또는 [데스크톱 지갑](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)을 설치하고 주소를 복사하십시오. [blocknet.id](https://blocknet.id)에서 받은 Blocknet ID 짧은 이름이 있다면 대신 `@name`으로 채굴할 수 있습니다.
+
+### 2단계: Apple 실리콘용 seine 다운로드
+
+[다운로드 섹션](/ko/#download)에서 `seine-macos-aarch64.tar.gz`를 받으십시오. 이 파일에는 `seine` 프로그램, readme와 라이선스, 다운로드를 확인하기 위한 `SHA256SUMS.txt` 파일이 들어 있습니다.
+
+### 3단계: 터미널에서 압축 풀기
+
+터미널(응용 프로그램 > 유틸리티)을 열고 다음 명령어를 실행하십시오. 홈 폴더에 `seine` 폴더를 만들고 그 안에 아카이브를 풉니다.
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### 4단계: seine 실행
+
+```sh
+./seine
+```
+
+macOS 빌드는 ad-hoc 서명되어 있습니다. macOS가 첫 실행을 막으면 시스템 설정을 열고 개인정보 보호 및 보안에서 `seine`를 허용하십시오. 터미널에서 다운로드 플래그를 지우고 다시 실행해도 됩니다.
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### 5단계: 주소를 입력하고 채굴 시작
+
+seine가 수령 주소나 `@shortname`을 묻고, 이어서 풀을 묻습니다. Return 키를 눌러 기본값인 `stratum+tcp://bntpool.com:3333`을 선택하십시오. 그러면 [대시보드](/ko/blog/seine-dashboard-explained/)에 해시레이트와 처음 승인된 셰어가 표시됩니다. bntpool.com 풀은 잔액이 0.1 BNT에 도달하면 주소로 보내 주며, [bntpool.com](https://bntpool.com)에서 주소를 조회해 잔액을 확인할 수 있습니다.
+
+## Mac에서 seine는 왜 CPU로만 채굴합니까?
+
+Apple 실리콘에서는 CPU와 그래픽 코어가 하나의 통합 메모리 풀을 공유합니다. Argon2id는 메모리 대역폭에 좌우되므로 CPU와 그래픽 코어가 같은 대역폭을 두고 경쟁하게 됩니다. M4 Max에서 seine를 테스트한 결과 CPU만으로 채굴할 때 해시레이트가 가장 높았기 때문에, seine는 모든 Apple 실리콘 Mac에서 이 방식을 자동으로 선택합니다. 플래그를 설정하지 않아도 가장 빠른 설정으로 채굴합니다.
+
+## Mac의 성능을 최대한 끌어내려면 어떻게 합니까?
+
+- **seine가 스스로 튜닝하게 두십시오.** 실제 채굴 작업으로 스레드 수와 CPU 커널을 비교하고, 향상이 확인된 경우에만 전환하며, 결과를 기억해 다음 실행에 사용합니다.
+- **Mac이 잠들지 않게 하십시오.** macOS는 유휴 상태인 Mac을 잠자기 상태로 전환하며, 그러면 채굴이 일시 중지됩니다. 내장된 `caffeinate` 명령어로 seine를 실행하면 seine가 실행되는 동안 Mac이 깨어 있습니다.
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **채굴 전용 Mac이라면 최대 처리량을 노리십시오.** Mac이 채굴만 한다면, M4 Max에서 30.94 H/s를 기록한 설정은 16개 코어를 모두 쓰고 균형 기본값보다 메모리를 더 많이 사용합니다.
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+모든 옵션은 [설정 가이드](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)를 참고하십시오. [기본 채굴 가이드](/ko/blog/how-to-mine-blocknet/)에서 지급과 다른 플랫폼을 다룹니다.
+
+<Note>
+이 결과는 Blocknet의 현재 Argon2id 작업 증명 기준입니다. [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)에 따르면 Blocknet은 2027년 2월 16일 무렵 Faraday라는 네트워크 업그레이드를 계획하고 있으며, 이 업그레이드에서 작업 증명이 바뀔 예정입니다. seine는 시작할 때와 12시간마다 새 릴리스를 확인하므로 최신 버전을 유지하십시오.
+</Note>
+
+<CTA target="seine" title="macOS용 seine 다운로드" text="Apple 실리콘 빌드는 Mac의 CPU로 채굴하며 스레드 수를 자동으로 정합니다." />

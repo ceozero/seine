@@ -1,0 +1,131 @@
+---
+title: Blocknet auf dem Mac minen
+description: 'Mine Blocknet mit seine auf einem Mac mit Apple Silicon: Einrichtung im Terminal, die gemessenen 30,9 H/s des M4 Max und wie viele Threads dein Mac schafft.'
+tags: [Mining-Anleitung, macOS, Apple Silicon, seine]
+faq:
+  - q: 'Kann man Blocknet auf einem MacBook Air minen?'
+    a: 'Ja. Jeder Mac mit Apple Silicon führt seine aus, auch das MacBook Air. Lade seine-macos-aarch64.tar.gz herunter, entpacke es im Terminal und starte ./seine. Jeder Thread braucht etwa 2 GB Arbeitsspeicher, ein MacBook Air mit 16 GB schafft also bis zu sieben Threads, und seine legt die Anzahl anhand des freien Speichers für dich fest.'
+  - q: 'Nutzt seine beim Blocknet-Mining auf dem Mac die GPU?'
+    a: 'seine mint auf Apple Silicon standardmäßig mit der CPU, weil das die schnellste Wahl ist. CPU und Grafikkerne teilen sich denselben gemeinsamen Arbeitsspeicher, und der Argon2id-Proof-of-Work von Blocknet hängt von der Speicherbandbreite ab. Auf dem M4 Max brachte reines CPU-Mining die höchste Hashrate, deshalb nutzt seine es automatisch.'
+  - q: 'Wie viel Arbeitsspeicher braucht ein Mac, um Blocknet zu minen?'
+    a: 'Jeder Mining-Thread arbeitet einen 2-GiB-Speicherblock durch, rechne also mit etwa 2 GB pro Thread. Ein Mac mit 16 GB schafft bis zu sieben Threads, einer mit 32 GB bis zu 15 und einer mit 64 GB bis zu 30. seine zählt den freien Speicher und stimmt die Threads außerdem auf deine Kerne ab.'
+  - q: 'Kann man Blocknet auf einem Intel-Mac minen?'
+    a: 'Ja. seine veröffentlicht ein eigenes Archiv für Intel-Macs, seine-macos-x86_64.tar.gz, und die Schritte sind dieselben wie bei Apple Silicon. Lade es herunter, entpacke es im Terminal, starte ./seine und füge deine Blocknet-Adresse oder deinen @name ein. seine richtet die Threads nach deinem Speicher aus und mint standardmäßig auf bntpool.com.'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+Diese Anleitung zeigt dir, wie du Blocknet mit **seine** auf einem Mac mit Apple Silicon minst: warum Chips der M-Serie gut zum Proof of Work von Blocknet passen, was ein M4 Max gemessen hat, wie viele Threads der Arbeitsspeicher deines Macs aufnehmen kann und mit welchen Schritten im Terminal du auf bntpool.com mit dem Mining beginnst.
+
+## Kann man Blocknet auf dem Mac minen?
+
+<Answer>
+Ja. Macs mit Apple Silicon sind starke Blocknet-Miner, weil ihr gemeinsamer Arbeitsspeicher dem speicherintensiven Argon2id-Proof-of-Work viel Bandbreite bietet. Lade `seine-macos-aarch64.tar.gz` herunter, entpacke es im Terminal, starte `./seine` und füge deine Adresse ein. Ein M4 Max mit 48 GB erreichte allein mit der CPU 30,9 H/s.
+</Answer>
+
+seine erledigt die Mac-spezifische Einrichtung selbst. Es mint mit der CPU, verteilt die Threads zuerst auf die Performance-Kerne und richtet die Thread-Anzahl nach deinem Speicher aus. Den meisten reicht deshalb ein einfaches `./seine`.
+
+## Warum minen Macs mit Apple Silicon Blocknet so gut?
+
+Der Proof of Work von Blocknet ist [Argon2id](/de/blog/argon2id-proof-of-work-explained/) mit 2 GiB Speicher pro Hash. Jeder Hash füllt einen 2-GiB-Speicherblock und liest dabei frühere Teile davon wieder aus. Die Geschwindigkeit eines Mining-Threads hängt deshalb vor allem davon ab, wie schnell der Chip Daten in den Speicher und aus ihm heraus bewegen kann. Darum braucht jeder seine-Thread etwa 2 GB RAM für sich allein.
+
+Apple Silicon ist um einen gemeinsamen Arbeitsspeicher (Unified Memory) herum gebaut, den [Apple](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) als Speicher mit hoher Bandbreite und niedriger Latenz beschreibt, der in einem einzigen Pool zusammengefasst ist. Das gibt jedem Mining-Thread viel Bandbreite, genau das, was ein speicherintensiver Hash braucht. Das Ergebnis ist ein Laptop, der Blocknet im selben Bereich mint wie Serverprozessoren.
+
+## Wie schnell mint ein M4 Max Blocknet?
+
+<Answer>
+Ein MacBook Pro mit M4 Max und 48 GB minte Blocknet allein mit der CPU bei 16 Threads mit 30,94 H/s. Mit 14 Threads und Zuweisung auf die Performance-Kerne, der ausgewogenen Einstellung, die seine auf diesem Rechner standardmäßig nutzt, erreichte er 29,26 H/s und ließ mehr Speicher für andere Apps frei.
+</Answer>
+
+Diese Ergebnisse stammen aus der Validierungsreihe von seine auf einem M4 Max mit 48 GB (12 Performance-Kerne und 4 Effizienzkerne) vom 10. Juli 2026:
+
+| Einstellung | Threads | Hashrate |
+|---|---|---|
+| Maximaler Durchsatz | 16, Zuweisung `auto` | 30,94 H/s |
+| Ausgewogen (Standardobergrenze von seine auf diesem Mac) | 14, Zuweisung `pcore-only` | 29,26 H/s |
+
+Zur Einordnung: Das Ergebnis von 30,9 H/s liegt vor allen Ergebnissen von Arm-Servern und Intel Xeon in den [Leistungstabellen](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) von seine; nur die Server mit AMD EPYC Zen 5 und Zen 4 lagen höher. Der [Leitfaden zur Blocknet-Mining-Hardware](/de/blog/blocknet-mining-hardware-hashrate/) vergleicht das beste Ergebnis jeder Hardware-Generation, und die [Apple-Silicon-Anleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) enthält alle Tuning-Hinweise.
+
+## Wie viele Threads schafft dein Mac?
+
+Jeder Thread braucht eigene 2 GiB Speicher, also bestimmt der Arbeitsspeicher die Obergrenze. seine lässt außerdem 5 % des Speichers deines Macs als Reserve frei, wenn es die Thread-Anzahl festlegt. Daraus ergeben sich diese Obergrenzen:
+
+| Arbeitsspeicher des Macs | Threads, die der Speicher aufnehmen kann |
+|---|---|
+| 16 GB | bis zu 7 |
+| 24 GB | bis zu 11 |
+| 32 GB | bis zu 15 |
+| 36 GB | bis zu 17 |
+| 48 GB | bis zu 22 |
+| 64 GB | bis zu 30 |
+
+Zwei Dinge passen die endgültige Zahl an deinen Mac an:
+
+- **Freier Speicher.** seine zählt beim Start den tatsächlich freien Speicher, offene Apps senken die Anzahl also ein wenig. Wird der Speicher während des Betriebs knapp, pausiert der Miner einzelne Threads und gibt deren Speicher frei.
+- **Kerne.** Auf dem Mac nutzt seine standardmäßig alle Performance-Kerne plus die Hälfte der Effizienzkerne. Beim M4 Max mit 12+4 Kernen sind das 14 Threads, die ausgewogene Einstellung aus der Tabelle oben.
+
+Nichts davon musst du selbst ausrechnen. seine wählt die Thread-Anzahl beim Start und testet während des Minens weiter benachbarte Werte.
+
+## Einrichtung unter macOS Schritt für Schritt
+
+### Schritt 1: eine Blocknet-Adresse besorgen
+
+Installiere die offizielle Blocknet-Wallet, entweder die [Kommandozeilen-Wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) oder die [Desktop-Wallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), und kopiere deine Adresse. Hast du einen Blocknet-ID-Kurznamen von [blocknet.id](https://blocknet.id), kannst du stattdessen auf `@name` minen.
+
+### Schritt 2: seine für Apple Silicon herunterladen
+
+Lade im [Download-Bereich](/de/#download) die Datei `seine-macos-aarch64.tar.gz` herunter. Sie enthält das Programm `seine`, Readme und Lizenz sowie eine Datei `SHA256SUMS.txt` zum Prüfen des Downloads.
+
+### Schritt 3: im Terminal entpacken
+
+Öffne das Terminal (unter Programme, dann Dienstprogramme) und führe diese Befehle aus. Sie legen in deinem Benutzerordner einen Ordner `seine` an und entpacken das Archiv dorthin:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### Schritt 4: seine starten
+
+```sh
+./seine
+```
+
+Der macOS-Build ist ad hoc signiert. Blockiert macOS den ersten Start, öffne die Systemeinstellungen, gehe zu Datenschutz & Sicherheit und erlaube `seine`. Du kannst auch die Download-Markierung im Terminal entfernen und es erneut starten:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### Schritt 5: Adresse eingeben und mit dem Mining beginnen
+
+seine fragt nach deiner Auszahlungsadresse oder deinem `@shortname` und danach nach einem Pool. Drücke Return, um den Standard `stratum+tcp://bntpool.com:3333` zu übernehmen. [Das Dashboard](/de/blog/seine-dashboard-explained/) zeigt dann deine Hashrate und deine ersten akzeptierten Shares. Der Pool bntpool.com sendet dein Guthaben an deine Adresse, sobald es 0,1 BNT erreicht, und auf [bntpool.com](https://bntpool.com) kannst du es verfolgen, indem du deine Adresse nachschlägst.
+
+## Warum mint seine auf dem Mac nur mit der CPU?
+
+Auf Apple Silicon teilen sich CPU und Grafikkerne einen gemeinsamen Arbeitsspeicher. Argon2id hängt von der Speicherbandbreite ab, also würden CPU und Grafikkerne um dieselbe Bandbreite konkurrieren. In den Tests von seine auf dem M4 Max brachte reines CPU-Mining die höchste Hashrate, deshalb wählt seine es auf jedem Mac mit Apple Silicon automatisch. Du bekommst die schnellste Einrichtung, ohne ein Flag setzen zu müssen.
+
+## Wie holst du das Meiste aus einem Mac heraus?
+
+- **Lass den Miner sich selbst optimieren.** seine vergleicht Thread-Anzahlen und CPU-Kernel bei echter Mining-Arbeit, wechselt nur nach einem bestätigten Gewinn und merkt sich das Ergebnis für den nächsten Start.
+- **Halte den Mac wach.** macOS schickt einen untätigen Mac in den Ruhezustand, was das Mining pausiert. Starte seine mit dem eingebauten Befehl `caffeinate`, damit der Mac wach bleibt, solange seine läuft:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Setze auf einem reinen Mining-Mac auf maximalen Durchsatz.** Macht der Mac nichts anderes als minen, nutzt die Einstellung, die auf dem M4 Max 30,94 H/s erreichte, alle 16 Kerne und mehr Speicher als der ausgewogene Standard:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Alle Optionen findest du in der [Konfigurationsanleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md). Die [Haupt-Mining-Anleitung](/de/blog/how-to-mine-blocknet/) behandelt Auszahlungen und die anderen Plattformen.
+
+<Note>
+Diese Ergebnisse beziehen sich auf den aktuellen Argon2id-Proof-of-Work von Blocknet. Laut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet um den 16. Februar 2027 ein Netzwerk-Upgrade namens Faraday, das den Proof of Work ändern soll. seine sucht beim Start und alle 12 Stunden nach neuen Releases, also halte es aktuell.
+</Note>
+
+<CTA target="seine" title="seine für macOS herunterladen" text="Der Build für Apple Silicon mint mit der CPU deines Macs und wählt die Thread-Anzahl automatisch." />

@@ -1,0 +1,78 @@
+---
+title: 'Windows madenciyi engelledi mi? İndirmeyi doğrulayın'
+description: 'Windows’un engellediği seine indirmesini kontrol edin: uyarıyı belirleyin, resmî ZIP’i SHA-256 ile doğrulayın ve algılama için gereken bilgileri toplayın.'
+tags: ["Madencilik rehberi", "Windows", "İndirmeler"]
+faq:
+  - q: 'Eşleşen SHA-256 özeti madencinin güvenli olduğunu kanıtlar mı?'
+    a: 'Eşleşen özet, indirdiğiniz dosyanın karşılaştırılan sağlama toplamına uyduğunu gösterir. İkisini de resmî sürümden alın. Bu, dosya bütünlüğünü denetler; antivirüs algılamasının incelenmesinin yerini tutmaz ve yazılımın çalıştırılmasının güvenli olduğunu tek başına kanıtlamaz.'
+  - q: 'Windows ZIP’i için hangi sağlama toplamı dosyasını kullanmalıyım?'
+    a: 'seine-windows-x86_64.zip ile aynı sürümün SHA256SUMS.txt ekini kullanın. Bu dosya arşiv özetlerini listeler. ZIP’in içindeki ikinci SHA256SUMS.txt, çıkarılan içeriği açıklar. Arşivi sürüm ekiyle karşılaştırın ve aynı sürüme ait dosyaları birlikte tutun.'
+  - q: 'Engellenen indirmeyi bildirirken neleri eklemeliyim?'
+    a: 'seine sürümü, resmî indirme URL’si, dosya adı, SHA-256 özeti, Windows sürümü ve tam algılama adı veya uyarı metnini ekleyin. ZIP’in mi çıkarılan bir dosyanın mı etkilendiğini belirtin. Kişisel yolları gizleyin; cüzdan kurtarma sözcüklerini, özel anahtarları ve API token’larını ekran görüntülerine koymayın.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Windows bir seine indirmesini engellerse veya çıkarılan dosya kaybolursa önce tam dosyayı ve uyarıyı belirleyin. Bu rehber resmî sürümü kontrol etmeyi, SHA-256 sağlama toplamını karşılaştırmayı ve bildirim için yararlı bilgileri toplamayı gösterir. Örnekte 25 Ekim 2026’da doğrulanan seine v0.2.26 kullanılır.
+
+## Windows bir madenciyi engellediğinde neyi kontrol etmelisiniz?
+
+<Answer>
+Bir şeyi değiştirmeden önce uyarı metnini, etkilenen dosya adını ve sürümü kaydedin. Windows Güvenliği’ni açıp Koruma geçmişindeki algılama kaydına bakın. Sonra arşivi ve sağlama toplamını resmî seine sürümünden alın. Uyarıya nasıl karşılık vereceğinize karar vermeden önce tam dosyayı ve sürümü eşleştirin.
+</Answer>
+
+[Koruma geçmişi](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app) içindeki ilgili kaydı genişletin. Windows, tehdit ayrıntıları için yönetici izni isteyebilir. Etkilenen öğenin indirilen ZIP, `seine.exe` veya DLL olduğunu not edin. Kaybolan çalıştırılabilir dosya ile tarayıcı indirme uyarısı farklı aşamalarda oluşabilir; dosya adını mesajla birlikte saklayın.
+
+## SmartScreen uyarısı mı, antivirüs algılaması mı?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation), indirilen uygulamaları dosya ve yayıncı itibarı gibi sinyallerle değerlendirir. Tanınmayan uygulama uyarısı, belirli adı olan antivirüs algılamasından farklıdır. Gerçek mesajı kaydedin; dosya adındaki madenci sözcüğü hangi denetimin devreye girdiğini veya engellemenin nedenini açıklamaz.
+
+Microsoft, kripto madenciliği yazılımlarını özellikle kurumsal ortamlar için [istenmeyebilecek uygulama ölçütlerinde](https://learn.microsoft.com/en-us/defender-xdr/criteria) de listeler. Yönetilen iş veya okul bilgisayarında geçerli politikayı yöneticiye sorun. Bu bir yazılım kategorisidir, indirdiğiniz dosya hakkında hüküm değildir. Her madenci uyarısını yanlış pozitif saymak yerine tam uyarıyı açıklığa kavuşturun.
+
+## ZIP ve sağlama toplamını aynı sürümden alın
+
+[İndirme sayfasından](/tr/#download) [resmî seine sürümlerini](https://github.com/zpalmtree/seine/releases) açın. Deponun `zpalmtree/seine` olduğunu doğrulayın. Tek bir sürümün `seine-windows-x86_64.zip` dosyasını ve ayrı `SHA256SUMS.txt` ekini seçin. Sürümü not edin. Daha yeni veya eski sürümün özeti indirdiğiniz arşivin referansı değildir.
+
+![seine v0.2.26 resmî sürüm eklerinde Windows ZIP’i ve SHA256SUMS.txt](/assets/blog/seine-release-assets.png)
+
+Bu, v0.2.26 ek listesinin gerçek görüntüsüdür. Sürüm düzeyindeki sağlama toplamı dosyası indirilebilir arşivleri kapsar. ZIP’in içinde çıkarılan dosyaları kapsayan başka bir `SHA256SUMS.txt` vardır. İlk kontrol için ayrı indirilen sürüm ekini kullanın. Adları aynı olsa da bu iki listeyi karıştırmayın.
+
+Doğrudan resmî arşivi kullanın. Yeniden adlandırılmış program, üçüncü tarafın yeniden paketlediği dosya veya sohbetten gelen dosya, resmî ZIP’in özeti karşılaştırılarak doğrulanmaz. ZIP ve sürüm özetini kolay bulabileceğiniz bir klasöre birlikte kaydedin; aşağıdaki komutları o klasörde çalıştırın.
+
+## SHA-256 sağlama toplamı nasıl karşılaştırılır?
+
+İki indirilen dosyanın klasöründe PowerShell’i açın. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) arşivin SHA-256 değerini hesaplar. Karşılaştırma tam Windows arşiv adıyla eşleşen kaydı seçer, tek kayıt bulunmasını şart koşar ve özet farklıysa hatayla durur. Madenciyi çalıştırmadan veya Windows koruma ayarlarını değiştirmeden dosyaları okur.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Başarı mesajı `PASS: ZIP matches SHA256SUMS.txt` olur. Dosya bulunamıyorsa mevcut klasörü ve adları kontrol edin. Sağlama toplamı kaydı yoksa veya yineleniyorsa özgün eki yeniden indirin. Değerler uyuşmazsa durun: sürümü doğrulayın, resmî arşivi ve özeti yeniden indirip karşılaştırmayı tekrarlayın.
+
+## Doğrulanmış örnek ne gösterdi?
+
+Bu karşılaştırmayı Windows PowerShell 5.1’de resmî v0.2.26 Windows ZIP’i üzerinde çalıştırdık. Hesaplanan özet sürümün sağlama toplamıyla eşleşti. Görsel, gerçek komut çıktısının düzenlenmiş dökümüdür; Windows Güvenliği bildirimi değildir. [Metin kaydı](/assets/blog/seine-v0.2.26-verification.txt) tam özeti ve arşiv dosyalarının listesini korur.
+
+![seine v0.2.26 Windows arşivi için gerçek Windows PowerShell sağlama toplamı sonucu](/assets/blog/seine-checksum-result.png)
+
+Özet karşılaştırması baytların verilen referansla eşleşip eşleşmediğini söyler. Başka kaynaktan alınan özeti doğrulamaz, kötü amaçlı yazılım bulunmadığını kanıtlamaz veya belirli algılamayı açıklamaz. Uyarı çıkarılan çalıştırılabilir dosyayı adlandırıyorsa dosya adını ve algılamayı ayrı kaydedin; ZIP özeti arşivin kimliğidir.
+
+## Doğrulanmış indirme hâlâ engelleniyorsa?
+
+Çözülmemiş algılama araştırılırken öğeyi karantinada tutun. Sürüm, indirme URL’si, etkilenen dosya adı, SHA-256 ve tam uyarı metnini hazırlayın. Windows sürümünü ve engelin indirme, çıkarma veya başlatma sırasında oluştuğunu ekleyin. Böylece kişisel yapılandırmayı paylaşmadan tekrarlanabilir bir bildirim oluşturulur.
+
+Proje bildirimi için [seine sorun takipçisini](https://github.com/zpalmtree/seine/issues), yanlış algılama şüphesinde Microsoft’un [dosya gönderim portalını](https://www.microsoft.com/en-us/wdsi/filesubmission) kullanın. Ekleri göndermeden önce inceleyin. İstendiğinde herkese açık sürüm dosyasını veya tanımlayıcılarını paylaşın; madencilik veri klasörünü değil. Ekran görüntülerinden kişisel yolları, cüzdan bilgilerini ve kimlik doğrulama token’larını çıkarın.
+
+Windows bazı algılamalarda öğeye özel işlemler sunar. Kaynağı ve algılamayı açıklığa kavuşturduktan ve tam o dosyaya güvendikten sonra izin vermeyi değerlendirin; kayıtlı uyarının talimatlarını izleyin. Sistem genelindeki korumayı açık bırakın. Yönetilen cihazlarda neye izin verileceğini yönetici belirler.
+
+## Doğrulanmış Windows arşiviyle devam edin
+
+Dosyanın kullanımına izin verildikten sonra tüm ZIP’i yazılabilir klasöre çıkarın ve birlikte gelen DLL’leri `seine.exe` yanında tutun. [Windows madencilik rehberi](/tr/blog/mine-blocknet-on-windows/) ilk başlatmayı ve ödeme adresi istemini açıklar. Sürücü, çalışma zamanı veya cihaz seçimi için [NVIDIA rehberine](/tr/blog/mine-blocknet-nvidia-gpu/) geçin. Bunlar indirme doğrulamasından ayrı kontrollerdir.
+
+<CTA target="seine" title="Resmî seine sürümünü edinin" text="Windows arşivini seçin ve kurulumdan önce aynı sürümün sağlama toplamını doğrulayın." />

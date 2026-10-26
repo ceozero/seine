@@ -1,0 +1,143 @@
+---
+title: Memos cifrados en los pagos de Blocknet
+description: 'Añade un memo cifrado a cualquier pago de Blocknet: factura, pedido o nota. Hasta 124 bytes, legible por emisor y receptor, con relleno para no destacar.'
+tags: [Memos, Privacidad, Billetera, Pagos]
+faq:
+  - q: '¿Qué longitud puede tener un memo de Blocknet?'
+    a: 'Un memo admite hasta 124 bytes. El texto plano se guarda en UTF-8, así que son 124 letras, dígitos o signos de puntuación en inglés, o unos 41 caracteres chinos, a tres bytes cada uno. La billetera detiene un memo más largo antes de construir la transacción y te indica el máximo de 124 bytes.'
+  - q: '¿Puede un explorador de bloques leer un memo de Blocknet?'
+    a: 'No. Un explorador muestra el campo del memo como 128 bytes de texto cifrado marcados como encrypted. La clave sale del secreto que comparten el emisor y el receptor para esa salida, así que solo sus billeteras pueden abrirlo. Como todos los memos se rellenan hasta su tamaño completo, un explorador ni siquiera puede saber qué salidas llevan una nota.'
+  - q: '¿Un memo hace más grande una transacción de Blocknet?'
+    a: 'No. Cada salida ya lleva un campo de memo cifrado de 128 bytes, tanto si escribes una nota como si lo dejas vacío. Añadir un memo ocupa un espacio que ya existe, así que un pago con un número de factura tiene exactamente el mismo tamaño que el mismo pago sin él, y los dos se ven idénticos en la cadena.'
+  - q: '¿Puedo añadir un memo cuando pago a un nombre de Blocknet ID?'
+    a: 'Sí. Pon el nombre donde va la dirección y el memo después del importe, por ejemplo send @rock 100 "invoice 1042". La billetera resuelve el nombre, muestra la dirección verificada, la comisión y el memo, y te pide confirmación. El memo se cifra para la billetera a la que apunta el nombre.'
+sourceHash: 6df2e7728647
+translation: reviewed
+---
+
+Cada pago de Blocknet puede llevar una breve nota cifrada. Puedes usarla para un número de factura, una referencia de pedido o un mensaje para la persona a la que pagas, y solo tú y esa persona pueden leerla. Esta guía muestra cómo añadir un memo al enviar BNT, quién puede leerlo, por qué los memos nunca destacan en la cadena y dónde encontrar los memos que recibes.
+
+## ¿Qué es un memo de Blocknet?
+
+Un memo de Blocknet es un campo cifrado de 128 bytes que va unido a cada salida de una transacción. Admite hasta 124 bytes de tu propio texto o datos, como un número de factura o una nota breve. Se cifra con un secreto que solo comparten el emisor y el receptor, y se rellena para que un memo vacío parezca uno lleno.
+
+El memo forma parte del propio formato de transacción. Cada salida de la cadena tiene uno, incluidas las salidas de cambio que devuelven monedas a tu propia billetera. Eso aporta tres propiedades útiles:
+
+- **Privado por defecto.** El contenido se cifra para el receptor de esa salida. Nadie más ve lo que escribiste.
+- **Tamaño fijo.** El campo siempre ocupa 128 bytes en la cadena, pongas lo que pongas en él.
+- **Siempre presente.** Como cada salida lleva un memo, un pago con nota se ve exactamente igual que un pago sin ella.
+
+## ¿Qué puedes poner en un memo?
+
+Cualquier cosa que quepa en 124 bytes. El texto plano se guarda en UTF-8, así que en inglés son 124 letras, dígitos y espacios. Los caracteres fuera del alfabeto latino ocupan más bytes: un carácter chino ocupa tres, así que en un memo caben unos 41.
+
+Usos habituales:
+
+- **Facturas.** Pon el número de factura en el memo, y quien recibe el pago puede relacionarlo con la factura correcta sin preguntar.
+- **Números de pedido.** Una tienda o un servicio puede pedir a sus clientes que incluyan una referencia de pedido y leerla directamente del pago entrante.
+- **Notas.** «Alquiler de noviembre», «Gracias por la ayuda» o «Mi parte de la cena» viajan con las monedas.
+- **Datos binarios.** La billetera también acepta bytes en bruto escritos en hexadecimal, para códigos de referencia que genera y lee el software.
+
+## ¿Cómo añades un memo al enviar BNT?
+
+<Answer>
+En la billetera de línea de comandos, escribe el memo después del importe: send @rock 100 "invoice 1042". La billetera muestra el memo en la pantalla de confirmación junto a la comisión, lo cifra para el receptor y envía el pago cuando confirmas. También funcionan los bytes en bruto, con el prefijo hex:.
+</Answer>
+
+El comando `send` de la billetera acepta el memo como último argumento opcional:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Un memo puede contener espacios, y las comillas a su alrededor son opcionales. La billetera elimina un par de comillas coincidentes antes de cifrar el texto. Este es un pago a un nombre de Blocknet ID con un número de factura:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+El paso de confirmación muestra el memo que leerá el receptor, así que puedes revisarlo antes de que se envíe nada. Si un memo supera los 124 bytes, la billetera se detiene antes de construir la transacción con `memo too long: max 124 bytes`, y puedes acortarlo y volver a intentarlo.
+
+Para enviar bytes en bruto, pon el prefijo `hex:` delante del memo. La billetera decodifica el hexadecimal y cifra los bytes:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+Los [enlaces de pago](/es/blog/blocknet-payment-links/) también pueden llevar un memo. Cuando pegas un enlace `blocknet://` o un enlace `bntpay.com` en la billetera, rellena la dirección, el importe y el memo para que los confirmes, de modo que la persona a la que pagas puede fijar de antemano la referencia de la factura. Puedes leer más sobre nombres y enlaces en la [guía de Blocknet ID](/es/blog/blocknet-id-pay-by-name/).
+
+### Memos desde tu propio software
+
+La API de la billetera acepta un memo para cada destinatario de un envío. En una petición a `POST /api/wallet/send`, da a cada destinatario `memo_text` para texto plano o `memo_hex` para bytes en bruto:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Aquí los importes van en unidades atómicas, donde 1 BNT son 100.000.000 unidades, así que el ejemplo envía 100 BNT y 25 BNT. Cada destinatario recibe su propio memo, cifrado solo para su billetera. Se aplica el mismo máximo de 124 bytes.
+
+## ¿Quién puede leer un memo de Blocknet?
+
+<Answer>
+El emisor y el receptor. Cada memo se cifra con el secreto que comparten las dos billeteras para esa salida, el mismo secreto que crea la dirección sigilosa de un solo uso del receptor. Cualquier otra persona, incluidos los operadores de nodos y los exploradores de bloques, ve 128 bytes de datos de aspecto aleatorio y no puede saber si dentro hay una nota.
+</Answer>
+
+Cuando tu billetera construye un pago, combina una clave de transacción aleatoria nueva con la clave pública de visualización del receptor para obtener un secreto compartido. Ese secreto es lo que genera la [dirección sigilosa de un solo uso](/es/blog/blocknet-privacy-features/) del receptor, y la billetera también lo usa para cifrar el memo. Calcula el hash del secreto con SHA3-256, junto con la posición de la salida en la transacción y el identificador de la red, para obtener una máscara de 128 bytes, y luego combina la máscara con el memo. Cada salida recibe su propia máscara, así que dos memos de la misma transacción se cifran por separado.
+
+La billetera del receptor llega al mismo secreto desde el otro lado, usando su clave privada de visualización, mientras examina cada bloque. Descifra el memo y lo guarda con el pago. Por tu parte, la billetera guarda los memos que escribiste en su historial de envíos.
+
+Dos cosas que conviene saber:
+
+- **Una billetera de solo lectura también muestra los memos.** Tu clave privada de visualización es la que lee los pagos entrantes, así que una billetera de solo lectura creada a partir de ella ve el importe y el memo de cada pago. Comparte esa clave solo con personas a las que dejarías ver tus pagos entrantes.
+- **Las recompensas de minería llevan memos vacíos.** El consenso exige que el memo de cada recompensa de bloque esté vacío, así que las salidas coinbase de la cadena nunca pueden usarse como canal público de mensajes.
+
+## Por qué todos los memos se ven iguales en la cadena
+
+Un memo que mostrara su longitud revelaría algo. Una nota de 30 bytes se ve distinta de una de 100, y un memo vacío destacaría frente a ambas. La billetera de Blocknet cierra esa puerta con un formato fijo y relleno aleatorio.
+
+Antes de cifrar, la billetera empaqueta el memo en un sobre de 128 bytes:
+
+| Bytes | Contenido |
+|---|---|
+| 1 | Versión del sobre |
+| 1 | Longitud de tu memo |
+| 2 | Suma de verificación del memo |
+| 0 a 124 | Tu memo |
+| El resto | Relleno aleatorio |
+
+El relleno sale del generador criptográfico de números aleatorios del sistema, así que el espacio sin usar es impredecible. Tras el cifrado, una nota corta, una nota completa y un memo vacío son todos 128 bytes de datos de aspecto aleatorio. Las salidas de cambio reciben su propio memo vacío y rellenado, así que incluso las monedas que te devuelves a ti mismo pasan desapercibidas.
+
+La suma de verificación permite a la billetera del receptor confirmar que ha descifrado bien el memo antes de mostrarlo. Los nodos también rechazan cualquier bloque que contenga una salida cuyo campo de memo sea todo ceros, así que cada salida de la cadena lleva un memo correctamente rellenado.
+
+## Dónde encontrar los memos que has recibido
+
+La billetera de línea de comandos muestra los memos allí donde lista pagos:
+
+- **`history`** muestra los pagos entrantes y salientes, con una línea `memo:` bajo cualquier pago que llevara uno.
+- **`outputs tx <txid>`** muestra todas las salidas de esa transacción que posee tu billetera, memo incluido. `outputs <n>` hace lo mismo para una sola salida de la lista.
+- **La API de la billetera** devuelve el memo de cada salida recibida como `memo_hex` desde `GET /api/wallet/history`, listo para que un sistema de pedidos lo compare con las facturas.
+
+Los memos de texto aparecen entre comillas. Un memo que no es texto imprimible, como los bytes en bruto enviados con `hex:`, aparece en hexadecimal.
+
+Si alguna vez hay que aclarar un pago, el emisor puede demostrarlo. El comando `prove <txid>` de la billetera muestra la clave de transacción de un pago que enviaste. Cualquiera que tenga esa clave, el ID de la transacción y la dirección del receptor puede comprobar el pago mediante el endpoint `POST /api/verify-proof`, que no necesita billetera. Confirma la transacción y muestra las salidas que recibió esa dirección, sus importes y sus memos.
+
+## Gana los BNT que vas a enviar
+
+Una forma sencilla de conseguir tus primeros BNT es minarlos. seine funciona en tu propia computadora, se ajusta solo mientras mina y paga a través de bntpool.com directamente a tu dirección o a tu `@name`. La [guía de minería](/es/blog/how-to-mine-blocknet/) te lo deja funcionando en pocos minutos.
+
+<CTA target="seine" title="Descarga seine y mina BNT" text="Mina Blocknet en tu propia computadora sin configurar nada y luego paga desde tu billetera con pagos privados que llevan memo." />

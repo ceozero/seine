@@ -1,0 +1,112 @@
+---
+title: 'Como minerar Blocknet com uma GPU NVIDIA'
+description: 'Minere Blocknet com uma GPU NVIDIA usando seine. Configure Windows ou Linux, use CPU e GPU, confira o hashrate e resolva problemas na inicialização.'
+tags: ['Guia de mineração', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'O seine pode usar a CPU e a GPU NVIDIA juntas?'
+    a: 'Sim. O seine seleciona automaticamente a CPU e as GPUs NVIDIA detectadas quando você não define a opção de backend. O painel Devices mostra cada backend separadamente. Para escolher uma placa e manter a mineração por CPU, selecione cpu e nvidia e informe o índice do dispositivo NVIDIA.'
+  - q: 'Preciso do CUDA Toolkit no Windows?'
+    a: 'O arquivo oficial do Windows inclui as bibliotecas de execução NVRTC que o seine usa para compilar seus kernels de GPU. Instale um driver de vídeo NVIDIA compatível e mantenha as DLLs extraídas ao lado de seine.exe. Essa versão empacotada para Windows não exige uma instalação separada do CUDA Toolkit.'
+  - q: 'Como minerar com uma GPU NVIDIA sem usar a CPU?'
+    a: 'Inicie o seine com a opção backend definida como nvidia. Ele cria um backend NVIDIA para cada placa detectada. Adicione a opção nvidia-devices para selecionar índices específicos. Confira o painel Devices após iniciar para confirmar que as GPUs desejadas aparecem e estão calculando hashes.'
+  - q: 'Onde vejo se os shares da minha GPU foram aceitos?'
+    a: 'O painel de mineração mostra os shares enviados, rejeitados e aceitos, e o log identifica o backend de cada evento de share. Confira o hashrate local na linha NVIDIA e procure mensagens de shares aceitos desse backend. Use o guia de acompanhamento do pool para consultar o trabalho creditado.'
+---
+
+O seine minera Blocknet na sua GPU NVIDIA junto com a CPU. Este guia aborda a configuração no Windows e no Linux, a seleção de placas, os shares aceitos e uma comparação medida com a RTX 5090. Os comandos correspondem ao seine v0.2.26 e à rede Argon2id atual em outubro de 2026.
+
+## Como começar a minerar Blocknet com uma GPU NVIDIA?
+
+<Answer>
+Baixe o arquivo do seine para Windows x86_64 ou Linux x86_64, prepare o driver NVIDIA e as bibliotecas de execução da sua plataforma e inicie o minerador. Informe seu endereço de pagamento e aceite o pool padrão. O seine seleciona automaticamente a CPU e as placas NVIDIA detectadas, depois prepara e ajusta cada backend de GPU.
+</Answer>
+
+Escolha seu arquivo na [seção de downloads](/pt-br/#download): `seine-windows-x86_64.zip` para Windows ou `seine-linux-x86_64.tar.gz` para Linux x86_64. O [guia geral de mineração](/pt-br/blog/how-to-mine-blocknet/) explica como obter um endereço de pagamento e fazer a primeira conexão.
+
+Comece com as configurações padrão. Deixe sem definir o kernel, o limite de registradores, a quantidade de lanes da GPU e de threads da CPU para que o seine escolha a configuração. O painel Devices mostra quais backends estão contribuindo quando a inicialização termina.
+
+## Preparar o ambiente NVIDIA no Windows ou no Linux
+
+| Plataforma | O que preparar | Comando para iniciar |
+|---|---|---|
+| Windows x86_64 | Driver de vídeo NVIDIA; DLLs de execução incluídas ao lado do executável | `.\seine.exe` |
+| Linux x86_64 | Driver NVIDIA e bibliotecas de execução NVRTC compatíveis | `./seine` |
+
+No Windows, extraia todo o ZIP para uma pasta com permissão de gravação. Mantenha `nvrtc64_120_0.dll` e `nvrtc-builtins64_128.dll` ao lado de `seine.exe`. A versão empacotada usa essas bibliotecas incluídas; não é necessário instalar o CUDA Toolkit separadamente.
+
+![O arquivo do Windows na tabela oficial de downloads do seine](/assets/blog/windows-download.png)
+
+Instale o driver da sua placa e sistema operacional pela [página de drivers da NVIDIA](https://www.nvidia.com/en-us/drivers/). O [guia de configuração do Windows](/pt-br/blog/mine-blocknet-on-windows/) detalha o download, a soma de verificação e a extração.
+
+No Linux, instale o driver NVIDIA e os pacotes NVRTC compatíveis com sua distribuição. O NVRTC compila os kernels CUDA do seine durante a execução. A [documentação do NVRTC](https://docs.nvidia.com/cuda/nvrtc/) da NVIDIA descreve o compilador e a biblioteca builtins correspondente; os [requisitos NVIDIA do seine](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) documentam o ambiente de execução esperado pelo minerador.
+
+Execute o binário a partir da pasta dele. Reutilize o mesmo diretório de trabalho para manter as configurações salvas em `seine-data`. Na primeira execução, informe seu endereço de recebimento e aceite `stratum+tcp://bntpool.com:3333` como pool.
+
+## É possível selecionar uma placa NVIDIA e manter a mineração por CPU?
+
+Selecione os dois backends e o índice do dispositivo. No PowerShell, este comando mantém a mineração por CPU e seleciona o dispositivo NVIDIA `0`:
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Use as mesmas opções com o executável do Linux:
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+Esses comandos usam seu endereço e pool salvos ou pedem esses dados na inicialização. Para informar a conexão explicitamente, adicione seu endereço público de recebimento com `--address` e a URL do pool com `--pool-url`.
+
+O índice identifica uma GPU enumerada pelo ambiente NVIDIA. Confirme a lista de dispositivos após iniciar. `--nvidia-devices 0,1` seleciona essas duas placas; omitir o seletor usa todos os dispositivos NVIDIA detectados.
+
+Para minerar apenas com GPU, selecione `nvidia`:
+
+```bash
+./seine --backend nvidia
+```
+
+No PowerShell, use `.\seine.exe --backend nvidia`. Inclua `cpu` na lista de backends quando quiser os dois tipos de hardware. Reinicie o seine com o comando desejado ao mudar essa seleção.
+
+## Como confirmar que a GPU está minerando?
+
+<Answer>
+Procure as linhas dos backends NVIDIA no painel Devices e confira seus hashrates atuais e médios. Durante a inicialização, uma linha pode mostrar o progresso enquanto os kernels CUDA são preparados. Quando o cálculo de hashes começar, procure eventos de shares desse backend no log e shares aceitos no painel Mining.
+</Answer>
+
+Os backends NVIDIA aparecem como `nvidia#1`, `nvidia#2` e assim por diante; a CPU tem sua própria linha. O hashrate total inclui todos os backends ativos. O [guia do painel](/pt-br/blog/seine-dashboard-explained/) explica os demais painéis e rótulos do log.
+
+![Uma sessão real do seine com uma RTX 5090, hashrates por dispositivo e shares aceitos](/assets/blog/nvidia-rtx5090-session.png)
+
+Esta captura mostra uma sessão real no pool com a RTX 5090. Os benchmarks cronometrados abaixo foram executados separadamente. O hashrate de um dispositivo mede a atividade local; um share aceito confirma que o pool creditou o trabalho enviado. Acompanhe esse trabalho com o [guia de acompanhamento do minerador](https://bntpool.com/blog/track-your-miner-on-bntpool/).
+
+A primeira execução prepara e ajusta os kernels da GPU. O seine salva os resultados do ajuste automático NVIDIA em `seine-data/seine.nvidia-autotune.json`. Reutilize esse diretório de dados para carregar resultados salvos compatíveis nas próximas execuções, ou selecione um diretório explicitamente com `--data-dir`.
+
+## Qual foi a velocidade da RTX 5090 no nosso teste?
+
+Testamos em 25 de outubro de 2026 usando Windows 11, uma NVIDIA GeForce RTX 5090, um AMD Ryzen 9 9950X3D, 125,4 GiB de RAM utilizável, seine v0.2.26 e o driver NVIDIA `610.88`. Executamos três pares intercalados com `--bench-kind backend`. Cada execução usou um aquecimento de 20 segundos e três rodadas medidas de 20 segundos, com 20 segundos entre as execuções. As configurações de kernel, limite de registradores, lanes e threads foram automáticas.
+
+| Modo | Média em H/s |
+|---|---|
+| Apenas RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+A tabela mostra a média de três execuções por modo neste computador, mantendo abertos os aplicativos que já estavam em uso. Ambos os modos usaram a GPU `0` e o mesmo cache de ajuste automático da NVIDIA. Esses são hashrates de benchmark local; os shares aceitos confirmam o crédito no pool. As [notas de medição](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) registram as configurações e os resultados individuais.
+
+## O que verificar se uma linha NVIDIA não aparecer?
+
+Confira primeiro o executável extraído e as bibliotecas de execução. No Windows, mantenha as DLLs NVRTC incluídas ao lado de `seine.exe`. No Linux, instale o driver e as bibliotecas NVRTC no ambiente em que você inicia o minerador.
+
+Depois confira seu comando. `--backend cpu` seleciona apenas a CPU. Use o comando padrão ou `--backend cpu,nvidia` para ambos. Se definir `--nvidia-devices`, verifique se os índices existem no seu computador.
+
+Leia o log de inicialização desse backend: ele distingue uma preparação em andamento de um erro de inicialização. Corrija o problema de ambiente ou de seleção informado e reinicie. O [guia NVIDIA](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) também aborda os requisitos para compilar a partir do código-fonte.
+
+Na carga Argon2id atual, cada lane de GPU ativo precisa de uma área de 2 GiB mais a memória adicional de execução. O seine dimensiona o trabalho da GPU usando a memória disponível e as verificações de alocação. Deixe os ajustes manuais de lanes sem definir; a VRAM anunciada, sozinha, não determina quantos lanes estão disponíveis durante uma sessão de desktop.
+
+Se o dispositivo calcula hashes, mas o pool mostra zero, siga a [lista de verificação do hashrate do pool](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate) para conferir endereço, conexão e shares aceitos.
+
+[Windows bloqueou seu minerador? Verifique o download](/pt-br/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="Baixe o seine para minerar com NVIDIA" text="Escolha o arquivo para Windows ou Linux x86_64 e comece com seleção automática de CPU e GPU NVIDIA." />

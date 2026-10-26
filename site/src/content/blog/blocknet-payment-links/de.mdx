@@ -1,0 +1,121 @@
+---
+title: Blocknet-Zahlung per Link anfordern
+description: Erstelle einen blocknet://- oder bntpay.com-Zahlungslink mit Betrag, Memo und deinem $name, damit dich jeder mit einer eingefügten Zeile in BNT bezahlen kann.
+tags: [Zahlungen, Zahlungslinks, Wallet, Blocknet ID]
+faq:
+  - q: 'Braucht ein Blocknet-Zahlungslink einen Betrag?'
+    a: 'Ja. Jeder Zahlungslink enthält ein Betragsfeld in BNT mit bis zu acht Nachkommastellen, etwa amount=25 oder amount=0.5. Das Memo ist optional. Fehlt in einem eingefügten Link der Betrag, antwortet die Kommandozeilen-Wallet mit payment link missing amount und sendet nichts, sodass der Zahlende nie raten muss, was du angefordert hast.'
+  - q: 'Kann ich meinen Blocknet-ID-Kurznamen in einen Zahlungslink schreiben?'
+    a: 'Ja. Schreib den Namen mit dem Dollar-Präfix, etwa bntpay.com/$yourname?amount=10 oder blocknet://$yourname?amount=10. Die Wallet schlägt den Namen auf blocknet.id nach, prüft den signierten Eintrag und zeigt dem Zahlenden vor der Bestätigung die vollständige Adresse als verifiziert an. Ein Link mit Namen zahlt immer an die Adresse, auf die dein Name zeigt.'
+  - q: 'Was ist der Unterschied zwischen einem blocknet://-Link und einem bntpay.com-Link?'
+    a: 'Beide enthalten dieselben drei Felder, Empfänger, Betrag und Memo, und die Kommandozeilen-Wallet liest beide gleich. Die Form blocknet:// ist das URI-Schema von Blocknet. Die Form bntpay.com ist eine normale Webadresse, die Chat-Apps, E-Mail-Programme und Social-Media-Profile in einen anklickbaren Link verwandeln.'
+  - q: 'Sendet das Einfügen eines Zahlungslinks sofort BNT?'
+    a: 'Nein. Das Einfügen eines Links in die Wallet bereitet die Zahlung vor und hält dann bei einer Zusammenfassung mit Betrag, Empfänger, vollständiger Adresse, Gebühr und Memo an, gefolgt von einer Ja-Nein-Abfrage. Die BNT werden erst gesendet, wenn der Zahlende y tippt. Jede andere Antwort bricht die Zahlung ab und gibt die dafür reservierten Coins wieder frei.'
+sourceHash: 193a7a6a455c
+translation: reviewed
+---
+
+Ein Blocknet-Zahlungslink packt alles, was ein Zahlender braucht, in eine Zeile: wen er bezahlen soll, wie viele BNT und ein optionales Memo, etwa eine Rechnungsnummer. Schick ihn im Chat, setz ihn auf eine Rechnung oder in dein Profil, und der Zahlende fügt ihn in die eigene Wallet ein und bestätigt. Diese Anleitung zeigt die zwei Linkformate, wie du einen Link mit deiner Adresse oder deinem `$name` erstellst und was die Wallet genau tut, wenn jemand ihn einfügt.
+
+## Was ist ein Blocknet-Zahlungslink?
+
+<Answer>
+Ein Blocknet-Zahlungslink ist eine einzelne Zeile mit Empfänger, Betrag und optionalem Memo, geschrieben als blocknet://recipient?amount=25&memo=invoice-42 oder bntpay.com/recipient?amount=25&memo=invoice-42. Der Empfänger ist eine Wallet-Adresse oder ein Blocknet-ID-Name. Fügst du ihn in die Kommandozeilen-Wallet ein, wird daraus eine Sendung, die nur noch bestätigt werden muss.
+</Answer>
+
+Die Kommandozeilen-Wallet von Blocknet akzeptiert zwei Formen:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Beide Formen enthalten dieselben Felder:
+
+| Feld | Wo es steht | Pflicht | Inhalt |
+|---|---|---|---|
+| Empfänger | direkt nach `blocknet://` oder `bntpay.com/` | Ja | Deine Wallet-Adresse oder dein Kurzname als `$name` |
+| `amount` | Query-String | Ja | Angeforderte BNT, bis zu acht Nachkommastellen |
+| `memo` | Query-String | Nein | Text für das Zahlungsmemo, bis zu 124 Byte |
+
+Die Wallet ist großzügig, was die Schreibweise des Links angeht. Sie erkennt `blocknet://` und das kürzere `blocknet:`, und bei der Webform nimmt sie `bntpay.com/` allein oder mit vorangestelltem `www.`, `http://` oder `https://`. Beim Präfix spielt Groß- und Kleinschreibung keine Rolle, und die Reihenfolge von `amount` und `memo` ist egal.
+
+Die Form `bntpay.com` ist eine normale Webadresse, daher machen die meisten Chat-Apps, E-Mail-Programme und Social-Media-Profile daraus einen Link, den man antippen kann. Die Form `blocknet://` ist die Blocknet-URI, praktisch überall, wo ein Link direkt in eine Wallet geht.
+
+## Wie erstellst du einen Zahlungslink?
+
+Du kannst einen Link in vier Schritten von Hand schreiben.
+
+1. **Wähle den Empfänger.** Führe in der Kommandozeilen-Wallet `address` aus, um deine Adresse anzuzeigen, oder nimm deinen [Blocknet-ID-Kurznamen](/de/blog/blocknet-id-pay-by-name/) mit dem Präfix `$`. Wenn du noch keine Wallet hast, zeigt die [Anleitung zur Blocknet-Wallet](/de/blog/blocknet-wallet-for-mining/), wie du eine erstellst und deine Adresse findest.
+2. **Lege den Betrag fest.** Schreib ihn in BNT. Ganze Zahlen und Dezimalzahlen funktionieren beide, bis auf acht Nachkommastellen, weil ein BNT 100.000.000 atomaren Einheiten entspricht.
+3. **Füge bei Bedarf ein Memo hinzu.** Eine Bestellnummer, eine Rechnungs-ID oder ein kurzes Dankeschön hilft dir, die Zahlung bei Eingang zuzuordnen. Es darf höchstens 124 Byte lang sein.
+4. **Füge die Teile zusammen.** Setze den Empfänger hinter das Präfix, dann `?amount=` und, falls vorhanden, `&memo=`.
+
+Eine Rechnung über 25 BNT an einen Namen, in beiden Formen:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Dieselbe Anforderung an eine vollständige Adresse:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Zeichen im Memo kodieren
+
+Ein Memo mit Leerzeichen oder Satzzeichen braucht für einige Zeichen URL-Kodierung, weil der Link selbst sie verwendet. Die Wallet dekodiert sie zurück, bevor sie die Zahlung erstellt.
+
+| Zeichen | Schreibweise | Warum |
+|---|---|---|
+| Leerzeichen | `%20` | Hält den Link beim Teilen in einem Stück |
+| `&` | `%26` | `&` beginnt das nächste Feld |
+| `#` | `%23` | `#` beendet den Query-String |
+| `+` | `%2B` | Ein einzelnes `+` wird als Leerzeichen gelesen |
+
+Zum Beispiel kommt `memo=Order%20%231042` als `Order #1042` an. Buchstaben, Ziffern, Bindestriche, Unterstriche und Punkte brauchen keine Kodierung, deshalb lassen sich Memos wie `invoice-42` einfach so verwenden.
+
+## Sollte ein Link deine Adresse oder deinen $name verwenden?
+
+Beides funktioniert, und jedes passt zu einer anderen Aufgabe.
+
+Ein **Name** hält den Link kurz genug, um ihn zu lesen, laut zu sagen oder in eine Bio zu packen. Schreib ihn in Links mit dem Präfix `$`: `$yourname` und `@yourname` sind derselbe Name, und `$` ist die Form, die beide Linktypen direkt an die Wallet weitergeben. Fügt ein Zahlender einen Link mit Namen ein, löst die Wallet den Namen über blocknet.id auf, prüft die Ed25519-Signatur des Eintrags und zeigt die vollständige Adresse als verifiziert an. Weil der Name erst zum Zahlungszeitpunkt aufgelöst wird, funktioniert ein langlebiger Link, etwa ein Trinkgeld-Link in deinem Profil, auch dann weiter, wenn du deinen Namen später auf eine neue Wallet zeigen lässt.
+
+Eine **vollständige Adresse** legt das Ziel im Link selbst fest. Das passt zu einer einmaligen Rechnung, bei der der Link genau eine bestimmte Wallet nennen soll.
+
+So oder so ist die Zahlung on-chain eine normale Blocknet-Transaktion an eine [Einmal-Stealth-Adresse](/de/blog/blocknet-privacy-features/), mit derselben Privatsphäre wie jede andere Zahlung.
+
+## Was passiert, wenn jemand einen Zahlungslink einfügt?
+
+<Answer>
+Die Wallet liest Empfänger, Betrag und Memo aus dem Link und führt damit eine normale Sendung aus. Sie löst einen eventuellen Namen auf, erstellt die Transaktion, zeigt dann Betrag, Empfänger, vollständige Adresse, Gebühr und Memo an und fragt Confirm [y/N]. Die BNT werden erst gesendet, wenn der Zahlende y tippt.
+</Answer>
+
+So läuft es in der Kommandozeilen-Wallet Schritt für Schritt ab.
+
+1. **Der Zahlende fügt den Link in die Wallet ein.** Die Wallet erkennt das Präfix `blocknet:` oder `bntpay.com/` und behandelt die Zeile als Sendung. Ein Link an `$yourname` über 25 BNT mit dem Memo `invoice-42` wird zur selben Anfrage, als hätte man `send $yourname 25 invoice-42` getippt.
+2. **Der Name wird aufgelöst.** Bei einem Link mit Namen gibt die Wallet `Resolved $yourname -> <address>` mit einer Verifiziert-Markierung aus.
+3. **Die Wallet prüft das Guthaben und erstellt die Zahlung.** Sie wählt Coins aus, erstellt die private Transaktion und berechnet die Gebühr.
+4. **Der Zahlende sieht eine Zusammenfassung.** Sie listet Betrag und Empfänger, die Gebühr, die vollständige Adresse, wenn ein Name verwendet wurde, eventuelles Wechselgeld und das Memo auf, gefolgt von `Confirm [y/N]`.
+5. **Der Zahlende bestätigt.** Mit `y` wird die Transaktion übermittelt, und die Wallet gibt ihre ID mit einem Explorer-Link auf `explorer.blocknetcrypto.com` aus. Jede andere Antwort gibt `Cancelled` aus und gibt die Coins frei, die die Wallet zurückgelegt hatte.
+
+Die Zusammenfassung ist die Gelegenheit des Zahlenden, die Anforderung zu prüfen, also verlässt nichts die Wallet, bevor er sie gesehen hat. Jeder Link braucht einen Betrag: Ohne einen antwortet die Wallet mit `payment link missing amount` und hält an, bevor sie irgendetwas erstellt.
+
+Das Memo, das du in den Link schreibst, reist als [verschlüsseltes Memo](/de/blog/blocknet-encrypted-memos/) von Blocknet mit der Zahlung. Wenn die BNT ankommen, listet der Befehl `history` deiner Wallet es unter der eingehenden Zahlung auf, sodass du es der Rechnung oder Bestellung zuordnen kannst.
+
+### Teste deinen Link, bevor du ihn teilst
+
+Du kannst genau sehen, was ein Zahlender sehen wird, indem du deinen eigenen Link in deine Wallet einfügst. Hat deine Wallet mindestens den angeforderten Betrag, zeigt sie die vollständige Zusammenfassung. Prüfe Empfänger, Betrag und Memo, antworte dann mit `n`, und es wird nichts gesendet.
+
+## Wo Zahlungslinks gut funktionieren
+
+- **Rechnungen.** Setz einen Link mit der Rechnungsnummer als Memo unten auf die Rechnung oder in die E-Mail. Der Zahlende fügt eine Zeile ein, und das Memo sagt dir, welche Rechnung bezahlt wurde.
+- **Shops und Bestellseiten.** Erzeuge pro Bestellung einen Link mit der Bestellnummer im Memo, sodass jede Zahlung bereits beschriftet ankommt.
+- **Trinkgelder und Spenden.** Ein Link an `$yourname` mit einem vorgeschlagenen Betrag passt in ein Profil, eine README oder ein Stream-Overlay.
+- **Kosten aufteilen.** Wirf einen Link mit dem Anteil jeder Person und einer Notiz wie `dinner%20friday` in einen Gruppenchat.
+
+Wenn du BNT auch durch Mining verdienst, kannst du denselben Namen dafür nutzen. seine und bntpool.com akzeptieren beide einen Blocknet-ID-Kurznamen als Auszahlungsadresse, sodass Mining-Auszahlungen und Zahlungen über Links in einer Wallet ankommen. Die [Anleitung zum Blocknet-Mining](/de/blog/how-to-mine-blocknet/) behandelt die Einrichtung.
+
+<CTA target="pool" title="Mine auf den Namen in deinen Links" text="bntpool.com akzeptiert deinen Blocknet-ID-Kurznamen als Auszahlungs-Login, sodass Mining-Auszahlungen in derselben Wallet landen, auf die deine Zahlungslinks zeigen." />

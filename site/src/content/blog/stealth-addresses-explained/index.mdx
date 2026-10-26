@@ -1,0 +1,94 @@
+---
+title: "Stealth addresses explained: how one-time addresses work"
+description: Stealth addresses explained in plain words. Learn how one-time addresses, view keys, spend keys and wallet scanning keep every payment to you private.
+date: 2026-10-25
+tags: [Privacy, Stealth addresses, Wallet, Blocknet]
+faq:
+  - q: Is a stealth address the same as a one-time address?
+    a: They are two halves of one system. The stealth address is the address you publish, made of a public spend key and a public view key. A one-time address is the fresh key a sender derives from it for a single payment. Only one-time addresses appear on the chain, and your published address never does.
+  - q: Can someone see my balance if they know my stealth address?
+    a: No. Knowing your published address doesn't let anyone find your payments, because each one lands on a one-time key that looks unrelated to it. Finding them takes your private view key, so only your wallet can list what you received. In Blocknet amounts are hidden too, so even the outputs themselves don't show a value.
+  - q: What can someone do with my private view key?
+    a: A private view key lets its holder find the payments sent to you and read their amounts and memos. It can't spend anything, because spending needs the private spend key. In Blocknet, the viewkeys command turns your view key into a view-only wallet, which is handy for watching funds on a second computer. Share it only with people you trust.
+  - q: Do I have to turn on stealth addresses in Blocknet?
+    a: No. Every Blocknet payment goes to a one-time stealth address automatically, because the transaction format has no transparent mode. Your wallet creates the one-time key when you send and finds incoming payments with your view key when it syncs. There is nothing to configure, whether you pay an address or an @name.
+related: [ring-signatures-explained, bulletproofs-explained, blocknet-wallet-for-mining]
+---
+
+A stealth address lets you publish one address and still have every payment to you land somewhere new on the chain. This guide explains how that works, what your view key and spend key each do, and how a wallet finds its own payments, with Blocknet as the worked example.
+
+## What is a stealth address?
+
+<Answer>
+A stealth address is a public address that never appears on the blockchain. It holds two public keys, a spend key and a view key. For each payment, the sender's wallet combines them with a fresh random number to make a one-time address that only the receiver can recognize and spend from.
+</Answer>
+
+On a public ledger, an ordinary address shows up in every payment it receives. A standard Bitcoin address works this way: anyone who knows it can look up each payment and add up the total. That is why many Bitcoin wallets hand out a new address for each payment.
+
+A stealth address does that job for you. You share one address, on a website, in a profile or as an `@name`, and every sender derives a different one-time address from it. Ten payments to you become ten outputs that share nothing visible with each other or with the address you shared. No back-and-forth is needed: the sender works out the one-time address alone, from your public address and a random number.
+
+## Where did stealth addresses come from?
+
+The one-time address design used by Monero, Blocknet and other coins traces back to the CryptoNote v2.0 whitepaper by Nicolas van Saberhagen, dated October 17, 2013. It calls the idea "unlinkable payments" and describes a sender generating a "one-time public key" from the receiver's address. Monero's documentation describes stealth addresses as letting senders create "random one-time addresses for every transaction on behalf of the recipient."
+
+The idea has spread beyond [privacy coins](/blog/what-is-a-privacy-coin/). Bitcoin's [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) lets a static Bitcoin address receive payments that can't be linked on chain, and Ethereum's [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564), created in 2022, standardizes stealth addresses for Ethereum accounts. Both are opt-in features on those chains. In Blocknet, every payment uses a one-time address.
+
+## How do stealth addresses work?
+
+<Answer>
+The sender picks a random number r, publishes R = r·G in the transaction, and combines r with the receiver's public view key into a shared secret. Adding that secret to the public spend key gives the one-time key. The receiver rebuilds the same secret from R and their private view key, so only they find the payment.
+</Answer>
+
+Your wallet holds two key pairs. Each private key is a secret number (s for spend, v for view), and each public key is that number times a fixed curve point G. Your address is just the two public keys, S and V. Here is the whole exchange:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+The trick is a Diffie-Hellman exchange. The sender computes r·V and the receiver computes v·R, and both land on the same point, because each is r·v·G. Nobody else knows r or v, so nobody else can compute it. Hashing that point (H) gives a shared secret, and the one-time key P is that secret, as a point, added to your public spend key.
+
+When you scan, you recompute the secret from R and your private view key and check whether it produces P. If it does, the output is yours. To spend it, your wallet adds the same secret to your private spend key, which gives the private key x for that one output.
+
+Blocknet follows this design on the Ristretto group over Curve25519, hashing with SHA-256 under a Blocknet-specific domain tag. It also mixes each output's position in the transaction into the hash, so two outputs to the same person in one transaction still get unrelated keys. The same shared secret also derives the blinding that hides the output's amount and the key that encrypts its memo, which is how the receiver reads both.
+
+## What do the view key and spend key do?
+
+Splitting the keys gives you two levels of access:
+
+- **The private view key finds payments.** With v and your public spend key, a wallet can recognize every output sent to you, decrypt its amount and read its memo.
+- **The private spend key spends them.** Only s turns a found output into a private key x that can sign a spend.
+
+That split makes watch-only wallets possible. In the Blocknet command-line wallet, `viewkeys` creates a separate wallet file from your view keys. The wallet's help describes it as a file that "can monitor but cannot spend", useful when "you want watch-only access on another machine". When you run it, the wallet explains what it is making:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Give a view-only wallet only to someone you would show your history to, such as your accountant, or keep it on a second computer of your own. Either way, it can watch funds arrive while your spend key stays on the machine you trust.
+
+## How does a wallet find its payments?
+
+Because one-time keys look unrelated to your address, nothing on the chain labels which outputs are yours. Your wallet checks for itself. For every transaction in every new block, it takes R, computes the shared secret with your private view key, and tests each output against the formula above. This is what a wallet is doing when it syncs.
+
+Blocknet's scanner keeps this quick. The costly step, multiplying R by your view key, runs once per transaction, and then every output in that transaction is checked against the result. When an output matches, the wallet decrypts the amount and confirms it against the output's Pedersen commitment before adding it to your balance.
+
+Scanning also makes recovery simple. Both Blocknet key pairs come from your 12-word [recovery seed](/blog/seed-phrase-explained/), so restoring the seed on a new computer rebuilds the keys, and the wallet rescans the chain to find every output that belongs to you. The [Blocknet wallet guide](/blog/blocknet-wallet-for-mining/) shows how to back up the seed and restore it.
+
+## Stealth addresses in Blocknet
+
+In Blocknet, a stealth address is simply your address. It is the base58 encoding of your public spend key, your public view key and a 4-byte checksum, which comes to 92 or 93 characters. Every payment to you uses it, because the transaction format has no transparent mode. Block rewards go to one-time keys too, so a solo miner's coinbase output is found by the same scan.
+
+Stealth addresses combine with the rest of Blocknet's privacy: [a ring of 16](/blog/ring-signatures-explained/) hides which output a spend comes from, [commitments](/blog/bulletproofs-explained/) hide amounts, and Dandelion++ hides where a transaction entered the network. The [Blocknet privacy guide](/blog/blocknet-privacy-features/) walks through each layer.
+
+They also work with names. A [Blocknet ID shortname](/blog/blocknet-id-pay-by-name/) such as `@yourname` maps publicly to your address, so senders can look it up at blocknet.id. The payments themselves still go to fresh one-time keys, so your name shows nothing about what you've received.
+
+That makes a shortname a handy payout address for mining. Start [seine](/#download), enter your address or `@yourname` at the prompt and accept the default pool, bntpool.com. The [mining guide](/blog/how-to-mine-blocknet/) covers the rest, and your wallet finds the BNT you earn with the same view-key scan described above.
+
+<CTA target="seine" title="Mine BNT to your own address" text="Download seine, enter your Blocknet address or @name, and mine on bntpool.com in a few minutes." />

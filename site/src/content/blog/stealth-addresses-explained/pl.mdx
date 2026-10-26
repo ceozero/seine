@@ -1,0 +1,94 @@
+---
+title: 'Adresy stealth: jak działają adresy jednorazowe'
+description: Adresy stealth w prostych słowach. Dowiedz się, jak adresy jednorazowe, klucze podglądu, klucze wydawania i skanowanie portfela chronią prywatność każdej płatności do Ciebie.
+tags: [Prywatność, Adresy stealth, Portfel, Blocknet]
+faq:
+  - q: 'Czy adres stealth to to samo co adres jednorazowy?'
+    a: 'To dwie połówki jednego systemu. Adres stealth to adres, który publikujesz, złożony z publicznego klucza wydawania i publicznego klucza podglądu. Adres jednorazowy to nowy klucz, który nadawca wyprowadza z niego dla jednej płatności. W łańcuchu pojawiają się tylko adresy jednorazowe, a Twój opublikowany adres nigdy.'
+  - q: 'Czy ktoś zobaczy moje saldo, jeśli zna mój adres stealth?'
+    a: 'Nie. Znajomość Twojego opublikowanego adresu nie pozwala nikomu znaleźć Twoich płatności, bo każda trafia na klucz jednorazowy, który wygląda na niezwiązany z tym adresem. Do ich znalezienia potrzebny jest Twój prywatny klucz podglądu, więc tylko Twój portfel może wyświetlić to, co otrzymałeś. W Blocknecie kwoty też są ukryte, więc nawet same wyjścia nie pokazują wartości.'
+  - q: 'Co ktoś może zrobić z moim prywatnym kluczem podglądu?'
+    a: 'Prywatny klucz podglądu pozwala jego posiadaczowi znaleźć płatności wysłane do Ciebie i odczytać ich kwoty oraz notatki. Nie pozwala niczego wydać, bo do wydawania potrzebny jest prywatny klucz wydawania. W Blocknecie polecenie viewkeys zamienia Twój klucz podglądu w portfel tylko do podglądu, przydatny do obserwowania środków na drugim komputerze. Udostępniaj go tylko zaufanym osobom.'
+  - q: 'Czy muszę włączać adresy stealth w Blocknecie?'
+    a: 'Nie. Każda płatność w Blocknecie automatycznie trafia na jednorazowy adres stealth, bo format transakcji nie ma trybu jawnego. Twój portfel tworzy klucz jednorazowy, gdy wysyłasz, i znajduje przychodzące płatności za pomocą Twojego klucza podglądu podczas synchronizacji. Nie trzeba nic konfigurować, niezależnie od tego, czy płacisz na adres, czy na @name.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Adres stealth (adres ukryty) pozwala opublikować jeden adres, a mimo to każda płatność do Ciebie trafia w łańcuchu w nowe miejsce. Ten poradnik wyjaśnia, jak to działa, do czego służą klucz podglądu i klucz wydawania oraz jak portfel znajduje własne płatności, na przykładzie Blocknetu.
+
+## Czym jest adres stealth?
+
+<Answer>
+Adres stealth to adres publiczny, który nigdy nie pojawia się w blockchainie. Zawiera dwa klucze publiczne: klucz wydawania (spend key) i klucz podglądu (view key). Dla każdej płatności portfel nadawcy łączy je z nową liczbą losową, tworząc adres jednorazowy, który tylko odbiorca potrafi rozpoznać i z którego tylko on może wydawać.
+</Answer>
+
+W publicznym rejestrze zwykły adres pojawia się w każdej otrzymanej płatności. Tak działa standardowy adres Bitcoin: każdy, kto go zna, może wyszukać każdą płatność i zsumować całość. Dlatego wiele portfeli Bitcoin podaje nowy adres dla każdej płatności.
+
+Adres stealth robi to za Ciebie. Udostępniasz jeden adres, na stronie internetowej, w profilu albo jako `@name`, a każdy nadawca wyprowadza z niego inny adres jednorazowy. Dziesięć płatności do Ciebie zamienia się w dziesięć wyjść, które nie mają nic widocznie wspólnego ani ze sobą, ani z adresem, który udostępniłeś. Nie trzeba niczego uzgadniać: nadawca sam wylicza adres jednorazowy z Twojego adresu publicznego i liczby losowej.
+
+## Skąd wzięły się adresy stealth?
+
+Konstrukcja adresów jednorazowych używana przez Monero, Blocknet i inne kryptowaluty wywodzi się z dokumentu CryptoNote v2.0 autorstwa Nicolasa van Saberhagena, datowanego na 17 października 2013 roku. Nazywa on ten pomysł „niepowiązywalnymi płatnościami” i opisuje nadawcę generującego „jednorazowy klucz publiczny” z adresu odbiorcy. Dokumentacja Monero opisuje adresy stealth jako mechanizm pozwalający nadawcom tworzyć „losowe adresy jednorazowe dla każdej transakcji w imieniu odbiorcy”.
+
+Pomysł wyszedł poza [kryptowaluty prywatności](/pl/blog/what-is-a-privacy-coin/). [BIP 352 „Silent Payments”](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) w Bitcoinie pozwala statycznemu adresowi Bitcoin odbierać płatności, których nie da się powiązać w łańcuchu, a [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) w Ethereum, utworzony w 2022 roku, standaryzuje adresy stealth dla kont Ethereum. W obu tych łańcuchach to funkcje opcjonalne. W Blocknecie każda płatność używa adresu jednorazowego.
+
+## Jak działają adresy stealth?
+
+<Answer>
+Nadawca wybiera liczbę losową r, publikuje w transakcji R = r·G i łączy r z publicznym kluczem podglądu odbiorcy we wspólny sekret. Dodanie tego sekretu do publicznego klucza wydawania daje klucz jednorazowy. Odbiorca odtwarza ten sam sekret z R i swojego prywatnego klucza podglądu, więc tylko on znajduje płatność.
+</Answer>
+
+Twój portfel ma dwie pary kluczy. Każdy klucz prywatny to tajna liczba (s dla wydawania, v dla podglądu), a każdy klucz publiczny to ta liczba pomnożona przez stały punkt krzywej G. Twój adres to po prostu dwa klucze publiczne, S i V. Oto cała wymiana:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+Cała sztuczka to wymiana Diffiego-Hellmana. Nadawca oblicza r·V, a odbiorca v·R, i obaj trafiają w ten sam punkt, bo każdy z nich to r·v·G. Nikt inny nie zna r ani v, więc nikt inny nie może go obliczyć. Zahaszowanie tego punktu (H) daje wspólny sekret, a klucz jednorazowy P to ten sekret w postaci punktu dodany do Twojego publicznego klucza wydawania.
+
+Podczas skanowania ponownie obliczasz sekret z R i swojego prywatnego klucza podglądu i sprawdzasz, czy daje on P. Jeśli tak, wyjście należy do Ciebie. Aby je wydać, portfel dodaje ten sam sekret do Twojego prywatnego klucza wydawania, co daje klucz prywatny x dla tego jednego wyjścia.
+
+Blocknet stosuje tę konstrukcję na grupie Ristretto nad Curve25519, haszując za pomocą SHA-256 z tagiem domeny specyficznym dla Blocknetu. Dodatkowo wplata do hasha pozycję każdego wyjścia w transakcji, więc dwa wyjścia do tej samej osoby w jednej transakcji nadal dostają niezwiązane ze sobą klucze. Z tego samego wspólnego sekretu wyprowadzane są też czynnik zaślepiający, który ukrywa kwotę wyjścia, i klucz szyfrujący jego notatkę, dzięki czemu odbiorca może odczytać jedno i drugie.
+
+## Do czego służą klucz podglądu i klucz wydawania?
+
+Rozdzielenie kluczy daje dwa poziomy dostępu:
+
+- **Prywatny klucz podglądu znajduje płatności.** Mając v i Twój publiczny klucz wydawania, portfel może rozpoznać każde wyjście wysłane do Ciebie, odszyfrować jego kwotę i odczytać notatkę.
+- **Prywatny klucz wydawania pozwala je wydać.** Tylko s zamienia znalezione wyjście w klucz prywatny x, którym można podpisać wydanie.
+
+Ten podział umożliwia portfele tylko do podglądu. W portfelu wiersza poleceń Blocknet polecenie `viewkeys` tworzy osobny plik portfela z Twoich kluczy podglądu. Pomoc portfela opisuje go jako plik, który „może monitorować, ale nie może wydawać”, przydatny, gdy „chcesz mieć dostęp tylko do podglądu na innej maszynie”. Po uruchomieniu polecenia portfel wyjaśnia, co tworzy:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Portfel tylko do podglądu dawaj wyłącznie komuś, komu pokazałbyś swoją historię, na przykład księgowemu, albo trzymaj go na drugim własnym komputerze. W obu przypadkach może on obserwować napływające środki, a Twój klucz wydawania zostaje na maszynie, której ufasz.
+
+## Jak portfel znajduje swoje płatności?
+
+Ponieważ klucze jednorazowe wyglądają na niezwiązane z Twoim adresem, nic w łańcuchu nie oznacza, które wyjścia są Twoje. Portfel sprawdza to sam. Dla każdej transakcji w każdym nowym bloku bierze R, oblicza wspólny sekret za pomocą Twojego prywatnego klucza podglądu i sprawdza każde wyjście według powyższego wzoru. To właśnie robi portfel podczas synchronizacji.
+
+Skaner Blocknetu robi to szybko. Kosztowny krok, czyli mnożenie R przez Twój klucz podglądu, wykonuje się raz na transakcję, a potem każde wyjście w tej transakcji jest sprawdzane względem wyniku. Gdy wyjście pasuje, portfel odszyfrowuje kwotę i potwierdza ją względem zobowiązania Pedersena tego wyjścia, zanim doda ją do Twojego salda.
+
+Skanowanie upraszcza też odzyskiwanie portfela. Obie pary kluczy Blocknet pochodzą z Twojej 12-wyrazowej [frazy odzyskiwania](/pl/blog/seed-phrase-explained/), więc przywrócenie frazy na nowym komputerze odtwarza klucze, a portfel ponownie skanuje łańcuch, aby znaleźć każde należące do Ciebie wyjście. [Poradnik o portfelu Blocknet](/pl/blog/blocknet-wallet-for-mining/) pokazuje, jak zrobić kopię zapasową frazy i ją przywrócić.
+
+## Adresy stealth w Blocknecie
+
+W Blocknecie adres stealth to po prostu Twój adres. To zakodowane w base58 połączenie Twojego publicznego klucza wydawania, publicznego klucza podglądu i 4-bajtowej sumy kontrolnej, co daje 92 lub 93 znaki. Każda płatność do Ciebie z niego korzysta, bo format transakcji nie ma trybu jawnego. Nagrody za blok również trafiają na klucze jednorazowe, więc wyjście coinbase górnika kopiącego solo jest znajdowane tym samym skanowaniem.
+
+Adresy stealth łączą się z resztą zabezpieczeń prywatności Blocknetu: [pierścień 16](/pl/blog/ring-signatures-explained/) ukrywa, z którego wyjścia pochodzi wydanie, [zobowiązania](/pl/blog/bulletproofs-explained/) ukrywają kwoty, a Dandelion++ ukrywa, gdzie transakcja weszła do sieci. [Poradnik o prywatności Blocknetu](/pl/blog/blocknet-privacy-features/) omawia każdą z tych warstw.
+
+Działają też z nazwami. [Krótka nazwa Blocknet ID](/pl/blog/blocknet-id-pay-by-name/), taka jak `@yourname`, jest publicznie powiązana z Twoim adresem, więc nadawcy mogą ją wyszukać na blocknet.id. Same płatności nadal trafiają na nowe klucze jednorazowe, więc Twoja nazwa nie zdradza niczego o tym, co otrzymałeś.
+
+Dzięki temu krótka nazwa to wygodny adres do wypłat z kopania. Uruchom [seine](/pl/#download), wpisz w odpowiedzi na pytanie swój adres lub `@yourname` i zaakceptuj domyślną pulę, bntpool.com. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) opisuje resztę, a Twój portfel znajdzie zarobione BNT tym samym skanowaniem kluczem podglądu, które opisano powyżej.
+
+<CTA target="seine" title="Kop BNT na własny adres" text="Pobierz seine, wpisz swój adres Blocknet lub @name i w kilka minut zacznij kopać na bntpool.com." />

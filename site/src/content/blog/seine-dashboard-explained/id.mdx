@@ -1,0 +1,125 @@
+---
+title: Dasbor seine, dijelaskan
+description: Tur panel demi panel dasbor penambangan seine (hashrate, share, status, thread, saldo pool, log) dan cara melihatnya menyetel diri sendiri selama menambang.
+tags: [seine, Panduan penambangan, Dasbor, Penyetelan otomatis]
+faq:
+  - q: 'Mengapa hashrate rata-rata seine lebih rendah daripada hashrate saat ini?'
+    a: 'Average membagi setiap hash yang selesai di sesi ini dengan waktu yang dipakai untuk menambang, jadi angka itu mencakup menit-menit pertama, saat setiap thread masih menyelesaikan hash pertamanya dan tuner mulai di bawah kapasitas penuh sebelum naik. Current hanya melihat lima detik terakhir. Keduanya makin mendekat semakin lama seine berjalan.'
+  - q: 'Bagaimana cara mengubah jumlah thread saat seine sedang berjalan?'
+    a: 'Tekan tombol plus, atau tombol sama dengan, untuk menambah satu thread per backend CPU, dan tombol minus untuk mengurangi satu. seine menjalankan ulang backend penambangannya dengan jumlah baru dan mempertahankan statistik sesi, uptime, dan rata-rata Anda. Perubahan manual mematikan penyetelan thread otomatis untuk sesi itu dan tidak disimpan sebagai bawaan baru Anda.'
+  - q: 'Apa arti berlian emas di bagian header?'
+    a: 'Setiap berlian menandai share yang diterima saat Anda menambang di pool, atau blok yang diterima saat Anda menambang solo. Berlian muncul di tepi kanan gelombang dan bergeser satu kolom ke kiri setiap detik, jadi berlian yang bisa Anda lihat adalah kerja yang diterima dalam sekitar dua menit terakhir.'
+  - q: 'Bisakah menjalankan seine tanpa dasbor?'
+    a: 'Bisa. Jalankan dengan --ui plain untuk mendapatkan log bergulir biasa alih-alih dasbor layar penuh. Ini cocok untuk server, file log, dan pengelola proses. Bawaannya, --ui auto, hanya menampilkan dasbor saat seine berjalan di terminal interaktif, jadi keluaran yang dialihkan sudah otomatis berupa log biasa.'
+sourceHash: 97304325a24d
+translation: draft
+---
+
+Jalankan seine dan terminal Anda akan terisi dasbor langsung: seberapa cepat Anda menghitung hash, berapa share yang diterima pool, berapa yang menjadi hak Anda, dan log semua yang dilakukannya. Tur ini membahas panel demi panel seine v0.2.22, menjelaskan arti setiap label dan dari mana angkanya berasal, serta memperlihatkan seperti apa penyetelan otomatis dan kontrol keyboard selama Anda menambang.
+
+![Dasbor terminal seine di Apple M4 Max yang menambang di bntpool.com: hashrate saat ini 30,63 H/s, 14 thread, 5 share dikirim, 0 ditolak dan 5 diterima, dengan saldo pool dan log job serta share yang diterima di bawahnya](/assets/blog/seine-dashboard.webp "Dasbor seine di Apple M4 Max")
+
+Tangkapan layar ini adalah Apple M4 Max yang menambang di bntpool.com sekitar sepuluh menit setelah diluncurkan, diambil untuk README seine pada Oktober 2026. Gambar ini menjadi acuan untuk sisa artikel.
+
+## Apa yang ditampilkan dasbor seine?
+
+<Answer>
+Dasbor seine menampilkan hashrate langsung dan rata-rata, jumlah hash yang selesai, tinggi rantai dan hashrate jaringan, status penambang, share yang dikirim, ditolak, dan diterima, hashrate setiap perangkat, endpoint pool dan jumlah thread, saldo bntpool.com Anda, serta log bertanda waktu. Dasbor diperbarui sekitar sekali per detik selama Anda menambang.
+</Answer>
+
+Dari atas ke bawah, panelnya adalah header, satu baris berisi tiga panel statistik (`HASHRATE`, `NETWORK`, `MINING`), `DEVICES`, `CONFIG`, `POOL BALANCE`, dan `LOG`. Di terminal dengan lebar minimal 148 kolom, `CONFIG` dan panel saldo berdampingan.
+
+## Header: versi, gelombang, dan uptime
+
+Judul di header menampilkan versi seine, misalnya `seine v0.2.22`. Saat ada rilis yang lebih baru, lencana `update vX.Y.Z available` yang disorot muncul di sebelahnya dan log mendapat satu baris berisi tautan unduhan. seine memeriksa GitHub saat mulai dan setiap 12 jam, dan pemeriksaan itu tidak pernah mengganggu penambangan.
+
+Di bawah judul, dua baris gelombang bergerak satu langkah per detik. Setiap kali pool menerima salah satu share Anda (atau, dalam mode solo, node menerima blok Anda), sebuah berlian emas muncul di baris atas di tepi kanan dan bergulir ke kiri satu kolom per detik. Di terminal dengan lebar sekitar 130 kolom, artinya berlian yang bisa Anda lihat adalah kerja yang diterima dalam sekitar dua menit terakhir. `uptime` berada di ujung baris bawah.
+
+## Bagaimana seine mengukur hashrate?
+
+Panel `HASHRATE` punya tiga baris:
+
+- **Current** adalah hashrate Anda dalam jendela bergulir lima detik. Satu hash di sini adalah satu perhitungan Argon2id 2 GiB yang lengkap, jadi H/s menghitung hash yang selesai per detik. GPU NVIDIA menyelesaikan kerja secara bergelombang, jadi laju saat ini untuk GPU memakai jendela 30 detik agar tetap stabil.
+- **Average** adalah semua hash di sesi ini dibagi waktu yang dipakai untuk menambang. Waktu menunggu (node yang sedang sinkronisasi, kata sandi wallet, atau setelah alamat tidak valid) tidak dihitung, dan rata-rata tetap terbawa saat Anda mengubah jumlah thread.
+- **Total** adalah jumlah hash yang selesai sejak Anda menjalankan seine.
+
+Di tangkapan layar, Current menunjukkan 30,63 H/s dan Average 29,33 H/s. Average dimulai lebih rendah karena mencakup menit-menit pertama, saat setiap thread masih menyelesaikan hash pertamanya dan tuner mulai di bawah kapasitas penuh sebelum naik. Semakin lama seine berjalan, semakin dekat keduanya.
+
+## Jaringan dan status
+
+Panel `NETWORK` menampilkan `Height`, yaitu tinggi rantai tempat Anda menambang, dan hashrate jaringan `Global`. Dalam mode pool, seine membaca hashrate jaringan dari statistik publik bntpool.com dan memperbaruinya paling sering setiap 30 detik.
+
+`State` memberi tahu apa yang sedang dilakukan penambang. `working` berwarna hijau adalah yang ingin Anda lihat. Dalam mode pool, Anda juga akan melihat status berikut saat mulai dan saat tersambung ulang:
+
+| Status | Arti |
+|---|---|
+| `pool-connecting` | Membuka koneksi Stratum |
+| `pool-connected` | Terhubung, sedang login |
+| `pool-authenticated` | Login diterima, menunggu job pertama |
+| `working` | Menghitung hash untuk job saat ini |
+| `pool-disconnected` | Koneksi terputus; seine tersambung ulang dengan sendirinya |
+| `pool-login-rejected` | Pool menolak login; baris `AUTH` di log memberi alasannya |
+
+Penambangan solo ke node Anda sendiri menambahkan status seperti `daemon-syncing`, `stale-tip` (blok baru tiba, sedang mengambil template baru), dan `solved`. Saat seine menunggu sesuatu, Current turun ke nol sehingga tidak pernah menampilkan laju yang tidak sedang dihasilkannya.
+
+## Apa arti Submitted, Rejected, dan Accepted?
+
+Panel `MINING` menghitung share untuk sesi ini:
+
+- **Submitted:** share yang telah dikirim seine ke pool.
+- **Rejected:** share yang tidak diterima pool. Dalam mode solo, baris ini berlabel `Stale` dan menghitung solusi yang sampai ke node setelah rantai sudah bergerak maju.
+- **Accepted:** share yang dikreditkan pool kepada Anda.
+
+bntpool.com menyesuaikan difficulty share setiap koneksi agar menghasilkan sekitar 10 share setiap lima menit, jadi satu share kira-kira setiap 30 detik adalah hal normal, berapa pun hashrate Anda. Angka 5 dikirim dan 5 diterima setelah sepuluh menit di tangkapan layar adalah awal yang sehat. Pembayaran Anda mengikuti share yang diterima, dan Rejected bernilai nol berarti setiap share yang Anda kirim telah dikreditkan.
+
+## Perangkat, konfigurasi, dan saldo pool
+
+`DEVICES` mencantumkan setiap backend penambangan beserta hashrate saat ini dan rata-ratanya: `cpu#1` untuk CPU, lalu `nvidia#1`, `nvidia#2`, dan seterusnya untuk setiap GPU NVIDIA. GPU yang masih memulai menampilkan kemajuannya, dari `starting CUDA runtime` hingga `preparing NVIDIA backend`. Peluncuran pertama mengompilasi dan menyetel kernel GPU, jadi butuh waktu lebih lama daripada peluncuran berikutnya.
+
+`CONFIG` menunjukkan bagaimana sesi ini diatur:
+
+- **Endpoint** adalah alamat pool (`stratum+tcp://bntpool.com:3333` secara bawaan), atau alamat API node Anda dalam mode solo. Di sebelahnya ada nama yang dipakai rig ini untuk login ke pool.
+- **Threads** adalah jumlah thread penambangan CPU, diikuti petunjuk `[+] [-]` untuk kontrol keyboard.
+- **Backends** menjelaskan setiap backend. `cpu#1 (14 lanes, ~28.0 GiB RAM)` berarti 14 thread, masing-masing memegang arena 2 GiB, jadi 14 × 2 GiB = 28 GiB.
+
+Untuk memberi rig nama yang mudah dikenali di pool, berikan saat mulai:
+
+```sh
+./seine --pool-worker rig-01
+```
+
+`POOL BALANCE` membaca saldo Anda dari bntpool.com setiap beberapa detik. `Pending` adalah yang sudah Anda hasilkan tetapi belum dibayar, `Paid` adalah yang sudah dikirim pool ke alamat Anda, dan `Miner` di sebelah kanan adalah alamat Anda yang dipendekkan menjadi enam karakter pertama dan terakhirnya. bntpool.com membayar begitu saldo Anda mencapai 0,1 BNT. Dalam mode solo, panel ini menjadi `WALLET`, dengan saldo `Pending` dan `Unlocked` dari wallet node Anda.
+
+## Membaca log
+
+`LOG` menyimpan 200 entri terbaru, yang terbaru di bawah, masing-masing dengan lencana level, tag, dan sudah berapa lama kejadiannya. Lencananya adalah `INFO`, `OK` (sesuatu berhasil), `WARN`, `ERR`, dan `**` untuk blok yang terpecahkan. Tag yang paling sering Anda lihat di pool adalah:
+
+- `AUTH`: login ke pool, seperti `login accepted (protocol v2, required=submit_claimed_hash)`
+- `JOB`: job baru dari pool, dengan tinggi dan difficulty-nya
+- `SHARE`: `submitted (backend=cpu#1)` lalu `accepted (backend=cpu#1)`
+- `VARDIFF`: pool mengubah difficulty share Anda
+- `MINER`: keputusan penyetelan otomatis
+
+## Seperti apa penyetelan otomatis saat seine berjalan?
+
+seine langsung mulai menambang dan menyetel diri berdasarkan pekerjaan penambangan sungguhan, dan Anda bisa melihat prosesnya di log. Baris `MINER` pertama berbunyi `cpu-autotune | starting with N threads`, diikuti `initial estimate` di mesin baru atau `cached starting point` jika seine sudah mengenal mesin itu.
+
+Dari sana seine membandingkan pengaturan secara bergiliran: jumlah thread saat ini, satu kandidat, lalu jumlah saat ini lagi. Setiap jendela berlangsung setidaknya 30 detik dan mengumpulkan setidaknya 20 hash. Anda akan melihat baris seperti `measuring useful mining work` dan `checking baseline again`, dan angka Threads di `CONFIG` ikut berubah. Setelah selesai, log menampilkan `done` dan menyebut jumlah thread yang dipertahankan.
+
+Kernel CPU dibandingkan dengan cara yang sama, misalnya `comparing avx2 and avx512 while mining`, dan seine beralih hanya setelah dua perbandingan mengonfirmasi peningkatannya: `confirmed faster ... path in two comparisons`. Pilihan-pilihan itu di-cache, sehingga peluncuran berikutnya melanjutkan dari titik terakhir. Penyetelan tidak pernah menyambung ulang ke pool atau menjalankan ulang GPU. [Panduan autotuning](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) membahas detailnya, dan [penjelasan Argon2id](/id/blog/argon2id-proof-of-work-explained/) menerangkan mengapa bandwidth memori menentukan di mana jumlah thread terbaik berada.
+
+## Bisakah mengubah jumlah thread dari dasbor?
+
+<Answer>
+Bisa. Tekan + (atau =, tanpa perlu Shift) untuk menambah satu thread per backend CPU dan - untuk mengurangi satu. seine menjalankan ulang backend penambangannya dengan jumlah baru sambil mempertahankan statistik sesi, uptime, dan hashrate rata-rata. Tekan q atau Ctrl+C untuk keluar. Perubahan manual mematikan penyetelan thread otomatis untuk sesi itu.
+</Answer>
+
+Selama perubahan diterapkan, `CONFIG` menampilkan `Restarting: 14 -> 15 threads...` dan tombol yang ditekan lagi diabaikan sampai selesai. Penambahan berhenti di batas otomatis CPU dan RAM, dan jumlah yang Anda pilih tidak disimpan sebagai bawaan baru. Untuk jumlah tetap sejak awal, pakai `--threads`.
+
+## Terminal kecil dan keluaran biasa
+
+Di terminal yang lebih sempit dari 80 kolom, tiga panel statistik ditumpuk secara vertikal. Di jendela yang pendek, seine beralih ke tampilan ringkas yang tetap menampilkan Threads, State, Current, Average, jumlah share, dan Height di atas log. `--ui auto` bawaan hanya menampilkan dasbor di terminal interaktif; `--ui plain` memberi log bergulir biasa untuk server, file log, dan pengelola proses.
+
+Jika Anda belum menyiapkan seine, [panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) membahas dari unduhan hingga share pertama Anda yang diterima.
+
+<CTA target="seine" title="Unduh seine dan lihat ia menyetel diri" text="Mulai menambang dengan satu perintah, dan dasbor menampilkan hashrate, share, dan saldo bntpool.com Anda sementara seine menyetel thread dan kernel untuk mesin Anda." />

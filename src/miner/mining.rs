@@ -1238,6 +1238,7 @@ pub(super) fn run_mining_loop(
     shutdown: Arc<AtomicBool>,
     runtime_backends: MiningRuntimeBackends<'_>,
     tui_state: Option<TuiState>,
+    history: Arc<super::session::SessionHistory>,
     tip_signal: Option<&TipSignal>,
     deferred_backends: Option<(Receiver<super::BackendSlot>, u64)>,
 ) -> Result<()> {
@@ -1250,12 +1251,12 @@ pub(super) fn run_mining_loop(
         Some((rx, count)) => (Some(rx), count),
         None => (None, 0),
     };
-    let stats = Stats::new();
+    let stats = &history.stats;
     let mut nonce_scheduler = NonceScheduler::new(cfg.start_nonce, cfg.nonce_iters_per_lane);
     let mut work_id_cursor = 1u64;
     let mut epoch = 0u64;
     let mut last_stats_print = Instant::now();
-    let mut tui = init_tui_display(tui_state, Arc::clone(&shutdown));
+    let mut tui = init_tui_display(tui_state, Arc::clone(&shutdown), Arc::clone(&history));
     if tui.is_some() {
         // Re-emit hugepage guidance after TUI state is attached so users see it
         // in the dashboard log pane (early startup logs happen before TUI attach).
@@ -2721,6 +2722,7 @@ mod tests {
 
     fn test_config(server: &MockServer) -> Config {
         Config {
+            hardware_telemetry: None,
             mode: crate::config::MiningMode::Daemon,
             pool_url: None,
             pool_worker: None,
@@ -2746,6 +2748,9 @@ mod tests {
             }],
             threads: 1,
             cpu_auto_threads_cap: 1,
+            cpu_manual_memory_check: false,
+            cpu_autotune_worker_slots: None,
+            cpu_memory_reserve_percent: 5,
             cpu_affinity: crate::config::CpuAffinityMode::Off,
             cpu_page_mode: crate::config::CpuPageMode::Auto,
             cpu_profile: crate::config::CpuPerformanceProfile::Balanced,
@@ -2796,6 +2801,7 @@ mod tests {
             work_allocation: WorkAllocation::Adaptive,
             sub_round_rebalance_interval: None,
             sse_enabled: true,
+            update_check_enabled: false,
             refresh_on_same_height: false,
             ui_mode: crate::config::UiMode::Plain,
             data_dir: std::path::PathBuf::from("./data"),
@@ -2805,10 +2811,13 @@ mod tests {
             service_mode: false,
             api_bind: "127.0.0.1:9977".to_string(),
             api_allow_unsafe_bind: false,
-            api_cors: "*".to_string(),
+            api_cors: String::new(),
+            api_token: None,
+            api_cookie_path: std::path::PathBuf::from("./data/control-api.cookie"),
             allow_wallet_prompt: true,
             bench: false,
             bench_kind: crate::config::BenchKind::Backend,
+            bench_cpu_kernel: None,
             bench_secs: 20,
             bench_rounds: 3,
             bench_warmup_rounds: 0,

@@ -1,0 +1,91 @@
+---
+title: 'Giải thích Dandelion++: truyền tải giao dịch theo stem và fluff'
+description: Giải thích Dandelion++ bằng lời lẽ đơn giản, từ cơ chế truyền tải stem và fluff đến thiết kế trong bài báo năm 2018, và cách Blocknet dùng nó để che giấu node nào đã gửi giao dịch.
+tags: [Quyền riêng tư, Dandelion++, Mạng lưới, Blocknet]
+faq:
+  - q: 'Dandelion++ có che giấu địa chỉ IP của tôi không?'
+    a: 'Nó che giấu node nào đã khởi tạo giao dịch trước những người quan sát rải khắp mạng lưới. Giao dịch chỉ lan rộng sau khi chuyển sang giai đoạn fluff, cách bạn vài bước nhảy. Peer stem đầu tiên của bạn thấy giao dịch đến từ node của bạn, nhưng thông điệp stem trông giống nhau dù một node tạo ra giao dịch hay chỉ chuyển tiếp nó, nên peer đó không thể biết là trường hợp nào.'
+  - q: 'Dandelion và Dandelion++ khác nhau thế nào?'
+    a: 'Dandelion (2017) giới thiệu giai đoạn stem và fluff trên một chuỗi relay thẳng hàng. Dandelion++ (2018) giữ hai giai đoạn đó và gia cố chúng trước những kẻ do thám vi phạm quy tắc. Nó dùng một đồ thị trong đó mỗi node chọn hai relay, gửi giao dịch của chính mình theo một cạnh cố định, chọn relay mới mỗi epoch, và thêm một bộ hẹn giờ dự phòng.'
+  - q: 'Những đồng tiền mã hóa nào dùng Dandelion++?'
+    a: 'Monero thêm Dandelion++ ở phiên bản 0.16, phát hành tháng 5 năm 2020, và Blocknet truyền tải mọi giao dịch bằng nó. Dandelion lần đầu được cùng nhóm nghiên cứu đề xuất cho Bitcoin dưới dạng BIP 156. Bất kỳ coin nào xây dựng trên mạng ngang hàng đều có thể áp dụng nó, vì nó chỉ thay đổi cách các node chuyển giao dịch mới cho nhau.'
+  - q: 'Blocknet dùng thiết lập Dandelion++ nào?'
+    a: 'Các node Blocknet tiếp tục stem với xác suất 0,9 ở mỗi bước nhảy, nên một giao dịch chuyển sang fluff với xác suất 10% ở mỗi relay. Các tuyến stem thay đổi mỗi 10 phút. Nếu giao dịch của chính bạn chưa quay lại node của bạn trong giai đoạn fluff sau 45 giây, node của bạn sẽ tự phát tán nó, nên giao dịch luôn đến được mạng lưới.'
+sourceHash: 036cbd9214b7
+translation: draft
+---
+
+Dandelion++ là một cách truyền tải giao dịch mới qua mạng ngang hàng sao cho những người theo dõi mạng lưới khó xác định máy tính nào đã gửi chúng. Hướng dẫn này giải thích vấn đề mà nó giải quyết, cách hai giai đoạn stem và fluff hoạt động, những gì bài báo năm 2018 bổ sung vào thiết kế ban đầu, và cách Blocknet dùng nó cho mọi khoản thanh toán.
+
+## Dandelion++ là gì?
+
+<Answer>
+Dandelion++ là một giao thức truyền tải giao dịch giúp che giấu node nào đã tạo ra giao dịch. Một giao dịch mới trước tiên đi dọc theo một “thân” (stem), được chuyển từ một node tới đúng một node tiếp theo qua vài bước nhảy. Sau đó nó “bung” (fluff) và lan ra toàn mạng lưới, trông như bắt đầu từ một node ở xa người gửi thật.
+</Answer>
+
+Cái tên đến từ hình dạng của đường đi: một thân mảnh, rồi một chùm hạt bồ công anh bay khắp nơi. Dandelion++ được Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller và Pramod Viswanath công bố năm 2018 trên [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (bản tiền ấn phẩm trên [arXiv](https://arxiv.org/abs/1805.11060)), và được trình bày tại ACM SIGMETRICS 2018. Nó cải tiến đề xuất năm 2017 của cùng nhóm, Dandelion.
+
+## Vì sao phát tán một giao dịch lại để lộ nguồn gốc của nó?
+
+Thông điệp giao dịch không chứa địa chỉ IP của bạn. Cách nó lan truyền mới là thứ để lộ. Trong một mạng tiền mã hóa điển hình, node tạo ra giao dịch gửi nó tới tất cả các peer, các peer đó gửi tiếp tới peer của họ, và giao dịch lan ra từ nguồn theo từng vòng.
+
+Các nhà nghiên cứu đã chứng minh có thể đo được sự lan truyền này. Năm 2014, Biryukov, Khovratovich và Pustogarov, và độc lập với họ là Koshy, Koshy và McDaniel, đã chạy một “siêu node” kết nối tới gần như mọi node Bitcoin có thể truy cập và ghi lại thời điểm mỗi giao dịch đến từ mỗi peer. Node chuyển giao dịch tới đầu tiên thường chính là node đã tạo ra nó. Bài báo Dandelion++ gọi đây là bộ ước lượng first-spy: đoán rằng node trung thực đầu tiên chuyển giao dịch tới chính là nguồn của nó. Cách này đơn giản và hiệu quả trước cơ chế phát tán ồ ạt.
+
+Thêm độ trễ ngẫu nhiên trước khi mỗi node chuyển tiếp giao dịch, điều mà Bitcoin Core làm với một cơ chế gọi là diffusion, khiến thời gian trở nên nhiễu hơn. Nghiên cứu Dandelion chọn một hướng khác và thay đổi chính hình dạng của đường đi.
+
+## Giai đoạn stem và fluff hoạt động như thế nào?
+
+<Answer>
+Ở giai đoạn stem, mỗi node chuyển giao dịch tới đúng một peer. Ở mỗi bước nhảy, node tung một đồng xu có trọng số: thường thì nó tiếp tục stem, đôi khi chuyển sang fluff. Ở giai đoạn fluff, giao dịch được phát tán tới tất cả các peer như bình thường, nên người quan sát thấy nó lan ra từ node đã chuyển sang fluff.
+</Answer>
+
+Từng bước một:
+
+1. **Node của bạn bắt đầu một stem.** Nó gửi giao dịch mới tới chỉ một peer.
+2. **Mỗi relay quyết định.** Peer đó hoặc chuyển tiếp giao dịch tới thêm một peer (stem) hoặc phát tán nó (fluff).
+3. **Giai đoạn fluff lan giao dịch đi khắp nơi.** Từ node chuyển sang fluff, giao dịch tràn ngập mạng lưới theo cách thông thường và đến được thợ đào.
+
+Một kẻ do thám theo dõi nhiều node giờ đây thấy sự lan truyền bắt đầu tại node chuyển sang fluff, có thể cách bạn rất nhiều bước nhảy. Độ dài stem là ngẫu nhiên, nên kẻ do thám không thể đơn giản đếm ngược một số bước nhảy cố định. Bài báo cho biết độ dài stem kỳ vọng là 1/q, trong đó q là xác suất chuyển sang fluff ở mỗi bước nhảy. Với q = 0,1, một stem trung bình dài khoảng mười bước nhảy.
+
+## Dandelion++ đã thay đổi gì so với Dandelion?
+
+Thiết kế Dandelion năm 2017 gửi stem dọc theo một chuỗi relay thẳng hàng và chứng minh các kết quả mạnh dưới ba giả định: mọi node tuân theo quy tắc, mỗi node gửi một giao dịch, và mọi node đều chạy Dandelion. Bài báo năm 2018 chỉ ra cách những kẻ do thám phá vỡ các giả định đó có thể biết thêm thông tin, rồi thay đổi thiết kế để các bảo đảm vẫn đứng vững trước họ. Nó vận hành theo các epoch, mỗi node chuyển sang epoch mới “trong khoảng cỡ 10 phút”, và trong mỗi epoch nó dùng bốn cơ chế:
+
+| Cơ chế | Tác dụng |
+|---|---|
+| Đồ thị relay gần như 4-chính quy | Mỗi node chọn tối đa hai kết nối đi ra làm relay, tạo thành một mạng lưới các đường đi đan xen thay vì một đường thẳng. |
+| Một cạnh cho giao dịch của chính mình | Một node gửi mọi giao dịch nó tạo ra dọc theo cùng một cạnh đi ra, nên gửi nhiều giao dịch không để lộ thêm thông tin. |
+| Truyền tải giả ngẫu nhiên | Mỗi epoch, một node hoặc là relay hoặc là diffuser cho mọi giao dịch nó nhận được ở giai đoạn stem, và ánh xạ mỗi cạnh đi vào tới một cạnh đi ra. |
+| Bộ hẹn giờ dự phòng | Node đã gửi hoặc chuyển tiếp một giao dịch stem chờ một khoảng thời gian ngẫu nhiên để thấy nó chuyển sang fluff, và tự phát tán nó nếu không thấy. |
+
+Để chọn q, các mô phỏng trong bài báo cho thấy giữ q ở mức 0,2 trở xuống sẽ hạn chế những gì kẻ do thám có thể thu được khi thao túng đồ thị relay. Các tác giả chạy bản triển khai của họ trên mạng Bitcoin thực tế và chọn q = 0,1 hoặc q = 0,2 để giữ thời gian lan truyền trong mục tiêu 4,5 giây của họ.
+
+Dandelion được đề xuất cho Bitcoin dưới dạng [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). Monero thêm Dandelion++ ở [phiên bản 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), phát hành tháng 5 năm 2020.
+
+## Blocknet dùng Dandelion++ như thế nào?
+
+Mọi node Blocknet đều truyền tải giao dịch bằng Dandelion++, và không có gì cần bật. Khi bạn gửi BNT, node của bạn trước tiên kiểm tra giao dịch và thêm nó vào memory pool của chính mình, rồi chuyển nó cho bộ định tuyến Dandelion++. Đây là các thiết lập trong daemon:
+
+| Thiết lập | Giá trị | Ý nghĩa |
+|---|---|---|
+| Xác suất stem | 0,9 | Mỗi relay tiếp tục stem 90% số lần và chuyển sang fluff 10% số lần (q = 0,1), đúng giá trị q mà bài báo đã thử nghiệm. |
+| Epoch | 10 phút | Các tuyến stem được xáo trộn lại mỗi 10 phút. |
+| Bộ hẹn giờ embargo | 45 giây | Nếu giao dịch của bạn chưa quay lại node của bạn trong giai đoạn fluff sau khoảng thời gian đó, node của bạn sẽ tự phát tán nó. |
+
+Một khoản thanh toán Blocknet di chuyển như thế nào:
+
+- **Node của bạn chọn một peer stem cho mỗi epoch.** Nó gửi mọi giao dịch nó tạo ra tới cùng peer đó cho đến epoch 10 phút tiếp theo, khớp với quy tắc của bài báo dành cho giao dịch của chính một node.
+- **Mỗi relay đưa ra lựa chọn mới.** Node nhận được một giao dịch stem sẽ chuyển nó sang fluff với xác suất 10%. Nếu không, nó chuyển tiếp giao dịch tới một peer được chọn ngẫu nhiên, khác với peer đã gửi tới. Với q = 0,1, một stem trung bình dài khoảng mười bước nhảy.
+- **Thông điệp stem trông giống nhau từ mọi node.** Một node dùng cùng một loại thông điệp để bắt đầu stem và để chuyển tiếp stem, nên peer nhận được không thể biết bạn đã tạo ra giao dịch hay chỉ đang chuyển tiếp nó.
+- **Giao dịch luôn đến nơi.** Nếu một bước nhảy stem không chuyển được, node sẽ chuyển giao dịch sang fluff ngay lập tức, và bộ hẹn giờ embargo 45 giây bao quát mọi giao dịch bị kẹt.
+- **Relay kiểm tra những gì chúng mang theo.** Một node xác nhận rằng dữ liệu stem là một giao dịch đúng định dạng trước khi chuyển tiếp, và phạt peer gửi dữ liệu rác.
+
+## Dandelion++ kết hợp với các lớp riêng tư khác của Blocknet như thế nào?
+
+Dandelion++ hoạt động ở tầng mạng: nó bảo vệ mối liên kết giữa một giao dịch và máy tính đã gửi nó. Quyền riêng tư trên chuỗi, thứ khiến Blocknet trở thành một [đồng coin riêng tư](/vi/blog/what-is-a-privacy-coin/), bảo vệ nội dung của giao dịch: một vòng CLSAG 16 thành viên trên mỗi đầu vào che giấu người gửi, địa chỉ ẩn dùng một lần che giấu người nhận, và Pedersen commitment với range proof Bulletproofs che giấu số tiền. Các lớp bảo vệ này là bắt buộc, nên mọi giao dịch đều trông giống nhau ngay cả trước khi Dandelion++ truyền tải chúng.
+
+Hai tầng bổ trợ cho nhau. Chữ ký vòng che giấu output nào đã trả tiền, còn Dandelion++ che giấu node nào đã phát tán khoản thanh toán. [Blocknet giữ thanh toán riêng tư như thế nào](/vi/blog/blocknet-privacy-features/) trình bày lần lượt từng lớp trên chuỗi, còn [Blocknet là gì?](/vi/blog/what-is-blocknet/) đưa ra cái nhìn tổng quan, bao gồm thanh toán bằng tên với Blocknet ID.
+
+Để có BNT của riêng bạn để gửi, bạn có thể tự đào tại nhà. Làm theo [hướng dẫn đào Blocknet](/vi/blog/how-to-mine-blocknet/) để tải seine, trỏ nó tới bntpool.com và nhận các khoản thanh toán về địa chỉ ví hoặc `@name` của bạn.
+
+<CTA target="seine" title="Đào BNT đầu tiên với seine" text="seine tự tinh chỉnh theo máy tính của bạn và đào BNT về địa chỉ hoặc @name của bạn trên bntpool.com, sẵn sàng cho khoản thanh toán riêng tư đầu tiên." />

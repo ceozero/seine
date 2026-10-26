@@ -1,0 +1,22 @@
+---
+// Call to action placed once in every post, near the end (like Sol Incinerator's ToolCTA):
+// <CTA target="seine" title="…" text="…" /> sends readers to the download, target="pool" to
+// bntpool.com's Get Started page.
+import { localizePath } from '../../i18n/locales';
+import { useTranslations } from '../../i18n/ui';
+import { localeFromUrl } from '../../lib/locale-from-url';
+
+interface Props { target?: 'seine' | 'pool'; title: string; text: string }
+const { target = 'seine', title, text } = Astro.props;
+const locale = localeFromUrl(Astro.url);
+const t = useTranslations(locale);
+const pool = target === 'pool';
+const href = pool ? 'https://bntpool.com/start' : `${localizePath('/', locale)}#download`;
+---
+<aside class="cta-card">
+  {pool
+    ? <svg class="cta-icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="4" width="24" height="24" rx="4" fill="#16a34a"/><rect x="9" y="9" width="14" height="14" rx="2" fill="#fff" opacity=".9"/><rect x="12" y="12" width="8" height="8" rx="1" fill="#16a34a"/></svg>
+    : <img class="cta-icon" src="/assets/brand/icon.svg" alt="" width="48" height="48">}
+  <div class="cta-copy"><b>{title}</b><span>{text}</span></div>
+  <a class="btn primary" href={href}>{pool ? t('ctaPoolButton') : t('postCtaButton')}</a>
+</aside>

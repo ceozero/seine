@@ -1,0 +1,86 @@
+---
+title: 'Ring signature dijelaskan: cara kripto menyembunyikan pengirim'
+description: 'Ring signature dijelaskan, dari gagasan 2001 hingga key image dan CLSAG: cara penanda tangan bersembunyi di antara public key dan cara Blocknet memakai ring 16 per input.'
+tags: [Privasi, Ring signature, Kriptografi, Blocknet]
+faq:
+  - q: 'Apa perbedaan ring signature dan group signature?'
+    a: 'Group signature membutuhkan pengelola yang menyiapkan grup terlebih dahulu dan bisa mengungkap siapa yang menandatangani. Ring signature tidak punya pengelola dan tidak perlu persiapan: penanda tangan memilih sekumpulan public key apa pun saat itu juga, dan tidak ada seorang pun, termasuk orang-orang yang kuncinya dipakai, yang kemudian bisa membuktikan anggota mana yang membuat tanda tangan itu.'
+  - q: 'Apa itu key image dalam ring signature?'
+    a: 'Key image adalah nilai yang dihitung dari private key output yang dibelanjakan. Output yang sama selalu menghasilkan key image yang sama, sehingga jaringan menolak pembelanjaan kedua atas output itu, tetapi key image tidak mengungkap anggota ring mana yang asli. Key image mengubah ring signature menjadi linkable ring signature yang mencegah double spending.'
+  - q: 'Apa itu CLSAG?'
+    a: 'CLSAG adalah skema linkable ring signature yang dijelaskan oleh Brandon Goodell, Sarang Noether, dan Arthur Blue pada 2019. Skema ini membuktikan bahwa penanda tangan memiliki satu output di dalam ring dan bahwa jumlahnya seimbang, dengan key image untuk mencegah double spending. Monero mengadopsinya pada Oktober 2020, dan Blocknet menandatangani setiap input dengan CLSAG dan RingCT.'
+  - q: 'Berapa ukuran ring yang dipakai Blocknet?'
+    a: 'Blocknet memakai ring berisi tepat 16 untuk setiap input: output asli ditambah 15 decoy, masing-masing berupa output nyata yang sudah ada di rantai. Konsensus menolak ukuran lain apa pun. Karena setiap input memakai ukuran yang sama, ukuran ring tidak pernah bisa menandai sebuah transaksi, dan output asli berada di posisi acak di dalam ring.'
+  - q: 'Apakah ring signature menyembunyikan jumlah pembayaran?'
+    a: 'Tidak. Ring signature menyembunyikan output mana yang membayar. Jumlah disembunyikan oleh lapisan terpisah: Pedersen commitment, yang mengunci sebuah angka tanpa memperlihatkannya, ditambah range proof Bulletproofs, yang membuktikan setiap jumlah valid. Blocknet memakai semuanya bersama-sama di setiap transaksi, di samping stealth address sekali pakai yang menyembunyikan penerima.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Ring signature (tanda tangan cincin) memungkinkan Anda menandatangani atas nama sebuah grup sehingga siapa pun bisa memeriksa bahwa tanda tangan itu berasal dari salah satu kunci grup, sementara tidak ada yang bisa tahu kunci yang mana. Artikel ini menjelaskan cara kerja ring signature, dari makalah tahun 2001 yang memperkenalkannya hingga key image dan CLSAG, dan menunjukkan bagaimana Blocknet memakai ring berisi 16 untuk menjaga privasi pengirim setiap pembayaran.
+
+## Apa itu ring signature?
+
+<Answer>
+Ring signature adalah tanda tangan digital yang dibuat dengan satu private key dan sekumpulan public key milik orang lain. Pemeriksa bisa memastikan bahwa pemegang salah satu kunci itu yang menandatangani, tetapi tidak bisa tahu yang mana. Penanda tangan memilih grupnya saat itu juga, tanpa persiapan dan tanpa kerja sama dari anggota lain.
+</Answer>
+
+Tanda tangan digital biasa mengikat pesan ke satu public key. Ring signature mengikatnya ke sekumpulan public key, yang disebut ring. Penanda tangan hanya membutuhkan private key miliknya sendiri; anggota lain tidak menyumbang apa pun selain public key yang sudah mereka terbitkan. Bagi pihak luar, setiap anggota ring sama-sama mungkin menjadi penanda tangannya.
+
+## Dari mana asal ring signature?
+
+Ron Rivest, Adi Shamir, dan Yael Tauman memperkenalkan ring signature di ASIACRYPT 2001 dalam makalah berjudul ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Contoh mereka adalah seorang anggota kabinet yang ingin membocorkan berita kepada wartawan dengan cara yang membuktikan berita itu berasal dari kabinet tanpa mengungkap anggota yang mana. Ia menandatangani dengan kuncinya sendiri ditambah public key anggota kabinet lainnya, dan wartawan bisa memverifikasi tanda tangan itu tanpa tahu siapa yang menulisnya.
+
+Dua sifat membuat gagasan ini menonjol. Tidak ada pengelola grup yang bisa membuka identitas penanda tangan, yang membedakan ring signature dari group signature yang lebih lama. Dan ring-nya spontan: penanda tangan bisa menyusunnya dari kunci apa pun yang sudah diterbitkan pada saat menandatangani. Para penulis memilih nama itu karena "cincin adalah bentuk geometris dengan tepi yang seragam dan tanpa pusat": setiap anggota berada di tepi, dan tidak ada yang memegang kendali. Algoritma penandatanganannya punya bentuk yang sama, yaitu rangkaian perhitungan yang melingkar kembali ke dirinya sendiri.
+
+## Bagaimana cara kerja ring signature?
+
+Skema modern yang dipakai di mata uang kripto membangun lingkaran itu dari hash dan kunci kurva eliptik. Berikut gagasannya dalam langkah sederhana untuk ring berisi 16 public key:
+
+1. **Mulai dari slot Anda sendiri.** Penanda tangan memilih angka rahasia acak dan menghitung hash-nya bersama pesan. Hash itu menjadi challenge untuk slot berikutnya di ring.
+2. **Palsukan respons untuk setiap slot lainnya.** Untuk masing-masing dari 15 anggota lain, penanda tangan memilih respons acak dan menggabungkannya dengan public key anggota itu serta challenge saat ini untuk menghitung challenge bagi slot sesudahnya.
+3. **Tutup ring-nya.** Setelah berputar penuh, rangkaian itu kembali ke slot milik penanda tangan. Hanya orang yang memegang private key slot itu yang bisa menghitung satu-satunya respons yang membuat rangkaian berakhir tepat di titik awalnya.
+
+Tanda tangannya adalah challenge awal ditambah 16 respons. Pemeriksa mulai dari mana saja, berjalan mengelilingi ring sambil menghitung ulang setiap challenge dari public key dan respons, lalu memeriksa bahwa lingkarannya tertutup. Setiap slot terlihat sama: sebuah public key dan respons yang tampak acak. Tidak ada yang menandai dari mana penanda tangan memulai, sehingga pemeriksa hanya tahu bahwa satu private key menutup ring itu, tanpa tahu yang mana.
+
+## Bagaimana key image mencegah double spending?
+
+Ring signature biasa punya satu celah untuk uang: jika setiap pembelanjaan bersembunyi di antara output lain, jaringan tidak bisa melihat bahwa koin yang sama dibelanjakan dua kali. Linkable ring signature memperbaiki hal ini. Joseph Liu, Victor Wei, dan Duncan Wong menjelaskan skema pertama semacam itu, LSAG, di ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Dua tanda tangan yang dibuat dengan private key yang sama bisa dihubungkan satu sama lain, sementara penanda tangan tetap tersembunyi di dalam ring.
+
+Desain CryptoNote tahun 2013 mengembangkan ini menjadi key image. Untuk output dengan private key `x` dan public key `P`, wallet menghitung `I = x · Hp(P)`, di mana `Hp` memetakan public key ke sebuah titik di kurva melalui hash. Tanda tangan membuktikan bahwa `I` milik anggota ring mana pun yang menandatangani, tanpa menyebut yang mana. Karena key image hanya bergantung pada output yang dibelanjakan, membelanjakan output itu lagi selalu menghasilkan `I` yang sama. Setiap node menyimpan daftar key image yang sudah terlihat dan menolak transaksi apa pun yang mengulangnya.
+
+## Dari MLSAG ke CLSAG
+
+Mata uang kripto yang juga menyembunyikan jumlah membutuhkan ring signature untuk membuktikan fakta kedua: bahwa jumlah input yang tersembunyi cocok dengan yang dibelanjakan transaksi. Makalah Shen Noether tahun 2015, ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT), melakukannya dengan MLSAG, ring signature atas dua set kunci, satu untuk kepemilikan dan satu untuk commitment jumlah.
+
+CLSAG, dari Brandon Goodell, Sarang Noether, dan Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), membuktikan dua fakta yang sama dengan lebih ringkas. Monero beralih dari MLSAG ke CLSAG dalam upgrade Oktober 2020. [Dokumentasi Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) melaporkan verifikasi sekitar 20% lebih cepat dan transaksi umum dua input dua output menyusut dari sekitar 2,5 kB menjadi 1,9 kB.
+
+## Apa arti ukuran ring bagi privasi?
+
+<Answer>
+Ukuran ring adalah jumlah output di setiap ring: output asli ditambah decoy. Ring berisi 16 berarti pengamat melihat 16 kandidat yang sama-sama valid untuk setiap input. Ukuran yang tetap sama pentingnya dengan ukuran yang besar, karena jika setiap input memakai ukuran yang sama, ukuran itu sendiri tidak mengungkap apa pun tentang siapa yang membuat transaksi.
+</Answer>
+
+Decoy adalah output nyata dari rantai, sehingga masing-masing benar-benar bisa menjadi koin yang sedang dibelanjakan. Jika ukuran ring bisa bervariasi, wallet yang memilih ukuran tidak lazim akan menandai transaksinya sendiri. Monero menaikkan ukuran ring-nya dari 11 menjadi 16 dalam upgrade Agustus 2022, dan Blocknet memakai 16 lewat konsensus untuk setiap input.
+
+## Bagaimana Blocknet memakai ring signature
+
+Setiap input Blocknet ditandatangani dengan CLSAG dan RingCT atas ring berisi tepat 16 output. Aturannya ditegakkan oleh konsensus, jadi tidak ada wallet yang bisa memilih keluar:
+
+- **Ring tetap berisi 16.** Daemon menolak input apa pun yang ring-nya tidak berisi tepat 16 anggota. Kodenya menetapkan ukuran itu "untuk mencegah kebocoran informasi dari ukuran ring yang bervariasi".
+- **Hanya output nyata.** Setiap anggota ring harus berupa output nyata yang sudah ada di rantai, sehingga setiap decoy adalah koin yang benar-benar bisa dibelanjakan.
+- **Decoy acak dan posisi acak.** Wallet mengacak output rantai dengan generator acak yang aman secara kriptografis untuk memilih 15 decoy, lalu menempatkan output asli Anda di posisi acak di dalam ring.
+- **Kepemilikan dan jumlah dalam satu bukti.** Setiap tanda tangan membuktikan bahwa Anda memiliki satu anggota ring dan bahwa jumlah tersembunyi pada input Anda cocok dengan commitment anggota itu, sehingga jumlahnya seimbang tanpa diperlihatkan.
+- **Key image diperiksa terhadap rantai.** Key image adalah bagian dari data yang ditandatangani, dan jaringan menolak transaksi jika key image itu sudah pernah dibelanjakan atau muncul dua kali dalam transaksi yang sama.
+
+Format transaksinya tidak punya mode transparan, jadi setiap pembayaran di rantai membawa ring seperti ini. Ring signature menyembunyikan pengirim; [stealth address sekali pakai](/id/blog/stealth-addresses-explained/) menyembunyikan penerima, dan [Pedersen commitment dengan Bulletproofs](/id/blog/bulletproofs-explained/) menyembunyikan jumlah. [Cara Blocknet menjaga privasi pembayaran](/id/blog/blocknet-privacy-features/) menguraikan setiap lapisan itu dan artinya saat Anda membayar seseorang.
+
+## Apa berikutnya dengan upgrade Faraday
+
+Blocknet merencanakan upgrade jaringan bernama Faraday, dengan aktivasi yang direncanakan sekitar 2027-02-16 menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Dalam kata-kata situs itu: "Saat ini sebuah pembelanjaan bersembunyi di antara 16 output. Setelah Faraday, pembelanjaan bersembunyi di antara setiap output di rantai." Faraday juga akan membawa spend proof baru, yang digambarkan situs itu sebagai "Dibangun agar komputer kuantum tidak bisa memalsukan pembelanjaan." Desain, pengujian, dan tinjauan adversarial sedang berjalan, dan tanggalnya masih rencana, belum final.
+
+## Dapatkan BNT untuk dikirim secara privat
+
+Cara mudah untuk mendapatkan koin yang memakai ring ini adalah dengan menambangnya. Penambang seine gratis, sumber terbuka, dan menyesuaikan diri dengan komputer Anda, dan bntpool.com adalah pool bawaannya, jadi Anda bisa mulai menambang dalam beberapa menit. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membahas pengaturannya, dan Anda bisa menambang langsung ke alamat Anda atau ke [nama Blocknet ID](/id/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Tambang BNT privat pertama Anda" text="Unduh seine, tambang di bntpool.com, dan terima koin yang setiap pembelanjaannya dilindungi ring berisi 16." />

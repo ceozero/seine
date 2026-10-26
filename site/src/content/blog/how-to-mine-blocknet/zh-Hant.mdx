@@ -1,0 +1,103 @@
+---
+title: 如何挖 Blocknet
+description: 幾分鐘內在 Windows、macOS 或 Linux 上開始挖 Blocknet：準備地址、下載 seine，用 CPU 與 NVIDIA 顯示卡在 bntpool.com 礦池挖礦。
+tags: [挖礦指南, Blocknet, Argon2id, bntpool]
+faq:
+  - q: '挖 Blocknet 需要多少記憶體？'
+    a: '每個挖礦執行緒約需 2 GB 記憶體，因為每次 Argon2id 雜湊都要處理一塊 2 GiB 的記憶體。因此一台 16 GB 記憶體的電腦在為系統留出空間後，大約能執行六到七個執行緒。seine 會偵測你的記憶體並自動選擇安全的執行緒數。'
+  - q: '在 bntpool.com 挖 Blocknet，收益什麼時候入帳？'
+    a: 'bntpool.com 採用六小時區間的 PPLNS 方式支付。區塊獎勵要等該區塊獲得 60 個確認（以五分鐘出塊約五小時）後才能支付，餘額達到 0.1 BNT 後發送。第一筆收益預計在第一批份額被接受幾小時後入帳。'
+  - q: '可以同時用 CPU 與顯示卡挖 Blocknet 嗎？'
+    a: '可以。在 Windows 與 Linux 上，seine 會同時使用電腦上的每個 CPU 核心與每張 NVIDIA 顯示卡挖礦，兩者的算力會相加。它在執行中分別為處理器與每張顯示卡調校，無需修改任何設定，就能讓你的全部硬體發揮出最大算力。'
+sourceHash: ad835df628e2
+translation: reviewed
+---
+
+本指南帶你從下載 **seine** 開始，到在 bntpool.com 礦池上獲得第一批被接受的份額與收益，適用於 Windows、macOS 與 Linux。剛接觸挖礦？[加密貨幣挖礦原理](/zh-hant/blog/how-crypto-mining-works/)先說明了區塊、難度與礦池。
+
+## 如何挖 Blocknet？
+
+<Answer>
+準備一個 Blocknet 地址或 Blocknet ID 短名稱，下載適合你系統的 seine，執行它，並在提示時貼上你的地址。接受預設礦池 bntpool.com，就已經在挖礦了。seine 會立即開始計算雜湊，並在執行中持續調整執行緒數與 CPU 運算核心程式。
+</Answer>
+
+## 開始之前需要準備什麼？
+
+- **一個 Blocknet 地址。** 安裝官方 Blocknet 錢包，即[命令列錢包](https://github.com/blocknetprivacy/blocknet/releases/latest)或[桌面錢包](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)，然後複製你的地址。[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)會一步步帶你完成。請把錢包與助記詞保存在你自己的電腦上，不要放在與他人共用的礦機上。
+- **或者一個短名稱。** 如果你在 [blocknet.id](https://blocknet.id) 註冊了 [Blocknet ID 短名稱](/zh-hant/blog/blocknet-id-pay-by-name/)，就可以直接挖到 `@name`，不必貼上很長的地址。
+- **每個挖礦執行緒約 2 GB 記憶體。** seine 會依你的電腦自動決定執行緒數，並為系統預留餘裕，所以無需事先計算。
+- **Windows、macOS 或 Linux。** 在 Windows 與 Linux 上，只要裝有較新的驅動程式，NVIDIA 顯示卡就會被自動使用。
+
+## 第 1 步：下載 seine
+
+在[下載區](/zh-hant/#download)取得適合你系統的壓縮檔。無需安裝：解壓縮即可使用。
+
+| 系統 | 壓縮檔 | 顯示卡 |
+|---|---|---|
+| Windows（x86_64） | `seine-windows-x86_64.zip` | NVIDIA；已內建 CUDA 執行環境 |
+| Linux（x86_64） | `seine-linux-x86_64.tar.gz` | NVIDIA，需安裝驅動程式 |
+| Linux（ARM64） | `seine-linux-aarch64.tar.gz` | CPU（glibc 2.39 或更新版本） |
+| macOS（Apple 晶片） | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS（Intel） | `seine-macos-x86_64.tar.gz` | CPU |
+
+每個版本也會發布一個 `SHA256SUMS.txt` 檔案，你可以用它核對下載的檔案是否與發布版本一致。
+
+## 第 2 步：執行
+
+在 Windows 上，雙擊 `seine.exe`。在 macOS 或 Linux 上，在解壓縮後的資料夾中開啟終端機並執行：
+
+```sh
+./seine
+```
+
+## 第 3 步：輸入地址並開始挖礦
+
+seine 會先詢問你的收款地址或 `@shortname`，然後詢問礦池。按 Enter 接受預設礦池 `stratum+tcp://bntpool.com:3333`。片刻之後，[儀表板](/zh-hant/blog/seine-dashboard-explained/)上就會顯示你的算力與第一批份額。
+
+此後 seine 會邊挖邊調校。它用真實的挖礦工作比較不同的執行緒數與 CPU 運算核心程式，只有在確認有提升後才會切換；記憶體吃緊時會自動調降，並記住有效的設定供下次啟動使用。整個過程不會重新連線礦池，因此調校不會浪費挖礦時間。
+
+## 多久能收到收益？
+
+bntpool.com 採用 PPLNS：每個區塊的獎勵在其被找到前六小時內提交的份額之間分配。區塊獎勵要等該區塊獲得 60 個確認後才能使用，以 Blocknet 五分鐘的出塊時間計算約為五小時。當你已確認的餘額達到 0.1 BNT 時，礦池會把它發送到你的地址。
+
+你可以在 [bntpool.com](https://bntpool.com) 上查詢自己的地址，查看算力、份額與餘額。尚未確認的區塊帶來的獎勵會分開顯示，因為這些獎勵仍可能變動。
+
+## 你的電腦挖礦有多快？
+
+算力主要取決於記憶體頻寬，以及你的記憶體能支援的執行緒數。以下是 seine 在各代硬體上實測的最佳結果：
+
+| 硬體 | 執行緒數 | 算力 |
+|---|---|---|
+| AMD EPYC · Zen 5（EPYC 9R45） | 32 | 49.4 H/s |
+| Arm 伺服器（AWS Graviton4） | 32 | 39.3 H/s |
+| AMD EPYC · Zen 4（EPYC 9R14） | 32 | 38.2 H/s |
+| Apple M4 Max（48 GB MacBook Pro） | 16 | 30.9 H/s |
+| Intel Xeon（Sapphire Rapids 8488C） | 32 | 26.0 H/s |
+
+所有已測試 CPU 的結果請見[效能頁面](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)，[Blocknet 挖礦硬體指南](/zh-hant/blog/blocknet-mining-hardware-hashrate/)則說明了記憶體容量與記憶體頻寬如何決定這些數字。
+
+## seine 如何讓同一顆 CPU 挖得更快？
+
+seine 為每個處理器系列提供多個 Argon2id 運算核心程式，並在挖礦過程中於你的電腦上實測比較。在我們測試的硬體上，選對運算核心程式帶來了很大的提升：
+
+- **AWS Graviton4：** 帶預取的 SHA3 運算核心程式比一般 NEON 快 56%（從 13.80 提升到 21.50 H/s）。
+- **AMD EPYC 9R45（Zen 5）：** 串流（streaming）運算核心程式比 AVX2 快 30%（24 執行緒下從 34.47 提升到 44.74 H/s）。
+
+這些都無需你手動選擇。seine 只在確認有提升後才切換運算核心程式，並記住結果供下次啟動使用。
+
+## 如何獲得更高的算力？
+
+- **CPU 與顯示卡一起挖。** 在 Windows 與 Linux 上 seine 預設如此，兩者的算力會相加。
+- **在 Linux 與 WSL 上預留大分頁記憶體。** 在驗證用的機器上，用 2 MiB 分頁承載每個執行緒的記憶體可提升約 4–6%，1 GiB 分頁還能再提升約 2%。[大分頁記憶體指南](/zh-hant/blog/huge-pages-blocknet-mining/)中有相關指令。
+- **讓大型伺服器分散執行緒。** 在 Linux 上，seine 會自動把執行緒分配到各個 NUMA 節點與快取群組。詳情請見[大型伺服器指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md)。
+- **在 Apple 晶片上只用 CPU 挖礦。** 這是 M 系列 Mac 上最快的選擇，也是 seine 的預設做法。
+
+## Blocknet 可以單獨挖礦（solo）嗎？
+
+可以。如果你執行著自己已同步的 Blocknet 節點，用 `./seine --mode daemon` 啟動 seine，它就會直接對接節點挖礦，而不經過礦池。你找到的每個區塊都歸你所有，但只有找到完整區塊時才有收益，所以大多數人會先從礦池開始。設定方式請見[單獨挖礦指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md)。
+
+<Note>
+根據 [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)，Blocknet 計畫在 2027-02-16 前後進行名為 Faraday 的網路升級，屆時工作量證明演算法預計會改變。請保持 seine 為最新版本：它會在啟動時以及每 12 小時檢查一次新版本。
+</Note>
+
+<CTA target="seine" title="下載 seine" text="免費提供 Windows、macOS 與 Linux 版本。執行它，貼上你的地址，即可在 bntpool.com 上開始挖礦。" />

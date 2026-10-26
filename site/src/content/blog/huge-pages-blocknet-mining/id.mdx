@@ -1,0 +1,159 @@
+---
+title: Huge pages untuk menambang Blocknet lebih cepat
+description: Cadangkan huge pages di Linux/WSL atau large pages di Windows agar seine menambang Blocknet lebih cepat, dengan lebih sedikit TLB miss di arena Argon2id 2 GiB.
+tags: [Panduan penambangan, Huge pages, Linux, Windows, Performa]
+faq:
+  - q: 'Apakah saya perlu huge pages untuk menambang Blocknet dengan seine?'
+    a: 'Tidak. seine langsung menambang dengan memori biasa begitu Anda menjalankannya, dan meminta transparent huge pages ke Linux dengan sendirinya. Mencadangkan huge pages adalah tambahan opsional untuk beberapa persen terakhir: sekitar 4 sampai 6% dengan halaman 2 MiB di host validasi, dan kira-kira 2% lagi dengan halaman 1 GiB.'
+  - q: 'Berapa huge pages yang dibutuhkan setiap thread seine?'
+    a: 'Setiap thread membutuhkan 1.024 halaman 2 MiB, yang pas menampung arena Argon2id 2 GiB miliknya, atau dua halaman 1 GiB. Untuk halaman 2 MiB, kalikan jumlah thread Anda dengan 1.024, tambahkan kelonggaran 5% dan bulatkan ke atas. Delapan thread membutuhkan 8.602 halaman, yang mencadangkan sekitar 16,8 GiB RAM.'
+  - q: 'Apakah seine memakai huge pages 1 GiB secara otomatis?'
+    a: 'Mode halaman bawaan seine memakai pool halaman 2 MiB yang dicadangkan, lalu transparent huge pages. Untuk memakai halaman 1 GiB, cadangkan dua per thread, sebaiknya saat boot dengan hugepagesz=1G hugepages=N, lalu jalankan seine dengan --cpu-page-mode large-1g. Mode itu berjalan di Linux x86_64 dan WSL serta menambah sekitar 2% di atas halaman 2 MiB.'
+  - q: 'Bagaimana cara mengaktifkan large pages untuk seine di Windows?'
+    a: 'Berikan hak Lock pages in memory ke akun Windows Anda di secpol.msc, di bawah Local Policies dan User Rights Assignment, lalu keluar dan masuk lagi. seine mengaktifkan hak itu untuk dirinya sendiri saat mulai dan mengalokasikan arena 2 GiB setiap thread dengan large pages. Di edisi Home, berikan hak tersebut dengan alat seperti ntrights.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+Dengan mencadangkan huge pages, seine bisa menempatkan memori setiap thread penambangan pada beberapa halaman besar, bukan ratusan ribu halaman kecil. Panduan ini menjelaskan mengapa hal itu mempercepat proof of work Argon2id milik Blocknet, berapa halaman yang perlu dicadangkan, dan perintah persisnya untuk Linux, WSL2, dan Windows.
+
+## Mengapa huge pages mempercepat penambangan Blocknet?
+
+<Answer>
+Setiap thread seine menghitung hash di dalam arena Argon2id 2 GiB dan membaca blok dari posisi yang tidak bisa ditebak di dalamnya. Dengan halaman biasa 4 KiB, arena itu mencakup 524.288 halaman, jauh lebih banyak terjemahan alamat daripada yang bisa disimpan TLB milik CPU. Huge pages mencakupnya dengan 1.024 atau hanya 2 halaman, sehingga lebih sedikit pembacaan yang tertahan oleh penelusuran tabel halaman.
+</Answer>
+
+Setiap akses memori dimulai dengan alamat virtual yang harus diterjemahkan CPU menjadi alamat fisik. Terjemahan terbaru disimpan di translation lookaside buffer (TLB), yang oleh [dokumentasi kernel Linux](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) disebut sebagai "cache untuk terjemahan alamat virtual ke fisik" dan "sumber daya yang sangat langka di prosesor". Jika sebuah alamat tidak ada di TLB, CPU harus menelusuri tabel halaman di memori sebelum bisa mulai mengambil datanya.
+
+Proof of work Blocknet membuat penelusuran itu sering terjadi. Setiap hash mengisi arena 2 GiB dengan blok 1 KiB, dan pada paruh kedua proses, setiap blok baru membaca blok sebelumnya yang posisinya bergantung pada data yang baru saja dihitung. Seperti dijelaskan dalam [penjelasan Argon2id](/id/blog/argon2id-proof-of-work-explained/), totalnya sekitar 2 GiB pembacaan acak per hash. Ukuran halaman menentukan berapa banyak terjemahan yang dibutuhkan pembacaan itu:
+
+| Ukuran halaman | Halaman per arena 2 GiB |
+|---|---|
+| 4 KiB (biasa) | 524.288 |
+| 2 MiB | 1.024 |
+| 1 GiB | 2 |
+
+Dengan huge pages, satu entri TLB mencakup memori 512 atau 262.144 kali lebih banyak, sehingga jauh lebih banyak bagian arena yang tetap terjangkau TLB dan lebih banyak waktu setiap thread terpakai untuk menghitung hash.
+
+## Seberapa besar huge pages mempercepat penambangan?
+
+[Panduan huge pages](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) milik seine menyebutnya sebagai pengaturan tunggal paling berpengaruh untuk penambangan CPU di Linux. Di host validasi, halaman 2 MiB yang dicadangkan menambah sekitar **4–6%**, dan halaman 1 GiB menambah kira-kira **2%** lagi. Panduan itu juga mencatat bahwa begitu banyak thread berjalan, cakupan huge pages biasanya lebih berpengaruh daripada penyetelan set instruksi.
+
+Hasil server di [grafik performa](/id/#performance) seine diukur dengan huge pages 2 MiB yang dicadangkan secara eksplisit. Angka 49,4 H/s dari AMD EPYC Zen 5 (EPYC 9R45) dengan 32 thread, yang diukur pada Oktober 2026, berjalan dengan 34.407 halaman yang dicadangkan, sama dengan angka di baris 32 thread pada tabel di bawah. [Panduan perangkat keras penambangan](/id/blog/blocknet-mining-hardware-hashrate/) memuat hasil lengkap per generasi.
+
+Bahkan tanpa pencadangan, seine meminta transparent huge pages ke kernel di Linux. Pool yang dicadangkan lebih unggul karena halamannya disisihkan sejak awal, sehingga setiap thread mendapatkannya seberapa pun terfragmentasinya memori.
+
+## Berapa huge pages yang dibutuhkan seine?
+
+<Answer>
+Setiap thread seine membutuhkan 1.024 huge pages 2 MiB untuk menampung arena 2 GiB miliknya, atau dua halaman 1 GiB. Untuk halaman 2 MiB, cadangkan thread × 1.024 × 1,05 lalu bulatkan ke atas, yang menyisakan kelonggaran 5%. Delapan thread membutuhkan 8.602 halaman, sekitar 16,8 GiB. seine mencetak jumlah persisnya saat mulai jika pencadangannya kurang.
+</Answer>
+
+Jumlah thread adalah angka **Threads** di dasbor seine. seine memilihnya berdasarkan RAM dan jumlah core Anda, jadi jalankan seine sekali tanpa huge pages dan catat angkanya. Jika pencadangannya terlalu kecil, log awal seine mencetak baris `hugepages |` berisi jumlah halaman yang dibutuhkan dan perintah `sysctl` untuk mencadangkannya.
+
+| Thread | Halaman 2 MiB (dengan kelonggaran 5%) | Memori yang dicadangkan | Halaman 1 GiB |
+|---|---|---|---|
+| 4 | 4.301 | 8,4 GiB | 8 |
+| 8 | 8.602 | 16,8 GiB | 16 |
+| 16 | 17.204 | 33,6 GiB | 32 |
+| 24 | 25.805 | 50,4 GiB | 48 |
+| 32 | 34.407 | 67,2 GiB | 64 |
+
+Halaman yang dicadangkan disisihkan untuk program yang meminta huge pages, jadi sesuaikan pencadangan dengan jumlah thread yang benar-benar Anda pakai untuk menambang. seine menghitung pool yang dicadangkan sebagai memori yang tersedia saat menentukan jumlah thread, sehingga mencadangkan halaman tidak mengubah jumlah thread Anda.
+
+## Bagaimana cara menyiapkan huge pages 2 MiB di Linux?
+
+Cadangkan halaman sesuai jumlah thread Anda. Contoh ini untuk 4 thread:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Periksa apakah kernel berhasil menemukan semuanya:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Jika `HugePages_Total` lebih kecil dari yang Anda minta, memori sedang terfragmentasi. Kosongkan cache, padatkan memori, lalu coba lagi:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Jadikan pencadangan itu permanen:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Untuk pencadangan besar, pengaturan permanen ditambah reboot adalah cara paling andal, karena kernel mencadangkan halaman di awal boot sebelum memori terfragmentasi. Setelah itu jalankan seine seperti biasa. Mode halaman bawaannya, `auto`, memetakan arena setiap thread dari pool yang dicadangkan tanpa flag tambahan.
+
+## Bagaimana cara menambahkan halaman 1 GiB?
+
+Halaman 1 GiB butuh sedikit lebih banyak pengaturan dan menambah sekitar 2% di atas halaman 2 MiB. Setiap arena 2 GiB membutuhkan tepat dua halaman, jadi tidak ada kelonggaran yang perlu dihitung. Halaman ini berjalan di Linux x86_64 dan WSL.
+
+Cadangkan saat boot dengan parameter kernel, cara paling andal untuk mendapatkan halaman sebesar ini. Untuk 9 thread:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Di mesin yang baru saja boot, Anda juga bisa mencoba pencadangan saat sistem berjalan, lalu memeriksa jumlah halaman yang bebas:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Baris `HugePages_*` di `/proc/meminfo` hanya mencakup ukuran bawaan 2 MiB, jadi baca pool 1 GiB dari `/sys`. Kemudian jalankan seine dengan mode 1 GiB:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+Dalam mode ini setiap thread memetakan arenanya dari pool 1 GiB, sehingga Anda tahu seluruh sesi memakai halaman 1 GiB.
+
+## Bagaimana cara mencadangkan huge pages di WSL2?
+
+WSL2 menjalankan kernel Linux sungguhan, jadi perintah Linux di atas berfungsi di dalamnya. Untuk halaman 1 GiB, teruskan parameter boot melalui `%UserProfile%\.wslconfig` di sisi Windows. VM juga membutuhkan memori yang cukup untuk pencadangan ditambah layanan Windows dan WSL. Host 64 GiB yang divalidasi untuk seine memakai ini:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Simpan file, jalankan `wsl --shutdown` dari Windows, lalu buka distribusi Anda lagi. Pastikan jumlah halaman bebas mencukupi setiap thread sebelum Anda mulai menambang.
+
+## Bagaimana cara mengaktifkan large pages di Windows?
+
+Penambangan langsung di Windows biasanya lebih cepat daripada WSL di perangkat keras yang sama, dan di sana seine memakai large pages Windows. Hanya satu izin yang dibutuhkan, **Lock pages in memory**:
+
+1. Buka `secpol.msc`, lalu *Local Policies* → *User Rights Assignment*.
+2. Tambahkan pengguna Anda ke **Lock pages in memory**.
+3. Keluar lalu masuk lagi, karena hak ini berlaku untuk sesi baru.
+
+`secpol.msc` tersedia di Windows Pro, Enterprise, dan Education. Di edisi Home, berikan hak yang sama dengan alat seperti `ntrights`.
+
+Hanya itu pengaturannya. Saat mulai, seine mengaktifkan hak itu untuk dirinya sendiri dan mengalokasikan arena 2 GiB setiap thread dengan `VirtualAlloc` dan `MEM_LARGE_PAGES`, metode yang [didokumentasikan Microsoft](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) untuk memori large page. Jika large pages tidak tersedia, seine menambang dengan halaman biasa dan mencatat alasannya beserta cara perbaikan yang tepat. seine tidak pernah mengubah hak akun atau mengeluarkan Anda dari sesi dengan sendirinya.
+
+## Mode halaman mana yang sebaiknya Anda pakai?
+
+Mode bawaan cocok untuk hampir semua orang. Mode lainnya tersedia untuk halaman 1 GiB dan untuk pengukuran:
+
+| Mode | Fungsinya |
+|---|---|
+| `--cpu-page-mode auto` (bawaan) | Memakai huge pages yang dicadangkan atau large pages Windows, lalu transparent huge pages, lalu halaman biasa |
+| `--cpu-page-mode large` | Mewajibkan huge pages yang dicadangkan atau large pages Windows untuk setiap thread, dan berhenti saat mulai jika tidak tersedia |
+| `--cpu-page-mode large-1g` | Mewajibkan halaman 1 GiB untuk setiap thread (Linux x86_64 dan WSL) |
+| `--cpu-page-mode regular` | Hanya halaman biasa, untuk benchmark sebelum dan sesudah |
+
+Untuk mengukur peningkatannya di mesin Anda sendiri, menambanglah beberapa saat dengan `--cpu-page-mode regular`, lalu dengan `auto` atau `large-1g`, dan bandingkan hashrate di dasbor. Untuk server dengan beberapa node NUMA, halaman yang dicadangkan juga harus berada di node yang menjalankan thread Anda; [panduan menambang di server](/id/blog/mine-blocknet-on-servers/) membahas hal itu.
+
+<CTA target="seine" title="Unduh seine dan cadangkan halaman Anda" text="seine memetakan arena 2 GiB setiap thread di huge pages begitu Anda mencadangkannya, tanpa flag tambahan." />

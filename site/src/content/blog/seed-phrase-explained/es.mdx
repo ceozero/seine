@@ -1,0 +1,103 @@
+---
+title: Qué es una frase semilla y cómo mantener la tuya a salvo
+description: Una frase semilla es la lista de palabras que reconstruye tu billetera de criptomonedas. Cómo funciona, cómo guardarla sin conexión y por qué nunca debes compartirla.
+tags: [Billetera, Frase semilla, Seguridad]
+faq:
+  - q: '¿Qué diferencia hay entre una frase semilla y una clave privada?'
+    a: 'Una clave privada controla los fondos directamente, mientras que una frase semilla es una copia de seguridad legible que la billetera convierte en sus claves privadas. En una billetera de Blocknet, las 12 palabras generan tanto la clave de gasto como la clave de visualización, así que la frase por sí sola basta para reconstruir la billetera y todo lo que puede hacer.'
+  - q: '¿Puedo recuperar una billetera si pierdo la frase semilla?'
+    a: 'Puedes seguir usando la billetera mientras conserves el archivo de la billetera y su contraseña. La frase semilla es la copia de seguridad para cuando el archivo o la contraseña ya no están. Mientras la billetera siga abriéndose, vuelve a mostrar la frase con el comando seed o con View Recovery Seed y anótala.'
+  - q: '¿Es seguro guardar una frase semilla en un gestor de contraseñas?'
+    a: 'La guía de la billetera de Blocknet pide que guardes la semilla sin conexión, en papel, y que no la pongas en archivos de texto, aplicaciones de notas ni almacenamiento en la nube, porque cualquiera que lea las 12 palabras controla los fondos. Las copias en papel guardadas en dos lugares seguros distintos te dan una copia de seguridad que nunca toca internet.'
+  - q: '¿Una frase semilla funciona en cualquier aplicación de billetera?'
+    a: 'La lista de palabras es un estándar compartido, pero cada moneda convierte las palabras en claves a su manera. Restaura una semilla de Blocknet en la billetera oficial de Blocknet, de línea de comandos o de escritorio. Ambas aceptan las 12 palabras y reconstruyen la misma dirección y el mismo saldo después de que la billetera escanee la cadena.'
+sourceHash: 8cef30920a89
+translation: reviewed
+---
+
+Una frase semilla es la breve lista de palabras que puede reconstruir tu billetera de criptomonedas en cualquier computadora. Esta guía explica qué son esas palabras, cómo las convierte una billetera en claves, cómo guardarlas para no perder nunca el acceso y por qué nadie más debe verlas jamás. Los ejemplos usan la billetera de Blocknet y su semilla de recuperación de 12 palabras.
+
+## ¿Qué es una frase semilla?
+
+<Answer>
+Una frase semilla, también llamada frase de recuperación o mnemónica, es una lista de palabras normales, normalmente 12 o 24, que codifica el secreto del que salen las claves de tu billetera. Escribe las palabras en una billetera compatible y reconstruirá las mismas claves, direcciones y saldo, aunque tu computadora y el archivo de tu billetera hayan desaparecido.
+</Answer>
+
+Toda billetera de criptomonedas se basa en claves secretas. Una clave es un número aleatorio largo, difícil de copiar a mano y con el que es fácil equivocarse. Una frase semilla escribe el mismo secreto como palabras de una lista fija, así que puedes copiarla en papel, releerla y escribirla años después.
+
+La billetera de Blocknet llama a su frase **semilla de recuperación** (recovery seed). Tiene 12 palabras y la billetera la crea cuando creas una billetera nueva. Guárdala bien y siempre podrás recuperar tu billetera.
+
+## ¿Cómo funciona una frase semilla?
+
+Muchas billeteras siguen BIP39, un estándar escrito para Bitcoin en 2013 por Marek Palatinus, Pavol Rusnak, Aaron Voisine y Sean Bowe. Funciona en tres pasos.
+
+1. **Bits aleatorios.** La billetera genera entre 128 y 256 bits aleatorios. Una frase de 12 palabras contiene 128 bits y una de 24 palabras, 256.
+2. **Una suma de verificación y, después, palabras.** La billetera calcula el hash SHA-256 de esos bits y añade los primeros bits del hash como suma de verificación (4 bits para 12 palabras). Después divide el resultado en trozos de 11 bits. Cada trozo es un número de 0 a 2047 que elige una palabra de una lista de 2048 palabras.
+3. **Una semilla para las claves.** Para usar la frase, la billetera la pasa por PBKDF2 con HMAC-SHA512 durante 2048 rondas y obtiene una semilla de 64 bytes. Las claves salen de esa semilla.
+
+La suma de verificación es lo que permite a una billetera decirte que una frase es incorrecta. Solo 1 de cada 16 combinaciones aleatorias de 12 palabras tiene una suma de verificación válida, así que la mayoría de las erratas y de las palabras intercambiadas se detectan antes de que pase nada. La lista en inglés está además construida para que las cuatro primeras letras de cada palabra sean únicas, lo que ayuda cuando tu letra es difícil de leer.
+
+### Qué significan las 12 palabras en Blocknet
+
+La billetera de Blocknet usa la lista estándar de BIP39 en inglés y 128 bits de aleatoriedad, así que cada semilla de recuperación tiene 12 palabras. Convierte esas palabras en su semilla de 64 bytes con el paso PBKDF2 de BIP39 y sin frase de contraseña adicional. Los primeros 32 bytes se convierten en tu **clave de gasto** y los últimos 32 bytes en tu **clave de visualización**. Tu dirección se construye a partir de las mitades públicas de esas dos claves, así que las mismas 12 palabras siempre llevan de vuelta a la misma dirección. La guía de [direcciones sigilosas](/es/blog/stealth-addresses-explained/) explica cómo trabajan juntas la clave de gasto y la clave de visualización para recibir pagos de forma privada.
+
+¿Cómo de grande es 128 bits? Hay 2^128 semillas posibles, unas 3,4 × 10^38. Nadie encuentra tu billetera adivinando palabras. La única forma práctica de entrar en ella es ver tu frase, y por eso el resto de esta guía trata de cómo guardarla bien.
+
+## Frase semilla, contraseña y archivo de la billetera: ¿qué diferencia hay?
+
+Es habitual confundir las tres cosas que protegen una billetera. Esto es lo que hace cada una en la billetera de Blocknet.
+
+| | Qué es | Qué te da |
+|---|---|---|
+| Semilla de recuperación | 12 palabras que anotas | Control total de la billetera en cualquier computadora |
+| Contraseña de la billetera | Una contraseña que eliges tú | Abre el archivo de la billetera en esta computadora |
+| Archivo de la billetera | Un único archivo `.wallet.dat` | Tus claves y tu historial, cifrados con tu contraseña |
+
+Tu contraseña cifra el archivo de la billetera (la billetera deriva la clave de cifrado con Argon2id y cifra con AES-GCM), y Blocknet nunca la guarda en ningún sitio. La contraseña no interviene en la creación de tus claves. Cuando restauras a partir de las 12 palabras, eliges una contraseña nueva para el nuevo archivo de la billetera. Eso hace de la semilla la copia de seguridad más importante: funciona aunque pierdas el archivo y olvides la contraseña.
+
+## ¿Cómo deberías guardar una frase semilla?
+
+<Answer>
+Escribe las palabras en papel en orden, comprueba cada palabra con la pantalla y guarda el papel en un lugar seguro y sin conexión. Haz una segunda copia y guárdala en otro sitio. No pongas la frase en fotos, archivos de texto, aplicaciones de notas, correo electrónico ni almacenamiento en la nube, porque cualquiera que la lea controla los fondos.
+</Answer>
+
+Estos hábitos mantienen una frase semilla a salvo y lista para usar:
+
+- **Primero, papel.** La guía de la billetera de Blocknet indica que escribas la semilla en papel y la guardes en un lugar seguro. Numera las palabras del 1 al 12, porque el orden importa.
+- **Compruébala una vez.** Compara cada palabra con la pantalla antes de cerrarla. La ortografía cuenta, y las cuatro primeras letras de cada palabra bastan para distinguirla.
+- **Dos copias, dos lugares.** Una copia en casa y otra en otro sitio de confianza te protegen de un incendio, una inundación o un cajón perdido. Algunas personas también graban las palabras en una placa de metal por el mismo motivo.
+- **Mantenla sin conexión.** Las capturas de pantalla, las fotos del teléfono, las aplicaciones de notas y las carpetas en la nube se sincronizan o hacen copias de seguridad en algún lugar que no controlas. La guía de la billetera cita los archivos de texto, las aplicaciones de notas y el almacenamiento en la nube como lugares donde la semilla nunca debe estar.
+- **Mantenla en privado.** Guárdala donde no la encuentren invitados, compañeros de trabajo ni talleres de reparación.
+
+## ¿Por qué no debes compartir nunca tu frase semilla?
+
+Las 12 palabras son tu billetera. Quien las tenga puede reconstruirla en su propia computadora y enviar todo lo que contiene, y una transacción no se puede revertir una vez que está en la cadena. La billetera de Blocknet muestra esta advertencia cada vez que pides ver la semilla:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Trata cualquier petición de tu semilla como una estafa, por oficial que parezca. Los desarrolladores de billeteras, los exchanges, los pools y el personal de soporte nunca la necesitan. Un sitio web o una aplicación que te pide «verificar» o «sincronizar» tu billetera escribiendo las palabras está intentando quedarse con tus monedas.
+
+Nunca tienes que compartir la semilla para hacer nada:
+
+- **Para cobrar**, comparte tu dirección o un [nombre corto de Blocknet ID](/es/blog/blocknet-id-pay-by-name/) como `@yourname` que apunte a ella.
+- **Para que alguien vea los fondos entrantes**, el comando `viewkeys` exporta claves de solo lectura. Una billetera de solo lectura muestra los pagos entrantes y no puede enviar. La [guía de privacidad](/es/blog/blocknet-privacy-features/) explica lo que revelan las claves de visualización.
+- **Para minar**, seine y bntpool.com solo necesitan tu dirección o tu nombre corto. La billetera y su semilla pueden quedarse en la única computadora en la que confías, mientras todas las máquinas de minería pagan a la misma dirección.
+
+## ¿Cómo ver y restaurar una semilla de recuperación de Blocknet?
+
+En la billetera de línea de comandos, escribe `seed` en el prompt. La billetera muestra la advertencia anterior, te pide que confirmes, te pide la contraseña y después muestra las 12 palabras en filas numeradas. En la billetera de escritorio, abre los ajustes y elige «View Recovery Seed», que también te pide primero la contraseña.
+
+Para restaurar, usa cualquiera de las dos billeteras:
+
+- **Línea de comandos:** ejecuta `import`, elige `1) 12-word recovery seed`, escribe las 12 palabras y después dale a la nueva billetera un nombre y una contraseña.
+- **Escritorio:** elige «Restore from Seed» e introduce tu frase de 12 palabras.
+
+La billetera comprueba las palabras y la suma de verificación, reconstruye tus claves y escanea la cadena en busca de tus salidas, así que tu saldo y tu historial vuelven con la misma dirección. La [guía de la billetera de Blocknet](/es/blog/blocknet-wallet-for-mining/) explica paso a paso cómo crear una billetera, hacer la copia de seguridad de la semilla y encontrar tu dirección.
+
+Cuando tengas tu semilla a salvo en papel, estarás listo para poner tu dirección a trabajar. La [guía para minar Blocknet](/es/blog/how-to-mine-blocknet/) muestra cómo apuntar [seine](/es/#download) a ella y empezar a minar en bntpool.com.
+
+<CTA target="pool" title="Mina a tu billetera con su copia de seguridad a salvo" text="Pega tu dirección de Blocknet o tu @name en seine, acepta bntpool.com y guarda tu semilla de recuperación en papel en casa." />

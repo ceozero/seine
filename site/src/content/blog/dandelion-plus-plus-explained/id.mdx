@@ -1,0 +1,91 @@
+---
+title: 'Penjelasan Dandelion++: relay transaksi stem dan fluff'
+description: 'Dandelion++ dijelaskan dengan sederhana: relay stem dan fluff, desain makalah 2018, dan cara Blocknet memakainya untuk menyembunyikan node pengirim transaksi.'
+tags: [Privasi, Dandelion++, Jaringan, Blocknet]
+faq:
+  - q: 'Apakah Dandelion++ menyembunyikan alamat IP saya?'
+    a: 'Dandelion++ menyembunyikan node mana yang memulai sebuah transaksi dari pengamat yang tersebar di seluruh jaringan. Transaksi baru menyebar luas setelah masuk fase fluff, beberapa lompatan dari Anda. Peer stem pertama Anda melihat transaksi datang dari node Anda, tetapi pesan stem terlihat sama baik node itu yang membuat transaksi maupun hanya meneruskannya, jadi peer itu tidak bisa membedakannya.'
+  - q: 'Apa bedanya Dandelion dan Dandelion++?'
+    a: 'Dandelion (2017) memperkenalkan fase stem dan fluff di atas satu barisan relay. Dandelion++ (2018) mempertahankan kedua fase itu dan memperkuatnya terhadap mata-mata yang melanggar aturan. Dandelion++ memakai graf di mana setiap node memilih dua relay, mengirim transaksinya sendiri melalui satu edge tetap, memilih relay baru setiap epoch, dan menambahkan timer pengaman.'
+  - q: 'Mata uang kripto apa saja yang memakai Dandelion++?'
+    a: 'Monero menambahkan Dandelion++ di versi 0.16, yang dirilis pada Mei 2020, dan Blocknet me-relay setiap transaksi dengannya. Dandelion pertama kali diusulkan untuk Bitcoin sebagai BIP 156 oleh kelompok riset yang sama. Koin apa pun yang dibangun di atas jaringan peer-to-peer bisa mengadopsinya, karena Dandelion++ hanya mengubah cara node saling meneruskan transaksi baru.'
+  - q: 'Pengaturan Dandelion++ apa yang dipakai Blocknet?'
+    a: 'Node Blocknet melanjutkan stem dengan probabilitas 0,9 di setiap lompatan, jadi sebuah transaksi masuk fase fluff dengan probabilitas 10% di setiap relay. Rute stem berganti setiap 10 menit. Jika dalam 45 detik transaksi Anda sendiri belum kembali ke node Anda dalam fase fluff, node Anda menyiarkannya sendiri, sehingga transaksi itu selalu sampai ke jaringan.'
+sourceHash: 036cbd9214b7
+translation: reviewed
+---
+
+Dandelion++ adalah cara me-relay transaksi baru di jaringan peer-to-peer sehingga orang yang mengamati jaringan tidak mudah mengetahui komputer mana yang mengirimnya. Panduan ini menjelaskan masalah yang dipecahkannya, cara kerja fase stem dan fluff, apa yang ditambahkan makalah 2018 pada desain aslinya, dan bagaimana Blocknet memakainya pada setiap pembayaran.
+
+## Apa itu Dandelion++?
+
+<Answer>
+Dandelion++ adalah protokol relay transaksi yang menyembunyikan node mana yang membuat sebuah transaksi. Transaksi baru pertama-tama berjalan di sepanjang “stem”, diteruskan dari satu node ke satu node berikutnya selama beberapa lompatan. Lalu transaksi masuk fase “fluff” dan menyebar ke seluruh jaringan, tampak berasal dari node yang jauh dari pengirim sebenarnya.
+</Answer>
+
+Namanya berasal dari bentuk jalurnya, seperti bunga dandelion: batang tipis (stem), lalu kepulan biji yang tertiup ke mana-mana. Dandelion++ diterbitkan pada 2018 oleh Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller, dan Pramod Viswanath di [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (pracetak di [arXiv](https://arxiv.org/abs/1805.11060)), dan dipresentasikan di ACM SIGMETRICS 2018. Dandelion++ menyempurnakan usulan kelompok yang sama pada 2017, Dandelion.
+
+## Mengapa menyiarkan transaksi mengungkap asalnya?
+
+Pesan transaksi tidak berisi alamat IP Anda. Cara penyebarannyalah yang mengungkapnya. Di jaringan mata uang kripto pada umumnya, node yang membuat transaksi mengirimnya ke semua peer-nya, mereka mengirimnya ke peer mereka, dan transaksi itu menyebar keluar dari sumbernya seperti riak.
+
+Para peneliti menunjukkan bahwa riak ini bisa diukur. Pada 2014, Biryukov, Khovratovich, dan Pustogarov, dan secara terpisah Koshy, Koshy, dan McDaniel, menjalankan sebuah “supernode” yang terhubung ke hampir setiap node Bitcoin yang bisa dijangkau dan mencatat kapan setiap transaksi tiba dari setiap peer. Node yang pertama mengirimkan sebuah transaksi sering kali adalah node yang membuatnya. Makalah Dandelion++ menyebut ini first-spy estimator: tebak bahwa node jujur pertama yang mengirimkan transaksi adalah sumbernya. Cara ini sederhana dan bekerja baik terhadap flooding.
+
+Menambahkan jeda acak sebelum setiap node meneruskan transaksi, yang dilakukan Bitcoin Core dengan skema bernama diffusion, membuat waktunya lebih acak. Riset Dandelion mengambil jalan lain dan mengubah bentuk jalurnya itu sendiri.
+
+## Bagaimana cara kerja fase stem dan fluff?
+
+<Answer>
+Dalam fase stem, setiap node meneruskan transaksi ke tepat satu peer. Di setiap lompatan node melempar koin berbobot: biasanya melanjutkan stem, kadang beralih ke fluff. Dalam fase fluff transaksi disiarkan ke semua peer seperti biasa, jadi pengamat melihatnya menyebar dari node yang melakukan fluff.
+</Answer>
+
+Langkah demi langkah:
+
+1. **Node Anda memulai stem.** Node mengirim transaksi baru hanya ke satu peer.
+2. **Setiap relay memutuskan.** Peer itu meneruskannya ke satu peer lagi (stem) atau menyiarkannya (fluff).
+3. **Fluff menyebarkannya ke mana-mana.** Dari node yang melakukan fluff, transaksi membanjiri jaringan dengan cara biasa dan sampai ke penambang.
+
+Mata-mata yang mengamati banyak node kini melihat riak dimulai di node yang melakukan fluff, yang mungkin berjarak banyak lompatan dari Anda. Panjang stem acak, jadi mata-mata tidak bisa sekadar menghitung mundur sejumlah lompatan yang tetap. Makalah itu memberikan perkiraan panjang stem sebesar 1/q, di mana q adalah peluang fluff di setiap lompatan. Dengan q = 0,1, stem rata-rata sekitar sepuluh lompatan.
+
+## Apa yang diubah Dandelion++ dari Dandelion?
+
+Desain Dandelion 2017 mengirim stem melalui satu barisan relay dan membuktikan hasil yang kuat dengan tiga asumsi: setiap node mengikuti aturan, setiap node mengirim satu transaksi, dan setiap node menjalankan Dandelion. Makalah 2018 menunjukkan bagaimana mata-mata yang melanggar asumsi itu bisa mengetahui lebih banyak, lalu mengubah desainnya agar jaminannya tetap berlaku terhadap mereka. Protokol ini berjalan dalam epoch, dengan setiap node berpindah ke epoch baru “dalam orde 10 menit”, dan di setiap epoch memakai empat mekanisme:
+
+| Mekanisme | Fungsinya |
+|---|---|
+| Graf relay yang kira-kira 4-reguler | Setiap node memilih hingga dua koneksi keluarnya sebagai relay, menghasilkan jaringan jalur yang saling terjalin sebagai pengganti satu barisan. |
+| Satu edge untuk transaksi Anda sendiri | Node mengirim setiap transaksi yang dibuatnya melalui edge keluar yang sama, jadi mengirim beberapa transaksi tidak mengungkap lebih banyak. |
+| Relay pseudoacak | Di setiap epoch, sebuah node menjadi relay atau diffuser untuk semua transaksi yang diterimanya dalam fase stem, dan memetakan setiap edge masuk ke satu edge keluar. |
+| Timer pengaman | Node yang mengirim atau me-relay transaksi stem menunggu selama waktu acak untuk melihatnya masuk fase fluff, dan menyiarkannya sendiri jika tidak. |
+
+Untuk memilih q, simulasi dalam makalah itu menemukan bahwa menjaga q di 0,2 atau lebih rendah membatasi apa yang bisa diperoleh mata-mata dengan memanipulasi graf relay. Para penulis menjalankan implementasi mereka di jaringan Bitcoin yang aktif dan memilih q = 0,1 atau q = 0,2 agar propagasi tetap dalam target 4,5 detik mereka.
+
+Dandelion diusulkan untuk Bitcoin sebagai [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). Monero menambahkan Dandelion++ di [versi 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), yang dirilis pada Mei 2020.
+
+## Bagaimana Blocknet memakai Dandelion++?
+
+Setiap node Blocknet me-relay transaksi dengan Dandelion++, dan tidak ada yang perlu diaktifkan. Saat Anda mengirim BNT, node Anda terlebih dahulu memeriksa transaksi dan menambahkannya ke memory pool-nya sendiri, lalu menyerahkannya ke router Dandelion++. Berikut pengaturannya di daemon:
+
+| Pengaturan | Nilai | Artinya |
+|---|---|---|
+| Probabilitas stem | 0,9 | Setiap relay melanjutkan stem dalam 90% kasus dan melakukan fluff dalam 10% kasus (q = 0,1), q yang sama dengan yang diuji makalah itu. |
+| Epoch | 10 menit | Rute stem diacak ulang setiap 10 menit. |
+| Timer embargo | 45 detik | Jika transaksi Anda belum kembali ke node Anda dalam fase fluff sampai saat itu, node Anda menyiarkannya sendiri. |
+
+Bagaimana pembayaran Blocknet berjalan:
+
+- **Node Anda memilih satu peer stem untuk setiap epoch.** Node mengirim setiap transaksi yang dibuatnya ke peer yang sama itu sampai epoch 10 menit berikutnya, sesuai aturan makalah untuk transaksi milik node sendiri.
+- **Setiap relay membuat pilihan baru.** Node yang menerima transaksi stem melakukan fluff dengan probabilitas 10%. Jika tidak, node meneruskannya ke peer yang dipilih secara acak selain peer asal transaksi itu. Dengan q = 0,1, stem rata-rata sekitar sepuluh lompatan.
+- **Pesan stem terlihat sama dari setiap node.** Node memakai pesan yang sama untuk memulai stem maupun meneruskannya, jadi peer penerima tidak bisa membedakan apakah Anda yang membuat transaksi atau hanya me-relay-nya.
+- **Transaksi selalu sampai.** Jika sebuah lompatan stem tidak bisa dikirim, node langsung melakukan fluff pada transaksi itu, dan embargo 45 detik menangani apa pun yang tersendat.
+- **Relay memeriksa apa yang dibawanya.** Node memastikan payload stem adalah transaksi yang tersusun dengan benar sebelum me-relay-nya, dan memberi penalti kepada peer yang mengirim data sampah.
+
+## Bagaimana Dandelion++ melengkapi privasi Blocknet lainnya?
+
+Dandelion++ bekerja di lapisan jaringan: ia melindungi hubungan antara sebuah transaksi dan komputer yang mengirimnya. Privasi on-chain yang menjadikan Blocknet [koin privasi](/id/blog/what-is-a-privacy-coin/) melindungi isi transaksi: ring CLSAG 16 anggota pada setiap input menyembunyikan pengirim, stealth address sekali pakai menyembunyikan penerima, dan Pedersen commitment dengan range proof Bulletproofs menyembunyikan jumlahnya. Perlindungan ini wajib, jadi setiap transaksi sudah terlihat serupa bahkan sebelum Dandelion++ membawanya.
+
+Kedua lapisan saling melengkapi. Ring signature menyembunyikan output mana yang membayar, dan Dandelion++ menyembunyikan node mana yang menyiarkan pembayaran. [Cara Blocknet menjaga pembayaran tetap privat](/id/blog/blocknet-privacy-features/) menguraikan setiap lapisan on-chain, dan [Apa itu Blocknet?](/id/blog/what-is-blocknet/) memberikan gambaran umumnya, termasuk bayar dengan nama dengan Blocknet ID.
+
+Untuk mendapatkan BNT sendiri yang bisa dikirim, Anda bisa menambangnya di rumah. Ikuti [panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) untuk mengunduh seine, mengarahkannya ke bntpool.com, dan menerima pembayaran di alamat wallet atau `@name` Anda.
+
+<CTA target="seine" title="Tambang BNT pertama Anda dengan seine" text="seine menyetel dirinya sesuai komputer Anda dan menambang BNT ke alamat atau @name Anda di bntpool.com, siap untuk pembayaran privat pertama Anda." />

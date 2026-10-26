@@ -1,0 +1,103 @@
+---
+title: Seed ifadesi nedir ve nasıl güvende tutulur
+description: Seed ifadesi, kripto cüzdanınızı yeniden oluşturabilen kelime listesidir. Nasıl çalıştığını, çevrimdışı nasıl saklanacağını ve neden asla paylaşılmaması gerektiğini öğrenin.
+tags: [Cüzdan, Seed ifadesi, Güvenlik]
+faq:
+  - q: 'Seed ifadesi ile özel anahtar arasındaki fark nedir?'
+    a: 'Özel anahtar fonları doğrudan kontrol eder; seed ifadesi ise bir cüzdanın özel anahtarlarına dönüştürdüğü, insanların okuyabileceği bir yedektir. Bir Blocknet cüzdanında 12 kelime hem harcama anahtarını hem görüntüleme anahtarını üretir; bu yüzden cüzdanı ve yapabildiği her şeyi yeniden oluşturmak için ifade tek başına yeterlidir.'
+  - q: 'Seed ifademi kaybedersem cüzdanımı kurtarabilir miyim?'
+    a: 'Cüzdan dosyası ve parolası sizde olduğu sürece cüzdanı kullanmaya devam edebilirsiniz. Seed ifadesi, dosya veya parola kaybolduğunda kullanılacak yedektir. Cüzdan hâlâ açılıyorken ifadeyi seed komutuyla veya View Recovery Seed ile yeniden görüntüleyin ve yazın.'
+  - q: 'Seed ifadesini bir parola yöneticisinde saklamak güvenli mi?'
+    a: 'Blocknet cüzdan rehberi, seed''i çevrimdışı olarak kâğıtta tutmanızı ve metin dosyalarına, not uygulamalarına ve bulut depolamaya koymamanızı ister, çünkü 12 kelimeyi okuyan herkes fonları kontrol eder. İki ayrı güvenli yerde saklanan kâğıt kopyalar size internete hiç dokunmayan bir yedek verir.'
+  - q: 'Seed ifadesi her cüzdan uygulamasında çalışır mı?'
+    a: 'Kelime listesi ortak bir standarttır, ancak her coin kelimeleri kendi yöntemiyle anahtarlara dönüştürür. Blocknet seed''ini resmi Blocknet komut satırı veya masaüstü cüzdanında geri yükleyin. İkisi de 12 kelimeyi kabul eder ve cüzdan zinciri taradıktan sonra aynı adresi ve bakiyeyi yeniden oluşturur.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Seed ifadesi, kripto cüzdanınızı herhangi bir bilgisayarda yeniden oluşturabilen kısa kelime listesidir. Bu rehber bu kelimelerin ne olduğunu, bir cüzdanın onları nasıl anahtarlara dönüştürdüğünü, erişimi asla kaybetmemek için onları nasıl saklayacağınızı ve neden başka hiç kimsenin onları görmemesi gerektiğini açıklıyor. Örneklerde Blocknet cüzdanı ve 12 kelimelik kurtarma ifadesi kullanılıyor.
+
+## Seed ifadesi nedir?
+
+<Answer>
+Kurtarma ifadesi veya anımsatıcı (mnemonic) olarak da adlandırılan seed ifadesi, cüzdanınızın anahtarlarının türetildiği sırrı kodlayan, genellikle 12 veya 24 sıradan kelimeden oluşan bir listedir. Kelimeleri uyumlu bir cüzdana yazdığınızda, bilgisayarınız ve cüzdan dosyanız gitmiş olsa bile aynı anahtarları, adresleri ve bakiyeyi yeniden oluşturur.
+</Answer>
+
+Her kripto cüzdanı gizli anahtarlar üzerine kuruludur. Anahtar, elle kopyalaması zor ve yanlış yazması kolay olan uzun, rastgele bir sayıdır. Seed ifadesi aynı sırrı sabit bir listeden seçilen kelimelerle yazar; böylece onu kâğıda kopyalayabilir, geri okuyabilir ve yıllar sonra yazabilirsiniz.
+
+Blocknet cüzdanı ifadesine **recovery seed** (kurtarma ifadesi) der. 12 kelime uzunluğundadır ve cüzdan, yeni bir cüzdan oluşturduğunuzda onu oluşturur. Onu güvende tutarsanız cüzdanınızı her zaman geri alabilirsiniz.
+
+## Seed ifadesi nasıl çalışır?
+
+Birçok cüzdan, 2013'te Marek Palatinus, Pavol Rusnak, Aaron Voisine ve Sean Bowe tarafından Bitcoin için yazılmış bir standart olan BIP39'u izler. Üç adımda çalışır.
+
+1. **Rastgele bitler.** Cüzdan 128 ila 256 rastgele bit çeker. 12 kelimelik bir ifade 128 bit, 24 kelimelik bir ifade 256 bit tutar.
+2. **Bir sağlama toplamı, ardından kelimeler.** Cüzdan bu bitleri SHA-256 ile hash'ler ve hash'in ilk birkaç bitini sağlama toplamı olarak ekler (12 kelime için 4 bit). Ardından sonucu 11 bitlik parçalara böler. Her parça, 2.048 kelimelik bir listeden bir kelime seçen 0 ile 2.047 arasında bir sayıdır.
+3. **Anahtarlar için bir seed.** İfadeyi kullanmak için cüzdan onu HMAC-SHA512 ile PBKDF2'den 2.048 tur geçirir ve 64 baytlık bir seed elde eder. Anahtarlar bu seed'den gelir.
+
+Bir cüzdanın ifadenin yanlış olduğunu size söyleyebilmesinin nedeni sağlama toplamıdır. Rastgele 12 kelimelik kombinasyonların yalnızca 16'da 1'i geçerli bir sağlama toplamına sahiptir; bu yüzden yazım hatalarının ve yer değiştirmiş kelimelerin çoğu bir şey olmadan yakalanır. İngilizce liste ayrıca her kelimenin ilk dört harfi benzersiz olacak şekilde hazırlanmıştır; bu da el yazınız zor okunduğunda işe yarar.
+
+### Blocknet'te 12 kelime ne anlama gelir
+
+Blocknet cüzdanı standart İngilizce BIP39 listesini ve 128 bit rastgeleliği kullanır, bu yüzden her kurtarma ifadesi 12 kelimedir. Bu kelimeleri BIP39'un PBKDF2 adımıyla ve ek bir parola ifadesi olmadan 64 baytlık seed'ine dönüştürür. İlk 32 bayt **harcama anahtarınız** (spend key), son 32 bayt ise **görüntüleme anahtarınız** (view key) olur. Adresiniz bu iki anahtarın açık yarılarından oluşturulur; bu yüzden aynı 12 kelime her zaman aynı adrese geri götürür. [Gizli adresler](/tr/blog/stealth-addresses-explained/) rehberi, harcama anahtarı ile görüntüleme anahtarının ödemeleri gizli olarak almak için nasıl birlikte çalıştığını açıklar.
+
+128 bit ne kadar büyüktür? 2^128 olası seed vardır, yaklaşık 3,4 × 10^38. Kimse kelimeleri tahmin ederek cüzdanınızı bulamaz. İçine girmenin tek pratik yolu ifadenizi görmektir; bu rehberin geri kalanının onu iyi saklamakla ilgili olmasının nedeni budur.
+
+## Seed ifadesi, parola ve cüzdan dosyası arasındaki fark nedir?
+
+İnsanlar bir cüzdanı koruyan üç şeyi sık sık karıştırır. Blocknet cüzdanında her birinin ne yaptığı şöyledir.
+
+| | Nedir | Size ne sağlar |
+|---|---|---|
+| Kurtarma ifadesi | Yazıp sakladığınız 12 kelime | Herhangi bir bilgisayarda cüzdanın tam kontrolü |
+| Cüzdan parolası | Sizin seçtiğiniz bir parola | Bu bilgisayardaki cüzdan dosyasını açar |
+| Cüzdan dosyası | Tek bir `.wallet.dat` dosyası | Parolanızla şifrelenmiş anahtarlarınız ve geçmişiniz |
+
+Parolanız cüzdan dosyasını şifreler (cüzdan şifreleme anahtarını Argon2id ile türetir ve AES-GCM ile şifreler) ve Blocknet onu hiçbir yerde saklamaz. Parolanın anahtarlarınızın oluşturulmasında hiçbir rolü yoktur. 12 kelimeden geri yüklediğinizde yeni cüzdan dosyası için yeni bir parola seçersiniz. Bu da seed'i en önemli yedek yapar: dosyayı kaybetseniz ve parolayı unutsanız bile çalışır.
+
+## Seed ifadesi nasıl saklanmalı?
+
+<Answer>
+Kelimeleri sırasıyla kâğıda yazın, her kelimeyi ekranla karşılaştırın ve kâğıdı güvenli, çevrimdışı bir yerde tutun. İkinci bir kopya yapın ve farklı bir yerde saklayın. İfadeyi fotoğraflara, metin dosyalarına, not uygulamalarına, e-postaya ve bulut depolamaya koymayın, çünkü onu okuyan herkes fonları kontrol eder.
+</Answer>
+
+Bu alışkanlıklar bir seed ifadesini hem güvende hem kullanılabilir tutar:
+
+- **Önce kâğıt.** Blocknet cüzdan rehberi seed'i kâğıda yazmanızı ve güvenli bir yerde tutmanızı söyler. Sıra önemli olduğu için kelimeleri 1'den 12'ye numaralandırın.
+- **Bir kez kontrol edin.** Ekranı kapatmadan önce her kelimeyi ekranla karşılaştırın. Yazım önemlidir ve her kelimenin ilk dört harfi onu ayırt etmeye yeter.
+- **İki kopya, iki yer.** Biri evde, diğeri güvendiğiniz başka bir yerde olan iki kopya sizi yangından, sel baskınından veya kaybolan bir çekmeceden korur. Bazı insanlar aynı nedenle kelimeleri metal bir plakaya da kazır.
+- **Çevrimdışı tutun.** Ekran görüntüleri, telefon fotoğrafları, not uygulamaları ve bulut klasörleri, kontrol etmediğiniz bir yere senkronize olur veya yedeklenir. Cüzdan rehberi metin dosyalarını, not uygulamalarını ve bulut depolamayı seed'in asla gitmemesi gereken yerler olarak sayar.
+- **Gizli tutun.** Misafirlerin, iş arkadaşlarının ve tamircilerin rastlamayacağı bir yerde saklayın.
+
+## Seed ifadenizi neden asla paylaşmamalısınız?
+
+12 kelime sizin cüzdanınızdır. Onlara sahip olan herkes cüzdanı kendi bilgisayarında yeniden oluşturabilir ve içindeki her şeyi gönderebilir; bir işlem de zincire girdikten sonra geri alınamaz. Blocknet cüzdanı, seed'i görmek istediğiniz her seferde şu uyarıyı yazdırır:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Ne kadar resmi görünürse görünsün, seed'inizi isteyen her talebi dolandırıcılık olarak kabul edin. Cüzdan geliştiricilerinin, borsaların, havuzların ve destek personelinin buna asla ihtiyacı yoktur. Kelimeleri yazarak cüzdanınızı "doğrulamanızı" veya "senkronize etmenizi" isteyen bir web sitesi veya uygulama coinlerinizi almaya çalışıyordur.
+
+İşlerinizi halletmek için seed'i asla paylaşmanız gerekmez:
+
+- **Ödeme almak için** adresinizi veya ona yönlendiren `@yourname` gibi bir [Blocknet ID kısa adını](/tr/blog/blocknet-id-pay-by-name/) paylaşın.
+- **Birinin gelen fonları görmesine izin vermek için** `viewkeys` komutu yalnızca görüntüleme anahtarlarını dışa aktarır. Yalnızca görüntüleme amaçlı bir cüzdan gelen ödemeleri gösterir ve gönderim yapamaz. [Gizlilik rehberi](/tr/blog/blocknet-privacy-features/) görüntüleme anahtarlarının neyi gösterdiğini açıklar.
+- **Madencilik için** seine ve bntpool.com yalnızca adresinize veya kısa adınıza ihtiyaç duyar. Cüzdan ve seed'i güvendiğiniz tek bilgisayarda kalabilir, her madencilik makinesi de aynı adrese ödeme yapar.
+
+## Blocknet kurtarma ifadesi nasıl görüntülenir ve geri yüklenir?
+
+Komut satırı cüzdanında kabuk isteminde `seed` yazın. Cüzdan yukarıdaki uyarıyı gösterir, onaylamanızı ister, parolanızı sorar ve ardından 12 kelimeyi numaralı satırlar halinde yazdırır. Masaüstü cüzdanında ayarları açın ve "View Recovery Seed" seçeneğini seçin; bu da önce parolanızı sorar.
+
+Geri yüklemek için iki cüzdandan birini kullanın:
+
+- **Komut satırı:** `import` komutunu çalıştırın, `1) 12-word recovery seed` seçeneğini seçin, 12 kelimeyi yazın, ardından yeni cüzdana bir ad ve parola verin.
+- **Masaüstü:** "Restore from Seed" seçeneğini seçin ve 12 kelimelik ifadenizi girin.
+
+Cüzdan kelimeleri ve sağlama toplamını kontrol eder, anahtarlarınızı yeniden oluşturur ve çıktılarınız için zinciri tarar; böylece bakiyeniz ve geçmişiniz aynı adresle geri gelir. [Blocknet cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) cüzdan oluşturmayı, seed'i yedeklemeyi ve adresinizi bulmayı adım adım anlatır.
+
+Seed'iniz kâğıtta güvende olduğunda adresi kullanmaya hazırsınız. [Blocknet madenciliği rehberi](/tr/blog/how-to-mine-blocknet/), [seine'i](/tr/#download) bu adrese nasıl yönlendireceğinizi ve bntpool.com'da madenciliğe nasıl başlayacağınızı gösterir.
+
+<CTA target="pool" title="Güvenle yedeklenmiş cüzdanınıza madencilik yapın" text="Blocknet adresinizi veya @name adınızı seine'e yapıştırın, bntpool.com'u kabul edin ve kurtarma ifadenizi evde kâğıt üzerinde saklayın." />

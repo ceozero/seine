@@ -1,0 +1,173 @@
+---
+title: 채굴용 Blocknet 지갑과 주소 만들기
+description: 공식 Blocknet 지갑을 설정하고, 12단어 복구 시드를 백업하고, 채굴할 주소를 복사한 뒤, bntpool.com 지급이 잔액에 들어오는 것을 확인하세요.
+tags: [지갑, 채굴 가이드, bntpool]
+faq:
+  - q: '채굴을 시작하기 전에 Blocknet 지갑이 필요합니까?'
+    a: '채굴 보상을 받을 Blocknet 주소가 필요하며, 공식 지갑에서 주소를 받을 수 있습니다. 명령줄 지갑이나 데스크톱 지갑으로 지갑을 만들고 주소를 복사해 seine에 붙여 넣으세요. 지갑 자체는 내 컴퓨터에 그대로 있습니다. seine와 bntpool.com에는 주소나 그 주소를 가리키는 Blocknet ID 짧은 이름만 있으면 됩니다.'
+  - q: 'Blocknet 복구 시드는 몇 단어입니까?'
+    a: 'Blocknet 복구 시드는 12단어입니다. 명령줄 지갑에서 seed 명령을 실행하면 경고와 지갑 비밀번호 입력 후에 표시됩니다. 단어를 종이에 적어 오프라인에 보관하세요. 이 12단어가 있으면 지갑 파일과 비밀번호를 잃어버려도 import 명령으로 어느 컴퓨터에서든 지갑을 다시 만들 수 있습니다.'
+  - q: 'bntpool.com 지급은 언제 지갑에 표시됩니까?'
+    a: '풀이 찾은 블록은 보상이 지급되기 전에 60 컨펌, 즉 Blocknet의 5분 블록 시간 기준으로 약 5시간이 필요합니다. 컨펌된 풀 잔액이 0.1 BNT에 도달하면 풀이 주소로 보냅니다. 지급은 history에 일반 트랜잭션으로 나타나며, 10 컨펌(약 50분) 후에 사용할 수 있습니다.'
+  - q: '여러 채굴 컴퓨터에서 같은 주소를 써도 됩니까?'
+    a: '네. seine를 실행하는 모든 컴퓨터가 같은 주소나 Blocknet ID 짧은 이름으로 채굴할 수 있으며, bntpool.com이 셰어를 하나의 잔액으로 합칩니다. 풀의 통계 페이지에는 연결된 컴퓨터가 주소 아래에 하나씩 표시됩니다. 지갑과 복구 시드는 내내 내 컴퓨터에 그대로 있습니다.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Blocknet을 채굴하려면 보상을 받을 주소가 필요하며, 공식 지갑으로 몇 분이면 주소를 만들 수 있습니다. 이 가이드에서는 명령줄 지갑이나 데스크톱 지갑으로 지갑을 만들고, 복구 시드를 백업하고, seine에 붙여 넣을 주소를 찾고, bntpool.com에서 지급을 받았을 때 잔액을 확인하는 방법을 보여 드립니다.
+
+## 채굴에는 어떤 Blocknet 지갑을 써야 합니까?
+
+<Answer>
+Blocknet Privacy의 공식 지갑 두 가지 중 하나를 쓰세요. Windows, macOS, Linux에서 실행되는 명령줄 지갑과, 같은 시스템용 데스크톱 지갑입니다. 둘 다 내 컴퓨터에서 Blocknet 풀 노드를 실행하며, seine로 bntpool.com에서 채굴할 수령 주소를 제공합니다.
+</Answer>
+
+- **명령줄 지갑.** `blocknet` 프로그램은 노드, 지갑, 네트워크를 실행하는 백그라운드 프로세스인 Blocknet 코어를 설치하고, 시작하고, 업데이트합니다. 지갑은 대화형 셸에서 관리합니다. Windows, macOS, Linux용 빌드가 있는 [명령줄 지갑 릴리스](https://github.com/blocknetprivacy/blocknet/releases/latest)에서 다운로드하세요.
+- **데스크톱 지갑.** Blocknet 데몬이 함께 들어 있는 그래픽 지갑입니다. [데스크톱 지갑 릴리스](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)에서 다운로드하세요.
+
+원하는 쪽을 고르면 됩니다. 아래에서는 모든 명령이 문서화되어 있는 명령줄 지갑을 먼저 안내하고, 이어서 데스크톱 지갑 설치를 다룹니다.
+
+## 명령줄 지갑으로 지갑 만들기
+
+1. **코어를 설치하고 시작합니다.** 릴리스의 압축을 풀고 설정 마법사를 실행하세요.
+
+   ```sh
+   blocknet setup
+   ```
+
+   마법사는 노드를 자동으로 업데이트할지 묻고, 최신 코어를 다운로드한 뒤 시작할지 묻습니다. Windows에서는 프로그램 이름이 `blocknet.exe`이므로 `blocknet.exe setup`을 실행하세요. 마법사를 건너뛰려면 `blocknet install latest`를 실행한 뒤 `blocknet start`를 실행하세요.
+
+2. **셸을 엽니다.** 실행 중인 코어에 연결하세요.
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   `>` 프롬프트가 나타납니다. `quit`으로 셸을 닫아도 코어는 계속 실행되므로 언제든 다시 연결할 수 있습니다.
+
+3. **지갑을 만듭니다.** `load`를 입력하세요. 지갑은 찾은 지갑 파일 목록과 함께 "Create a new wallet" 항목을 보여 줍니다. 이 항목을 고르고 이름과 비밀번호를 입력하면, 코어가 새 복구 시드를 가진 새 지갑을 만듭니다.
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+지갑은 `.wallet.dat` 파일 하나이며, 비밀번호가 지출 키를 암호화합니다. 코어는 지갑 경로를 기억하므로 다음에 `blocknet start`를 실행하면 지갑을 자동으로 불러옵니다. Blocknet은 불러온 지갑을 `~/.config/bnt/wallets/`에도 복사하므로, 알려진 위치에 사본이 하나 더 생깁니다.
+
+## 복구 시드는 어떻게 백업합니까?
+
+복구 시드는 가장 중요한 백업입니다. 12단어로 이루어져 있으며, 지갑 파일을 잃어버리거나 비밀번호를 잊어도 이 단어로 어느 컴퓨터에서든 지갑을 다시 만들 수 있습니다. Blocknet은 비밀번호를 저장하지 않으므로, 비밀번호를 잊었을 때 복구하는 방법도 시드입니다.
+
+`seed` 명령으로 시드를 표시합니다. 지갑은 경고를 출력하고, 확인과 비밀번호를 요청한 뒤 단어를 보여 줍니다.
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+12단어를 종이에 적어 안전한 오프라인 장소에 보관하세요. 지갑 가이드는 단어를 가진 사람이 누구든 자금을 통제하게 되므로 텍스트 파일, 메모 앱, 클라우드 저장소에 저장하지 말라고 안내합니다. [시드 문구](/ko/blog/seed-phrase-explained/) 가이드에서 12단어가 어떻게 키가 되는지, 어떻게 잘 보관하는지 설명합니다.
+
+나중에 복원하려면 `import`를 실행하고 `1) 12-word recovery seed`를 고른 뒤, 단어를 입력하고 새 지갑의 이름과 비밀번호를 정하세요. 그러면 코어가 체인에서 내 출력을 스캔합니다.
+
+## Blocknet 주소는 어떻게 찾습니까?
+
+<Answer>
+명령줄 지갑의 셸 프롬프트에서 address(또는 addr)를 입력하세요. 지갑이 92~93자로 된 수령 주소를 출력하고, 이어서 짧은 이름을 받을 수 있는 blocknet.id를 안내합니다. 주소 전체를 복사해 seine가 수령 주소를 물을 때 붙여 넣으세요.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+이것이 seine에 입력할 주소입니다. [seine](/ko/#download)를 처음 실행하면 수령 주소를 묻고 이어서 풀을 묻습니다. 주소를 붙여 넣고 Enter 키를 눌러 bntpool.com을 선택하세요. 주소를 직접 넘길 수도 있습니다.
+
+```sh
+./seine --address <your-address>
+```
+
+seine가 채굴을 시작하면 [대시보드](/ko/blog/seine-dashboard-explained/)의 풀 잔액 패널에 채굴 중인 주소의 앞 여섯 자와 뒤 여섯 자가 표시되므로, 지갑 주소와 일치하는지 확인할 수 있습니다.
+
+더 짧은 것으로 채굴하고 싶다면 `@yourname` 같은 [Blocknet ID 짧은 이름](/ko/blog/blocknet-id-pay-by-name/)이 이 주소를 가리키며, seine와 bntpool.com에서 작동합니다.
+
+## 데스크톱 지갑 설정하기
+
+데스크톱 지갑의 최신 릴리스(v0.22.0, 2026년 10월 15일 게시)는 다음 파일을 제공합니다.
+
+| 시스템 | 파일 |
+|---|---|
+| Windows x86_64 | `.exe` 설치 프로그램 |
+| macOS Apple 실리콘 | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+모든 릴리스에는 `SHA256SUMS.txt`가 들어 있으므로 설치 전에 다운로드한 파일을 확인할 수 있습니다.
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Linux에서는 `.deb`를 설치하거나 `.AppImage`를 바로 실행하세요. macOS에서는 앱을 응용 프로그램 폴더로 옮기고, README의 안내대로 처음 실행하기 전에 터미널에서 다음을 한 번 실행하세요.
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Windows에서 설치 프로그램을 실행할 때 Defender 경고 창이 뜨면 "추가 정보"를 누른 뒤 "실행"을 누르세요.
+
+앱은 함께 들어 있는 Blocknet 데몬을 내 컴퓨터에서 실행하고 `127.0.0.1`로 통신하며, 외부 서비스에는 요청을 보내지 않습니다. 앱에서 지갑을 만들고, 복구 시드를 적어 두고, 수령 주소를 seine에 복사하세요. 데스크톱 지갑은 `blocknet://` [결제 링크](/ko/blog/blocknet-payment-links/)도 열어 송금 양식을 채워 주므로 검토만 하면 됩니다.
+
+## 키는 내 컴퓨터에 보관하세요
+
+채굴 컴퓨터에는 주소만 있으면 됩니다. seine는 채굴에 주소나 짧은 이름만 필요하므로, 지갑 파일과 복구 시드는 신뢰하는 컴퓨터에 그대로 둘 수 있습니다. 임대 서버, 공용 리그, 다른 사람이 접근할 수 있는 컴퓨터라면 특히 중요합니다.
+
+- **지갑은 집에서, 채굴은 어디서든.** seine를 실행하는 모든 컴퓨터에 같은 주소를 넣으세요. bntpool.com이 셰어를 하나의 잔액으로 합칩니다.
+- **키 없이 진행 상황 확인.** 어느 브라우저에서든 [bntpool.com](https://bntpool.com)에서 주소를 조회하면 해시레이트, 셰어, 잔액을 볼 수 있습니다.
+- **조회 전용 접근.** 다른 컴퓨터에서 들어오는 자금을 보고 싶다면 `viewkeys`로 조회 전용 키를 내보내세요. 조회 전용 지갑은 들어오는 자금을 보여 주며, 송금이나 서명은 할 수 없습니다.
+- **자리를 비울 때는 잠그세요.** `lock`은 비밀번호로 `unlock`할 때까지 지출을 막습니다.
+
+## 채굴 지급은 지갑에 어떻게 표시됩니까?
+
+bntpool.com은 블록이 성숙하면 보상을 지급합니다. 풀이 찾은 블록에는 60 컨펌, 즉 Blocknet의 5분 블록 시간 기준으로 약 5시간이 필요합니다. 컨펌된 잔액이 최소 금액인 0.1 BNT에 도달하면 풀이 일반 Blocknet 트랜잭션으로 주소에 보냅니다.
+
+지갑에서 `balance`(또는 `bal`)로 확인하세요.
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+새 지급은 먼저 `confirming` 아래에 나타납니다. 일반 트랜잭션은 10 컨펌(약 50분) 후에 사용할 수 있게 되어 `spendable`로 옮겨집니다. `history` 명령은 들어온 트랜잭션을 오래된 순서부터 블록, 금액, 유형과 함께 나열합니다. 풀 지급은 `regular`로 표시되고, 솔로 모드에서 직접 찾은 블록은 `coinbase`로 표시되며 사용하려면 60 컨펌이 필요합니다.
+
+지갑은 노드가 체인을 따라잡으면 지급을 표시합니다. 동기화가 끝나면 `status`에 `Syncing: false`가 표시되며, `sync`는 다운로드한 블록에서 내 출력을 다시 스캔합니다.
+
+채굴이 처음이라면 [Blocknet 채굴 가이드](/ko/blog/how-to-mine-blocknet/)에서 seine 다운로드, 스레드 선택, bntpool.com에서 기대할 수 있는 것을 다룹니다.
+
+<CTA target="pool" title="새 주소로 채굴하기" text="Blocknet 주소를 seine에 붙여 넣고 bntpool.com을 선택하세요. 잔액이 0.1 BNT에 도달하면 지급이 지갑으로 들어옵니다." />

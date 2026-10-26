@@ -1,0 +1,112 @@
+---
+title: '2026 年的 CPU 挖矿：用 CPU 挖什么'
+description: 2026 年 CPU 挖矿详解：为什么 Blocknet 这类内存密集型币种适合普通电脑，什么决定 CPU 的挖矿速度，以及如何用 seine 开始挖矿。
+tags: [CPU 挖矿, Argon2id, 挖矿指南, 硬件]
+faq:
+  - q: '2026 年可以用 CPU 挖哪些币？'
+    a: '寻找工作量证明专为通用处理器设计的币种。Monero 使用 RandomX，其作者称它针对通用 CPU 进行了优化；Blocknet 使用 Argon2id，每次哈希需要 2 GiB 内存。两者都让普通台式机、笔记本电脑和服务器保持竞争力，因为每次哈希既依赖原始运算，也依赖内存。'
+  - q: '用 CPU 挖 Blocknet 需要多少内存？'
+    a: '每个挖矿线程大约需要 2 GB 内存，因为每次 Argon2id 哈希都要填满它自己的 2 GiB 内存块。把内存容量除以二，就是最多能放下的线程数，再给系统留一点余量。在 32 GB 的电脑上，seine 大约运行 14 个线程，它会在启动时自动算好。'
+  - q: '为什么内存密集型算法适合普通电脑？'
+    a: '内存密集型哈希每次尝试都需要数 GB 的高速内存，所以专为哈希设计的芯片仍然要在每个核心旁边配备大量内存。台式机、笔记本电脑和服务器出厂时就带有充足的内存和高速内存控制器，因此人们已有的硬件本来就接近算法所需。'
+  - q: '可以同时用 CPU 和显卡挖矿吗？'
+    a: '可以，在 Windows 或 Linux 上用 seine 挖 Blocknet 时就能做到。seine 会同时在处理器和检测到的每张 NVIDIA 显卡上挖矿，算力相加。它在挖矿时调优处理器，并在每张显卡首次启动时为其调优，所以开始之前无需任何配置。'
+sourceHash: 67d582c389a6
+translation: reviewed
+---
+
+本指南介绍 2026 年 CPU 挖矿的现状，为什么采用内存密集型工作量证明的币种能让普通电脑保持竞争力，选择用处理器挖的币种时要看什么，以及如何用 seine 在几分钟内开始挖 Blocknet。
+
+## 2026 年还能用 CPU 挖矿吗？
+
+<Answer>
+可以，前提是币种的工作量证明专为通用处理器设计。比特币用专用 ASIC 芯片挖矿，以太坊在 2022 年结束了挖矿，但 Monero 的 RandomX 和 Blocknet 的 Argon2id 这类内存密集型算法让 CPU 依然大有可为，因为每次哈希除了运算，还需要数 GB 的高速内存。
+</Answer>
+
+挖矿最早就是在 CPU 上进行的。比特币白皮书把工作量证明描述为“本质上是一个 CPU 一票”。随着比特币发展，矿工先转向显卡，再转向 FPGA，然后转向 ASIC：只计算比特币的 SHA-256 哈希、别的什么都不做的芯片。如今比特币专用 ASIC 是挖比特币的主要方式。
+
+以太坊在 2022 年 9 月 15 日的合并（the Merge）中完成了从工作量证明到权益证明的转变。从那以后，以太坊不再通过挖矿产生区块。[工作量证明与权益证明的区别](/zh-hans/blog/proof-of-work-vs-proof-of-stake/)一文解释了两种设计有何不同。
+
+所以 2026 年的 CPU 挖矿归结为一个选择：挑一个算法专为普通电脑已有的处理器和内存而设计的币种。
+
+## 为什么内存密集型币种适合普通电脑？
+
+<Answer>
+内存密集型工作量证明让每次哈希都要填满一大块内存并回读其中的数据。专为哈希设计的芯片仍然需要在每个核心旁边配备数 GB 的高速内存，而台式机、笔记本电脑和服务器出厂时就已经带有这些内存，以及为其供数的控制器。
+</Answer>
+
+比特币的 SHA-256 几乎不需要内存。每次哈希只是一小段运算，所以定制芯片可以把许多小型哈希电路并排放在一起。通用处理器还带有缓存、分支预测和指令解码，这些 SHA-256 都用不上。
+
+内存密集型算法改变了工作发生的地方。Blocknet 的工作量证明是 [Argon2id](/zh-hans/blog/argon2id-proof-of-work-explained/)，使用 2 GiB 内存、一遍处理、单通道。每次哈希大约写入 2 GiB 内存，再读回大约 2 GiB。在这一遍处理的后半段，每个新块都会读取一个较早的块，而读哪一块由矿工无法提前预知的数据决定。只有整个 2 GiB 内存块构建完成，哈希才算完成，因此速度取决于内存系统搬运数据的快慢，以及内存中能同时放下多少个 2 GiB 内存块。
+
+这正是普通电脑本来就擅长的部分。Blocknet 守护进程的代码直接写明了设计意图：用“内存密集型工作量证明抵御 ASIC、确保公平挖矿”，而 2 GB 的大小使“专用硬件不切实际”。Argon2id 的设计目标是抵御 ASIC，2 GiB 的设置让这一设计为人们已有的电脑服务。
+
+## 用 CPU 应该挖什么？
+
+与其追逐一份榜单，不如用几个问题来检验一个币种：
+
+- **算法是为 CPU 设计的吗？** Monero 的 RandomX 是“一种针对通用 CPU 优化的工作量证明（PoW）算法”，Monero 于 2019 年 11 月 30 日启用了它。Blocknet 的 Argon2id 每次哈希使用 2 GiB 内存，因此内存容量和内存带宽是决定性的资源。
+- **发行公平吗？** 在 Blocknet 上，创世区块没有任何交易，每个区块的奖励都是单一输出，付给找到该区块的矿工。共识中没有预挖、金库或开发者基金，所以流通中的每一枚币都是挖出来的。
+- **有了解你处理器的挖矿软件吗？** 好的挖矿软件会为每个 CPU 系列提供不同的代码路径，并为你的机器选出最快的那一种。
+- **有支付稳定的矿池吗？** 矿池挖矿把许多小矿工的算力合在一起，让奖励定期到账，而不是一个区块一个区块地等。[加密货币挖矿原理](/zh-hans/blog/how-crypto-mining-works/)一文介绍了矿池和份额。
+
+Blocknet 四个问题都能答好。它是一种[默认隐私](/zh-hans/blog/blocknet-privacy-features/)的隐私币，出块时间五分钟，支持按名称付款，于 2026 年 2 月发布。它的挖矿软件 seine 免费且开源，默认矿池 bntpool.com 采用六小时窗口的 PPLNS 支付。[Blocknet 概览](/zh-hans/blog/what-is-blocknet/)介绍了这个币本身。
+
+## 什么让 CPU 在内存密集型挖矿中更快？
+
+有三件事决定处理器在 Blocknet 上每秒能完成多少次哈希（H/s）。
+
+**内存容量。** 每个挖矿线程每次哈希都需要自己的 2 GiB 内存块，所以把内存容量除以二，就是最多能放下的线程数。32 GB 的电脑理论上能放下 16 个内存块。seine 保留 5% 的内存作为余量，并给操作系统留出空间，这样这台机器大约运行 14 个线程。内存往往比核心数更早成为线程数的上限。[用旧电脑或笔记本电脑挖矿](/zh-hans/blog/mine-crypto-on-old-pc-or-laptop/)一文逐一计算了 4-16 GB 的机器。
+
+**内存带宽。** 每次哈希都要让数 GB 的数据经过内存系统。在 49.4 H/s 时，用 seine 测得的最快机器每秒写入约 99 GiB 的新内存块（49.4 × 2 GiB）。内存通道更多、内存更快的处理器会领先。
+
+**合适的计算内核。** seine 带有多种 Argon2id 计算内核：x86 上有 AVX2、AVX-512 和流式内核，Arm 上有带 SHA3 快速路径的 NEON。在同一颗芯片上，计算内核的差别很大。在 AWS Graviton4 上，带预取的 SHA3 内核比普通 NEON 快 56%（从 13.80 提升到 21.50 H/s）；在 AMD EPYC 9R45 上，流式内核比 AVX2 快 30%（24 线程时从 34.47 提升到 44.74 H/s）。seine 会在挖矿时比较各个计算内核并保留更快的那个。
+
+以下是用 seine 为每一代硬件测得的最佳结果：
+
+| 硬件 | 具体芯片 | 线程 | 算力 |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | EPYC 9R45 服务器 | 32 | 49.4 H/s |
+| Arm 服务器 | AWS Graviton4 | 32 | 39.3 H/s |
+| AMD EPYC · Zen 4 | EPYC 9R14 服务器 | 32 | 38.2 H/s |
+| Apple M4 Max | 48 GB MacBook Pro | 16 | 30.9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26.0 H/s |
+
+Apple M4 Max 这一行是一台笔记本电脑，说明强大的内存系统与 Argon2id 非常契合。服务器各行在启用 2 MiB 大页内存的 AWS 机器上运行。[Blocknet 挖矿硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)深入介绍了选购建议和内存规划，[Mac 指南](/zh-hans/blog/mine-blocknet-on-mac/)介绍了 Apple Silicon。
+
+## 如何开始用 CPU 挖 Blocknet？
+
+seine 无需配置。它会根据你的机器自动调整，并立即开始哈希：
+
+1. **获取地址。** 安装官方 Blocknet 钱包并复制你的地址，或者注册一个 [Blocknet ID 短名称](/zh-hans/blog/blocknet-id-pay-by-name/)，挖矿到 `@name`。[钱包指南](/zh-hans/blog/blocknet-wallet-for-mining/)会一步步带你完成。
+2. **下载 seine**：从[下载区](/zh-hans/#download)获取适用于 Windows、macOS 或 Linux 的版本并解压。
+3. **运行它**，在提示时粘贴你的地址：
+
+```sh
+./seine
+```
+
+4. **接受默认矿池** `stratum+tcp://bntpool.com:3333`，就开始挖矿了。
+
+挖矿期间，seine 会在真实挖矿工作中比较线程数和 CPU 计算内核，在内存紧张时自动收缩，并记住有效的设置供下次启动使用。在 Windows 和 Linux 上，它还会同时在机器里的 NVIDIA 显卡上挖矿，算力相加。[分步挖矿指南](/zh-hans/blog/how-to-mine-blocknet/)介绍了支付；在 Linux 上，按照[大页内存指南](/zh-hans/blog/huge-pages-blocknet-mining/)设置后，2 MiB 页面可提升约 4-6%，1 GiB 页面还能再提升 2%。
+
+## 你的 CPU 能挖多少？
+
+先测量你的算力。seine 的离线基准测试不需要矿池或节点：
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+然后用实时数据计算。Blocknet 的目标是每五分钟出一个块，即每天 288 个块。按你的算力占比，预期为：
+
+- **每天区块数** = 288 × （你的 H/s ÷ 全网 H/s）
+- **每天 BNT 数** = 每天区块数 × 当前区块奖励
+
+全网算力和区块奖励都会随时间变化，所以计算前请到 [bntpool.com](https://bntpool.com) 读取最新数值。在矿池中，余额达到 0.1 BNT 后，你会收到定期的 PPLNS 支付，无需等待自己找到整个区块。这些 BNT 的价值则取决于币价和你的电费。
+
+<Note>
+以上内容描述的是 Blocknet 当前的 Argon2id 工作量证明。据 [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) 介绍，Blocknet 计划在 2027-02-16 前后进行名为 Faraday 的网络升级，将带来“更轻量的工作量证明”。seine 会在启动时以及每 12 小时检查一次新版本。
+</Note>
+
+<CTA target="seine" title="用 seine 开始 CPU 挖矿" text="seine 在 bntpool.com 上挖矿时，会根据你的内存设定线程数，并为你的处理器选出最快的计算内核。" />

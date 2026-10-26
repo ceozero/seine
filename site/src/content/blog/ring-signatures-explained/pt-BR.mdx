@@ -1,0 +1,87 @@
+---
+title: 'Assinaturas em anel explicadas: como as criptomoedas ocultam o remetente'
+seoTitle: 'Assinaturas em anel: como as criptomoedas ocultam o remetente'
+description: 'Assinaturas em anel, da ideia de 2001 às key images e ao CLSAG: como o signatário se esconde entre chaves e o Blocknet assina cada entrada com anel de 16.'
+tags: [Privacidade, Assinaturas em anel, Criptografia, Blocknet]
+faq:
+  - q: 'Qual é a diferença entre uma assinatura em anel e uma assinatura de grupo?'
+    a: 'Uma assinatura de grupo precisa de um gerente que monta o grupo com antecedência e pode revelar quem assinou. Uma assinatura em anel não tem gerente nem configuração prévia: o signatário escolhe na hora qualquer conjunto de chaves públicas, e ninguém, nem mesmo as pessoas cujas chaves foram usadas, consegue provar depois qual membro produziu a assinatura.'
+  - q: 'O que é uma key image em uma assinatura em anel?'
+    a: 'Uma key image (imagem de chave) é um valor calculado a partir da chave privada da saída que está sendo gasta. A mesma saída sempre produz a mesma key image, então a rede rejeita um segundo gasto dela, e ainda assim a key image não revela qual membro do anel é o verdadeiro. Ela transforma uma assinatura em anel em uma assinatura em anel vinculável, que impede o gasto duplo.'
+  - q: 'O que é o CLSAG?'
+    a: 'O CLSAG é um esquema de assinatura em anel vinculável descrito por Brandon Goodell, Sarang Noether e Arthur Blue em 2019. Ele prova que o signatário é dono de uma saída do anel e que os valores se equilibram, com uma key image para impedir gastos duplos. O Monero o adotou em outubro de 2020, e o Blocknet assina toda entrada com CLSAG e RingCT.'
+  - q: 'Qual tamanho de anel o Blocknet usa?'
+    a: 'O Blocknet usa um anel de exatamente 16 para toda entrada: a saída real mais 15 iscas, cada uma delas uma saída real que já está na blockchain. O consenso rejeita qualquer outro tamanho. Como toda entrada usa o mesmo tamanho, o tamanho do anel nunca destaca uma transação, e a saída real fica em uma posição aleatória do anel.'
+  - q: 'As assinaturas em anel ocultam o valor de um pagamento?'
+    a: 'Não. Uma assinatura em anel oculta qual saída pagou. Os valores são ocultados por uma camada separada: compromissos de Pedersen, que fixam um número sem mostrá-lo, mais as provas de intervalo Bulletproofs, que provam que cada valor é válido. O Blocknet usa tudo isso junto em toda transação, além de endereços furtivos de uso único que ocultam o destinatário.'
+sourceHash: 72e21b4e9c54
+translation: reviewed
+---
+
+Uma assinatura em anel permite assinar em nome de um grupo de modo que qualquer pessoa possa conferir que a assinatura veio de uma das chaves do grupo, sem que ninguém consiga dizer de qual. Este post explica como as assinaturas em anel funcionam, do artigo de 2001 que as apresentou até as key images e o CLSAG, e mostra como o Blocknet usa um anel de 16 para manter privado o remetente de cada pagamento.
+
+## O que é uma assinatura em anel?
+
+<Answer>
+Uma assinatura em anel é uma assinatura digital feita com uma chave privada e um conjunto de chaves públicas de outras pessoas. Quem verifica consegue confirmar que o dono de uma dessas chaves assinou, mas não consegue dizer qual. O signatário escolhe o grupo na hora, sem configuração prévia e sem a colaboração dos outros membros.
+</Answer>
+
+Uma assinatura digital comum vincula uma mensagem a uma chave pública. Uma assinatura em anel a vincula a um conjunto de chaves públicas, chamado anel. O signatário precisa apenas da sua própria chave privada; os outros membros não contribuem com nada além das chaves públicas que já publicaram. Para quem está de fora, cada membro do anel é um signatário igualmente plausível.
+
+## De onde vieram as assinaturas em anel?
+
+Ron Rivest, Adi Shamir e Yael Tauman apresentaram as assinaturas em anel na ASIACRYPT 2001, em um artigo intitulado ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf) ("Como vazar um segredo"). O exemplo deles é um membro do gabinete que quer vazar uma história para um jornalista de um jeito que prove que ela veio do gabinete, sem revelar qual membro a vazou. Ele assina com a própria chave mais as chaves públicas dos outros membros do gabinete, e o jornalista consegue verificar a assinatura sem descobrir quem a escreveu.
+
+Duas propriedades fizeram a ideia se destacar. Não há um gerente de grupo capaz de desmascarar o signatário, o que diferencia as assinaturas em anel das assinaturas de grupo, mais antigas. E o anel é espontâneo: o signatário pode montá-lo com quaisquer chaves publicadas no momento de assinar. Os autores escolheram o nome porque "anéis são regiões geométricas com periferia uniforme e sem centro": todos os membros ficam na borda, e ninguém está no comando. O algoritmo de assinatura tem a mesma forma, uma cadeia de cálculos que volta para o ponto de partida.
+
+## Como funciona uma assinatura em anel?
+
+Os esquemas modernos usados em criptomoedas constroem esse ciclo com hashes e chaves de curva elíptica. Esta é a ideia em passos simples, para um anel de 16 chaves públicas:
+
+1. **Comece pela sua própria posição.** O signatário escolhe um número secreto aleatório e calcula o hash dele junto com a mensagem. Esse hash vira o desafio da próxima posição do anel.
+2. **Simule uma resposta para cada uma das outras posições.** Para cada um dos outros 15 membros, o signatário escolhe uma resposta aleatória e a combina com a chave pública daquele membro e com o desafio atual para calcular o desafio da posição seguinte.
+3. **Feche o anel.** Depois de dar a volta completa, a cadeia chega de novo à posição do próprio signatário. Só quem tem a chave privada dessa posição consegue calcular a única resposta que faz a cadeia terminar exatamente onde começou.
+
+A assinatura é o desafio inicial mais as 16 respostas. Quem verifica começa em qualquer ponto, percorre o anel recalculando cada desafio a partir das chaves públicas e das respostas e confere se o ciclo se fecha. Todas as posições parecem iguais: uma chave pública e uma resposta de aparência aleatória. Nada marca onde o signatário começou, então quem verifica descobre que uma chave privada fechou o anel e nada sobre qual.
+
+## Como as key images impedem o gasto duplo?
+
+Uma assinatura em anel simples tem uma lacuna quando se trata de dinheiro: se todo gasto se esconde entre outras saídas, a rede não consegue ver que as mesmas moedas foram gastas duas vezes. As assinaturas em anel vinculáveis resolvem isso. Joseph Liu, Victor Wei e Duncan Wong descreveram o primeiro esquema desse tipo, o LSAG, na ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Duas assinaturas feitas com a mesma chave privada podem ser vinculadas entre si, enquanto o signatário continua escondido no anel.
+
+O design CryptoNote, de 2013, transformou isso na key image (imagem de chave). Para uma saída com chave privada `x` e chave pública `P`, a carteira calcula `I = x · Hp(P)`, em que `Hp` faz o hash da chave pública para um ponto da curva. A assinatura prova que `I` pertence ao membro do anel que assinou, seja ele qual for, sem dizer qual. Como a key image depende apenas da saída que está sendo gasta, gastar essa saída de novo sempre produz o mesmo `I`. Cada nó mantém uma lista das key images já vistas e rejeita qualquer transação que repita uma delas.
+
+## Do MLSAG ao CLSAG
+
+As criptomoedas que também ocultam valores precisam que a assinatura em anel prove um segundo fato: que o valor oculto da entrada corresponde ao que a transação gasta. O artigo de Shen Noether de 2015, ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT), fez isso com o MLSAG, uma assinatura em anel sobre dois conjuntos de chaves, um para a posse e outro para os compromissos (commitments) de valor.
+
+O CLSAG, de Brandon Goodell, Sarang Noether e Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), prova os mesmos dois fatos de forma mais compacta. O Monero trocou o MLSAG pelo CLSAG na sua atualização de outubro de 2020. A [documentação do Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) relata uma verificação cerca de 20% mais rápida e uma transação típica de duas entradas e duas saídas encolhendo de cerca de 2,5 kB para 1,9 kB.
+
+## O que o tamanho do anel significa para a privacidade?
+
+<Answer>
+O tamanho do anel é o número de saídas em cada anel: a verdadeira mais as iscas. Um anel de 16 significa que um observador vê 16 candidatas igualmente válidas para cada entrada. Um tamanho fixo importa tanto quanto um tamanho grande, porque quando toda entrada usa o mesmo tamanho, o próprio tamanho não revela nada sobre quem montou a transação.
+</Answer>
+
+As iscas são saídas reais da blockchain, então cada uma delas poderia de fato ser a moeda que está sendo gasta. Se os anéis pudessem variar, uma carteira que escolhesse um tamanho incomum marcaria as próprias transações. O Monero aumentou o tamanho do anel de 11 para 16 na atualização de agosto de 2022, e o Blocknet usa 16 por consenso em toda entrada.
+
+## Como o Blocknet usa assinaturas em anel
+
+Toda entrada do Blocknet é assinada com CLSAG e RingCT sobre um anel de exatamente 16 saídas. As regras são impostas pelo consenso, então nenhuma carteira pode deixar de segui-las:
+
+- **Anel fixo de 16.** O daemon rejeita qualquer entrada cujo anel não tenha exatamente 16 membros. O código dele fixa o tamanho "para evitar vazamento de informação por tamanhos de anel variáveis".
+- **Somente saídas reais.** Todo membro do anel precisa ser uma saída real que já está na blockchain, então cada isca é uma moeda que poderia de fato ser gasta.
+- **Iscas aleatórias e posição aleatória.** A carteira embaralha as saídas da blockchain com um gerador aleatório criptograficamente seguro para escolher 15 iscas e, depois, coloca a sua saída real em uma posição aleatória do anel.
+- **Posse e valor em uma só prova.** Cada assinatura prova que você é dono de um membro do anel e que o valor oculto da sua entrada corresponde ao compromisso desse membro, então os valores se equilibram sem serem mostrados.
+- **Key images conferidas na blockchain.** A key image faz parte dos dados assinados, e a rede rejeita uma transação se essa key image já tiver sido gasta ou aparecer duas vezes na mesma transação.
+
+O formato de transação não tem modo transparente, então todo pagamento na blockchain leva anéis como esses. As assinaturas em anel ocultam o remetente; os [endereços furtivos (stealth addresses) de uso único](/pt-br/blog/stealth-addresses-explained/) ocultam o destinatário, e os [compromissos de Pedersen com Bulletproofs](/pt-br/blog/bulletproofs-explained/) ocultam o valor. [Como o Blocknet mantém os pagamentos privados](/pt-br/blog/blocknet-privacy-features/) percorre cada uma dessas camadas e o que elas significam quando você paga alguém.
+
+## O que vem a seguir com a atualização Faraday
+
+O Blocknet planeja uma atualização da rede chamada Faraday, com ativação prevista para por volta de 16 de fevereiro de 2027, segundo o [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Nas palavras do site: "Hoje um gasto se esconde entre 16 saídas. Depois da Faraday, ele se esconde entre todas as saídas da blockchain." A Faraday também vai trazer novas provas de gasto, que o site descreve como "feitas para que um computador quântico não consiga forjar um gasto". O design, os testes e a revisão adversarial estão em andamento, e as datas são previstas, não definitivas.
+
+## Consiga BNT para enviar com privacidade
+
+Um jeito simples de conseguir moedas que usam esses anéis é minerá-las. O minerador seine é gratuito, de código aberto e se ajusta ao seu computador, e o bntpool.com é o pool padrão dele, então você pode estar minerando em poucos minutos. O [guia de mineração](/pt-br/blog/how-to-mine-blocknet/) mostra a configuração, e você pode minerar direto para o seu endereço ou para um [nome do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Minere seus primeiros BNT privados" text="Baixe o seine, minere no bntpool.com e receba moedas protegidas por um anel de 16 em cada gasto." />

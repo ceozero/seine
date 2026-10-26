@@ -14,10 +14,10 @@ use serde_json::Value;
 use crate::backend::{DynamicShareTarget, MiningSolution, ShareBindingId};
 use crate::config::{Config, WorkAllocation};
 use crate::daemon_api::{is_unauthorized_error, ApiClient};
-use crate::dev_fee::{effective_pool_dev_fee_percent, DevFeeTracker, DEV_ADDRESS, DEV_FEE_PERCENT};
+use crate::dev_fee::{DevFeeTracker, DEV_ADDRESS};
 use crate::pool::{
-    PoolClient, PoolEvent, PoolJob, POOL_NOTIFICATION_MINER_BLOCK_FOUND,
-    POOL_NOTIFICATION_POOL_BLOCK_SOLVED,
+    PoolClient, PoolEvent, PoolJob, PoolSubmitAck, PoolSubmitRetry,
+    POOL_NOTIFICATION_MINER_BLOCK_FOUND, POOL_NOTIFICATION_POOL_BLOCK_SOLVED,
 };
 use crate::types::{decode_hex, difficulty_to_target, parse_target};
 
@@ -53,8 +53,6 @@ const POOL_DESYNC_STALE_FOR_THRESHOLD: Duration = Duration::from_secs(15);
 const POOL_TELEMETRY_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const POOL_HASHRATE_CACHE_TTL: Duration = Duration::from_secs(30);
 const POOL_TELEMETRY_TIMEOUT: Duration = Duration::from_secs(5);
-const POOL_TIMING_SLOW_CANCEL_THRESHOLD: Duration = Duration::from_secs(1);
-const POOL_TIMING_SLOW_ASSIGN_THRESHOLD: Duration = Duration::from_secs(1);
 const POOL_TIMING_SLOW_QUEUE_THRESHOLD: Duration = Duration::from_secs(3);
 const POOL_TIMING_SLOW_ACK_THRESHOLD: Duration = Duration::from_secs(3);
 const ATOMIC_UNITS_PER_BNT: u64 = 100_000_000;
@@ -344,6 +342,7 @@ fn rebind_active_pool_job(
     job: PoolJob,
     target: [u8; 32],
     network_target: Option<[u8; 32]>,
+    log_changes: bool,
 ) {
     let now = Instant::now();
     let previous_difficulty = active_job.share_difficulty;
@@ -356,7 +355,7 @@ fn rebind_active_pool_job(
     active_job.register_share_binding(job.job_id.clone(), target);
     active_job.job = job.clone();
 
-    if !mode.is_user() {
+    if !mode.is_user() || !log_changes {
         return;
     }
     let difficulty_label = job
@@ -380,6 +379,50 @@ fn rebind_active_pool_job(
             job.height
         ),
     );
+}
+
+/// Decoded header, share target and network target of a pool job.
+type PoolJobBinding = (Arc<[u8]>, [u8; 32], Option<[u8; 32]>);
+
+fn parse_pool_job_binding(job: &PoolJob) -> std::result::Result<PoolJobBinding, String> {
+    let header_base = decode_hex(&job.header_base, "pool.header_base")
+        .map(Arc::<[u8]>::from)
+        .map_err(|err| format!("invalid job header_base: {err:#}"))?;
+    let target = parse_target(&job.target).map_err(|err| format!("invalid job target: {err:#}"))?;
+    let network_target = match job.network_target.as_deref() {
+        Some(value) => Some(
+            parse_target(value).map_err(|err| format!("invalid job network_target: {err:#}"))?,
+        ),
+        None => None,
+    };
+    Ok((header_base, target, network_target))
+}
+
+/// Keeps a parked (inactive-session) job attached to `job` when the pool only
+/// re-issued the same template and nonce range under a new job id, as it does
+/// for a same-template difficulty rebind. Returns false when `job` is real new
+/// work and the parked job must be discarded.
+///
+/// Without this, a rebind that arrives while the dev-fee session is active
+/// would discard the parked user job, and resuming would start a fresh job at
+/// `nonce_start` on the same header, resubmitting every share already found
+/// there (the pool rejects those as duplicates).
+fn rebind_parked_pool_job(
+    mode: PoolConnectionMode,
+    parked: &mut ActivePoolJob,
+    job: &PoolJob,
+) -> bool {
+    if parked.job.job_id == job.job_id {
+        return true;
+    }
+    let Ok((header_base, target, network_target)) = parse_pool_job_binding(job) else {
+        return false;
+    };
+    if !same_pool_template_identity(parked, job, header_base.as_ref(), network_target.as_ref()) {
+        return false;
+    }
+    rebind_active_pool_job(mode, parked, job.clone(), target, network_target, false);
+    true
 }
 
 enum PoolShareSubmitOutcome {
@@ -460,38 +503,17 @@ fn format_pool_duration(duration: Duration) -> String {
 }
 
 fn record_pool_assignment_timing(
-    mode: PoolConnectionMode,
     job: &mut ActivePoolJob,
     reason: &'static str,
     cancel_latency: Option<Duration>,
     assign_latency: Duration,
 ) {
-    let completed_at = Instant::now();
     job.last_assignment_timing = Some(PoolAssignmentTiming {
         reason,
         cancel_latency,
         assign_latency,
-        completed_at,
+        completed_at: Instant::now(),
     });
-
-    if !mode.is_user() {
-        return;
-    }
-    let slow_cancel =
-        cancel_latency.is_some_and(|value| value >= POOL_TIMING_SLOW_CANCEL_THRESHOLD);
-    let slow_assign = assign_latency >= POOL_TIMING_SLOW_ASSIGN_THRESHOLD;
-    if slow_cancel || slow_assign {
-        warn(
-            "POOL",
-            format!(
-                "timing | switch={reason} cancel={} assign={}",
-                cancel_latency
-                    .map(format_pool_duration)
-                    .unwrap_or_else(|| "-".to_string()),
-                format_pool_duration(assign_latency),
-            ),
-        );
-    }
 }
 
 fn maybe_log_pool_submit_timing(
@@ -522,11 +544,7 @@ fn maybe_log_pool_submit_timing(
         format_pool_duration(total),
     );
     if mode.is_user() {
-        if status == "accepted" {
-            info("POOL", message);
-        } else {
-            warn("POOL", message);
-        }
+        warn("POOL", message);
     }
 }
 
@@ -697,6 +715,7 @@ pub(super) fn run_pool_mining_loop(
     runtime_backends: MiningRuntimeBackends<'_>,
     local_daemon_client: Option<ApiClient>,
     tui_state: Option<TuiState>,
+    history: Arc<super::session::SessionHistory>,
     deferred_backends: Option<(Receiver<super::BackendSlot>, u64)>,
 ) -> Result<()> {
     let MiningRuntimeBackends {
@@ -711,25 +730,15 @@ pub(super) fn run_pool_mining_loop(
 
     let (user_connection, dev_connection) = build_pool_connection_configs(cfg)?;
 
-    let stats = Stats::new();
+    let stats = &history.stats;
     let mut last_stats_print = Instant::now();
     let mut backend_weights = seed_backend_weights(backends);
     stats.register_expected_backends(&super::backend_instance_labels(backends));
     let mut work_id_cursor = 1u64;
     let mut epoch = 0u64;
     let mut last_hash_poll = Instant::now();
-    let mut tui = init_tui_display(tui_state, Arc::clone(&shutdown));
-    let dev_fee_percent = effective_pool_dev_fee_percent(&user_connection.pool_url);
-    if (dev_fee_percent - DEV_FEE_PERCENT).abs() > f64::EPSILON {
-        success(
-            "POOL",
-            format!(
-                "bntpool.com detected; dev fee reduced to {:.1}% (default {:.1}%)",
-                dev_fee_percent, DEV_FEE_PERCENT
-            ),
-        );
-    }
-    let mut dev_fee_tracker = DevFeeTracker::with_percent(dev_fee_percent);
+    let mut tui = init_tui_display(tui_state, Arc::clone(&shutdown), Arc::clone(&history));
+    let mut dev_fee_tracker = DevFeeTracker::new();
     let mut dev_fee_round_started = Instant::now();
     let _ = dev_fee_tracker.begin_round();
     let mut active_mode = if dev_fee_tracker.is_dev_round() {
@@ -873,11 +882,10 @@ pub(super) fn run_pool_mining_loop(
                         )
                     };
 
-                    if let Some(resume) = resumed_job.take() {
-                        if cached_job
-                            .as_ref()
-                            .is_some_and(|cached| cached.job_id == resume.job.job_id)
-                        {
+                    if let Some(mut resume) = resumed_job.take() {
+                        if cached_job.as_ref().is_some_and(|cached| {
+                            rebind_parked_pool_job(active_mode, &mut resume, cached)
+                        }) {
                             active_job = Some(resume);
                             if let Some(job) = active_job.as_mut() {
                                 let assign_started = Instant::now();
@@ -891,7 +899,6 @@ pub(super) fn run_pool_mining_loop(
                                     job,
                                 )?;
                                 record_pool_assignment_timing(
-                                    active_mode,
                                     job,
                                     "resume",
                                     None,
@@ -1093,7 +1100,6 @@ pub(super) fn run_pool_mining_loop(
             set_tui_pending_nvidia(&mut tui, deferred_remaining);
             if deferred_backend_activated {
                 maybe_hot_rebalance_active_pool_job(
-                    active_mode,
                     cfg,
                     &mut work_id_cursor,
                     &mut epoch,
@@ -1306,7 +1312,6 @@ pub(super) fn run_pool_mining_loop(
 
         if topology_changed {
             maybe_hot_rebalance_active_pool_job(
-                active_mode,
                 cfg,
                 &mut work_id_cursor,
                 &mut epoch,
@@ -1354,7 +1359,6 @@ pub(super) fn run_pool_mining_loop(
                     job,
                 )?;
                 record_pool_assignment_timing(
-                    active_mode,
                     job,
                     "resume-backlog",
                     None,
@@ -1406,6 +1410,7 @@ fn collect_pool_backend_samples(
     for (slot, runtime) in backends.iter().zip(runtime_telemetry.into_iter()) {
         let backend_id = slot.id;
         let hashes = slot.backend.take_hashes();
+        backend_executor.record_hardware_sample(slot, hashes);
         let telemetry = slot.backend.take_telemetry();
         has_pending_work |= telemetry.pending_work > 0 || telemetry.active_lanes > 0;
         super::merge_backend_telemetry(
@@ -1564,6 +1569,7 @@ fn handle_active_pool_event(
                 recent_submit_lookup,
             );
             let mut desync_reason = None::<String>;
+            let retry_suffix = record_retried_share_outcome(stats, &ack);
             if ack.accepted {
                 stats.bump_accepted();
                 let backend_suffix = submit_timing
@@ -1571,7 +1577,7 @@ fn handle_active_pool_event(
                     .map(|pending| format!(" (backend={})", pending.backend_label))
                     .unwrap_or_default();
                 if mode.is_user() {
-                    success("SHARE", format!("accepted{backend_suffix}"));
+                    success("SHARE", format!("accepted{retry_suffix}{backend_suffix}"));
                 }
                 if let Some(display) = tui.as_mut() {
                     display.mark_block_found();
@@ -1581,13 +1587,6 @@ fn handle_active_pool_event(
                         job.recent_stale_submit_acks.clear();
                     }
                 }
-                maybe_log_pool_submit_timing(
-                    mode,
-                    "accepted",
-                    ack.nonce,
-                    submit_timing.as_ref(),
-                    acknowledged_at,
-                );
             } else {
                 stats.bump_stale_shares();
                 let reason = ack.error.as_deref().unwrap_or("unknown");
@@ -1596,7 +1595,10 @@ fn handle_active_pool_event(
                     .map(|pending| format!(" (backend={})", pending.backend_label))
                     .unwrap_or_default();
                 if mode.is_user() {
-                    warn("SHARE", format!("rejected ({reason}){backend_suffix}"));
+                    warn(
+                        "SHARE",
+                        format!("rejected ({reason}){retry_suffix}{backend_suffix}"),
+                    );
                 }
                 maybe_log_pool_submit_timing(
                     mode,
@@ -1654,6 +1656,9 @@ fn handle_active_pool_event(
                 }
             }
         }
+        PoolEvent::SubmitRetry(retry) => {
+            note_pool_submit_retry(mode, stats, &retry);
+        }
         PoolEvent::Job(job) => {
             *latest_job = Some(job.clone());
             assign_pool_job(
@@ -1674,6 +1679,42 @@ fn handle_active_pool_event(
         }
     }
     Ok(())
+}
+
+/// Counts the final outcome of a share that was resubmitted after busy
+/// rejects and returns a log suffix such as " after 2 retries".
+fn record_retried_share_outcome(stats: &Stats, ack: &PoolSubmitAck) -> String {
+    if ack.retries == 0 {
+        return String::new();
+    }
+    stats.record_retried_share_outcome(ack.accepted);
+    let plural = if ack.retries == 1 { "y" } else { "ies" };
+    format!(" after {} retr{plural}", ack.retries)
+}
+
+fn note_pool_submit_retry(mode: PoolConnectionMode, stats: &Stats, retry: &PoolSubmitRetry) {
+    stats.bump_share_retries();
+    if !mode.is_user() {
+        return;
+    }
+    let message = format!(
+        "pool busy ({}); resubmitting {} nonce={} in {} (retry {}/{})",
+        retry.reason,
+        if retry.block_candidate {
+            "block candidate"
+        } else {
+            "share"
+        },
+        retry.nonce,
+        format_pool_duration(retry.delay),
+        retry.retry_number,
+        retry.max_retries,
+    );
+    if retry.block_candidate {
+        warn("SHARE", message);
+    } else if retry.retry_number == 1 {
+        info("SHARE", message);
+    }
 }
 
 fn force_pool_session_resync(
@@ -1804,6 +1845,7 @@ fn handle_inactive_pool_event(
                     .map(|job| &mut job.pending_submit_nonces),
                 recent_submit_lookup,
             );
+            let retry_suffix = record_retried_share_outcome(stats, &ack);
             if ack.accepted {
                 stats.bump_accepted();
                 let backend_suffix = submit_timing
@@ -1813,7 +1855,7 @@ fn handle_inactive_pool_event(
                 if mode.is_user() {
                     success(
                         "SHARE",
-                        format!("accepted ({}){backend_suffix}", mode.as_str()),
+                        format!("accepted ({}){retry_suffix}{backend_suffix}", mode.as_str()),
                     );
                 }
             } else {
@@ -1826,7 +1868,10 @@ fn handle_inactive_pool_event(
                 if mode.is_user() {
                     warn(
                         "SHARE",
-                        format!("rejected ({reason}) ({}){backend_suffix}", mode.as_str()),
+                        format!(
+                            "rejected ({reason}) ({}){retry_suffix}{backend_suffix}",
+                            mode.as_str()
+                        ),
                     );
                 }
             }
@@ -1849,10 +1894,13 @@ fn handle_inactive_pool_event(
                 }
             }
         }
+        PoolEvent::SubmitRetry(retry) => {
+            note_pool_submit_retry(mode, stats, &retry);
+        }
         PoolEvent::Job(job) => {
             if inactive_job
-                .as_ref()
-                .is_some_and(|active| active.job.job_id != job.job_id)
+                .as_mut()
+                .is_some_and(|parked| !rebind_parked_pool_job(mode, parked, &job))
             {
                 *inactive_job = None;
             }
@@ -1909,13 +1957,7 @@ fn apply_submit_ack_difficulty(
         backend_weights,
         job,
     )?;
-    record_pool_assignment_timing(
-        mode,
-        job,
-        "difficulty-update",
-        None,
-        assign_started.elapsed(),
-    );
+    record_pool_assignment_timing(job, "difficulty-update", None, assign_started.elapsed());
     Ok(())
 }
 
@@ -1943,41 +1985,20 @@ fn assign_pool_job(
         return Ok(());
     }
 
-    let header_base = match decode_hex(&job.header_base, "pool.header_base") {
-        Ok(value) => Arc::<[u8]>::from(value),
-        Err(err) => {
+    let (header_base, target, network_target) = match parse_pool_job_binding(&job) {
+        Ok(parsed) => parsed,
+        Err(message) => {
             if mode.is_user() {
-                warn("JOB", format!("invalid job header_base: {err:#}"));
+                warn("JOB", message);
             }
             return Ok(());
         }
-    };
-    let target = match parse_target(&job.target) {
-        Ok(target) => target,
-        Err(err) => {
-            if mode.is_user() {
-                warn("JOB", format!("invalid job target: {err:#}"));
-            }
-            return Ok(());
-        }
-    };
-    let network_target = match job.network_target.as_deref() {
-        Some(value) => match parse_target(value) {
-            Ok(target) => Some(target),
-            Err(err) => {
-                if mode.is_user() {
-                    warn("JOB", format!("invalid job network_target: {err:#}"));
-                }
-                return Ok(());
-            }
-        },
-        None => None,
     };
 
     if let Some(current) = active_job.as_mut() {
         if same_pool_template_identity(current, &job, header_base.as_ref(), network_target.as_ref())
         {
-            rebind_active_pool_job(mode, current, job, target, network_target);
+            rebind_active_pool_job(mode, current, job, target, network_target, true);
             set_tui_state_label(tui, "working");
             render_tui_now(tui);
             return Ok(());
@@ -2029,13 +2050,7 @@ fn assign_pool_job(
             backend_weights,
             job,
         )?;
-        record_pool_assignment_timing(
-            mode,
-            job,
-            "new-job",
-            cancel_latency,
-            assign_started.elapsed(),
-        );
+        record_pool_assignment_timing(job, "new-job", cancel_latency, assign_started.elapsed());
     }
     set_tui_state_label(tui, "working");
     render_tui_now(tui);
@@ -2138,7 +2153,6 @@ fn assign_pool_continuation(
 
 #[allow(clippy::too_many_arguments)]
 fn maybe_hot_rebalance_active_pool_job(
-    mode: PoolConnectionMode,
     cfg: &Config,
     work_id_cursor: &mut u64,
     epoch_cursor: &mut u64,
@@ -2191,13 +2205,7 @@ fn maybe_hot_rebalance_active_pool_job(
                 backend_weights,
                 job,
             )?;
-            record_pool_assignment_timing(
-                mode,
-                job,
-                "hot-rebalance",
-                None,
-                assign_started.elapsed(),
-            );
+            record_pool_assignment_timing(job, "hot-rebalance", None, assign_started.elapsed());
             info("JOB", format!("{reason}; hot-rebalanced current pool job"));
         }
     }
@@ -2889,8 +2897,9 @@ mod tests {
 
     use super::{
         advance_pool_nonce_cursor, compact_pool_address_for_log,
-        fetch_local_daemon_wallet_snapshot, note_current_job_stale_submit_rejection,
-        parse_pool_stale_for, pool_api_base_urls_from_pool_url,
+        fetch_local_daemon_wallet_snapshot, handle_inactive_pool_event,
+        note_current_job_stale_submit_rejection, parse_pool_stale_for,
+        pool_api_base_urls_from_pool_url, rebind_parked_pool_job,
         service_pool_submit_backlog_with_submitter, should_apply_submit_ack_difficulty_immediately,
         should_resume_pool_assignment, submit_pool_solution_with_submitter,
         take_submit_timing_for_ack, ActivePoolJob, PendingPoolSubmit, PoolConnectionMode, PoolJob,
@@ -2898,6 +2907,74 @@ mod tests {
         POOL_DESYNC_STALE_ACK_THRESHOLD, POOL_DESYNC_STALE_ACK_WINDOW, POOL_MAX_INFLIGHT_SUBMITS,
         POOL_SUBMIT_ACK_TIMEOUT,
     };
+
+    #[test]
+    fn pool_hash_samples_reach_hardware_reports_without_changing_accounting() {
+        use crate::backend::{BackendEvent, BackendInstanceId, PowBackend, WorkAssignment};
+        use crate::hardware_telemetry::Recorder;
+        use crate::miner::{backend_executor::BackendExecutor, BackendSlot};
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        struct CountingBackend(AtomicU64);
+        impl PowBackend for CountingBackend {
+            fn name(&self) -> &'static str {
+                "cpu"
+            }
+            fn lanes(&self) -> usize {
+                2
+            }
+            fn set_instance_id(&self, _: BackendInstanceId) {}
+            fn set_event_sink(&self, _: crossbeam_channel::Sender<BackendEvent>) {}
+            fn start(&self) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn stop(&self) {}
+            fn assign_work(&self, _: WorkAssignment) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn cancel_work(&self) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn fence(&self) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn take_hashes(&self) -> u64 {
+                self.0.swap(0, Ordering::AcqRel)
+            }
+        }
+        let backend = Arc::new(CountingBackend(AtomicU64::new(99)));
+        let slots = vec![BackendSlot {
+            id: 7,
+            backend: backend.clone(),
+            lanes: 2,
+            runtime_policy: Default::default(),
+            capabilities: backend.capabilities(),
+        }];
+        let executor = BackendExecutor::new();
+        let recorder = Recorder::test_recorder();
+        executor.set_hardware_telemetry(recorder.clone());
+        let stats = Stats::new();
+        let mut job = test_active_job(1);
+        super::collect_pool_backend_samples(&slots, &executor, &stats, &mut job);
+        recorder.test_advance_window(Duration::from_secs(120));
+        backend.0.store(240, Ordering::Release);
+        super::collect_pool_backend_samples(&slots, &executor, &stats, &mut job);
+        // A zero poll must still extend the observation window and preserve the sample.
+        super::collect_pool_backend_samples(&slots, &executor, &stats, &mut job);
+        let samples = recorder.drain();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].instance, 7);
+        assert_eq!(samples[0].settings.backend, "cpu");
+        assert_eq!(samples[0].settings.lanes, 2);
+        assert_eq!(samples[0].hashes, 240, "first counter predates the window");
+        assert!(samples[0].observed_secs >= 120.0);
+        assert!(!samples[0].settings_changed);
+        assert_eq!(
+            job.round_hashes, 339,
+            "telemetry must not consume hashes twice"
+        );
+        assert_eq!(job.round_backend_hashes[&7], 339);
+    }
 
     fn test_daemon_client(server: &MockServer, token: &str) -> ApiClient {
         ApiClient::new(
@@ -2939,6 +3016,144 @@ mod tests {
             [0xFF; 32],
             Some([0xFF; 32]),
         )
+    }
+
+    fn rebind_of(job: &PoolJob, job_id: &str, difficulty: u64) -> PoolJob {
+        let mut rebind = job.clone();
+        rebind.job_id = job_id.to_string();
+        rebind.difficulty = Some(difficulty);
+        rebind.target = hex::encode(crate::types::difficulty_to_target(difficulty));
+        rebind
+    }
+
+    #[test]
+    fn parked_job_keeps_nonce_progress_across_same_template_rebind() {
+        let mut parked = test_active_job(7);
+        parked.next_nonce = 500;
+        parked.submitted_nonces.insert(42);
+        let rebind = rebind_of(&parked.job, "job-2", 2);
+
+        assert!(rebind_parked_pool_job(
+            PoolConnectionMode::User,
+            &mut parked,
+            &rebind
+        ));
+        assert_eq!(parked.job.job_id, "job-2");
+        assert_eq!(
+            parked.next_nonce, 500,
+            "rebind must not rewind the nonce cursor"
+        );
+        assert!(parked.submitted_nonces.contains(&42));
+        assert!(parked.has_share_binding_job_id("job-1"));
+        assert!(parked.has_share_binding_job_id("job-2"));
+        assert_eq!(parked.share_difficulty, Some(2));
+        assert_eq!(parked.target, crate::types::difficulty_to_target(2));
+
+        // After resuming, a rescanned nonce is still deduplicated and new
+        // shares go out under the rebound job id.
+        let new_binding = parked.dynamic_share_target.snapshot().share_binding_id;
+        let mut active = Some(parked);
+        let mut lookup = RecentPendingSubmitLookup::default();
+        let stats = Stats::new();
+        let mut submitted = Vec::new();
+        for nonce in [42u64, 600] {
+            let mut solution = test_solution(7, nonce);
+            solution.share_binding_id = new_binding;
+            let outcome = submit_pool_solution_with_submitter(
+                PoolConnectionMode::User,
+                &mut active,
+                &solution,
+                "cpu#1",
+                &stats,
+                |job_id, nonce, _, _| {
+                    submitted.push((job_id.to_string(), nonce));
+                    Ok(())
+                },
+                &mut lookup,
+            );
+            if nonce == 42 {
+                assert!(matches!(outcome, PoolShareSubmitOutcome::Duplicate));
+            } else {
+                assert!(matches!(outcome, PoolShareSubmitOutcome::Submitted));
+            }
+        }
+        assert_eq!(submitted, vec![("job-2".to_string(), 600)]);
+    }
+
+    #[test]
+    fn parked_job_is_replaced_by_genuinely_new_work() {
+        let parked = test_active_job(1);
+        let mut new_header = rebind_of(&parked.job, "job-2", 1);
+        new_header.header_base = "01".to_string();
+        let mut new_range = rebind_of(&parked.job, "job-3", 1);
+        new_range.nonce_start = 1_001;
+        new_range.nonce_end = 2_000;
+        let mut new_height = rebind_of(&parked.job, "job-4", 1);
+        new_height.height = 2;
+        let mut new_template = rebind_of(&parked.job, "job-5", 1);
+        new_template.template_id = Some("tmpl-2".to_string());
+
+        for job in [new_header, new_range, new_height, new_template] {
+            let mut parked = test_active_job(1);
+            assert!(
+                !rebind_parked_pool_job(PoolConnectionMode::User, &mut parked, &job),
+                "{} should not rebind",
+                job.job_id
+            );
+            assert_eq!(parked.job.job_id, "job-1");
+        }
+    }
+
+    #[test]
+    fn inactive_session_rebind_keeps_parked_job_for_resume() {
+        let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let client = crate::pool::PoolClient::connect(
+            "127.0.0.1:1",
+            "BTestAddress".to_string(),
+            "rig01".to_string(),
+            Arc::clone(&shutdown),
+        )
+        .expect("pool client should start");
+        let stats = Stats::new();
+        let mut lookup = RecentPendingSubmitLookup::default();
+        let mut latest_job = None;
+        let mut connected = true;
+        let mut parked = Some(test_active_job(3));
+        parked.as_mut().expect("parked job").next_nonce = 321;
+        let rebind = rebind_of(&parked.as_ref().expect("parked job").job, "job-2", 4);
+
+        handle_inactive_pool_event(
+            crate::pool::PoolEvent::Job(rebind),
+            PoolConnectionMode::User,
+            &client,
+            &mut latest_job,
+            &mut connected,
+            &mut parked,
+            &mut lookup,
+            &stats,
+        );
+        let kept = parked.as_ref().expect("rebind must keep the parked job");
+        assert_eq!(kept.job.job_id, "job-2");
+        assert_eq!(kept.next_nonce, 321);
+        assert_eq!(
+            latest_job.as_ref().map(|job| job.job_id.as_str()),
+            Some("job-2")
+        );
+
+        let mut new_block = rebind_of(&kept.job, "job-3", 4);
+        new_block.height = 2;
+        handle_inactive_pool_event(
+            crate::pool::PoolEvent::Job(new_block),
+            PoolConnectionMode::User,
+            &client,
+            &mut latest_job,
+            &mut connected,
+            &mut parked,
+            &mut lookup,
+            &stats,
+        );
+        assert!(parked.is_none(), "new block must discard the parked job");
+        shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn test_solution(epoch: u64, nonce: u64) -> MiningSolution {

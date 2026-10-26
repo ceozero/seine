@@ -1,0 +1,86 @@
+---
+title: 'Ringhandtekeningen uitgelegd: hoe crypto de verzender verbergt'
+description: 'Ringhandtekeningen uitgelegd, van het idee uit 2001 tot key images en CLSAG: hoe een ondertekenaar opgaat tussen publieke sleutels en hoe Blocknet met een ring van 16 ondertekent.'
+tags: [Privacy, Ringhandtekeningen, Cryptografie, Blocknet]
+faq:
+  - q: 'Wat is het verschil tussen een ringhandtekening en een groepshandtekening?'
+    a: 'Een groepshandtekening heeft een beheerder nodig die de groep vooraf opzet en kan onthullen wie heeft ondertekend. Een ringhandtekening heeft geen beheerder en geen opzet: de ondertekenaar kiest ter plekke een willekeurige set publieke sleutels, en niemand, ook niet de mensen van wie de sleutels zijn gebruikt, kan later bewijzen welk lid de handtekening heeft gemaakt.'
+  - q: 'Wat is een key image in een ringhandtekening?'
+    a: 'Een key image is een waarde die wordt berekend uit de privésleutel van de output die wordt uitgegeven. Dezelfde output levert altijd hetzelfde key image op, dus het netwerk weigert een tweede uitgave ervan, terwijl het key image niet verraadt welk lid van de ring het echte is. Het maakt van een ringhandtekening een koppelbare ringhandtekening die dubbel uitgeven voorkomt.'
+  - q: 'Wat is CLSAG?'
+    a: 'CLSAG is een schema voor koppelbare ringhandtekeningen dat Brandon Goodell, Sarang Noether en Arthur Blue in 2019 beschreven. Het bewijst dat de ondertekenaar één output in de ring bezit en dat de bedragen kloppen, met een key image om dubbele uitgaven te stoppen. Monero nam het in oktober 2020 in gebruik, en Blocknet ondertekent elke input met CLSAG en RingCT.'
+  - q: 'Welke ringgrootte gebruikt Blocknet?'
+    a: 'Blocknet gebruikt voor elke input een ring van precies 16: de echte output plus 15 decoys, elk een echte output die al op de chain staat. De consensus weigert elke andere grootte. Omdat elke input dezelfde grootte gebruikt, kan de ringgrootte nooit een transactie doen opvallen, en de echte output staat op een willekeurige positie in de ring.'
+  - q: 'Verbergen ringhandtekeningen het bedrag van een betaling?'
+    a: 'Nee. Een ringhandtekening verbergt welke output heeft betaald. Bedragen worden verborgen door een aparte laag: Pedersen-commitments, die een getal vastleggen zonder het te tonen, plus range proofs met Bulletproofs, die bewijzen dat elk bedrag geldig is. Blocknet gebruikt ze allemaal samen bij elke transactie, naast eenmalige stealth-adressen die de ontvanger verbergen.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Met een ringhandtekening onderteken je namens een groep, zodat iedereen kan controleren dat de handtekening van een van de sleutels in de groep komt, terwijl niemand kan zien van welke. Dit artikel legt uit hoe ringhandtekeningen werken, van de paper uit 2001 die ze introduceerde tot key images en CLSAG, en laat zien hoe Blocknet een ring van 16 gebruikt om de verzender van elke betaling privé te houden.
+
+## Wat is een ringhandtekening?
+
+<Answer>
+Een ringhandtekening is een digitale handtekening die wordt gemaakt met één privésleutel en een set publieke sleutels van andere mensen. Een verificateur kan bevestigen dat de houder van een van die sleutels heeft ondertekend, maar kan niet zien welke. De ondertekenaar kiest de groep ter plekke, zonder opzet en zonder medewerking van de andere leden.
+</Answer>
+
+Een gewone digitale handtekening koppelt een bericht aan één publieke sleutel. Een ringhandtekening koppelt het aan een set publieke sleutels, de ring. De ondertekenaar heeft alleen zijn eigen privésleutel nodig; de andere leden dragen niets bij behalve publieke sleutels die ze al hebben gepubliceerd. Voor een buitenstaander is elk lid van de ring een even aannemelijke ondertekenaar.
+
+## Waar komen ringhandtekeningen vandaan?
+
+Ron Rivest, Adi Shamir en Yael Tauman introduceerden ringhandtekeningen op ASIACRYPT 2001 in een paper met de titel ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Hun voorbeeld is een kabinetslid dat een verhaal wil lekken naar een journalist op een manier die bewijst dat het uit het kabinet komt, zonder te onthullen welk lid. Hij ondertekent met zijn eigen sleutel plus de publieke sleutels van de andere kabinetsleden, en de journalist kan de handtekening controleren zonder te weten te komen wie hem heeft geschreven.
+
+Twee eigenschappen maakten het idee bijzonder. Er is geen groepsbeheerder die de ondertekenaar kan ontmaskeren, wat ringhandtekeningen onderscheidt van de oudere groepshandtekeningen. En de ring is spontaan: de ondertekenaar kan hem op het moment van ondertekenen samenstellen uit willekeurige gepubliceerde sleutels. De auteurs kozen de naam omdat "rings are geometric regions with uniform periphery and no center": elk lid zit aan de rand, en niemand is de baas. Het ondertekeningsalgoritme heeft dezelfde vorm, een keten van berekeningen die naar zichzelf terugloopt.
+
+## Hoe werkt een ringhandtekening?
+
+De moderne schema's die in cryptocurrencies worden gebruikt, bouwen de lus uit hashes en sleutels op elliptische krommen. Hier is het idee in eenvoudige stappen voor een ring van 16 publieke sleutels:
+
+1. **Begin bij je eigen plek.** De ondertekenaar kiest een willekeurig geheim getal en hasht het samen met het bericht. Die hash wordt de challenge voor de volgende plek in de ring.
+2. **Vervals een response voor elke andere plek.** Voor elk van de andere 15 leden kiest de ondertekenaar een willekeurige response en combineert die met de publieke sleutel van dat lid en de huidige challenge om de challenge voor de plek daarna te berekenen.
+3. **Sluit de ring.** Na een volledige ronde komt de keten terug bij de eigen plek van de ondertekenaar. Alleen iemand die de privésleutel van die plek heeft, kan de ene response berekenen waardoor de keten precies uitkomt waar hij begon.
+
+De handtekening bestaat uit de startchallenge plus de 16 responses. Een verificateur begint ergens, loopt de ring rond terwijl hij elke challenge opnieuw berekent uit de publieke sleutels en responses, en controleert of de lus sluit. Elke plek ziet er hetzelfde uit: een publieke sleutel en een willekeurig ogende response. Niets geeft aan waar de ondertekenaar begon, dus de verificateur leert dat één privésleutel de ring heeft gesloten en niets over welke.
+
+## Hoe voorkomen key images dubbel uitgeven?
+
+Een gewone ringhandtekening heeft bij geld één gat: als elke uitgave zich tussen andere outputs verbergt, kan het netwerk niet zien dat dezelfde coins twee keer zijn uitgegeven. Koppelbare ringhandtekeningen lossen dit op. Joseph Liu, Victor Wei en Duncan Wong beschreven het eerste zulke schema, LSAG, op ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Twee handtekeningen die met dezelfde privésleutel zijn gemaakt, kunnen aan elkaar worden gekoppeld, terwijl de ondertekenaar zich nog steeds in de ring verbergt.
+
+Het CryptoNote-ontwerp uit 2013 maakte hier het key image van. Voor een output met privésleutel `x` en publieke sleutel `P` berekent de wallet `I = x · Hp(P)`, waarbij `Hp` de publieke sleutel hasht naar een punt op de kromme. De handtekening bewijst dat `I` hoort bij het lid van de ring dat heeft ondertekend, zonder te zeggen welk. Omdat het key image alleen afhangt van de output die wordt uitgegeven, levert het opnieuw uitgeven van die output altijd dezelfde `I` op. Elke node houdt een lijst bij van key images die al zijn gezien en weigert elke transactie die er een herhaalt.
+
+## Van MLSAG naar CLSAG
+
+Cryptocurrencies die ook bedragen verbergen, hebben een ringhandtekening nodig die een tweede feit bewijst: dat het verborgen inputbedrag overeenkomt met wat de transactie uitgeeft. De paper ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT) van Shen Noether uit 2015 deed dit met MLSAG, een ringhandtekening over twee sets sleutels, één voor eigendom en één voor de commitments van de bedragen.
+
+CLSAG, van Brandon Goodell, Sarang Noether en Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), bewijst dezelfde twee feiten compacter. Monero stapte bij zijn upgrade van oktober 2020 over van MLSAG naar CLSAG. De [documentatie van Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) meldt ongeveer 20% snellere verificatie en een typische transactie met twee inputs en twee outputs die krimpt van ongeveer 2,5 kB naar 1,9 kB.
+
+## Wat betekent de ringgrootte voor privacy?
+
+<Answer>
+De ringgrootte is het aantal outputs in elke ring: de echte plus de decoys. Een ring van 16 betekent dat een waarnemer voor elke input 16 even geldige kandidaten ziet. Een vaste grootte is net zo belangrijk als een grote, want als elke input dezelfde grootte gebruikt, verraadt de grootte zelf niets over wie de transactie heeft gemaakt.
+</Answer>
+
+De decoys zijn echte outputs van de chain, dus elk ervan zou werkelijk de coin kunnen zijn die wordt uitgegeven. Als ringen konden variëren, zou een wallet die een ongebruikelijke grootte koos, zijn eigen transacties markeren. Monero verhoogde zijn ringgrootte bij de upgrade van augustus 2022 van 11 naar 16, en Blocknet gebruikt via de consensus 16 voor elke input.
+
+## Hoe Blocknet ringhandtekeningen gebruikt
+
+Elke Blocknet-input wordt ondertekend met CLSAG en RingCT over een ring van precies 16 outputs. De regels worden door de consensus afgedwongen, dus geen enkele wallet kan zich eraan onttrekken:
+
+- **Vaste ring van 16.** De daemon weigert elke input waarvan de ring niet precies 16 leden heeft. De code legt de grootte vast "to prevent information leakage from variable ring sizes".
+- **Alleen echte outputs.** Elk lid van de ring moet een echte output zijn die al op de chain staat, dus elke decoy is een coin die werkelijk uitgegeven zou kunnen worden.
+- **Willekeurige decoys en een willekeurige positie.** De wallet schudt de outputs van de chain met een cryptografisch veilige willekeurige generator om 15 decoys te kiezen en zet je echte output daarna op een willekeurige positie in de ring.
+- **Eigendom en bedrag in één bewijs.** Elke handtekening bewijst dat je één lid van de ring bezit en dat het verborgen bedrag van je input overeenkomt met de commitment van dat lid, zodat de bedragen kloppen zonder dat ze worden getoond.
+- **Key images gecontroleerd tegen de chain.** Het key image maakt deel uit van de ondertekende data, en het netwerk weigert een transactie als dat key image al is uitgegeven of twee keer in dezelfde transactie voorkomt.
+
+Het transactieformaat heeft geen transparante modus, dus elke betaling op de chain bevat ringen zoals deze. Ringhandtekeningen verbergen de verzender; [eenmalige stealth-adressen](/nl/blog/stealth-addresses-explained/) verbergen de ontvanger, en [Pedersen-commitments met Bulletproofs](/nl/blog/bulletproofs-explained/) verbergen het bedrag. [Hoe Blocknet betalingen privé houdt](/nl/blog/blocknet-privacy-features/) loopt door elk van die lagen en wat ze betekenen als je iemand betaalt.
+
+## Wat er komt met de Faraday-upgrade
+
+Blocknet plant een netwerkupgrade met de naam Faraday, met activering gepland rond 16 februari 2027 volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). In de woorden van de site: "Today a spend hides among 16 outputs. After Faraday, it hides among every output on the chain." Faraday zal ook nieuwe spend proofs brengen, die de site omschrijft als "Built so a quantum computer cannot forge a spend." Ontwerp, tests en adversarial review zijn bezig, en de data zijn gepland, niet definitief.
+
+## Haal wat BNT om privé te versturen
+
+Een eenvoudige manier om coins te krijgen die deze ringen gebruiken, is ze minen. De miner seine is gratis, open source en past zich aan je computer aan, en bntpool.com is de standaardpool, dus je kunt binnen een paar minuten aan het minen zijn. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt de installatie, en je kunt rechtstreeks naar je adres of een [Blocknet ID-naam](/nl/blog/blocknet-id-pay-by-name/) minen.
+
+<CTA target="seine" title="Mine je eerste privé-BNT" text="Download seine, mine op bntpool.com en ontvang coins die bij elke uitgave worden beschermd door een ring van 16." />

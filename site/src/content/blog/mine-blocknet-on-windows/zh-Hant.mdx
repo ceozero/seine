@@ -1,0 +1,93 @@
+---
+title: '如何在 Windows 上挖 Blocknet'
+description: '使用 seine 在 Windows 上挖 Blocknet。從選擇 ZIP、驗證下載和填寫地址，到確認 CPU 與 NVIDIA 同時運作並提交已接受的份額，本指南逐步說明。'
+tags: ['挖礦指南', 'Windows', 'NVIDIA']
+faq:
+  - q: '在 Windows 上挖 Blocknet 需要 CUDA Toolkit 嗎？'
+    a: '不需要。Windows 發行版 ZIP 已包含 seine 所需的 NVIDIA 執行階段程式庫。安裝目前版本的 NVIDIA 驅動程式，並將解壓縮後的檔案放在一起即可。seine 會偵測 CPU 和支援的 NVIDIA 顯示卡，並自動調校。沒有 NVIDIA 顯示卡的電腦也能使用 CPU 挖礦。'
+  - q: 'seine 將 Windows 挖礦設定儲存在哪裡？'
+    a: '預設情況下，seine 將收款地址、礦池和礦機名稱儲存在啟動目錄下的 seine-data/seine.config.json。從同一個解壓縮目錄執行即可沿用這些設定。需要其他目錄時，可以使用 data-dir 選項指定。'
+  - q: '開始挖礦前需要啟用 Windows 大型分頁嗎？'
+    a: '不需要。seine 會自動嘗試使用大型分頁，無法使用時則採用一般分頁。你可以直接使用預設設定開始挖礦。如需進行選用的大型分頁設定，請為挖礦帳戶授予「鎖定記憶體分頁」權限，然後登出並重新登入，再重新啟動 seine。'
+sourceHash: 3eebcb8784e8
+translation: draft
+---
+
+本指南將帶你從下載 Windows ZIP，一直到在 bntpool.com 取得已接受的份額。你將檢查壓縮檔、解壓縮檔案、填寫收款地址，並確認 CPU 和支援的 NVIDIA 顯示卡正在挖礦。以下指令使用直接在 Windows 上執行的 PowerShell。
+
+## 如何在 Windows 上開始挖 Blocknet？
+
+<Answer>
+下載 `seine-windows-x86_64.zip`，完整解壓縮，然後開啟 `seine.exe`。輸入 Blocknet 地址或已註冊的 `@name`，再接受 `stratum+tcp://bntpool.com:3333` 作為礦池。seine 會選擇可用的 CPU 和 NVIDIA 後端，依記憶體決定執行緒數，並在挖礦的同時開始調校。
+</Answer>
+
+開啟礦工程式前，請準備好公開收款地址。[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)說明了如何取得地址。只需輸入收款地址：礦工程式不需要錢包助記詞或支出金鑰。已註冊的 [Blocknet ID](/zh-hant/blog/blocknet-id-pay-by-name/) 也可以使用，因此你能用 `@name` 代替長地址。
+
+每個 CPU 挖礦執行緒使用一個 2 GiB 的記憶體區塊。seine 會檢查可用 RAM 和核心數，保留記憶體餘裕，並為你選擇初始執行緒數。桌上型電腦或筆記型電腦都可以從預設設定開始，不必預先計算執行緒數或選擇 CPU 運算核心程式。
+
+## 第 1 步：下載並檢查 Windows 壓縮檔
+
+開啟[下載區域](/zh-hant/#download)，選擇 Windows x86_64。壓縮檔名為 `seine-windows-x86_64.zip`。如果想在解壓縮前驗證 ZIP，請從同一[發行版本](https://github.com/zpalmtree/seine/releases/latest)下載 `SHA256SUMS.txt`。壓縮檔與校驗和檔案必須來自同一發行版本。
+
+![seine 官方下載清單中的 Windows ZIP](/assets/blog/windows-download.png)
+
+在 PowerShell 中切換到 Downloads 資料夾，然後計算壓縮檔的 SHA-256 雜湊值：
+
+```powershell
+cd "$HOME\Downloads"
+Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
+```
+
+將顯示的雜湊值與 `SHA256SUMS.txt` 中該 ZIP 對應的項目比較。字母大小寫不影響結果，但每一位十六進位數字都必須一致。如果檔案儲存在其他資料夾，可以參考 [Microsoft 的 Get-FileHash 文件](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash)。校驗和用來確認壓縮檔與已發布版本一致；請從官方發行頁面下載這兩個檔案。
+
+## 第 2 步：完整解壓縮 ZIP
+
+在檔案總管中，以滑鼠右鍵按一下下載的 ZIP，選擇**全部解壓縮**。選擇有寫入權限的資料夾，然後開啟解壓縮後的資料夾。將 `seine.exe` 與附帶的 DLL 放在一起：Windows 壓縮檔包含礦工程式使用的 NVIDIA 執行階段程式庫。
+
+在解壓縮後的資料夾中按兩下 `seine.exe`。如果偏好終端機，可以在該資料夾開啟 PowerShell 並執行：
+
+```powershell
+.\seine.exe
+```
+
+`./` 或 `.\` 前置字元會告訴 shell 執行目前目錄中的可執行檔。從解壓縮後的資料夾執行，也能讓 seine 在固定位置儲存設定。之後啟動時使用同一資料夾，程式就能找到你輸入過的地址和礦池。
+
+## 第 3 步：輸入地址和礦池
+
+在首次提示時，貼上 Blocknet 收款地址或已註冊的 `@name`，然後確認。接受預設礦池 URL：`stratum+tcp://bntpool.com:3333`。如果提示設定礦機名稱，請使用容易辨認的礦池名稱，以便將這台 Windows PC 與挖向同一地址的其他電腦區分開。
+
+[設定指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)介紹了這些提示和儲存的設定。預設位置是相對於啟動目錄的 `seine-data/seine.config.json`。後續啟動時，seine 會沿用這些設定。每次開始新的執行時，都會重新解析短名。
+
+你也可以直接在 PowerShell 中指定已註冊的短名：
+
+```powershell
+.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
+```
+
+將 `@name` 換成你已註冊的短名。不設定 CPU 執行緒和運算核心程式參數，即可讓 seine 自動選擇。跨作業系統的通用設定請參閱[如何挖 Blocknet](/zh-hant/blog/how-to-mine-blocknet/)。
+
+## 如何確認挖礦正在運作？
+
+<Answer>
+檢查 seine 儀表板是否顯示雜湊率和已接受的份額，然後在 bntpool.com 的 My Stats 頁面查詢同一收款地址。儀表板顯示礦工程式目前的工作；礦池記錄提交的份額與獎勵。比較速率或修改設定前，請先等待自動調校穩定下來。
+</Answer>
+
+[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)介紹了雜湊率、挖礦狀態和礦池面板。運作中的雜湊率表示本機正在計算雜湊；已接受的份額則確認工作已送達礦池。開啟 [My Stats](https://bntpool.com/stats)，輸入相同的地址或短名，即可追蹤這台礦機的份額和餘額。
+
+檢查新設定時，請區分已接受的份額與付款。份額參與礦池獎勵分配；付款則遵循礦池的確認與餘額規則。[PPLNS 指南](https://bntpool.com/blog/how-pplns-payouts-work/)解釋了這個流程。不必等待首次付款，就能立即檢查連線。
+
+## 在同一台 PC 上使用 CPU 和 NVIDIA 挖礦
+
+seine 預設同時使用 CPU 和支援的 NVIDIA 顯示卡。安裝目前版本的 NVIDIA 驅動程式即可；Windows ZIP 已包含執行階段程式庫，因此不必另行安裝 CUDA Toolkit。移動礦工程式資料夾時，請將解壓縮後的 DLL 留在可執行檔旁邊。
+
+首次啟動時，seine 會調校每張 GPU 並記住設定。CPU 調校也會在挖礦期間進行。[硬體指南](/zh-hant/blog/blocknet-mining-hardware-hashrate/)介紹了記憶體配置和實測結果，[NVIDIA 指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)則涵蓋多顯示卡使用。若要正常停止，請在儀表板按 `q`，或在終端機按 `Ctrl+C`。
+
+## 選用：啟用 Windows 大型分頁
+
+正常啟動時，程式已經會嘗試大型分頁，並在需要時改用一般分頁。若要在 Windows Pro、Enterprise 或 Education 上準備大型分頁，請開啟 `secpol.msc`，進入**本機原則 → 使用者權限指派 → 鎖定記憶體分頁**，加入執行 seine 的帳戶。登出並重新登入，讓新的登入工作階段取得該權限。
+
+[大型分頁指南](/zh-hant/blog/huge-pages-blocknet-mining/)詳細介紹了這項選用設定。重新登入後，照常啟動 seine，並查看啟動記錄中的分頁模式。建立第一個可正常運作的設定時，保持預設自動模式；之後若修改分頁設定，請在同一台 PC 上比較測量結果。
+
+[Windows 封鎖挖礦程式？驗證下載檔案](/zh-hant/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="下載 Windows 版 seine" text="解壓縮 ZIP，輸入收款地址，即可在 bntpool.com 開始挖礦，CPU 和 NVIDIA 都會自動調校。" />

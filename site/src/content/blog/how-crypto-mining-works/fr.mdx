@@ -1,0 +1,117 @@
+---
+title: 'Comment fonctionne le minage de cryptomonnaies'
+description: 'Le minage de cryptomonnaies expliqué simplement : blocs, hashs, difficulté, récompenses et pools, avec les blocs de cinq minutes de Blocknet comme exemple.'
+tags: [Minage, Preuve de travail, Blocknet, bntpool]
+faq:
+  - q: 'Que calcule réellement un mineur de cryptomonnaies ?'
+    a: 'Un mineur hache l''en-tête d''un bloc encore et encore, en changeant à chaque fois un nombre appelé nonce, jusqu''à ce que le résultat soit inférieur ou égal à la cible du réseau. Sur Blocknet, chaque tentative est un hash Argon2id sur 2 GiB de mémoire. Personne ne peut prévoir quel nonce gagnera : la seule façon de trouver un bloc est de continuer à essayer.'
+  - q: 'Combien de temps faut-il pour miner un bloc ?'
+    a: 'Chaque réseau fixe sa propre cible. Le Bitcoin vise un bloc toutes les dix minutes, et Blocknet un bloc toutes les cinq minutes, soit 288 blocs par jour. La difficulté s''ajuste pour tenir ce rythme quand des mineurs arrivent ou partent, si bien que le temps de bloc reste proche de la cible quel que soit le hashrate total.'
+  - q: 'Qu''est-ce qu''un share dans un pool de minage ?'
+    a: 'Un share est un hash qui atteint une cible plus facile, fixée par le pool pour votre connexion. Les shares prouvent combien de travail vous avez fourni sans attendre un bloc complet. Sur bntpool.com, le pool ajuste la difficulté des shares de chaque connexion pour viser environ dix shares toutes les cinq minutes, et les récompenses de bloc sont réparties selon les shares.'
+  - q: 'Puis-je miner des cryptomonnaies sur un ordinateur ordinaire ?'
+    a: 'Oui, sur les coins dont la preuve de travail est conçue pour du matériel ordinaire. Blocknet utilise Argon2id, gourmand en mémoire : un ordinateur de bureau, un portable, un Mac ou un serveur doté d''assez de RAM peut le miner. Chaque thread de minage a besoin d''environ 2 GB de mémoire, et seine détermine tout seul le bon nombre de threads pour votre machine.'
+sourceHash: d05a84885aae
+translation: draft
+---
+
+Ce guide explique ce que font les mineurs de cryptomonnaies et pourquoi : comment les transactions deviennent des blocs, ce que sont un hash et un nonce, comment la difficulté maintient le rythme des blocs, d'où vient la récompense et pourquoi la plupart des gens minent dans un pool. Blocknet sert d'exemple tout au long du guide : chaque chiffre est donc réel et vérifiable.
+
+## Qu'est-ce que le minage de cryptomonnaies ?
+
+<Answer>
+Le minage de cryptomonnaies est la façon dont une blockchain à preuve de travail ajoute de nouveaux blocs. Les mineurs regroupent les transactions en attente dans un bloc, puis font la course pour trouver un hash de ce bloc qui atteint une cible de difficulté. Le premier mineur qui en trouve un diffuse le bloc, chaque nœud le vérifie, et le gagnant empoche une récompense de bloc nouvellement créée.
+</Answer>
+
+Le minage remplit deux fonctions à la fois. Il ordonne les transactions, pour que tout le monde s'accorde sur le paiement arrivé en premier, et il émet de nouveaux coins selon un calendrier fixe, pour qu'il ne soit nécessaire de faire confiance à personne pour les créer. Le Bitcoin a introduit cette idée en 2008, et de nombreux coins l'utilisent aujourd'hui, dont Blocknet. Certaines chaînes, comme Ethereum depuis 2022, utilisent à la place la preuve d'enjeu ; [preuve de travail ou preuve d'enjeu](/fr/blog/proof-of-work-vs-proof-of-stake/) compare les deux.
+
+## Que contient un bloc ?
+
+Un bloc est un lot de transactions accompagné d'un court en-tête qui le décrit. L'en-tête d'un bloc Blocknet comporte sept champs :
+
+| Champ | Contenu |
+|---|---|
+| Version | La version du protocole |
+| Hauteur | La position du bloc dans la chaîne |
+| Hash précédent | L'identifiant du bloc qui le précède |
+| Racine de Merkle | Une empreinte de toutes les transactions du bloc |
+| Horodatage | Le moment où le bloc a été créé |
+| Difficulté | La difficulté pour trouver ce bloc |
+| Nonce | Le nombre que le mineur change à chaque tentative |
+
+C'est le champ du hash précédent qui forme une chaîne. Chaque bloc pointe vers celui qui le précède : modifier une ancienne transaction changerait l'empreinte de son bloc et briserait tous les liens suivants. La première transaction de chaque bloc est la coinbase, celle qui verse la récompense au mineur qui l'a trouvé.
+
+## Comment un mineur trouve-t-il un bloc ?
+
+<Answer>
+Un mineur hache l'en-tête du bloc, vérifie si le résultat est inférieur ou égal à la cible du réseau, et si ce n'est pas le cas, change le nonce et réessaie. Une bonne fonction de hachage rend le résultat imprévisible : la seule façon de gagner est de faire de nombreuses tentatives. Votre hashrate est le nombre de tentatives que vous faites par seconde.
+</Answer>
+
+Une fonction de hachage transforme n'importe quelle entrée en un nombre de longueur fixe d'apparence aléatoire. Changez un seul bit de l'entrée et le résultat change complètement. Traitez ce résultat comme un nombre gigantesque : s'il est inférieur ou égal à la cible, le bloc est valide. Une cible plus basse signifie moins de hashs gagnants, donc davantage de tentatives en moyenne.
+
+Sur Blocknet, chaque tentative est un hash Argon2id. Le nonce de 8 octets sert de mot de passe et le reste de l'en-tête sert de sel, et chaque hash parcourt 2 GiB de mémoire avant de produire un résultat de 32 octets. Quand un mineur trouve un hash inférieur ou égal à la cible, il envoie le bloc au réseau. Chaque nœud recalcule ce seul hash pour le confirmer, ce qui représente une infime fraction du travail qu'il a fallu pour le trouver.
+
+L'[explication d'Argon2id](/fr/blog/argon2id-proof-of-work-explained/) détaille chaque étape de ce hash et explique pourquoi il a besoin d'autant de mémoire.
+
+## Qu'est-ce que la difficulté de minage ?
+
+La difficulté est le nombre qui fixe la cible. Sur Blocknet, la cible vaut (2^256 − 1) divisé par la difficulté, ce qui signifie que la difficulté correspond à peu près au nombre de hashs dont l'ensemble du réseau a besoin, en moyenne, pour trouver un bloc.
+
+Cela donne un moyen rapide de lire l'état du réseau. Blocknet vise un bloc toutes les 300 secondes : le hashrate du réseau vaut donc environ difficulté ÷ 300. Par exemple, une difficulté de 6 000 000 signifierait que le réseau calcule environ 20 000 hashs par seconde.
+
+Le réseau ajuste la difficulté pour maintenir le rythme des blocs à mesure que les mineurs arrivent et partent :
+
+- **Le Bitcoin** vise des blocs de dix minutes et recalcule la difficulté une fois tous les 2 016 blocs, soit environ toutes les deux semaines.
+- **Blocknet** vise des blocs de cinq minutes et recalcule la difficulté après chaque bloc avec LWMA, une moyenne mobile pondérée linéairement. Elle examine les 60 derniers blocs et donne le plus de poids aux plus récents, si bien qu'elle suit rapidement les variations de hashrate : toute la fenêtre couvre environ cinq heures de blocs.
+
+LWMA limite aussi l'influence d'un bloc atypique sur le résultat : le temps de résolution de chaque bloc compte pour au moins 1 seconde et au plus 1 800 secondes, soit six fois la cible. Si les blocs arrivent plus vite que toutes les cinq minutes, la difficulté augmente ; s'ils arrivent plus lentement, elle baisse.
+
+## Comment les mineurs sont-ils payés ?
+
+Chaque bloc crée de nouveaux coins dans sa transaction coinbase. Sur Blocknet, la coinbase a exactement une sortie, d'une valeur égale à la récompense de bloc, versée à l'adresse choisie par le mineur. Le bloc genesis ne contenait aucune transaction : chaque coin en circulation a donc été miné.
+
+La récompense suit un calendrier publié. Celle de Blocknet a démarré à 723,25 BNT par bloc et décroît progressivement, en baissant une fois par mois de 30 jours, soit 8 640 blocs. L'émission atteint environ 100 millions de BNT au bout de quatre ans, et à partir de là chaque bloc verse une récompense de queue permanente de 2 BNT : les mineurs ont donc toujours quelque chose à miner.
+
+Les coins minés attendent 60 blocs, soit environ cinq heures, avant de pouvoir être dépensés. Cette pause laisse le temps à toute brève division de la chaîne de se résorber avant qu'une nouvelle récompense puisse être dépensée.
+
+## Pourquoi la plupart des mineurs rejoignent-ils un pool ?
+
+Un pool réunit le hashrate de nombreux mineurs pour que le groupe trouve souvent des blocs, puis répartit chaque récompense selon le travail fourni par chaque membre. En solo, un petit mineur peut attendre des jours ou des semaines pour un bloc entier ; dans un pool, le même hashrate rapporte un flux régulier de paiements plus petits.
+
+Le calcul montre pourquoi. Blocknet produit 288 blocs par jour : votre nombre attendu de blocs en solo par jour vaut donc 288 × (votre hashrate ÷ hashrate du réseau). Si votre machine représente un millième du réseau, vous trouvez en moyenne environ 0,29 bloc par jour, soit un bloc tous les trois jours et demi, même si l'écart réel varie d'un bloc à l'autre.
+
+Un pool mesure votre travail avec des **shares**. Un share est un hash qui atteint une cible plus facile, fixée par le pool pour votre connexion. Chaque share compte pour votre part de la récompense, et un share qui atteint aussi la cible complète du réseau est un vrai bloc, que le pool soumet à la blockchain. Sur bntpool.com :
+
+- **La difficulté des shares s'ajuste par connexion**, avec un objectif d'environ dix shares toutes les cinq minutes, pour que les machines rapides comme les lentes déclarent leur travail régulièrement.
+- **Les récompenses sont réparties en PPLNS** sur une fenêtre de six heures : la récompense de chaque bloc va aux shares soumis pendant les six heures précédant sa découverte.
+- **Les paiements commencent à 0,1 BNT** une fois qu'un bloc a 60 blocs de profondeur.
+
+Si vous faites tourner votre propre nœud, vous pouvez aussi miner en solo et garder chaque bloc que vous trouvez. Le [guide de minage](/fr/blog/how-to-mine-blocknet/) couvre les deux.
+
+## Qu'est-ce qui détermine votre vitesse de minage ?
+
+La fonction de hachage détermine quel matériel s'en sort bien. Le SHA-256 du Bitcoin n'a presque pas besoin de mémoire : des puces spécialisées appelées ASIC assurent aujourd'hui l'essentiel du minage du Bitcoin. Blocknet a choisi Argon2id, une fonction gourmande en mémoire conçue pour résister aux ASIC : chaque hash remplit 2 GiB de RAM, si bien que la taille et la bande passante de la mémoire fixent votre vitesse.
+
+Cela change le calcul pour un ordinateur ordinaire :
+
+- **La RAM fixe le nombre de threads.** Chaque thread de minage a besoin de sa propre zone mémoire de 2 GiB : une machine de 16 GB fait donc tourner environ six ou sept threads tout en laissant de la place au système.
+- **La bande passante mémoire fixe la vitesse totale.** Chaque hash écrit environ 2 GiB et en lit environ 2 GiB : une machine qui déplace la mémoire plus vite termine davantage de hashs par seconde.
+- **Les CPU comme les GPU peuvent miner.** Sous Windows et Linux, seine mine en même temps sur le CPU et sur toutes les cartes NVIDIA, et les hashrates s'additionnent.
+
+Le meilleur résultat mesuré par seine est de 49,4 H/s sur un serveur AMD EPYC Zen 5 (EPYC 9R45, 32 threads), et un MacBook Pro Apple M4 Max atteint 30,9 H/s. Le [guide du matériel](/fr/blog/blocknet-mining-hardware-hashrate/) présente les résultats de chaque génération testée, et le guide du [minage CPU en 2026](/fr/blog/cpu-mining-2026/) explique pourquoi les coins gourmands en mémoire conviennent aux processeurs ordinaires.
+
+## Qui garantit l'honnêteté de la chaîne ?
+
+Chaque nœud vérifie chaque bloc : le hash atteint la cible, les transactions sont valides et la récompense est exactement la bonne. Un bloc qui échoue à une seule vérification est rejeté, quelle que soit la quantité de travail qu'il a demandée.
+
+Quand deux mineurs trouvent un bloc presque au même moment, la chaîne se divise brièvement. Les nœuds Blocknet suivent la chaîne qui cumule le plus de travail, c'est-à-dire la somme des difficultés de tous ses blocs : la division se résout dès que le bloc suivant arrive d'un côté. C'est pourquoi les portefeuilles comptent les confirmations : sur Blocknet, 10 confirmations (environ 50 minutes) sont considérées comme sûres, et aucun nœud ne réorganisera la chaîne sur plus de 100 blocs de profondeur.
+
+## Essayez sur votre propre ordinateur
+
+Miner Blocknet se fait en trois étapes : obtenez une adresse, téléchargez [seine](/fr/#download), lancez-le et acceptez le pool par défaut, bntpool.com. seine choisit son nombre de threads, son kernel CPU et son organisation mémoire pendant qu'il mine : vous pouvez donc voir arriver vos premiers shares en quelques minutes.
+
+<Note>
+Selon [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet prévoit vers le 2027-02-16 une mise à niveau du réseau appelée Faraday, qui doit apporter une preuve de travail plus légère. Les détails de preuve de travail ci-dessus décrivent le réseau avant Faraday. seine vérifie la présence de nouvelles versions au démarrage et toutes les 12 heures.
+</Note>
+
+<CTA target="seine" title="Commencez à miner Blocknet" text="Téléchargez seine pour Windows, macOS ou Linux, collez votre adresse et commencez à envoyer des shares à bntpool.com en quelques minutes." />

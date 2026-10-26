@@ -1,0 +1,104 @@
+---
+title: Proof of work a proof of stake – czym się różnią
+description: Proof of work a proof of stake w prostych słowach. Jak każdy z nich wybiera następny blok, zabezpiecza łańcuch i emituje nowe monety oraz dlaczego Blocknet używa proof of work.
+tags: [Proof of work, Proof of stake, Konsensus, Blocknet, Kopanie]
+faq:
+  - q: 'Czy Blocknet działa na proof of work czy na proof of stake?'
+    a: 'Blocknet używa proof of work. Górnicy liczą hashe Argon2id, z których każdy wymaga 2 GiB pamięci, nowy blok pojawia się mniej więcej co pięć minut, a cała nagroda za blok trafia do górnika, który go znalazł. Nie ma stakingu. Możesz go kopać programem seine na zwykłym komputerze w puli bntpool.com.'
+  - q: 'Kiedy Ethereum przeszło z proof of work na proof of stake?'
+    a: 'Ethereum przeszło na proof of stake w aktualizacji nazwanej the Merge, przeprowadzonej 15 września 2022 roku. Od tego czasu bloki proponują i głosują nad nimi walidatorzy, którzy zdeponowali 32 ETH, a nie górnicy. Bitcoin, Monero i Blocknet nadal używają proof of work, w którym nowe bloki powstają dzięki pracy obliczeniowej.'
+  - q: 'Czym jest atak 51%?'
+    a: 'Atak 51% to próba przejęcia kontroli nad tym, które bloki akceptuje łańcuch, przez posiadanie większości zasobu, który o tym decyduje. W proof of work oznacza to większość mocy obliczeniowej sieci. W proof of stake oznacza to większość zablokowanych monet. W obu przypadkach atakujący musi zaangażować większość realnych zasobów.'
+  - q: 'Czy można kopać kryptowalutę opartą na proof of stake?'
+    a: 'Nie. Kryptowaluta oparta wyłącznie na proof of stake nie ma kopania. Nowe monety trafiają do walidatorów, którzy blokują posiadane monety jako stawkę, więc musisz mieć monety, zanim zaczniesz jakiekolwiek zarabiać. Aby zarabiać nowe monety komputerem, który już masz, potrzebujesz kryptowaluty opartej na proof of work, takiej jak Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: draft
+---
+
+Ten artykuł wyjaśnia, jak proof of work i proof of stake decydują o tym, kto dodaje kolejny blok do blockchaina, jak każdy z tych mechanizmów zabezpiecza łańcuch i jak każdy z nich tworzy nowe monety. Przykładem przewijającym się przez cały tekst jest Blocknet, kryptowaluta oparta na proof of work, którą możesz kopać na zwykłym komputerze.
+
+## Czym różni się proof of work od proof of stake?
+
+<Answer>
+Proof of work (dowód pracy) i proof of stake (dowód stawki) to dwa sposoby, w jakie blockchain decyduje, kto dodaje kolejny blok. W proof of work górnicy zużywają moc obliczeniową, aby znaleźć prawidłowy hash. W proof of stake walidatorzy blokują monety jako depozyt i są wybierani do proponowania bloków i głosowania nad nimi. Oba sprawiają, że oszukiwanie jest kosztowne.
+</Answer>
+
+Każdy blockchain musi rozwiązać ten sam problem. Tysiące komputerów, które sobie nie ufają, muszą zgodzić się co do jednej historii płatności, aby nikt nie mógł wydać tej samej monety dwa razy. Ktoś musi zaproponować każdy nowy blok, a wszyscy pozostali muszą mieć powód, by go zaakceptować. Ta reguła nazywa się mechanizmem konsensusu, a proof of work i proof of stake to dwie najbardziej znane konstrukcje.
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Kto tworzy blok | Górnik, który jako pierwszy znajdzie hash równy celowi sieci lub poniżej niego | Walidator wybrany spośród tych, którzy zablokowali monety |
+| Co angażują | Sprzęt i prąd | Monety zdeponowane jako stawka |
+| Który łańcuch wygrywa | Łańcuch z największą skumulowaną pracą | Łańcuch popierany przez najwięcej głosów walidatorów, z punktami kontrolnymi finalności |
+| Dokąd trafiają nowe monety | Nagroda za blok dla górnika, który znalazł blok | Nagrody dla walidatorów za proponowanie i głosowanie |
+| Czego potrzebujesz, by dołączyć | Komputera, który potrafi liczyć hashe | Monet do stakowania (32 ETH dla walidatora Ethereum) |
+| Przykłady | Bitcoin, Monero, Blocknet | Ethereum od 2022 roku |
+
+## Jak proof of work wybiera następny blok?
+
+W proof of work górnicy rywalizują w rozwiązywaniu zagadki, którą trudno rozwiązać, a łatwo sprawdzić. Górnik bierze blok, który chce opublikować, dodaje liczbę zwaną nonce i haszuje wynik. Jeśli hash, odczytany jako liczba, jest równy celowi sieci lub poniżej niego, blok jest prawidłowy. Jeśli nie, górnik zmienia nonce i próbuje ponownie. Jedynym sposobem na wygraną jest wypróbowanie wielu wartości nonce, więc szansa górnika na znalezienie następnego bloku odpowiada jego udziałowi w mocy obliczeniowej sieci.
+
+Satoshi Nakamoto ujął to w swoim [dokumencie o Bitcoinie](https://bitcoin.org/bitcoin.pdf) z 2008 roku tak: „Proof-of-work to w istocie zasada jeden CPU, jeden głos”. Węzły podążają za łańcuchem, w który włożono najwięcej pracy, a ustawienie trudności przesuwa cel w górę lub w dół, tak aby bloki pojawiały się w równym tempie bez względu na to, ile mocy obliczeniowej dołączy do sieci. Poradnik o tym, [jak działa kopanie kryptowalut](/pl/blog/how-crypto-mining-works/), krok po kroku omawia hashe, trudność i pule.
+
+Blocknet działa tak samo, a liczby są ustalone w jego kodzie konsensusu:
+
+- **Hash to Argon2id** z 2 GiB pamięci, więc każdy hash wymaga prawdziwej pamięci, a nie tylko czasu procesora. [Artykuł o Argon2id](/pl/blog/argon2id-proof-of-work-explained/) pokazuje, jak to działa.
+- **Cel to (2^256 − 1) podzielone przez trudność**, przez co trudność odpowiada mniej więcej liczbie hashy, których sieć potrzebuje, aby znaleźć jeden blok.
+- **Blok pojawia się mniej więcej co pięć minut**, czyli 288 bloków dziennie. Trudność podąża za czasami ostatnich bloków dzięki ważonej średniej ruchomej z 60 bloków (LWMA).
+- **Węzły podążają za najcięższym łańcuchem.** Każdy węzeł sumuje trudność wszystkich bloków w łańcuchu i przechodzi na konkurencyjny łańcuch tylko wtedy, gdy jego łączna praca jest większa.
+
+## Jak proof of stake wybiera następny blok?
+
+Proof of stake zastępuje haszowanie depozytem. Aby wziąć udział, walidator blokuje monety w protokole, a protokół wybiera walidatorów do proponowania i zatwierdzania bloków. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), uruchomiony w 2012 roku, był pierwszą kryptowalutą, która go użyła, a Ethereum przeszło na niego 15 września 2022 roku w aktualizacji nazwanej [the Merge](https://ethereum.org/en/roadmap/merge/).
+
+Konstrukcja Ethereum dobrze pokazuje poszczególne elementy. Według [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Walidator deponuje 32 ETH w kontrakcie depozytowym.
+- Czas jest podzielony na 12-sekundowe sloty, zgrupowane w epoki po 32 sloty.
+- W każdym slocie jeden losowo wybrany walidator proponuje blok, a inni głosują nad nim za pomocą atestacji.
+- Punkty kontrolne stają się ostateczne, gdy zagłosują za nimi walidatorzy posiadający co najmniej dwie trzecie wszystkich zablokowanych ETH.
+- Walidator, który zaproponuje dwa bloki dla tego samego slotu lub odda sprzeczne głosy, podlega slashingowi: część jego stawki, aż do całości, zostaje zniszczona.
+
+Stawka pełni tę samą funkcję co prąd w proof of work. Łamanie zasad kosztuje walidatora monety, które już posiada.
+
+## Jak proof of work i proof of stake zapewniają bezpieczeństwo?
+
+Obie konstrukcje sprawiają, że atak kosztuje więcej, niż mógłby przynieść, a ten koszt umieszczają w różnych miejscach.
+
+**W proof of work kosztem są bieżące obliczenia.** Aby przepisać miniony blok, atakujący musi powtórzyć pracę tego bloku i wszystkich kolejnych, a następnie wyprzedzić uczciwą sieć. Nakamoto pokazał, że szansa wolniejszego atakującego na dogonienie sieci maleje wykładniczo z każdym nowym blokiem. Przejęcie kontroli nad łańcuchem na przyszłość oznacza utrzymywanie większej mocy obliczeniowej niż wszyscy pozostali razem, przez cały czas trwania ataku.
+
+**W proof of stake kosztem jest zagrożony kapitał.** Dokumentacja Ethereum mówi, że atakujący „potrzebowałby 51% zablokowanych ETH”, aby kontrolować łańcuch, że jedna trzecia stawki wystarczy, by zablokować finalizację bloków, i że cofnięcie sfinalizowanego bloku oznaczałoby utratę co najmniej jednej trzeciej wszystkich zablokowanych ETH w wyniku slashingu.
+
+Blocknet ustala też dwa progi ponad swoim proof of work. Sieć uznaje 10 potwierdzeń, czyli około 50 minut, za bezpieczne, a węzły odrzucają każdą reorganizację głębszą niż 100 bloków, czyli około ośmiu godzin, więc blok na głębokości 100 jest ostateczny.
+
+## Jak oba modele emitują nowe monety?
+
+<Answer>
+Kryptowaluty oparte na proof of work wypłacają nowe monety górnikowi, który znajdzie każdy blok, więc każdy, kto wnosi moc obliczeniową, może zarabiać monety, nie posiadając wcześniej żadnych. Kryptowaluty oparte na proof of stake wypłacają nowe monety walidatorom proporcjonalnie do ich stawki, więc nagrody trafiają do osób, które już mają monety. Każdy protokół ustala własny harmonogram.
+</Answer>
+
+W proof of work pierwsza transakcja w każdym bloku tworzy nowe monety dla górnika, który go znalazł. Dokument o Bitcoinie opisuje to jako „sposób na początkowe wprowadzenie monet do obiegu, ponieważ nie ma centralnego organu, który by je emitował”. Nagroda w Bitcoinie zmniejsza się o połowę co 210 000 bloków, czyli mniej więcej co cztery lata, a całkowita podaż pozostaje tuż poniżej 21 milionów.
+
+W proof of stake Ethereum nagrody są dopisywane do sald walidatorów raz na epokę za atestacje, proponowanie bloków i udział w komitecie synchronizacji. [Nagroda bazowa](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) maleje wraz ze wzrostem łącznej stawki, a całkowita emisja rośnie, gdy dołącza więcej walidatorów.
+
+Emisja Blocknetu odbywa się wyłącznie przez kopanie. Jego blok genesis nie zawiera żadnych transakcji, więc przed rozpoczęciem kopania nie istniały żadne monety, a konsensus nie przewiduje premine, skarbca ani wyjścia dla założycieli. Każdy blok wypłaca całą swoją nagrodę w jednym wyjściu górnikowi, który go znalazł. Nagroda zaczynała się od 723,25 BNT za blok, co każdy 30-dniowy miesiąc obniża się po krzywej wykładniczej przez 48 miesięcy, a potem już na stałe wynosi 2 BNT za blok.
+
+## Dlaczego Blocknet używa proof of work?
+
+Blocknet wybrał proof of work, aby każdy, kto ma komputer, mógł od pierwszego bloku zarabiać nowe monety bez ich wcześniejszego kupowania. Jego demon opisuje Argon2id jako „wymagający dużo pamięci PoW, który ma opierać się układom ASIC i zapewnić uczciwe kopanie”, a każdy hash liczy na jednym wątku „dla uczciwości”.
+
+To wymaganie pamięciowe utrzymuje kopanie otwarte. Każdy hash wypełnia 2 GiB pamięci, więc każdy wątek kopiący potrzebuje około 2 GB RAM, a komputery, które ludzie już mają, czyli komputery stacjonarne, laptopy i serwery, mają tę pamięć i kontrolery, które ją obsługują. Blocknet należy do rodziny kryptowalut opartych na proof of work, zbudowanych wokół sprzętu ogólnego przeznaczenia: Monero na przykład od listopada 2019 roku używa [RandomX](https://github.com/tevador/RandomX), algorytmu „zoptymalizowanego pod procesory ogólnego przeznaczenia”.
+
+Proof of work pozostaje w planach Blocknetu. Aktualizacja Faraday, planowana według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) na około luty 2027 roku, przyniesie „lżejszy proof of work”, aby nowe węzły szybciej nadrabiały łańcuch.
+
+## Jak zacząć kopać kryptowalutę opartą na proof of work?
+
+Aby kopać Blocknet, potrzebujesz adresu portfela i seine, darmowego minera open source:
+
+1. Zdobądź adres z oficjalnego portfela. [Poradnik o portfelu](/pl/blog/blocknet-wallet-for-mining/) przeprowadzi Cię przez to krok po kroku.
+2. [Pobierz seine](/pl/#download) dla systemu Windows, macOS lub Linux i uruchom go.
+3. Wklej swój adres lub `@name` i zaakceptuj domyślną pulę, bntpool.com.
+
+seine dobiera liczbę wątków do Twojej pamięci RAM, porównuje jądra obliczeniowe CPU podczas kopania i zostawia najszybsze, a w systemach Windows i Linux dołącza do procesora każdą kartę graficzną NVIDIA. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) szczegółowo omawia sprzęt i wypłaty.
+
+<CTA target="seine" title="Kop Blocknet z seine" text="Pobierz seine, wklej swój adres lub @name, a Twój komputer w kilka minut zacznie kopać BNT na bntpool.com." />

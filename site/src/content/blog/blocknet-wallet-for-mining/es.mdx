@@ -1,0 +1,173 @@
+---
+title: Crea una billetera y una dirección de Blocknet para minar
+description: 'Configura la billetera oficial de Blocknet, guarda tu semilla de 12 palabras, copia la dirección a la que minar y mira llegar los pagos de bntpool.com.'
+tags: [Billetera, Guía de minería, bntpool]
+faq:
+  - q: '¿Necesito una billetera de Blocknet antes de empezar a minar?'
+    a: 'Necesitas una dirección de Blocknet a la que minar, y la billetera oficial te da una. Crea una billetera en la billetera de línea de comandos o en la de escritorio, copia la dirección y pégala en seine. La billetera en sí se queda en tu propia computadora. seine y bntpool.com solo necesitan la dirección, o un nombre corto de Blocknet ID que apunte a ella.'
+  - q: '¿Cuántas palabras tiene una semilla de recuperación de Blocknet?'
+    a: 'Una semilla de recuperación de Blocknet tiene 12 palabras. En la billetera de línea de comandos, el comando seed la muestra tras una advertencia y después de pedirte la contraseña de la billetera. Escribe las palabras en papel y guárdalas sin conexión. Con esas 12 palabras, el comando import puede reconstruir tu billetera en cualquier equipo, aunque se pierdan el archivo de la billetera y la contraseña.'
+  - q: '¿Cuándo aparecen los pagos de bntpool.com en mi billetera?'
+    a: 'Un bloque del pool necesita 60 confirmaciones, unas cinco horas con el tiempo de bloque de cinco minutos de Blocknet, antes de que se paguen sus recompensas. Cuando tu saldo confirmado en el pool llega a 0,1 BNT, el pool lo envía a tu dirección. El pago aparece en el historial como una transacción normal y se puede gastar tras 10 confirmaciones, unos 50 minutos.'
+  - q: '¿Puedo usar la misma dirección en varios equipos de minería?'
+    a: 'Sí. Todos los equipos que ejecutan seine pueden minar a la misma dirección o al mismo nombre corto de Blocknet ID, y bntpool.com suma sus shares en un solo saldo. La página de estadísticas del pool muestra cada equipo conectado bajo tu dirección. La billetera y su semilla de recuperación se quedan en tu propia computadora en todo momento.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Para minar Blocknet necesitas una dirección para tus recompensas, y la billetera oficial te da una en pocos minutos. Esta guía muestra cómo crear una billetera con la billetera de línea de comandos o la de escritorio, hacer una copia de seguridad de su semilla de recuperación, encontrar la dirección que debes pegar en seine y consultar tu saldo cuando bntpool.com te pague.
+
+## ¿Qué billetera de Blocknet deberías usar para minar?
+
+<Answer>
+Usa una de las dos billeteras oficiales de Blocknet Privacy: la billetera de línea de comandos, que funciona en Windows, macOS y Linux, o la billetera de escritorio para los mismos sistemas. Las dos ejecutan un nodo completo de Blocknet en tu computadora y te dan una dirección de recepción a la que minar en bntpool.com con seine.
+</Answer>
+
+- **Billetera de línea de comandos.** El programa `blocknet` instala, inicia y actualiza un core de Blocknet, el proceso en segundo plano que ejecuta el nodo, la billetera y la red. Gestionas tu billetera desde una consola interactiva. Descárgala desde las [versiones de línea de comandos](https://github.com/blocknetprivacy/blocknet/releases/latest), que tienen compilaciones para Windows, macOS y Linux.
+- **Billetera de escritorio.** Una billetera gráfica que incluye el daemon de Blocknet. Descárgala desde las [versiones de escritorio](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Elige la que prefieras. Los pasos siguientes recorren la billetera de línea de comandos, porque cada comando está documentado, y después explican la instalación de escritorio.
+
+## Cómo crear una billetera con la billetera de línea de comandos
+
+1. **Instala e inicia un core.** Descomprime la versión y ejecuta el asistente de configuración:
+
+   ```sh
+   blocknet setup
+   ```
+
+   El asistente pregunta si quieres mantener tu nodo actualizado automáticamente, descarga el core más reciente y se ofrece a iniciarlo. En Windows el programa es `blocknet.exe`, así que ejecuta `blocknet.exe setup`. Para saltarte el asistente, ejecuta `blocknet install latest` y luego `blocknet start`.
+
+2. **Abre la consola.** Conéctate al core en ejecución:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Verás un prompt `>`. Si cierras la consola con `quit`, el core sigue funcionando, así que puedes volver a conectarte cuando quieras.
+
+3. **Crea la billetera.** Escribe `load`. La billetera muestra los archivos de billetera que encuentra y ofrece "Create a new wallet". Elige esa opción, escribe un nombre y una contraseña, y el core crea una billetera nueva con una semilla de recuperación nueva:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+La billetera es un único archivo `.wallet.dat`, y tu contraseña cifra su clave de gasto. El core recuerda la ruta de la billetera, así que el siguiente `blocknet start` la carga por ti. Blocknet también copia la billetera cargada a `~/.config/bnt/wallets/`, lo que te da una segunda copia en un lugar conocido.
+
+## ¿Cómo haces una copia de seguridad de tu semilla de recuperación?
+
+Tu semilla de recuperación es la copia de seguridad más importante. Son 12 palabras, y con ellas puedes reconstruir la billetera en cualquier computadora, aunque pierdas el archivo de la billetera u olvides la contraseña. Blocknet nunca guarda tu contraseña, así que la semilla es también la forma de recuperarte si la olvidas.
+
+Muéstrala con el comando `seed`. La billetera muestra una advertencia, te pide confirmación y tu contraseña, y luego muestra las palabras:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Escribe las 12 palabras en papel y guárdalas en un lugar seguro y sin conexión. La guía de la billetera dice que no las guardes en un archivo de texto, en una app de notas ni en la nube, porque quien tenga las palabras controla los fondos. La guía sobre las [frases semilla](/es/blog/seed-phrase-explained/) explica cómo las 12 palabras se convierten en tus claves y cómo guardarlas bien.
+
+Para restaurar la billetera más adelante, ejecuta `import`, elige `1) 12-word recovery seed`, escribe las palabras y dale a la nueva billetera un nombre y una contraseña. El core recorre entonces la cadena en busca de tus salidas.
+
+## ¿Cómo encuentras tu dirección de Blocknet?
+
+<Answer>
+En la billetera de línea de comandos, escribe address (o addr) en el prompt de la consola. La billetera muestra tu dirección de recepción, una cadena de 92 o 93 caracteres, seguida de un enlace a blocknet.id para conseguir un nombre corto. Copia la dirección completa y pégala en seine cuando te pida una dirección de pago.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Esta es la dirección que le das a seine. La primera vez que inicias [seine](/es/#download), te pide tu dirección de pago y después un pool; pega la dirección y pulsa Enter para aceptar bntpool.com. También puedes pasarla directamente:
+
+```sh
+./seine --address <your-address>
+```
+
+Cuando seine ya está minando, el recuadro de saldo del pool en su [panel](/es/blog/seine-dashboard-explained/) muestra los seis primeros y los seis últimos caracteres de la dirección a la que minas, para que compruebes que coincide con tu billetera.
+
+Si prefieres minar a algo más corto, un [nombre corto de Blocknet ID](/es/blog/blocknet-id-pay-by-name/) como `@yourname` apunta a esta dirección y funciona en seine y en bntpool.com.
+
+## Configurar la billetera de escritorio
+
+La última versión de la billetera de escritorio (v0.22.0, publicada el 15 de octubre de 2026) tiene estas descargas:
+
+| Sistema | Archivo |
+|---|---|
+| Windows x86_64 | Instalador `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Cada versión incluye un `SHA256SUMS.txt`, para que puedas comprobar tu descarga antes de instalar:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+En Linux, instala el `.deb` o ejecuta directamente el `.AppImage`. En macOS, mueve la app a Aplicaciones y ejecuta esto una vez en Terminal antes del primer inicio, como indica el README:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+En Windows, si Defender muestra un aviso para el instalador, haz clic en «Más información» y luego en «Ejecutar de todas formas».
+
+La app ejecuta en tu computadora el daemon de Blocknet que incluye y se comunica con él a través de `127.0.0.1`, sin hacer peticiones a servicios externos. Crea tu billetera en la app, apunta su semilla de recuperación y copia tu dirección de recepción en seine. La billetera de escritorio también abre los [enlaces de pago](/es/blog/blocknet-payment-links/) `blocknet://` y rellena el formulario de envío para que lo revises.
+
+## Guarda tus claves en tu propia computadora
+
+Un equipo de minería solo necesita tu dirección. seine solo necesita una dirección o un nombre corto para minar, así que el archivo de la billetera y la semilla de recuperación pueden quedarse en la computadora en la que confías. Esto importa sobre todo en servidores alquilados, rigs compartidos y equipos a los que otras personas pueden acceder.
+
+- **Ejecuta la billetera en casa y mina en cualquier sitio.** Pon la misma dirección en todos los equipos que ejecutan seine. bntpool.com suma sus shares en un solo saldo.
+- **Sigue el progreso sin claves.** Busca tu dirección en [bntpool.com](https://bntpool.com) para ver tu tasa de hash, tus shares y tu saldo desde cualquier navegador.
+- **Acceso de solo lectura.** Si quieres ver los fondos entrantes en una segunda computadora, `viewkeys` exporta claves de solo lectura. Una billetera de solo lectura muestra los fondos entrantes y no puede enviar ni firmar.
+- **Bloquéala cuando te ausentes.** `lock` bloquea los gastos hasta que ejecutes `unlock` con tu contraseña.
+
+## ¿Cómo aparecen los pagos de minería en tu billetera?
+
+bntpool.com paga las recompensas cuando su bloque ha madurado. Un bloque del pool necesita 60 confirmaciones, unas cinco horas con el tiempo de bloque de cinco minutos de Blocknet. Cuando tu saldo confirmado llega al mínimo de 0,1 BNT, el pool lo envía a tu dirección como una transacción normal de Blocknet.
+
+En la billetera, consulta `balance` (o `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Un pago nuevo aparece primero en `confirming`. Las transacciones normales se pueden gastar tras 10 confirmaciones, unos 50 minutos, y entonces pasan a `spendable`. El comando `history` muestra las transacciones entrantes de la más antigua a la más reciente, con el bloque, el importe y el tipo de cada una: los pagos del pool aparecen como `regular`, y los bloques que encuentras tú mismo en modo solitario aparecen como `coinbase`, que necesitan 60 confirmaciones antes de que puedas gastarlos.
+
+Tu billetera muestra un pago cuando su nodo se ha puesto al día con la cadena. `status` muestra `Syncing: false` cuando lo ha hecho, y `sync` vuelve a recorrer los bloques descargados en busca de tus salidas.
+
+¿Eres nuevo en la minería? La [guía para minar Blocknet](/es/blog/how-to-mine-blocknet/) explica cómo descargar seine, elegir los hilos y qué esperar en bntpool.com.
+
+<CTA target="pool" title="Mina a tu nueva dirección" text="Pega tu dirección de Blocknet en seine, acepta bntpool.com y mira cómo llegan los pagos a tu billetera cuando tu saldo alcance 0,1 BNT." />

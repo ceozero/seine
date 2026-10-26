@@ -19,7 +19,7 @@ const LOGO: &[&str] = &[
 static COLOR_ENABLED: OnceLock<bool> = OnceLock::new();
 static LOG_START: OnceLock<Instant> = OnceLock::new();
 static OUTPUT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-static TUI_STATE: OnceLock<TuiState> = OnceLock::new();
+static TUI_STATE: Mutex<Option<TuiState>> = Mutex::new(None);
 static LOG_SINK: OnceLock<Mutex<Option<LogSink>>> = OnceLock::new();
 
 type LogSink = Arc<dyn Fn(UiLogEvent) + Send + Sync + 'static>;
@@ -104,7 +104,7 @@ pub(super) fn startup_banner(lines: &[(&str, String)]) {
     println!();
 }
 
-pub(super) fn info(tag: &str, message: impl AsRef<str>) {
+pub(crate) fn info(tag: &str, message: impl AsRef<str>) {
     log(Level::Info, tag, message.as_ref());
 }
 
@@ -112,11 +112,23 @@ pub(super) fn success(tag: &str, message: impl AsRef<str>) {
     log(Level::Success, tag, message.as_ref());
 }
 
-pub(super) fn warn(tag: &str, message: impl AsRef<str>) {
+#[track_caller]
+pub(crate) fn warn(tag: &str, message: impl AsRef<str>) {
+    crate::diagnostics::record(
+        seine_telemetry::DiagnosticCode::Warning,
+        crate::diagnostics::classify(message.as_ref()),
+        None,
+    );
     log(Level::Warn, tag, message.as_ref());
 }
 
+#[track_caller]
 pub(super) fn error(tag: &str, message: impl AsRef<str>) {
+    crate::diagnostics::record(
+        seine_telemetry::DiagnosticCode::Error,
+        crate::diagnostics::classify(message.as_ref()),
+        None,
+    );
     log(Level::Error, tag, message.as_ref());
 }
 
@@ -138,8 +150,31 @@ pub(super) fn notify_dev_fee_mode(is_dev: bool) {
     });
 }
 
+/// Logs a newer-release notice and flags it in the live dashboard header.
+/// Returns false when no dashboard was live to receive it.
+pub(crate) fn announce_update(latest: &str, message: &str) -> bool {
+    let tui_state = lock(&TUI_STATE).clone();
+    if let Some(state) = &tui_state {
+        if let Ok(mut state) = state.lock() {
+            state.update_available = Some(latest.to_string());
+        }
+    }
+    info("UPDATE", message);
+    tui_state.is_some()
+}
+
 pub(super) fn set_tui_state(state: TuiState) {
-    let _ = TUI_STATE.set(state);
+    *lock(&TUI_STATE) = Some(state);
+}
+
+pub(super) fn clear_tui_state(state: &TuiState) {
+    let mut slot = lock(&TUI_STATE);
+    if slot
+        .as_ref()
+        .is_some_and(|active| Arc::ptr_eq(active, state))
+    {
+        *slot = None;
+    }
 }
 
 pub(crate) fn set_log_sink(sink: Option<Arc<dyn Fn(UiLogEvent) + Send + Sync + 'static>>) {
@@ -166,7 +201,8 @@ fn log(level: Level, tag: &str, message: &str) {
         message: message.to_string(),
     });
 
-    if let Some(tui_state) = TUI_STATE.get() {
+    let tui_state = lock(&TUI_STATE).clone();
+    if let Some(tui_state) = tui_state {
         if let Ok(mut state) = tui_state.lock() {
             if suppress_in_tui(tag, message)
                 || suppress_dev_fee_related_in_tui(tag, message, state.dev_fee_active)
@@ -174,7 +210,7 @@ fn log(level: Level, tag: &str, message: &str) {
                 return;
             }
             let entry = LogEntry {
-                elapsed_secs,
+                elapsed_secs: state.started_at.elapsed().as_secs_f64(),
                 level: level_to_tui(level),
                 tag: tag.to_string(),
                 message: message.to_string(),

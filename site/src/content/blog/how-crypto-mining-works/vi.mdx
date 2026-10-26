@@ -1,0 +1,117 @@
+---
+title: Đào coin hoạt động như thế nào
+description: Đào coin hoạt động như thế nào, giải thích bằng lời lẽ đơn giản, từ khối, hàm băm và độ khó đến phần thưởng khối và pool đào, lấy khối năm phút của Blocknet làm ví dụ.
+tags: [Đào coin, Proof of Work, Blocknet, bntpool]
+faq:
+  - q: 'Thợ đào coin thực sự tính toán cái gì?'
+    a: 'Thợ đào băm tiêu đề khối hết lần này đến lần khác, mỗi lần thay đổi một con số gọi là nonce, cho đến khi kết quả bằng hoặc nhỏ hơn mục tiêu của mạng lưới. Trên Blocknet, mỗi lần thử là một lần băm Argon2id trên 2 GiB bộ nhớ. Không ai đoán trước được nonce nào thắng, nên cách duy nhất để tìm ra khối là tiếp tục thử.'
+  - q: 'Đào một khối mất bao lâu?'
+    a: 'Mỗi mạng lưới tự đặt mục tiêu riêng. Bitcoin nhắm tới một khối mỗi mười phút, còn Blocknet nhắm tới một khối mỗi năm phút, tức 288 khối mỗi ngày. Độ khó điều chỉnh để giữ nhịp độ đó khi thợ đào tham gia hoặc rời đi, nên thời gian khối luôn gần với mục tiêu bất kể tổng hashrate là bao nhiêu.'
+  - q: 'Share trong pool đào là gì?'
+    a: 'Share là một lần băm đạt một mục tiêu dễ hơn do pool đặt cho kết nối của bạn. Share chứng minh bạn đã đóng góp bao nhiêu công sức mà không cần chờ tìm được nguyên một khối. Trên bntpool.com, pool điều chỉnh độ khó share của từng kết nối để nhắm tới khoảng mười share mỗi năm phút, và phần thưởng khối được chia theo share.'
+  - q: 'Có thể đào tiền mã hóa trên máy tính thông thường không?'
+    a: 'Có, với những coin có Proof of Work được thiết kế cho phần cứng thông thường. Blocknet dùng Argon2id memory-hard, nên máy để bàn, laptop, Mac hay máy chủ có đủ RAM đều đào được. Mỗi luồng đào cần khoảng 2 GB bộ nhớ, và seine tự tính ra số luồng phù hợp cho máy của bạn.'
+sourceHash: d05a84885aae
+translation: draft
+---
+
+Hướng dẫn này giải thích thợ đào coin làm gì và vì sao: giao dịch trở thành khối như thế nào, hàm băm và nonce là gì, độ khó giữ cho khối đúng lịch ra sao, phần thưởng đến từ đâu và vì sao phần lớn mọi người đào theo pool. Blocknet là ví dụ xuyên suốt, nên mọi con số đều là số liệu thật bạn có thể kiểm tra.
+
+## Đào coin là gì?
+
+<Answer>
+Đào coin là cách một blockchain Proof of Work thêm khối mới. Thợ đào gom các giao dịch đang chờ vào một khối, rồi chạy đua tìm một giá trị băm của khối đó đạt mục tiêu độ khó. Thợ đào đầu tiên tìm được sẽ phát tán khối, mọi node kiểm tra nó, và người thắng nhận phần thưởng khối mới được tạo ra.
+</Answer>
+
+Đào coin làm hai việc cùng lúc. Nó sắp xếp thứ tự giao dịch, để mọi người thống nhất khoản thanh toán nào đến trước, và nó phát hành coin mới theo một lịch trình cố định, để không cần tin tưởng ai trong việc tạo ra coin. Bitcoin giới thiệu ý tưởng này năm 2008, và ngày nay nhiều coin sử dụng nó, trong đó có Blocknet. Một số chuỗi, như Ethereum từ năm 2022, dùng Proof of Stake thay thế; bài [Proof of Work và Proof of Stake](/vi/blog/proof-of-work-vs-proof-of-stake/) so sánh hai cơ chế này.
+
+## Một khối gồm những gì?
+
+Một khối là một loạt giao dịch cộng với một tiêu đề ngắn mô tả nó. Tiêu đề khối của Blocknet có bảy trường:
+
+| Trường | Nội dung |
+|---|---|
+| Version | Phiên bản giao thức |
+| Height | Vị trí của khối trong chuỗi |
+| Previous hash | Mã định danh của khối trước đó |
+| Merkle root | Dấu vân tay của mọi giao dịch trong khối |
+| Timestamp | Thời điểm khối được tạo |
+| Difficulty | Mức độ khó để tìm ra khối này |
+| Nonce | Con số thợ đào thay đổi ở mỗi lần thử |
+
+Trường previous hash là thứ tạo nên chuỗi. Mỗi khối trỏ tới khối trước nó, nên thay đổi bất kỳ giao dịch cũ nào cũng sẽ thay đổi dấu vân tay của khối đó và phá vỡ mọi liên kết phía sau. Giao dịch đầu tiên trong mỗi khối là coinbase, giao dịch trả phần thưởng cho thợ đào đã tìm ra khối.
+
+## Thợ đào tìm ra khối như thế nào?
+
+<Answer>
+Thợ đào băm tiêu đề khối, kiểm tra xem kết quả có bằng hoặc nhỏ hơn mục tiêu của mạng lưới không, và nếu không, đổi nonce rồi thử lại. Một hàm băm tốt khiến đầu ra không thể đoán trước, nên cách duy nhất để thắng là thử thật nhiều lần. Hashrate của bạn là số lần thử bạn thực hiện mỗi giây.
+</Answer>
+
+Hàm băm biến bất kỳ đầu vào nào thành một con số có độ dài cố định trông như ngẫu nhiên. Thay đổi một bit của đầu vào, đầu ra sẽ thay đổi hoàn toàn. Hãy coi đầu ra đó là một con số khổng lồ: nếu nó bằng hoặc nhỏ hơn mục tiêu, khối hợp lệ. Mục tiêu càng thấp nghĩa là càng ít giá trị băm thắng, nên trung bình cần nhiều lần thử hơn.
+
+Trên Blocknet, mỗi lần thử là một lần băm Argon2id. Nonce 8 byte là mật khẩu và phần còn lại của tiêu đề là salt, và mỗi lần băm xử lý 2 GiB bộ nhớ trước khi cho ra kết quả 32 byte. Khi thợ đào tìm được một giá trị băm bằng hoặc nhỏ hơn mục tiêu, nó gửi khối lên mạng lưới. Mọi node lặp lại đúng lần băm đó để xác nhận, chỉ tốn một phần nhỏ công sức đã bỏ ra để tìm nó.
+
+[Bài giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) trình bày từng bước của lần băm đó và vì sao nó cần nhiều bộ nhớ đến vậy.
+
+## Độ khó đào là gì?
+
+Độ khó là con số đặt ra mục tiêu. Trên Blocknet, mục tiêu bằng (2^256 − 1) chia cho độ khó, nghĩa là độ khó xấp xỉ bằng số lần băm mà toàn mạng lưới cần, tính trung bình, để tìm được một khối.
+
+Điều đó cho bạn một cách nhanh để đọc tình trạng mạng lưới. Blocknet nhắm tới một khối mỗi 300 giây, nên hashrate của mạng lưới vào khoảng độ khó ÷ 300. Ví dụ, độ khó 6.000.000 có nghĩa là mạng lưới đang tạo ra khoảng 20.000 lần băm mỗi giây.
+
+Mạng lưới điều chỉnh độ khó để giữ khối đúng lịch khi thợ đào đến và đi:
+
+- **Bitcoin** nhắm tới khối mười phút và tính lại độ khó mỗi 2.016 khối, khoảng hai tuần một lần.
+- **Blocknet** nhắm tới khối năm phút và tính lại độ khó sau mỗi khối bằng LWMA, trung bình động có trọng số tuyến tính. Nó xét 60 khối gần nhất và đặt trọng số lớn nhất cho những khối mới nhất, nên bám theo thay đổi của hashrate rất nhanh: toàn bộ cửa sổ chỉ bao quát khoảng năm giờ khối.
+
+LWMA cũng giới hạn mức một khối bất thường có thể làm thay đổi kết quả: thời gian giải của mỗi khối được tính tối thiểu là 1 giây và tối đa là 1.800 giây, gấp sáu lần mục tiêu. Nếu khối đến nhanh hơn năm phút một khối, độ khó tăng lên; nếu đến chậm hơn, độ khó giảm xuống.
+
+## Thợ đào được trả tiền như thế nào?
+
+Mỗi khối tạo ra coin mới trong giao dịch coinbase của nó. Trên Blocknet, coinbase có đúng một output, trị giá đúng bằng phần thưởng khối, trả về địa chỉ mà thợ đào đã chọn. Khối genesis không chứa giao dịch nào, nên mọi đồng coin đang lưu hành đều được đào ra.
+
+Phần thưởng theo một lịch trình đã công bố. Phần thưởng của Blocknet bắt đầu ở 723,25 BNT mỗi khối và giảm dần đều, hạ bậc mỗi tháng 30 ngày gồm 8.640 khối. Lượng phát hành đạt khoảng 100 triệu BNT sau bốn năm, và từ đó trở đi mỗi khối trả một phần thưởng đuôi vĩnh viễn 2 BNT, nên thợ đào luôn có thứ để đào.
+
+Coin được đào phải chờ 60 khối, khoảng năm giờ, trước khi chi tiêu được. Khoảng chờ đó cho phép mọi sự phân tách ngắn ngủi trong chuỗi ổn định lại trước khi phần thưởng mới có thể được chi tiêu.
+
+## Vì sao phần lớn thợ đào tham gia pool?
+
+Một pool gộp hashrate của nhiều thợ đào để cả nhóm tìm được khối thường xuyên, rồi chia mỗi phần thưởng theo công sức mỗi thành viên đã đóng góp. Đào solo, một thợ đào nhỏ có thể phải chờ nhiều ngày hoặc nhiều tuần để có nguyên một khối; trong pool, cùng hashrate đó mang lại một dòng thanh toán nhỏ hơn nhưng đều đặn.
+
+Phép tính cho thấy lý do. Blocknet tạo ra 288 khối mỗi ngày, nên số khối solo dự kiến mỗi ngày của bạn là 288 × (hashrate của bạn ÷ hashrate của mạng lưới). Nếu máy của bạn chiếm một phần nghìn mạng lưới, trung bình bạn tìm được khoảng 0,29 khối mỗi ngày, tức một khối mỗi ba ngày rưỡi, dù khoảng cách thực tế thay đổi theo từng khối.
+
+Pool đo công sức của bạn bằng **share**. Share là một lần băm đạt một mục tiêu dễ hơn mà pool đặt cho kết nối của bạn. Mọi share đều được tính vào phần thưởng của bạn, và một share đồng thời đạt mục tiêu đầy đủ của mạng lưới là một khối thật, được pool gửi lên blockchain. Trên bntpool.com:
+
+- **Độ khó share được điều chỉnh theo từng kết nối**, nhắm tới khoảng mười share mỗi năm phút, nên cả máy nhanh lẫn máy chậm đều báo cáo công việc đều đặn.
+- **Phần thưởng được chia theo PPLNS** với cửa sổ sáu giờ: phần thưởng của mỗi khối thuộc về các share đã gửi trong sáu giờ trước khi khối được tìm thấy.
+- **Thanh toán bắt đầu từ 0,1 BNT** khi khối đã sâu 60 khối.
+
+Nếu bạn chạy node của riêng mình, bạn cũng có thể đào solo và giữ trọn mọi khối tìm được. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) trình bày cả hai cách.
+
+## Điều gì quyết định tốc độ đào của bạn?
+
+Hàm băm quyết định phần cứng nào làm tốt. SHA-256 của Bitcoin gần như không cần bộ nhớ, nên các chip chuyên dụng gọi là ASIC đảm nhận phần lớn việc đào Bitcoin ngày nay. Blocknet chọn Argon2id, một hàm memory-hard được thiết kế để chống ASIC: mỗi lần băm lấp đầy 2 GiB RAM, nên dung lượng bộ nhớ và băng thông bộ nhớ quyết định tốc độ của bạn.
+
+Điều đó thay đổi phép tính đối với một máy tính thông thường:
+
+- **RAM quyết định số luồng.** Mỗi luồng đào cần một vùng nhớ 2 GiB riêng, nên một máy 16 GB chạy được khoảng sáu hoặc bảy luồng sau khi chừa chỗ cho hệ thống.
+- **Băng thông bộ nhớ quyết định tổng tốc độ.** Mỗi lần băm ghi khoảng 2 GiB và đọc khoảng 2 GiB, nên máy chuyển dữ liệu bộ nhớ nhanh hơn sẽ hoàn thành nhiều lần băm hơn mỗi giây.
+- **Cả CPU và GPU đều đào được.** Trên Windows và Linux, seine đào trên CPU và mọi card NVIDIA cùng lúc, và hashrate được cộng dồn.
+
+Kết quả tốt nhất seine đã đo được là 49,4 H/s trên một máy chủ AMD EPYC Zen 5 (EPYC 9R45, 32 luồng), và một chiếc MacBook Pro Apple M4 Max đạt 30,9 H/s. [Hướng dẫn phần cứng](/vi/blog/blocknet-mining-hardware-hashrate/) có kết quả cho mọi thế hệ đã thử nghiệm, và bài [đào coin bằng CPU năm 2026](/vi/blog/cpu-mining-2026/) giải thích vì sao coin memory-hard phù hợp với bộ xử lý thông thường.
+
+## Ai giữ cho chuỗi trung thực?
+
+Mọi node kiểm tra mọi khối: giá trị băm đạt mục tiêu, các giao dịch hợp lệ và phần thưởng chính xác tuyệt đối. Khối nào không vượt qua bất kỳ phép kiểm tra nào sẽ bị từ chối, bất kể đã tốn bao nhiêu công sức.
+
+Khi hai thợ đào tìm ra khối gần như cùng lúc, chuỗi tạm thời bị phân tách. Các node Blocknet đi theo chuỗi có tổng công sức lớn nhất, tức tổng độ khó của mọi khối, nên sự phân tách được giải quyết ngay khi khối tiếp theo xuất hiện ở một bên. Đó là lý do ví đếm số xác nhận: trên Blocknet, 10 xác nhận (khoảng 50 phút) được coi là an toàn, và không node nào tổ chức lại chuỗi sâu quá 100 khối.
+
+## Thử trên máy tính của riêng bạn
+
+Đào Blocknet chỉ cần ba bước: chuẩn bị địa chỉ, tải [seine](/vi/#download), chạy nó và chấp nhận pool mặc định là bntpool.com. seine tự chọn số luồng, kernel CPU và cách bố trí bộ nhớ trong khi đào, nên bạn có thể thấy những share đầu tiên đến chỉ trong vài phút.
+
+<Note>
+Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến nâng cấp mạng lưới mang tên Faraday vào khoảng 2027-02-16, và bản nâng cấp này dự kiến mang đến một Proof of Work nhẹ hơn. Các chi tiết Proof of Work ở trên mô tả mạng lưới trước Faraday. seine kiểm tra bản phát hành mới khi khởi động và mỗi 12 giờ.
+</Note>
+
+<CTA target="seine" title="Bắt đầu đào Blocknet" text="Tải seine cho Windows, macOS hoặc Linux, dán địa chỉ của bạn và bắt đầu gửi share tới bntpool.com chỉ trong vài phút." />

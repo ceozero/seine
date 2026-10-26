@@ -1,0 +1,121 @@
+---
+title: 'Demander un paiement Blocknet avec un lien'
+description: 'Créez un lien de paiement blocknet:// ou bntpay.com avec un montant, un mémo et votre $name : on vous paie en BNT en collant une seule ligne dans son portefeuille.'
+tags: [Paiements, Liens de paiement, Portefeuille, Blocknet ID]
+faq:
+  - q: 'Un lien de paiement Blocknet doit-il contenir un montant ?'
+    a: 'Oui. Chaque lien de paiement porte un champ amount, exprimé en BNT avec jusqu''à huit décimales, comme amount=25 ou amount=0.5. Le mémo est facultatif. Si un lien collé n''a pas de montant, le portefeuille en ligne de commande répond payment link missing amount et n''envoie rien : celui qui paie n''a jamais à deviner ce que vous avez demandé.'
+  - q: 'Puis-je mettre mon nom court Blocknet ID dans un lien de paiement ?'
+    a: 'Oui. Écrivez le nom avec le préfixe dollar, comme dans bntpay.com/$yourname?amount=10 ou blocknet://$yourname?amount=10. Le portefeuille recherche le nom sur blocknet.id, vérifie l''enregistrement signé et montre à celui qui paie l''adresse complète marquée comme vérifiée avant qu''il confirme. Un lien avec un nom paie toujours l''adresse vers laquelle pointe votre nom.'
+  - q: 'Quelle est la différence entre un lien blocknet:// et un lien bntpay.com ?'
+    a: 'Ils portent les trois mêmes champs, destinataire, montant et mémo, et le portefeuille en ligne de commande les lit de la même manière. La forme blocknet:// est le schéma d''URI de Blocknet. La forme bntpay.com est une adresse web ordinaire, que les messageries, les clients e-mail et les profils sociaux transforment en lien cliquable.'
+  - q: 'Coller un lien de paiement envoie-t-il les BNT immédiatement ?'
+    a: 'Non. Coller un lien dans le portefeuille prépare le paiement puis s''arrête sur un récapitulatif indiquant le montant, le destinataire, l''adresse complète, les frais et le mémo, suivi d''une demande de confirmation par oui ou non. Les BNT ne partent que lorsque celui qui paie tape y. Toute autre réponse annule le paiement et libère les coins qu''il avait réservés.'
+sourceHash: 193a7a6a455c
+translation: draft
+---
+
+Un lien de paiement Blocknet réunit sur une seule ligne tout ce dont celui qui paie a besoin : qui payer, combien de BNT et un mémo facultatif, comme un numéro de facture. Envoyez-le dans une conversation, placez-le sur une facture ou dans votre profil, et la personne qui paie le colle dans son portefeuille puis confirme. Ce guide présente les deux formats de lien, la façon d'en écrire un avec votre adresse ou votre `$name`, et ce que fait exactement le portefeuille quand quelqu'un le colle.
+
+## Qu'est-ce qu'un lien de paiement Blocknet ?
+
+<Answer>
+Un lien de paiement Blocknet est une ligne unique qui contient un destinataire, un montant et un mémo facultatif, écrite sous la forme blocknet://destinataire?amount=25&memo=invoice-42 ou bntpay.com/destinataire?amount=25&memo=invoice-42. Le destinataire est une adresse de portefeuille ou un nom Blocknet ID. Collé dans le portefeuille en ligne de commande, il devient un envoi prêt à confirmer.
+</Answer>
+
+Le portefeuille en ligne de commande de Blocknet accepte deux formes :
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Les deux formes portent les mêmes champs :
+
+| Champ | Emplacement | Obligatoire | Contenu |
+|---|---|---|---|
+| Destinataire | juste après `blocknet://` ou `bntpay.com/` | Oui | Votre adresse de portefeuille, ou votre nom court sous la forme `$name` |
+| `amount` | chaîne de requête | Oui | Les BNT demandés, jusqu'à huit décimales |
+| `memo` | chaîne de requête | Non | Le texte du mémo de paiement, jusqu'à 124 octets |
+
+Le portefeuille est souple sur la façon dont le lien est saisi. Il reconnaît `blocknet://` et la forme plus courte `blocknet:`, et pour la forme web il accepte `bntpay.com/` seul ou précédé de `www.`, `http://` ou `https://`. Le préfixe n'est pas sensible à la casse, et l'ordre de `amount` et `memo` n'a pas d'importance.
+
+La forme `bntpay.com` est une adresse web normale : la plupart des messageries, des clients e-mail et des profils sociaux la transforment en lien sur lequel on peut appuyer. La forme `blocknet://` est l'URI Blocknet, pratique partout où un lien va directement dans un portefeuille.
+
+## Comment écrire un lien de paiement ?
+
+Vous pouvez écrire un lien à la main en quatre étapes.
+
+1. **Choisissez le destinataire.** Lancez `address` dans le portefeuille en ligne de commande pour afficher votre adresse, ou utilisez votre [nom court Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) avec le préfixe `$`. Si vous n'avez pas encore de portefeuille, le [guide du portefeuille Blocknet](/fr/blog/blocknet-wallet-for-mining/) montre comment en créer un et trouver votre adresse.
+2. **Fixez le montant.** Écrivez-le en BNT. Les nombres entiers comme les décimaux fonctionnent, jusqu'à huit décimales, car un BNT vaut 100 000 000 unités atomiques.
+3. **Ajoutez un mémo si vous le souhaitez.** Un numéro de commande, un identifiant de facture ou un petit merci vous aide à identifier le paiement à son arrivée. Limitez-le à 124 octets.
+4. **Assemblez les parties.** Placez le destinataire après le préfixe, puis `?amount=`, puis `&memo=` si vous en avez un.
+
+Une facture de 25 BNT adressée à un nom, sous les deux formes :
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+La même demande vers une adresse complète :
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Encoder les caractères du mémo
+
+Un mémo qui contient des espaces ou de la ponctuation doit écrire quelques caractères en encodage URL, car le lien lui-même les utilise. Le portefeuille les décode avant de construire le paiement.
+
+| Caractère | À écrire | Pourquoi |
+|---|---|---|
+| espace | `%20` | Garde le lien d'un seul tenant quand il est partagé |
+| `&` | `%26` | `&` commence le champ suivant |
+| `#` | `%23` | `#` termine la chaîne de requête |
+| `+` | `%2B` | Un `+` seul est lu comme une espace |
+
+Par exemple, `memo=Order%20%231042` arrive sous la forme `Order #1042`. Les lettres, les chiffres, les traits d'union, les tirets bas et les points n'ont pas besoin d'être encodés : c'est pourquoi des mémos comme `invoice-42` s'utilisent tels quels.
+
+## Un lien doit-il utiliser votre adresse ou votre $name ?
+
+Les deux fonctionnent, et chacun convient à un usage différent.
+
+Un **nom** garde le lien assez court pour être lu, dit à voix haute ou placé dans une bio. Écrivez-le avec le préfixe `$` dans les liens : `$yourname` et `@yourname` sont le même nom, et `$` est la forme que les deux types de lien transmettent tels quels au portefeuille. Quand quelqu'un colle un lien contenant un nom, le portefeuille résout le nom via blocknet.id, vérifie la signature Ed25519 de l'enregistrement et affiche l'adresse complète marquée comme vérifiée. Comme le nom est résolu au moment du paiement, un lien durable, comme un lien de pourboire dans votre profil, continue de fonctionner si vous faites plus tard pointer votre nom vers un nouveau portefeuille.
+
+Une **adresse complète** fixe la destination dans le lien lui-même. Elle convient à une facture ponctuelle pour laquelle vous voulez que le lien désigne un portefeuille précis.
+
+Dans les deux cas, le paiement sur la chaîne est une transaction Blocknet ordinaire vers une [adresse furtive à usage unique](/fr/blog/blocknet-privacy-features/), avec la même confidentialité que n'importe quel autre paiement.
+
+## Que se passe-t-il quand quelqu'un colle un lien de paiement ?
+
+<Answer>
+Le portefeuille lit le destinataire, le montant et le mémo dans le lien et lance avec eux un envoi normal. Il résout le nom s'il y en a un, construit la transaction, puis affiche le montant, le destinataire, l'adresse complète, les frais et le mémo, et demande Confirm [y/N]. Les BNT ne partent que lorsque celui qui paie tape y.
+</Answer>
+
+Voici le déroulement dans le portefeuille en ligne de commande, étape par étape.
+
+1. **La personne qui paie colle le lien à l'invite du portefeuille.** Le portefeuille reconnaît le préfixe `blocknet:` ou `bntpay.com/` et traite la ligne comme un envoi. Un lien vers `$yourname` pour 25 BNT avec le mémo `invoice-42` devient la même demande que si l'on tapait `send $yourname 25 invoice-42`.
+2. **Le nom est résolu.** Pour un lien contenant un nom, le portefeuille affiche `Resolved $yourname -> <address>` avec une marque de vérification.
+3. **Le portefeuille vérifie le solde et construit le paiement.** Il sélectionne les coins, construit la transaction confidentielle et calcule les frais.
+4. **La personne qui paie voit un récapitulatif.** Il indique le montant et le destinataire, les frais, l'adresse complète quand un nom a été utilisé, l'éventuelle monnaie rendue et le mémo, suivis de `Confirm [y/N]`.
+5. **La personne qui paie confirme.** Taper `y` soumet la transaction et affiche son identifiant avec un lien vers l'explorateur sur `explorer.blocknetcrypto.com`. Toute autre réponse affiche `Cancelled` et libère les coins que le portefeuille avait mis de côté.
+
+Le récapitulatif permet à la personne qui paie de vérifier la demande : rien ne quitte son portefeuille avant qu'elle l'ait vu. Chaque lien doit contenir un montant : sans montant, le portefeuille répond `payment link missing amount` et s'arrête avant de construire quoi que ce soit.
+
+Le mémo que vous mettez dans le lien voyage avec le paiement sous forme de [mémo chiffré](/fr/blog/blocknet-encrypted-memos/) Blocknet. Quand les BNT arrivent, la commande `history` de votre portefeuille l'affiche sous le paiement entrant, pour que vous puissiez le rapprocher de la facture ou de la commande.
+
+### Testez votre lien avant de le partager
+
+Vous pouvez voir exactement ce que verra la personne qui paie en collant votre propre lien dans votre portefeuille. Si votre portefeuille contient au moins le montant demandé, il affiche le récapitulatif complet. Vérifiez le destinataire, le montant et le mémo, puis répondez `n` : rien n'est envoyé.
+
+## Là où les liens de paiement sont utiles
+
+- **Factures.** Placez un lien avec le numéro de facture en mémo au bas de la facture ou dans l'e-mail. La personne qui paie colle une ligne, et le mémo vous indique quelle facture a été réglée.
+- **Boutiques et pages de commande.** Générez un lien par commande avec le numéro de commande en mémo, pour que chaque paiement arrive déjà étiqueté.
+- **Pourboires et dons.** Un lien vers `$yourname` avec un montant suggéré tient dans un profil, un README ou un habillage de stream.
+- **Partage d'une addition.** Déposez dans une conversation de groupe un lien avec la part de chacun et une note comme `dinner%20friday`.
+
+Si vous gagnez aussi des BNT en minant, vous pouvez utiliser le même nom. seine et bntpool.com acceptent tous deux un nom court Blocknet ID comme adresse de paiement, si bien que les paiements de minage et les paiements par lien arrivent dans le même portefeuille. Le [guide pour miner Blocknet](/fr/blog/how-to-mine-blocknet/) explique la configuration.
+
+<CTA target="pool" title="Minez vers le nom de vos liens" text="bntpool.com accepte votre nom court Blocknet ID comme identifiant de paiement : les paiements de minage arrivent dans le portefeuille vers lequel pointent vos liens de paiement." />

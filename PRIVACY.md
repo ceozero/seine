@@ -1,0 +1,135 @@
+# Privacy policy
+
+Last updated: October 25, 2026.
+
+This policy describes hardware, performance and reliability telemetry in the Seine miner.
+Telemetry helps the project understand which hardware is in use, identify
+performance differences, diagnose failures and prioritize fixes and optimization work.
+
+## Collection and controls
+
+Hardware telemetry is enabled by default in releases configured with a telemetry
+collector, including unattended mining. It runs in the background without a
+startup prompt. Builds with no collector configured do not send telemetry.
+Benchmark mode does not send reports.
+
+To disable it, run Seine with `--telemetry off`, alongside your normal mining
+arguments. This preference is saved in `seine.telemetry.json` in your Seine data
+directory and applies to later launches. You can also set `enabled` to `false`
+in that file. Running instances check the preference before each upload; a
+request already in progress may finish. Use `--telemetry on` to enable it again.
+Disabling future collection does not immediately delete earlier reports, which
+expire under the retention policy below.
+
+## Information reported
+
+Reports contain the CPU model, vendor and architecture identifiers, supported
+CPU kernels, core counts, memory capacity, operating system and version, and
+whether the miner runs natively or under WSL. Report-time resource snapshots include
+the allowed CPU count, OS-estimated available parallelism, effective memory limit
+and available memory, including container limits where supported. They include
+the miner version, build target and features, and whether it is a debug build.
+
+For active mining backends, reports include GPU model and memory where available,
+the number of enabled workers or lanes, CPU kernel, requested page and affinity
+policies, allocator-observed memory backing by page type, available GPU tuning
+settings, hash counts and measurement durations. Reports
+identify measurement windows in which settings changed or telemetry samples
+were missed so those windows can be excluded from performance comparisons.
+
+Reliability summaries include bounded counts of warnings, errors, backend failures
+and quarantines, failed mining runs and Rust panics. Each summary includes a
+repository-relative source file and line, a fixed failure category, backend type
+where known, occurrence counts and elapsed times within the mining run. Categories
+are hints derived locally; free-form error messages, panic contents and stack
+traces are never uploaded. Reports include the source revision and fingerprint,
+pool-or-daemon mode, requested backend types, requested CPU threads, page and
+affinity policies and whether CPU thread tuning is enabled. They also identify
+truncated summaries and an unclean previous run, which may reflect a forced stop
+or power loss rather than a crash. Where available, structured failure details
+include a fixed reason and operation, a numeric operating-system error code and
+the requested allocation size. Reports also include the current run phase and,
+for an interrupted previous run, its last observed phase, elapsed runtime and
+build revision. These checkpoints do not identify the termination cause.
+
+Seine creates a random installation ID in its data directory to distinguish
+installations and avoid counting frequent reports as additional users. This ID
+is not derived from a wallet, CPU, GPU or other hardware identifier. Each report
+also has a random ID to prevent duplicate storage. The collector records when
+reports arrive. Installation IDs make reports pseudonymous; they do not make
+them anonymous.
+
+Telemetry does not include wallet addresses or balances, private keys, API
+tokens, passwords, worker names, pool addresses, hostnames, MAC addresses,
+hardware serial numbers, command lines or raw logs.
+
+## Transmission, access and retention
+
+Regular reports are attempted after five minutes of a mining run, followed by
+hourly reports. A mining run that ends with diagnostics can attempt a final report,
+including failures before the first regular report. Reports use HTTPS, except
+when explicitly configured for a local loopback test server. Collection failures
+do not stop mining.
+
+Seine keeps at most one pending diagnostic report (up to 32 KiB) and a small
+run-state marker in its data directory. A failed diagnostic upload can be retried
+on a later reporting cycle or launch, with the same report ID to avoid duplicate
+storage. New diagnostics may replace older pending diagnostics. Reports older
+than 24 hours are discarded when next checked, rather than uploaded. The local
+upload cooldown limits repeated attempts across launches. Ordinary performance
+reports without diagnostics are not queued. Opting out suppresses pending uploads
+and removes pending state when the miner can acquire it; an active reporting
+worker also checks opt-out before sending. A forced termination may leave the
+marker for the next launch. No crash dump is collected.
+
+The receiving server necessarily sees the connection's IP address. IP addresses
+are not part of report payloads or stored telemetry records. The supplied
+deployment configuration disables request and proxy error logging that could
+retain IP addresses. Operators who add a CDN or another proxy must configure
+its logging consistently with this policy.
+
+Raw reports are retained for 30 days and removed by an hourly cleanup task.
+Analysis uses the retained reports to summarize hardware adoption and performance.
+The collector exposes no public endpoint for individual reports. Access to the
+database is limited to its operators; aggregate hardware and performance results
+may be shared to explain optimization work. Reports are used for miner development,
+not advertising or wallet profiling. Backups must follow the same retention limit.
+
+The collector URL is recorded in your telemetry settings. Operators of a custom
+collector control its hosting and data handling and should provide their own
+policy if they change these practices.
+
+## Scope and questions
+
+This telemetry is separate from the connections needed to mine with a pool or
+daemon, wallet operations and the miner's update checks. This policy does not
+describe those services' data handling or website hosting logs.
+
+Questions about Seine's telemetry can be directed to the
+[project maintainers](https://github.com/zpalmtree/seine).
+
+## Website analytics
+
+The blogs on **seineminer.com** and **bntpool.com** count article page loads and
+clicks toward Seine downloads or pool setup. These are aggregate activity counts,
+not unique visitors, completed downloads or confirmed miners.
+
+Each request contains only the article slug, its language, and one action:
+`view`, `download` or `pool_setup`. The collector identifies the source website
+from the browser's Origin header. It does not store individual events, IP
+addresses, wallet addresses, names, cookies, browser identifiers, full page URLs,
+query strings or referrers in these counters. The script uses no browser storage
+and sends requests without credentials or a referrer. Like other web requests,
+the connection is visible to our hosting infrastructure and its normal access logs.
+
+We keep daily aggregate counters for 30 days, with no person-level history or
+cross-site visitor matching. Routine database backups can retain an older snapshot
+for up to seven additional days. Reports require the pool operator's API key.
+Counts are best effort: reloads and bots can increase them, blockers can prevent
+them, and an interrupted server can lose the latest unflushed batch.
+
+The script respects **Do Not Track** and **Global Privacy Control** when enabled
+in your browser. Blocking `/article-metrics.js`, `/blog/article-metrics.js` or
+`https://bntpool.com/api/site-events` also prevents these website counts without
+affecting reading or mining. These website counters are separate from the miner's
+hardware telemetry described above.

@@ -1,0 +1,88 @@
+---
+import { render } from 'astro:content';
+import '../../../styles/blog.css';
+import Answer from '../../../components/mdx/Answer.astro';
+import CTA from '../../../components/mdx/CTA.astro';
+import Note from '../../../components/mdx/Note.astro';
+import Warning from '../../../components/mdx/Warning.astro';
+import { LOCALES, langParam, localeDef, localizePath } from '../../../i18n/locales';
+import { useTranslations } from '../../../i18n/ui';
+import Base from '../../../layouts/Base.astro';
+import { topicFor } from '../../../lib/blog-topics';
+import { getPosts, type Post } from '../../../lib/blog';
+import { ORGANIZATION, SITE_URL, breadcrumbList, formatDate, isoDate } from '../../../lib/site';
+
+export async function getStaticPaths() {
+    const paths = [];
+    for (const l of LOCALES) {
+        const posts = await getPosts(l.code);
+        const bySlug = new Map(posts.map((p) => [p.slug, p]));
+        for (const post of posts) {
+            const related = post.related.map((s) => bySlug.get(s)).filter((p): p is Post => Boolean(p));
+            paths.push({ params: { lang: langParam(l.code), slug: post.slug }, props: { post, related } });
+        }
+    }
+    return paths;
+}
+
+interface Props { post: Post; related: Post[] }
+const { post, related } = Astro.props;
+const locale = post.locale;
+const t = useTranslations(locale);
+const lang = localeDef(locale).htmlLang;
+const { Content } = await render(post.entry);
+const home = localizePath('/', locale);
+const blog = localizePath('/blog/', locale);
+const topic = topicFor(post.slug);
+
+const schema: unknown[] = [
+    {
+        '@context': 'https://schema.org', '@type': 'BlogPosting', headline: post.title, description: post.description,
+        datePublished: isoDate(post.date), dateModified: isoDate(post.updated), image: post.image, inLanguage: lang,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': post.url }, author: ORGANIZATION, publisher: ORGANIZATION,
+        ...(post.tags.length ? { keywords: post.tags.join(', ') } : {}),
+    },
+    breadcrumbList([['seine', SITE_URL + home], [t('navBlog'), SITE_URL + blog], [post.title, post.url]]),
+];
+if (post.faq.length) {
+    schema.push({
+        '@context': 'https://schema.org', '@type': 'FAQPage', '@id': `${post.url}#faq`, inLanguage: lang,
+        mainEntity: post.faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+    });
+}
+---
+<Base locale={locale} path={`/blog/${post.slug}/`} title={post.seoTitle ?? `${post.title} · seine`}
+      description={post.description} image={post.image} ogType="article" schema={schema}>
+  <Fragment slot="head">
+    <meta property="article:published_time" content={isoDate(post.date)}>
+    <meta property="article:modified_time" content={isoDate(post.updated)}>
+    {post.tags.map((tag) => <meta property="article:tag" content={tag}>)}
+  </Fragment>
+<main class="wrap">
+  <header class="page-head">
+    <nav class="crumbs" aria-label={t('breadcrumb')}><a href={home}>seine</a> / <a href={blog}>{t('navBlog')}</a> / <a href={`${blog}#${topic.id}`}>{t(topic.key)}</a></nav>
+    <h1>{post.title}</h1>
+    <div class="meta">
+      <time datetime={isoDate(post.date)}>{formatDate(post.date, lang)}</time>
+      {+post.updated !== +post.date && <>{' · '}{t('postUpdated')} <time datetime={isoDate(post.updated)}>{formatDate(post.updated, lang)}</time></>}
+      {' · '}{t('postMinutes', { n: post.readingMinutes })}
+    </div>
+  </header>
+  <article class="prose" data-metrics-article={post.slug} data-metrics-locale={locale}>
+    <Content components={{ Answer, CTA, Note, Warning }} />
+    {post.faq.length > 0 && (
+      <section class="faq" id="faq" aria-labelledby="faq-title">
+        <h2 id="faq-title">{t('postFaq')}</h2>
+        {post.faq.map((f) => <><h3>{f.q}</h3><p>{f.a}</p></>)}
+      </section>
+    )}
+    {related.length > 0 && (
+      <nav class="related" aria-labelledby="related-title">
+        <h2 id="related-title">{t('postRelated')}</h2>
+        <ul>{related.map((r) => <li><a href={r.path}>{r.title}</a></li>)}</ul>
+      </nav>
+    )}
+  </article>
+</main>
+<script is:inline defer src="/article-metrics.js"></script>
+</Base>

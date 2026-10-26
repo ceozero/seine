@@ -1,0 +1,104 @@
+---
+title: Recibe pagos en tu @name con Blocknet ID
+description: 'Registra un nombre en blocknet.id y recibe BNT, comparte enlaces de pago y mina en bntpool.com con tu @name en vez de una dirección de más de 90 caracteres.'
+tags: [Blocknet ID, Billetera, Pagos, bntpool]
+faq:
+  - q: '¿Distinguen los nombres cortos de Blocknet ID entre mayúsculas y minúsculas?'
+    a: 'No. Un nombre corto no distingue entre mayúsculas y minúsculas, así que @Alice, @alice y $ALICE llegan a la misma billetera. Los nombres usan las letras de la a a la z, los dígitos del 0 al 9, guion bajo, guion y punto, y pueden tener hasta 64 caracteres. Los prefijos @ y $ funcionan en todos los sitios donde se acepta un nombre.'
+  - q: '¿Es gratis un Blocknet ID?'
+    a: 'A fecha de octubre de 2026, los nombres de nueve caracteres o más son gratis mientras dure la promoción de blocknet.id, sin factura y sin pago. Los nombres más cortos tienen un precio único que sube cuanto más corto es el nombre, desde 100 BNT para ocho caracteres. La página de precios de blocknet.id muestra el precio de cada longitud.'
+  - q: '¿Puedo minar a un nombre corto de Blocknet ID en bntpool.com?'
+    a: 'Sí. Escribe tu @name cuando seine te pida una dirección de pago, o pásalo con --address. seine comprueba el registro firmado en blocknet.id, muestra la dirección completa a la que se ha resuelto y mina a esa dirección durante toda la sesión. Los nombres cortos necesitan seine v0.2.16 o posterior, y bntpool.com también los acepta al iniciar sesión.'
+  - q: '¿Qué pasa con mi saldo del pool si apunto mi nombre a una dirección nueva?'
+    a: 'Tu saldo actual se queda con la dirección que lo generó, y bntpool.com lo paga allí como siempre. El pool registra los shares, los saldos y los pagos por la dirección completa, así que un cambio de nombre nunca redirige un saldo existente. La próxima vez que empieces a minar, el nombre se resuelve de nuevo y los shares nuevos van a la dirección nueva.'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+Con un nombre corto de Blocknet ID, la gente puede pagarte en `@yourname`, puedes compartir un enlace de pago que cabe en un mensaje de chat y puedes minar en bntpool.com a ese mismo nombre. Esta guía explica cómo funcionan los nombres, cómo registrar uno en blocknet.id y cómo usarlo en la billetera y en seine.
+
+## ¿Qué es un nombre corto de Blocknet ID?
+
+<Answer>
+Un nombre corto de Blocknet ID es un nombre breve, como @alice o $alice, que apunta a la dirección de tu billetera de Blocknet. Lo registras en blocknet.id. Las billeteras, seine y bntpool.com buscan el nombre, comprueban que blocknet.id firmó el registro y luego usan la dirección completa a la que corresponde.
+</Answer>
+
+Las reglas son las mismas en todos los sitios donde se acepta un nombre:
+
+- **Dos prefijos.** `@name` y `$name` son el mismo nombre. Usa el que prefieras.
+- **Sin distinción entre mayúsculas y minúsculas.** `@Alice` y `@alice` se resuelven a la misma dirección.
+- **Caracteres sencillos.** Letras de la a a la z, dígitos del 0 al 9, guion bajo, guion y punto.
+- **Hasta 64 caracteres.**
+
+Cada registro de blocknet.id está firmado. Cuando la billetera resuelve un nombre, obtiene el registro y comprueba su firma Ed25519 con la clave de firma que blocknet.id publica en `https://blocknet.id/.well-known/blocknet-id.json`. El contenido firmado incluye el nombre, la dirección y la fecha de su última actualización, y la billetera confirma que los tres coinciden antes de usar la dirección. Cada nombre tiene además una página pública en blocknet.id que muestra su dirección, el contenido firmado y la firma, para que cualquiera pueda comprobar un registro por su cuenta.
+
+## ¿Por qué pagar a un nombre en lugar de a una dirección?
+
+Una dirección de Blocknet es la codificación base58 de tu clave pública de gasto, tu clave pública de visualización y una suma de verificación, lo que da 92 o 93 caracteres. Es mucho para copiar entre apps, leer en voz alta o meter en un perfil. Un nombre corto es algo que puedes decir en una frase, imprimir en una pegatina o poner en tu biografía.
+
+También tienes un paso de confirmación claro. Cuando envías a un nombre, la billetera muestra la dirección a la que se ha resuelto y la marca como verificada antes de que apruebes el pago. El nombre solo sustituye a la dirección que habrías compartido de todos modos. En la cadena, el pago es una transacción normal de Blocknet a una [dirección sigilosa de un solo uso](/es/blog/blocknet-privacy-features/), así que es tan privado como cualquier otro pago.
+
+## ¿Cómo consigues un Blocknet ID?
+
+<Answer>
+Copia la dirección de tu billetera, abre blocknet.id y busca el nombre que quieres. Si está disponible, la web muestra su precio; pega tu dirección y envía el formulario. Los nombres de nueve o más caracteres son gratis durante la promoción actual. Una vez registrado, tu nombre funciona en las billeteras, en seine y en bntpool.com.
+</Answer>
+
+1. **Copia tu dirección.** En la billetera de línea de comandos, el comando `address` la muestra, seguida de la línea "Get a short name like @name or $name at https://blocknet.id". Consigue la billetera desde las [versiones de línea de comandos](https://github.com/blocknetprivacy/blocknet/releases/latest) o las [versiones de escritorio](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Busca un nombre.** Entra en [blocknet.id](https://blocknet.id), escribe un nombre en el cuadro "find a name" y pulsa Search. Mientras escribes, la página te avisa si un carácter no está permitido o si el nombre es demasiado largo.
+3. **Revisa el resultado.** Un nombre disponible muestra su precio. Un nombre ya registrado muestra su dirección, cuándo se actualizó por última vez y un enlace a su página pública.
+4. **Regístralo.** Pega la dirección de tu billetera y pulsa "Claim free" (o "Register" si el nombre tiene precio).
+
+El precio es un pago único según la longitud del nombre. En el momento de escribir esto (octubre de 2026), todos los nombres de nueve caracteres o más son gratis gracias a una promoción, "no invoice, no payment" (sin factura y sin pago), en palabras de la web. Los nombres de ocho caracteres cuestan 100 BNT, y los más cortos cuestan más, hasta 6000 BNT por un solo carácter. La [página de precios](https://blocknet.id/pricing) muestra todas las longitudes.
+
+Para gestionar tus nombres más adelante, usa "sign in" en blocknet.id con tu dirección de Blocknet. En la página de gestión es donde apuntas un nombre a otra dirección.
+
+## ¿Cómo envías BNT a un nombre?
+
+En la billetera de línea de comandos, pon el nombre donde iría la dirección:
+
+```
+send @rock 100 "hello"
+```
+
+La billetera resuelve `@rock`, muestra `Resolved @rock -> <address>` con una marca de verificado y después te pide confirmación. La confirmación muestra el nombre, la dirección completa, la comisión y tu memo. La forma `$rock` funciona igual, y `send` acepta importes enteros o fraccionarios.
+
+La API de la billetera resuelve los nombres de la misma manera para cada destinatario de una solicitud de envío, así que las herramientas construidas sobre la billetera admiten pagos a nombres sin trabajo adicional.
+
+## ¿Cómo funcionan los enlaces de pago con un nombre?
+
+Un [enlace de pago](/es/blog/blocknet-payment-links/) lleva el destinatario, el importe y un memo opcional. Blocknet admite dos formas:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+El enlace de bntpay.com funciona con un nombre en lugar de una dirección, así que se mantiene corto. Al abrirlo aparece una página con "Pay $yourname", el importe y el memo, además de un botón "Open in Wallet" que abre el pago como enlace `blocknet://`. Si pegas cualquiera de las dos formas en la billetera de línea de comandos, rellena un envío para que lo confirmes. Incluye el campo `amount`; el memo es opcional y admite hasta 124 bytes de texto.
+
+Así es fácil publicar un único enlace para propinas o enviar una factura en un solo mensaje.
+
+## ¿Cómo minas a tu @name?
+
+Tanto seine como bntpool.com aceptan un nombre corto como dirección de pago. La primera vez que inicias [seine](/es/#download), escribe `@yourname` cuando te pida la dirección y acepta el pool predeterminado. Para pasarlo por línea de comandos, ponlo entre comillas:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Pon entre comillas los nombres cortos en los comandos de la terminal, sobre todo la forma `$name`, para que la terminal los pase sin cambios. Los nombres cortos necesitan seine v0.2.16 o posterior.
+</Note>
+
+Esto es lo que pasa después:
+
+- **seine resuelve el nombre al arrancar.** Verifica el registro firmado de blocknet.id, comprueba la dirección, registra en el log la dirección completa a la que se ha resuelto y mantiene esa dirección durante toda la sesión, incluidas las reconexiones al pool.
+- **El pool también acepta nombres al iniciar sesión.** bntpool.com verifica la correspondencia firmada cuando un minero se conecta con un nombre, y usa la dirección completa resuelta para los trabajos, los shares, los saldos y los pagos.
+- **Puedes buscarte por nombre.** La página de estadísticas de [bntpool.com](https://bntpool.com) acepta `@name` y `$name`, así que puedes seguir tu tasa de hash y tu saldo sin pegar la dirección.
+- **Un nombre guardado se resuelve de nuevo en la siguiente sesión.** seine guarda el nombre en su configuración, así que cada nuevo arranque recoge la dirección a la que apunta tu nombre en ese momento.
+
+Como los saldos pertenecen a la dirección completa, un cambio de nombre posterior nunca redirige un saldo existente. Lo que ya hayas ganado se queda con la dirección que lo generó y se paga allí, mientras que la minería nueva va a la dirección nueva. El mismo nombre funciona también en modo solitario contra tu propio nodo.
+
+¿Eres nuevo en la minería? La [guía para minar Blocknet](/es/blog/how-to-mine-blocknet/) explica la descarga de seine, el hardware y los pagos en bntpool.com.
+
+<CTA target="pool" title="Mina a tu @name" text="bntpool.com acepta tu nombre corto de Blocknet ID como inicio de sesión para los pagos. Empieza a minar en pocos minutos." />

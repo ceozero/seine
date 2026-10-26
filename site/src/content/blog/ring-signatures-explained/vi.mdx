@@ -1,0 +1,86 @@
+---
+title: 'Giải thích chữ ký vòng: cách tiền mã hóa che giấu người gửi'
+description: 'Giải thích chữ ký vòng (ring signature), từ ý tưởng năm 2001 đến key image và CLSAG: cách người ký ẩn giữa các khóa công khai và cách Blocknet ký mỗi input bằng vòng 16.'
+tags: [Quyền riêng tư, Chữ ký vòng, Mật mã học, Blocknet]
+faq:
+  - q: 'Chữ ký vòng khác chữ ký nhóm như thế nào?'
+    a: 'Chữ ký nhóm cần một người quản lý lập nhóm từ trước và có thể tiết lộ ai đã ký. Chữ ký vòng không có người quản lý và không cần thiết lập: người ký chọn bất kỳ tập khóa công khai nào ngay tại chỗ, và không ai, kể cả những người có khóa được dùng, có thể chứng minh về sau thành viên nào đã tạo ra chữ ký.'
+  - q: 'Key image trong chữ ký vòng là gì?'
+    a: 'Key image là một giá trị được tính từ khóa riêng của output đang được chi tiêu. Cùng một output luôn tạo ra cùng một key image, nên mạng từ chối lần chi tiêu thứ hai của nó, nhưng key image không tiết lộ thành viên nào trong vòng là thật. Nó biến chữ ký vòng thành chữ ký vòng có thể liên kết, giúp ngăn chi tiêu hai lần.'
+  - q: 'CLSAG là gì?'
+    a: 'CLSAG là một cơ chế chữ ký vòng có thể liên kết do Brandon Goodell, Sarang Noether và Arthur Blue mô tả năm 2019. Nó chứng minh người ký sở hữu một output trong vòng và các số tiền cân bằng, kèm một key image để ngăn chi tiêu hai lần. Monero áp dụng nó vào tháng 10 năm 2020, và Blocknet ký mọi input bằng CLSAG và RingCT.'
+  - q: 'Blocknet dùng kích thước vòng bao nhiêu?'
+    a: 'Blocknet dùng vòng đúng 16 cho mọi input: output thật cộng với 15 output mồi, mỗi output mồi là một output thật đã có trên chuỗi. Đồng thuận từ chối mọi kích thước khác. Vì mọi input dùng cùng kích thước, kích thước vòng không bao giờ làm một giao dịch nổi bật, và output thật nằm ở một vị trí ngẫu nhiên trong vòng.'
+  - q: 'Chữ ký vòng có che giấu số tiền thanh toán không?'
+    a: 'Không. Chữ ký vòng che giấu output nào đã trả tiền. Số tiền được che giấu bởi một lớp riêng: Pedersen commitment, khóa chặt một con số mà không để lộ nó, cùng range proof Bulletproofs, chứng minh mỗi số tiền là hợp lệ. Blocknet dùng tất cả những thứ này cùng lúc trên mọi giao dịch, bên cạnh địa chỉ ẩn dùng một lần để che giấu người nhận.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Chữ ký vòng cho phép bạn ký thay mặt một nhóm, sao cho bất kỳ ai cũng có thể kiểm tra chữ ký đến từ một trong các khóa của nhóm, nhưng không ai biết được là khóa nào. Bài viết này giải thích cách chữ ký vòng hoạt động, từ bài báo năm 2001 giới thiệu chúng đến key image và CLSAG, và cho thấy cách Blocknet dùng vòng 16 để giữ riêng tư người gửi của mọi khoản thanh toán.
+
+## Chữ ký vòng là gì?
+
+<Answer>
+Chữ ký vòng là một chữ ký số được tạo bằng một khóa riêng và một tập khóa công khai của những người khác. Người xác minh có thể xác nhận rằng chủ sở hữu của một trong các khóa đó đã ký, nhưng không thể biết là ai. Người ký chọn nhóm ngay tại chỗ, không cần thiết lập và không cần sự hợp tác của các thành viên khác.
+</Answer>
+
+Một chữ ký số thông thường gắn một thông điệp với một khóa công khai. Chữ ký vòng gắn nó với một tập khóa công khai, gọi là vòng. Người ký chỉ cần khóa riêng của mình; các thành viên khác không đóng góp gì ngoài những khóa công khai họ đã công bố. Với người ngoài, mọi thành viên trong vòng đều có khả năng là người ký như nhau.
+
+## Chữ ký vòng ra đời từ đâu?
+
+Ron Rivest, Adi Shamir và Yael Tauman giới thiệu chữ ký vòng tại ASIACRYPT 2001 trong bài báo có tựa ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Ví dụ của họ là một thành viên nội các muốn tiết lộ một câu chuyện cho nhà báo theo cách chứng minh được thông tin đến từ nội các mà không lộ ra thành viên nào. Ông ký bằng khóa của mình cộng với khóa công khai của các thành viên nội các khác, và nhà báo có thể xác minh chữ ký mà không biết ai đã viết.
+
+Hai đặc tính làm ý tưởng này nổi bật. Không có người quản lý nhóm nào có thể lật mặt người ký, điều phân biệt chữ ký vòng với chữ ký nhóm ra đời trước đó. Và vòng mang tính tự phát: người ký có thể ghép nó từ bất kỳ khóa nào đã công bố ngay lúc ký. Các tác giả chọn cái tên này vì "vòng là những vùng hình học có đường biên đồng đều và không có tâm": mọi thành viên đều nằm trên rìa, và không ai nắm quyền. Thuật toán ký cũng có hình dạng tương tự, một chuỗi phép tính vòng lại chính nó.
+
+## Chữ ký vòng hoạt động như thế nào?
+
+Các cơ chế hiện đại dùng trong tiền mã hóa xây dựng vòng lặp từ hàm băm và khóa đường cong elliptic. Dưới đây là ý tưởng qua các bước đơn giản cho một vòng 16 khóa công khai:
+
+1. **Bắt đầu tại vị trí của bạn.** Người ký chọn một số bí mật ngẫu nhiên và băm nó cùng với thông điệp. Kết quả băm đó trở thành thách thức cho vị trí kế tiếp trong vòng.
+2. **Tạo phản hồi giả cho mọi vị trí khác.** Với mỗi thành viên trong 15 thành viên còn lại, người ký chọn một phản hồi ngẫu nhiên và kết hợp nó với khóa công khai của thành viên đó cùng thách thức hiện tại để tính thách thức cho vị trí tiếp theo.
+3. **Khép vòng.** Sau khi đi hết một vòng, chuỗi phép tính quay về vị trí của chính người ký. Chỉ người giữ khóa riêng của vị trí đó mới tính được phản hồi duy nhất khiến chuỗi kết thúc đúng tại điểm xuất phát.
+
+Chữ ký gồm thách thức khởi đầu cộng với 16 phản hồi. Người xác minh bắt đầu ở bất kỳ đâu, đi quanh vòng và tính lại từng thách thức từ các khóa công khai và phản hồi, rồi kiểm tra vòng có khép lại không. Mọi vị trí trông giống nhau: một khóa công khai và một phản hồi trông như ngẫu nhiên. Không có gì đánh dấu nơi người ký bắt đầu, nên người xác minh biết được rằng một khóa riêng đã khép vòng và không biết gì về khóa nào.
+
+## Key image ngăn chi tiêu hai lần như thế nào?
+
+Chữ ký vòng thuần túy có một lỗ hổng khi dùng cho tiền: nếu mọi lần chi tiêu đều ẩn giữa các output khác, mạng không thể thấy cùng một số coin bị tiêu hai lần. Chữ ký vòng có thể liên kết khắc phục điều này. Joseph Liu, Victor Wei và Duncan Wong mô tả cơ chế đầu tiên như vậy, LSAG, tại ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Hai chữ ký tạo bằng cùng một khóa riêng có thể được liên kết với nhau, trong khi người ký vẫn ẩn giữa vòng.
+
+Thiết kế CryptoNote năm 2013 biến điều này thành key image. Với một output có khóa riêng `x` và khóa công khai `P`, ví tính `I = x · Hp(P)`, trong đó `Hp` băm khóa công khai thành một điểm trên đường cong. Chữ ký chứng minh rằng `I` thuộc về thành viên vòng nào đã ký, mà không nói là ai. Vì key image chỉ phụ thuộc vào output đang được chi tiêu, chi tiêu output đó lần nữa luôn tạo ra cùng `I`. Mọi node giữ danh sách các key image đã thấy và từ chối mọi giao dịch lặp lại một key image.
+
+## Từ MLSAG đến CLSAG
+
+Các đồng tiền mã hóa che giấu cả số tiền cần chữ ký vòng chứng minh thêm một điều nữa: số tiền input bị che giấu khớp với số tiền giao dịch chi tiêu. Bài báo năm 2015 của Shen Noether, ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT), làm điều này bằng MLSAG, một chữ ký vòng trên hai tập khóa, một cho quyền sở hữu và một cho các commitment số tiền.
+
+CLSAG, của Brandon Goodell, Sarang Noether và Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), chứng minh cùng hai điều đó gọn hơn. Monero chuyển từ MLSAG sang CLSAG trong bản nâng cấp tháng 10 năm 2020. [Tài liệu Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) cho biết tốc độ xác minh nhanh hơn khoảng 20% và một giao dịch điển hình hai input, hai output giảm từ khoảng 2,5 kB xuống 1,9 kB.
+
+## Kích thước vòng có ý nghĩa gì với quyền riêng tư?
+
+<Answer>
+Kích thước vòng là số output trong mỗi vòng: output thật cộng với các output mồi. Vòng 16 nghĩa là người quan sát thấy 16 ứng viên hợp lệ như nhau cho mọi input. Kích thước cố định quan trọng không kém kích thước lớn, vì khi mọi input dùng cùng kích thước, bản thân kích thước không tiết lộ gì về người tạo giao dịch.
+</Answer>
+
+Các output mồi là output thật trên chuỗi, nên mỗi output đều thực sự có thể là đồng coin đang được chi tiêu. Nếu kích thước vòng có thể thay đổi, một ví chọn kích thước bất thường sẽ tự đánh dấu giao dịch của mình. Monero tăng kích thước vòng từ 11 lên 16 trong bản nâng cấp tháng 8 năm 2022, và Blocknet dùng 16 theo đồng thuận cho mọi input.
+
+## Cách Blocknet dùng chữ ký vòng
+
+Mọi input của Blocknet được ký bằng CLSAG và RingCT trên một vòng đúng 16 output. Các quy tắc được thực thi bởi đồng thuận, nên không ví nào có thể bỏ qua:
+
+- **Vòng cố định 16.** Daemon từ chối mọi input có vòng không đúng 16 thành viên. Mã của nó cố định kích thước "để ngăn rò rỉ thông tin từ kích thước vòng thay đổi".
+- **Chỉ output thật.** Mọi thành viên vòng phải là output thật đã có trên chuỗi, nên mỗi output mồi là một đồng coin thực sự có thể được chi tiêu.
+- **Output mồi ngẫu nhiên và vị trí ngẫu nhiên.** Ví xáo trộn các output trên chuỗi bằng bộ sinh số ngẫu nhiên an toàn về mật mã để chọn 15 output mồi, rồi đặt output thật của bạn ở một vị trí ngẫu nhiên trong vòng.
+- **Quyền sở hữu và số tiền trong một bằng chứng.** Mỗi chữ ký chứng minh bạn sở hữu một thành viên vòng và số tiền bị che giấu của input khớp với commitment của thành viên đó, nên số tiền cân bằng mà không bị lộ.
+- **Key image được đối chiếu với chuỗi.** Key image là một phần của dữ liệu được ký, và mạng từ chối giao dịch nếu key image đó đã được chi tiêu hoặc xuất hiện hai lần trong cùng một giao dịch.
+
+Định dạng giao dịch không có chế độ minh bạch, nên mọi khoản thanh toán trên chuỗi đều mang những vòng như thế này. Chữ ký vòng che giấu người gửi; [địa chỉ ẩn dùng một lần](/vi/blog/stealth-addresses-explained/) che giấu người nhận, còn [Pedersen commitment cùng Bulletproofs](/vi/blog/bulletproofs-explained/) che giấu số tiền. [Cách Blocknet giữ riêng tư cho các khoản thanh toán](/vi/blog/blocknet-privacy-features/) trình bày từng lớp đó và ý nghĩa của chúng khi bạn thanh toán cho ai đó.
+
+## Điều gì đến tiếp theo với bản nâng cấp Faraday
+
+Blocknet dự kiến một bản nâng cấp mạng tên là Faraday, với thời điểm kích hoạt dự kiến vào khoảng ngày 2027-02-16 theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Theo lời của trang này: "Hiện nay, một lần chi tiêu ẩn giữa 16 output. Sau Faraday, nó ẩn giữa mọi output trên chuỗi." Faraday cũng sẽ mang đến các bằng chứng chi tiêu mới, được trang này mô tả là "Được xây dựng để máy tính lượng tử không thể giả mạo một lần chi tiêu." Việc thiết kế, kiểm thử và đánh giá đối kháng đang được tiến hành, và các mốc thời gian là dự kiến chứ chưa phải cuối cùng.
+
+## Kiếm BNT để gửi một cách riêng tư
+
+Một cách đơn giản để có coin dùng những vòng này là tự đào. Trình đào seine miễn phí, mã nguồn mở và tự điều chỉnh theo máy tính của bạn, và bntpool.com là pool mặc định của nó, nên bạn có thể bắt đầu đào chỉ sau vài phút. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) trình bày cách thiết lập, và bạn có thể đào thẳng về địa chỉ của mình hoặc về một [tên Blocknet ID](/vi/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Đào những đồng BNT riêng tư đầu tiên" text="Tải seine, đào trên bntpool.com và nhận coin mà mọi lần chi tiêu đều được bảo vệ bằng vòng 16." />

@@ -1221,6 +1221,13 @@ impl NvidiaBackend {
             self.effective_hashes_per_launch_per_lane_cap(selected);
 
         if let Some(forced_rregcount) = self.tuning_options.max_rregcount_override {
+            crate::miner::ui::info(
+                "NVIDIA",
+                format!(
+                    "nvidia-autotune | GPU {}: disabled by explicit register cap",
+                    selected.index
+                ),
+            );
             let forced = self.apply_runtime_tuning_overrides(
                 NvidiaKernelTuning {
                     max_rregcount: forced_rregcount.max(1),
@@ -1237,15 +1244,30 @@ impl NvidiaBackend {
         }
 
         let key = build_nvidia_autotune_key(selected, requested_hashes_per_launch_per_lane);
-        if let Some(cached) = load_nvidia_cached_tuning(&self.autotune_config_path, &key) {
-            // Keep Blackwell's first-run autotune behavior unchanged. Only clamp cached
-            // depth-2 defaults to depth-1 when the operator left the launch-depth flag unset.
-            let cached =
-                self.apply_runtime_tuning_overrides(cached, cached_hashes_per_launch_per_lane_cap);
-            if let Ok(mut slot) = self.kernel_tuning.write() {
-                *slot = Some(cached);
+        match load_nvidia_cached_tuning(&self.autotune_config_path, &key) {
+            Ok(cached) => {
+                // Keep Blackwell's implicit launch-depth handling unchanged.
+                let cached = self
+                    .apply_runtime_tuning_overrides(cached, cached_hashes_per_launch_per_lane_cap);
+                crate::miner::ui::info(
+                    "NVIDIA",
+                    format!(
+                        "nvidia-autotune | GPU {}: using cached tuning",
+                        selected.index
+                    ),
+                );
+                if let Ok(mut slot) = self.kernel_tuning.write() {
+                    *slot = Some(cached);
+                }
+                return cached;
             }
-            return cached;
+            Err(reason) => crate::miner::ui::info(
+                "NVIDIA",
+                format!(
+                    "nvidia-autotune | GPU {}: {reason}; running autotune",
+                    selected.index
+                ),
+            ),
         }
 
         let tuned = self.apply_runtime_tuning_overrides(
@@ -1257,9 +1279,18 @@ impl NvidiaBackend {
                 self.resolve_max_lanes_override(),
                 requested_hashes_per_launch_per_lane,
             )
-            .unwrap_or_else(|_| NvidiaKernelTuning {
-                hashes_per_launch_per_lane: requested_hashes_per_launch_per_lane,
-                ..NvidiaKernelTuning::default()
+            .unwrap_or_else(|_| {
+                crate::miner::ui::warn(
+                    "NVIDIA",
+                    format!(
+                        "nvidia-autotune | GPU {}: tuning failed; using default tuning",
+                        selected.index
+                    ),
+                );
+                NvidiaKernelTuning {
+                    hashes_per_launch_per_lane: requested_hashes_per_launch_per_lane,
+                    ..NvidiaKernelTuning::default()
+                }
             }),
             requested_hashes_per_launch_per_lane,
         );
@@ -1317,6 +1348,23 @@ impl Drop for NvidiaBackend {
 }
 
 impl PowBackend for NvidiaBackend {
+    fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
+        let device = self.resolved_device.try_read().ok().and_then(|d| d.clone());
+        let tuning = self.kernel_tuning.try_read().ok().and_then(|t| *t);
+        seine_telemetry::BackendSettings {
+            backend: "nvidia".into(),
+            device_model: device.as_ref().map(|d| d.name.clone()),
+            memory_mib: device.map(|d| d.memory_total_mib),
+            lanes: self.enabled_lanes() as u32,
+            cpu_kernel: None,
+            cpu_page_mode: None,
+            gpu_register_cap: tuning.map(|t| t.max_rregcount),
+            gpu_launch_depth: tuning.map(|t| t.hashes_per_launch_per_lane),
+            cpu_backing_mib: None,
+            cpu_affinity: None,
+        }
+    }
+
     fn name(&self) -> &'static str {
         BACKEND_NAME
     }
@@ -3025,8 +3073,22 @@ fn load_nvidia_autotune_cache(path: &Path) -> Option<NvidiaAutotuneCache> {
     Some(parsed)
 }
 
-fn load_nvidia_cached_tuning(path: &Path, key: &NvidiaAutotuneKey) -> Option<NvidiaKernelTuning> {
-    let cache = load_nvidia_autotune_cache(path)?;
+fn load_nvidia_cached_tuning(
+    path: &Path,
+    key: &NvidiaAutotuneKey,
+) -> Result<NvidiaKernelTuning, &'static str> {
+    let raw = fs::read(path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            "no saved tuning result"
+        } else {
+            "saved tuning results could not be read"
+        }
+    })?;
+    let cache: NvidiaAutotuneCache =
+        serde_json::from_slice(&raw).map_err(|_| "saved tuning results are invalid")?;
+    if cache.schema_version != NVIDIA_AUTOTUNE_SCHEMA_VERSION {
+        return Err("cache format changed");
+    }
     let exact = cache
         .records
         .iter()
@@ -3062,10 +3124,22 @@ fn load_nvidia_cached_tuning(path: &Path, key: &NvidiaAutotuneKey) -> Option<Nvi
                     }
                 }
             }
-            best?
+            best.ok_or_else(|| {
+                // Compare only this GPU's newest record. Another GPU in a
+                // shared cache must not be reported as a changed build/runtime.
+                cache
+                    .records
+                    .iter()
+                    .filter(|record| same_nvidia_device(&record.key, key))
+                    .max_by_key(|record| record.timestamp_unix_secs)
+                    .map_or("no saved tuning result for this GPU", |record| {
+                        nvidia_autotune_key_change(&record.key, key)
+                            .unwrap_or("saved tuning result is invalid")
+                    })
+            })?
         }
     };
-    Some(NvidiaKernelTuning {
+    Ok(NvidiaKernelTuning {
         max_rregcount: record.max_rregcount,
         block_loop_unroll: record.block_loop_unroll,
         hashes_per_launch_per_lane: record.hashes_per_launch_per_lane.max(1),
@@ -3073,21 +3147,43 @@ fn load_nvidia_cached_tuning(path: &Path, key: &NvidiaAutotuneKey) -> Option<Nvi
     })
 }
 
-fn nvidia_autotune_key_compatible(lhs: &NvidiaAutotuneKey, rhs: &NvidiaAutotuneKey) -> bool {
+fn same_nvidia_device(lhs: &NvidiaAutotuneKey, rhs: &NvidiaAutotuneKey) -> bool {
     lhs.device_name == rhs.device_name
         && lhs.memory_total_mib == rhs.memory_total_mib
         && lhs.compute_cap_major == rhs.compute_cap_major
         && lhs.compute_cap_minor == rhs.compute_cap_minor
-        && lhs.m_cost_kib == rhs.m_cost_kib
-        && lhs.t_cost == rhs.t_cost
-        && lhs.kernel_threads == rhs.kernel_threads
-        && lhs.hashes_per_launch_per_lane_cap == rhs.hashes_per_launch_per_lane_cap
-        && lhs.os == rhs.os
-        && lhs.kernel_version == rhs.kernel_version
-        && lhs.runtime_environment == rhs.runtime_environment
-        && lhs.build_fingerprint == rhs.build_fingerprint
-        && lhs.cuda_kernel_fingerprint == rhs.cuda_kernel_fingerprint
-        && lhs.nvrtc_version == rhs.nvrtc_version
+}
+
+fn nvidia_autotune_key_change(
+    lhs: &NvidiaAutotuneKey,
+    rhs: &NvidiaAutotuneKey,
+) -> Option<&'static str> {
+    if !same_nvidia_device(lhs, rhs) {
+        Some("GPU configuration changed")
+    } else if lhs.build_fingerprint != rhs.build_fingerprint {
+        Some("miner build changed")
+    } else if lhs.cuda_kernel_fingerprint != rhs.cuda_kernel_fingerprint {
+        Some("CUDA kernel changed")
+    } else if lhs.nvrtc_version != rhs.nvrtc_version {
+        Some("CUDA compiler changed")
+    } else if lhs.os != rhs.os
+        || lhs.kernel_version != rhs.kernel_version
+        || lhs.runtime_environment != rhs.runtime_environment
+    {
+        Some("operating system or runtime changed")
+    } else if lhs.m_cost_kib != rhs.m_cost_kib
+        || lhs.t_cost != rhs.t_cost
+        || lhs.kernel_threads != rhs.kernel_threads
+        || lhs.hashes_per_launch_per_lane_cap != rhs.hashes_per_launch_per_lane_cap
+    {
+        Some("mining or tuning settings changed")
+    } else {
+        None
+    }
+}
+
+fn nvidia_autotune_key_compatible(lhs: &NvidiaAutotuneKey, rhs: &NvidiaAutotuneKey) -> bool {
+    nvidia_autotune_key_change(lhs, rhs).is_none()
 }
 
 fn memory_budget_distance(lhs: u64, rhs: u64) -> u64 {
@@ -3970,7 +4066,7 @@ mod tests {
 
         let loaded = load_nvidia_cached_tuning(&path, &base_key);
         assert!(
-            loaded.is_none(),
+            loaded.is_err(),
             "cache lookup should not reuse tuning from a different launch-depth cap"
         );
 
@@ -4008,6 +4104,76 @@ mod tests {
 
         assert!(!nvidia_autotune_key_compatible(&key, &different_build));
         assert!(!nvidia_autotune_key_compatible(&key, &different_runtime));
+
+        let path = unique_temp_file("cache-diagnostics");
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &key).unwrap_err(),
+            "no saved tuning result"
+        );
+        fs::write(&path, "invalid json").unwrap();
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &key).unwrap_err(),
+            "saved tuning results are invalid"
+        );
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &key).unwrap_err(),
+            "saved tuning results could not be read"
+        );
+        fs::remove_dir(&path).unwrap();
+        persist_nvidia_autotune_record(
+            &path,
+            key.clone(),
+            NvidiaKernelTuning::default(),
+            1.0,
+            2,
+            2,
+            Vec::new(),
+            0,
+        )
+        .unwrap();
+        assert!(load_nvidia_cached_tuning(&path, &key).is_ok());
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &different_build).unwrap_err(),
+            "miner build changed"
+        );
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &different_runtime).unwrap_err(),
+            "operating system or runtime changed"
+        );
+        let different_gpu = NvidiaAutotuneKey {
+            device_name: "another GPU".into(),
+            ..different_build
+        };
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &different_gpu).unwrap_err(),
+            "no saved tuning result for this GPU"
+        );
+        let different_compiler = NvidiaAutotuneKey {
+            nvrtc_version: "another compiler".into(),
+            ..key.clone()
+        };
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &different_compiler).unwrap_err(),
+            "CUDA compiler changed"
+        );
+        let different_kernel = NvidiaAutotuneKey {
+            cuda_kernel_fingerprint: "another kernel".into(),
+            ..key.clone()
+        };
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &different_kernel).unwrap_err(),
+            "CUDA kernel changed"
+        );
+        let mut cache = load_nvidia_autotune_cache(&path).unwrap();
+        cache.schema_version = 0;
+        fs::write(&path, serde_json::to_vec(&cache).unwrap()).unwrap();
+        assert_eq!(
+            load_nvidia_cached_tuning(&path, &key).unwrap_err(),
+            "cache format changed"
+        );
+        fs::remove_file(&path).unwrap();
     }
 
     #[test]

@@ -1,0 +1,112 @@
+---
+title: '2026''da CPU madenciliği: CPU ile ne kazılır'
+description: 2026'da CPU madenciliği. Blocknet gibi bellek yoğun coinlerin sıradan bilgisayarlara neden uygun olduğunu, CPU'yu neyin hızlı yaptığını ve seine ile nasıl başlanacağını öğrenin.
+tags: [CPU madenciliği, Argon2id, Madencilik rehberi, Donanım]
+faq:
+  - q: '2026''da CPU ile hangi coinler kazılabilir?'
+    a: 'İş kanıtı genel amaçlı işlemciler için tasarlanmış coinlere bakın. Monero, yazarlarının genel amaçlı CPU''lar için optimize edilmiş olarak tanımladığı RandomX''i, Blocknet ise hash başına 2 GiB bellekle Argon2id''yi kullanır. Her ikisi de sıradan masaüstü bilgisayarları, dizüstüleri ve sunucuları oyunda tutar, çünkü her hash ham aritmetiğin yanında belleğe de bağlıdır.'
+  - q: 'Blocknet''i CPU ile kazmak için ne kadar RAM gerekir?'
+    a: 'Her madencilik iş parçacığı yaklaşık 2 GB RAM ister, çünkü her Argon2id hash''i kendi 2 GiB''lık bellek bloğunu doldurur. Sığabilecek en fazla iş parçacığı sayısı için RAM''inizi ikiye bölün, ardından sisteme biraz pay bırakın. 32 GB''lık bir bilgisayarda seine yaklaşık 14 iş parçacığı çalıştırır ve bunu başlarken sizin için hesaplar.'
+  - q: 'Bellek yoğun algoritmalar neden sıradan bilgisayarlara uygundur?'
+    a: 'Bellek yoğun bir hash her deneme için gigabaytlarca hızlı bellek ister, bu yüzden yalnızca hash için üretilmiş bir çip bile her çekirdeğin yanında büyük miktarda RAM''e ihtiyaç duyar. Masaüstü bilgisayarlar, dizüstüler ve sunucular zaten bol RAM ve hızlı bellek denetleyicileriyle gelir; bu da insanların sahip olduğu donanımı algoritmanın ihtiyacına yaklaştırır.'
+  - q: 'CPU''nuz ve ekran kartınızla aynı anda madencilik yapabilir misiniz?'
+    a: 'Evet, Windows veya Linux''ta seine ile Blocknet madenciliği yaparken. seine işlemcide ve algıladığı her NVIDIA ekran kartında aynı anda madencilik yapar ve hashrate''ler toplanır. İşlemciyi madencilik yaparken, her kartı ise ilk açılışta ayarlar; bu yüzden başlamadan önce yapılandırmanız gereken hiçbir şey yoktur.'
+sourceHash: 67d582c389a6
+translation: draft
+---
+
+Bu rehber, CPU madenciliğinin 2026'da nerede durduğunu, bellek yoğun iş kanıtına sahip coinlerin sıradan bilgisayarları neden rekabetçi tuttuğunu, işlemciyle kazmak için coin seçerken nelere bakmanız gerektiğini ve seine ile birkaç dakikada Blocknet madenciliğine nasıl başlayacağınızı açıklar.
+
+## 2026'da hâlâ CPU ile kripto madenciliği yapılabilir mi?
+
+<Answer>
+Evet, iş kanıtı genel amaçlı işlemciler için tasarlanmış coinlerde. Bitcoin özel ASIC çiplerle kazılır ve Ethereum 2022'de madenciliği sonlandırdı; ancak Monero'nun RandomX'i ve Blocknet'in Argon2id'si gibi bellek yoğun algoritmalar CPU'ları verimli tutar, çünkü her hash aritmetiğin yanında gigabaytlarca hızlı bellek ister.
+</Answer>
+
+Madencilik CPU'larda başladı. Bitcoin teknik belgesi iş kanıtını “esasen bir CPU, bir oy” olarak tanımlar. Bitcoin büyüdükçe madenciler önce ekran kartlarına, sonra FPGA'lara, ardından ASIC'lere geçti: Bitcoin'in SHA-256 hash'ini hesaplamaktan başka hiçbir şey yapmayan çipler. Bitcoin'e özel ASIC'ler artık Bitcoin madenciliğinin ana yoludur.
+
+Ethereum, iş kanıtından hisse kanıtına geçişini 15 Eylül 2022'de Merge ile tamamladı. O zamandan beri Ethereum blokları madencilikle üretilmiyor. [İş kanıtı ile hisse kanıtı](/tr/blog/proof-of-work-vs-proof-of-stake/) rehberi iki tasarımın nasıl farklılaştığını açıklar.
+
+Dolayısıyla 2026'da CPU madenciliği tek bir seçime iner: algoritması, sıradan bilgisayarların zaten sahip olduğu işlemciler ve bellek için üretilmiş bir coin seçin.
+
+## Bellek yoğun coinler neden sıradan bilgisayarlara uygundur?
+
+<Answer>
+Bellek yoğun bir iş kanıtı, her hash'in büyük bir bellek bloğunu doldurmasını ve geri okumasını gerektirir. Yalnızca hash için üretilmiş bir çip bile her çekirdeğin yanında gigabaytlarca hızlı RAM'e ihtiyaç duyar; masaüstü bilgisayarlar, dizüstüler ve sunucular ise zaten bu bellekle ve onu besleyecek denetleyicilerle gelir.
+</Answer>
+
+Bitcoin'in SHA-256'sı neredeyse hiç bellek gerektirmez. Her hash kısa bir aritmetik patlamasıdır, bu yüzden özel bir çip birçok küçük hash devresini yan yana dizebilir. Genel amaçlı bir işlemci ise SHA-256'nın hiç kullanmadığı önbellekler, dallanma tahmini ve komut çözme birimleri de taşır.
+
+Bellek yoğun bir algoritma işin yapıldığı yeri değiştirir. Blocknet'in iş kanıtı 2 GiB bellek, tek geçiş ve tek şeritle çalışan [Argon2id](/tr/blog/argon2id-proof-of-work-explained/)'dir. Her hash yaklaşık 2 GiB bellek yazar ve yaklaşık 2 GiB geri okur. Geçişin ikinci yarısında her yeni blok, madencinin önceden tahmin edemeyeceği verilerle seçilen daha önceki bir bloğu okur. Hash ancak 2 GiB'lık bloğun tamamı oluşturulduğunda biter, bu yüzden hız, bellek sisteminin veriyi ne kadar hızlı taşıdığına ve aynı anda kaç tane 2 GiB'lık bloğun RAM'e sığdığına bağlıdır.
+
+Sıradan bilgisayarların zaten iyi olduğu kısım budur. Blocknet'in daemon kodu amacı doğrudan belirtir: 2 GB boyutunun “özel donanımı pratik olmaktan çıkardığı”, “ASIC'lere direnmek ve adil madenciliği sağlamak için bellek yoğun bir PoW.” Argon2id ASIC'lere direnecek şekilde tasarlanmıştır ve 2 GiB ayarı bu tasarımı insanların zaten sahip olduğu bilgisayarlar için devreye sokar.
+
+## CPU ile ne kazmalısınız?
+
+Bir listenin peşinden koşmak yerine bir coini birkaç soruyla değerlendirin:
+
+- **Algoritma CPU'lar için mi tasarlandı?** Monero'nun RandomX'i “genel amaçlı CPU'lar için optimize edilmiş bir iş kanıtı (PoW) algoritmasıdır” ve Monero onu 30 Kasım 2019'da etkinleştirdi. Blocknet'in Argon2id'si hash başına 2 GiB bellek kullanır; bu da RAM'i ve bellek bant genişliğini belirleyici kaynaklar yapar.
+- **Adil bir başlangıç yaptı mı?** Blocknet'te genesis bloğunda hiç işlem yoktur ve her bloğun ödülü, bloğu bulan madenciye ödenen tek bir çıktıdır. Konsensüste premine, hazine veya geliştirici fonu yoktur, bu yüzden dolaşımdaki her coin madencilikle çıkarılmıştır.
+- **İşlemcinizi tanıyan bir madenci yazılımı var mı?** İyi bir madenci yazılımı her CPU ailesi için ayrı kod yolları içerir ve makineniz için en hızlısını seçer.
+- **Düzenli ödeme yapan bir havuz var mı?** Havuz madenciliği birçok küçük madenciyi birleştirir, böylece ödüller blok blok değil düzenli olarak gelir. [Kripto madenciliği nasıl çalışır](/tr/blog/how-crypto-mining-works/) rehberi havuzları ve share'leri açıklar.
+
+Blocknet dördünü de karşılar. [Varsayılan olarak gizlilik](/tr/blog/blocknet-privacy-features/), beş dakikalık bloklar ve isimle ödeme sunan bir gizlilik coinidir ve Şubat 2026'da başladı. Madenci yazılımı seine ücretsiz ve açık kaynaktır; varsayılan havuzu ise altı saatlik bir pencereyle PPLNS yöntemiyle ödeme yapan bntpool.com'dur. [Blocknet'e genel bakış](/tr/blog/what-is-blocknet/) coinin kendisini anlatır.
+
+## Bir CPU'yu bellek yoğun madencilikte hızlı yapan nedir?
+
+Bir işlemcinin Blocknet'te saniyede kaç hash (H/s) üreteceğini üç şey belirler.
+
+**RAM kapasitesi.** Her madencilik iş parçacığı her hash için kendi 2 GiB'lık bloğuna ihtiyaç duyar, bu yüzden sığabilecek en fazla iş parçacığı sayısı için RAM'inizi ikiye bölün. 32 GB'lık bir bilgisayar kağıt üzerinde 16 blok tutar. seine RAM'in %5'ini yedekte tutar ve işletim sistemine yer bırakır; bu da o makineyi yaklaşık 14 iş parçacığına getirir. İş parçacığı sayısını çoğu zaman çekirdek sayısından önce RAM sınırlar. [Eski bir bilgisayarda veya dizüstünde madencilik](/tr/blog/mine-crypto-on-old-pc-or-laptop/) rehberi 4–16 GB'lık makineleri ele alır.
+
+**Bellek bant genişliği.** Her hash bellek sistemi üzerinden gigabaytlarca veri taşır. seine ile ölçülen en hızlı makine, 49,4 H/s'de her saniye yaklaşık 99 GiB yeni bellek bloğu yazar (49,4 × 2 GiB). Daha fazla bellek kanalına ve daha hızlı belleğe sahip işlemciler öne geçer.
+
+**Doğru kernel.** seine birkaç Argon2id kernel'i taşır: x86'da AVX2, AVX-512 ve bir streaming kernel'i, Arm'da ise SHA3 hızlı yoluna sahip NEON. Aynı çipte kernel büyük bir fark yaratır. AWS Graviton4'te önceden getirme kullanan SHA3 kernel'i düz NEON'dan %56 daha hızlı madencilik yapar (13,80'den 21,50 H/s'ye); AMD EPYC 9R45'te ise streaming kernel'i AVX2'den %30 daha hızlıdır (24 iş parçacığında 34,47'den 44,74 H/s'ye). seine madencilik yaparken kernel'leri karşılaştırır ve daha hızlı olanı tutar.
+
+Bunlar, her donanım nesli için seine ile ölçülen en iyi sonuçlardır:
+
+| Donanım | Tam çip | İş parçacığı | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | EPYC 9R45 sunucu | 32 | 49,4 H/s |
+| Arm sunucu | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | EPYC 9R14 sunucu | 32 | 38,2 H/s |
+| Apple M4 Max | 48 GB MacBook Pro | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+Apple M4 Max satırı bir dizüstü bilgisayardır ve güçlü bir bellek sisteminin Argon2id'ye ne kadar uygun olduğunu gösterir. Sunucu satırları 2 MiB'lık huge pages ile AWS makinelerinde çalıştırıldı. [Blocknet madencilik donanımı rehberi](/tr/blog/blocknet-mining-hardware-hashrate/) satın alma önerilerini ve RAM boyutlandırmayı ayrıntılı olarak ele alır; [Mac rehberi](/tr/blog/mine-blocknet-on-mac/) ise Apple Silicon'u anlatır.
+
+## Blocknet CPU madenciliğine nasıl başlanır?
+
+seine hiçbir yapılandırma gerektirmez. Kendini makinenize göre boyutlandırır ve hemen hash hesaplamaya başlar:
+
+1. **Bir adres edinin.** Resmi Blocknet cüzdanını kurun ve adresinizi kopyalayın ya da bir [Blocknet ID kısa adı](/tr/blog/blocknet-id-pay-by-name/) alın ve `@name` adına madencilik yapın. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) bunu adım adım anlatır.
+2. **seine'i indirin**; Windows, macOS veya Linux için [indirme bölümünden](/tr/#download) alın ve arşivden çıkarın.
+3. **Çalıştırın** ve istendiğinde adresinizi yapıştırın:
+
+```sh
+./seine
+```
+
+4. **Varsayılan havuzu kabul edin**, yani `stratum+tcp://bntpool.com:3333`; madencilik başlar.
+
+seine madencilik yaparken gerçek madencilik işi üzerinde iş parçacığı sayılarını ve CPU kernel'lerini karşılaştırır, bellek daralırsa geri çekilir ve işe yarayanı bir sonraki başlatma için hatırlar. Windows ve Linux'ta ayrıca makinedeki her NVIDIA ekran kartında aynı anda madencilik yapar ve hashrate'ler toplanır. [Adım adım madencilik rehberi](/tr/blog/how-to-mine-blocknet/) ödemeleri anlatır; Linux'ta ise [huge pages rehberi](/tr/blog/huge-pages-blocknet-mining/) 2 MiB'lık sayfalarla yaklaşık %4–6, 1 GiB'lık sayfalarla da %2 daha ekler.
+
+## CPU'nuz ne kadar kazar?
+
+Önce hashrate'inizi ölçün. seine'in çevrimdışı benchmark'ı havuz veya düğüm gerektirmez:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Ardından hesabı güncel sayılarla yapın. Blocknet her beş dakikada bir blok, yani günde 288 blok hedefler. Beklenen payınız şöyledir:
+
+- **Günlük blok** = 288 × (sizin H/s ÷ ağ H/s)
+- **Günlük BNT** = günlük blok × güncel blok ödülü
+
+Ağ hashrate'i ve blok ödülü zamanla değişir, bu yüzden hesaplamadan önce onları [bntpool.com](https://bntpool.com)'dan güncel olarak okuyun. Havuzda, bütün bir bloğu kendiniz bulmayı beklemek yerine bakiyeniz 0,1 BNT'ye ulaştığında düzenli PPLNS ödemeleri alırsınız. Bu BNT'nin değeri ise coin fiyatına ve elektrik maliyetinize bağlıdır.
+
+<Note>
+Yukarıdaki her şey Blocknet'in mevcut Argon2id iş kanıtını anlatır. [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, 2027-02-16 civarında “daha hafif bir iş kanıtı” getirecek Faraday adlı bir ağ yükseltmesi planlıyor. seine başlarken ve her 12 saatte bir yeni sürümleri kontrol eder.
+</Note>
+
+<CTA target="seine" title="seine ile CPU madenciliğine başlayın" text="seine, bntpool.com'da madencilik yaparken iş parçacıklarını RAM'inize göre boyutlandırır ve işlemciniz için en hızlı kernel'i seçer." />

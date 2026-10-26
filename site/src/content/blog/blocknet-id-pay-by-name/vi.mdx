@@ -1,0 +1,104 @@
+---
+title: Nhận thanh toán qua @name với Blocknet ID
+description: Đăng ký tên ngắn Blocknet ID tại blocknet.id, rồi nhận BNT, chia sẻ liên kết thanh toán và đào trên bntpool.com bằng @name thay vì địa chỉ dài hơn 90 ký tự.
+tags: [Blocknet ID, Ví, Thanh toán, bntpool]
+faq:
+  - q: 'Tên ngắn Blocknet ID có phân biệt chữ hoa chữ thường không?'
+    a: 'Không. Tên ngắn không phân biệt chữ hoa chữ thường, nên @Alice, @alice và $ALICE đều trỏ tới cùng một ví. Tên dùng các chữ cái từ a đến z, chữ số từ 0 đến 9, dấu gạch dưới, dấu gạch ngang và dấu chấm, và dài tối đa 64 ký tự. Cả hai tiền tố @ và $ đều dùng được ở mọi nơi chấp nhận tên.'
+  - q: 'Blocknet ID có miễn phí không?'
+    a: 'Tính đến tháng 10 năm 2026, tên từ chín ký tự trở lên được miễn phí trong thời gian khuyến mãi của blocknet.id, không hóa đơn và không thanh toán. Tên ngắn hơn có giá trả một lần, tăng dần khi tên càng ngắn, bắt đầu từ 100 BNT cho tên tám ký tự. Trang bảng giá tại blocknet.id liệt kê giá cho mọi độ dài.'
+  - q: 'Có thể đào về tên ngắn Blocknet ID trên bntpool.com không?'
+    a: 'Có. Nhập @name của bạn khi seine hỏi địa chỉ nhận thanh toán, hoặc truyền nó bằng --address. seine kiểm tra bản ghi đã ký tại blocknet.id, hiển thị địa chỉ đầy đủ mà tên phân giải ra, và đào về địa chỉ đó trong suốt phiên chạy. Tên ngắn cần seine v0.2.16 trở lên, và bntpool.com cũng chấp nhận tên khi đăng nhập.'
+  - q: 'Số dư trên pool sẽ ra sao nếu tôi trỏ tên sang địa chỉ mới?'
+    a: 'Số dư hiện có vẫn thuộc về địa chỉ đã kiếm được nó, và bntpool.com trả về địa chỉ đó như bình thường. Pool theo dõi share, số dư và khoản thanh toán theo địa chỉ đầy đủ, nên việc đổi tên không bao giờ chuyển hướng số dư hiện có. Lần tới bạn bắt đầu đào, tên được phân giải lại và share mới sẽ về địa chỉ mới.'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+Với một tên ngắn Blocknet ID, mọi người có thể trả tiền cho bạn tại `@yourname`, bạn có thể chia sẻ một liên kết thanh toán vừa trong một tin nhắn chat, và bạn có thể đào trên bntpool.com về cùng tên đó. Hướng dẫn này trình bày cách tên hoạt động, cách đăng ký tên tại blocknet.id, và cách dùng tên trong ví và trong seine.
+
+## Tên ngắn Blocknet ID là gì?
+
+<Answer>
+Tên ngắn Blocknet ID là một tên ngắn như @alice hoặc $alice trỏ tới địa chỉ ví Blocknet của bạn. Bạn đăng ký nó tại blocknet.id. Ví, seine và bntpool.com tra cứu tên, kiểm tra rằng blocknet.id đã ký bản ghi, rồi dùng địa chỉ đầy đủ mà tên ánh xạ tới.
+</Answer>
+
+Các quy tắc giống nhau ở mọi nơi chấp nhận tên:
+
+- **Hai tiền tố.** `@name` và `$name` là cùng một tên. Dùng dạng nào bạn thích.
+- **Không phân biệt chữ hoa chữ thường.** `@Alice` và `@alice` phân giải ra cùng một địa chỉ.
+- **Ký tự đơn giản.** Chữ cái từ a đến z, chữ số từ 0 đến 9, dấu gạch dưới, dấu gạch ngang và dấu chấm.
+- **Tối đa 64 ký tự.**
+
+Mọi bản ghi tại blocknet.id đều được ký. Khi ví phân giải một tên, nó tải bản ghi, rồi kiểm tra chữ ký Ed25519 của bản ghi với khóa ký mà blocknet.id công bố tại `https://blocknet.id/.well-known/blocknet-id.json`. Dữ liệu được ký chứa tên, địa chỉ và thời điểm cập nhật gần nhất, và ví xác nhận cả ba đều khớp trước khi dùng địa chỉ. Mỗi tên cũng có một trang công khai tại blocknet.id hiển thị địa chỉ, dữ liệu được ký và chữ ký, nên bất kỳ ai cũng có thể tự kiểm tra một bản ghi.
+
+## Vì sao nên thanh toán cho một tên thay vì một địa chỉ?
+
+Địa chỉ Blocknet là mã hóa base58 của spend key công khai, view key công khai và một checksum, dài 92 hoặc 93 ký tự. Đó là một chuỗi dài để sao chép giữa các ứng dụng, đọc to lên hay đặt vào hồ sơ cá nhân. Tên ngắn là thứ bạn có thể nói trong một câu, in lên nhãn dán hoặc đặt vào phần giới thiệu.
+
+Bạn cũng có một bước xác nhận rõ ràng. Khi bạn gửi tới một tên, ví in ra địa chỉ mà tên phân giải ra và đánh dấu đã xác minh trước khi bạn chấp thuận khoản thanh toán. Tên chỉ thay thế địa chỉ mà đằng nào bạn cũng sẽ chia sẻ. Trên chuỗi, khoản thanh toán là một giao dịch Blocknet bình thường tới một [địa chỉ ẩn dùng một lần](/vi/blog/blocknet-privacy-features/), nên nó vẫn riêng tư như mọi khoản thanh toán khác.
+
+## Làm sao để có Blocknet ID?
+
+<Answer>
+Sao chép địa chỉ ví của bạn, mở blocknet.id và tìm tên bạn muốn. Nếu tên còn trống, trang web hiển thị giá; dán địa chỉ của bạn và gửi đi. Tên từ chín ký tự trở lên được miễn phí trong đợt khuyến mãi hiện tại. Sau khi đăng ký, tên của bạn dùng được trong ví, seine và bntpool.com.
+</Answer>
+
+1. **Sao chép địa chỉ.** Trong ví dòng lệnh, lệnh `address` in ra địa chỉ, kèm theo dòng "Get a short name like @name or $name at https://blocknet.id". Tải ví từ [bản phát hành dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) hoặc [bản phát hành desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Tìm một tên.** Vào [blocknet.id](https://blocknet.id), gõ tên vào ô "find a name" và nhấn Search. Trong khi bạn gõ, trang sẽ báo nếu có ký tự không được phép hoặc tên quá dài.
+3. **Kiểm tra kết quả.** Tên còn trống sẽ hiển thị giá. Tên đã được đăng ký sẽ hiển thị địa chỉ, thời điểm cập nhật gần nhất và liên kết tới trang công khai của nó.
+4. **Đăng ký.** Dán địa chỉ ví của bạn và nhấn "Claim free" (hoặc "Register" với tên có tính phí).
+
+Giá là khoản phí trả một lần theo độ dài tên. Tại thời điểm viết bài (tháng 10 năm 2026), mọi tên từ chín ký tự trở lên đều miễn phí theo chương trình khuyến mãi, theo lời trang web là “không hóa đơn, không thanh toán”. Tên tám ký tự có giá 100 BNT, và tên ngắn hơn có giá cao hơn, lên tới 6.000 BNT cho tên một ký tự. [Trang bảng giá](https://blocknet.id/pricing) liệt kê mọi độ dài.
+
+Để quản lý tên về sau, dùng "sign in" tại blocknet.id bằng địa chỉ Blocknet của bạn. Trang quản lý là nơi bạn trỏ tên sang một địa chỉ khác.
+
+## Làm sao để gửi BNT tới một tên?
+
+Trong ví dòng lệnh, đặt tên vào chỗ của địa chỉ:
+
+```
+send @rock 100 "hello"
+```
+
+Ví phân giải `@rock`, in ra `Resolved @rock -> <address>` kèm dấu đã xác minh, rồi yêu cầu bạn xác nhận. Màn hình xác nhận hiển thị tên, địa chỉ đầy đủ, phí và memo của bạn. Dạng `$rock` hoạt động y như vậy, và `send` nhận số tiền nguyên hoặc số lẻ.
+
+API của ví phân giải tên theo cùng cách cho mọi người nhận trong một yêu cầu gửi, nên các công cụ xây dựng trên ví có thể thanh toán bằng tên mà không cần làm thêm gì.
+
+## Liên kết thanh toán hoạt động với tên như thế nào?
+
+Một [liên kết thanh toán](/vi/blog/blocknet-payment-links/) mang theo người nhận, số tiền và một memo tùy chọn. Blocknet hỗ trợ hai dạng:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+Liên kết bntpay.com dùng được với tên thay cho địa chỉ, nên nó vẫn ngắn gọn. Mở liên kết sẽ hiện một trang với "Pay $yourname", số tiền và memo, cùng nút "Open in Wallet" mở khoản thanh toán dưới dạng liên kết `blocknet://`. Nếu bạn dán dạng nào trong hai dạng này vào ví dòng lệnh, ví sẽ điền sẵn một lệnh gửi để bạn xác nhận. Hãy kèm trường `amount`; memo là tùy chọn và chứa tối đa 124 byte văn bản.
+
+Nhờ vậy, bạn dễ dàng đăng một liên kết để nhận tiền tip hoặc gửi hóa đơn chỉ trong một tin nhắn.
+
+## Làm sao để đào về @name của bạn?
+
+seine và bntpool.com đều chấp nhận tên ngắn làm địa chỉ nhận thanh toán. Khi bạn khởi động [seine](/vi/#download) lần đầu, nhập `@yourname` ở lời nhắc nhập địa chỉ và chấp nhận pool mặc định. Để truyền tên qua dòng lệnh, hãy đặt nó trong dấu nháy:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Đặt tên ngắn trong dấu nháy khi dùng trong lệnh shell, nhất là dạng `$name`, để shell truyền nó đi nguyên vẹn. Tên ngắn cần seine v0.2.16 trở lên.
+</Note>
+
+Đây là những gì xảy ra tiếp theo:
+
+- **seine phân giải tên khi khởi động.** Nó xác minh bản ghi đã ký từ blocknet.id, kiểm tra địa chỉ, ghi log địa chỉ đầy đủ mà tên phân giải ra, và giữ địa chỉ đó trong suốt phiên chạy, kể cả khi kết nối lại pool.
+- **Pool cũng chấp nhận tên khi đăng nhập.** bntpool.com xác minh ánh xạ đã ký khi thợ đào kết nối bằng tên, và dùng địa chỉ đầy đủ đã phân giải cho job, share, số dư và khoản thanh toán.
+- **Bạn có thể tra cứu chính mình theo tên.** Trang thống kê trên [bntpool.com](https://bntpool.com) chấp nhận `@name` và `$name`, nên bạn có thể theo dõi hashrate và số dư mà không cần dán địa chỉ.
+- **Tên đã lưu được phân giải lại ở lần chạy sau.** seine lưu tên trong cấu hình, nên mỗi lần khởi động mới sẽ lấy địa chỉ mà tên của bạn đang trỏ tới vào thời điểm đó.
+
+Vì số dư thuộc về địa chỉ đầy đủ, việc đổi tên về sau không bao giờ chuyển hướng số dư hiện có. Mọi thứ bạn đã kiếm được vẫn thuộc về địa chỉ đã kiếm được nó và được trả về đó, còn phần đào mới sẽ về địa chỉ mới. Cùng một tên cũng dùng được ở chế độ solo với node của riêng bạn.
+
+Mới làm quen với đào coin? [Hướng dẫn đào Blocknet](/vi/blog/how-to-mine-blocknet/) trình bày cách tải seine, phần cứng và các khoản thanh toán trên bntpool.com.
+
+<CTA target="pool" title="Đào về @name của bạn" text="bntpool.com chấp nhận tên ngắn Blocknet ID của bạn làm tên đăng nhập nhận thanh toán. Bắt đầu đào chỉ trong vài phút." />

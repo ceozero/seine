@@ -1,0 +1,94 @@
+---
+title: 'Giải thích địa chỉ ẩn: địa chỉ dùng một lần hoạt động thế nào'
+description: Giải thích địa chỉ ẩn (stealth address) bằng ngôn ngữ đơn giản. Tìm hiểu cách địa chỉ dùng một lần, view key, spend key và việc ví quét chuỗi giữ riêng tư mọi khoản thanh toán cho bạn.
+tags: [Quyền riêng tư, Địa chỉ ẩn, Ví, Blocknet]
+faq:
+  - q: 'Địa chỉ ẩn có giống địa chỉ dùng một lần không?'
+    a: 'Chúng là hai nửa của cùng một hệ thống. Địa chỉ ẩn là địa chỉ bạn công bố, gồm một public spend key và một public view key. Địa chỉ dùng một lần là khóa mới mà người gửi tạo ra từ đó cho một khoản thanh toán duy nhất. Chỉ địa chỉ dùng một lần xuất hiện trên chuỗi, còn địa chỉ bạn công bố thì không bao giờ.'
+  - q: 'Người khác có xem được số dư của tôi nếu biết địa chỉ ẩn của tôi không?'
+    a: 'Không. Biết địa chỉ bạn công bố không giúp ai tìm ra các khoản thanh toán của bạn, vì mỗi khoản đều đến một khóa dùng một lần trông không liên quan gì đến nó. Muốn tìm ra chúng cần private view key của bạn, nên chỉ ví của bạn mới liệt kê được những gì bạn đã nhận. Trong Blocknet, số tiền cũng được che giấu, nên ngay cả bản thân các output cũng không hiển thị giá trị.'
+  - q: 'Người khác làm được gì với private view key của tôi?'
+    a: 'Private view key cho phép người giữ nó tìm các khoản thanh toán gửi cho bạn, đọc số tiền và memo của chúng. Nó không thể chi tiêu gì cả, vì chi tiêu cần private spend key. Trong Blocknet, lệnh viewkeys biến view key của bạn thành một ví chỉ xem, tiện cho việc theo dõi tiền trên một máy tính thứ hai. Chỉ chia sẻ nó với người bạn tin tưởng.'
+  - q: 'Tôi có phải bật địa chỉ ẩn trong Blocknet không?'
+    a: 'Không. Mọi khoản thanh toán Blocknet tự động đến một địa chỉ ẩn dùng một lần, vì định dạng giao dịch không có chế độ minh bạch. Ví của bạn tạo khóa dùng một lần khi bạn gửi và tìm các khoản thanh toán nhận vào bằng view key khi đồng bộ. Không có gì phải cấu hình, dù bạn thanh toán cho một địa chỉ hay một @name.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Địa chỉ ẩn cho phép bạn công bố một địa chỉ duy nhất mà mọi khoản thanh toán cho bạn vẫn đến một nơi mới trên chuỗi. Bài hướng dẫn này giải thích cách điều đó hoạt động, view key và spend key của bạn làm gì, và cách ví tìm ra các khoản thanh toán của chính nó, với Blocknet làm ví dụ minh họa.
+
+## Địa chỉ ẩn là gì?
+
+<Answer>
+Địa chỉ ẩn là một địa chỉ công khai không bao giờ xuất hiện trên blockchain. Nó chứa hai khóa công khai, một spend key và một view key. Với mỗi khoản thanh toán, ví của người gửi kết hợp chúng với một số ngẫu nhiên mới để tạo ra một địa chỉ dùng một lần mà chỉ người nhận mới nhận ra và chi tiêu được.
+</Answer>
+
+Trên một sổ cái công khai, một địa chỉ thông thường xuất hiện trong mọi khoản thanh toán nó nhận. Một địa chỉ Bitcoin tiêu chuẩn hoạt động như vậy: bất kỳ ai biết nó đều có thể tra từng khoản thanh toán và cộng ra tổng số. Đó là lý do nhiều ví Bitcoin cấp một địa chỉ mới cho mỗi khoản thanh toán.
+
+Địa chỉ ẩn làm việc đó thay bạn. Bạn chia sẻ một địa chỉ, trên trang web, trong hồ sơ hoặc dưới dạng `@name`, và mỗi người gửi tạo ra một địa chỉ dùng một lần khác nhau từ đó. Mười khoản thanh toán cho bạn trở thành mười output không có điểm chung nào nhìn thấy được với nhau hay với địa chỉ bạn đã chia sẻ. Không cần trao đổi qua lại: người gửi tự tính ra địa chỉ dùng một lần, từ địa chỉ công khai của bạn và một số ngẫu nhiên.
+
+## Địa chỉ ẩn ra đời từ đâu?
+
+Thiết kế địa chỉ dùng một lần mà Monero, Blocknet và các đồng coin khác sử dụng bắt nguồn từ whitepaper CryptoNote v2.0 của Nicolas van Saberhagen, đề ngày 17 tháng 10 năm 2013. Nó gọi ý tưởng này là "thanh toán không thể liên kết" và mô tả việc người gửi tạo ra một "khóa công khai dùng một lần" từ địa chỉ của người nhận. Tài liệu của Monero mô tả địa chỉ ẩn là cho phép người gửi tạo "các địa chỉ dùng một lần ngẫu nhiên cho mọi giao dịch thay mặt người nhận."
+
+Ý tưởng này đã lan ra ngoài phạm vi [các đồng coin riêng tư](/vi/blog/what-is-a-privacy-coin/). [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) của Bitcoin cho phép một địa chỉ Bitcoin cố định nhận các khoản thanh toán không thể liên kết trên chuỗi, và [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) của Ethereum, ra đời năm 2022, chuẩn hóa địa chỉ ẩn cho các tài khoản Ethereum. Cả hai đều là tính năng tùy chọn trên các chuỗi đó. Trong Blocknet, mọi khoản thanh toán đều dùng địa chỉ dùng một lần.
+
+## Địa chỉ ẩn hoạt động như thế nào?
+
+<Answer>
+Người gửi chọn một số ngẫu nhiên r, công bố R = r·G trong giao dịch, và kết hợp r với public view key của người nhận thành một bí mật chung. Cộng bí mật đó vào public spend key sẽ ra khóa dùng một lần. Người nhận tái tạo cùng bí mật đó từ R và private view key của mình, nên chỉ họ mới tìm ra khoản thanh toán.
+</Answer>
+
+Ví của bạn giữ hai cặp khóa. Mỗi khóa riêng là một số bí mật (s cho spend, v cho view), và mỗi khóa công khai là số đó nhân với một điểm cố định G trên đường cong. Địa chỉ của bạn chỉ đơn giản là hai khóa công khai, S và V. Đây là toàn bộ quá trình trao đổi:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+Mấu chốt là một phép trao đổi Diffie-Hellman. Người gửi tính r·V và người nhận tính v·R, và cả hai cùng ra một điểm, vì mỗi bên đều bằng r·v·G. Không ai khác biết r hay v, nên không ai khác tính được nó. Băm điểm đó (H) cho ra một bí mật chung, và khóa dùng một lần P chính là bí mật đó, dưới dạng một điểm, cộng với public spend key của bạn.
+
+Khi quét, bạn tính lại bí mật từ R và private view key của mình rồi kiểm tra xem nó có tạo ra P không. Nếu có, output đó là của bạn. Để chi tiêu nó, ví cộng cùng bí mật đó vào private spend key của bạn, cho ra khóa riêng x của riêng output đó.
+
+Blocknet đi theo thiết kế này trên nhóm Ristretto dựa trên Curve25519, băm bằng SHA-256 với một thẻ miền riêng của Blocknet. Nó cũng trộn vị trí của mỗi output trong giao dịch vào hàm băm, nên hai output gửi cho cùng một người trong một giao dịch vẫn có các khóa không liên quan đến nhau. Cùng bí mật chung đó còn tạo ra giá trị làm mù che giấu số tiền của output và khóa mã hóa memo của nó, đó là cách người nhận đọc được cả hai.
+
+## View key và spend key làm gì?
+
+Việc tách khóa cho bạn hai cấp độ truy cập:
+
+- **Private view key tìm các khoản thanh toán.** Với v và public spend key của bạn, ví có thể nhận ra mọi output gửi cho bạn, giải mã số tiền và đọc memo của nó.
+- **Private spend key chi tiêu chúng.** Chỉ s mới biến một output đã tìm thấy thành khóa riêng x có thể ký một lần chi tiêu.
+
+Sự tách biệt đó giúp tạo ra ví chỉ xem. Trong ví dòng lệnh Blocknet, `viewkeys` tạo một tệp ví riêng từ các view key của bạn. Phần trợ giúp của ví mô tả đây là tệp "có thể theo dõi nhưng không thể chi tiêu", hữu ích khi "bạn muốn quyền chỉ xem trên một máy khác". Khi bạn chạy lệnh, ví giải thích nó đang tạo gì:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Chỉ đưa ví chỉ xem cho người mà bạn sẵn sàng cho xem lịch sử, chẳng hạn kế toán của bạn, hoặc giữ nó trên một máy tính thứ hai của riêng bạn. Dù theo cách nào, nó cũng có thể theo dõi tiền đến trong khi spend key của bạn vẫn nằm trên chiếc máy bạn tin tưởng.
+
+## Ví tìm các khoản thanh toán của nó như thế nào?
+
+Vì khóa dùng một lần trông không liên quan đến địa chỉ của bạn, không có gì trên chuỗi đánh dấu output nào là của bạn. Ví của bạn tự kiểm tra. Với mọi giao dịch trong mọi khối mới, nó lấy R, tính bí mật chung bằng private view key của bạn và kiểm tra từng output theo công thức ở trên. Đây là việc ví đang làm khi nó đồng bộ.
+
+Bộ quét của Blocknet giữ việc này nhanh chóng. Bước tốn kém, nhân R với view key của bạn, chỉ chạy một lần cho mỗi giao dịch, rồi mọi output trong giao dịch đó được kiểm tra với kết quả. Khi một output khớp, ví giải mã số tiền và đối chiếu nó với Pedersen commitment của output trước khi cộng vào số dư của bạn.
+
+Việc quét cũng giúp khôi phục trở nên đơn giản. Cả hai cặp khóa Blocknet đều được tạo từ [cụm từ khôi phục](/vi/blog/seed-phrase-explained/) 12 từ của bạn, nên khôi phục seed trên máy tính mới sẽ tái tạo các khóa, và ví quét lại chuỗi để tìm mọi output thuộc về bạn. [Hướng dẫn ví Blocknet](/vi/blog/blocknet-wallet-for-mining/) chỉ cách sao lưu seed và khôi phục nó.
+
+## Địa chỉ ẩn trong Blocknet
+
+Trong Blocknet, địa chỉ ẩn đơn giản là địa chỉ của bạn. Nó là bản mã hóa base58 của public spend key, public view key và một checksum 4 byte, dài 92 hoặc 93 ký tự. Mọi khoản thanh toán cho bạn đều dùng nó, vì định dạng giao dịch không có chế độ minh bạch. Phần thưởng khối cũng đến các khóa dùng một lần, nên output coinbase của người đào solo được tìm thấy bằng cùng cách quét.
+
+Địa chỉ ẩn kết hợp với phần còn lại của các lớp riêng tư trong Blocknet: [vòng 16](/vi/blog/ring-signatures-explained/) che giấu output mà một lần chi tiêu xuất phát từ đó, [commitment](/vi/blog/bulletproofs-explained/) che giấu số tiền, và Dandelion++ che giấu nơi giao dịch đi vào mạng. [Hướng dẫn quyền riêng tư Blocknet](/vi/blog/blocknet-privacy-features/) trình bày từng lớp.
+
+Chúng cũng hoạt động với tên. Một [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) như `@yourname` được ánh xạ công khai tới địa chỉ của bạn, nên người gửi có thể tra cứu nó trên blocknet.id. Bản thân các khoản thanh toán vẫn đến những khóa dùng một lần mới, nên tên của bạn không tiết lộ gì về những gì bạn đã nhận.
+
+Điều đó khiến tên ngắn trở thành một địa chỉ nhận thanh toán tiện lợi khi đào coin. Khởi động [seine](/vi/#download), nhập địa chỉ hoặc `@yourname` khi được hỏi và chấp nhận pool mặc định, bntpool.com. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) trình bày phần còn lại, và ví của bạn tìm ra số BNT bạn kiếm được bằng chính cách quét bằng view key mô tả ở trên.
+
+<CTA target="seine" title="Đào BNT về địa chỉ của chính bạn" text="Tải seine, nhập địa chỉ Blocknet hoặc @name của bạn, và đào trên bntpool.com chỉ sau vài phút." />

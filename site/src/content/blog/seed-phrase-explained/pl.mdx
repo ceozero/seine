@@ -1,0 +1,103 @@
+---
+title: Fraza seed – czym jest i jak bezpiecznie ją przechowywać
+description: Fraza seed to lista słów, z której można odtworzyć portfel kryptowalut. Dowiedz się, jak działa, jak przechowywać ją offline i dlaczego nigdy nie wolno jej udostępniać.
+tags: [Portfel, Fraza seed, Bezpieczeństwo]
+faq:
+  - q: 'Czym różni się fraza seed od klucza prywatnego?'
+    a: 'Klucz prywatny bezpośrednio kontroluje środki, a fraza seed to czytelna dla człowieka kopia zapasowa, którą portfel zamienia na klucze prywatne. W portfelu Blocknet 12 słów tworzy zarówno klucz wydawania, jak i klucz podglądu, więc sama fraza wystarczy, aby odtworzyć portfel i wszystko, co potrafi.'
+  - q: 'Czy mogę odzyskać portfel, jeśli zgubię frazę seed?'
+    a: 'Możesz dalej korzystać z portfela, dopóki masz plik portfela i jego hasło. Fraza seed to kopia zapasowa na wypadek utraty pliku lub hasła. Dopóki portfel się otwiera, wyświetl frazę ponownie poleceniem seed lub opcją View Recovery Seed i zapisz ją.'
+  - q: 'Czy przechowywanie frazy seed w menedżerze haseł jest bezpieczne?'
+    a: 'Poradnik portfela Blocknet zaleca trzymanie frazy seed offline na papierze, z dala od plików tekstowych, aplikacji do notatek i chmury, bo każdy, kto przeczyta 12 słów, kontroluje środki. Papierowe kopie trzymane w dwóch różnych bezpiecznych miejscach dają kopię zapasową, która nigdy nie styka się z internetem.'
+  - q: 'Czy fraza seed działa w każdej aplikacji portfela?'
+    a: 'Lista słów to wspólny standard, ale każda kryptowaluta zamienia słowa na klucze na swój sposób. Frazę seed Blocknetu przywracaj w oficjalnym portfelu Blocknet wiersza poleceń lub desktopowym. Oba przyjmują 12 słów i po przeskanowaniu łańcucha odtwarzają ten sam adres i saldo.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Fraza seed to krótka lista słów, z której można odtworzyć portfel kryptowalut na dowolnym komputerze. Ten poradnik wyjaśnia, czym są te słowa, jak portfel zamienia je na klucze, jak je przechowywać, aby nigdy nie stracić dostępu, i dlaczego nikt inny nie powinien ich nigdy zobaczyć. Przykłady dotyczą portfela Blocknet i jego 12-wyrazowej frazy odzyskiwania.
+
+## Czym jest fraza seed?
+
+<Answer>
+Fraza seed, nazywana też frazą odzyskiwania lub mnemoniczną, to lista zwykłych słów, zwykle 12 lub 24, która koduje sekret, z którego pochodzą klucze Twojego portfela. Wpisz te słowa w zgodnym portfelu, a odtworzy on te same klucze, adresy i saldo, nawet jeśli nie masz już komputera ani pliku portfela.
+</Answer>
+
+Każdy portfel kryptowalut opiera się na tajnych kluczach. Klucz to długa losowa liczba, którą trudno przepisać ręcznie i łatwo przy tym pomylić. Fraza seed zapisuje ten sam sekret jako słowa ze stałej listy, więc możesz przepisać ją na papier, odczytać i wpisać nawet po latach.
+
+Portfel Blocknet nazywa swoją frazę **recovery seed** (frazą odzyskiwania). Ma ona 12 słów, a portfel tworzy ją, gdy zakładasz nowy portfel. Przechowuj ją bezpiecznie, a zawsze odzyskasz swój portfel.
+
+## Jak działa fraza seed?
+
+Wiele portfeli stosuje BIP39, standard napisany dla Bitcoina w 2013 roku przez Marka Palatinusa, Pavola Rusnaka, Aarona Voisine'a i Seana Bowe'a. Działa on w trzech krokach.
+
+1. **Losowe bity.** Portfel losuje od 128 do 256 bitów. Fraza z 12 słów mieści 128 bitów, a fraza z 24 słów 256.
+2. **Suma kontrolna, a potem słowa.** Portfel haszuje te bity za pomocą SHA-256 i dodaje kilka pierwszych bitów hasha jako sumę kontrolną (4 bity dla 12 słów). Następnie dzieli wynik na kawałki po 11 bitów. Każdy kawałek to liczba od 0 do 2047, która wybiera jedno słowo z listy 2048 słów.
+3. **Seed dla kluczy.** Aby użyć frazy, portfel przepuszcza ją przez PBKDF2 z HMAC-SHA512 w 2048 rundach i otrzymuje 64-bajtowy seed. Z tego seeda pochodzą klucze.
+
+Dzięki sumie kontrolnej portfel może Ci powiedzieć, że fraza jest błędna. Tylko 1 na 16 losowych kombinacji 12 słów ma prawidłową sumę kontrolną, więc większość literówek i zamienionych słów zostaje wychwycona, zanim cokolwiek się stanie. Angielska lista jest też ułożona tak, że pierwsze cztery litery każdego słowa są unikalne, co pomaga, gdy pismo jest trudne do odczytania.
+
+### Co oznacza 12 słów w Blocknecie
+
+Portfel Blocknet używa standardowej angielskiej listy BIP39 i 128 bitów losowości, więc każda fraza odzyskiwania ma 12 słów. Zamienia te słowa na swój 64-bajtowy seed za pomocą kroku PBKDF2 z BIP39, bez dodatkowego hasła (passphrase). Pierwsze 32 bajty stają się Twoim **kluczem wydawania** (spend key), a ostatnie 32 bajty Twoim **kluczem podglądu** (view key). Twój adres powstaje z publicznych połówek tych dwóch kluczy, więc te same 12 słów zawsze prowadzi z powrotem do tego samego adresu. Poradnik o [adresach stealth](/pl/blog/stealth-addresses-explained/) wyjaśnia, jak klucz wydawania i klucz podglądu współpracują, aby prywatnie odbierać płatności.
+
+Jak duże jest 128 bitów? Możliwych seedów jest 2^128, czyli około 3,4 × 10^38. Nikt nie znajdzie Twojego portfela, zgadując słowa. Jedyny praktyczny sposób, by się do niego dostać, to zobaczyć Twoją frazę, i dlatego reszta tego poradnika dotyczy jej dobrego przechowywania.
+
+## Fraza seed, hasło i plik portfela: czym się różnią?
+
+Ludzie często mylą trzy rzeczy, które chronią portfel. Oto, co każda z nich robi w portfelu Blocknet.
+
+| | Czym jest | Co Ci daje |
+|---|---|---|
+| Fraza odzyskiwania | 12 słów, które zapisujesz | Pełną kontrolę nad portfelem na dowolnym komputerze |
+| Hasło portfela | Hasło, które wybierasz | Otwiera plik portfela na tym komputerze |
+| Plik portfela | Jeden plik `.wallet.dat` | Twoje klucze i historię, zaszyfrowane Twoim hasłem |
+
+Hasło szyfruje plik portfela (portfel wyprowadza klucz szyfrujący za pomocą Argon2id i szyfruje algorytmem AES-GCM), a Blocknet nigdzie go nie przechowuje. Hasło nie bierze udziału w tworzeniu Twoich kluczy. Gdy przywracasz portfel z 12 słów, wybierasz nowe hasło dla nowego pliku portfela. Dlatego fraza seed jest najważniejszą kopią zapasową: działa nawet wtedy, gdy zgubisz plik i zapomnisz hasła.
+
+## Jak przechowywać frazę seed?
+
+<Answer>
+Zapisz słowa na papierze w odpowiedniej kolejności, porównaj każde słowo z ekranem i trzymaj kartkę w bezpiecznym miejscu offline. Zrób drugą kopię i przechowuj ją gdzie indziej. Nie umieszczaj frazy na zdjęciach, w plikach tekstowych, aplikacjach do notatek, e-mailach ani w chmurze, bo każdy, kto ją przeczyta, kontroluje środki.
+</Answer>
+
+Te nawyki sprawiają, że fraza seed jest zarazem bezpieczna i gotowa do użycia:
+
+- **Najpierw papier.** Poradnik portfela Blocknet zaleca zapisanie frazy seed na papierze i przechowywanie jej w bezpiecznym miejscu. Ponumeruj słowa od 1 do 12, bo kolejność ma znaczenie.
+- **Sprawdź raz.** Porównaj każde słowo z ekranem, zanim go zamkniesz. Pisownia się liczy, a pierwsze cztery litery każdego słowa wystarczą, by je odróżnić.
+- **Dwie kopie, dwa miejsca.** Jedna kopia w domu i jedna w innym zaufanym miejscu chronią Cię przed pożarem, powodzią czy zgubioną szufladą. Niektórzy z tego samego powodu wybijają też słowa na metalowej płytce.
+- **Trzymaj ją offline.** Zrzuty ekranu, zdjęcia z telefonu, aplikacje do notatek i foldery w chmurze synchronizują się lub tworzą kopie zapasowe w miejscach, nad którymi nie masz kontroli. Poradnik portfela wymienia pliki tekstowe, aplikacje do notatek i chmurę jako miejsca, w których fraza seed nigdy nie powinna się znaleźć.
+- **Trzymaj ją w tajemnicy.** Przechowuj ją tam, gdzie nie natkną się na nią goście, współpracownicy ani serwisanci.
+
+## Dlaczego nigdy nie wolno udostępniać frazy seed?
+
+Te 12 słów to Twój portfel. Kto je ma, może odtworzyć portfel na własnym komputerze i wysłać wszystko, co się w nim znajduje, a transakcji zapisanej w łańcuchu nie da się cofnąć. Portfel Blocknet wyświetla to ostrzeżenie za każdym razem, gdy prosisz o pokazanie frazy seed:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Traktuj każdą prośbę o frazę seed jako oszustwo, bez względu na to, jak oficjalnie wygląda. Twórcy portfeli, giełdy, pule i pracownicy wsparcia nigdy jej nie potrzebują. Strona lub aplikacja, która prosi, abyś „zweryfikował” lub „zsynchronizował” portfel, wpisując słowa, próbuje zabrać Twoje monety.
+
+Nigdy nie musisz udostępniać frazy seed, aby cokolwiek załatwić:
+
+- **Aby otrzymać zapłatę**, udostępnij swój adres albo [krótką nazwę Blocknet ID](/pl/blog/blocknet-id-pay-by-name/), taką jak `@yourname`, która na niego wskazuje.
+- **Aby ktoś mógł widzieć przychodzące środki**, polecenie `viewkeys` eksportuje klucze tylko do podglądu. Portfel tylko do podglądu pokazuje przychodzące płatności i nie może wysyłać. [Poradnik o prywatności](/pl/blog/blocknet-privacy-features/) wyjaśnia, co ujawniają klucze podglądu.
+- **Aby kopać**, seine i bntpool.com potrzebują tylko Twojego adresu lub krótkiej nazwy. Portfel i jego fraza seed mogą zostać na jednym komputerze, któremu ufasz, a każda maszyna kopiąca wpłaca na ten sam adres.
+
+## Jak wyświetlić i przywrócić frazę odzyskiwania Blocknet?
+
+W portfelu wiersza poleceń wpisz `seed` w wierszu poleceń portfela. Portfel pokaże powyższe ostrzeżenie, poprosi o potwierdzenie, poprosi o hasło, a potem wypisze 12 słów w ponumerowanych wierszach. W portfelu desktopowym otwórz ustawienia i wybierz „View Recovery Seed”, co również najpierw wymaga podania hasła.
+
+Aby przywrócić portfel, użyj jednego z portfeli:
+
+- **Wiersz poleceń:** uruchom `import`, wybierz `1) 12-word recovery seed`, wpisz 12 słów, a potem nadaj nowemu portfelowi nazwę i hasło.
+- **Desktop:** wybierz „Restore from Seed” i wpisz swoją 12-wyrazową frazę.
+
+Portfel sprawdza słowa i sumę kontrolną, odtwarza Twoje klucze i skanuje łańcuch w poszukiwaniu Twoich wyjść, więc saldo i historia wracają z tym samym adresem. [Poradnik o portfelu Blocknet](/pl/blog/blocknet-wallet-for-mining/) krok po kroku pokazuje, jak założyć portfel, zrobić kopię zapasową frazy seed i znaleźć swój adres.
+
+Gdy fraza seed jest już bezpiecznie zapisana na papierze, możesz zacząć używać adresu. [Poradnik kopania Blocknetu](/pl/blog/how-to-mine-blocknet/) pokazuje, jak wskazać go w [seine](/pl/#download) i zacząć kopać na bntpool.com.
+
+<CTA target="pool" title="Kop do portfela z bezpieczną kopią zapasową" text="Wklej swój adres Blocknet lub @name do seine, zaakceptuj bntpool.com i trzymaj frazę odzyskiwania na papierze w domu." />

@@ -1,0 +1,103 @@
+---
+title: Cara menambang Blocknet
+description: 'Mulai menambang Blocknet di Windows, macOS, atau Linux dalam beberapa menit: siapkan alamat, unduh seine, dan menambang di bntpool.com dengan CPU dan GPU NVIDIA.'
+tags: [Panduan penambangan, Blocknet, Argon2id, bntpool]
+faq:
+  - q: 'Berapa banyak RAM yang dibutuhkan untuk menambang Blocknet?'
+    a: 'Setiap thread penambangan membutuhkan sekitar 2 GB RAM, karena setiap hash Argon2id bekerja di atas blok memori 2 GiB. Jadi komputer dengan 16 GB bisa menjalankan sekitar enam sampai tujuh thread setelah menyisakan ruang untuk sistem. seine mengukur memori Anda dan memilih jumlah thread yang aman secara otomatis.'
+  - q: 'Kapan pembayaran hasil menambang Blocknet di bntpool.com masuk?'
+    a: 'Pool bntpool.com membayar dengan PPLNS dalam jendela enam jam. Imbalan sebuah blok baru bisa dibayarkan setelah blok itu tertimbun 60 blok, sekitar lima jam dengan waktu blok lima menit, dan saldo dikirim setelah mencapai 0,1 BNT. Pembayaran pertama biasanya masuk beberapa jam setelah share pertama Anda diterima.'
+  - q: 'Bisakah saya menambang Blocknet dengan CPU dan GPU sekaligus?'
+    a: 'Bisa. Di Windows dan Linux, seine menambang dengan setiap core CPU dan setiap kartu grafis NVIDIA di komputer secara bersamaan, dan kedua hashrate-nya dijumlahkan. seine menyetel prosesor dan setiap kartu secara terpisah selama berjalan, sehingga Anda mendapatkan hasil maksimal dari seluruh perangkat keras tanpa mengubah satu pengaturan pun.'
+sourceHash: ad835df628e2
+translation: draft
+---
+
+Panduan ini membawa Anda dari mengunduh **seine** sampai share pertama yang diterima dan pembayaran di pool bntpool.com, di Windows, macOS, atau Linux. Baru mengenal penambangan? [Cara kerja penambangan kripto](/id/blog/how-crypto-mining-works/) menjelaskan blok, tingkat kesulitan, dan pool terlebih dahulu.
+
+## Bagaimana cara menambang Blocknet?
+
+<Answer>
+Siapkan alamat Blocknet atau nama pendek Blocknet ID, unduh seine untuk sistem Anda, jalankan, lalu tempel alamat Anda saat diminta. Terima pool bawaan, bntpool.com, dan Anda sudah menambang. seine langsung mulai menghitung hash dan terus menyetel jumlah thread serta kernel CPU selama berjalan.
+</Answer>
+
+## Apa yang perlu disiapkan sebelum mulai?
+
+- **Alamat Blocknet.** Pasang wallet Blocknet resmi, yaitu [wallet baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) atau [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), lalu salin alamat Anda. [Panduan wallet](/id/blog/blocknet-wallet-for-mining/) menjelaskannya langkah demi langkah. Simpan wallet dan frasa pemulihannya di komputer Anda sendiri; jangan taruh di rig penambangan yang dipakai bersama.
+- **Atau nama pendek.** Jika Anda punya [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) dari [blocknet.id](https://blocknet.id), Anda bisa menambang ke `@name` alih-alih menempelkan alamat yang panjang.
+- **Sekitar 2 GB RAM per thread penambangan.** seine menyesuaikan diri dengan komputer Anda dan menyisakan ruang untuk sistem, jadi Anda tidak perlu menghitungnya lebih dulu.
+- **Windows, macOS, atau Linux.** Di Windows dan Linux, kartu grafis NVIDIA dipakai otomatis jika driver terbaru sudah terpasang.
+
+## Langkah 1: unduh seine
+
+Ambil arsip untuk sistem Anda dari [bagian unduhan](/id/#download). Tidak ada yang perlu dipasang: ekstrak arsipnya dan seine siap dipakai.
+
+| Sistem | Arsip | Kartu grafis |
+|---|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; runtime CUDA sudah disertakan |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, dengan driver terpasang |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 atau lebih baru) |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
+
+Setiap rilis juga menyertakan file `SHA256SUMS.txt`, sehingga Anda bisa memeriksa bahwa unduhan Anda cocok dengan rilisnya.
+
+## Langkah 2: jalankan
+
+Di Windows, klik dua kali `seine.exe`. Di macOS atau Linux, buka terminal di folder hasil ekstrak dan jalankan:
+
+```sh
+./seine
+```
+
+## Langkah 3: masukkan alamat Anda dan mulai menambang
+
+seine meminta alamat pembayaran atau `@shortname` Anda, lalu pool. Tekan Enter untuk menerima pool bawaan, `stratum+tcp://bntpool.com:3333`. Dalam sekejap [dasbor](/id/blog/seine-dashboard-explained/) menampilkan hashrate dan share pertama Anda.
+
+Sejak itu seine terus menyetel dirinya sambil menambang. seine membandingkan jumlah thread dan kernel CPU pada pekerjaan penambangan sungguhan, hanya beralih setelah peningkatan terkonfirmasi, mundur jika memori mulai sesak, dan mengingat pengaturan yang berhasil untuk start berikutnya. Semua itu dilakukan tanpa pernah menyambung ulang ke pool, jadi penyetelan tidak memakan waktu menambang Anda.
+
+## Berapa lama sampai Anda dibayar?
+
+Pool bntpool.com memakai PPLNS: imbalan setiap blok dibagi di antara share yang dikirim dalam enam jam sebelum blok itu ditemukan. Imbalan belum bisa dibelanjakan sampai bloknya tertimbun 60 blok, sekitar lima jam dengan waktu blok Blocknet lima menit. Setelah saldo terkonfirmasi Anda mencapai 0,1 BNT, pool mengirimkannya ke alamat Anda.
+
+Anda bisa memantau hashrate, share, dan saldo di [bntpool.com](https://bntpool.com) dengan mencari alamat Anda. Pool menampilkan imbalan dari blok yang belum terkonfirmasi secara terpisah, karena jumlahnya masih bisa berubah.
+
+## Seberapa cepat komputer Anda menambang?
+
+Hashrate terutama bergantung pada bandwidth memori dan jumlah thread yang muat di RAM Anda. Berikut hasil terbaik yang diukur dengan seine untuk setiap generasi:
+
+| Perangkat keras | Thread | Hashrate |
+|---|---|---|
+| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| Server Arm (AWS Graviton4) | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
+| Apple M4 Max (MacBook Pro 48 GB) | 16 | 30,9 H/s |
+| Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Hasil untuk setiap CPU yang diuji ada di [halaman performa](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), dan [panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/) menjelaskan bagaimana RAM dan bandwidth memori menentukan angka-angka ini.
+
+## Bagaimana seine mendapatkan lebih banyak dari CPU yang sama?
+
+seine membawa beberapa kernel Argon2id untuk setiap keluarga prosesor dan mengukurnya di komputer Anda sambil menambang. Di perangkat keras yang kami uji, kernel yang tepat membuat perbedaan besar:
+
+- **AWS Graviton4:** kernel SHA3 dengan prefetching menambang 56% lebih cepat daripada NEON biasa (dari 13,80 menjadi 21,50 H/s).
+- **AMD EPYC 9R45 (Zen 5):** kernel streaming menambang 30% lebih cepat daripada AVX2 (dari 34,47 menjadi 44,74 H/s dengan 24 thread).
+
+Anda tidak perlu memilih semua ini. seine hanya berganti kernel setelah peningkatan terkonfirmasi dan mengingat hasilnya untuk start berikutnya.
+
+## Bagaimana cara mendapatkan hashrate lebih tinggi?
+
+- **Menambang dengan CPU dan GPU bersamaan.** seine melakukannya secara default di Windows dan Linux, dan kedua hashrate-nya dijumlahkan.
+- **Siapkan huge pages di Linux dan WSL.** Menempatkan memori setiap thread di halaman 2 MiB menambah sekitar 4–6% di mesin validasi, dan halaman 1 GiB sekitar 2% lagi. [Panduan huge pages](/id/blog/huge-pages-blocknet-mining/) berisi perintah-perintahnya.
+- **Biarkan server besar menyebar.** Di Linux, seine menempatkan thread di seluruh node NUMA dan grup cache secara otomatis. [Panduan server besar](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) membahas detailnya.
+- **Gunakan penambangan CPU saja di Apple Silicon.** Itulah pilihan tercepat di Mac seri M, dan memang itu yang dilakukan seine secara default.
+
+## Bisakah Anda menambang Blocknet secara solo?
+
+Bisa. Jika Anda menjalankan node Blocknet sendiri yang sudah tersinkron, jalankan seine dengan `./seine --mode daemon` dan seine akan menambang langsung ke node itu, bukan ke pool. Anda menyimpan setiap blok yang Anda temukan, tetapi pembayaran baru masuk saat Anda menemukan satu blok utuh, jadi kebanyakan orang memulai di pool. [Panduan penambangan solo](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md) menjelaskan cara menyiapkannya.
+
+<Note>
+Blocknet merencanakan upgrade jaringan bernama Faraday sekitar 2027-02-16, menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Upgrade ini direncanakan mengubah proof of work, jadi pastikan seine selalu terbaru: seine memeriksa rilis baru saat dijalankan dan setiap 12 jam.
+</Note>
+
+<CTA target="seine" title="Unduh seine" text="Gratis untuk Windows, macOS, dan Linux. Jalankan, tempel alamat Anda, dan Anda langsung menambang di bntpool.com." />

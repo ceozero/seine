@@ -1,0 +1,117 @@
+---
+// Shared page shell. Owns every SEO tag: canonical, hreflang alternates, Open Graph/Twitter,
+// robots and JSON-LD. `path` is the unlocalized site path ("/", "/blog/<slug>/"); every page
+// exists in every locale, so the alternates are derived from it.
+// Weight entrypoints include unicode-range: each page fetches only the scripts it uses.
+import '@fontsource/instrument-sans/400.css';
+import '@fontsource/instrument-sans/500.css';
+import '@fontsource/instrument-sans/600.css';
+import '@fontsource/instrument-sans/700.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '../styles/site.css';
+import { LOCALES, localeDef, localizePath, type Locale } from '../i18n/locales';
+import { useTranslations } from '../i18n/ui';
+import LanguageSuggestion from '../components/LanguageSuggestion.astro';
+import { DEFAULT_IMAGE, REPO, SITE_URL, jsonLd } from '../lib/site';
+
+interface Props {
+    locale: Locale;
+    path: string;
+    title: string;
+    description: string;
+    image?: string;
+    imageAlt?: string;
+    ogType?: 'website' | 'article';
+    robots?: string;
+    schema?: unknown[];
+    alternates?: boolean;
+}
+
+const {
+    locale, path, title, description, image = DEFAULT_IMAGE, imageAlt = title,
+    ogType = 'website', robots = 'index, follow', schema = [], alternates = true,
+} = Astro.props;
+const t = useTranslations(locale);
+const def = localeDef(locale);
+const canonical = SITE_URL + localizePath(path, locale);
+const home = localizePath('/', locale);
+---
+<!doctype html>
+<html lang={def.htmlLang} dir={def.dir}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{title}</title>
+<meta name="description" content={description}>
+<meta name="robots" content={robots}>
+<meta name="theme-color" content="#F4F6F5">
+<link rel="canonical" href={canonical}>
+{alternates && LOCALES.map((l) => <link rel="alternate" hreflang={l.htmlLang} href={SITE_URL + localizePath(path, l.code)}>)}
+{alternates && <link rel="alternate" hreflang="x-default" href={SITE_URL + path}>}
+<meta property="og:type" content={ogType}>
+<meta property="og:site_name" content="seine">
+<meta property="og:url" content={canonical}>
+<meta property="og:title" content={title}>
+<meta property="og:description" content={description}>
+<meta property="og:locale" content={def.ogLocale}>
+{alternates && LOCALES.filter((l) => l.code !== locale).map((l) => <meta property="og:locale:alternate" content={l.ogLocale}>)}
+<meta property="og:image" content={image}>
+<meta property="og:image:alt" content={imageAlt}>
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content={title}>
+<meta name="twitter:description" content={description}>
+<meta name="twitter:image" content={image}>
+<meta name="twitter:image:alt" content={imageAlt}>
+<link rel="alternate" type="application/rss+xml" title={t('blogRssTitle')} href={localizePath('/blog/rss.xml', locale)}>
+<link rel="icon" href="/assets/brand/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/brand/icon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/assets/brand/icon-180.png">
+<slot name="head" />
+{schema.map((s) => <script type="application/ld+json" set:html={jsonLd(s)} />)}
+</head>
+<body>
+{alternates && <LanguageSuggestion path={path} english={locale === 'en'} />}
+
+<header class="nav">
+  <div class="wrap">
+    <a class="logo" href={home} aria-label={t('homeLink')}><img src="/assets/brand/icon.svg" alt="" width="26" height="26"><span>seine<i>.</i></span></a>
+    <nav aria-label={t('navMain')}>
+      <a class="hide-sm" href={`${home}#download`}>{t('navDownload')}</a>
+      <a class="hide-sm" href={`${home}#performance`}>{t('navPerformance')}</a>
+      <a class="hide-sm" href={localizePath('/blog/', locale)}>{t('navBlog')}</a>
+      <a class="hide-sm" href={REPO}>GitHub</a>
+      {alternates && (
+        <details class="langs">
+          <summary aria-label={t('navLanguage')}>{def.short}</summary>
+          <ul>
+            {LOCALES.map((l) => (
+              <li><a href={localizePath(path, l.code)} hreflang={l.htmlLang} lang={l.htmlLang}
+                     aria-current={l.code === locale ? 'true' : undefined}>{l.endonym}</a></li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </nav>
+  </div>
+</header>
+
+<slot />
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href={home} aria-label={t('homeLink')}><img src="/assets/brand/icon.svg" alt="" width="22" height="22"><span>seine<i>.</i></span></a>
+    <nav aria-label={t('navFooter')}>
+      <a href={REPO}>GitHub</a>
+      <a href={localizePath('/blog/', locale)}>{t('navBlog')}</a>
+      <a href={`${REPO}/blob/master/CHANGELOG.md`}>{t('footerChangelog')}</a>
+      <a href="/privacy/" lang="en">Privacy policy</a>
+      <a href="https://bntpool.com">bntpool.com</a>
+      <a href="https://blocknetcrypto.com">Blocknet</a>
+    </nav>
+    <span>{t('footerLicense')}</span>
+  </div>
+</footer>
+<slot name="scripts" />
+</body>
+</html>

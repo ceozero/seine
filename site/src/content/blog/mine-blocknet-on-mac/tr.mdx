@@ -1,0 +1,131 @@
+---
+title: Mac'te Blocknet madenciliği nasıl yapılır
+description: seine ile Apple Silicon Mac'te Blocknet madenciliği yapın. Terminal'de kurun, M4 Max ile ölçülen 30,9 H/s sonucunu görün ve Mac'inizin kaç iş parçacığı çalıştırabileceğini öğrenin.
+tags: [Madencilik rehberi, macOS, Apple Silicon, seine]
+faq:
+  - q: 'MacBook Air ile Blocknet madenciliği yapılabilir mi?'
+    a: 'Evet. MacBook Air dahil her Apple Silicon Mac seine''i çalıştırır. seine-macos-aarch64.tar.gz dosyasını indirin, Terminal''de arşivden çıkarın ve ./seine komutunu çalıştırın. Her iş parçacığı yaklaşık 2 GB bellek gerektirir; bu yüzden 16 GB''lık bir MacBook Air yedi iş parçacığına kadar çalıştırabilir ve seine sayıyı boştaki belleğe göre sizin için belirler.'
+  - q: 'seine, Mac''te Blocknet madenciliği yaparken GPU''yu kullanır mı?'
+    a: 'seine, Apple Silicon''da varsayılan olarak CPU ile madencilik yapar, çünkü en hızlı seçenek budur. CPU ve grafik çekirdekleri aynı birleşik belleği paylaşır ve Blocknet''in Argon2id iş kanıtı bellek bant genişliğine bağlıdır. M4 Max''te yalnızca CPU ile madencilik en yüksek hashrate''i verdi, bu yüzden seine onu otomatik olarak kullanır.'
+  - q: 'Blocknet madenciliği için Mac''te ne kadar bellek gerekir?'
+    a: 'Her madencilik iş parçacığı 2 GiB''lık bir bellek bloğu üzerinde çalışır, bu yüzden iş parçacığı başına yaklaşık 2 GB hesaplayın. 16 GB''lık bir Mac yedi, 32 GB''lık bir Mac 15 ve 64 GB''lık bir Mac 30 iş parçacığına kadar çalıştırabilir. seine boştaki belleği sayar ve iş parçacıklarını çekirdeklerinize de göre ayarlar.'
+  - q: 'Intel Mac ile Blocknet madenciliği yapılabilir mi?'
+    a: 'Evet. seine, Intel Mac''ler için ayrı bir arşiv olan seine-macos-x86_64.tar.gz''yi yayınlar ve adımlar Apple Silicon''dakiyle aynıdır. İndirin, Terminal''de arşivden çıkarın, ./seine komutunu çalıştırın ve Blocknet adresinizi veya @name adınızı yapıştırın. seine iş parçacıklarını belleğinize göre boyutlandırır ve varsayılan olarak bntpool.com''da madenciliğe başlar.'
+sourceHash: 59ec24375f40
+translation: draft
+---
+
+Bu rehber, **seine** ile Apple Silicon Mac'te nasıl Blocknet madenciliği yapacağınızı gösteriyor: M serisi çiplerin Blocknet'in iş kanıtına neden uygun olduğu, bir M4 Max'in ölçülen sonucu, Mac'inizin belleğinin kaç iş parçacığı taşıyabileceği ve bntpool.com'da madenciliğe başlamak için tam Terminal adımları.
+
+## Mac'te Blocknet madenciliği yapılabilir mi?
+
+<Answer>
+Evet. Apple Silicon Mac'ler güçlü Blocknet madencileridir, çünkü birleşik bellekleri bellek yoğun Argon2id iş kanıtına bol bant genişliği sağlar. `seine-macos-aarch64.tar.gz` dosyasını indirin, Terminal'de arşivden çıkarın, `./seine` komutunu çalıştırın ve adresinizi yapıştırın. 48 GB'lık bir M4 Max yalnızca CPU'suyla 30,9 H/s ölçtü.
+</Answer>
+
+seine, Mac'e özgü kurulumu kendisi halleder. CPU ile madencilik yapar, iş parçacıklarını önce performans çekirdeklerine yerleştirir ve iş parçacığı sayısını belleğinize göre boyutlandırır; bu yüzden çoğu kişi için düz bir `./seine` yeterlidir.
+
+## Apple Silicon Mac'ler neden Blocknet madenciliğinde iyidir?
+
+Blocknet'in iş kanıtı, hash başına 2 GiB bellek kullanan [Argon2id](/tr/blog/argon2id-proof-of-work-explained/)'dir. Her hash 2 GiB'lık bir bellek bloğunu doldurur ve ilerlerken bu bloğun daha önceki kısımlarını geri okur; bu yüzden bir madencilik iş parçacığının hızı büyük ölçüde çipin belleğe ve bellekten ne kadar hızlı veri taşıyabildiğine bağlıdır. Her seine iş parçacığının kendine ait yaklaşık 2 GB RAM'e ihtiyaç duymasının nedeni budur.
+
+Apple Silicon, [Apple'ın](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) tek bir havuzda bir araya getirilmiş yüksek bant genişlikli, düşük gecikmeli bellek olarak tanımladığı birleşik bellek üzerine kuruludur. Bu, her madencilik iş parçacığına bol bant genişliği verir; bellek yoğun bir hash'in tam olarak ihtiyaç duyduğu şey budur. Sonuç, sunucu işlemcileriyle aynı aralıkta Blocknet madenciliği yapan bir dizüstü bilgisayardır.
+
+## M4 Max ile Blocknet madenciliği ne kadar hızlıdır?
+
+<Answer>
+M4 Max çipli 48 GB'lık bir MacBook Pro, yalnızca CPU'sunda 16 iş parçacığıyla 30,94 H/s hızında Blocknet madenciliği yaptı. seine'in o makinede varsayılan olarak çalıştırdığı dengeli ayar olan, performans çekirdeği yerleşimiyle 14 iş parçacığında 29,26 H/s hızında madencilik yaptı ve diğer uygulamalara daha fazla bellek bıraktı.
+</Answer>
+
+Bu sonuçlar, seine'in 2026-07-10 tarihinde 48 GB'lık bir M4 Max (12 performans çekirdeği ve 4 verimlilik çekirdeği) üzerinde yaptığı doğrulama taramasından gelir:
+
+| Ayar | İş parçacığı | Hashrate |
+|---|---|---|
+| Maksimum verim | 16, `auto` yerleşim | 30,94 H/s |
+| Dengeli (seine'in bu Mac'teki varsayılan üst sınırı) | 14, `pcore-only` yerleşim | 29,26 H/s |
+
+Karşılaştırma için, 30,9 H/s sonucu seine'in [performans tablolarındaki](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) tüm Arm sunucu ve Intel Xeon sonuçlarının önündedir; yalnızca AMD EPYC Zen 5 ve Zen 4 sunucular daha yüksek ölçtü. [Blocknet madencilik donanımı rehberi](/tr/blog/blocknet-mining-hardware-hashrate/) her donanım nesli için en iyi sonucu karşılaştırır, [Apple Silicon rehberi](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) ise tüm ayar notlarını içerir.
+
+## Mac'iniz kaç iş parçacığı çalıştırabilir?
+
+Her iş parçacığı kendi 2 GiB belleğine ihtiyaç duyar, bu yüzden üst sınırı bellek belirler. seine kendini boyutlandırırken Mac'inizin belleğinin %5'ini de pay olarak boş bırakır. Bu da şu üst sınırları verir:
+
+| Mac belleği | Belleğin taşıyabileceği iş parçacığı |
+|---|---|
+| 16 GB | 7'ye kadar |
+| 24 GB | 11'e kadar |
+| 32 GB | 15'e kadar |
+| 36 GB | 17'ye kadar |
+| 48 GB | 22'ye kadar |
+| 64 GB | 30'a kadar |
+
+Son sayıyı Mac'inize tam uyacak hale iki şey getirir:
+
+- **Boş bellek.** seine başladığında gerçekten boş olan belleği sayar, bu yüzden açık uygulamalarınız sayıyı biraz düşürür. Çalışırken bellek daralırsa seine iş parçacıklarını bekletir ve belleklerini serbest bırakır.
+- **Çekirdekler.** Mac'te varsayılan olarak seine tüm performans çekirdeklerini ve verimlilik çekirdeklerinin yarısını kullanır. 12+4 çekirdekli M4 Max'te bu, yukarıdaki tablodaki dengeli ayar olan 14 iş parçacığı eder.
+
+Bunların hiçbirini hesaplamanız gerekmez. seine başladığında iş parçacığı sayısını seçer ve madencilik yaparken yakın sayıları test etmeye devam eder.
+
+## macOS'ta adım adım kurulum
+
+### 1. adım: bir Blocknet adresi edinin
+
+Resmi Blocknet cüzdanını, yani [komut satırı cüzdanını](https://github.com/blocknetprivacy/blocknet/releases/latest) veya [masaüstü cüzdanını](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) kurun ve adresinizi kopyalayın. [blocknet.id](https://blocknet.id) üzerinden bir Blocknet ID kısa adınız varsa bunun yerine `@name` adresine madencilik yapabilirsiniz.
+
+### 2. adım: Apple Silicon için seine'i indirin
+
+[İndirme bölümünden](/tr/#download) `seine-macos-aarch64.tar.gz` dosyasını alın. İçinde `seine` programı, benioku ve lisans dosyaları ve indirmeyi kontrol etmek için bir `SHA256SUMS.txt` dosyası bulunur.
+
+### 3. adım: Terminal'de arşivden çıkarın
+
+Terminal'i açın (Uygulamalar, ardından İzlenceler içinde) ve bu komutları çalıştırın. Ana klasörünüzde bir `seine` klasörü oluşturur ve arşivi içine açarlar:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### 4. adım: seine'i çalıştırın
+
+```sh
+./seine
+```
+
+macOS sürümü ad-hoc imzalıdır. macOS ilk açılışı durdurursa Sistem Ayarları'nı açın, Gizlilik ve Güvenlik'e gidin ve `seine`'e izin verin. İndirme işaretini Terminal'den de kaldırıp programı yeniden çalıştırabilirsiniz:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### 5. adım: adresinizi girin ve madenciliğe başlayın
+
+seine önce ödeme adresinizi veya `@shortname` adınızı, ardından bir havuz sorar. Varsayılanı, yani `stratum+tcp://bntpool.com:3333` adresini kabul etmek için Return tuşuna basın. Ardından [panel](/tr/blog/seine-dashboard-explained/) hashrate'inizi ve kabul edilen ilk share'lerinizi gösterir. bntpool.com havuzu bakiyeniz 0,1 BNT'ye ulaştığında onu adresinize gönderir; adresinizi aratarak [bntpool.com](https://bntpool.com) üzerinden takip edebilirsiniz.
+
+## seine Mac'te neden yalnızca CPU ile madencilik yapar?
+
+Apple Silicon'da CPU ve grafik çekirdekleri tek bir birleşik bellek havuzunu paylaşır. Argon2id bellek bant genişliğine bağlıdır, bu yüzden CPU ve grafik çekirdekleri aynı bant genişliği için yarışırdı. seine'in M4 Max üzerindeki testlerinde yalnızca CPU ile madencilik en yüksek hashrate'i verdi, bu yüzden seine bunu her Apple Silicon Mac'te otomatik olarak seçer. Hiçbir bayrak ayarlamadan en hızlı kurulumu elde edersiniz.
+
+## Bir Mac'ten en iyi sonucu nasıl alırsınız?
+
+- **seine'in kendini ayarlamasına izin verin.** İş parçacığı sayılarını ve CPU kernel'lerini gerçek madencilik işi üzerinde karşılaştırır, yalnızca doğrulanmış bir kazançtan sonra geçiş yapar ve sonucu bir sonraki başlangıç için hatırlar.
+- **Mac'i uyanık tutun.** macOS boşta kalan bir Mac'i uyku moduna alır, bu da madenciliği duraklatır. seine çalıştığı sürece Mac'i uyanık tutmak için seine'i yerleşik `caffeinate` komutuyla başlatın:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Yalnızca madenciliğe ayrılmış bir Mac'te maksimum verimi hedefleyin.** Mac madencilik dışında hiçbir şey yapmıyorsa, M4 Max'te 30,94 H/s ölçen ayar 16 çekirdeğin tamamını ve dengeli varsayılandan daha fazla bellek kullanır:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Tüm seçenekler için [yapılandırma rehberine](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) bakın. [Ana madencilik rehberi](/tr/blog/how-to-mine-blocknet/) ödemeleri ve diğer platformları anlatır.
+
+<Note>
+Bu sonuçlar Blocknet'in mevcut Argon2id iş kanıtını yansıtır. [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, 2027-02-16 civarında iş kanıtını değiştirmesi planlanan Faraday adlı bir ağ yükseltmesi planlıyor. seine başladığında ve her 12 saatte bir yeni sürümleri kontrol eder, bu yüzden onu güncel tutun.
+</Note>
+
+<CTA target="seine" title="macOS için seine'i indirin" text="Apple Silicon sürümü Mac'inizin CPU'suyla madencilik yapar ve iş parçacığı sayısını otomatik olarak seçer." />

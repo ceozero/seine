@@ -1,0 +1,146 @@
+---
+title: Sunucularda ve rig'lerde Blocknet madenciliği
+description: seine ile EPYC sunucularda ve çoklu rig kurulumlarında Blocknet madenciliği yapın. Otomatik NUMA ve L3 iş parçacığı yerleşimi, terminalsiz çalışma, kontrol API'si ve Prometheus metrikleri.
+tags: [Madencilik rehberi, Sunucular, Linux, seine]
+faq:
+  - q: 'seine NUMA sunucuları destekliyor mu?'
+    a: 'Evet. Linux''ta seine''in varsayılan otomatik yerleşimi, madencilik iş parçacıklarını NUMA düğümlerine ve L3 önbellek gruplarına, SMT kardeşlerinden önce her fiziksel çekirdeğe bir tane olacak şekilde dağıtır; her iş parçacığı 2 GiB alanını ayırmadan önce kendini sabitler, böylece bellek ona yakın konumlanır. İki düğümlü bir EPYC makinesinde bu, sekiz iş parçacığında hashrate''i yüzde 73 artırdı.'
+  - q: 'seine terminal olmadan, arka plan hizmeti olarak çalışabilir mi?'
+    a: 'Evet. İlk çalıştırmada --address ve --pool-url verin; seine hiçbir soru sormadan başlar, ikisini de veri dizinindeki seine.config.json dosyasına kaydeder ve bağlı bir terminal yoksa düz günlük satırlarına geçer. Bu da onu systemd veya otomatik olarak yeniden başlatan başka bir hizmet yöneticisi altında çalıştırmayı kolaylaştırır.'
+  - q: 'seine Prometheus metrikleri sunar mı?'
+    a: 'Evet. seine''i --api-server veya --service ile başlatın; varsayılan olarak 127.0.0.1 adresinin 9977 numaralı portunu dinleyen yerel kontrol API''sinde /metrics yolunda Prometheus metrikleri sunar. Metrikler madencinin çalışıp çalışmadığını, yaşam döngüsü durumunu, gönderilen, kabul edilen ve eskimiş çözümleri ve backend karantinalarını kapsar. Toplama istekleri API bearer token''ını gönderir.'
+  - q: 'seine kontrol API''si neden token istiyor?'
+    a: 'seine v0.2.23''ten beri sağlık kontrolü dışındaki her kontrol API uç noktası bir bearer token gerektirir; bu, ziyaret ettiğiniz web sitelerinin ödeme adresinizi veya ayarlarınızı değiştirmesini engeller. seine her başlangıçta veri dizinindeki control-api.cookie dosyasına yeni bir token yazar; isterseniz --api-token ile sabit bir token da belirleyebilirsiniz.'
+sourceHash: 186b1dc3c49e
+translation: draft
+---
+
+Bu rehber seine'i büyük makinelerde ve bir dolap dolusu madencilik rig'inde çalıştırmayı anlatıyor: çok çekirdekli sunucularda iş parçacıklarını nasıl yerleştirdiğini, bir hizmet yöneticisi altında terminalsiz nasıl çalıştırılacağını ve her rig'i yerel kontrol API'si, canlı olay akışı ve Prometheus metrikleriyle nasıl başlatıp durduracağınızı ve izleyeceğinizi.
+
+## seine büyük bir sunucuyu nasıl kullanır?
+
+<Answer>
+Linux'ta seine madencilik iş parçacıklarını NUMA düğümlerine ve her düğümün içindeki L3 önbellek gruplarına dağıtır; herhangi bir SMT kardeşinden önce her fiziksel çekirdeğe bir iş parçacığı yerleştirir. Her iş parçacığı 2 GiB bellek alanını ayırmadan önce kendini çekirdeğine sabitler, böylece bellek ona yakın konumlanır. Bu varsayılan davranıştır, yani yapılandırılacak bir şey yoktur.
+</Answer>
+
+Blocknet'in Argon2id iş kanıtı büyük ölçüde bellek trafiğidir. Her iş parçacığı her hash için kendi 2 GiB alanını doldurur ve geri okur; bu yüzden hashrate, iş parçacıklarınızın aynı anda kaç bellek denetleyicisini ve önbellek grubunu meşgul ettiğine bağlıdır. [Argon2id açıklaması](/tr/blog/argon2id-proof-of-work-explained/) bunun nedenini anlatır.
+
+İş parçacıkları yalnızca işletim sisteminin CPU sırasını izlerse listedeki ilk çekirdekleri doldururlar; bunların hepsi aynı düğümde ve aynı birkaç önbellek grubunda bulunur. İki düğümlü bir EPYC makinesinde, işletim sistemi sırasındaki sekiz iş parçacığının tamamı 0. düğüme yerleşti ve 16 GiB'lık alanların neredeyse tamamı o düğümün belleğinde kaldı. seine'in otomatik yerleşimi her düğüme dört iş parçacığı ve yaklaşık 8 GiB alan koydu; böylece iki düğümün belleği aynı anda kullanıldı. Sekiz L3 grubuna sahip tek düğümlü bir EPYC 8434P'de, işletim sistemi sırasındaki 24 iş parçacığı dört gruba altışar tane sıkıştı. seine sekiz grubun tamamını üçer iş parçacığıyla kullandı.
+
+Yerleşim, sürece verdiğiniz sınırlara uyar. Sürecin CPU ve bellek maskelerine saygı gösterir; bu yüzden `taskset`, cgroups ve konteynerler içinde çalışır ve yalnızca izin verdiğiniz çekirdekleri kullanır. Yerel Windows'ta aynı `auto` ayarı, SMT kardeşlerinden önce fiziksel çekirdekleri doldurur.
+
+## NUMA'ya duyarlı yerleşim ne kadar hızlıdır?
+
+seine geliştiricileri bunu 24 Ekim 2026'da, aynı ikili dosyayı iki şekilde, sırayla değişen çiftler halinde çalıştırarak ölçtü: seine'in otomatik yerleşimi ve düz işletim sistemi sırasına sabitleme (`--cpu-affinity os`):
+
+| Makine | İş parçacığı | Bellek sayfaları | Otomatik yerleşimin kazancı |
+|---|---|---|---|
+| İki düğümlü AMD EPYC · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Normal | **+%73** |
+| İki düğümlü AMD EPYC · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | 2 MiB huge pages | **+%108** |
+| AMD EPYC sunucu (EPYC 8434P, 48 çekirdek, sekiz L3 grubu) | 24 | Normal | **+%16,7** |
+
+Sırayla değişen her çift otomatik yerleşimden yana çıktı; tam yöntem ve ham sonuçlar seine'in [büyük sunucular rehberinde](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) ve [CPU optimizasyon günlüğünde](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) yer alır.
+
+Kazanç, seine makinedeki çekirdek sayısından daha az iş parçacığı çalıştırdığında ortaya çıkar. Bu, iş parçacığı sayısını çekirdek sayısı yerine RAM belirlediğinde olur: her iş parçacığı yaklaşık 2 GB gerektirir, bu yüzden 48 çekirdekli bir sunucuyu doldurmak yalnızca alanlar için yaklaşık 96 GB gerektirir. Yerleşim, karşılayabildiğiniz iş parçacıklarının her NUMA düğümüne ve önbellek grubuna dağılmasını sağlar.
+
+İkinci satırın gösterdiği gibi yerleşim ve huge pages birbirine eklenir. Huge pages ayırıyorsanız, iş parçacığı barındıran her düğümde ayırın; çünkü yeterince büyük bir toplam, yerel sayfaları garanti etmez. [Huge pages rehberi](/tr/blog/huge-pages-blocknet-mining/) sayfa kurulumunu anlatır; Linux'ta her düğümün 2 MiB havuzu `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages` içinde ayarlanır.
+
+Etkiyi kendi makinenizde kontrol etmek için aynı iş parçacığı sayısı ve aynı sayfa kurulumuyla `auto` ile `os`'u karşılaştırın. `--cpu-affinity off`, yerleşimi tamamen zamanlayıcıya bırakır.
+
+### Paylaşılan sunucularda bellek payı
+
+Otomatik iş parçacığı boyutlandırma, varsa GPU ayırmasına ek olarak toplam RAM'in %5'ini boş tutar. Bunu `--cpu-memory-reserve-percent` ile değiştirin. Diğer hizmetler bellek kullanmaya başlarsa seine'in otomatik iş parçacıkları alanlarını serbest bırakır ve bellek boşaldığında geri gelir; böylece madencilik makinenin geri kalanına uyum sağlar. Ayar sonuçları makine başına önbelleğe alınır ve önbellek, izin verilen CPU kümesi veya NUMA ve L3 düzeni değiştiğinde, örneğin bir sanal makine yeniden boyutlandırıldıktan sonra sıfırlanır.
+
+## seine terminalsiz nasıl çalıştırılır?
+
+<Answer>
+Ödeme adresinizi ve havuzunuzu komut satırında verin; örneğin adresiniz veya `@name` adınızla `--address` ve `--pool-url stratum+tcp://bntpool.com:3333`. seine bu durumda soru sormadan başlar, ayarları veri dizinine kaydeder ve bağlı bir terminal yoksa düz günlük satırları yazdırır; böylece bir hizmet yöneticisi onu çalıştırabilir.
+</Answer>
+
+Masaüstünde seine ilk çalıştırıldığında bir adres ve havuz sorar. Terminal bağlı olmayan bir sunucuda ikisini de baştan verin:
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Rig adı (burada `rack1-node04`), bu makinenin havuzda nasıl görüneceğidir. seine adresi, havuzu ve rig adını veri dizinindeki `seine.config.json` dosyasına kaydeder (varsayılan olarak `./seine-data`); bu yüzden aynı veri diziniyle yapılan sonraki başlatmalar başka bayrak gerektirmez. Varsayılan `--ui auto` ile terminalde [paneli](/tr/blog/seine-dashboard-explained/), diğer her yerde düz günlük satırlarını gösterir; `--ui plain` düz çıktıyı zorlar. Kabuk komutlarında `@name` ve `$name` ifadelerini tırnak içine alın.
+
+Linux'ta bir systemd birimi seine'i açılışta başlatır ve herhangi bir nedenle kapanırsa yeniden başlatır:
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine kısa adları başlangıçta çözümler, bu yüzden birim ağı bekler. Her rig madencilik yaparken kendini ayarlar ve seçimlerini bir sonraki başlangıç için kendi veri dizininde saklar.
+
+## seine API'si üzerinden nasıl kontrol edilir?
+
+seine'in panolar ve filo araçları için yapılmış, canlı olay akışı ve Prometheus metrikleri içeren yerel bir REST API'si vardır. Başlatmanın iki yolu vardır:
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+`--service` modu API'yi başlatır ve bir denetleyici `POST /v1/miner/start` gönderene kadar madenciyi boşta bırakır; bu istek o çalıştırma için adresi, havuzu, iş parçacığı sayısını ve diğer ayarları taşıyabilir. Her makinenin ne zaman ve hangi ayarlarla madencilik yapacağına denetleyiciniz karar verir.
+
+### API token'ı
+
+seine v0.2.23'ten beri `GET /v1/health` dışındaki her uç nokta `Authorization: Bearer <token>` gerektirir. seine her başlangıçta veri dizinindeki `control-api.cookie` dosyasına, Unix'te yalnızca sahibinin okuyabileceği yeni bir rastgele token yazar ve kapanışta siler. Sabit bir değere ihtiyaç duyan filo araçları için `--api-token` ile bir değer belirleyin veya dosyayı `--api-cookie` ile taşıyın. API ayrıca varsayılan olarak hiçbir CORS başlığı göndermez ve loopback bağlamasında `Host` değeri yerel olmayan istekleri reddeder; bu da ziyaret ettiğiniz web sitelerinin ödeme adresinizi veya ayarlarınızı değiştirmesini engeller.
+
+API varsayılan olarak `127.0.0.1:9977` adresine bağlanır. Başka bir arayüze bağlamak `--api-allow-unsafe-bind` gerektirir; böylece siz aksini seçmedikçe API makinede kalır.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Canlı olaylar
+
+`GET /v1/events/stream`, sunucu tarafından gönderilen bir olay akışıdır (server-sent events). Durum değişikliklerini, backend aşamalarını, otomatik ayarlama ilerlemesini ve sonuçlarını, bulunan çözümleri ve gönderim sonuçlarını gerçekleştikleri anda bildirir; böylece bir pano her rig'i canlı gösterebilir. Yeniden bağlandıktan sonra `GET /v1/runtime/state` tüm güncel durumu döndürür.
+
+### Prometheus metrikleri
+
+`GET /metrics`, aralarında `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total` ve `seine_miner_stale_submits_total` bulunan Prometheus metriklerini sunar. Cookie her başlangıçta değiştiği ve yalnızca seine'in kullanıcısı tarafından okunabildiği için Prometheus'a sabit bir token verin: seine'i `--api-token` ile başlatın ve aynı değeri Prometheus'un okuyabileceği bir dosyaya kaydedin. Aynı makinedeki bir toplama işi bu durumda şöyle görünür:
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+Uç noktaların tam listesi, istek şemaları ve olay kataloğu seine'in [kontrol API belgelerinde](https://github.com/zpalmtree/seine/blob/master/docs/API.md) yer alır.
+
+## Rig için makine seçimi
+
+Yerleşim, terminalsiz çalışma ve API tek bir kasada da bir dolap dolusu sunucuda da aynı şekilde çalışır. Hangi işlemcilerin en hızlı madencilik yaptığı ve iş parçacığı başına ne kadar RAM takılacağı için [Blocknet madencilik donanımı rehberine](/tr/blog/blocknet-mining-hardware-hashrate/) bakın. seine'de yeni misiniz? [Blocknet madenciliği nasıl yapılır](/tr/blog/how-to-mine-blocknet/) rehberiyle başlayın.
+
+<CTA target="seine" title="Sunucularınız için seine'i indirin" text="seine iş parçacıklarını NUMA düğümlerine ve önbellek gruplarına kendisi yerleştirir, terminalsiz çalışır ve her rig'e canlı olaylar ve Prometheus metrikleri sunan bir kontrol API'si verir." />

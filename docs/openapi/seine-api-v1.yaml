@@ -7,6 +7,8 @@ info:
     This API is local-first, supports sparse config overrides, and exposes streaming runtime events.
 servers:
   - url: http://127.0.0.1:9977
+security:
+  - bearerAuth: []
 tags:
   - name: Health
   - name: Runtime
@@ -19,6 +21,7 @@ paths:
     get:
       tags: [Health]
       summary: Health check
+      security: []
       responses:
         '200':
           description: OK
@@ -209,6 +212,11 @@ paths:
               schema:
                 type: string
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token from `<data-dir>/control-api.cookie` (or `--api-token`).
   schemas:
     ErrorBody:
       $ref: '../schemas/action-response.schema.json#/$defs/ErrorBody'

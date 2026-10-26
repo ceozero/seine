@@ -1,0 +1,173 @@
+---
+title: Portfel i adres Blocknet do kopania
+description: Skonfiguruj oficjalny portfel Blocknet, zapisz 12-wyrazowy seed odzyskiwania, skopiuj adres do kopania i zobacz, jak wypłaty z bntpool.com trafiają na saldo.
+tags: [Portfel, Poradnik kopania, bntpool]
+faq:
+  - q: 'Czy potrzebuję portfela Blocknet, zanim zacznę kopać?'
+    a: 'Potrzebujesz adresu Blocknet, na który będziesz kopać, a oficjalny portfel Ci go daje. Utwórz portfel w wersji wiersza poleceń lub desktopowej, skopiuj adres i wklej go do seine. Sam portfel zostaje na Twoim własnym komputerze. seine i bntpool.com potrzebują tylko adresu albo krótkiej nazwy Blocknet ID, która na niego wskazuje.'
+  - q: 'Ile wyrazów ma seed odzyskiwania Blocknet?'
+    a: 'Seed odzyskiwania Blocknet ma 12 wyrazów. W portfelu wiersza poleceń polecenie seed pokazuje go po ostrzeżeniu i podaniu hasła do portfela. Zapisz wyrazy na papierze i przechowuj je offline. Dzięki tym 12 wyrazom polecenie import odtworzy Twój portfel na dowolnym komputerze, nawet jeśli plik portfela i hasło przepadną.'
+  - q: 'Kiedy wypłaty z bntpool.com pojawiają się w moim portfelu?'
+    a: 'Blok puli potrzebuje 60 potwierdzeń, czyli około pięciu godzin przy pięciominutowym czasie bloku Blocknet, zanim nagrody zostaną wypłacone. Gdy Twoje potwierdzone saldo w puli osiągnie 0,1 BNT, pula wysyła je na Twój adres. Wypłata pojawia się w historii jako zwykła transakcja i można ją wydać po 10 potwierdzeniach, czyli po około 50 minutach.'
+  - q: 'Czy mogę używać tego samego adresu na kilku koparkach?'
+    a: 'Tak. Każdy komputer z seine może kopać na ten sam adres lub tę samą krótką nazwę Blocknet ID, a bntpool.com sumuje ich udziały w jednym saldzie. Strona statystyk puli wyświetla każdy podłączony komputer pod Twoim adresem. Portfel i jego seed odzyskiwania przez cały czas zostają na Twoim własnym komputerze.'
+sourceHash: 4954bfd74d20
+translation: draft
+---
+
+Aby kopać Blocknet, potrzebujesz adresu na nagrody, a oficjalny portfel da Ci go w kilka minut. Ten poradnik pokazuje, jak utworzyć portfel w wersji wiersza poleceń lub desktopowej, zrobić kopię zapasową jego seeda odzyskiwania, znaleźć adres do wklejenia w seine i sprawdzić saldo, gdy bntpool.com wypłaci Ci środki.
+
+## Którego portfela Blocknet używać do kopania?
+
+<Answer>
+Użyj jednego z dwóch oficjalnych portfeli od Blocknet Privacy: portfela wiersza poleceń, który działa w systemach Windows, macOS i Linux, albo portfela desktopowego dla tych samych systemów. Oba uruchamiają na Twoim komputerze pełny węzeł Blocknet i dają Ci adres odbiorczy, na który możesz kopać z seine na bntpool.com.
+</Answer>
+
+- **Portfel wiersza poleceń.** Program `blocknet` instaluje, uruchamia i aktualizuje rdzeń Blocknet (core), czyli proces działający w tle, który obsługuje węzeł, portfel i sieć. Portfelem zarządzasz z interaktywnej powłoki. Pobierz go z [wydań wersji wiersza poleceń](https://github.com/blocknetprivacy/blocknet/releases/latest), które zawierają kompilacje dla systemów Windows, macOS i Linux.
+- **Portfel desktopowy.** Graficzny portfel z dołączonym demonem Blocknet. Pobierz go z [wydań wersji desktopowej](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Wybierz ten, który wolisz. Poniższe kroki opisują portfel wiersza poleceń, bo każde jego polecenie jest udokumentowane, a potem instalację wersji desktopowej.
+
+## Jak utworzyć portfel w portfelu wiersza poleceń
+
+1. **Zainstaluj i uruchom rdzeń.** Rozpakuj wydanie i uruchom kreator konfiguracji:
+
+   ```sh
+   blocknet setup
+   ```
+
+   Kreator pyta, czy automatycznie aktualizować węzeł, pobiera najnowszy rdzeń i proponuje jego uruchomienie. W systemie Windows program nazywa się `blocknet.exe`, więc uruchom `blocknet.exe setup`. Aby pominąć kreator, uruchom `blocknet install latest`, a potem `blocknet start`.
+
+2. **Otwórz powłokę.** Podłącz się do działającego rdzenia:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Zobaczysz znak zachęty `>`. Zamknięcie powłoki poleceniem `quit` pozostawia rdzeń uruchomiony, więc możesz podłączyć się ponownie w dowolnej chwili.
+
+3. **Utwórz portfel.** Wpisz `load`. Portfel wyświetla znalezione pliki portfeli i oferuje opcję „Create a new wallet”. Wybierz ją, podaj nazwę i hasło, a rdzeń utworzy nowy portfel ze świeżym seedem odzyskiwania:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Portfel to pojedynczy plik `.wallet.dat`, a Twoje hasło szyfruje jego klucz wydawania (spend key). Rdzeń zapamiętuje ścieżkę portfela, więc kolejne `blocknet start` wczyta go za Ciebie. Blocknet kopiuje też wczytany portfel do `~/.config/bnt/wallets/`, dzięki czemu masz drugą kopię w znanym miejscu.
+
+## Jak zrobić kopię zapasową seeda odzyskiwania?
+
+Seed odzyskiwania to najważniejsza kopia zapasowa. Ma 12 wyrazów, a dzięki nim możesz odtworzyć portfel na dowolnym komputerze, nawet jeśli zgubisz plik portfela albo zapomnisz hasła. Blocknet nigdy nie przechowuje Twojego hasła, więc seed jest też sposobem na odzyskanie dostępu po zapomnianym haśle.
+
+Wyświetl go poleceniem `seed`. Portfel pokazuje ostrzeżenie, prosi o potwierdzenie i o hasło, a następnie wyświetla wyrazy:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Zapisz 12 wyrazów na papierze i trzymaj je w bezpiecznym miejscu offline. Przewodnik po portfelu radzi, by nie zapisywać ich w pliku tekstowym, aplikacji do notatek ani w chmurze, bo każdy, kto ma te wyrazy, kontroluje środki. Poradnik o [frazach seed](/pl/blog/seed-phrase-explained/) wyjaśnia, jak 12 wyrazów zamienia się w Twoje klucze i jak dobrze je przechowywać.
+
+Aby później przywrócić portfel, uruchom `import`, wybierz `1) 12-word recovery seed`, wpisz wyrazy i nadaj nowemu portfelowi nazwę i hasło. Rdzeń przeskanuje wtedy łańcuch w poszukiwaniu Twoich wyjść.
+
+## Jak znaleźć swój adres Blocknet?
+
+<Answer>
+W portfelu wiersza poleceń wpisz address (lub addr) w powłoce. Portfel wyświetli Twój adres odbiorczy, ciąg 92 lub 93 znaków, a po nim odnośnik do blocknet.id, gdzie zdobędziesz krótką nazwę. Skopiuj cały adres i wklej go do seine, gdy poprosi o adres wypłat.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+To jest adres, który podajesz seine. Gdy pierwszy raz uruchomisz [seine](/pl/#download), zapyta o adres wypłat, a potem o pulę; wklej adres i naciśnij Enter, aby zaakceptować bntpool.com. Możesz też podać go bezpośrednio:
+
+```sh
+./seine --address <your-address>
+```
+
+Gdy seine już kopie, sekcja salda puli w jego [panelu](/pl/blog/seine-dashboard-explained/) pokazuje pierwsze i ostatnie sześć znaków adresu, na który kopiesz, więc możesz sprawdzić, czy zgadza się z Twoim portfelem.
+
+Jeśli wolisz kopać na coś krótszego, [krótka nazwa Blocknet ID](/pl/blog/blocknet-id-pay-by-name/), taka jak `@yourname`, wskazuje na ten adres i działa w seine oraz na bntpool.com.
+
+## Konfiguracja portfela desktopowego
+
+Najnowsze wydanie portfela desktopowego (v0.22.0, opublikowane 15 października 2026 roku) zawiera następujące pliki:
+
+| System | Plik |
+|---|---|
+| Windows x86_64 | instalator `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Każde wydanie zawiera plik `SHA256SUMS.txt`, więc przed instalacją możesz sprawdzić pobrany plik:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+W systemie Linux zainstaluj pakiet `.deb` albo uruchom bezpośrednio `.AppImage`. W systemie macOS przenieś aplikację do folderu Aplikacje i przed pierwszym uruchomieniem wykonaj raz w Terminalu to polecenie, zgodnie z instrukcją w README:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+W systemie Windows, jeśli Defender wyświetli komunikat przy instalatorze, kliknij „Więcej informacji”, a potem „Uruchom mimo to”.
+
+Aplikacja uruchamia dołączony demon Blocknet na Twoim komputerze i komunikuje się z nim przez `127.0.0.1`, nie wysyłając żadnych żądań do zewnętrznych usług. Utwórz portfel w aplikacji, zapisz jego seed odzyskiwania i skopiuj adres odbiorczy do seine. Portfel desktopowy otwiera też [linki płatności](/pl/blog/blocknet-payment-links/) `blocknet://` i wypełnia formularz wysyłki do Twojej weryfikacji.
+
+## Trzymaj klucze na własnym komputerze
+
+Koparka potrzebuje tylko Twojego adresu. seine do kopania wystarczy adres lub krótka nazwa, więc plik portfela i seed odzyskiwania mogą zostać na komputerze, któremu ufasz. Ma to największe znaczenie w przypadku wynajętych serwerów, współdzielonych koparek i maszyn, do których dostęp mają inne osoby.
+
+- **Portfel w domu, kopanie gdziekolwiek.** Wpisz ten sam adres na każdym komputerze z seine. bntpool.com sumuje ich udziały w jednym saldzie.
+- **Śledź postępy bez kluczy.** Wyszukaj swój adres na [bntpool.com](https://bntpool.com), aby zobaczyć swój hashrate, udziały i saldo z dowolnej przeglądarki.
+- **Dostęp tylko do podglądu.** Jeśli chcesz widzieć przychodzące środki na drugim komputerze, `viewkeys` eksportuje klucze tylko do podglądu. Portfel tylko do podglądu (view-only) pokazuje przychodzące środki i nie może wysyłać ani podpisywać.
+- **Zablokuj, gdy odchodzisz.** `lock` blokuje wydawanie, dopóki nie wpiszesz `unlock` z hasłem.
+
+## Jak wypłaty z kopania pojawiają się w portfelu?
+
+bntpool.com wypłaca nagrody, gdy ich blok dojrzeje. Blok puli potrzebuje 60 potwierdzeń, czyli około pięciu godzin przy pięciominutowym czasie bloku Blocknet. Gdy Twoje potwierdzone saldo osiągnie minimum 0,1 BNT, pula wysyła je na Twój adres jako zwykłą transakcję Blocknet.
+
+W portfelu sprawdź `balance` (lub `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Nowa wypłata najpierw pojawia się w pozycji `confirming`. Zwykłe transakcje można wydać po 10 potwierdzeniach, czyli po około 50 minutach, i wtedy przechodzą do `spendable`. Polecenie `history` wyświetla przychodzące transakcje od najstarszej do najnowszej, z blokiem, kwotą i typem każdej z nich: wypłaty z puli mają typ `regular`, a bloki znalezione samodzielnie w trybie solo mają typ `coinbase` i wymagają 60 potwierdzeń, zanim będzie można je wydać.
+
+Portfel pokazuje wypłatę, gdy jego węzeł nadrobi łańcuch. `status` pokazuje wtedy `Syncing: false`, a `sync` ponownie skanuje pobrane bloki w poszukiwaniu Twoich wyjść.
+
+Dopiero zaczynasz kopać? [Poradnik kopania Blocknet](/pl/blog/how-to-mine-blocknet/) opisuje pobieranie seine, wybór liczby wątków i to, czego spodziewać się na bntpool.com.
+
+<CTA target="pool" title="Kop na swój nowy adres" text="Wklej swój adres Blocknet do seine, zaakceptuj bntpool.com i obserwuj, jak wypłaty trafiają do portfela, gdy Twoje saldo osiągnie 0,1 BNT." />

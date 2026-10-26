@@ -1,0 +1,159 @@
+---
+title: Les huge pages pour miner Blocknet plus vite
+description: 'Huge pages sous Linux et WSL, large pages sous Windows : seine mappe chaque zone Argon2id de 2 GiB avec moins de défauts de TLB et mine Blocknet plus vite.'
+tags: [Guide de minage, Huge pages, Linux, Windows, Performances]
+faq:
+  - q: 'Faut-il des huge pages pour miner Blocknet avec seine ?'
+    a: 'Non. seine mine sur la mémoire ordinaire dès son lancement et demande de lui-même à Linux des transparent huge pages. Réserver des huge pages est un bonus facultatif pour gagner les derniers pourcents : environ 4 à 6 % avec des pages de 2 MiB sur la machine de validation, et environ 2 % de plus avec des pages de 1 GiB.'
+  - q: 'Combien de huge pages faut-il pour chaque thread de seine ?'
+    a: 'Chaque thread a besoin de 1 024 pages de 2 MiB, qui contiennent exactement sa zone Argon2id de 2 GiB, ou de deux pages de 1 GiB. Pour des pages de 2 MiB, multipliez votre nombre de threads par 1 024, ajoutez 5 % de marge et arrondissez au supérieur. Huit threads demandent 8 602 pages, soit environ 16,8 GiB de RAM réservés.'
+  - q: 'seine utilise-t-il automatiquement les huge pages de 1 GiB ?'
+    a: 'Le mode de pages par défaut de seine utilise le pool réservé de pages de 2 MiB, puis les transparent huge pages. Pour utiliser des pages de 1 GiB, réservez-en deux par thread, de préférence au démarrage avec hugepagesz=1G hugepages=N, et lancez seine avec --cpu-page-mode large-1g. Ce mode fonctionne sous Linux x86_64 et WSL et ajoute environ 2 % par rapport aux pages de 2 MiB.'
+  - q: 'Comment activer les large pages pour seine sous Windows ?'
+    a: 'Accordez à votre compte Windows le droit Verrouiller les pages en mémoire dans secpol.msc, sous Stratégies locales puis Attribution des droits utilisateur, puis déconnectez-vous et reconnectez-vous. seine active ce droit pour lui-même au démarrage et alloue la zone de 2 GiB de chaque thread avec des large pages. Sur les éditions Famille, accordez le droit avec un outil comme ntrights.'
+sourceHash: ef216c34d813
+translation: draft
+---
+
+Réserver des huge pages permet à seine de placer la mémoire de chaque thread de minage dans quelques grandes pages au lieu de centaines de milliers de petites. Ce guide explique pourquoi cela accélère la preuve de travail Argon2id de Blocknet, combien de pages réserver et les commandes exactes pour Linux, WSL2 et Windows.
+
+## Pourquoi les huge pages accélèrent-elles le minage de Blocknet ?
+
+<Answer>
+Chaque thread de seine calcule ses hachages dans une zone mémoire Argon2id de 2 GiB et y lit des blocs à des emplacements imprévisibles. Avec des pages ordinaires de 4 KiB, cette zone couvre 524 288 pages, bien plus de traductions d'adresses que le TLB du CPU ne peut en garder en cache. Les huge pages la couvrent avec 1 024 pages, voire 2, si bien que moins de lectures restent bloquées sur un parcours des tables de pages.
+</Answer>
+
+Chaque accès mémoire part d'une adresse virtuelle que le CPU doit traduire en adresse physique. Les traductions récentes sont conservées dans le translation lookaside buffer (TLB), que la [documentation du noyau Linux](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) décrit comme « un cache des traductions d'adresses virtuelles en adresses physiques » et « une ressource très limitée du processeur ». Quand une adresse n'est pas dans le TLB, le CPU parcourt les tables de pages en mémoire avant même de pouvoir commencer à lire les données.
+
+La preuve de travail de Blocknet rend ce parcours fréquent. Chaque hachage remplit une zone de 2 GiB avec des blocs de 1 KiB, et dans la seconde moitié de la passe, chaque nouveau bloc lit un bloc antérieur dont la position dépend de données calculées un instant plus tôt. Comme le montre l'[explication d'Argon2id](/fr/blog/argon2id-proof-of-work-explained/), cela représente environ 2 GiB de lectures dispersées par hachage. La taille des pages détermine le nombre de traductions dont ces lectures ont besoin :
+
+| Taille de page | Pages par zone de 2 GiB |
+|---|---|
+| 4 KiB (ordinaire) | 524 288 |
+| 2 MiB | 1 024 |
+| 1 GiB | 2 |
+
+Avec des huge pages, une entrée du TLB couvre 512 ou 262 144 fois plus de mémoire. Une bien plus grande partie de la zone reste donc à portée du TLB, et chaque thread consacre une plus grande part de son temps au hachage.
+
+## Quel gain de vitesse apportent les huge pages ?
+
+Le [guide des huge pages](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) de seine les présente comme le levier de réglage le plus important pour le minage CPU sous Linux. Sur la machine de validation, des pages réservées de 2 MiB ont apporté environ **4 à 6 %**, et les pages de 1 GiB environ **2 %** de plus. Le guide note aussi qu'une fois de nombreux threads lancés, la couverture en huge pages compte généralement davantage que le réglage du jeu d'instructions.
+
+Les résultats serveur du [graphique de performances](/fr/#performance) de seine ont été mesurés avec des huge pages explicites de 2 MiB. Les 49,4 H/s d'un AMD EPYC Zen 5 (EPYC 9R45) à 32 threads, mesurés en octobre 2026, ont tourné avec 34 407 pages réservées, le même chiffre que la ligne 32 threads du tableau ci-dessous. Le [guide du matériel de minage](/fr/blog/blocknet-mining-hardware-hashrate/) présente tous les résultats par génération.
+
+Même sans réservation, seine demande au noyau des transparent huge pages sous Linux. Un pool réservé va plus loin, car les pages sont mises de côté à l'avance : chaque thread les obtient, quel que soit le degré de fragmentation de la mémoire.
+
+## Combien de huge pages faut-il à seine ?
+
+<Answer>
+Chaque thread de seine a besoin de 1 024 huge pages de 2 MiB pour contenir sa zone de 2 GiB, ou de deux pages de 1 GiB. Pour des pages de 2 MiB, réservez threads × 1 024 × 1,05 et arrondissez au supérieur, ce qui laisse 5 % de marge. Huit threads demandent 8 602 pages, environ 16,8 GiB. seine affiche le nombre exact au démarrage si la réservation est insuffisante.
+</Answer>
+
+Le nombre de threads est la valeur **Threads** du tableau de bord de seine. seine le choisit d'après votre RAM et votre nombre de cœurs : lancez donc seine une fois sans huge pages et notez-le. Si la réservation est trop petite, le journal de démarrage de seine affiche une ligne `hugepages |` avec le nombre de pages nécessaires et la commande `sysctl` pour les réserver.
+
+| Threads | Pages de 2 MiB (avec 5 % de marge) | Mémoire réservée | Pages de 1 GiB |
+|---|---|---|---|
+| 4 | 4 301 | 8,4 GiB | 8 |
+| 8 | 8 602 | 16,8 GiB | 16 |
+| 16 | 17 204 | 33,6 GiB | 32 |
+| 24 | 25 805 | 50,4 GiB | 48 |
+| 32 | 34 407 | 67,2 GiB | 64 |
+
+Les pages réservées sont mises de côté pour les programmes qui demandent des huge pages : dimensionnez donc la réservation pour le nombre de threads avec lequel vous minez réellement. seine compte le pool réservé comme de la mémoire disponible quand il dimensionne les threads, si bien que réserver des pages ne change pas votre nombre de threads.
+
+## Comment configurer des huge pages de 2 MiB sous Linux ?
+
+Réservez les pages pour votre nombre de threads. Cet exemple vaut pour 4 threads :
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Vérifiez que le noyau les a toutes trouvées :
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Si `HugePages_Total` est inférieur à ce que vous avez demandé, la mémoire est fragmentée. Videz les caches, compactez la mémoire et réessayez :
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Rendez la réservation permanente :
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Pour les grosses réservations, le réglage persistant suivi d'un redémarrage est la voie la plus fiable, car le noyau réserve les pages tôt au démarrage, avant que la mémoire ne se fragmente. Lancez ensuite seine comme d'habitude. Son mode de pages par défaut, `auto`, mappe la zone de chaque thread depuis le pool réservé sans option supplémentaire.
+
+## Comment ajouter des pages de 1 GiB ?
+
+Les pages de 1 GiB demandent un peu plus de configuration et ajoutent environ 2 % par rapport aux pages de 2 MiB. Chaque zone de 2 GiB en utilise exactement deux, il n'y a donc aucune marge à calculer. Elles fonctionnent sous Linux x86_64 et WSL.
+
+Réservez-les au démarrage avec des paramètres du noyau, la méthode la plus fiable pour obtenir des pages aussi grandes. Pour 9 threads :
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Sur une machine qui vient de démarrer, vous pouvez aussi tenter une réservation à chaud, puis vérifier le nombre de pages libres :
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Les lignes `HugePages_*` de `/proc/meminfo` ne concernent que la taille par défaut de 2 MiB : lisez donc le pool de 1 GiB dans `/sys`. Lancez ensuite seine en mode 1 GiB :
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+Dans ce mode, chaque thread mappe sa zone depuis le pool de 1 GiB : vous savez ainsi que toute la session a utilisé des pages de 1 GiB.
+
+## Comment réserver des huge pages sous WSL2 ?
+
+WSL2 exécute un vrai noyau Linux, donc les commandes Linux ci-dessus y fonctionnent. Pour des pages de 1 GiB, passez les paramètres de démarrage via `%UserProfile%\.wslconfig` côté Windows. La VM doit aussi disposer d'assez de mémoire pour la réservation, plus Windows et les services WSL. La machine de validation de seine, avec 64 GiB, utilisait ceci :
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Enregistrez le fichier, lancez `wsl --shutdown` depuis Windows et rouvrez votre distribution. Vérifiez que le nombre de pages libres couvre chaque thread avant de commencer à miner.
+
+## Comment activer les large pages sous Windows ?
+
+Le minage natif sous Windows est généralement plus rapide que sous WSL sur le même matériel, et seine y utilise les large pages de Windows. Il lui faut une seule autorisation, **Verrouiller les pages en mémoire** (Lock pages in memory) :
+
+1. Ouvrez `secpol.msc`, puis *Stratégies locales* → *Attribution des droits utilisateur*.
+2. Ajoutez votre utilisateur à **Verrouiller les pages en mémoire**.
+3. Déconnectez-vous et reconnectez-vous, car le droit s'applique aux nouvelles sessions.
+
+`secpol.msc` est fourni avec Windows Professionnel, Entreprise et Éducation. Sur les éditions Famille, accordez le même droit avec un outil comme `ntrights`.
+
+La configuration s'arrête là. Au démarrage, seine active ce droit pour lui-même et alloue la zone de 2 GiB de chaque thread avec `VirtualAlloc` et `MEM_LARGE_PAGES`, la méthode que [Microsoft documente](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) pour la mémoire en large pages. Si les large pages ne sont pas disponibles, seine mine sur des pages normales et indique dans son journal la raison et la correction exacte. seine ne modifie jamais lui-même les droits du compte et ne vous déconnecte jamais.
+
+## Quel mode de pages choisir ?
+
+Le mode par défaut convient à presque tout le monde. Les autres modes servent aux pages de 1 GiB et aux mesures :
+
+| Mode | Ce qu'il fait |
+|---|---|
+| `--cpu-page-mode auto` (par défaut) | Utilise les huge pages réservées ou les large pages de Windows, puis les transparent huge pages, puis les pages normales |
+| `--cpu-page-mode large` | Exige des huge pages réservées ou des large pages de Windows pour chaque thread, et s'arrête au démarrage si elles manquent |
+| `--cpu-page-mode large-1g` | Exige des pages de 1 GiB pour chaque thread (Linux x86_64 et WSL) |
+| `--cpu-page-mode regular` | Pages ordinaires uniquement, pour un benchmark avant/après |
+
+Pour mesurer le gain sur votre propre machine, minez un moment avec `--cpu-page-mode regular`, puis avec `auto` ou `large-1g`, et comparez le hashrate sur le tableau de bord. Sur les serveurs à plusieurs nœuds NUMA, les pages réservées doivent aussi se trouver sur les nœuds qui exécutent vos threads ; le [guide du minage sur serveur](/fr/blog/mine-blocknet-on-servers/) traite ce point.
+
+<CTA target="seine" title="Téléchargez seine et réservez vos pages" text="seine mappe la zone de 2 GiB de chaque thread sur des huge pages dès que vous les réservez, sans option supplémentaire." />

@@ -1,0 +1,112 @@
+---
+title: 'Đào coin bằng CPU năm 2026: nên đào gì bằng CPU'
+description: Giải thích về đào coin bằng CPU năm 2026. Tìm hiểu vì sao các coin memory-hard như Blocknet ưu ái máy tính thông thường, điều gì làm CPU đào nhanh, và cách bắt đầu đào với seine.
+tags: [Đào bằng CPU, Argon2id, Hướng dẫn đào coin, Phần cứng]
+faq:
+  - q: 'Năm 2026 có thể đào những coin nào bằng CPU?'
+    a: 'Hãy tìm những coin có Proof of Work được thiết kế cho bộ xử lý đa dụng. Monero dùng RandomX, được các tác giả mô tả là tối ưu cho CPU đa dụng, còn Blocknet dùng Argon2id với 2 GiB bộ nhớ cho mỗi lần băm. Cả hai đều giữ cho máy để bàn, laptop và máy chủ thông thường có chỗ đứng, vì mỗi lần băm phụ thuộc vào bộ nhớ cũng như sức tính toán thuần túy.'
+  - q: 'Cần bao nhiêu RAM để đào Blocknet bằng CPU?'
+    a: 'Mỗi luồng đào cần khoảng 2 GB RAM, vì mỗi lần băm Argon2id lấp đầy khối bộ nhớ 2 GiB của riêng nó. Chia dung lượng RAM cho hai để có số luồng tối đa vừa đủ, rồi chừa lại một chút cho hệ thống. Trên một máy tính 32 GB, seine chạy khoảng 14 luồng, và nó tự tính toán việc này cho bạn khi khởi động.'
+  - q: 'Vì sao thuật toán memory-hard ưu ái máy tính thông thường?'
+    a: 'Một hàm băm memory-hard cần hàng gigabyte bộ nhớ nhanh cho mỗi lần thử, nên một con chip chỉ được chế tạo để băm vẫn cần lượng RAM lớn bên cạnh mỗi nhân. Máy để bàn, laptop và máy chủ vốn đã có nhiều RAM và bộ điều khiển bộ nhớ nhanh, điều này đưa phần cứng mọi người đang có đến gần với những gì thuật toán cần.'
+  - q: 'Có thể đào bằng CPU và card đồ họa cùng lúc không?'
+    a: 'Có, khi đào Blocknet bằng seine trên Windows hoặc Linux. seine đào trên bộ xử lý và mọi card đồ họa NVIDIA nó phát hiện được cùng một lúc, và hashrate được cộng dồn. Nó tinh chỉnh bộ xử lý trong khi đào và tinh chỉnh từng card ở lần chạy đầu tiên, nên bạn không cần cấu hình gì trước khi bắt đầu.'
+sourceHash: 67d582c389a6
+translation: draft
+---
+
+Hướng dẫn này giải thích tình hình đào coin bằng CPU năm 2026, vì sao các coin có Proof of Work memory-hard giữ cho máy tính thông thường có sức cạnh tranh, cần chú ý điều gì khi chọn coin để đào bằng bộ xử lý, và cách bắt đầu đào Blocknet với seine chỉ trong vài phút.
+
+## Năm 2026 còn đào coin bằng CPU được không?
+
+<Answer>
+Được, với những coin có Proof of Work được thiết kế cho bộ xử lý đa dụng. Bitcoin được đào bằng chip ASIC chuyên dụng và Ethereum đã kết thúc việc đào vào năm 2022, nhưng các thuật toán memory-hard như RandomX của Monero và Argon2id của Blocknet giữ cho CPU làm việc hiệu quả, vì mỗi lần băm cần hàng gigabyte bộ nhớ nhanh bên cạnh sức tính toán.
+</Answer>
+
+Việc đào coin bắt đầu trên CPU. Whitepaper của Bitcoin mô tả Proof of Work “về cơ bản là mỗi CPU một phiếu bầu.” Khi Bitcoin phát triển, thợ đào chuyển sang card đồ họa, rồi FPGA, rồi ASIC: những con chip không làm gì khác ngoài tính hàm băm SHA-256 của Bitcoin. ASIC chuyên cho Bitcoin hiện là cách chính để đào Bitcoin.
+
+Ethereum hoàn tất việc chuyển từ Proof of Work sang Proof of Stake tại sự kiện Merge ngày 15 tháng 9 năm 2022. Từ đó, đào coin không còn là cách Ethereum tạo khối. Bài [Proof of Work và Proof of Stake](/vi/blog/proof-of-work-vs-proof-of-stake/) giải thích hai thiết kế này khác nhau thế nào.
+
+Vì vậy, đào coin bằng CPU năm 2026 quy về một lựa chọn: chọn một coin có thuật toán được xây dựng cho bộ xử lý và bộ nhớ mà máy tính thông thường vốn đã có.
+
+## Vì sao coin memory-hard ưu ái máy tính thông thường?
+
+<Answer>
+Proof of Work memory-hard buộc mỗi lần băm phải lấp đầy và đọc lại một khối bộ nhớ lớn. Một con chip chỉ được chế tạo để băm vẫn cần hàng gigabyte RAM nhanh bên cạnh mỗi nhân, trong khi máy để bàn, laptop và máy chủ vốn đã có sẵn bộ nhớ đó cùng bộ điều khiển để cung cấp dữ liệu cho nó.
+</Answer>
+
+SHA-256 của Bitcoin gần như không cần bộ nhớ. Mỗi lần băm là một loạt phép tính ngắn, nên một con chip tùy biến có thể xếp nhiều mạch băm nhỏ cạnh nhau. Một bộ xử lý đa dụng còn mang theo cache, dự đoán rẽ nhánh và giải mã lệnh mà SHA-256 không bao giờ dùng đến.
+
+Thuật toán memory-hard thay đổi nơi công việc diễn ra. Proof of Work của Blocknet là [Argon2id](/vi/blog/argon2id-proof-of-work-explained/) với 2 GiB bộ nhớ, một lượt và một làn. Mỗi lần băm ghi khoảng 2 GiB bộ nhớ và đọc lại khoảng 2 GiB. Ở nửa sau của lượt xử lý, mỗi khối mới đọc một khối trước đó được chọn bằng dữ liệu mà thợ đào không thể đoán trước. Lần băm chỉ hoàn tất khi toàn bộ khối 2 GiB đã được tạo, nên tốc độ phụ thuộc vào việc hệ thống bộ nhớ chuyển dữ liệu nhanh đến đâu và RAM chứa được bao nhiêu khối 2 GiB cùng lúc.
+
+Đó chính là phần mà máy tính thông thường vốn đã làm tốt. Mã nguồn daemon của Blocknet nêu rõ mục đích: một “PoW memory-hard nhằm chống ASIC và đảm bảo đào công bằng,” trong đó kích thước 2 GB khiến “phần cứng chuyên dụng trở nên không thực tế.” Argon2id được thiết kế để chống ASIC, và thiết lập 2 GiB đưa thiết kế đó vào phục vụ những chiếc máy tính mọi người đang có.
+
+## Nên đào gì bằng CPU?
+
+Thay vì chạy theo một danh sách, hãy đánh giá một coin qua vài câu hỏi:
+
+- **Thuật toán có được thiết kế cho CPU không?** RandomX của Monero là “một thuật toán Proof of Work (PoW) được tối ưu cho CPU đa dụng,” và Monero kích hoạt nó vào ngày 30 tháng 11 năm 2019. Argon2id của Blocknet dùng 2 GiB bộ nhớ cho mỗi lần băm, khiến RAM và băng thông bộ nhớ trở thành tài nguyên quyết định.
+- **Coin có ra mắt công bằng không?** Trên Blocknet, khối genesis không có giao dịch nào, và phần thưởng của mỗi khối là một output duy nhất trả cho thợ đào đã tìm ra nó. Không có premine, quỹ ngân khố hay quỹ nhà phát triển trong quy tắc đồng thuận, nên mọi đồng coin đang lưu hành đều được đào ra.
+- **Có trình đào hiểu bộ xử lý của bạn không?** Một trình đào tốt có các đường mã riêng cho từng dòng CPU và chọn đường nhanh nhất cho máy của bạn.
+- **Có pool trả thanh toán đều đặn không?** Đào theo pool gộp nhiều thợ đào nhỏ lại để phần thưởng đến đều đặn thay vì theo từng khối. Bài [đào coin hoạt động như thế nào](/vi/blog/how-crypto-mining-works/) giải thích về pool và share.
+
+Blocknet đáp ứng cả bốn. Đây là một đồng coin riêng tư với [quyền riêng tư theo mặc định](/vi/blog/blocknet-privacy-features/), khối năm phút và thanh toán bằng tên, ra mắt vào tháng 2 năm 2026. Trình đào của nó, seine, miễn phí và mã nguồn mở, và pool mặc định là bntpool.com, trả theo PPLNS với cửa sổ sáu giờ. [Tổng quan về Blocknet](/vi/blog/what-is-blocknet/) trình bày về bản thân đồng coin.
+
+## Điều gì giúp CPU đào memory-hard nhanh?
+
+Ba yếu tố quyết định một bộ xử lý tạo ra bao nhiêu lần băm mỗi giây (H/s) trên Blocknet.
+
+**Dung lượng RAM.** Mỗi luồng đào cần một khối 2 GiB riêng cho mỗi lần băm, nên chia dung lượng RAM cho hai để có số luồng tối đa vừa đủ. Một máy tính 32 GB chứa được 16 khối trên lý thuyết. seine giữ lại 5% RAM dự phòng và chừa chỗ cho hệ điều hành, nên máy đó chạy được khoảng 14 luồng. RAM thường giới hạn số luồng trước cả số nhân. Hướng dẫn [đào coin trên PC cũ hoặc laptop](/vi/blog/mine-crypto-on-old-pc-or-laptop/) trình bày cho các máy 4-16 GB.
+
+**Băng thông bộ nhớ.** Mỗi lần băm chuyển hàng gigabyte dữ liệu qua hệ thống bộ nhớ. Ở 49,4 H/s, máy nhanh nhất đo được với seine ghi khoảng 99 GiB khối bộ nhớ mới mỗi giây (49,4 × 2 GiB). Những bộ xử lý có nhiều kênh bộ nhớ hơn và bộ nhớ nhanh hơn sẽ vượt lên.
+
+**Kernel phù hợp.** seine có nhiều kernel Argon2id: AVX2, AVX-512 và một kernel streaming trên x86, cùng NEON với đường nhanh SHA3 trên Arm. Trên cùng một chip, kernel tạo ra khác biệt lớn. Trên AWS Graviton4, kernel SHA3 có prefetch đào nhanh hơn 56% so với NEON thông thường (từ 13,80 lên 21,50 H/s), và trên AMD EPYC 9R45, kernel streaming đào nhanh hơn 30% so với AVX2 (từ 34,47 lên 44,74 H/s ở 24 luồng). seine so sánh các kernel trong khi đào và giữ kernel nhanh hơn.
+
+Đây là kết quả tốt nhất đo được với seine cho từng thế hệ phần cứng:
+
+| Phần cứng | Chip cụ thể | Luồng | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | Máy chủ EPYC 9R45 | 32 | 49,4 H/s |
+| Máy chủ Arm | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | Máy chủ EPYC 9R14 | 32 | 38,2 H/s |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+Dòng Apple M4 Max là một chiếc laptop, cho thấy một hệ thống bộ nhớ mạnh phù hợp với Argon2id đến mức nào. Các dòng máy chủ chạy trên máy AWS với huge pages 2 MiB. [Hướng dẫn phần cứng đào Blocknet](/vi/blog/blocknet-mining-hardware-hashrate/) trình bày chi tiết lời khuyên khi mua và cách chọn dung lượng RAM, còn [hướng dẫn cho Mac](/vi/blog/mine-blocknet-on-mac/) trình bày về Apple Silicon.
+
+## Làm sao để bắt đầu đào Blocknet bằng CPU?
+
+seine không cần cấu hình. Nó tự điều chỉnh theo máy của bạn và bắt đầu băm ngay:
+
+1. **Chuẩn bị địa chỉ.** Cài ví Blocknet chính thức và sao chép địa chỉ của bạn, hoặc đăng ký một [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) và đào về `@name`. [Hướng dẫn về ví](/vi/blog/blocknet-wallet-for-mining/) trình bày từng bước.
+2. **Tải seine** cho Windows, macOS hoặc Linux từ [mục tải xuống](/vi/#download) và giải nén.
+3. **Chạy chương trình** và dán địa chỉ của bạn khi được hỏi:
+
+```sh
+./seine
+```
+
+4. **Chấp nhận pool mặc định**, `stratum+tcp://bntpool.com:3333`, vậy là bạn đã bắt đầu đào.
+
+Trong khi đào, seine so sánh các số luồng và kernel CPU trên công việc đào thực tế, giảm bớt nếu bộ nhớ bị chật, và ghi nhớ thiết lập hiệu quả cho lần khởi động sau. Trên Windows và Linux, nó cũng đào trên mọi card đồ họa NVIDIA trong máy cùng lúc, và hashrate được cộng dồn. [Hướng dẫn đào coin từng bước](/vi/blog/how-to-mine-blocknet/) trình bày về các khoản thanh toán, và trên Linux, [hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) giúp tăng khoảng 4-6% với trang 2 MiB và thêm 2% với trang 1 GiB.
+
+## CPU của bạn sẽ đào được bao nhiêu?
+
+Hãy đo hashrate trước. Benchmark ngoại tuyến của seine không cần pool hay node:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Sau đó làm phép tính với số liệu thực tế. Blocknet nhắm tới một khối mỗi năm phút, tức 288 khối mỗi ngày. Phần dự kiến của bạn là:
+
+- **Số khối mỗi ngày** = 288 × (H/s của bạn ÷ H/s của mạng lưới)
+- **Số BNT mỗi ngày** = số khối mỗi ngày × phần thưởng khối hiện tại
+
+Hashrate của mạng lưới và phần thưởng khối đều thay đổi theo thời gian, nên hãy xem số liệu mới nhất trên [bntpool.com](https://bntpool.com) trước khi tính. Trên pool, bạn nhận các khoản thanh toán PPLNS đều đặn khi số dư đạt 0,1 BNT, thay vì phải chờ tự tìm được nguyên một khối. Giá trị của số BNT đó còn phụ thuộc vào giá coin và chi phí điện của bạn.
+
+<Note>
+Mọi điều ở trên mô tả Proof of Work Argon2id hiện tại của Blocknet. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến nâng cấp mạng lưới mang tên Faraday vào khoảng 2027-02-16, mang đến “một Proof of Work nhẹ hơn.” seine kiểm tra bản phát hành mới khi khởi động và mỗi 12 giờ.
+</Note>
+
+<CTA target="seine" title="Bắt đầu đào bằng CPU với seine" text="seine chọn số luồng theo RAM của bạn và chọn kernel nhanh nhất cho bộ xử lý của bạn trong khi đào trên bntpool.com." />

@@ -1,0 +1,97 @@
+---
+title: 'Penjelasan Bulletproofs: cara jumlah tersembunyi diverifikasi'
+description: Bulletproofs dijelaskan dengan sederhana. Cara Pedersen commitment menyembunyikan jumlah transaksi dan range proof membuat setiap node bisa memeriksa hitungannya.
+tags: [Bulletproofs, Privasi, Kriptografi, Blocknet]
+faq:
+  - q: 'Apakah Bulletproofs membutuhkan trusted setup?'
+    a: 'Tidak. Bulletproofs hanya bergantung pada asumsi logaritma diskret, asumsi yang sama di balik tanda tangan kurva eliptik, dan memakai parameter publik yang bisa diturunkan siapa pun. Tidak ada upacara penyiapan dan tidak ada rahasia yang harus dimusnahkan seseorang sesudahnya, dan koin privasi termasuk Monero dan Blocknet memakainya untuk range proof mereka.'
+  - q: 'Seberapa besar range proof Bulletproofs?'
+    a: 'Satu Bulletproof 64-bit memuat 2 × log2(64) + 9 = 21 elemen. Di grup Ristretto setiap elemen memakan 32 byte, jadi setiap bukti berukuran 672 byte, dan explorer Blocknet menampilkan persis angka itu untuk setiap output. Ukurannya tumbuh mengikuti logaritma rentang, jadi menggandakan panjang bit hanya menambah dua elemen.'
+  - q: 'Siapa yang bisa melihat jumlah transaksi Blocknet?'
+    a: 'Hanya pengirim dan penerima. Blockchain menyimpan Pedersen commitment dan range proof untuk setiap output, ditambah jumlah yang dienkripsi dengan rahasia yang dibagi kedua wallet. Wallet penerima mendekripsinya dengan view key privat. Biaya jaringan adalah satu-satunya angka publik, sehingga node bisa memasukkannya ke pemeriksaan saldo.'
+  - q: 'Bagaimana node tahu tidak ada koin yang diciptakan jika jumlahnya tersembunyi?'
+    a: 'Setiap node memeriksa dua hal untuk setiap transaksi. Pedersen commitment harus seimbang, sehingga input sama dengan output ditambah biaya, dan setiap output harus membawa range proof yang valid yang menunjukkan jumlahnya berada di antara 0 dan 2^64. Bersama-sama, keduanya mencegah inflasi tersembunyi tanpa mengungkap satu jumlah pun.'
+sourceHash: e02793933862
+translation: reviewed
+---
+
+Bulletproofs adalah range proof zero-knowledge berukuran kecil yang memungkinkan sebuah mata uang kripto menyembunyikan setiap jumlah transaksi sementara setiap node tetap memeriksa bahwa tidak ada koin yang diciptakan. Panduan ini menjelaskan Pedersen commitment, mengapa jumlah tersembunyi membutuhkan range proof, bagaimana Bulletproofs menjaga bukti itu tetap kecil, dan bagaimana Blocknet memakainya pada setiap output.
+
+## Apa itu Bulletproofs?
+
+<Answer>
+Bulletproofs adalah bukti zero-knowledge berukuran kecil yang diterbitkan oleh Bünz, Bootle, Boneh, Poelstra, Wuille, dan Maxwell pada 2018. Dalam mata uang kripto, Bulletproofs membuktikan bahwa jumlah yang tersembunyi berada dalam rentang yang valid, seperti 0 sampai 2^64, tanpa mengungkapnya. Bulletproofs tidak membutuhkan trusted setup, dan ukurannya hanya tumbuh mengikuti logaritma rentang.
+</Answer>
+
+Makalahnya, [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066), dipresentasikan di IEEE Symposium on Security and Privacy pada 2018. Para penulisnya merancang Bulletproofs untuk transaksi rahasia (confidential transactions), di mana jumlah di blockchain diganti dengan commitment. Untuk memahami mengapa bukti semacam itu dibutuhkan, mulailah dari commitment.
+
+## Apa itu Pedersen commitment?
+
+Commitment adalah versi kriptografis dari amplop tersegel. Anda memasukkan angka ke dalamnya, menunjukkan amplopnya kepada semua orang, dan nanti bisa membuktikan apa isinya. Tidak ada yang bisa membaca angka itu dari amplopnya, dan Anda tidak bisa menukarnya dengan angka lain sesudahnya.
+
+Pedersen commitment, yang dijelaskan oleh Torben Pedersen pada 1991, melakukan hal ini dengan titik-titik kurva eliptik. Untuk membuat commitment atas jumlah `v`, wallet memilih rahasia acak `r`, yang disebut blinding factor, lalu menghitung:
+
+```
+C = v·G + r·H
+```
+
+`G` dan `H` adalah dua titik publik yang tetap pada kurva, dipilih sedemikian rupa sehingga tidak ada yang tahu cara menuliskan yang satu sebagai kelipatan yang lain. Hasilnya, `C`, adalah satu titik berukuran 32 byte. Commitment ini punya dua sifat:
+
+- **Menyembunyikan (hiding).** Karena `r` acak, `C` tampak seperti titik acak. Jumlah yang sama yang di-commit dua kali menghasilkan dua commitment yang tidak berhubungan, dan commitment itu sendiri tidak memberi tahu pengamat apa pun tentang `v`.
+- **Mengikat (binding).** Setelah `C` dipublikasikan, wallet tidak bisa membukanya ke jumlah yang berbeda. Melakukannya berarti memecahkan masalah logaritma diskret pada kurva.
+
+## Bagaimana node memeriksa transaksi yang tidak bisa dibacanya?
+
+<Answer>
+Pedersen commitment bisa dijumlahkan. Jumlah dua commitment adalah commitment atas jumlah kedua nilainya, dengan blinding factor yang ikut dijumlahkan. Node menjumlahkan commitment input sebuah transaksi dan commitment output-nya ditambah biaya, lalu memeriksa bahwa kedua totalnya cocok, sehingga node memastikan keseimbangan tanpa melihat satu jumlah pun.
+</Answer>
+
+Menjumlahkan dua commitment menghasilkan `(v1 + v2)·G + (r1 + r2)·H`, yang dengan sendirinya adalah commitment atas `v1 + v2`. Pengirim mengatur blinding factor agar total blinding input sama dengan total blinding output. Jika jumlahnya juga seimbang, selisih antara total input dan total output tepat nol, dan node mana pun bisa memverifikasinya.
+
+Biaya jaringan adalah satu-satunya angka publik dalam transaksi. Node mengubahnya menjadi commitment dengan blinding factor nol dan menambahkannya ke sisi output, jadi pemeriksaannya berbunyi: input = output + biaya.
+
+## Mengapa jumlah tersembunyi membutuhkan range proof?
+
+Aritmetika commitment bekerja modulo sebuah angka yang sangat besar, yaitu orde grup kurva, sekitar 2^252. Dalam aritmetika itu, jumlah "negatif" hanyalah angka positif yang sangat besar. Seseorang bisa membelanjakan input senilai 10 koin dan membuat dua output, satu senilai 11 dan satu senilai "minus 1". Commitment-nya akan seimbang sempurna, dan 1 koin akan muncul dari ketiadaan, tersembunyi dari setiap pengamat.
+
+Range proof menutup celah itu. Range proof membuktikan bahwa jumlah di dalam sebuah commitment berada di antara 0 dan 2^64 tanpa menyebutkan berapa nilainya. Dengan setiap output dibatasi seperti itu, segelintir output tidak akan pernah bisa berjumlah cukup besar untuk melampaui orde grup, sehingga commitment yang seimbang berarti jumlah yang seimbang.
+
+Desain transaksi rahasia sebelumnya memakai range proof yang tumbuh secara linear mengikuti jumlah bit. Bulletproofs hanya tumbuh mengikuti logaritma, sehingga bukti 64-bit turun menjadi beberapa ratus byte.
+
+## Bagaimana cara kerja Bulletproofs?
+
+Bulletproof membuktikan sebuah rentang dalam tiga langkah.
+
+1. **Pecah jumlah menjadi bit.** Jumlah 64-bit menjadi vektor berisi 64 bit. Pembukti membuat commitment atas vektor itu dan menunjukkan dua fakta tentangnya: setiap entri bernilai 0 atau 1, dan bit-bit itu, diberi bobot pangkat dua, berjumlah sama dengan jumlah yang di-commit.
+2. **Ubah fakta-fakta itu menjadi satu inner product.** Dengan tantangan acak, pembukti melipat semua kondisi itu menjadi satu klaim tentang inner product dua vektor. Karena tantangannya acak, klaim yang salah hanya lolos dengan peluang yang dapat diabaikan.
+3. **Buktikan inner product dengan membagi dua.** Di setiap putaran, pembukti mengirim dua titik kurva, `L` dan `R`, dan kedua vektor dilipat menjadi setengah panjangnya. Setelah log2(64) = 6 putaran, tersisa sepasang angka.
+
+Pembagian dua itulah sumber ukurannya. Abstrak makalah menyebut ukuran range proof sebesar `2·log2(n) + 9` elemen grup dan field untuk rentang `n` bit. Untuk 64 bit itu berarti 12 titik dari enam putaran ditambah 9 lagi, total 21 elemen, atau 672 byte jika setiap elemen berukuran 32 byte.
+
+Buktinya non-interaktif. Alih-alih verifier yang mengirim tantangan secara langsung, kedua pihak menurunkan tantangan dengan melakukan hash pada transkrip bukti, teknik standar yang dikenal sebagai heuristik Fiat-Shamir. Bulletproofs juga tidak membutuhkan trusted setup: generatornya publik dan diturunkan secara terbuka, dan keamanannya hanya bersandar pada asumsi logaritma diskret. Beberapa bukti bisa digabungkan dengan tambahan elemen yang hanya logaritmik, dan verifikasinya bisa dilakukan secara batch.
+
+## Siapa yang memakai Bulletproofs?
+
+Monero mengaktifkan Bulletproofs dalam upgrade jaringannya pada 18 Oktober 2018 (rilis v0.13.0) untuk mengurangi ukuran transaksi. [Pustaka Rust bulletproofs](https://github.com/dalek-cryptography/bulletproofs) dari proyek dalek-cryptography mengimplementasikannya di atas grup Ristretto dari Curve25519, dan pustaka kriptografi Blocknet dibangun di atasnya.
+
+## Bagaimana Blocknet menyembunyikan setiap jumlah?
+
+Di Blocknet, setiap output dari setiap transaksi menyimpan Pedersen commitment sebagai pengganti jumlah, dan setiap output membawa Bulletproof 64-bit miliknya sendiri. Privasi adalah bagian dari format transaksi tanpa mode transparan, jadi tidak ada cara mengirim pembayaran dengan jumlah yang terlihat.
+
+Inilah yang diperiksa node sebelum menerima sebuah transaksi:
+
+- **Setiap range proof.** Bulletproof setiap output harus terverifikasi terhadap commitment-nya, membuktikan bahwa jumlahnya berada di antara 0 dan 2^64. Bukti-bukti itu memakai transkrip berlabel "Blocknet Range Proof", yang mengikat setiap bukti ke Blocknet.
+- **Keseimbangan.** Setiap input membawa commitment pseudo-output, dan ring signature membuktikan bahwa commitment itu bernilai sama dengan koin asli yang dibelanjakan tanpa mengungkap anggota ring yang mana. Node lalu memeriksa bahwa pseudo-output berjumlah sama dengan output ditambah biaya.
+- **Koin baru.** Imbalan blok mengikuti jadwal publik, jadi untuk output hasil penambangan node menghitung ulang commitment yang diharapkannya untuk tinggi blok itu dan memeriksa kecocokannya.
+
+Anda bisa melihatnya di [explorer Blocknet](https://explorer.blocknetcrypto.com). Halaman transaksi menampilkan jumlahnya sebagai "hidden · Pedersen commitments", dan setiap output menampilkan commitment-nya, memo terenkripsi, dan range proof sebesar "672 bytes · Bulletproof", ukuran yang diprediksi oleh hitungan di atas.
+
+Penerima tetap melihat angka sebenarnya. Setiap output membawa jumlah yang dienkripsi dengan rahasia yang dibagi wallet pengirim dan penerima, dan wallet penerima mendekripsinya dengan view key privat. Jumlahnya terlihat oleh dua orang dalam pembayaran itu dan tidak oleh orang lain.
+
+Jumlah tersembunyi bekerja bersama lapisan-lapisan lain Blocknet: [ring signature](/id/blog/ring-signatures-explained/) atas 16 output menyembunyikan pengirim, [stealth address sekali pakai](/id/blog/stealth-addresses-explained/) menyembunyikan penerima, dan [Dandelion++](/id/blog/dandelion-plus-plus-explained/) menyembunyikan dari mana transaksi masuk ke jaringan. [Panduan fitur privasi Blocknet](/id/blog/blocknet-privacy-features/) menguraikan masing-masing.
+
+## Dapatkan BNT privat milik Anda sendiri
+
+Cara mudah mendapatkan koin dengan jumlah tersembunyi adalah dengan menambangnya. Blocknet memakai [proof of work Argon2id](/id/blog/argon2id-proof-of-work-explained/) yang memory-hard dan bisa Anda tambang di komputer biasa, dan seine menambangnya di CPU Anda, bersama GPU NVIDIA jika ada, serta menyetel dirinya sendiri tanpa pengaturan. Setiap pembayaran yang dikirim bntpool.com kepada Anda tiba sebagai output privat dengan commitment dan Bulletproof. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membawa Anda dari unduhan sampai share diterima dalam beberapa menit.
+
+<CTA target="seine" title="Tambang BNT privat dengan seine" text="Unduh seine, tempel alamat atau @name Anda, dan mulai dapatkan Blocknet dengan setiap jumlah tersembunyi di blockchain." />

@@ -1,0 +1,146 @@
+---
+title: Đào Blocknet trên máy chủ và dàn máy đào
+description: Đào Blocknet trên máy chủ EPYC và hệ thống nhiều dàn máy đào bằng seine. Tự động xếp luồng theo NUMA và L3, chạy không giao diện, API điều khiển và số liệu Prometheus.
+tags: [Hướng dẫn đào coin, Máy chủ, Linux, seine]
+faq:
+  - q: 'seine có hỗ trợ máy chủ NUMA không?'
+    a: 'Có. Trên Linux, chế độ affinity tự động mặc định của seine trải các luồng đào qua các node NUMA và các nhóm bộ đệm L3, mỗi nhân vật lý một luồng trước khi dùng đến luồng SMT cùng nhân, và mỗi luồng tự ghim vào nhân trước khi cấp phát vùng nhớ 2 GiB để bộ nhớ nằm gần nó. Trên một máy EPYC hai node, cách này tăng hashrate thêm 73 phần trăm ở tám luồng.'
+  - q: 'seine có chạy được không cần terminal, như một dịch vụ nền không?'
+    a: 'Có. Truyền --address và --pool-url ở lần chạy đầu tiên, seine sẽ khởi động mà không hỏi gì, lưu cả hai vào seine.config.json trong thư mục dữ liệu và chuyển sang các dòng nhật ký thuần khi không có terminal. Nhờ vậy rất dễ chạy nó dưới systemd hoặc một trình quản lý dịch vụ khác có thể tự khởi động lại nó.'
+  - q: 'seine có xuất số liệu Prometheus không?'
+    a: 'Có. Chạy seine với --api-server hoặc --service, nó sẽ cung cấp số liệu Prometheus tại /metrics trên API điều khiển cục bộ, mặc định lắng nghe ở 127.0.0.1 cổng 9977. Số liệu cho biết trình đào có đang chạy không, trạng thái vòng đời, số lời giải đã gửi, được chấp nhận và stale, cùng các lần backend bị cách ly. Các lượt thu thập gửi kèm bearer token của API.'
+  - q: 'Vì sao API điều khiển của seine yêu cầu token?'
+    a: 'Từ seine v0.2.23, mọi endpoint của API điều khiển trừ kiểm tra tình trạng đều cần bearer token, giúp ngăn các trang web bạn truy cập thay đổi địa chỉ nhận thanh toán hay thiết lập của bạn. seine ghi một token mới vào control-api.cookie trong thư mục dữ liệu mỗi lần khởi động, hoặc bạn có thể đặt token cố định bằng --api-token.'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+Bài hướng dẫn này trình bày cách chạy seine trên máy lớn và trên cả một tủ rack dàn máy đào: cách nó xếp luồng trên máy chủ nhiều nhân, cách chạy không giao diện dưới một trình quản lý dịch vụ, và cách khởi động, dừng và theo dõi mọi dàn máy qua API điều khiển cục bộ, luồng sự kiện thời gian thực và số liệu Prometheus.
+
+## seine tận dụng một máy chủ lớn như thế nào?
+
+<Answer>
+Trên Linux, seine trải các luồng đào qua các node NUMA và qua các nhóm bộ đệm L3 bên trong mỗi node, dùng mỗi nhân vật lý một luồng trước khi dùng đến bất kỳ luồng SMT cùng nhân nào. Mỗi luồng tự ghim vào nhân của nó trước khi cấp phát vùng nhớ 2 GiB, nên bộ nhớ nằm gần nó. Đây là mặc định, nên bạn không cần cấu hình gì.
+</Answer>
+
+Proof of Work Argon2id của Blocknet chủ yếu là lưu lượng bộ nhớ. Mỗi luồng lấp đầy và đọc lại vùng nhớ 2 GiB của riêng nó cho mỗi lần băm, nên hashrate phụ thuộc vào số bộ điều khiển bộ nhớ và nhóm bộ đệm mà các luồng của bạn giữ bận cùng lúc. [Bài giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) phân tích lý do.
+
+Nếu các luồng chỉ đi theo thứ tự CPU của hệ điều hành, chúng sẽ lấp các nhân đầu danh sách, vốn đều nằm trên cùng một node và cùng vài nhóm bộ đệm. Trên một máy EPYC hai node, tám luồng theo thứ tự hệ điều hành đều rơi vào node 0, với gần như toàn bộ 16 GiB vùng nhớ nằm trong bộ nhớ của node đó. Cách xếp tự động của seine đặt bốn luồng trên mỗi node và khoảng 8 GiB vùng nhớ trên mỗi node, nên bộ nhớ của cả hai node được dùng cùng lúc. Trên một máy EPYC 8434P một node với tám nhóm L3, 24 luồng theo thứ tự hệ điều hành dồn sáu luồng vào mỗi nhóm trong bốn nhóm. seine dùng cả tám nhóm, mỗi nhóm ba luồng.
+
+Cách xếp luồng tuân theo giới hạn bạn đặt cho tiến trình. Nó tôn trọng mặt nạ CPU và bộ nhớ của tiến trình, nên hoạt động bên trong `taskset`, cgroups và container, và chỉ dùng những nhân bạn cho phép. Trên Windows gốc, cùng thiết lập `auto` sẽ lấp các nhân vật lý trước các luồng SMT cùng nhân.
+
+## Xếp luồng theo NUMA nhanh hơn bao nhiêu?
+
+Các nhà phát triển seine đã đo vào ngày 24 tháng 10 năm 2026 bằng cùng một tệp thực thi, chạy theo hai cách trong các cặp xen kẽ: cách xếp tự động của seine, và ghim theo thứ tự hệ điều hành thuần túy (`--cpu-affinity os`):
+
+| Máy | Số luồng | Trang bộ nhớ | Mức tăng từ cách xếp tự động |
+|---|---|---|---|
+| AMD EPYC hai node · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Thông thường | **+73%** |
+| AMD EPYC hai node · Zen 3 (EPYC 7R13, AWS c6a.8xlarge) | 8 | Huge pages 2 MiB | **+108%** |
+| Máy chủ AMD EPYC (EPYC 8434P, 48 nhân, tám nhóm L3) | 24 | Thông thường | **+16,7%** |
+
+Mọi cặp xen kẽ đều nghiêng về cách xếp tự động, và toàn bộ phương pháp cùng kết quả thô có trong [hướng dẫn máy chủ lớn](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) và [nhật ký tối ưu CPU](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) của seine.
+
+Mức tăng thể hiện rõ khi seine chạy ít luồng hơn số nhân của máy. Điều đó xảy ra mỗi khi RAM, chứ không phải số nhân, quyết định số luồng: mỗi luồng cần khoảng 2 GB, nên để lấp đầy một máy chủ 48 nhân cần khoảng 96 GB chỉ cho các vùng nhớ. Cách xếp luồng đảm bảo những luồng bạn chạy được sẽ trải đều trên mọi node NUMA và nhóm bộ đệm.
+
+Cách xếp luồng và huge pages cộng dồn với nhau, như hàng thứ hai cho thấy. Nếu bạn dành sẵn huge pages, hãy dành sẵn trên mọi node có luồng chạy, vì tổng số đủ lớn không đảm bảo có trang cục bộ. [Hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) trình bày cách thiết lập trang, và trên Linux, nhóm trang 2 MiB của mỗi node được đặt trong `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages`.
+
+Để kiểm tra hiệu quả trên máy của bạn, hãy so sánh `auto` với `os` ở cùng số luồng và cùng thiết lập trang. `--cpu-affinity off` để bộ lập lịch toàn quyền xếp luồng.
+
+### Bộ nhớ dự phòng trên máy chủ dùng chung
+
+Cơ chế tự chọn số luồng chừa 5% tổng RAM, cộng thêm phần dành cho GPU nếu có. Thay đổi mức này bằng `--cpu-memory-reserve-percent`. Nếu các dịch vụ khác bắt đầu dùng bộ nhớ, các luồng tự động của seine sẽ giải phóng vùng nhớ và quay lại khi bộ nhớ trống trở lại, nên việc đào luôn vừa vặn với phần còn lại của máy. Kết quả tinh chỉnh được lưu đệm theo từng máy, và bộ đệm được đặt lại khi tập CPU được phép hoặc bố cục NUMA và L3 thay đổi, chẳng hạn sau khi đổi cấu hình máy ảo.
+
+## Làm sao chạy seine không giao diện?
+
+<Answer>
+Truyền địa chỉ nhận thanh toán và pool qua dòng lệnh, ví dụ `--address` với địa chỉ hoặc `@name` của bạn và `--pool-url stratum+tcp://bntpool.com:3333`. Khi đó seine khởi động mà không hỏi gì, lưu thiết lập vào thư mục dữ liệu và in các dòng nhật ký thuần khi không có terminal, nên một trình quản lý dịch vụ có thể chạy nó.
+</Answer>
+
+Trên máy tính để bàn, seine hỏi địa chỉ và pool ở lần chạy đầu tiên. Trên máy chủ không có terminal, hãy cung cấp cả hai ngay từ đầu:
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Tên dàn máy đào (ở đây là `rack1-node04`) là tên máy này hiển thị trên pool. seine lưu địa chỉ, pool và tên dàn máy đào vào `seine.config.json` trong thư mục dữ liệu (mặc định là `./seine-data`), nên các lần khởi động sau với cùng thư mục dữ liệu không cần thêm cờ nào. Với thiết lập mặc định `--ui auto`, nó hiển thị [bảng điều khiển](/vi/blog/seine-dashboard-explained/) trong terminal và các dòng nhật ký thuần ở mọi nơi khác; `--ui plain` buộc xuất dạng thuần. Hãy đặt `@name` và `$name` trong dấu nháy khi dùng trong lệnh shell.
+
+Trên Linux, một unit systemd sẽ khởi động seine cùng hệ thống và khởi động lại nếu nó thoát:
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine phân giải tên ngắn khi khởi động, nên unit chờ mạng sẵn sàng. Mỗi dàn máy tự tinh chỉnh trong lúc đào và lưu lựa chọn trong thư mục dữ liệu của riêng nó cho lần khởi động sau.
+
+## Làm sao điều khiển seine qua API?
+
+seine có một REST API cục bộ kèm luồng sự kiện thời gian thực và số liệu Prometheus, dành cho bảng điều khiển và công cụ quản lý nhiều máy. Có hai cách khởi động nó:
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+Chế độ `--service` khởi động API và để trình đào chờ cho đến khi bộ điều khiển gửi `POST /v1/miner/start`, yêu cầu này có thể mang theo địa chỉ, pool, số luồng và các thiết lập khác cho lượt chạy đó. Bộ điều khiển của bạn quyết định khi nào mỗi máy đào và với thiết lập nào.
+
+### Token API
+
+Từ seine v0.2.23, mọi endpoint trừ `GET /v1/health` đều cần `Authorization: Bearer <token>`. seine ghi một token ngẫu nhiên mới vào `control-api.cookie` trong thư mục dữ liệu mỗi lần khởi động, trên Unix chỉ chủ sở hữu đọc được, và xóa nó khi tắt. Với công cụ quản lý cần giá trị cố định, hãy đặt token bằng `--api-token`, hoặc chuyển tệp sang chỗ khác bằng `--api-cookie`. API mặc định cũng không gửi header CORS và, khi gắn vào địa chỉ loopback, từ chối các yêu cầu có `Host` không phải cục bộ, giúp ngăn các trang web bạn truy cập thay đổi địa chỉ nhận thanh toán hay thiết lập của bạn.
+
+API mặc định gắn vào `127.0.0.1:9977`. Muốn gắn vào giao diện mạng khác phải dùng `--api-allow-unsafe-bind`, nên API luôn nằm trên máy trừ khi bạn chọn khác.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Sự kiện thời gian thực
+
+`GET /v1/events/stream` là một luồng server-sent events. Nó báo các thay đổi trạng thái, các giai đoạn của backend, tiến độ và kết quả tự tinh chỉnh, các lời giải tìm được và kết quả gửi ngay khi chúng xảy ra, nên một bảng điều khiển có thể hiển thị mọi dàn máy theo thời gian thực. Sau khi kết nối lại, `GET /v1/runtime/state` trả về toàn bộ trạng thái hiện tại.
+
+### Số liệu Prometheus
+
+`GET /metrics` cung cấp số liệu Prometheus, gồm `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total` và `seine_miner_stale_submits_total`. Vì cookie thay đổi mỗi lần khởi động và chỉ người dùng của seine đọc được, hãy cấp cho Prometheus một token cố định: chạy seine với `--api-token` và lưu cùng giá trị đó vào một tệp mà Prometheus đọc được. Khi đó một scrape job trên cùng máy sẽ trông như sau:
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+Danh sách endpoint đầy đủ, lược đồ yêu cầu và danh mục sự kiện có trong [tài liệu API điều khiển](https://github.com/zpalmtree/seine/blob/master/docs/API.md) của seine.
+
+## Chọn máy cho dàn máy đào
+
+Cách xếp luồng, chạy không giao diện và API hoạt động như nhau trên một máy tower đơn lẻ và trên cả một tủ rack máy chủ. Để biết bộ xử lý nào đào nhanh nhất và cần lắp bao nhiêu RAM cho mỗi luồng, hãy xem [hướng dẫn phần cứng đào Blocknet](/vi/blog/blocknet-mining-hardware-hashrate/). Mới dùng seine? Hãy bắt đầu với [cách đào Blocknet](/vi/blog/how-to-mine-blocknet/).
+
+<CTA target="seine" title="Tải seine cho máy chủ của bạn" text="seine tự xếp luồng qua các node NUMA và nhóm bộ đệm, chạy không giao diện và cung cấp cho mỗi dàn máy một API điều khiển với sự kiện thời gian thực và số liệu Prometheus." />

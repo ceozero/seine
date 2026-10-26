@@ -1,0 +1,95 @@
+---
+title: 'Gizli adres (stealth address) nedir: tek kullanımlık adresler nasıl çalışır'
+seoTitle: 'Stealth address nedir: tek kullanımlık adresler'
+description: Gizli adresler (stealth address) sade bir dille. Tek kullanımlık adreslerin, görüntüleme ve harcama anahtarlarının ve cüzdan taramasının size yapılan her ödemeyi nasıl gizli tuttuğunu öğrenin.
+tags: [Gizlilik, Gizli adresler, Cüzdan, Blocknet]
+faq:
+  - q: 'Gizli adres ile tek kullanımlık adres aynı şey mi?'
+    a: 'İkisi tek bir sistemin iki yarısıdır. Gizli adres, yayınladığınız ve bir açık harcama anahtarı ile bir açık görüntüleme anahtarından oluşan adrestir. Tek kullanımlık adres ise göndericinin tek bir ödeme için ondan türettiği yeni anahtardır. Zincirde yalnızca tek kullanımlık adresler görünür, yayınladığınız adres asla görünmez.'
+  - q: 'Gizli adresimi bilen biri bakiyemi görebilir mi?'
+    a: 'Hayır. Yayınladığınız adresi bilmek, kimsenin ödemelerinizi bulmasını sağlamaz, çünkü her ödeme onunla ilgisiz görünen tek kullanımlık bir anahtara gider. Onları bulmak özel görüntüleme anahtarınızı gerektirir, bu yüzden aldıklarınızı yalnızca cüzdanınız listeleyebilir. Blocknet''te tutarlar da gizlidir, yani çıktıların kendisi bile bir değer göstermez.'
+  - q: 'Özel görüntüleme anahtarımla biri ne yapabilir?'
+    a: 'Özel görüntüleme anahtarı, sahibinin size gönderilen ödemeleri bulmasını ve tutarlarını ve memo''larını okumasını sağlar. Hiçbir şey harcayamaz, çünkü harcama özel harcama anahtarını gerektirir. Blocknet''te viewkeys komutu görüntüleme anahtarınızı yalnızca görüntüleme amaçlı bir cüzdana dönüştürür; bu, fonları ikinci bir bilgisayarda izlemek için kullanışlıdır. Yalnızca güvendiğiniz kişilerle paylaşın.'
+  - q: 'Blocknet''te gizli adresleri açmam gerekiyor mu?'
+    a: 'Hayır. İşlem formatında şeffaf bir mod olmadığı için her Blocknet ödemesi otomatik olarak tek kullanımlık bir gizli adrese gider. Cüzdanınız gönderdiğinizde tek kullanımlık anahtarı oluşturur ve senkronize olduğunda gelen ödemeleri görüntüleme anahtarınızla bulur. İster bir adrese ister bir @name adına ödeme yapın, yapılandırılacak bir şey yoktur.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Gizli adres (stealth address), tek bir adres yayınlamanızı ve yine de size yapılan her ödemenin zincirde yeni bir yere gitmesini sağlar. Bu rehber bunun nasıl çalıştığını, görüntüleme anahtarınızın ve harcama anahtarınızın her birinin ne yaptığını ve bir cüzdanın kendi ödemelerini nasıl bulduğunu Blocknet örneği üzerinden açıklıyor.
+
+## Gizli adres nedir?
+
+<Answer>
+Gizli adres, blokzincirde hiçbir zaman görünmeyen açık bir adrestir. İki açık anahtar tutar: bir harcama anahtarı ve bir görüntüleme anahtarı. Her ödeme için göndericinin cüzdanı bunları yeni bir rastgele sayıyla birleştirerek yalnızca alıcının tanıyabileceği ve harcayabileceği tek kullanımlık bir adres oluşturur.
+</Answer>
+
+Herkese açık bir defterde sıradan bir adres, aldığı her ödemede görünür. Standart bir Bitcoin adresi böyle çalışır: onu bilen herkes her ödemeye bakıp toplamı hesaplayabilir. Birçok Bitcoin cüzdanının her ödeme için yeni bir adres vermesinin nedeni budur.
+
+Gizli adres bu işi sizin yerinize yapar. Bir web sitesinde, bir profilde veya bir `@name` olarak tek bir adres paylaşırsınız ve her gönderici ondan farklı bir tek kullanımlık adres türetir. Size yapılan on ödeme, birbirleriyle veya paylaştığınız adresle görünür hiçbir ortak noktası olmayan on çıktıya dönüşür. Karşılıklı bir yazışmaya gerek yoktur: gönderici tek kullanımlık adresi açık adresinizden ve rastgele bir sayıdan tek başına hesaplar.
+
+## Gizli adresler nereden çıktı?
+
+Monero, Blocknet ve diğer coinlerin kullandığı tek kullanımlık adres tasarımı, Nicolas van Saberhagen'in 17 Ekim 2013 tarihli CryptoNote v2.0 teknik makalesine dayanır. Makale bu fikre "bağlanamayan ödemeler" der ve göndericinin alıcının adresinden bir "tek kullanımlık açık anahtar" ürettiğini anlatır. Monero'nun belgeleri gizli adresleri, göndericilerin "alıcı adına her işlem için rastgele tek kullanımlık adresler" oluşturmasını sağlayan bir yöntem olarak tanımlar.
+
+Fikir [gizlilik coinlerinin](/tr/blog/what-is-a-privacy-coin/) ötesine yayıldı. Bitcoin'in [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) önerisi, sabit bir Bitcoin adresinin zincirde bağlanamayan ödemeler almasını sağlar; 2022'de oluşturulan Ethereum'un [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) standardı ise Ethereum hesapları için gizli adresleri standartlaştırır. İkisi de o zincirlerde isteğe bağlı özelliklerdir. Blocknet'te her ödeme tek kullanımlık bir adres kullanır.
+
+## Gizli adresler nasıl çalışır?
+
+<Answer>
+Gönderici rastgele bir r sayısı seçer, işlemde R = r·G değerini yayınlar ve r'yi alıcının açık görüntüleme anahtarıyla birleştirerek ortak bir sır oluşturur. Bu sırrı açık harcama anahtarına eklemek tek kullanımlık anahtarı verir. Alıcı aynı sırrı R ve özel görüntüleme anahtarından yeniden oluşturur; bu yüzden ödemeyi yalnızca o bulur.
+</Answer>
+
+Cüzdanınız iki anahtar çifti tutar. Her özel anahtar gizli bir sayıdır (harcama için s, görüntüleme için v) ve her açık anahtar bu sayının sabit bir eğri noktası G ile çarpımıdır. Adresiniz yalnızca iki açık anahtardan, S ve V'den oluşur. Tüm alışveriş şöyledir:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+İşin püf noktası bir Diffie-Hellman anahtar değişimidir. Gönderici r·V'yi, alıcı v·R'yi hesaplar ve ikisi de aynı noktaya varır, çünkü her biri r·v·G'dir. Başka kimse r'yi veya v'yi bilmediği için başka kimse bunu hesaplayamaz. Bu noktayı hash'lemek (H) ortak bir sır verir ve tek kullanımlık anahtar P, nokta olarak bu sırrın açık harcama anahtarınıza eklenmiş halidir.
+
+Tarama yaptığınızda sırrı R'den ve özel görüntüleme anahtarınızdan yeniden hesaplar ve P'yi üretip üretmediğini kontrol edersiniz. Üretiyorsa çıktı sizindir. Onu harcamak için cüzdanınız aynı sırrı özel harcama anahtarınıza ekler; bu da o tek çıktı için özel anahtar x'i verir.
+
+Blocknet bu tasarımı Curve25519 üzerindeki Ristretto grubunda izler ve Blocknet'e özgü bir alan etiketi altında SHA-256 ile hash'ler. Ayrıca her çıktının işlemdeki konumunu da hash'e katar; böylece tek bir işlemde aynı kişiye giden iki çıktı bile ilgisiz anahtarlar alır. Aynı ortak sır, çıktının tutarını gizleyen körleme değerini ve memo'sunu şifreleyen anahtarı da türetir; alıcı ikisini de bu sayede okur.
+
+## Görüntüleme anahtarı ve harcama anahtarı ne yapar?
+
+Anahtarları ayırmak size iki erişim seviyesi verir:
+
+- **Özel görüntüleme anahtarı ödemeleri bulur.** v ve açık harcama anahtarınızla bir cüzdan size gönderilen her çıktıyı tanıyabilir, tutarını çözebilir ve memo'sunu okuyabilir.
+- **Özel harcama anahtarı onları harcar.** Bulunan bir çıktıyı bir harcamayı imzalayabilecek özel anahtar x'e yalnızca s dönüştürür.
+
+Bu ayrım, yalnızca izleme amaçlı (watch-only) cüzdanları mümkün kılar. Blocknet komut satırı cüzdanında `viewkeys`, görüntüleme anahtarlarınızdan ayrı bir cüzdan dosyası oluşturur. Cüzdanın yardım metni bunu "izleyebilen ama harcayamayan" ve "başka bir makinede yalnızca izleme erişimi istediğinizde" kullanışlı bir dosya olarak tanımlar. Komutu çalıştırdığınızda cüzdan ne oluşturduğunu açıklar:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Yalnızca görüntüleme amaçlı bir cüzdanı yalnızca geçmişinizi göstereceğiniz birine, örneğin muhasebecinize verin veya kendinize ait ikinci bir bilgisayarda tutun. Her iki durumda da harcama anahtarınız güvendiğiniz makinede kalırken fonların gelişini izleyebilir.
+
+## Bir cüzdan ödemelerini nasıl bulur?
+
+Tek kullanımlık anahtarlar adresinizle ilgisiz göründüğü için zincirde hiçbir şey hangi çıktıların sizin olduğunu etiketlemez. Cüzdanınız bunu kendisi kontrol eder. Her yeni bloktaki her işlem için R'yi alır, özel görüntüleme anahtarınızla ortak sırrı hesaplar ve her çıktıyı yukarıdaki formüle göre test eder. Bir cüzdan senkronize olurken yaptığı şey budur.
+
+Blocknet'in tarayıcısı bunu hızlı tutar. Maliyetli adım olan R'yi görüntüleme anahtarınızla çarpmak işlem başına bir kez çalışır, ardından o işlemdeki her çıktı sonuca göre kontrol edilir. Bir çıktı eşleştiğinde cüzdan tutarı çözer ve bakiyenize eklemeden önce çıktının Pedersen taahhüdüne göre doğrular.
+
+Tarama, kurtarmayı da basitleştirir. Her iki Blocknet anahtar çifti de 12 kelimelik [kurtarma ifadenizden](/tr/blog/seed-phrase-explained/) gelir; bu yüzden seed'i yeni bir bilgisayarda geri yüklemek anahtarları yeniden oluşturur ve cüzdan size ait her çıktıyı bulmak için zinciri yeniden tarar. [Blocknet cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) seed'in nasıl yedekleneceğini ve geri yükleneceğini gösterir.
+
+## Blocknet'te gizli adresler
+
+Blocknet'te gizli adres, doğrudan sizin adresinizdir. Açık harcama anahtarınızın, açık görüntüleme anahtarınızın ve 4 baytlık bir sağlama toplamının base58 kodlamasıdır ve 92 veya 93 karakter uzunluğundadır. İşlem formatında şeffaf bir mod olmadığı için size yapılan her ödeme onu kullanır. Blok ödülleri de tek kullanımlık anahtarlara gider; bu yüzden bir solo madencinin coinbase çıktısı da aynı taramayla bulunur.
+
+Gizli adresler Blocknet'in diğer gizlilik katmanlarıyla birleşir: [16'lık bir halka](/tr/blog/ring-signatures-explained/) bir harcamanın hangi çıktıdan geldiğini gizler, [taahhütler](/tr/blog/bulletproofs-explained/) tutarları gizler ve Dandelion++ bir işlemin ağa nereden girdiğini gizler. [Blocknet gizlilik rehberi](/tr/blog/blocknet-privacy-features/) her katmanı anlatır.
+
+İsimlerle de çalışırlar. `@yourname` gibi bir [Blocknet ID kısa adı](/tr/blog/blocknet-id-pay-by-name/) herkese açık olarak adresinize eşlenir, böylece göndericiler onu blocknet.id üzerinde arayabilir. Ödemelerin kendisi yine yeni tek kullanımlık anahtarlara gider; bu yüzden adınız ne aldığınız hakkında hiçbir şey göstermez.
+
+Bu da kısa adı madencilik için kullanışlı bir ödeme adresi yapar. [seine'i](/tr/#download) başlatın, istemde adresinizi veya `@yourname` adınızı girin ve varsayılan havuz olan bntpool.com'u kabul edin. Gerisini [madencilik rehberi](/tr/blog/how-to-mine-blocknet/) anlatır; cüzdanınız kazandığınız BNT'yi yukarıda anlatılan aynı görüntüleme anahtarı taramasıyla bulur.
+
+<CTA target="seine" title="Kendi adresinize BNT kazın" text="seine'i indirin, Blocknet adresinizi veya @name adınızı girin ve birkaç dakika içinde bntpool.com'da madenciliğe başlayın." />

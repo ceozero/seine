@@ -1,0 +1,143 @@
+---
+title: 'Les mémos chiffrés des paiements Blocknet'
+description: 'Ajoutez un mémo chiffré à un paiement Blocknet : facture, commande ou note. 124 octets maximum, lisibles par vous et le destinataire, rembourrés pour passer inaperçus.'
+tags: [Mémos, Confidentialité, Portefeuille, Paiements]
+faq:
+  - q: 'Quelle longueur peut avoir un mémo Blocknet ?'
+    a: 'Un mémo contient jusqu''à 124 octets. Le texte brut est stocké en UTF-8 : cela fait 124 lettres, chiffres ou signes de ponctuation en anglais, ou environ 41 caractères chinois à trois octets chacun. Le portefeuille bloque un mémo plus long avant de construire la transaction et vous rappelle le maximum de 124 octets.'
+  - q: 'Un explorateur de blocs peut-il lire un mémo Blocknet ?'
+    a: 'Non. Un explorateur affiche le champ mémo sous la forme de 128 octets de texte chiffré marqués comme chiffrés. La clé provient du secret partagé par l''expéditeur et le destinataire pour cette sortie, donc seuls leurs portefeuilles peuvent l''ouvrir. Comme chaque mémo est rembourré à sa taille complète, un explorateur ne peut même pas savoir quelles sorties portent une note.'
+  - q: 'Un mémo rend-il une transaction Blocknet plus volumineuse ?'
+    a: 'Non. Chaque sortie porte déjà un champ mémo chiffré de 128 octets, que vous écriviez une note ou que vous le laissiez vide. Ajouter un mémo remplit un espace qui existe de toute façon : un paiement avec un numéro de facture a exactement la même taille que le même paiement sans, et les deux sont identiques sur la chaîne.'
+  - q: 'Puis-je ajouter un mémo quand je paie un nom Blocknet ID ?'
+    a: 'Oui. Mettez le nom à la place de l''adresse et le mémo après le montant, par exemple send @rock 100 "invoice 1042". Le portefeuille résout le nom, affiche l''adresse vérifiée, les frais et le mémo, puis vous demande de confirmer. Le mémo est chiffré pour le portefeuille vers lequel pointe le nom.'
+sourceHash: 6df2e7728647
+translation: draft
+---
+
+Chaque paiement Blocknet peut transporter une courte note chiffrée. Vous pouvez y mettre un numéro de facture, une référence de commande ou un message pour la personne que vous payez, et vous seuls pouvez la lire. Ce guide montre comment ajouter un mémo quand vous envoyez des BNT, qui peut le lire, pourquoi les mémos ne se distinguent jamais sur la chaîne, et où trouver les mémos que vous recevez.
+
+## Qu'est-ce qu'un mémo Blocknet ?
+
+Un mémo Blocknet est un champ chiffré de 128 octets attaché à chaque sortie de transaction. Il contient jusqu'à 124 octets de votre propre texte ou de vos données, comme un numéro de facture ou une courte note. Il est chiffré avec un secret que seuls l'expéditeur et le destinataire partagent, et rembourré pour qu'un mémo vide ressemble à un mémo plein.
+
+Le mémo fait partie du format même des transactions. Chaque sortie de la chaîne en possède un, y compris les sorties de rendu de monnaie qui renvoient des coins vers votre propre portefeuille. Cela apporte trois propriétés utiles :
+
+- **Confidentiel par défaut.** Le contenu est chiffré pour le destinataire de cette sortie. Personne d'autre ne voit ce que vous avez écrit.
+- **Taille fixe.** Le champ fait toujours 128 octets sur la chaîne, quoi que vous y mettiez.
+- **Toujours présent.** Comme chaque sortie porte un mémo, un paiement avec une note est identique à un paiement sans note.
+
+## Que peut-on mettre dans un mémo ?
+
+Tout ce qui tient en 124 octets. Le texte brut est stocké en UTF-8 : en anglais, cela fait 124 lettres, chiffres et espaces. Les caractères hors de l'alphabet latin de base prennent plus d'octets : un caractère chinois en prend trois, si bien qu'un mémo peut en contenir environ 41.
+
+Usages courants :
+
+- **Factures.** Mettez le numéro de facture dans le mémo, et la personne qui reçoit le paiement peut le rapprocher de la bonne facture sans rien demander.
+- **Numéros de commande.** Une boutique ou un service peut demander à ses clients d'inclure une référence de commande, puis la lire directement dans le paiement reçu.
+- **Notes.** « Loyer de novembre », « Merci pour le coup de main » ou « Ma part du dîner » voyagent avec les coins.
+- **Données binaires.** Le portefeuille accepte aussi des octets bruts écrits en hexadécimal, pour des codes de référence que des logiciels génèrent et lisent.
+
+## Comment ajouter un mémo en envoyant des BNT ?
+
+<Answer>
+Dans le portefeuille en ligne de commande, tapez le mémo après le montant : send @rock 100 "invoice 1042". Le portefeuille affiche le mémo sur l'écran de confirmation à côté des frais, le chiffre pour le destinataire et envoie le paiement une fois que vous confirmez. Les octets bruts fonctionnent aussi, avec le préfixe hex:.
+</Answer>
+
+La commande `send` du portefeuille accepte le mémo comme dernier argument facultatif :
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Un mémo peut contenir des espaces, et les guillemets autour sont facultatifs. Le portefeuille retire une paire de guillemets correspondants avant de chiffrer le texte. Voici un paiement vers un nom Blocknet ID avec un numéro de facture :
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+L'étape de confirmation affiche le mémo que lira le destinataire, ce qui vous permet de le vérifier avant tout envoi. Si un mémo dépasse 124 octets, le portefeuille s'arrête avant de construire la transaction avec `memo too long: max 124 bytes`, et vous pouvez le raccourcir puis réessayer.
+
+Pour envoyer des octets bruts, préfixez le mémo par `hex:`. Le portefeuille décode l'hexadécimal et chiffre les octets :
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+Les [liens de paiement](/fr/blog/blocknet-payment-links/) peuvent aussi transporter un mémo. Quand vous collez un lien `blocknet://` ou un lien `bntpay.com` dans le portefeuille, il remplit l'adresse, le montant et le mémo pour que vous confirmiez : la personne que vous payez peut ainsi fixer la référence de facture à l'avance. Pour en savoir plus sur les noms et les liens, consultez le [guide Blocknet ID](/fr/blog/blocknet-id-pay-by-name/).
+
+### Les mémos depuis vos propres logiciels
+
+L'API du portefeuille accepte un mémo pour chaque destinataire d'un envoi. Dans une requête à `POST /api/wallet/send`, donnez à chaque destinataire soit `memo_text` pour du texte brut, soit `memo_hex` pour des octets bruts :
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Les montants sont ici exprimés en unités atomiques, où 1 BNT vaut 100 000 000 unités : l'exemple envoie donc 100 BNT et 25 BNT. Chaque destinataire reçoit son propre mémo, chiffré pour son seul portefeuille. Le même maximum de 124 octets s'applique.
+
+## Qui peut lire un mémo Blocknet ?
+
+<Answer>
+L'expéditeur et le destinataire. Chaque mémo est chiffré avec le secret que les deux portefeuilles partagent pour cette sortie, le même secret qui crée l'adresse furtive à usage unique du destinataire. Tous les autres, y compris les opérateurs de nœuds et les explorateurs de blocs, voient 128 octets de données d'apparence aléatoire et ne peuvent pas savoir si une note s'y trouve.
+</Answer>
+
+Quand votre portefeuille construit un paiement, il combine une clé de transaction aléatoire toute neuve avec la clé de visualisation publique du destinataire pour obtenir un secret partagé. C'est ce secret qui produit l'[adresse furtive à usage unique](/fr/blog/blocknet-privacy-features/) du destinataire, et le portefeuille s'en sert aussi pour chiffrer le mémo. Il hache le secret avec SHA3-256, avec la position de la sortie dans la transaction et l'identifiant du réseau, pour obtenir un masque de 128 octets, puis combine ce masque avec le mémo. Chaque sortie reçoit son propre masque, si bien que deux mémos d'une même transaction sont chiffrés séparément.
+
+Le portefeuille du destinataire retrouve le même secret de l'autre côté, grâce à sa clé de visualisation privée, pendant qu'il analyse chaque bloc. Il déchiffre le mémo et l'enregistre avec le paiement. De votre côté, le portefeuille conserve les mémos que vous avez écrits dans son historique d'envois.
+
+Deux points à connaître :
+
+- **Un portefeuille en lecture seule affiche aussi les mémos.** C'est votre clé de visualisation privée qui lit les paiements entrants : un portefeuille en lecture seule construit à partir d'elle voit donc le montant et le mémo de chaque paiement. Ne partagez cette clé qu'avec des personnes à qui vous laisseriez voir vos paiements entrants.
+- **Les récompenses de minage portent des mémos vides.** Le consensus exige que le mémo de chaque récompense de bloc soit vide, de sorte que les sorties coinbase de la chaîne ne peuvent jamais servir de canal de messages public.
+
+## Pourquoi tous les mémos se ressemblent sur la chaîne
+
+Un mémo qui laisserait voir sa longueur trahirait quelque chose. Une note de 30 octets ne ressemble pas à une note de 100 octets, et un mémo vide se distinguerait des deux. Le portefeuille de Blocknet comble cette faille avec une structure fixe et un rembourrage aléatoire.
+
+Avant de chiffrer, le portefeuille range le mémo dans une enveloppe de 128 octets :
+
+| Octets | Contenu |
+|---|---|
+| 1 | Version de l'enveloppe |
+| 1 | Longueur de votre mémo |
+| 2 | Somme de contrôle du mémo |
+| 0 à 124 | Votre mémo |
+| Le reste | Rembourrage aléatoire |
+
+Le rembourrage provient du générateur de nombres aléatoires cryptographique du système, si bien que l'espace inutilisé est imprévisible. Après chiffrement, une note courte, une note pleine et un mémo vide font tous 128 octets de données d'apparence aléatoire. Les sorties de rendu de monnaie reçoivent leur propre mémo vide et rembourré, de sorte que même les coins que vous vous renvoyez passent inaperçus.
+
+La somme de contrôle permet au portefeuille du destinataire de confirmer qu'il a correctement déchiffré le mémo avant de l'afficher. Les nœuds refusent aussi tout bloc contenant une sortie dont le champ mémo n'est composé que de zéros : chaque sortie de la chaîne porte donc un mémo correctement rempli.
+
+## Où trouver les mémos que vous avez reçus
+
+Le portefeuille en ligne de commande affiche les mémos partout où il liste des paiements :
+
+- **`history`** liste les paiements entrants et sortants, avec une ligne `memo:` sous chaque paiement qui en portait un.
+- **`outputs tx <txid>`** affiche chaque sortie que votre portefeuille possède dans cette transaction, mémo compris. `outputs <n>` fait de même pour une seule sortie de la liste.
+- **L'API du portefeuille** renvoie le mémo de chaque sortie reçue sous la forme `memo_hex` depuis `GET /api/wallet/history`, prêt à être rapproché des factures par un système de commandes.
+
+Les mémos texte s'affichent entre guillemets. Un mémo qui n'est pas du texte imprimable, comme des octets bruts envoyés avec `hex:`, s'affiche en hexadécimal.
+
+Si un paiement doit un jour être justifié, l'expéditeur peut le prouver. La commande `prove <txid>` du portefeuille affiche la clé de transaction d'un paiement que vous avez envoyé. Toute personne disposant de cette clé, de l'identifiant de transaction et de l'adresse du destinataire peut vérifier le paiement via le point d'accès `POST /api/verify-proof`, qui ne nécessite aucun portefeuille. Il confirme la transaction et affiche les sorties reçues par cette adresse, leurs montants et leurs mémos.
+
+## Gagnez les BNT que vous enverrez
+
+Une façon simple d'obtenir vos premiers BNT est de les miner. seine tourne sur votre propre ordinateur, s'optimise tout seul pendant qu'il mine et paie via bntpool.com directement sur votre adresse ou votre `@name`. Le [guide de minage](/fr/blog/how-to-mine-blocknet/) vous permet de le lancer en quelques minutes.
+
+<CTA target="seine" title="Téléchargez seine et minez des BNT" text="Minez Blocknet sur votre propre ordinateur sans aucune configuration, puis payez depuis votre portefeuille avec des paiements confidentiels accompagnés d'un mémo." />

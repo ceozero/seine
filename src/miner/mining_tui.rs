@@ -6,12 +6,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{bounded, Sender, TrySendError};
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event};
 
 use super::hashrate_tracker::HashrateTracker;
+use super::session::SessionHistory;
 use super::stats::{format_hashrate_ui, Stats};
 use super::tui::{DeviceHashrate, TuiRenderer, TuiState};
-use super::ui::{set_tui_state, warn};
+use super::ui::{clear_tui_state, set_tui_state, warn};
 use super::{backend_descriptions, backend_display_names, BackendSlot};
 
 const NVIDIA_CURRENT_WINDOW_SECS: f64 = 30.0;
@@ -44,6 +45,7 @@ pub(super) struct TuiDisplay {
     quit_watcher_stop: Arc<AtomicBool>,
     quit_watcher: Option<JoinHandle<()>>,
     hashrate_tracker: HashrateTracker,
+    history: Arc<SessionHistory>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -62,10 +64,15 @@ pub(super) struct RoundUiView<'a> {
 }
 
 impl TuiDisplay {
-    fn new(tui_state: TuiState, shutdown: Arc<AtomicBool>) -> Result<Self> {
+    fn new(
+        tui_state: TuiState,
+        shutdown: Arc<AtomicBool>,
+        history: Arc<SessionHistory>,
+    ) -> Result<Self> {
         let (render_signal, render_stop, render_worker) =
             spawn_tui_render_worker(Arc::clone(&tui_state), Arc::clone(&shutdown))?;
-        let (quit_watcher_stop, quit_watcher) = spawn_tui_quit_watcher(shutdown);
+        let (quit_watcher_stop, quit_watcher) =
+            spawn_tui_quit_watcher(shutdown, Arc::clone(&tui_state), render_signal.clone());
         let display = Self {
             state: tui_state,
             last_render_request: Instant::now() - TUI_RENDER_INTERVAL,
@@ -75,7 +82,8 @@ impl TuiDisplay {
             render_worker: Some(render_worker),
             quit_watcher_stop,
             quit_watcher: Some(quit_watcher),
-            hashrate_tracker: HashrateTracker::new(),
+            hashrate_tracker: history.take_hashrate_tracker(),
+            history,
         };
         display.request_render();
         Ok(display)
@@ -129,6 +137,7 @@ impl TuiDisplay {
             s.submitted = snapshot.submitted;
             s.stale_shares = snapshot.stale_shares;
             s.accepted = snapshot.accepted;
+            s.share_retries = snapshot.share_retries;
             s.device_hashrates = device_hashrates;
             s.backends_desc = backend_descriptions(view.backends);
         }
@@ -220,15 +229,20 @@ impl Drop for TuiDisplay {
         if let Some(handle) = self.quit_watcher.take() {
             let _ = handle.join();
         }
+        clear_tui_state(&self.state);
+        let mut tracker = std::mem::replace(&mut self.hashrate_tracker, HashrateTracker::new());
+        tracker.pause_for_restart();
+        self.history.save_hashrate_tracker(tracker);
     }
 }
 
 pub(super) fn init_tui_display(
     tui_state: Option<TuiState>,
     shutdown: Arc<AtomicBool>,
+    history: Arc<SessionHistory>,
 ) -> Option<TuiDisplay> {
     let state = tui_state?;
-    match TuiDisplay::new(Arc::clone(&state), shutdown) {
+    match TuiDisplay::new(Arc::clone(&state), shutdown, history) {
         Ok(display) => {
             set_tui_state(state);
             Some(display)
@@ -359,11 +373,18 @@ fn spawn_tui_render_worker(
         while !render_stop_flag.load(Ordering::Relaxed) && !shutdown.load(Ordering::Relaxed) {
             match render_signal_rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(RenderSignal::RenderNow) => {
-                    if let Ok(locked) = state.lock() {
+                    if let Ok(mut locked) = state.lock() {
+                        locked.poll_thread_rejection();
                         let _ = renderer.render(&locked);
                     }
                 }
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                    if let Ok(mut locked) = state.lock() {
+                        if locked.poll_thread_rejection() {
+                            let _ = renderer.render(&locked);
+                        }
+                    }
+                }
                 Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
             }
         }
@@ -386,7 +407,11 @@ fn spawn_tui_render_worker(
     }
 }
 
-fn spawn_tui_quit_watcher(shutdown: Arc<AtomicBool>) -> (Arc<AtomicBool>, JoinHandle<()>) {
+fn spawn_tui_quit_watcher(
+    shutdown: Arc<AtomicBool>,
+    state: TuiState,
+    render_signal: Sender<RenderSignal>,
+) -> (Arc<AtomicBool>, JoinHandle<()>) {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_flag = Arc::clone(&stop);
     let handle = thread::spawn(move || {
@@ -400,10 +425,12 @@ fn spawn_tui_quit_watcher(shutdown: Arc<AtomicBool>) -> (Arc<AtomicBool>, JoinHa
                 continue;
             }
             if let Ok(Event::Key(key)) = event::read() {
-                if key.code == KeyCode::Char('q')
-                    || (key.code == KeyCode::Char('c')
-                        && key.modifiers.contains(KeyModifiers::CONTROL))
-                {
+                let quit = state
+                    .lock()
+                    .map(|mut state| state.handle_key(key))
+                    .unwrap_or(false);
+                let _ = render_signal.try_send(RenderSignal::RenderNow);
+                if quit {
                     shutdown.store(true, Ordering::SeqCst);
                     break;
                 }

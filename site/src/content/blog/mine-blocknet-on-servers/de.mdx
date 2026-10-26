@@ -1,0 +1,146 @@
+---
+title: Blocknet auf Servern und Rigs minen
+description: 'Mine Blocknet mit seine auf EPYC-Servern und vielen Rigs: automatische Thread-Verteilung über NUMA und L3, Headless-Betrieb, Steuer-API und Prometheus-Metriken.'
+tags: [Mining-Anleitung, Server, Linux, seine]
+faq:
+  - q: 'Unterstützt seine NUMA-Server?'
+    a: 'Ja. Unter Linux verteilt die automatische Affinität von seine die Mining-Threads standardmäßig über NUMA-Nodes und L3-Cache-Gruppen, einen pro physischem Kern vor den SMT-Geschwistern, und jeder Thread bindet sich an seinen Kern, bevor er den eigenen 2-GiB-Speicherbereich anlegt, damit der Speicher nah bei ihm liegt. Auf einem EPYC-Rechner mit zwei Nodes steigerte das die Hashrate bei acht Threads um 73 Prozent.'
+  - q: 'Kann seine ohne Terminal als Hintergrunddienst laufen?'
+    a: 'Ja. Übergib beim ersten Start --address und --pool-url, dann startet seine ohne Rückfragen, speichert beides in seine.config.json im Datenverzeichnis und wechselt zu einfachen Logzeilen, wenn kein Terminal angeschlossen ist. So lässt es sich leicht unter systemd oder einem anderen Dienstmanager betreiben, der es automatisch neu startet.'
+  - q: 'Exportiert seine Prometheus-Metriken?'
+    a: 'Ja. Starte seine mit --api-server oder --service, dann stellt es Prometheus-Metriken unter /metrics auf seiner lokalen Steuer-API bereit, die standardmäßig auf 127.0.0.1 Port 9977 lauscht. Die Metriken zeigen, ob der Miner läuft, seinen Lebenszyklus-Status, eingereichte, akzeptierte und veraltete Lösungen sowie Backend-Quarantänen. Scrapes senden das Bearer-Token der API.'
+  - q: 'Warum verlangt die Steuer-API von seine ein Token?'
+    a: 'Seit seine v0.2.23 braucht jeder Endpunkt der Steuer-API außer dem Health-Check ein Bearer-Token. Das verhindert, dass Websites, die du besuchst, deine Auszahlungsadresse oder Einstellungen ändern. seine schreibt bei jedem Start ein neues Token in control-api.cookie im Datenverzeichnis, oder du legst mit --api-token ein festes fest.'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+Diese Anleitung behandelt den Betrieb von seine auf großen Maschinen und in einem Rack voller Mining-Rigs: wie es Threads auf Servern mit vielen Kernen verteilt, wie du es ohne Terminal unter einem Dienstmanager betreibst und wie du jedes Rig über die lokale Steuer-API, den Live-Event-Stream und Prometheus-Metriken startest, stoppst und überwachst.
+
+## Wie nutzt seine einen großen Server?
+
+<Answer>
+Unter Linux verteilt seine die Mining-Threads über NUMA-Nodes und über die L3-Cache-Gruppen innerhalb jedes Nodes, mit einem Thread pro physischem Kern, bevor ein SMT-Geschwister belegt wird. Jeder Thread bindet sich an seinen Kern, bevor er den eigenen 2-GiB-Speicherbereich anlegt, damit der Speicher nah bei ihm liegt. Das ist der Standard, du musst also nichts konfigurieren.
+</Answer>
+
+Der Argon2id-Proof-of-Work von Blocknet besteht vor allem aus Speicherverkehr. Jeder Thread füllt für jeden Hash einen eigenen 2-GiB-Speicherbereich und liest ihn wieder aus, die Hashrate hängt also davon ab, wie viele Speichercontroller und Cache-Gruppen die Threads gleichzeitig beschäftigen. Die [Argon2id-Erklärung](/de/blog/argon2id-proof-of-work-explained/) zeigt, warum.
+
+Folgen die Threads einfach der CPU-Reihenfolge des Betriebssystems, füllen sie die ersten Kerne der Liste, die alle auf demselben Node und in denselben wenigen Cache-Gruppen liegen. Auf einem EPYC-Rechner mit zwei Nodes landeten acht Threads in Betriebssystem-Reihenfolge alle auf Node 0, und fast die gesamten 16 GiB an Speicherbereichen lagen im Speicher dieses Nodes. Die automatische Verteilung von seine legte je vier Threads und etwa 8 GiB Speicherbereiche auf jeden Node, sodass der Speicher beider Nodes gleichzeitig genutzt wurde. Auf einem EPYC 8434P mit einem Node und acht L3-Gruppen packte die Betriebssystem-Reihenfolge 24 Threads zu sechst in vier Gruppen. seine nutzte alle acht Gruppen mit je drei.
+
+Die Verteilung hält sich an die Grenzen, die du dem Prozess setzt. Sie respektiert die CPU- und Speichermasken des Prozesses, funktioniert also innerhalb von `taskset`, cgroups und Containern und nutzt nur die Kerne, die du erlaubst. Unter nativem Windows belegt dieselbe Einstellung `auto` die physischen Kerne vor den SMT-Geschwistern.
+
+## Wie viel schneller ist die NUMA-bewusste Verteilung?
+
+Die Entwickler von seine haben das am 24. Oktober 2026 gemessen, mit derselben Binärdatei, die abwechselnd paarweise auf zwei Arten lief: mit der automatischen Verteilung von seine und mit Bindung in einfacher Betriebssystem-Reihenfolge (`--cpu-affinity os`):
+
+| Maschine | Threads | Speicher-Pages | Gewinn durch automatische Verteilung |
+|---|---|---|---|
+| AMD EPYC · Zen 3 mit zwei Nodes (EPYC 7R13, AWS c6a.8xlarge) | 8 | Normal | **+73 %** |
+| AMD EPYC · Zen 3 mit zwei Nodes (EPYC 7R13, AWS c6a.8xlarge) | 8 | 2-MiB-Huge-Pages | **+108 %** |
+| AMD-EPYC-Server (EPYC 8434P, 48 Kerne, acht L3-Gruppen) | 24 | Normal | **+16,7 %** |
+
+Jedes abwechselnde Paar fiel zugunsten der automatischen Verteilung aus. Die vollständige Methode und die Rohdaten stehen in der [Anleitung für große Server](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) und im [CPU-Optimierungsprotokoll](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) von seine.
+
+Der Gewinn zeigt sich, wenn seine weniger Threads ausführt, als die Maschine Kerne hat. Das passiert immer dann, wenn der RAM und nicht die Kernanzahl die Thread-Anzahl bestimmt: Jeder Thread braucht etwa 2 GB, um alle 48 Kerne eines Servers zu belegen, braucht es also allein für die Speicherbereiche etwa 96 GB. Die Verteilung sorgt dafür, dass die Threads, die du dir leisten kannst, über alle NUMA-Nodes und Cache-Gruppen verteilt sind.
+
+Verteilung und Huge Pages addieren sich, wie die zweite Zeile zeigt. Wenn du Huge Pages reservierst, reserviere sie auf jedem Node, auf dem Threads laufen, denn eine ausreichend große Gesamtzahl garantiert keine lokalen Pages. Die [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) erklärt die Einrichtung der Pages, und unter Linux wird der 2-MiB-Pool jedes Nodes in `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages` festgelegt.
+
+Um die Wirkung auf deiner eigenen Maschine zu prüfen, vergleiche `auto` mit `os` bei gleicher Thread-Anzahl und gleicher Page-Einrichtung. `--cpu-affinity off` überlässt die Verteilung ganz dem Scheduler.
+
+### Speicherreserve auf geteilten Servern
+
+Die automatische Thread-Bemessung hält 5 % des gesamten RAMs frei, zusätzlich zu einer etwaigen GPU-Reservierung. Ändern kannst du das mit `--cpu-memory-reserve-percent`. Fangen andere Dienste an, Speicher zu belegen, geben die automatischen Threads von seine ihre Speicherbereiche frei und kommen zurück, sobald wieder Speicher frei ist, sodass sich das Mining in den Rest der Maschine einfügt. Tuning-Ergebnisse werden pro Maschine zwischengespeichert, und der Cache wird zurückgesetzt, wenn sich die erlaubten CPUs oder das NUMA- und L3-Layout ändern, etwa nachdem du die Größe einer VM geändert hast.
+
+## Wie betreibst du seine ohne Terminal?
+
+<Answer>
+Übergib deine Auszahlungsadresse und deinen Pool auf der Kommandozeile, zum Beispiel `--address` mit deiner Adresse oder deinem `@name` und `--pool-url stratum+tcp://bntpool.com:3333`. seine startet dann ohne Rückfragen, speichert die Einstellungen im Datenverzeichnis und gibt einfache Logzeilen aus, wenn kein Terminal angeschlossen ist, sodass ein Dienstmanager es betreiben kann.
+</Answer>
+
+Auf einem Desktop fragt seine beim ersten Start nach Adresse und Pool. Auf einem Server ohne angeschlossenes Terminal gibst du beides vorab an:
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Unter dem Rig-Namen (hier `rack1-node04`) erscheint diese Maschine im Pool. seine speichert Adresse, Pool und Rig-Namen in `seine.config.json` im Datenverzeichnis (standardmäßig `./seine-data`), sodass spätere Starts mit demselben Datenverzeichnis keine weiteren Flags brauchen. Mit dem Standard `--ui auto` zeigt es in einem Terminal [das Dashboard](/de/blog/seine-dashboard-explained/) und überall sonst einfache Logzeilen; `--ui plain` erzwingt die einfache Ausgabe. Setze `@name` und `$name` in Shell-Befehlen in Anführungszeichen.
+
+Unter Linux startet eine systemd-Unit seine beim Booten und startet es neu, falls es sich je beendet:
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine löst einen Kurznamen beim Start auf, deshalb wartet die Unit auf das Netzwerk. Jedes Rig optimiert sich während des Minens selbst und behält die gewählten Einstellungen für den nächsten Start im eigenen Datenverzeichnis.
+
+## Wie steuerst du seine über die API?
+
+seine hat eine lokale REST-API mit Live-Event-Stream und Prometheus-Metriken, gemacht für Dashboards und Tools zur Verwaltung vieler Rigs. Es gibt zwei Möglichkeiten, sie zu starten:
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+Der Modus `--service` startet die API und lässt den Miner untätig, bis ein Controller `POST /v1/miner/start` sendet; die Anfrage kann Adresse, Pool, Thread-Anzahl und andere Einstellungen für diesen Lauf enthalten. Dein Controller entscheidet, wann jede Maschine mint und mit welchen Einstellungen.
+
+### Das API-Token
+
+Seit seine v0.2.23 braucht jeder Endpunkt außer `GET /v1/health` den Header `Authorization: Bearer <token>`. seine schreibt bei jedem Start ein neues zufälliges Token in `control-api.cookie` im Datenverzeichnis, unter Unix nur für den Besitzer lesbar, und löscht es beim Beenden. Für Verwaltungstools, die einen stabilen Wert brauchen, legst du mit `--api-token` einen fest oder verschiebst die Datei mit `--api-cookie`. Die API sendet außerdem standardmäßig keine CORS-Header und lehnt bei einer Loopback-Bindung Anfragen ab, deren `Host` nicht lokal ist. Das verhindert, dass Websites, die du besuchst, deine Auszahlungsadresse oder Einstellungen ändern.
+
+Die API bindet sich standardmäßig an `127.0.0.1:9977`. Die Bindung an eine andere Schnittstelle erfordert `--api-allow-unsafe-bind`, sodass die API auf der Maschine bleibt, solange du nichts anderes wählst.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Live-Events
+
+`GET /v1/events/stream` ist ein Server-Sent-Events-Stream. Er meldet Statuswechsel, Backend-Phasen, Fortschritt und Ergebnisse des Auto-Tunings, gefundene Lösungen und Einreichungsergebnisse in dem Moment, in dem sie passieren, sodass ein Dashboard jedes Rig live anzeigen kann. Nach einer Neuverbindung liefert `GET /v1/runtime/state` den vollständigen aktuellen Zustand.
+
+### Prometheus-Metriken
+
+`GET /metrics` liefert Prometheus-Metriken, darunter `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total` und `seine_miner_stale_submits_total`. Da sich das Cookie bei jedem Start ändert und nur der Benutzer, unter dem seine läuft, es lesen kann, gibst du Prometheus ein festes Token: Starte seine mit `--api-token` und speichere denselben Wert in einer Datei, die Prometheus lesen kann. Ein Scrape-Job auf derselben Maschine sieht dann so aus:
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+Die vollständige Liste der Endpunkte, die Anfrageschemata und den Event-Katalog findest du in der [Dokumentation der Steuer-API](https://github.com/zpalmtree/seine/blob/master/docs/API.md) von seine.
+
+## Maschinen für ein Rig auswählen
+
+Verteilung, Betrieb ohne Terminal und die API funktionieren auf einem einzelnen Tower genauso wie in einem Server-Rack. Welche Prozessoren am schnellsten minen und wie viel RAM du pro Thread einplanen solltest, erklärt der [Leitfaden zur Blocknet-Mining-Hardware](/de/blog/blocknet-mining-hardware-hashrate/). Neu bei seine? Fang mit der Anleitung [So minst du Blocknet](/de/blog/how-to-mine-blocknet/) an.
+
+<CTA target="seine" title="seine für deine Server herunterladen" text="seine verteilt Threads selbst über NUMA-Nodes und Cache-Gruppen, läuft ohne Terminal und gibt jedem Rig eine Steuer-API mit Live-Events und Prometheus-Metriken." />

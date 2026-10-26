@@ -1,0 +1,112 @@
+---
+title: 'CPU-Mining 2026: Was du mit einer CPU minen kannst'
+description: 'CPU-Mining 2026 erklärt: warum speicherintensive Coins wie Blocknet normale Computer begünstigen, was eine CPU schnell macht und wie du mit seine startest.'
+tags: [CPU-Mining, Argon2id, Mining-Anleitung, Hardware]
+faq:
+  - q: 'Welche Coins kann man 2026 mit einer CPU minen?'
+    a: 'Such nach Coins, deren Proof of Work für Allzweckprozessoren entworfen wurde. Monero nutzt RandomX, das laut seinen Entwicklern für Allzweck-CPUs optimiert ist, und Blocknet nutzt Argon2id mit 2 GiB Speicher pro Hash. Beide halten normale Desktop-PCs, Laptops und Server im Spiel, weil jeder Hash vom Speicher abhängt und nicht nur von reiner Rechenleistung.'
+  - q: 'Wie viel RAM brauchst du für CPU-Mining von Blocknet?'
+    a: 'Jeder Mining-Thread braucht etwa 2 GB RAM, weil jeder Argon2id-Hash seinen eigenen 2-GiB-Speicherblock füllt. Teile deinen RAM durch zwei, um die maximale Thread-Anzahl zu erhalten, und lass etwas für das System übrig. Auf einem Computer mit 32 GB kommt seine auf etwa 14 Threads und rechnet das beim Start für dich aus.'
+  - q: 'Warum begünstigen speicherintensive Algorithmen normale Computer?'
+    a: 'Ein speicherintensiver Hash braucht für jeden Versuch Gigabytes an schnellem Speicher, sodass auch ein reiner Hash-Chip große Mengen RAM neben jedem Kern bräuchte. Desktop-PCs, Laptops und Server haben bereits reichlich RAM und schnelle Speichercontroller, womit die Hardware, die man ohnehin besitzt, nah an dem liegt, was der Algorithmus braucht.'
+  - q: 'Kann man gleichzeitig mit CPU und Grafikkarte minen?'
+    a: 'Ja, beim Blocknet-Mining mit seine unter Windows oder Linux. seine mint gleichzeitig auf dem Prozessor und jeder erkannten NVIDIA-Grafikkarte, und die Hashraten addieren sich. Den Prozessor optimiert es während des Minings und jede Karte beim ersten Start, es gibt also vor dem Start nichts zu konfigurieren.'
+sourceHash: 67d582c389a6
+translation: reviewed
+---
+
+Diese Anleitung erklärt, wo CPU-Mining 2026 steht, warum Coins mit speicherintensivem Proof of Work normale Computer konkurrenzfähig halten, worauf du bei der Wahl eines Coins für das Mining mit dem Prozessor achten solltest und wie du in wenigen Minuten Blocknet mit seine minst.
+
+## Kann man 2026 noch mit einer CPU Krypto minen?
+
+<Answer>
+Ja, bei Coins, deren Proof of Work für Allzweckprozessoren entworfen ist. Bitcoin wird mit spezialisierten ASIC-Chips gemint, und Ethereum hat das Mining 2022 beendet, aber speicherintensive Algorithmen wie Moneros RandomX und Blocknets Argon2id halten CPUs produktiv, weil jeder Hash neben Rechenleistung auch Gigabytes an schnellem Speicher braucht.
+</Answer>
+
+Mining hat auf CPUs angefangen. Das Bitcoin-Whitepaper beschreibt Proof of Work als „im Wesentlichen eine CPU, eine Stimme“. Als Bitcoin wuchs, wechselten Miner zu Grafikkarten, dann zu FPGAs und dann zu ASICs: Chips, die nichts anderes tun, als Bitcoins SHA-256-Hash zu berechnen. Bitcoin-spezifische ASICs sind heute der wichtigste Weg, Bitcoin zu minen.
+
+Ethereum hat seinen Wechsel von Proof of Work zu Proof of Stake mit dem Merge am 15. September 2022 abgeschlossen. Seitdem entstehen die Blöcke von Ethereum nicht mehr durch Mining. Der Artikel [Proof of Work vs. Proof of Stake](/de/blog/proof-of-work-vs-proof-of-stake/) erklärt, wie sich die beiden Designs unterscheiden.
+
+CPU-Mining 2026 läuft also auf eine Entscheidung hinaus: Wähle einen Coin, dessen Algorithmus für die Prozessoren und den Speicher gebaut wurde, die normale Computer bereits haben.
+
+## Warum begünstigen speicherintensive Coins normale Computer?
+
+<Answer>
+Ein speicherintensiver (memory-hard) Proof of Work lässt jeden Hash einen großen Speicherblock füllen und zurücklesen. Ein reiner Hash-Chip bräuchte trotzdem Gigabytes an schnellem RAM neben jedem Kern, während Desktop-PCs, Laptops und Server diesen Speicher und die passenden Controller bereits mitbringen.
+</Answer>
+
+Bitcoins SHA-256 braucht fast keinen Speicher. Jeder Hash ist eine kurze Folge von Rechenoperationen, daher kann ein eigener Chip viele kleine Hash-Schaltungen dicht nebeneinander packen. Ein Allzweckprozessor trägt außerdem Caches, Sprungvorhersage und Befehlsdekodierung mit sich, die SHA-256 nie nutzt.
+
+Ein speicherintensiver Algorithmus verlagert die Arbeit. Blocknets Proof of Work ist [Argon2id](/de/blog/argon2id-proof-of-work-explained/) mit 2 GiB Speicher, einem Durchlauf und einer einzigen Lane. Jeder Hash schreibt etwa 2 GiB Speicher und liest etwa 2 GiB zurück. In der zweiten Hälfte des Durchlaufs liest jeder neue Block einen früheren, der anhand von Daten ausgewählt wird, die der Miner nicht im Voraus kennen kann. Der Hash ist erst fertig, wenn der ganze 2-GiB-Block aufgebaut ist, die Geschwindigkeit hängt also davon ab, wie schnell das Speichersystem Daten bewegt und wie viele 2-GiB-Blöcke gleichzeitig in den RAM passen.
+
+Genau darin sind normale Computer schon gut. Blocknets Daemon-Code nennt die Absicht direkt: ein „speicherintensiver PoW, um ASICs zu widerstehen und faires Mining sicherzustellen“, bei dem die Größe von 2 GB „spezialisierte Hardware unpraktikabel“ macht. Argon2id ist darauf ausgelegt, ASICs zu widerstehen, und die 2-GiB-Einstellung setzt dieses Design für die Computer um, die man ohnehin schon besitzt.
+
+## Was solltest du mit einer CPU minen?
+
+Statt einer Liste hinterherzulaufen, prüfe einen Coin anhand einiger Fragen:
+
+- **Wurde der Algorithmus für CPUs entworfen?** Moneros RandomX ist „ein Proof-of-Work-Algorithmus (PoW), der für Allzweck-CPUs optimiert ist“, und Monero hat ihn am 30. November 2019 aktiviert. Blocknets Argon2id nutzt 2 GiB Speicher pro Hash, womit RAM und Speicherbandbreite die entscheidenden Ressourcen sind.
+- **War der Launch fair?** Bei Blocknet enthält der Genesis-Block keine Transaktionen, und die Belohnung jedes Blocks ist ein einzelner Output, der an den Miner geht, der ihn gefunden hat. Es gibt keinen Premine, keine Treasury und keinen Entwicklerfonds im Konsens, jeder Coin im Umlauf wurde also gemint.
+- **Gibt es einen Miner, der deinen Prozessor kennt?** Ein guter Miner bringt für jede CPU-Familie eigene Codepfade mit und wählt den schnellsten für deinen Rechner.
+- **Gibt es einen Pool mit regelmäßigen Auszahlungen?** Pool-Mining bündelt viele kleine Miner, sodass Belohnungen regelmäßig ankommen statt Block für Block. Der Artikel [Wie Krypto-Mining funktioniert](/de/blog/how-crypto-mining-works/) erklärt Pools und Shares.
+
+Blocknet beantwortet alle vier Fragen. Es ist eine Privacy Coin mit [Privatsphäre als Standard](/de/blog/blocknet-privacy-features/), Fünf-Minuten-Blöcken und Bezahlen per Name und startete im Februar 2026. Sein Miner seine ist kostenlos und Open Source, und sein Standard-Pool ist bntpool.com, der per PPLNS über ein Sechs-Stunden-Fenster auszahlt. Der [Überblick über Blocknet](/de/blog/what-is-blocknet/) behandelt den Coin selbst.
+
+## Was macht eine CPU schnell beim speicherintensiven Mining?
+
+Drei Dinge entscheiden, wie viele Hashes pro Sekunde (H/s) ein Prozessor bei Blocknet schafft.
+
+**RAM-Kapazität.** Jeder Mining-Thread braucht für jeden Hash seinen eigenen 2-GiB-Block, teile deinen RAM also durch zwei, um die maximale Thread-Anzahl zu erhalten. Ein Computer mit 32 GB fasst auf dem Papier 16 Blöcke. seine hält 5 % des RAM in Reserve und lässt Platz für das Betriebssystem, womit dieser Rechner auf etwa 14 Threads kommt. Oft begrenzt der RAM die Thread-Anzahl, bevor es die Kernzahl tut. Die Anleitung zum [Mining auf einem alten PC oder Laptop](/de/blog/mine-crypto-on-old-pc-or-laptop/) rechnet Rechner mit 4–16 GB durch.
+
+**Speicherbandbreite.** Jeder Hash bewegt Gigabytes durch das Speichersystem. Bei 49,4 H/s schreibt der schnellste mit seine gemessene Rechner jede Sekunde etwa 99 GiB an frischen Speicherblöcken (49,4 × 2 GiB). Prozessoren mit mehr Speicherkanälen und schnellerem Speicher ziehen davon.
+
+**Der richtige Kernel.** seine bringt mehrere Argon2id-Kernel mit: AVX2, AVX-512 und einen Streaming-Kernel auf x86 sowie NEON mit einem schnellen SHA3-Pfad auf Arm. Auf demselben Chip macht der Kernel einen großen Unterschied. Auf AWS Graviton4 mint der SHA3-Kernel mit Prefetching 56 % schneller als reines NEON (13,80 auf 21,50 H/s), und auf dem AMD EPYC 9R45 mint der Streaming-Kernel 30 % schneller als AVX2 (34,47 auf 44,74 H/s bei 24 Threads). seine vergleicht die Kernel während des Minings und behält den schnelleren.
+
+Das sind die besten mit seine gemessenen Ergebnisse für jede Hardware-Generation:
+
+| Hardware | Genauer Chip | Threads | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | EPYC-9R45-Server | 32 | 49,4 H/s |
+| Arm-Server | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | EPYC-9R14-Server | 32 | 38,2 H/s |
+| Apple M4 Max | MacBook Pro mit 48 GB | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+Die Zeile mit dem Apple M4 Max ist ein Laptop, was zeigt, wie gut ein starkes Speichersystem zu Argon2id passt. Die Server-Zeilen liefen auf AWS-Rechnern mit 2-MiB-Huge-Pages. Der [Hardware-Leitfaden für Blocknet-Mining](/de/blog/blocknet-mining-hardware-hashrate/) behandelt Kaufberatung und RAM-Bemessung ausführlich, und die [Mac-Anleitung](/de/blog/mine-blocknet-on-mac/) behandelt Apple Silicon.
+
+## Wie startest du CPU-Mining für Blocknet?
+
+seine braucht keine Konfiguration. Es passt sich an deinen Rechner an und beginnt sofort zu hashen:
+
+1. **Besorge dir eine Adresse.** Installiere die offizielle Blocknet-Wallet und kopiere deine Adresse, oder sichere dir einen [Blocknet-ID-Kurznamen](/de/blog/blocknet-id-pay-by-name/) und mine auf `@name`. Die [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/) führt dich durch.
+2. **Lade seine herunter**, für Windows, macOS oder Linux, im [Download-Bereich](/de/#download), und entpacke es.
+3. **Starte es** und füge deine Adresse ein, wenn du danach gefragt wirst:
+
+```sh
+./seine
+```
+
+4. **Übernimm den Standard-Pool** `stratum+tcp://bntpool.com:3333`, und schon läuft das Mining.
+
+Während des Minings vergleicht seine die Thread-Anzahlen und CPU-Kernel an echter Mining-Arbeit, nimmt sich zurück, wenn der Speicher knapp wird, und merkt sich für den nächsten Start, was funktioniert hat. Unter Windows und Linux mint es zusätzlich gleichzeitig auf jeder NVIDIA-Grafikkarte im Rechner, und die Hashraten addieren sich. Die [Schritt-für-Schritt-Anleitung zum Mining](/de/blog/how-to-mine-blocknet/) behandelt Auszahlungen, und unter Linux bringt die [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) etwa 4–6 % mit 2-MiB-Seiten und weitere 2 % mit 1-GiB-Seiten.
+
+## Wie viel wird deine CPU minen?
+
+Miss zuerst deine Hashrate. Der Offline-Benchmark von seine braucht weder Pool noch Node:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Dann rechne mit aktuellen Zahlen. Blocknet zielt auf einen Block alle fünf Minuten, also 288 Blöcke pro Tag. Dein erwarteter Anteil ist:
+
+- **Blöcke pro Tag** = 288 × (deine H/s ÷ Netzwerk-H/s)
+- **BNT pro Tag** = Blöcke pro Tag × die aktuelle Blockbelohnung
+
+Netzwerk-Hashrate und Blockbelohnung ändern sich beide mit der Zeit, lies sie also vor dem Rechnen frisch auf [bntpool.com](https://bntpool.com) ab. Auf dem Pool bekommst du regelmäßige PPLNS-Auszahlungen, sobald dein Guthaben 0,1 BNT erreicht, statt darauf zu warten, selbst einen ganzen Block zu finden. Der Wert dieser BNT hängt dann vom Coin-Preis und deinen Stromkosten ab.
+
+<Note>
+Alles oben beschreibt Blocknets aktuellen Argon2id-Proof-of-Work. Laut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet um den 16. Februar 2027 ein Netzwerk-Upgrade namens Faraday, das „einen leichteren Proof of Work“ bringen wird. seine sucht beim Start und alle 12 Stunden nach neuen Releases.
+</Note>
+
+<CTA target="seine" title="CPU-Mining mit seine starten" text="seine richtet die Threads nach deinem RAM aus und wählt den schnellsten Kernel für deinen Prozessor, während es auf bntpool.com mint." />

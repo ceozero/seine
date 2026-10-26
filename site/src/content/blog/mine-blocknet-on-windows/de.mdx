@@ -1,0 +1,93 @@
+---
+title: Blocknet unter Windows minen
+description: 'Mine Blocknet unter Windows mit seine. ZIP wählen, Download prüfen, Adresse eingeben und akzeptierte Shares beim gemeinsamen CPU- und NVIDIA-Mining prüfen.'
+tags: [Mining-Anleitung, Windows, NVIDIA]
+faq:
+  - q: 'Brauche ich das CUDA Toolkit, um Blocknet unter Windows zu minen?'
+    a: 'Nein. Das Windows-Release-ZIP enthält die NVIDIA-Laufzeitbibliotheken, die seine benötigt. Installiere einen aktuellen NVIDIA-Treiber und lasse die entpackten Dateien zusammen. seine erkennt unterstützte NVIDIA-Karten neben der CPU und stimmt sie automatisch ab. CPU-Mining funktioniert auch auf Rechnern ohne NVIDIA-Karte.'
+  - q: 'Wo speichert seine meine Mining-Einstellungen unter Windows?'
+    a: 'Standardmäßig speichert seine die Auszahlungsadresse, den Pool und den Rig-Namen in seine-data/seine.config.json unterhalb des Ordners, aus dem du es startest. Starte es aus demselben entpackten Ordner, um diese Einstellungen wiederzuverwenden. Mit der Option data-dir kannst du bei Bedarf ein anderes Verzeichnis auswählen.'
+  - q: 'Brauche ich Windows Large Pages, bevor ich mit dem Mining beginne?'
+    a: 'Nein. seine versucht automatisch, Large Pages zu verwenden, und nutzt normale Speicherseiten, wenn sie nicht verfügbar sind. Du kannst mit den Standardeinstellungen minen. Für die optionale Einrichtung von Large Pages gewähre deinem Mining-Konto das Recht Sperren von Seiten im Speicher. Melde dich dann ab und wieder an, bevor du seine neu startest.'
+sourceHash: 3eebcb8784e8
+translation: draft
+---
+
+Diese Anleitung führt dich vom Windows-ZIP-Download bis zu akzeptierten Shares auf bntpool.com. Du prüfst das Archiv, entpackst die Dateien, gibst deine Auszahlungsadresse ein und bestätigst, dass deine CPU und alle unterstützten NVIDIA-Karten minen. Die folgenden Befehle verwenden PowerShell und natives Windows.
+
+## Wie beginnst du mit Blocknet-Mining unter Windows?
+
+<Answer>
+Lade `seine-windows-x86_64.zip` herunter, entpacke das gesamte Archiv und öffne `seine.exe`. Gib deine Blocknet-Adresse oder deinen registrierten `@name` ein und übernimm `stratum+tcp://bntpool.com:3333` als Pool. seine wählt die verfügbaren CPU- und NVIDIA-Backends aus, passt die Thread-Anzahl an den Arbeitsspeicher an und beginnt während des Minings mit der Abstimmung.
+</Answer>
+
+Halte deine öffentliche Auszahlungsadresse bereit, bevor du den Miner öffnest. Die [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/) erklärt, wie du eine erhältst. Gib nur die Empfangsadresse ein: Der Miner benötigt weder die Seed-Phrase noch die Ausgabeschlüssel deiner Wallet. Eine registrierte [Blocknet ID](/de/blog/blocknet-id-pay-by-name/) funktioniert ebenfalls. Du kannst also `@name` anstelle der langen Adresse verwenden.
+
+Jeder CPU-Mining-Thread verwendet einen 2 GiB großen Speicherblock. seine prüft den verfügbaren RAM und die Anzahl der Kerne, hält Speicherreserven frei und wählt die anfängliche Thread-Anzahl für dich aus. Auf einem Desktop oder Laptop kannst du mit den Standardeinstellungen beginnen; du musst weder eine Thread-Anzahl berechnen noch zuerst einen CPU-Kernel auswählen.
+
+## Schritt 1: Windows-Archiv herunterladen und prüfen
+
+Öffne den [Downloadbereich](/de/#download) und wähle Windows x86_64. Das Archiv heißt `seine-windows-x86_64.zip`. Lade `SHA256SUMS.txt` aus demselben [Release](https://github.com/zpalmtree/seine/releases/latest) herunter, wenn du das ZIP vor dem Entpacken überprüfen möchtest. Das Archiv und die Prüfsummendatei müssen aus derselben Release-Version stammen.
+
+![Windows-ZIP in der offiziellen Downloadtabelle von seine](/assets/blog/windows-download.png)
+
+Wechsle in PowerShell in deinen Downloads-Ordner und berechne den SHA-256-Hash des Archivs:
+
+```powershell
+cd "$HOME\Downloads"
+Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
+```
+
+Vergleiche den angezeigten Hash mit dem Eintrag für genau dieses ZIP in `SHA256SUMS.txt`. Groß- und Kleinschreibung spielt keine Rolle; alle Hexadezimalziffern müssen übereinstimmen. [Microsoft dokumentiert Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash), falls du eine Datei in einem anderen Ordner prüfen möchtest. Eine Prüfsumme bestätigt, dass das Archiv dem veröffentlichten Release entspricht; lade beide Dateien von der offiziellen Release-Seite herunter.
+
+## Schritt 2: Das vollständige ZIP entpacken
+
+Klicke im Datei-Explorer mit der rechten Maustaste auf das heruntergeladene ZIP und wähle **Alle extrahieren**. Wähle einen Ordner mit Schreibzugriff und öffne anschließend den entpackten Ordner. Lasse `seine.exe` und die zugehörigen DLLs zusammen: Das Windows-Archiv enthält die vom Miner verwendeten NVIDIA-Laufzeitbibliotheken.
+
+Doppelklicke im entpackten Ordner auf `seine.exe`. Wenn du ein Terminal bevorzugst, öffne PowerShell in diesem Ordner und führe Folgendes aus:
+
+```powershell
+.\seine.exe
+```
+
+Das Präfix `./` oder `.\` weist die Shell an, die ausführbare Datei im aktuellen Verzeichnis zu starten. Der Start aus einem entpackten Ordner gibt seine außerdem einen festen Speicherort für seine Einstellungen. Verwende bei späteren Starts denselben Ordner, damit es die eingegebene Adresse und den Pool wiederfindet.
+
+## Schritt 3: Adresse und Pool eingeben
+
+Füge bei der ersten Abfrage deine Blocknet-Empfangsadresse oder deinen registrierten `@name` ein und bestätige. Übernimm die Standard-Pool-URL `stratum+tcp://bntpool.com:3333`. Gib dem Rig auf Nachfrage einen erkennbaren Namen im Pool, damit du diesen Windows-PC von anderen Rechnern unterscheiden kannst, die auf dieselbe Adresse minen.
+
+Die [Konfigurationsanleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) beschreibt diese Abfragen und die gespeicherten Einstellungen. Standardmäßig liegen sie in `seine-data/seine.config.json`, relativ zu dem Ordner, aus dem du das Programm startest. Bei späteren Starts verwendet seine sie erneut. Kurznamen werden bei jedem neuen Start wieder aufgelöst.
+
+Du kannst einen registrierten Kurznamen auch direkt in PowerShell übergeben:
+
+```powershell
+.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
+```
+
+Ersetze `@name` durch deinen eigenen registrierten Kurznamen. Lasse die Flags für CPU-Threads und Kernel ungesetzt, damit seine sie automatisch auswählt. Die allgemeine Einrichtung für verschiedene Betriebssysteme findest du unter [Blocknet minen](/de/blog/how-to-mine-blocknet/).
+
+## Woran erkennst du, dass das Mining funktioniert?
+
+<Answer>
+Prüfe, ob das Dashboard von seine eine Hashrate und akzeptierte Shares anzeigt, und suche anschließend dieselbe Auszahlungsadresse auf der Seite My Stats von bntpool.com. Das Dashboard beschreibt die aktuelle Arbeit des Miners; der Pool erfasst eingereichte Shares und Belohnungen. Lass die automatische Abstimmung zur Ruhe kommen, bevor du Hashraten vergleichst oder Einstellungen änderst.
+</Answer>
+
+Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die Hashrate, den Mining-Status und die Pool-Anzeigen. Eine laufende Hashrate zeigt die lokale Hashing-Aktivität; ein akzeptierter Share bestätigt, dass Arbeit beim Pool angekommen ist. Öffne [My Stats](https://bntpool.com/stats) und gib dieselbe Adresse oder denselben Kurznamen ein, um die Shares und das Guthaben dieses Rigs zu verfolgen.
+
+Unterscheide beim Prüfen einer neuen Einrichtung zwischen akzeptierten Shares und Auszahlungen. Shares tragen zu den Pool-Belohnungen bei; eine Auszahlung richtet sich nach den Bestätigungs- und Guthabenregeln des Pools. Die [PPLNS-Anleitung](https://bntpool.com/blog/how-pplns-payouts-work/) erklärt diesen Ablauf. Du kannst die Verbindung sofort prüfen, ohne auf die erste Auszahlung zu warten.
+
+## CPU- und NVIDIA-Mining auf demselben PC
+
+seine verwendet standardmäßig die CPU und unterstützte NVIDIA-Karten zusammen. Installiere einen aktuellen NVIDIA-Treiber; das Windows-ZIP enthält bereits die Laufzeitbibliotheken, du musst das CUDA Toolkit also nicht separat installieren. Lasse die entpackten DLLs neben der ausführbaren Datei, wenn du den Ordner des Miners verschiebst.
+
+Beim ersten Start stimmt seine jede GPU ab und merkt sich ihre Einstellungen. Auch die CPU-Abstimmung läuft während des Minings. Die [Hardware-Anleitung](/de/blog/blocknet-mining-hardware-hashrate/) erklärt die Speicherdimensionierung und Messergebnisse, während die [NVIDIA-Anleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) mehrere Karten behandelt. Zum sauberen Beenden drücke `q` im Dashboard oder `Ctrl+C` im Terminal.
+
+## Optional: Windows Large Pages aktivieren
+
+Beim normalen Start versucht das Programm bereits, Large Pages zu verwenden, und fällt auf normale Speicherseiten zurück. Um Large Pages unter Windows Pro, Enterprise oder Education vorzubereiten, öffne `secpol.msc`, gehe zu **Lokale Richtlinien → Zuweisen von Benutzerrechten → Sperren von Seiten im Speicher** und füge das Konto hinzu, mit dem seine läuft. Melde dich ab und wieder an, damit die neue Sitzung das Recht erhält.
+
+Die [Large-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) beschreibt diese optionale Einrichtung ausführlich. Starte seine nach der erneuten Anmeldung normal und prüfe im Startprotokoll den ausgewählten Seitenmodus. Behalte den automatischen Standardmodus bei, während du deine erste funktionierende Einrichtung herstellst. Vergleiche anschließend Messungen auf demselben PC, wenn du Seiteneinstellungen änderst.
+
+[Windows blockiert deinen Miner? Download prüfen](/de/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="seine für Windows herunterladen" text="Entpacke das ZIP, gib deine Auszahlungsadresse ein und mine auf bntpool.com mit automatischer CPU- und NVIDIA-Abstimmung." />

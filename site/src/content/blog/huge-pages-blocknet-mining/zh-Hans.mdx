@@ -1,0 +1,159 @@
+---
+title: 用大页内存加快 Blocknet 挖矿
+description: 在 Linux 和 WSL 上预留大页，或在 Windows 上启用大页面，让 seine 用更少的 TLB 未命中映射每块 2 GiB 的 Argon2id 区域，更快地挖 Blocknet。
+tags: [挖矿指南, 大页内存, Linux, Windows, 性能]
+faq:
+  - q: '用 seine 挖 Blocknet 必须使用大页吗？'
+    a: '不必。seine 一启动就能用普通内存挖矿，并且会自行向 Linux 请求透明大页。预留大页是一项可选设置，用来榨出最后几个百分点：在验证机上，2 MiB 大页带来约 4% 到 6% 的提升，1 GiB 大页再多约 2%。'
+  - q: 'seine 的每个线程需要多少个大页？'
+    a: '每个线程需要 1,024 个 2 MiB 大页，正好容纳它的 2 GiB Argon2id 区域，或者两个 1 GiB 大页。使用 2 MiB 大页时，用线程数乘以 1,024，再加 5% 余量并向上取整。八个线程需要 8,602 个大页，约占用 16.8 GiB 内存。'
+  - q: 'seine 会自动使用 1 GiB 大页吗？'
+    a: 'seine 的默认页面模式先使用预留的 2 MiB 大页池，然后使用透明大页。要使用 1 GiB 大页，请为每个线程预留两个，最好在启动时用 hugepagesz=1G hugepages=N 预留，并用 --cpu-page-mode large-1g 启动 seine。该模式适用于 x86_64 Linux 和 WSL，在 2 MiB 大页的基础上再提升约 2%。'
+  - q: '如何在 Windows 上为 seine 启用大页面？'
+    a: '在 secpol.msc 的“本地策略”和“用户权限分配”中，把“锁定内存页”（Lock pages in memory）权限授予你的 Windows 账户，然后注销并重新登录。seine 启动时会为自己启用该权限，并用大页面分配每个线程的 2 GiB 区域。家庭版可用 ntrights 等工具授予该权限。'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+预留大页后，seine 可以用少量大页面承载每个挖矿线程的内存，而不是几十万个小页面。本指南解释这为什么能加快 Blocknet 的 Argon2id 工作量证明、需要预留多少页，以及 Linux、WSL2 和 Windows 上的具体命令。
+
+## 为什么大页能加快 Blocknet 挖矿？
+
+<Answer>
+seine 的每个线程都在一块 2 GiB 的 Argon2id 区域中计算哈希，并从其中无法预测的位置读取数据块。使用普通的 4 KiB 页面时，这块区域横跨 524,288 个页面，所需的地址转换远超 CPU 的 TLB 能缓存的数量。大页只需 1,024 个甚至 2 个页面就能覆盖它，因此因页表遍历而停顿的读取更少。
+</Answer>
+
+每次内存访问都从一个虚拟地址开始，CPU 必须把它转换成物理地址。最近用过的转换保存在转换后备缓冲区（TLB）中，[Linux 内核文档](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html)把它描述为“a cache of virtual-to-physical translations”（虚拟地址到物理地址转换的缓存），并称它“a very scarce resource on processor”（是处理器上非常稀缺的资源）。如果某个地址不在 TLB 中，CPU 要先遍历内存中的页表，然后才能开始读取数据。
+
+Blocknet 的工作量证明让这种遍历变得频繁。每次哈希都会用 1 KiB 的数据块填满一块 2 GiB 的区域，在这一遍的后半段，每个新数据块都要读取一个更早的数据块，而它的位置取决于前一刻才算出的数据。正如 [Argon2id 详解](/zh-hans/blog/argon2id-proof-of-work-explained/)所示，每次哈希累计约有 2 GiB 的分散读取。页面大小决定了这些读取需要多少次地址转换：
+
+| 页面大小 | 每块 2 GiB 区域的页面数 |
+|---|---|
+| 4 KiB（普通） | 524,288 |
+| 2 MiB | 1,024 |
+| 1 GiB | 2 |
+
+使用大页时，一个 TLB 条目覆盖的内存是原来的 512 倍或 262,144 倍，所以区域中更多的部分都在 TLB 的覆盖范围内，每个线程也有更多时间用于计算哈希。
+
+## 使用大页后挖矿能快多少？
+
+seine 的[大页指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md)称它是 Linux 上 CPU 挖矿最重要的单项调优设置。在验证机上，预留的 2 MiB 大页带来约 **4–6%** 的提升，1 GiB 大页再多约 **2%**。指南还指出，当运行的线程很多时，大页的覆盖程度通常比指令集调优更重要。
+
+seine [性能图表](/zh-hans/#performance)中的服务器结果都是在显式 2 MiB 大页下测得的。AMD EPYC Zen 5（EPYC 9R45）在 32 个线程下跑出的 49.4 H/s 测于 2026 年 10 月，当时预留了 34,407 个大页，与下表中 32 线程那一行的数字相同。[挖矿硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)列出了各代硬件的完整结果。
+
+即使没有预留，seine 在 Linux 上也会向内核请求透明大页。预留的大页池效果更好，因为这些页面是事先留出的，无论内存碎片化到什么程度，每个线程都能拿到。
+
+## seine 需要多少个大页？
+
+<Answer>
+seine 的每个线程需要 1,024 个 2 MiB 大页来容纳它的 2 GiB 区域，或者两个 1 GiB 大页。使用 2 MiB 大页时，预留 线程数 × 1,024 × 1.05 并向上取整，留出 5% 余量。八个线程需要 8,602 个大页，约 16.8 GiB。预留不足时，seine 会在启动时显示确切数字。
+</Answer>
+
+线程数就是 seine 仪表盘上的 **Threads** 数字。seine 根据你的内存和核心数自动选择它，所以先在不使用大页的情况下启动一次 seine，记下这个数字。如果预留太少，seine 的启动日志会显示一行 `hugepages |`，给出所需的页数和预留它们的 `sysctl` 命令。
+
+| 线程数 | 2 MiB 大页（含 5% 余量） | 预留内存 | 1 GiB 大页 |
+|---|---|---|---|
+| 4 | 4,301 | 8.4 GiB | 8 |
+| 8 | 8,602 | 16.8 GiB | 16 |
+| 16 | 17,204 | 33.6 GiB | 32 |
+| 24 | 25,805 | 50.4 GiB | 48 |
+| 32 | 34,407 | 67.2 GiB | 64 |
+
+预留的页面专供请求大页的程序使用，所以请按你实际挖矿时的线程数来确定预留量。seine 在确定线程数时会把预留的大页池计入可用内存，因此预留大页后线程数保持不变。
+
+## 如何在 Linux 上设置 2 MiB 大页？
+
+按你的线程数预留页面。下面的例子针对 4 个线程：
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+检查内核是否全部分配成功：
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+如果 `HugePages_Total` 比你要求的少，说明内存已经碎片化。清空缓存、整理内存后再试一次：
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+让预留永久生效：
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+预留量较大时，保存设置后重启是最可靠的做法，因为内核会在启动早期、内存尚未碎片化时预留页面。然后照常启动 seine。它的默认页面模式 `auto` 会从预留的大页池中映射每个线程的区域，无需额外参数。
+
+## 如何添加 1 GiB 大页？
+
+1 GiB 大页的设置稍多一些，在 2 MiB 大页的基础上再提升约 2%。每块 2 GiB 区域正好需要两个 1 GiB 大页，所以不必计算余量。它们适用于 x86_64 Linux 和 WSL。
+
+用内核启动参数在开机时预留，这是获得这么大页面最可靠的方法。以 9 个线程为例：
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+在刚开机的机器上，你也可以尝试在运行时预留，然后查看空闲数量：
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+`/proc/meminfo` 中的 `HugePages_*` 各行只统计默认的 2 MiB 大小，所以请从 `/sys` 读取 1 GiB 大页池。然后用 1 GiB 模式启动 seine：
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+在这个模式下，每个线程都从 1 GiB 大页池映射它的区域，因此可以确定整个运行过程都使用了 1 GiB 大页。
+
+## 如何在 WSL2 上预留大页？
+
+WSL2 运行的是真正的 Linux 内核，所以上面的 Linux 命令在其中同样适用。对于 1 GiB 大页，请在 Windows 端通过 `%UserProfile%\.wslconfig` 传入启动参数。虚拟机还需要足够的内存，用于预留的大页以及 Windows 和 WSL 服务。seine 验证用的 64 GiB 主机使用了如下配置：
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+保存文件，在 Windows 中运行 `wsl --shutdown`，然后重新打开你的发行版。开始挖矿前，确认空闲页数足够覆盖每个线程。
+
+## 如何在 Windows 上启用大页面？
+
+在同一台硬件上，原生 Windows 挖矿通常比 WSL 更快，而 seine 在 Windows 上会使用大页面（large pages）。它只需要一项权限：**锁定内存页**（Lock pages in memory）：
+
+1. 打开 `secpol.msc`，进入 *本地策略* → *用户权限分配*。
+2. 把你的用户添加到 **锁定内存页**。
+3. 注销并重新登录，因为该权限只对新的登录会话生效。
+
+`secpol.msc` 随 Windows 专业版、企业版和教育版提供。家庭版可用 `ntrights` 等工具授予同一权限。
+
+设置就这么多。启动时，seine 会为自己启用该权限，并用 `VirtualAlloc` 和 `MEM_LARGE_PAGES` 分配每个线程的 2 GiB 区域，这正是 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support)介绍的大页面内存分配方法。如果大页面不可用，seine 会使用普通页面挖矿，并在日志中记录原因和具体的解决办法。seine 从不自行更改账户权限，也不会替你注销。
+
+## 应该使用哪种页面模式？
+
+默认模式适合几乎所有人。其他模式用于 1 GiB 大页和性能测量：
+
+| 模式 | 作用 |
+|---|---|
+| `--cpu-page-mode auto`（默认） | 先使用预留的大页或 Windows 大页面，然后是透明大页，最后是普通页面 |
+| `--cpu-page-mode large` | 要求每个线程都使用预留的大页或 Windows 大页面，缺少时在启动阶段停止 |
+| `--cpu-page-mode large-1g` | 要求每个线程都使用 1 GiB 大页（x86_64 Linux 和 WSL） |
+| `--cpu-page-mode regular` | 只用普通页面，用于前后对比的基准测试 |
+
+要在自己的机器上测量提升，先用 `--cpu-page-mode regular` 挖一段时间，再用 `auto` 或 `large-1g` 挖一段时间，然后比较仪表盘上的算力。对于有多个 NUMA 节点的服务器，预留的大页还需要位于运行线程的节点上；[服务器挖矿指南](/zh-hans/blog/mine-blocknet-on-servers/)介绍了这一点。
+
+<CTA target="seine" title="下载 seine，预留你的大页" text="只要预留好大页，seine 就会用大页映射每个线程的 2 GiB 区域，无需额外参数。" />

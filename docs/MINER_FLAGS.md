@@ -24,6 +24,15 @@ For the raw CLI output, run:
 | `--daemon-dir` | path, default wrapper-managed `~/.config/bnt/data/mainnet` | Daemon data dir used to find `api.cookie` when `--cookie` is not set. Also used by pool mode when probing for a local daemon wallet. |
 | `--data-dir` | path, default `./seine-data` | Seine data dir for persisted state (`seine.config.json`, autotune caches, etc). |
 
+## Hardware Telemetry
+
+| Flag | Values / Default | What it does |
+|---|---|---|
+| `--telemetry` | `on`, `off`; on when a collector is configured | Saves the hardware/performance reporting preference in `seine.telemetry.json`. Applies to interactive and headless mining. |
+| `--telemetry-url` | HTTPS URL; no default unless supplied by the release builder | Sets the collector destination. A new destination preserves an explicit opt-out. HTTP is allowed only on loopback for local testing. |
+
+See [collection fields and self-hosting](../telemetry/README.md).
+
 ## Backend Selection and Topology
 
 | Flag | Values / Default | What it does |
@@ -32,11 +41,12 @@ For the raw CLI output, run:
 | `--nvidia-devices` | comma-separated GPU indices; default all detected devices | Creates one NVIDIA backend instance per listed device index; listing indices subsets/pins devices and disables auto-expansion. Requires NVIDIA backend selected. |
 | `--amd-devices` | comma-separated GPU indices; default all detected wave32 devices | Creates one AMD backend instance per listed device index; listing indices subsets/pins devices and disables auto-expansion. Requires AMD backend selected. |
 | `--threads` | integer `>=1`; alias: `--cpu-threads` | CPU threads per CPU backend instance. If omitted, auto-sized by CPU/RAM/profile. |
-| `--cpu-affinity` | `off`, `auto`, `pcore-only`; default `pcore-only` on macOS, `auto` elsewhere | CPU worker affinity policy. Native Windows `auto` uses complete physical-core topology before SMT; Linux/WSL keep OS order. macOS modes use best-effort Mach affinity tags/QoS, not hard CPU IDs. |
-| `--cpu-page-mode` | `auto`, `regular`, `large`, `large-1g`; default `auto` | CPU arena page contract. `auto` prefers explicit large pages and falls back; `regular` forces ordinary pages and disables Linux THP; `large` requires every worker to use Windows large pages or Linux HugeTLB and fails closed; `large-1g` requires explicit 1 GiB HugeTLB pages (Linux x86_64/aarch64 systems whose kernels expose a 1 GiB pool, two 1 GiB pages per worker, reserve via `/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages` or the `hugepagesz=1G` boot parameter) and fails closed. `large` and `large-1g` are unsupported on macOS. |
-| `--cpu-profile` | `balanced`, `throughput`, `efficiency`; default `balanced` | Profile presets for CPU defaults (threads/poll/flush/event batching). |
+| `--cpu-affinity` | `off`, `auto`, `os`, `pcore-only`; default `pcore-only` on macOS, `auto` elsewhere | CPU worker affinity policy. Native Windows `auto` uses complete physical-core topology before SMT; Linux `auto` spreads physical cores across NUMA nodes and L3 groups within each node before SMT. Missing cache data retains NUMA-only placement; a single node/cache or incomplete NUMA/core topology retains OS order. `os` opts out of reordering while retaining pinning. macOS modes use best-effort Mach affinity tags/QoS, not hard CPU IDs. |
+| `--cpu-page-mode` | `auto`, `regular`, `large`, `large-1g`; default `auto` | CPU arena page contract. `auto` prefers explicit large pages and falls back; `regular` forces ordinary pages and disables Linux THP; `large` requires every worker to use Windows large pages or Linux HugeTLB and fails closed; `large-1g` requires explicit 1 GiB HugeTLB pages (x86_64 Linux/WSL only, two 1 GiB pages per worker, reserve via `/sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages` or the `hugepagesz=1G` boot parameter) and fails closed. `large` and `large-1g` are unsupported on macOS. |
+| `--cpu-profile` | `balanced`, `throughput`, `efficiency`; default `balanced` | Profile presets for CPU polling, flushing and batching. Both `balanced` and `throughput` target the highest measured hashrate; only opt-in `efficiency` may choose fewer workers below that peak. All profiles retain memory safeguards. |
 | `--cpu-threads-per-instance` | comma-separated integers `>=1` | Per-CPU-backend thread counts; length must match CPU instances. |
-| `--cpu-affinity-per-instance` | comma-separated `off|auto|pcore-only` | Per-CPU-backend affinity; length must match CPU instances. |
+| `--cpu-affinity-per-instance` | comma-separated `off|auto|os|pcore-only` | Per-CPU-backend affinity; length must match CPU instances. |
+| `--cpu-memory-reserve-percent` | integer `0..99`; default `5` | Subtract this percentage of effective total RAM from the automatic CPU sizing/autotune budget. `0` opts out. Explicit thread counts bypass the reserve unless autotuning is forced; fixed counts retain RAM checks; adaptive mining may pause at zero workers when RAM is insufficient. |
 | `--allow-oversubscribe` | bool flag (default `false`) | Allows start even when configured CPU lanes exceed detected RAM budget. |
 
 ## Runtime Loop, Scheduling, and Nonce Space
@@ -55,6 +65,7 @@ For the raw CLI output, run:
 | `--work-allocation` | `adaptive` or `static`, default `adaptive` | Nonce chunk split policy across active backends. |
 | `--sub-round-rebalance-ms` | integer `>=0`, default `0` | Optional in-round adaptive rebalance interval (`0` disables). |
 | `--disable-sse` | bool flag (default `false`) | Disables daemon tip SSE; miner falls back to refresh timer only. |
+| `--disable-update-check` | bool flag (default `false`) | Disables the startup and 12-hourly GitHub check for newer seine releases. |
 | `--refresh-on-same-height` | bool flag (default `false`) | Refresh on same-height `new_block` hash change events. |
 | `--ui` | `auto`, `tui`, `plain`; default `auto` | Output mode selection. |
 
@@ -66,12 +77,12 @@ For the raw CLI output, run:
 | `--cpu-control-check-interval-hashes` | integer `>=1` | CPU worker control poll cadence (in hashes). |
 | `--cpu-hash-flush-ms` | integer `>=1` | CPU worker time-based hash flush interval. |
 | `--cpu-event-dispatch-capacity` | integer `>=1` | CPU backend internal event dispatch queue size. |
-| `--cpu-autotune-threads` | bool flag | Forces CPU autotune thread search at startup. |
-| `--disable-cpu-autotune-threads` | bool flag | Disables CPU thread autotune. |
-| `--cpu-autotune-min-threads` | integer `>=1`, default `1` | Lower bound for CPU autotune thread search. |
+| `--cpu-autotune-threads` | bool flag | Enables adaptive CPU tuning during mining, even when `--threads` is set; benchmark mode uses the offline kernel search. |
+| `--disable-cpu-autotune-threads` | bool flag | Disables CPU thread autotune and runtime worker adjustment. |
+| `--cpu-autotune-min-threads` | integer `>=1`, default `1` | Lower performance-search bound; memory pressure can temporarily reduce the count below it, including to zero. |
 | `--cpu-autotune-max-threads` | integer `>=1` | Upper bound for CPU autotune thread search. |
-| `--cpu-autotune-secs` | integer `>=1`, default `6` | Base sample window per CPU autotune candidate. Close balanced-profile finalists are confirmed with a longer reversed-order window before caching. |
-| `--cpu-autotune-config` | path | CPU autotune cache file (default under `--data-dir`). |
+| `--cpu-autotune-secs` | integer `>=1`, default `6` | Offline sample window. Mining uses `max(30, 5 × value)` seconds per productive A/B/A window, with at least 20 hashes; warming and interrupted windows are excluded. |
+| `--cpu-autotune-config` | path | CPU autotune cache file (default under `--data-dir`); mining reuses compatible seeds across changes in available RAM and records subsequent progress. |
 
 ## NVIDIA Backend Tuning
 
@@ -126,7 +137,9 @@ For the raw CLI output, run:
 | `--service` | bool flag (default `false`) | Starts control API in idle mode (waits for `/v1/miner/start`). |
 | `--api-bind` | `host:port`, default `127.0.0.1:9977` | Control API bind address. |
 | `--api-allow-unsafe-bind` | bool flag (default `false`) | Allows non-loopback bind addresses. |
-| `--api-cors` | string, default `*` | CORS allow-origin value for control API responses. |
+| `--api-cors` | string, default empty (no CORS headers) | CORS allow-origin value for control API responses. |
+| `--api-token` | string, default generated | Fixed bearer token for the control API. When unset, Seine generates one per start. |
+| `--api-cookie` | path, default `<data-dir>/control-api.cookie` | Where the generated control API token is written. |
 
 ## Benchmark Mode
 
@@ -134,6 +147,7 @@ For the raw CLI output, run:
 |---|---|---|
 | `--bench` | bool flag (default `false`) | Runs local benchmark instead of live mining. |
 | `--bench-kind` | `kernel`, `kernel-effective`, `backend`, `end-to-end`; default `backend` | Selects benchmark scope. |
+| `--bench-cpu-kernel` | `scalar`, `avx2`, `avx512`, `avx512-256`, `avx512-256-stream`, `neon`, `neon-sha3`; unset = automatic | Benchmark-only CPU kernel selection. Requires `--bench`, explicit `--threads`, CPU-only backends, and disabled CPU autotuning; unsupported host/build paths fail. |
 | `--bench-secs` | integer `>=1`, default `20` | Per-round measured benchmark duration. |
 | `--bench-rounds` | integer `>=1`, default `3` | Number of measured rounds. |
 | `--bench-warmup-rounds` | integer `>=0`, default `0` | Warmup rounds before measured rounds. |

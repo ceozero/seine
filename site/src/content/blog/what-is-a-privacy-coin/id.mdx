@@ -1,0 +1,102 @@
+---
+title: Apa itu koin privasi? Cara kerja mata uang kripto privat
+description: Koin privasi adalah mata uang kripto yang menyembunyikan siapa yang membayar, siapa yang dibayar, dan berapa jumlahnya. Pelajari cara kerjanya dan pentingnya privasi bawaan.
+tags: [Privasi, Koin privasi, Ring signature, Stealth address, Blocknet]
+faq:
+  - q: 'Apa perbedaan koin privasi dan Bitcoin?'
+    a: 'Bitcoin mencatat setiap alamat dan jumlah secara terbuka, sehingga siapa pun bisa mengikuti koin dari satu alamat ke alamat berikutnya dan membaca setiap saldo. Koin privasi memakai kriptografi seperti ring signature, alamat sekali pakai, dan jumlah tersembunyi, sehingga rantai tetap membuktikan setiap pembayaran valid sambil hanya memperlihatkan sangat sedikit kepada pihak luar tentang siapa membayar siapa atau berapa jumlahnya.'
+  - q: 'Apakah semua koin privasi mewajibkan privasi?'
+    a: 'Tidak, desainnya berbeda-beda. Sebagian koin, seperti Monero dan Blocknet, menerapkan privasinya ke setiap transaksi, sehingga sama sekali tidak ada mode publik. Zcash menawarkan alamat shielded, yang menyembunyikan pengirim, penerima, dan jumlah dengan bukti zero-knowledge, di samping alamat transparan yang bekerja mirip alamat Bitcoin. Pengguna bisa memindahkan dana di antara keduanya.'
+  - q: 'Bagaimana jaringan bisa memeriksa pembayaran yang tidak bisa dilihatnya?'
+    a: 'Kriptografi memungkinkan node memverifikasi pembayaran tanpa membaca detailnya. Ring signature membuktikan bahwa salah satu dari beberapa output telah dibelanjakan, key image mencegah pembelanjaan kedua atas koin yang sama, dan commitment jumlah bisa dijumlahkan sehingga node bisa memastikan input sama dengan output ditambah biaya. Range proof menunjukkan bahwa tidak ada jumlah tersembunyi yang negatif.'
+  - q: 'Bisakah menambang koin privasi di komputer biasa?'
+    a: 'Bisa, jika koin itu memakai proof of work yang memory-hard. Blocknet memakai Argon2id, yang membutuhkan sekitar 2 GB memori untuk setiap hash, sehingga desktop, laptop, dan server biasa yang melakukan penambangan. Unduh seine, berikan alamat Blocknet atau @name Anda, dan seine menambang di pool bntpool.com dengan CPU Anda dan kartu grafis NVIDIA apa pun.'
+sourceHash: 62f9c81926d6
+translation: draft
+---
+
+Panduan ini menjelaskan apa itu koin privasi, apa yang diungkap blockchain biasa tentang pembayaran Anda, dan kriptografi yang dipakai koin privasi untuk menyembunyikan pengirim, penerima, dan jumlah. Di akhir, Blocknet menjadi contoh, beserta cara mendapatkan koin privat pertama Anda dengan menambang.
+
+## Apa itu koin privasi?
+
+<Answer>
+Koin privasi adalah mata uang kripto yang dibuat agar pembayaran tidak memamerkan pengirim, penerima, atau jumlahnya ke publik. Koin ini memakai kriptografi seperti ring signature, stealth address sekali pakai, dan jumlah tersembunyi, sehingga setiap node tetap bisa memverifikasi setiap pembayaran sementara orang yang membaca blockchain hanya mengetahui sangat sedikit tentangnya.
+</Answer>
+
+Setiap mata uang kripto menyimpan buku besar bersama, yaitu blockchain, yang disalin dan diperiksa oleh banyak komputer independen. Keterbukaan inilah yang memungkinkan orang yang tidak saling kenal menyepakati siapa memiliki apa tanpa bank di tengahnya. Pertanyaan yang dijawab koin privasi adalah seberapa banyak dari setiap pembayaran yang harus diperlihatkan buku besar itu.
+
+Bitcoin memperlihatkan sebagian besarnya. Whitepaper-nya menggambarkan model privasinya dalam satu kalimat: "Publik bisa melihat bahwa seseorang mengirim sejumlah uang kepada orang lain, tetapi tanpa informasi yang menghubungkan transaksi itu dengan siapa pun." Nama tidak tercantum, tetapi alamat dan jumlahnya publik. Koin privasi melangkah lebih jauh dan menjaga detail setiap pembayaran tetap di luar catatan publik sambil tetap membuktikan bahwa pembayaran itu mengikuti aturan.
+
+## Apa yang diungkap blockchain publik tentang Anda?
+
+Di rantai transparan seperti Bitcoin, siapa pun yang mengetahui salah satu alamat Anda bisa mencarinya di block explorer dan melihat:
+
+- **Saldonya**, sampai satuan terkecil.
+- **Setiap pembayaran masuk dan keluar**, lengkap dengan jumlah dan tanggalnya.
+- **Ke mana uang itu pergi selanjutnya**, karena setiap pembayaran mencantumkan alamat asal dan alamat tujuannya.
+
+Nama Anda tidak tertulis di sana, tetapi alamat jarang tetap tidak terhubung dalam waktu lama. Membayar di toko, menarik dana dari exchange, atau memasang alamat untuk donasi akan mengaitkannya dengan Anda, dan sejak saat itu seluruh riwayatnya bisa dibaca. Ini mirip seperti menempelkan rekening koran Anda di papan pengumuman publik dengan nomor rekening sebagai pengganti nama Anda. Siapa pun yang Anda bayar bisa melihat apa yang Anda miliki, dan siapa pun yang membayar Anda bisa mengamati apa yang Anda lakukan dengan uang itu.
+
+Koin privasi dirancang agar papan pengumuman itu hanya menunjukkan bahwa pembayaran yang valid telah terjadi.
+
+## Bagaimana koin privasi menyembunyikan pengirim, penerima, dan jumlah?
+
+<Answer>
+Banyak koin privasi menggabungkan tiga teknik. Ring signature menyembunyikan pengirim dengan mencampur koin asli dengan decoy, stealth address sekali pakai menyembunyikan penerima dengan memberi setiap pembayaran alamat baru, dan commitment dengan range proof menyembunyikan jumlah sambil membuktikan bahwa jumlah itu valid. Banyak juga yang melindungi lapisan jaringan, sehingga asal sebuah transaksi tetap tersembunyi.
+</Answer>
+
+Setiap teknik menangani satu bagian pembayaran. Berikut cara kerjanya dalam bahasa sederhana.
+
+### Ring signature menyembunyikan siapa yang membayar
+
+[Ring signature](/id/blog/ring-signatures-explained/) (tanda tangan cincin) memungkinkan Anda menandatangani atas nama sebuah grup tanpa mengungkap anggota mana yang menandatangani. Ron Rivest, Adi Shamir, dan Yael Tauman menjelaskan gagasan ini pada 2001, dan desain CryptoNote tahun 2013 membawanya ke mata uang kripto. Saat Anda membelanjakan, wallet Anda memilih output lain dari rantai sebagai decoy dan menandatangani untuk seluruh grup. Siapa pun bisa memeriksa bahwa salah satunya telah dibelanjakan, dan tanda tangan itu tidak menyebut yang mana.
+
+Koin privasi memakai linkable ring signature, yang menambahkan key image: tanda unik untuk koin asli yang dibelanjakan yang tidak mengungkap apa pun tentang anggota ring mana koin itu. Jika key image yang sama muncul dua kali, jaringan menolak pembelanjaan kedua, sehingga koin privat tetap tidak bisa dibelanjakan dua kali. Monero dan Blocknet memakai versi ringkas yang disebut CLSAG.
+
+### Stealth address menyembunyikan siapa yang dibayar
+
+Dengan skema [stealth address](/id/blog/stealth-addresses-explained/) (alamat siluman), alamat yang Anda bagikan tidak pernah muncul di rantai. Alamat Anda memuat dua public key, view key dan spend key. Untuk setiap pembayaran, wallet pengirim mencampur kunci-kunci itu dengan nilai acak baru dan menurunkan alamat yang dipakai sekali saja. Di sisi Anda, private view key memungkinkan wallet memindai rantai dan menemukan output yang ditujukan kepada Anda, dan private spend key memungkinkan Anda membelanjakannya.
+
+Jika sepuluh orang membayar ke alamat di situs web Anda, rantai menunjukkan sepuluh alamat sekali pakai terpisah tanpa hubungan yang terlihat di antara mereka, sehingga tidak ada yang bisa menjumlahkan apa yang telah Anda terima.
+
+### Commitment dan range proof menyembunyikan jumlah
+
+Jumlah disimpan sebagai Pedersen commitment, yang mengunci sebuah angka tanpa memperlihatkannya. Commitment bisa dijumlahkan, sehingga setiap node bisa memastikan bahwa yang masuk ke sebuah transaksi sama dengan yang keluar, termasuk biaya, tanpa melihat satu angka pun. Range proof kemudian menunjukkan bahwa tidak ada jumlah tersembunyi yang negatif, sehingga tidak ada yang bisa menciptakan koin dari udara kosong. [Bulletproofs](/id/blog/bulletproofs-explained/), yang diterbitkan oleh Bünz dan rekan-rekannya pada 2018, membuat bukti-bukti ini jauh lebih kecil.
+
+### Privasi jaringan menyembunyikan dari mana pembayaran berasal
+
+Bahkan transaksi yang sepenuhnya privat bisa dilacak ke komputer yang menyiarkannya, dengan mengamati node mana yang mengumumkannya pertama kali. [Dandelion++](/id/blog/dandelion-plus-plus-explained/), yang diterbitkan pada 2018, mengatasi hal ini dengan terlebih dahulu meneruskan transaksi baru secara diam-diam dari satu peer ke peer berikutnya di sepanjang "stem" (batang), lalu membiarkannya menyebar ke seluruh jaringan dari titik acak yang lebih jauh.
+
+Sebagian koin privasi menempuh jalur yang berbeda. Zcash, yang diluncurkan pada 2016, memakai bukti zero-knowledge yang disebut zk-SNARK: alamat shielded-nya menyembunyikan pengirim, penerima, dan jumlah, dan buktinya menunjukkan bahwa transaksi valid tanpa mengungkap satu pun dari ketiganya.
+
+## Mengapa privasi bawaan itu penting?
+
+Jika privasi adalah fitur yang harus Anda aktifkan, transaksi yang memakainya membentuk kelompok yang lebih kecil, dan kelompok yang lebih kecil lebih mudah dipelajari. Jika setiap transaksi dibuat dengan cara yang sama, pembayaran privat terlihat sama seperti setiap pembayaran lain di rantai, dan tidak ada yang perlu ingat untuk melindunginya.
+
+Privasi bawaan juga menjaga setiap koin tetap bisa saling dipertukarkan, sifat yang disebut fungibilitas. Di rantai transparan, sebuah koin membawa seluruh riwayatnya, dan dua koin dengan nilai yang sama bisa diperlakukan berbeda karena asal-usulnya. Jika tidak ada koin yang punya masa lalu yang terlihat, satu koin sama nilainya dengan koin lain, dan itulah yang diharapkan orang dari uang.
+
+Alasan sehari-harinya sederhana. Sebuah bisnis tidak ingin pesaing membaca pembayaran ke pemasoknya. Seorang karyawan tidak ingin gajinya terlihat oleh setiap orang tempat ia membeli kopi. Seseorang yang berdonasi untuk suatu tujuan mungkin lebih suka merahasiakannya. Uang tunai dan rekening bank biasa sudah memberi orang privasi semacam ini, dan koin privasi membawanya ke pembayaran digital.
+
+## Blocknet sebagai contoh koin privasi
+
+Blocknet adalah koin privasi yang menerapkan ring signature, stealth address, jumlah tersembunyi, dan privasi jaringan ke setiap pembayaran. Format transaksinya tidak punya mode transparan:
+
+- **Pengirim:** setiap input ditandatangani dengan ring CLSAG berisi tepat 16 output, yang asli dan 15 decoy, dan konsensus menolak ukuran lain apa pun.
+- **Penerima:** setiap pembayaran masuk ke stealth address sekali pakai.
+- **Jumlah:** jumlah berupa Pedersen commitment dengan range proof Bulletproofs 64-bit.
+- **Jaringan:** transaksi dikirim dengan Dandelion++, yang mengganti rute stem setiap 10 menit.
+- **Memo:** setiap output punya ruang untuk catatan terenkripsi hingga 124 byte, yang hanya bisa dibaca pengirim dan penerima dan diberi padding hingga tetap 128 byte, sehingga pembayaran dengan catatan terlihat sama dengan pembayaran tanpa catatan.
+
+Blocknet juga memungkinkan Anda membayar seseorang dengan nama. [Nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) seperti `@alice` menggantikan alamat sepanjang lebih dari 90 karakter, dan pembayaran ke nama itu tetap masuk ke stealth address baru, sehingga nama publik tidak mengungkap apa pun tentang pemasukan pemiliknya. Untuk setiap lapisan secara mendalam, baca [cara Blocknet menjaga privasi pembayaran](/id/blog/blocknet-privacy-features/), dan untuk gambaran yang lebih luas, [apa itu Blocknet?](/id/blog/what-is-blocknet/)
+
+Upgrade Faraday yang direncanakan Blocknet akan memperluas kelompok tempat setiap pembelanjaan bersembunyi. Dalam kata-kata [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): "Saat ini sebuah pembelanjaan bersembunyi di antara 16 output. Setelah Faraday, pembelanjaan bersembunyi di antara setiap output di rantai."
+
+## Bagaimana cara mendapatkan koin privasi?
+
+Anda bisa mendapatkannya dengan menambang. Proof of work Blocknet, [Argon2id](/id/blog/argon2id-proof-of-work-explained/), membutuhkan sekitar 2 GB memori untuk setiap hash, sehingga CPU dan RAM biasa di desktop, laptop, dan server yang melakukan penambangan. Pembayaran dari pool sampai kepada Anda seperti pembayaran Blocknet lainnya, ke stealth address sekali pakai dengan jumlah tersembunyi.
+
+1. **Dapatkan wallet.** [Panduan wallet Blocknet untuk menambang](/id/blog/blocknet-wallet-for-mining/) menunjukkan cara membuatnya, mencadangkan seed, dan menyalin alamat Anda.
+2. **Unduh seine.** seine adalah penambang Blocknet gratis dan sumber terbuka untuk Windows, macOS, dan Linux, tersedia di [bagian unduhan](/id/#download). seine menambang dengan CPU Anda dan, di Windows dan Linux, kartu grafis NVIDIA apa pun secara bersamaan, serta menyetel dirinya sendiri selama berjalan.
+3. **Mulai menambang di bntpool.com.** Tempel alamat atau `@name` Anda, terima pool bawaan, dan pembayaran masuk secara privat ke wallet Anda. [Cara menambang Blocknet](/id/blog/how-to-mine-blocknet/) menjelaskan setiap langkahnya.
+
+<CTA target="seine" title="Tambang koin privasi di komputer Anda" text="seine menambang Blocknet dengan CPU dan GPU NVIDIA Anda dan membayar di bntpool.com ke alamat privat atau @name Anda." />

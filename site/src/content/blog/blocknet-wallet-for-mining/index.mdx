@@ -1,0 +1,173 @@
+---
+title: Get a Blocknet wallet and address for mining
+description: Set up the official Blocknet wallet, back up your 12-word recovery seed, copy the address to mine to, and see your bntpool.com payouts arrive in your balance.
+date: 2026-10-25
+tags: [Wallet, Mining guide, bntpool]
+faq:
+  - q: Do I need a Blocknet wallet before I start mining?
+    a: You need a Blocknet address to mine to, and the official wallet gives you one. Create a wallet in the command-line or desktop wallet, copy the address, and paste it into seine. The wallet itself stays on your own computer. Seine and bntpool.com only ever need the address, or a Blocknet ID shortname that points to it.
+  - q: How many words is a Blocknet recovery seed?
+    a: A Blocknet recovery seed is 12 words. In the command-line wallet, the seed command shows it after a warning and your wallet password. Write the words on paper and store them offline. With those 12 words, the import command can rebuild your wallet on any machine, even if the wallet file and password are lost.
+  - q: When do bntpool.com payouts show up in my wallet?
+    a: A pool block needs 60 confirmations, about five hours at Blocknet's five-minute block time, before its rewards are paid. Once your confirmed pool balance reaches 0.1 BNT, the pool sends it to your address. The payout appears in history as a regular transaction and becomes spendable after 10 confirmations, about 50 minutes.
+  - q: Can I use the same address on several mining machines?
+    a: Yes. Every machine running seine can mine to the same address or Blocknet ID shortname, and bntpool.com adds their shares to one balance. The pool's stats page lists each connected machine under your address. The wallet and its recovery seed stay on your own computer the whole time.
+related: [how-to-mine-blocknet, blocknet-id-pay-by-name, blocknet-payment-links]
+---
+
+To mine Blocknet you need an address for your rewards, and the official wallet gives you one in a few minutes. This guide shows how to create a wallet with the command-line or desktop wallet, back up its recovery seed, find the address to paste into seine, and check your balance when bntpool.com pays you.
+
+## Which Blocknet wallet should you use for mining?
+
+<Answer>
+Use one of the two official wallets from Blocknet Privacy: the command-line wallet, which runs on Windows, macOS and Linux, or the desktop wallet for the same systems. Both run a full Blocknet node on your computer and give you a receiving address to mine to on bntpool.com with seine.
+</Answer>
+
+- **Command-line wallet.** The `blocknet` program installs, starts and updates a Blocknet core, the background process that runs the node, wallet and network. You manage your wallet from an interactive shell. Download it from the [command-line releases](https://github.com/blocknetprivacy/blocknet/releases/latest), which have builds for Windows, macOS and Linux.
+- **Desktop wallet.** A graphical wallet that bundles the Blocknet daemon. Download it from the [desktop releases](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Pick whichever you prefer. The steps below walk through the command-line wallet, because every command is documented, and then cover the desktop install.
+
+## How to create a wallet with the command-line wallet
+
+1. **Install and start a core.** Unpack the release and run the setup wizard:
+
+   ```sh
+   blocknet setup
+   ```
+
+   The wizard asks whether to keep your node updated automatically, downloads the latest core and offers to start it. On Windows the program is `blocknet.exe`, so run `blocknet.exe setup`. To skip the wizard, run `blocknet install latest` and then `blocknet start`.
+
+2. **Open the shell.** Attach to the running core:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   You get a `>` prompt. Closing the shell with `quit` leaves the core running, so you can attach again at any time.
+
+3. **Create the wallet.** Type `load`. The wallet lists any wallet files it finds and offers "Create a new wallet". Choose that option, enter a name and a password, and the core creates a new wallet with a fresh recovery seed:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+The wallet is a single `.wallet.dat` file, and your password encrypts its spend key. The core remembers the wallet's path, so the next `blocknet start` loads it for you. Blocknet also copies a loaded wallet to `~/.config/bnt/wallets/`, which gives you a second copy in a known place.
+
+## How do you back up your recovery seed?
+
+Your recovery seed is the backup that matters most. It is 12 words, and with them you can rebuild the wallet on any computer, even if you lose the wallet file or forget the password. Blocknet never stores your password, so the seed is also how you recover from a forgotten one.
+
+Show it with the `seed` command. The wallet prints a warning, asks you to confirm and asks for your password, then shows the words:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Write the 12 words on paper and keep them somewhere safe and offline. The wallet guide says not to save them in a text file, a notes app or cloud storage, because anyone who has the words controls the funds. The guide to [seed phrases](/blog/seed-phrase-explained/) explains how the 12 words become your keys and how to store them well.
+
+To restore later, run `import`, choose `1) 12-word recovery seed`, type the words, and give the new wallet a name and password. The core then scans the chain for your outputs.
+
+## How do you find your Blocknet address?
+
+<Answer>
+In the command-line wallet, type address (or addr) at the shell prompt. The wallet prints your receiving address, a string of 92 or 93 characters, followed by a pointer to blocknet.id for a short name. Copy the whole address and paste it into seine when it asks for a payout address.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+This is the address you give seine. When you start [seine](/#download) for the first time, it asks for your payout address and then for a pool; paste the address and press Enter to accept bntpool.com. You can also pass it directly:
+
+```sh
+./seine --address <your-address>
+```
+
+Once seine is mining, the pool balance panel on its [dashboard](/blog/seine-dashboard-explained/) shows the first and last six characters of the address you're mining to, so you can check it matches your wallet.
+
+If you'd rather mine to something shorter, a [Blocknet ID shortname](/blog/blocknet-id-pay-by-name/) such as `@yourname` points to this address and works in seine and on bntpool.com.
+
+## Setting up the desktop wallet
+
+The desktop wallet's latest release (v0.22.0, published October 15, 2026) has these downloads:
+
+| System | File |
+|---|---|
+| Windows x86_64 | `.exe` installer |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Every release includes a `SHA256SUMS.txt`, so you can check your download before installing:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+On Linux, install the `.deb` or run the `.AppImage` directly. On macOS, move the app to Applications and run this once in Terminal before the first launch, as the README instructs:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+On Windows, if Defender shows a prompt for the installer, click "More info" and then "Run anyway".
+
+The app runs its bundled Blocknet daemon on your computer and talks to it over `127.0.0.1`, and it makes no requests to outside services. Create your wallet in the app, write down its recovery seed, and copy your receiving address into seine. The desktop wallet also opens `blocknet://` [payment links](/blog/blocknet-payment-links/) and fills in the send form for you to review.
+
+## Keep your keys on your own computer
+
+A mining machine only needs your address. Seine needs only an address or shortname to mine, so the wallet file and the recovery seed can stay on the computer you trust. This matters most for rented servers, shared rigs and machines other people can reach.
+
+- **Run the wallet at home, mine anywhere.** Put the same address on every machine running seine. bntpool.com adds their shares to one balance.
+- **Watch progress without keys.** Look up your address on [bntpool.com](https://bntpool.com) to see your hashrate, shares and balance from any browser.
+- **Watch-only access.** If you want to see incoming funds on a second computer, `viewkeys` exports view-only keys. A view-only wallet shows incoming funds and cannot send or sign.
+- **Lock when you step away.** `lock` blocks spending until you `unlock` with your password.
+
+## How do mining payouts show up in your wallet?
+
+bntpool.com pays rewards once their block has matured. A pool block needs 60 confirmations, about five hours at Blocknet's five-minute block time. When your confirmed balance reaches the 0.1 BNT minimum, the pool sends it to your address as a normal Blocknet transaction.
+
+In the wallet, check `balance` (or `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+A new payout first appears under `confirming`. Regular transactions become spendable after 10 confirmations, about 50 minutes, and then move to `spendable`. The `history` command lists incoming transactions from oldest to newest, with each one's block, amount and type: pool payouts show as `regular`, and blocks you find yourself in solo mode show as `coinbase`, which need 60 confirmations before you can spend them.
+
+Your wallet lists a payout once its node has caught up with the chain. `status` shows `Syncing: false` when it has, and `sync` rescans the downloaded blocks for your outputs.
+
+New to mining? The [guide to mining Blocknet](/blog/how-to-mine-blocknet/) covers downloading seine, choosing threads and what to expect on bntpool.com.
+
+<CTA target="pool" title="Mine to your new address" text="Paste your Blocknet address into seine, accept bntpool.com, and watch payouts arrive in your wallet once your balance reaches 0.1 BNT." />

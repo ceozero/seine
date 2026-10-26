@@ -1,0 +1,78 @@
+---
+title: 'Windows memblokir miner? Periksa unduhannya'
+description: 'Periksa unduhan seine yang diblokir Windows: kenali peringatannya, cocokkan ZIP resmi dengan SHA-256, dan kumpulkan rincian untuk menindaklanjuti deteksi.'
+tags: ["Panduan penambangan", "Windows", "Unduhan"]
+faq:
+  - q: 'Apakah hash SHA-256 yang cocok membuktikan miner aman?'
+    a: 'Hash yang cocok memastikan berkas unduhan sesuai dengan checksum pembanding. Ambil keduanya dari rilis resmi. Ini memeriksa integritas berkas, bukan menggantikan peninjauan deteksi antivirus atau membuktikan secara mandiri bahwa perangkat lunak tersebut aman dijalankan.'
+  - q: 'Checksum mana yang digunakan untuk ZIP Windows?'
+    a: 'Gunakan aset SHA256SUMS.txt dari rilis yang sama dengan seine-windows-x86_64.zip. Berkas itu memuat checksum arsip. Ada SHA256SUMS.txt lain di dalam ZIP yang menjelaskan isi hasil ekstraksi. Bandingkan arsip dengan aset rilis dan pastikan versinya sama.'
+  - q: 'Apa yang disertakan saat melaporkan unduhan diblokir?'
+    a: 'Sertakan versi seine, URL unduhan resmi, nama berkas, hash SHA-256, versi Windows, serta nama deteksi atau teks peringatan persisnya. Jelaskan apakah ZIP atau berkas hasil ekstraksi yang terdampak. Samarkan jalur pribadi dan jangan sertakan seed dompet, kunci privat, atau token API dalam tangkapan layar.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Jika Windows memblokir unduhan seine atau berkas hasil ekstraksi menghilang, identifikasi dahulu berkas dan peringatan yang tepat. Panduan ini menjelaskan cara memeriksa rilis resmi, mencocokkan checksum SHA-256, dan mengumpulkan informasi laporan. Contohnya menggunakan seine v0.2.26, diperiksa pada 25 Oktober 2026.
+
+## Apa yang diperiksa saat Windows memblokir miner?
+
+<Answer>
+Catat teks peringatan, nama berkas terdampak, dan versi rilis sebelum mengubah apa pun. Buka Keamanan Windows dan periksa Riwayat perlindungan untuk entri deteksi. Kemudian ambil arsip dan checksum dari rilis resmi seine. Cocokkan berkas serta versi yang tepat sebelum menentukan tindakan terhadap peringatan.
+</Answer>
+
+Buka rincian entri terkait di [Riwayat perlindungan](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app). Windows mungkin memerlukan izin administrator untuk menampilkan rincian ancaman. Catat apakah item terdampak adalah ZIP unduhan, `seine.exe`, atau DLL. Berkas program yang hilang dan peringatan unduhan browser bisa terjadi pada tahap berbeda; simpan nama berkas bersama pesannya.
+
+## Peringatan SmartScreen atau deteksi antivirus?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) menilai aplikasi unduhan berdasarkan sinyal reputasi berkas dan penerbit. Peringatan aplikasi tidak dikenal berbeda dari deteksi antivirus bernama. Catat pesan sebenarnya; kata miner pada nama berkas tidak menunjukkan pemeriksaan mana yang bertindak maupun penyebab pemblokiran.
+
+Microsoft juga memasukkan perangkat lunak penambangan kripto ke [kriteria aplikasi yang mungkin tidak diinginkan](https://learn.microsoft.com/en-us/defender-xdr/criteria), khusus untuk lingkungan perusahaan. Pada komputer kerja atau sekolah yang dikelola, tanyakan kebijakan terkait kepada administrator. Ini menjelaskan kategori perangkat lunak, bukan keputusan tentang unduhan Anda. Selidiki peringatan persisnya, jangan menganggap semua peringatan miner adalah positif palsu.
+
+## Ambil ZIP dan checksum dari rilis yang sama
+
+Buka [rilis resmi seine](https://github.com/zpalmtree/seine/releases) melalui [halaman unduhan](/id/#download). Pastikan repositorinya `zpalmtree/seine`. Pilih `seine-windows-x86_64.zip` dan aset terpisah `SHA256SUMS.txt` dari satu rilis. Catat versinya. Checksum rilis lebih baru atau lama bukan referensi arsip yang Anda unduh.
+
+![ZIP Windows dan SHA256SUMS.txt dalam aset rilis resmi seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Ini tangkapan asli daftar aset v0.2.26. Berkas checksum tingkat rilis mencakup arsip yang dapat diunduh. Ada `SHA256SUMS.txt` lain di dalam ZIP untuk berkas hasil ekstraksi. Untuk pemeriksaan pertama ini, gunakan aset rilis yang diunduh terpisah. Jangan mencampur kedua daftar meski namanya sama.
+
+Gunakan arsip resmi secara langsung. Membandingkan checksum ZIP resmi tidak memverifikasi program yang diganti namanya, paket ulang pihak ketiga, atau berkas dari obrolan. Simpan ZIP dan checksum rilis bersama dalam folder yang mudah ditemukan, lalu jalankan perintah berikut dari folder itu.
+
+## Bagaimana membandingkan checksum SHA-256?
+
+Buka PowerShell di folder berisi kedua unduhan. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) menghitung SHA-256 arsip. Perbandingan memilih entri dengan nama arsip Windows yang tepat, mengharuskan satu entri yang cocok, dan berhenti dengan galat jika hash berbeda. Perintah hanya membaca berkas tanpa menjalankan miner atau mengubah perlindungan Windows.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Pesan berhasilnya adalah `PASS: ZIP matches SHA256SUMS.txt`. Jika berkas tidak ditemukan, periksa folder aktif dan namanya. Jika entri checksum tidak ada atau ganda, unduh lagi aset checksum asli. Jika nilainya berbeda, berhenti: pastikan versi rilis, unduh ulang arsip resmi serta checksum, lalu ulangi perbandingan.
+
+## Apa hasil contoh yang diverifikasi?
+
+Kami menjalankan perbandingan di Windows PowerShell 5.1 terhadap ZIP Windows resmi v0.2.26. Hash hasil perhitungan cocok dengan checksum rilis. Gambar menampilkan keluaran perintah asli sebagai transkrip yang dirender, bukan notifikasi Keamanan Windows. [Catatan teks](/assets/blog/seine-v0.2.26-verification.txt) menyimpan hash lengkap dan daftar berkas arsip.
+
+![Hasil checksum Windows PowerShell asli untuk arsip Windows seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+Perbandingan hash menjawab apakah byte tersebut sesuai dengan referensi yang diberikan. Ini tidak mengautentikasi checksum dari sumber lain, membuktikan tidak adanya malware, atau menjelaskan deteksi tertentu. Jika peringatan menyebut program hasil ekstraksi, catat nama dan deteksinya secara terpisah; hash ZIP adalah identitas arsip.
+
+## Bagaimana jika unduhan terverifikasi tetap diblokir?
+
+Biarkan item dalam karantina selama deteksi yang belum jelas diselidiki. Siapkan versi rilis, URL, nama berkas terdampak, nilai SHA-256, dan teks peringatan persisnya. Tambahkan versi Windows serta apakah blok terjadi saat mengunduh, mengekstrak, atau menjalankan. Informasi ini membuat laporan dapat direproduksi tanpa membuka konfigurasi pribadi.
+
+Gunakan [pelacak masalah seine](https://github.com/zpalmtree/seine/issues) untuk laporan proyek dan [portal pengiriman berkas Microsoft](https://www.microsoft.com/en-us/wdsi/filesubmission) untuk dugaan deteksi keliru. Periksa lampiran sebelum mengirim. Bagikan berkas rilis publik atau identifikasinya bila diminta, bukan folder data penambangan. Hapus jalur pribadi, rincian dompet, dan token autentikasi dari tangkapan layar.
+
+Windows menyediakan tindakan khusus item untuk beberapa deteksi. Pertimbangkan mengizinkan item hanya setelah sumber dan deteksinya jelas serta Anda memercayai berkas yang tepat itu; ikuti petunjuk peringatan yang dicatat. Biarkan perlindungan sistem tetap aktif. Pada perangkat terkelola, administrator menentukan yang diizinkan.
+
+## Lanjutkan dengan arsip Windows terverifikasi
+
+Setelah berkas diizinkan digunakan, ekstrak seluruh ZIP ke folder yang bisa ditulis dan letakkan DLL bawaan di samping `seine.exe`. [Panduan penambangan Windows](/id/blog/mine-blocknet-on-windows/) membahas peluncuran pertama dan alamat pembayaran. Untuk driver, pustaka runtime, atau pilihan perangkat, lanjutkan ke [panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/). Itu pemeriksaan tersendiri di luar verifikasi unduhan.
+
+<CTA target="seine" title="Dapatkan rilis resmi seine" text="Pilih arsip Windows dan verifikasi checksum rilis yang sesuai sebelum menyiapkan miner." />

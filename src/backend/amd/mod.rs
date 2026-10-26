@@ -365,6 +365,24 @@ impl Drop for AmdBackend {
 }
 
 impl PowBackend for AmdBackend {
+    fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
+        let device = self.resolved_device.try_read().ok().and_then(|d| d.clone());
+        seine_telemetry::BackendSettings {
+            backend: "amd".into(),
+            device_model: device.as_ref().map(|d| d.name.clone()),
+            memory_mib: device.map(|d| d.memory_total_mib),
+            lanes: self.enabled_lanes() as u32,
+            cpu_kernel: None,
+            cpu_page_mode: None,
+            gpu_register_cap: None,
+            gpu_launch_depth: Some(
+                self.max_hashes_per_launch_per_lane.load(Ordering::Acquire) as u32
+            ),
+            cpu_backing_mib: None,
+            cpu_affinity: None,
+        }
+    }
+
     fn name(&self) -> &'static str {
         BACKEND_NAME
     }

@@ -1,0 +1,104 @@
+---
+title: Proof of work vs proof of stake uitgelegd
+description: Proof of work vs proof of stake, uitgelegd. Hoe elk model het volgende blok kiest, de chain beveiligt en nieuwe coins uitgeeft, en waarom Blocknet proof of work gebruikt.
+tags: [Proof of work, Proof of stake, Consensus, Blocknet, Minen]
+faq:
+  - q: 'Is Blocknet proof of work of proof of stake?'
+    a: 'Blocknet gebruikt proof of work. Miners berekenen Argon2id-hashes die elk 2 GiB geheugen nodig hebben, ongeveer elke vijf minuten wordt er een nieuw blok gevonden, en de volledige blokbeloning gaat naar de miner die het heeft gevonden. Er is geen staking. Je kunt het minen met seine op een gewone computer via de pool bntpool.com.'
+  - q: 'Wanneer stapte Ethereum over van proof of work naar proof of stake?'
+    a: 'Ethereum stapte over op proof of stake met een upgrade die de Merge heet, uitgevoerd op 15 september 2022. Sindsdien stellen validators die 32 ETH storten blokken voor en stemmen ze erover, in plaats van miners. Bitcoin, Monero en Blocknet gebruiken nog steeds proof of work, waarbij nieuwe blokken voortkomen uit rekenwerk.'
+  - q: 'Wat is een 51%-aanval?'
+    a: 'Een 51%-aanval is een poging om te bepalen welke blokken een chain accepteert door het grootste deel van de middelen in handen te hebben die dat beslissen. Bij proof of work betekent dat het grootste deel van de hashkracht van het netwerk. Bij proof of stake betekent het het grootste deel van de gestakete coins. In beide gevallen moet de aanvaller een meerderheid van echte middelen inzetten.'
+  - q: 'Kun je een proof-of-stake-coin minen?'
+    a: 'Nee. Een pure proof-of-stake-coin kent geen minen. Nieuwe coins worden uitbetaald aan validators die bestaande coins als stake vastzetten, dus je moet coins bezitten voordat je er iets mee kunt verdienen. Om nieuwe coins te verdienen met de computer die je al hebt, heb je een proof-of-work-coin nodig, zoals Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: draft
+---
+
+Dit artikel legt uit hoe proof of work en proof of stake bepalen wie het volgende blok aan een blockchain toevoegt, hoe elk model de chain veilig houdt en hoe elk model nieuwe coins creëert. Blocknet, een proof-of-work-coin die je op een gewone computer kunt minen, dient overal als uitgewerkt voorbeeld.
+
+## Wat is het verschil tussen proof of work en proof of stake?
+
+<Answer>
+Proof of work en proof of stake zijn twee manieren waarop een blockchain bepaalt wie het volgende blok toevoegt. Bij proof of work besteden miners rekenkracht aan het vinden van een geldige hash. Bij proof of stake zetten validators coins vast als borg en worden ze gekozen om blokken voor te stellen en erover te stemmen. Beide maken valsspelen duur.
+</Answer>
+
+Elke blockchain moet hetzelfde probleem oplossen. Duizenden computers die elkaar niet vertrouwen, moeten het eens worden over één geschiedenis van betalingen, zodat niemand dezelfde coin twee keer kan uitgeven. Iemand moet elk nieuw blok voorstellen, en alle anderen hebben een reden nodig om het te accepteren. Die regel heet het consensusmechanisme, en proof of work en proof of stake zijn de twee bekendste ontwerpen.
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Wie maakt een blok | De miner die als eerste een hash vindt die gelijk is aan of lager is dan de target van het netwerk | Een validator, gekozen uit degenen die coins hebben vastgezet |
+| Wat ze inzetten | Hardware en stroom | Coins die als stake zijn gestort |
+| Welke chain wint | De chain met het meeste opgebouwde werk | De chain met de meeste stemmen van validators, met finality-checkpoints |
+| Waar nieuwe coins naartoe gaan | Een blokbeloning voor de miner die het blok vond | Beloningen voor validators voor voorstellen en stemmen |
+| Wat je nodig hebt om mee te doen | Een computer die kan hashen | Coins om te staken (32 ETH voor een Ethereum-validator) |
+| Voorbeelden | Bitcoin, Monero, Blocknet | Ethereum sinds 2022 |
+
+## Hoe kiest proof of work het volgende blok?
+
+Bij proof of work strijden miners om een puzzel op te lossen die moeilijk op te lossen en makkelijk te controleren is. Een miner neemt het blok dat hij wil publiceren, voegt een getal toe dat een nonce heet en hasht het resultaat. Is de hash, gelezen als getal, gelijk aan of lager dan de target van het netwerk, dan is het blok geldig. Zo niet, dan verandert de miner de nonce en probeert hij het opnieuw. De enige manier om te winnen is veel nonces proberen, dus de kans dat een miner het volgende blok vindt, komt overeen met zijn aandeel in de hashkracht van het netwerk.
+
+De [Bitcoin-paper](https://bitcoin.org/bitcoin.pdf) van Satoshi Nakamoto uit 2008 zei het zo: "Proof-of-work is essentially one-CPU-one-vote." Nodes volgen de chain waarin de meeste proof-of-work-inspanning is gestoken, en een moeilijkheidsinstelling schuift de target omhoog of omlaag, zodat blokken in een vast tempo blijven komen, hoeveel hashkracht er ook bijkomt. De gids over [hoe crypto minen werkt](/nl/blog/how-crypto-mining-works/) loopt stap voor stap door hashes, moeilijkheidsgraad en pools.
+
+Blocknet werkt op dezelfde manier, met getallen die in de consensuscode zijn vastgelegd:
+
+- **De hash is Argon2id** met 2 GiB geheugen, dus elke hash heeft echt geheugen nodig naast processortijd. De [uitleg over Argon2id](/nl/blog/argon2id-proof-of-work-explained/) laat zien hoe het werkt.
+- **De target is (2^256 − 1) gedeeld door de moeilijkheidsgraad**, waardoor de moeilijkheidsgraad ongeveer het aantal hashes is dat het netwerk nodig heeft om één blok te vinden.
+- **Er komt ongeveer elke vijf minuten een blok**, 288 blokken per dag. De moeilijkheidsgraad volgt de recente bloktijden via een gewogen voortschrijdend gemiddelde over 60 blokken (LWMA).
+- **Nodes volgen de zwaarste chain.** Elke node telt de moeilijkheidsgraad van elk blok in een chain op en stapt alleen over op een concurrerende chain als het totale werk daarvan hoger is.
+
+## Hoe kiest proof of stake het volgende blok?
+
+Proof of stake vervangt hashen door een borg. Om mee te doen zet een validator coins vast bij het protocol, en het protocol kiest validators om blokken voor te stellen en goed te keuren. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), gelanceerd in 2012, was de eerste cryptocurrency die het gebruikte, en Ethereum stapte op 15 september 2022 over met een upgrade die [de Merge](https://ethereum.org/en/roadmap/merge/) heet.
+
+Het ontwerp van Ethereum laat de onderdelen zien. Volgens [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Een validator stort 32 ETH in het depositocontract.
+- De tijd is verdeeld in slots van 12 seconden, gegroepeerd in epochs van 32 slots.
+- In elke slot wordt één validator willekeurig gekozen om een blok voor te stellen, en anderen stemmen erover met attestations.
+- Checkpoints worden definitief wanneer validators die samen minstens twee derde van alle gestakete ETH hebben, ervoor stemmen.
+- Een validator die twee blokken voor dezelfde slot voorstelt of tegenstrijdige stemmen uitbrengt, wordt geslasht: een deel van zijn stake, tot en met alles, wordt vernietigd.
+
+De stake doet het werk dat stroom doet bij proof of work. De regels breken kost de validator coins die hij al bezit.
+
+## Hoe blijven proof of work en proof of stake veilig?
+
+Beide ontwerpen zorgen ervoor dat een aanval meer kost dan hij kan opleveren, en ze leggen die kosten op verschillende plekken.
+
+**Bij proof of work zijn de kosten doorlopend rekenwerk.** Om een eerder blok te herschrijven, moet een aanvaller het werk van dat blok en van elk blok daarna opnieuw doen en daarna het eerlijke netwerk inhalen. Nakamoto liet zien dat de kans dat een langzamere aanvaller bijbeent, met elk nieuw blok exponentieel kleiner wordt. Om de controle over de chain vanaf nu over te nemen, moet je meer hashkracht draaien dan alle anderen samen, zolang de aanval duurt.
+
+**Bij proof of stake zijn de kosten kapitaal dat op het spel staat.** De documentatie van Ethereum zegt dat een aanvaller "would need 51% of the staked ETH" om de chain te controleren, dat een derde van de stake genoeg is om te voorkomen dat blokken definitief worden, en dat het terugdraaien van een definitief blok zou betekenen dat minstens een derde van alle gestakete ETH door slashing verloren gaat.
+
+Blocknet legt bovenop zijn proof of work ook twee drempels vast. Het netwerk beschouwt 10 bevestigingen, ongeveer 50 minuten, als veilig, en nodes weigeren elke reorganisatie die dieper gaat dan 100 blokken, ongeveer acht uur, dus een blok op 100 blokken diepte is definitief.
+
+## Hoe geven de twee modellen nieuwe coins uit?
+
+<Answer>
+Proof-of-work-coins betalen nieuwe coins uit aan de miner die elk blok vindt, dus iedereen die rekenkracht bijdraagt, kan coins verdienen zonder er eerst zelf een te bezitten. Proof-of-stake-coins betalen nieuwe coins uit aan validators naar verhouding van hun stake, dus de beloningen gaan naar mensen die al coins hebben. Elk protocol bepaalt zijn eigen schema.
+</Answer>
+
+Bij proof of work maakt de eerste transactie in elk blok nieuwe coins aan voor de miner die het vond. De Bitcoin-paper beschrijft dit als "a way to initially distribute coins into circulation, since there is no central authority to issue them." De beloning van Bitcoin halveert elke 210.000 blokken, ongeveer elke vier jaar, en het totale aanbod blijft net onder de 21 miljoen.
+
+Bij de proof of stake van Ethereum worden beloningen één keer per epoch bij de saldi van validators opgeteld, voor attestations, blokvoorstellen en dienst in het sync committee. De [basisbeloning](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) wordt kleiner naarmate de totale stake groeit, terwijl de totale uitgifte stijgt naarmate er meer validators bijkomen.
+
+De uitgifte van Blocknet loopt volledig via minen. Het genesisblok bevat helemaal geen transacties, dus er bestonden geen coins voordat het minen begon, en de consensus kent geen premine, treasury of output voor de oprichters. Elk blok betaalt zijn volledige beloning in één output uit aan de miner die het vond. De beloning begon op 723,25 BNT per blok, zakt elke maand van 30 dagen een stap langs een exponentiële curve gedurende 48 maanden en blijft daarna voorgoed op 2 BNT per blok.
+
+## Waarom gebruikt Blocknet proof of work?
+
+Blocknet koos voor proof of work, zodat iedereen met een computer vanaf het eerste blok nieuwe coins kan verdienen zonder er eerst te kopen. De daemon beschrijft Argon2id als "Memory-hard PoW to resist ASICs and ensure fair mining," en draait elke hash op één thread "for fairness."
+
+De geheugeneis is wat het minen open houdt. Elke hash vult 2 GiB geheugen, dus elke mining-thread heeft ongeveer 2 GB RAM nodig, en de computers die mensen al hebben, desktops, laptops en servers, hebben dat geheugen en de controllers om het te voeden. Blocknet hoort bij een familie van proof-of-work-coins die rond hardware voor algemeen gebruik zijn gebouwd: Monero gebruikt bijvoorbeeld sinds november 2019 [RandomX](https://github.com/tevador/RandomX), "optimized for general-purpose CPUs."
+
+Proof of work blijft in de plannen van Blocknet. De Faraday-upgrade, gepland rond februari 2027 volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), zal "a lighter proof of work" brengen, zodat nieuwe nodes de chain sneller inhalen.
+
+## Hoe begin je met het minen van een proof-of-work-coin?
+
+Voor Blocknet heb je een walletadres nodig en seine, de gratis opensource-miner:
+
+1. Haal een adres uit de officiële wallet. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) loopt het met je door.
+2. [Download seine](/nl/#download) voor Windows, macOS of Linux en start het.
+3. Plak je adres of `@name` en accepteer de standaardpool, bntpool.com.
+
+seine kiest het aantal threads op basis van je RAM, vergelijkt CPU-kernels tijdens het minen en houdt de snelste, en zet op Windows en Linux elke NVIDIA-videokaart naast de processor in. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt hardware en uitbetalingen in detail.
+
+<CTA target="seine" title="Mine Blocknet met seine" text="Download seine, plak je adres of @name, en binnen een paar minuten minet je computer BNT op bntpool.com." />

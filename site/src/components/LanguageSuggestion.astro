@@ -1,0 +1,77 @@
+---
+// Dismissible "this page is available in <language>" banner, ported from Sol Incinerator's
+// LanguageSuggestion. English pages only: a saved choice wins, otherwise the first supported
+// browser language decides; English or unsupported languages get no banner. Choosing a language
+// here or in the language menu is remembered. The script runs where it's placed (top of <body>),
+// so the banner exists before first paint and doesn't shift the layout.
+import { LOCALES, localizePath, type Locale } from '../i18n/locales';
+import { useTranslations } from '../i18n/ui';
+
+interface Props { path: string; english: boolean }
+const { path, english } = Astro.props;
+const keepEnglish = useTranslations('en')('suggestKeepEnglish');
+const offers = Object.fromEntries(
+    LOCALES.filter((l) => l.code !== 'en').map((l) => {
+        const t = useTranslations(l.code as Locale);
+        return [l.code, { prompt: t('suggestPrompt'), action: t('suggestAction'), href: localizePath(path, l.code), lang: l.htmlLang, dir: l.dir }];
+    }),
+);
+---
+<script is:inline define:vars={{ offers, keepEnglish, english }}>
+  (function () {
+    var KEY = "seine:language:preference:v1";
+    function remember(code) { try { localStorage.setItem(KEY, code); } catch (e) {} }
+    // Remember explicit picks from the language menu too.
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest(".langs a[hreflang]");
+      if (a) remember(a.getAttribute("hreflang") === "en" ? "en" : a.getAttribute("hreflang"));
+      document.querySelectorAll(".langs[open]").forEach(function (menu) {
+        if (!menu.contains(e.target)) menu.open = false;
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      document.querySelectorAll(".langs[open]").forEach(function (menu) {
+        if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
+        menu.open = false;
+      });
+    });
+    if (!english) return; // Translated pages keep their language.
+    function preferred(languages) {
+      for (var i = 0; i < languages.length; i++) {
+        var n = String(languages[i]).toLowerCase();
+        for (var code in offers) if (code.toLowerCase() === n) return code;
+        var base = n.split("-")[0];
+        if (base === "en") return null;
+        if (base === "zh") return /(?:^|-)(?:hant|tw|hk|mo)(?:-|$)/.test(n) ? "zh-Hant" : "zh-Hans";
+        if (base === "pt") return "pt-BR";
+        if (offers[base]) return base;
+      }
+      return null;
+    }
+    var target = null;
+    try {
+      var saved = localStorage.getItem(KEY);
+      target = saved ? (offers[saved] ? saved : null) : preferred(navigator.languages || [navigator.language || ""]);
+    } catch (e) { return; } // Unreadable storage: no banner.
+    if (!target) return;
+    var o = offers[target];
+    var bar = document.createElement("aside");
+    bar.className = "lang-suggest";
+    bar.setAttribute("dir", "ltr");
+    var text = document.createElement("span");
+    text.lang = o.lang; text.dir = o.dir; text.textContent = o.prompt;
+    var go = document.createElement("a");
+    go.className = "btn primary"; go.href = o.href + location.search + location.hash;
+    go.lang = o.lang; go.dir = o.dir; go.textContent = o.action;
+    go.addEventListener("click", function () { remember(target); });
+    var stay = document.createElement("button");
+    stay.type = "button"; stay.className = "btn secondary"; stay.textContent = keepEnglish;
+    stay.addEventListener("click", function () { remember("en"); bar.remove(); });
+    var actions = document.createElement("span");
+    actions.className = "lang-suggest-actions";
+    actions.append(go, stay);
+    bar.append(text, actions);
+    document.body.prepend(bar);
+  })();
+</script>

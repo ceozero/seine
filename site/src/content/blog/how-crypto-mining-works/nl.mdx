@@ -1,0 +1,117 @@
+---
+title: Hoe cryptomining werkt
+description: 'Cryptomining in gewone taal: blokken, hashes, moeilijkheidsgraad, blokbeloningen en miningpools, uitgelegd met de blokken van vijf minuten van Blocknet.'
+tags: [Minen, Proof of work, Blocknet, bntpool]
+faq:
+  - q: 'Wat berekent een cryptominer eigenlijk?'
+    a: 'Een miner hasht een blokheader keer op keer en verandert elke keer een getal dat de nonce heet, tot het resultaat gelijk is aan of lager is dan de target van het netwerk. Bij Blocknet is elke poging één Argon2id-hash over 2 GiB geheugen. Niemand kan voorspellen welke nonce wint, dus de enige manier om een blok te vinden is blijven proberen.'
+  - q: 'Hoe lang duurt het om één blok te minen?'
+    a: 'Elk netwerk stelt zijn eigen doeltijd in. Bitcoin mikt op één blok per tien minuten, en Blocknet op één blok per vijf minuten, wat neerkomt op 288 blokken per dag. De moeilijkheidsgraad past zich aan om dat tempo vast te houden als miners erbij komen of vertrekken, dus de bloktijd blijft dicht bij het doel, wat de totale hashrate ook is.'
+  - q: 'Wat is een share in een miningpool?'
+    a: 'Een share is een hash die voldoet aan een makkelijkere target die de pool voor je verbinding instelt. Shares bewijzen hoeveel werk je hebt bijgedragen zonder op een volledig blok te wachten. Op bntpool.com past de pool de share-moeilijkheidsgraad van elke verbinding aan zodat er ongeveer tien shares per vijf minuten binnenkomen, en blokbeloningen worden verdeeld op basis van shares.'
+  - q: 'Kan ik cryptovaluta minen op een gewone computer?'
+    a: 'Ja, op coins waarvan de proof of work is ontworpen voor gewone hardware. Blocknet gebruikt het geheugenintensieve Argon2id, dus een desktop, laptop, Mac of server met genoeg RAM kan het minen. Elke miningthread heeft ongeveer 2 GB geheugen nodig, en seine bepaalt zelf het juiste aantal threads voor je computer.'
+sourceHash: d05a84885aae
+translation: draft
+---
+
+Deze gids legt uit wat cryptominers doen en waarom: hoe transacties blokken worden, wat een hash en een nonce zijn, hoe de moeilijkheidsgraad blokken op schema houdt, waar de beloning vandaan komt en waarom de meeste mensen in een pool minen. Blocknet is overal het uitgewerkte voorbeeld, dus elk getal is een echt getal dat je kunt controleren.
+
+## Wat is cryptomining?
+
+<Answer>
+Cryptomining is de manier waarop een blockchain met proof of work nieuwe blokken toevoegt. Miners bundelen wachtende transacties in een blok en racen dan om een hash van dat blok te vinden die aan een moeilijkheidstarget voldoet. De eerste miner die er een vindt, zendt het blok uit, elke node controleert het en de winnaar krijgt een nieuw gemaakte blokbeloning.
+</Answer>
+
+Minen doet twee dingen tegelijk. Het zet transacties op volgorde, zodat iedereen het eens is over welke betaling eerst kwam, en het geeft nieuwe munten uit volgens een vast schema, zodat niemand hoeft te worden vertrouwd om ze te maken. Bitcoin introduceerde het idee in 2008, en veel coins gebruiken het vandaag, waaronder Blocknet. Sommige chains, zoals Ethereum sinds 2022, gebruiken in plaats daarvan proof of stake; [proof of work vs proof of stake](/nl/blog/proof-of-work-vs-proof-of-stake/) vergelijkt de twee.
+
+## Wat zit er in een blok?
+
+Een blok is een bundel transacties plus een korte header die het beschrijft. De blokheader van Blocknet heeft zeven velden:
+
+| Veld | Wat het bevat |
+|---|---|
+| Versie | De protocolversie |
+| Hoogte | De positie van het blok in de chain |
+| Vorige hash | De ID van het blok ervoor |
+| Merkle-root | Een vingerafdruk van elke transactie in het blok |
+| Tijdstempel | Wanneer het blok is gemaakt |
+| Moeilijkheidsgraad | Hoe moeilijk dit blok te vinden is |
+| Nonce | Het getal dat de miner bij elke poging verandert |
+
+Het veld met de vorige hash maakt er een chain van. Elk blok wijst naar het blok ervoor, dus als je een oude transactie verandert, verandert de vingerafdruk van dat blok en breekt elke schakel erna. De eerste transactie in elk blok is de coinbase, de transactie die de beloning betaalt aan de miner die het blok vond.
+
+## Hoe vindt een miner een blok?
+
+<Answer>
+Een miner hasht de blokheader, controleert of het resultaat gelijk is aan of lager is dan de target van het netwerk en verandert, als dat niet zo is, de nonce en probeert het opnieuw. Een goede hashfunctie maakt de uitvoer onvoorspelbaar, dus de enige manier om te winnen is veel pogingen doen. Je hashrate is het aantal pogingen dat je per seconde doet.
+</Answer>
+
+Een hashfunctie zet elke invoer om in een getal van vaste lengte dat er willekeurig uitziet. Verander één bit van de invoer en de uitvoer verandert volledig. Behandel die uitvoer als een enorm getal: is het gelijk aan of lager dan de target, dan is het blok geldig. Een lagere target betekent minder winnende hashes, dus gemiddeld meer pogingen.
+
+Bij Blocknet is elke poging één Argon2id-hash. De nonce van 8 bytes is het wachtwoord en de rest van de header is de salt, en elke hash werkt door 2 GiB geheugen voordat hij een resultaat van 32 bytes oplevert. Als een miner een hash vindt die gelijk is aan of lager is dan de target, stuurt hij het blok naar het netwerk. Elke node herhaalt die ene hash om het te bevestigen, wat een fractie kost van het werk dat in het vinden ervan ging zitten.
+
+De [uitleg over Argon2id](/nl/blog/argon2id-proof-of-work-explained/) loopt elke stap van die hash door en legt uit waarom hij zoveel geheugen nodig heeft.
+
+## Wat is de moeilijkheidsgraad bij minen?
+
+De moeilijkheidsgraad (difficulty) is het getal dat de target bepaalt. Bij Blocknet is de target (2^256 − 1) gedeeld door de moeilijkheidsgraad, wat betekent dat de moeilijkheidsgraad ongeveer het aantal hashes is dat het hele netwerk gemiddeld nodig heeft om één blok te vinden.
+
+Zo kun je het netwerk snel aflezen. Blocknet mikt op één blok per 300 seconden, dus de hashrate van het netwerk is ongeveer de moeilijkheidsgraad ÷ 300. Een moeilijkheidsgraad van 6.000.000 zou bijvoorbeeld betekenen dat het netwerk ongeveer 20.000 hashes per seconde maakt.
+
+Het netwerk past de moeilijkheidsgraad aan om blokken op schema te houden terwijl miners komen en gaan:
+
+- **Bitcoin** mikt op blokken van tien minuten en herberekent de moeilijkheidsgraad eens per 2.016 blokken, ongeveer elke twee weken.
+- **Blocknet** mikt op blokken van vijf minuten en herberekent de moeilijkheidsgraad na elk blok met LWMA, een lineair gewogen voortschrijdend gemiddelde. Het kijkt naar de laatste 60 blokken en geeft de meest recente het meeste gewicht, zodat het veranderingen in hashrate snel volgt: het hele venster beslaat ongeveer vijf uur aan blokken.
+
+LWMA beperkt ook hoeveel één afwijkend blok de uitkomst kan verschuiven: de oplostijd van elk blok telt als minimaal 1 seconde en maximaal 1.800 seconden, zes keer de doeltijd. Komen blokken sneller binnen dan elke vijf minuten, dan stijgt de moeilijkheidsgraad; komen ze langzamer binnen, dan daalt hij.
+
+## Hoe worden miners betaald?
+
+Elk blok maakt nieuwe munten aan in zijn coinbase-transactie. Bij Blocknet heeft de coinbase precies één output, ter waarde van precies de blokbeloning, betaald aan het adres dat de miner heeft gekozen. Het genesisblok bevatte helemaal geen transacties, dus elke munt in omloop is gemined.
+
+De beloning volgt een gepubliceerd schema. Die van Blocknet begon op 723,25 BNT per blok en neemt geleidelijk af, met een stap omlaag eens per maand van 30 dagen, ofwel 8.640 blokken. De uitgifte bereikt na vier jaar ongeveer 100 miljoen BNT, en vanaf dan betaalt elk blok een permanente tail reward van 2 BNT, zodat miners altijd iets hebben om voor te minen.
+
+Geminede munten wachten 60 blokken, ongeveer vijf uur, voordat ze kunnen worden uitgegeven. Die pauze laat een eventuele korte splitsing in de chain tot rust komen voordat een nieuwe beloning kan worden uitgegeven.
+
+## Waarom sluiten de meeste miners zich aan bij een pool?
+
+Een pool bundelt de hashrate van veel miners, zodat de groep vaak blokken vindt, en verdeelt elke beloning naar het werk dat elk lid heeft bijgedragen. Solo zou een kleine miner dagen of weken op een heel blok kunnen wachten; in een pool levert dezelfde hashrate een gestage stroom kleinere betalingen op.
+
+De rekensom laat zien waarom. Blocknet maakt 288 blokken per dag, dus je verwachte aantal soloblokken per dag is 288 × (jouw hashrate ÷ hashrate van het netwerk). Is je computer een duizendste van het netwerk, dan vind je gemiddeld ongeveer 0,29 blokken per dag, één blok per drieënhalve dag, al verschilt de echte tussentijd van blok tot blok.
+
+Een pool meet je werk met **shares**. Een share is een hash die voldoet aan een makkelijkere target die de pool voor je verbinding instelt. Elke share telt mee voor jouw deel van de beloning, en een share die ook aan de volledige target van het netwerk voldoet, is een echt blok, dat de pool bij de blockchain indient. Op bntpool.com:
+
+- **Past de share-moeilijkheidsgraad zich per verbinding aan**, met als doel ongeveer tien shares per vijf minuten, zodat snelle en langzame computers allebei regelmatig werk melden.
+- **Worden beloningen verdeeld met PPLNS** over een venster van zes uur: de beloning van elk blok gaat naar de shares die in de zes uur voor de vondst zijn ingediend.
+- **Beginnen uitbetalingen bij 0,1 BNT** zodra er 60 blokken op een blok volgen.
+
+Draai je je eigen node, dan kun je ook solo minen en elk blok dat je vindt zelf houden. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt beide.
+
+## Wat bepaalt hoe snel je minet?
+
+De hashfunctie bepaalt welke hardware goed presteert. SHA-256 van Bitcoin heeft bijna geen geheugen nodig, dus gespecialiseerde chips die ASICs heten doen tegenwoordig het meeste Bitcoin-minen. Blocknet koos Argon2id, een geheugenintensieve functie die is ontworpen om ASICs te weerstaan: elke hash vult 2 GiB RAM, dus geheugengrootte en geheugenbandbreedte bepalen je snelheid.
+
+Dat verandert de rekensom voor een gewone computer:
+
+- **RAM bepaalt het aantal threads.** Elke miningthread heeft een eigen arena van 2 GiB nodig, dus een computer met 16 GB draait ongeveer zes of zeven threads en houdt dan nog ruimte over voor het systeem.
+- **Geheugenbandbreedte bepaalt de totale snelheid.** Elke hash schrijft ongeveer 2 GiB en leest ongeveer 2 GiB, dus een computer die geheugen sneller verplaatst, voltooit meer hashes per seconde.
+- **CPU's en GPU's kunnen allebei minen.** Op Windows en Linux minet seine tegelijk op de CPU en op elke NVIDIA-kaart, en de hashrates tellen op.
+
+Het beste resultaat dat seine heeft gemeten, is 49,4 H/s op een AMD EPYC Zen 5-server (EPYC 9R45, 32 threads), en een MacBook Pro met Apple M4 Max haalt 30,9 H/s. De [hardwaregids](/nl/blog/blocknet-mining-hardware-hashrate/) bevat resultaten voor elke geteste generatie, en de gids over [CPU-mining in 2026](/nl/blog/cpu-mining-2026/) legt uit waarom geheugenintensieve coins goed bij gewone processors passen.
+
+## Wie houdt de chain eerlijk?
+
+Elke node controleert elk blok: de hash voldoet aan de target, de transacties zijn geldig en de beloning klopt precies. Een blok dat een controle niet doorstaat, wordt geweigerd, hoeveel werk er ook in zat.
+
+Als twee miners bijna op hetzelfde moment een blok vinden, splitst de chain zich kort. Blocknet-nodes volgen de chain met het meeste totale werk, de som van de moeilijkheidsgraad van elk blok, dus de splitsing lost zich op zodra het volgende blok aan één kant landt. Daarom tellen wallets bevestigingen: bij Blocknet gelden 10 bevestigingen (ongeveer 50 minuten) als veilig, en geen enkele node voert een reorganisatie uit van meer dan 100 blokken diep.
+
+## Probeer het op je eigen computer
+
+Blocknet minen gaat in drie stappen: regel een adres, download [seine](/nl/#download), start het en accepteer de standaardpool, bntpool.com. seine kiest het aantal threads, de CPU-kernel en de geheugenindeling terwijl het minet, dus je kunt binnen enkele minuten je eerste shares zien binnenkomen.
+
+<Note>
+Volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet rond 16 februari 2027 een netwerkupgrade met de naam Faraday, die een lichtere proof of work moet brengen. De details over proof of work hierboven beschrijven het netwerk vóór Faraday. seine controleert bij het opstarten en elke 12 uur op nieuwe releases.
+</Note>
+
+<CTA target="seine" title="Begin met Blocknet minen" text="Download seine voor Windows, macOS of Linux, plak je adres en stuur binnen een paar minuten shares naar bntpool.com." />

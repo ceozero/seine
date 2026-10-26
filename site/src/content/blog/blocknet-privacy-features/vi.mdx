@@ -1,0 +1,97 @@
+---
+title: Blocknet giữ thanh toán riêng tư như thế nào
+description: Blocknet giữ mọi khoản thanh toán riêng tư theo mặc định với vòng 16 thành viên, địa chỉ ẩn dùng một lần, số tiền được che giấu, truyền tải Dandelion++ và memo được mã hóa.
+tags: [Quyền riêng tư, Blocknet, Chữ ký vòng, Địa chỉ ẩn, Memo]
+faq:
+  - q: 'Blocknet có riêng tư theo mặc định không?'
+    a: 'Có. Mọi giao dịch Blocknet đều dùng chữ ký vòng trên 16 output, một địa chỉ ẩn dùng một lần cho mỗi người nhận, số tiền được che giấu với range proof Bulletproofs và một memo được mã hóa 128 byte trên mọi output. Định dạng giao dịch không có chế độ minh bạch, nên không có thiết lập nào cần bật và không có cách nào để một khoản thanh toán bỏ qua các lớp bảo vệ này.'
+  - q: 'Blocknet dùng kích thước vòng bao nhiêu?'
+    a: 'Mọi đầu vào trong giao dịch Blocknet đều được ký bằng một vòng CLSAG gồm đúng 16 output: output thật và 15 output mồi lấy từ chuỗi. Quy tắc đồng thuận từ chối mọi kích thước khác, và mỗi thành viên vòng phải là một output thật đã có trên chuỗi. Vì mọi đầu vào dùng cùng kích thước, kích thước vòng không bao giờ có thể làm lộ một ví.'
+  - q: 'Ai đọc được memo Blocknet?'
+    a: 'Chỉ người gửi và người nhận. Mỗi memo được mã hóa bằng bí mật mà hai ví chia sẻ cho output đó, và luôn chiếm đúng 128 byte trên chuỗi, với chỗ cho tối đa 124 byte văn bản. Memo ngắn hoặc trống được lấp đầy bằng phần đệm ngẫu nhiên, nên không ai khác biết được khoản thanh toán nào có kèm ghi chú.'
+  - q: 'Người khác có thấy địa chỉ Blocknet của tôi đã nhận bao nhiêu không?'
+    a: 'Không. Mọi khoản thanh toán tới địa chỉ của bạn đều đến một địa chỉ ẩn dùng một lần mới, nên không thể gom các khoản thanh toán dưới địa chỉ bạn đã chia sẻ. Số tiền được lưu dưới dạng Pedersen commitment kèm range proof, nên chuỗi không bao giờ hiển thị mỗi output chứa bao nhiêu. Chỉ ví của bạn, dùng view key riêng, mới tìm và cộng tổng các khoản thanh toán của bạn.'
+  - q: 'Blocknet có dùng cùng kỹ thuật mật mã với Monero không?'
+    a: 'Blocknet dùng cùng họ mật mã đã được kiểm chứng như Monero: chữ ký vòng CLSAG với vòng 16 thành viên, địa chỉ ẩn dùng một lần, Pedersen commitment với range proof Bulletproofs, và truyền tải giao dịch Dandelion++. Ngoài ra, nó bổ sung thanh toán bằng tên qua tên ngắn Blocknet ID và một memo được mã hóa 128 byte trên mọi output.'
+sourceHash: 2732784d0db4
+translation: draft
+---
+
+Bài viết này đi sâu hơn phần tóm tắt về quyền riêng tư trong [Blocknet là gì?](/vi/blog/what-is-blocknet/) và lần lượt trình bày từng lớp riêng tư trong một giao dịch Blocknet: nó che giấu điều gì, hoạt động ra sao, và có ý nghĩa gì vào lần tới bạn gửi hoặc nhận BNT.
+
+## Blocknet giữ thanh toán riêng tư như thế nào?
+
+<Answer>
+Blocknet che giấu người gửi bằng chữ ký vòng CLSAG trên 16 output, người nhận bằng địa chỉ ẩn dùng một lần, và số tiền bằng Pedersen commitment cùng range proof Bulletproofs. Truyền tải Dandelion++ che giấu nơi giao dịch đi vào mạng lưới, và mọi output đều mang một memo được mã hóa 128 byte. Tất cả đều bắt buộc, không có chế độ minh bạch.
+</Answer>
+
+Blocknet dùng cùng họ mật mã đã được kiểm chứng như Monero: chữ ký vòng, địa chỉ ẩn và range proof Bulletproofs, xây dựng trên nhóm Ristretto trên Curve25519. Ngoài ra, nó bổ sung thanh toán bằng tên và memo được mã hóa. Mỗi lớp bao phủ một phần khác nhau của khoản thanh toán, và kết hợp lại, chúng để lại rất ít manh mối cho người đọc chuỗi.
+
+## Chữ ký vòng che giấu ai đã trả tiền
+
+Khi bạn chi tiêu coin, ví của bạn ký cho một nhóm 16 output: output bạn sở hữu và 15 output khác được chọn từ chuỗi làm output mồi. Chữ ký đó là một [chữ ký vòng CLSAG](/vi/blog/ring-signatures-explained/). Bất kỳ ai cũng có thể xác minh rằng một thành viên của vòng đã ký, và chữ ký không tiết lộ đó là thành viên nào.
+
+Quy tắc đồng thuận bắt buộc kích thước vòng. Mọi đầu vào phải mang đúng 16 thành viên vòng, mỗi thành viên là một output thật đã có trên chuỗi, và mạng lưới từ chối mọi thứ khác. Vì mọi đầu vào trên mạng lưới dùng cùng kích thước, kích thước vòng không thể làm lộ một giao dịch hay ví đã tạo ra nó. Mã nguồn của daemon cố định kích thước này “để ngăn rò rỉ thông tin từ kích thước vòng thay đổi”.
+
+Để ngăn cùng một số coin bị chi tiêu hai lần, mỗi đầu vào còn mang một key image. Nó là duy nhất với output thật đang được chi tiêu nhưng không tiết lộ đó là thành viên vòng nào. Nếu một key image xuất hiện lần thứ hai, mạng lưới từ chối giao dịch vì chi tiêu hai lần.
+
+## Địa chỉ ẩn che giấu ai đã nhận tiền
+
+Một địa chỉ Blocknet chứa hai khóa công khai, spend key và view key. Khi ai đó trả tiền cho bạn, ví của họ kết hợp các khóa của bạn với một số ngẫu nhiên mới để tạo một [địa chỉ dùng một lần](/vi/blog/stealth-addresses-explained/) chỉ dùng cho output đó. Địa chỉ bạn đã chia sẻ không bao giờ xuất hiện trên chuỗi.
+
+Ví của bạn dùng view key riêng để quét các giao dịch mới và nhận ra những output thuộc về bạn, và dùng spend key để chi tiêu chúng sau này. Mười khoản thanh toán tới cùng một địa chỉ sẽ đến mười địa chỉ dùng một lần không liên quan gì đến nhau, nên người quan sát không thể cộng tổng số tiền một địa chỉ đã nhận hay biết rằng hai khoản thanh toán đã đến cùng một người.
+
+Điều tương tự cũng đúng với [tên Blocknet ID](/vi/blog/blocknet-id-pay-by-name/). Một tên ngắn như `@name` được thiết kế để công khai, vì người gửi tra cứu nó tại [blocknet.id](https://blocknet.id) để trả tiền cho bạn. Các khoản thanh toán tới tên đó vẫn đến các địa chỉ dùng một lần mới, nên cái tên không cho biết gì về số tiền bạn đã nhận.
+
+## Blocknet che giấu số tiền giao dịch như thế nào?
+
+Số tiền được lưu dưới dạng Pedersen commitment. Một commitment khóa chặt một con số mà không để lộ nó, và các commitment có thể cộng với nhau. Nhờ đó, mọi node có thể kiểm tra rằng tổng đầu vào của một giao dịch bằng tổng output cộng phí mà không biết bất kỳ số tiền nào.
+
+Riêng một commitment có thể che giấu một số tiền âm, điều sẽ tạo ra coin từ hư không. Vì vậy mỗi output đi kèm một [range proof Bulletproofs](/vi/blog/bulletproofs-explained/) chứng minh số tiền của nó nằm trong phạm vi 64 bit bắt đầu từ số không. Bằng chứng này thuyết phục mọi node rằng số tiền hợp lệ và không tiết lộ thêm điều gì về nó.
+
+Người nhận vẫn thấy con số thật. Ví của họ khôi phục nó bằng chính bí mật chung dùng để tìm output, nên số tiền chỉ hai người trong khoản thanh toán thấy được, ngoài ra không ai khác.
+
+## Dandelion++ che giấu nơi giao dịch bắt đầu
+
+Nếu một node thông báo giao dịch của chính nó tới tất cả các peer cùng lúc, người theo dõi nhiều node có thể đoán nguồn gốc giao dịch bằng cách ghi nhận ai nghe thấy nó đầu tiên. Blocknet truyền tải giao dịch bằng [Dandelion++](/vi/blog/dandelion-plus-plus-explained/) để ngăn điều đó.
+
+Một giao dịch mới trước tiên đi dọc theo một “thân” (stem), được chuyển từ một peer tới đúng một peer tiếp theo. Ở mỗi bước nhảy có 90% khả năng nó tiếp tục đi dọc thân; nếu không, nó “bung” (fluff) và lan ra toàn mạng lưới từ điểm đó. Khi phần lớn các node thấy giao dịch, nó có vẻ đến từ một node có thể cách node của bạn rất nhiều bước nhảy. Các tuyến stem được xáo trộn lại mỗi 10 phút.
+
+## Ai đọc được memo Blocknet?
+
+Mọi output đều mang một memo được mã hóa 128 byte với chỗ cho tối đa 124 byte văn bản. Nó được mã hóa bằng chính bí mật mà người gửi và người nhận chia sẻ cho output đó, nên chỉ hai bạn đọc được. Hãy dùng nó cho số hóa đơn, mã tham chiếu đơn hàng hoặc một ghi chú ngắn gửi người bạn đang trả tiền. [Hướng dẫn về memo được mã hóa](/vi/blog/blocknet-encrypted-memos/) chỉ cách thêm memo và nơi tìm những memo bạn nhận được.
+
+Memo luôn có cùng kích thước, dù bạn viết đầy ghi chú hay không viết gì. Khi memo ngắn hoặc trống, ví lấp phần còn lại bằng phần đệm ngẫu nhiên trước khi mã hóa, nên một output có ghi chú trông giống hệt output không có. Memo không bao giờ nổi bật, và không ai khác thậm chí biết được khoản thanh toán nào có kèm lời nhắn.
+
+## Quyền riêng tư trên Blocknet có phải là tùy chọn không?
+
+<Answer>
+Không. Quyền riêng tư là bắt buộc trên Blocknet. Định dạng giao dịch không có chế độ minh bạch, và quy tắc đồng thuận yêu cầu mọi đầu vào mang một vòng gồm đúng 16 thành viên, nên mọi khoản thanh toán đều dùng chữ ký vòng, địa chỉ ẩn, số tiền được che giấu và memo được mã hóa. Vì không ai có thể chọn không dùng, các khoản thanh toán riêng tư trông giống mọi khoản thanh toán khác trên chuỗi.
+</Answer>
+
+Khi quyền riêng tư là một thiết lập, những người bật nó tạo thành một nhóm nhỏ dễ bị nhận ra hơn. Trên Blocknet, mọi giao dịch được tạo theo cùng một cách, nên mỗi giao dịch hòa lẫn với tất cả các giao dịch khác, và bạn không bao giờ phải nhớ bảo vệ một khoản thanh toán.
+
+## Điều này có ý nghĩa gì khi bạn trả tiền cho ai đó
+
+Khi bạn gửi BNT tới một địa chỉ hoặc một `@name`, ví của bạn xử lý mọi bước cho bạn, không có gì cần bật:
+
+1. Nó chọn 15 output mồi từ chuỗi và ký đầu vào của bạn bằng một vòng 16 thành viên.
+2. Nó tạo một địa chỉ dùng một lần mới cho người nhận.
+3. Nó tạo commitment cho số tiền và đính kèm range proof.
+4. Nó mã hóa memo của bạn, hoặc phần đệm ngẫu nhiên nếu bạn để trống memo.
+5. Nó chuyển giao dịch cho Dandelion++ để truyền tải.
+
+Người đọc chuỗi thấy các đầu vào mà mỗi đầu vào trỏ tới 16 output có thể là thật, các output gửi tới những địa chỉ dùng một lần chưa ai từng thấy, các commitment thay cho số tiền, và một trường memo gồm các byte trông ngẫu nhiên. Người bạn trả tiền thấy khoản thanh toán, số tiền và ghi chú của bạn trong ví của họ.
+
+Nếu bạn muốn kiếm BNT đầu tiên, bạn có thể tự đào trên máy tính của mình. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) giúp bạn chạy seine trên bntpool.com trong vài phút, và bạn có thể đào thẳng về địa chỉ hoặc `@name` của mình.
+
+## Những gì sắp đến với bản nâng cấp Faraday
+
+Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến nâng cấp mạng lưới mang tên Faraday, với thời điểm kích hoạt dự kiến vào khoảng 2027-02-16. Trang web liệt kê hai thay đổi sẽ đưa quyền riêng tư đi xa hơn:
+
+- **Mọi output trên chuỗi trong mỗi lần chi tiêu.** Theo lời trang web: “Hiện nay một lần chi tiêu ẩn giữa 16 output. Sau Faraday, nó ẩn giữa mọi output trên chuỗi.”
+- **Bằng chứng chi tiêu được thiết kế để vẫn an toàn trước máy tính lượng tử.** Faraday sẽ chuyển bằng chứng chi tiêu sang bằng chứng dựa trên hàm băm thay cho đường cong elliptic, và việc phát hiện khoản thanh toán sẽ dùng ML-KEM.
+
+Trang web cũng cho biết Faraday sẽ không có coin mới và không khởi chạy lại, và lịch sử của bạn được giữ nguyên. Việc thiết kế, kiểm thử và đánh giá đối kháng đang được tiến hành, và các mốc thời gian là dự kiến chứ chưa phải cuối cùng, vì vậy hãy theo dõi [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) để cập nhật.
+
+<CTA target="seine" title="Kiếm BNT bằng cách đào" text="Đào Blocknet bằng seine và nhận các khoản thanh toán riêng tư thẳng về địa chỉ hoặc @name của bạn." />

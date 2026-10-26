@@ -26,20 +26,31 @@ first-hardware iteration checklist.
   sweeps and any AMD-specific scheduling work come after this checklist
   passes.
 
-## Recommended rental image
+## Qualify the rental and software stack
 
-- Vast.ai or RunPod, Ubuntu 22.04 or 24.04 with **ROCm 6.x** preinstalled
-  (e.g. `rocm/dev-ubuntu-22.04:6.2` or newer; any image where `rocminfo`
-  and `/opt/rocm/lib/libamdhip64.so` exist). Kernel driver `amdgpu` must be
-  loaded on the host; verify the container/VM actually exposes
-  `/dev/kfd` and `/dev/dri`.
+As of 2026-10-25 at 11:45 EDT, the AMD campaign had not established a
+compatible GPU rental or a native HIP result.
+Confirm the exact GPU, native device access and complete OS/kernel/driver/HIP
+combination before reserving a machine. A provider's "AMD" label or installed
+shared libraries do not prove the device is usable by this backend.
+
+- Pin a combination listed in AMD's
+  [Linux support matrix](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/native_linux/native_linux_compatibility.html).
+  As checked on 2026-10-25, that page lists RX 7900 XTX for ROCm 7.2.1 and
+  explains that releases from Core SDK 7.13.0 use unified documentation.
+  Select the matching version's matrix; do not assume "6.x or newer" is a
+  qualified stack. Vendor support does not establish Seine correctness.
+- The host must load `amdgpu`; verify the container/VM exposes usable
+  `/dev/kfd` and `/dev/dri`. Record GPU name, PCI ID, `gcnArchName`, HIP-reported
+  wavefront size, VRAM, driver/runtime/hipRTC versions, OS and kernel.
 - Install build deps: `rustup` (repo pins 1.93.0 via rust-toolchain.toml),
   `build-essential`, `git`.
 - If the loader cannot find the libraries, add ROCm to the search path:
   `export LD_LIBRARY_PATH=/opt/rocm/lib:$LD_LIBRARY_PATH`.
 
-Sanity: `rocminfo | grep gfx` should print `gfx1100` and
-`rocm-smi --showmeminfo vram` should show ~24 GB.
+For the proposed RX 7900 XTX target, confirm `gfx1100`, approximately 24 GB
+VRAM, and HIP-reported wavefront size **32**. Record actual available memory;
+the number of usable 2 GiB arenas can be lower than the nominal VRAM capacity.
 
 ## Verification sequence
 
@@ -48,17 +59,26 @@ Run steps in order; each gate must pass before the next is meaningful.
 ### (a) Unit tests, including the ignored hardware tests
 
 ```bash
-cargo test --features amd
-cargo test --features amd -- --ignored --nocapture
+cargo +1.93.0 test --locked --no-default-features --features amd backend::amd:: -- --test-threads=1
+cargo +1.93.0 test --locked --no-default-features --features amd backend::amd::engine::tests::hip_device_props_parse_sanely -- --ignored --exact --nocapture
+cargo +1.93.0 test --locked --no-default-features --features amd backend::amd::engine::tests::hiprtc_kernel_compiles_for_device_arch -- --ignored --exact --nocapture
 ```
 
-The ignored set, in dependency order:
+The checks, in dependency order (run each hardware test separately and stop on
+failure; disabling default features avoids unrelated NVIDIA hardware tests):
+
+The compile and differential hardware tests currently use the first enumerated
+device. Confirm that it is the intended wave32 GPU before running them; checking
+another device's properties is insufficient.
 
 1. `backend::amd::hip_ffi::…loader_reports_missing_rocm…` (not ignored; on
-   the box it must take the Ok path — i.e. simply pass).
+   a pass alone does not prove ROCm loaded, because the test also accepts the
+   expected missing-library error. The subsequent device query must succeed).
 2. `backend::amd::engine::tests::hip_device_props_parse_sanely` — validates
    the hand-declared legacy (`R0000`) `hipDeviceProp_t` ABI: wavefront size
-   must read 32 and `gcnArchName` must start with `gfx`. **If this fails, the
+   must read a plausible 32 or 64 and `gcnArchName` must start with `gfx`.
+   Separately require **32 for the selected mining device**; a plausible wave64
+   device can pass the ABI test but is unsupported by this backend. **If the ABI test fails, the
    struct layout in `src/backend/amd/hip_ffi.rs` is wrong for the installed
    ROCm — fix offsets before anything else; every later step depends on it.**
 3. `backend::amd::engine::tests::hiprtc_kernel_compiles_for_device_arch` —
@@ -74,7 +94,7 @@ This mirrors the NVIDIA backend's ignored GPU-vs-CPU differential
 (must solve) and target == hash − 1 (must not solve)):
 
 ```bash
-cargo test --features amd gpu_solution_target_bracket_matches_cpu_reference -- --ignored --nocapture
+cargo +1.93.0 test --locked --no-default-features --features amd backend::amd::tests::gpu_solution_target_bracket_matches_cpu_reference -- --ignored --exact --nocapture
 ```
 
 A pass proves the full pipeline — seed blocks, 2 GiB Argon2id lane fill,
@@ -86,20 +106,20 @@ path) before suspecting the compression loop.
 ### (c) Single-lane kernel benchmark
 
 ```bash
-cargo run --release --features amd -- --bench --bench-kind kernel \
+cargo +1.93.0 run --locked --release --no-default-features --features amd -- --bench --bench-kind kernel \
   --backend amd --amd-max-lanes 1 --bench-secs 20 --bench-rounds 3 \
   --bench-output bench-amd-1lane.json
 ```
 
-Expect roughly 0.4–0.5 H/s per lane if RDNA3 behaves like other
-DRAM-latency-bound runs of this kernel (one hash ≈ sequential walk over
-2 GiB). Also run `--bench-kind kernel-effective` to include the eval path.
+Record the measured rate without an expected H/s target. Also run
+`--bench-kind kernel-effective` to measure the benchmark's effective wall-time
+scope; keep that result separate from kernel timing.
 
 ### (d) Lane scaling on 24 GB
 
 ```bash
 for lanes in 1 2 4 8 11; do
-  cargo run --release --features amd -- --bench --bench-kind backend \
+  cargo +1.93.0 run --locked --release --no-default-features --features amd -- --bench --bench-kind backend \
     --backend amd --amd-max-lanes $lanes --bench-secs 20 --bench-rounds 3 \
     --bench-warmup-rounds 1 --bench-output bench-amd-${lanes}lane.json
 done
@@ -108,13 +128,11 @@ done
 - 11 lanes is the expected maximum: 24 576 MiB total − 384 MiB reserve →
   ~23.6 GiB budget / 2 GiB per lane (the engine backs off automatically if
   the display or other processes hold VRAM).
-- Scaling should be near-linear until DRAM latency/bandwidth saturates.
-- **Expected ballpark (speculative until measured):** the workload is
-  DRAM-latency-bound; RX 7900 XTX has ~960 GB/s bandwidth vs the RTX 5090's
-  ~1.79 TB/s, so if latency characteristics are similar, expect roughly half
-  of the 5090's ~9.6 H/s backend rate — i.e. **~4–5 H/s** at full lanes.
-  Treat anything within 2–8 H/s as plausible for a first unoptimized run;
-  the number exists to catch order-of-magnitude breakage, not to be a target.
+- Treat this ascending sweep as screening only. Confirm any chosen lane count
+  with fresh interleaved paired runs, recording actual allocated lanes,
+  warmup, duration, completed hashes, variability and thermal conditions.
+  Do not infer AMD hashrate or scaling from NVIDIA measurements or theoretical
+  memory bandwidth. Keep failed allocations and negative results.
 - Check `late_hash_pct` in the report: with depth 1 and cancel checkpoints
   every 64 blocks, round-end preemption should be comparable to the NVIDIA
   backend's; a large value suggests the device-side cancel flag isn't being
@@ -124,13 +142,29 @@ done
 ### (e) Mining smoke test (pool)
 
 ```bash
-cargo run --release --features amd -- --backend cpu,amd
+cargo +1.93.0 run --locked --release --no-default-features --features amd -- --backend amd --address YOUR_BLOCKNET_ADDRESS
 ```
 
-Confirm: backend line shows `amd` with 11 lanes; cancel/fence startup probe
+Confirm: backend line shows `amd` with its actual allocated lane count; cancel/fence startup probe
 passes (the backend advertises cooperative deadlines, so it is NOT gated
 behind `--allow-best-effort-deadlines`); shares from backend `amd` are
 accepted by the pool.
+
+## Evidence and power scope
+
+Preserve source revision, binary and kernel-source checksums, compiler options,
+commands, full JSON reports, correctness/cancel logs and the exact device/software
+identity. Export completed observations with their benchmark kind, numerator,
+denominator, repetitions and uncertainty. A screen or ignored test is not native
+validation, and no result from this guide should enter README/website graphs
+until its evidence is collected and reviewed.
+
+For efficiency, record the actual sensor and measurement interval. A configured
+board power limit is not measured watts. If only sampled board power is
+available, disclose the sampling/integration method and missing samples; do not
+present it as a hardware energy counter. Keep GPU-board, CPU-package and wall
+power distinct, and leave unavailable measurements null. Confirm any power
+setting with a new paired hashrate/energy comparison before recommending it.
 
 ## Known risks to verify on hardware (in priority order)
 

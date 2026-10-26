@@ -1,0 +1,33 @@
+{
+  "decision": "accept_automatic_trial_eligibility",
+  "reviewed_at": "2026-10-25T07:58:56.822997-04:00",
+  "result_manifest_sha256": "ec942c079ea669c3718d4495074171d00438212c5fadb01b36c65fc61d26f5fd",
+  "binary_sha256": {
+    "control": "f79a27bb124f8dde5da5dacf9d2b374003a5524d093b53708eaba91cbee4ba72",
+    "candidate": "08427586c118d11b2a0b8f19f9e5c62d95136c190da0cb107eb54b3a73de5759",
+    "verify_streaming_dispatch": "612fd0ef67040aa83b0806b3c526bc1235ee681e502d43039bb3609addaef758"
+  },
+  "cold_paired_deltas_pct": [
+    3.083951209548119,
+    2.6230141893857084
+  ],
+  "warm_paired_deltas_pct": [
+    7.44763916541884,
+    8.53757069416854
+  ],
+  "fixed_control_delta_pct": -0.5899872670578121,
+  "rationale": [
+    "Both cold candidate runs promoted streaming at 12 workers after two independently passing A/B/A comparisons; runtime ISA and two-confirmation gates remain unchanged.",
+    "Both cold and cached productive pairs improved. Fixed AVX2 controls were 0.36-0.82% slower; no build-effect correction was applied to the automatic gains.",
+    "All eight commands used automatic worker and kernel selection, a 24-worker ceiling and explicit 2 MiB HugeTLB. No fixed worker or kernel override.",
+    "All four restarts reused their own cold worker count. Candidate restarts began at 18 workers, and logs subsequently showed streaming-cache restoration during count exploration.",
+    "All 21 full-size reference transitions passed; resource lifecycle completed without swap or OOM. Under temporary memory limits workers parked; constrained restart retained the remembered count of 3 and recovered from 1 to 2 workers within the observed window. Recovery to 3 was not demonstrated.",
+    "Accept identity-scoped candidate eligibility, with normal runtime confirmation; do not force streaming at startup or extrapolate VM throughput to a full socket."
+  ],
+  "limitations": [
+    "Two pairs per phase in one VM session; descriptive finite-window gains, not a population confidence interval or steady-state peak.",
+    "Physical memory channels and DIMM speed, package power and wall power unmeasured.",
+    "At 18/24-worker contexts, retaining the streaming incumbent after losing challengers is not a new two-cycle streaming promotion.",
+    "Measurements use the frozen recorded revisions, not a later integration build."
+  ]
+}

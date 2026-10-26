@@ -1,0 +1,104 @@
+---
+title: Terima pembayaran ke @name dengan Blocknet ID
+description: Klaim nama pendek Blocknet ID di blocknet.id, lalu terima BNT, bagikan tautan pembayaran, dan tambang di bntpool.com dengan @name, bukan alamat lebih dari 90 karakter.
+tags: [Blocknet ID, Wallet, Pembayaran, bntpool]
+faq:
+  - q: 'Apakah nama pendek Blocknet ID membedakan huruf besar dan kecil?'
+    a: 'Tidak. Nama pendek tidak membedakan huruf besar dan kecil, jadi @Alice, @alice, dan $ALICE semuanya sampai ke wallet yang sama. Nama memakai huruf a sampai z, angka 0 sampai 9, garis bawah, tanda hubung, dan titik, dan panjangnya bisa sampai 64 karakter. Awalan @ dan $ sama-sama berfungsi di mana pun nama diterima.'
+  - q: 'Apakah Blocknet ID gratis?'
+    a: 'Per Oktober 2026, nama sepanjang sembilan karakter atau lebih gratis selama promosi blocknet.id berlangsung, tanpa invoice dan tanpa pembayaran. Nama yang lebih pendek punya harga sekali bayar yang naik semakin pendek namanya, mulai dari 100 BNT untuk delapan karakter. Halaman harga di blocknet.id mencantumkan harga untuk setiap panjang nama.'
+  - q: 'Bisakah saya menambang ke nama pendek Blocknet ID di bntpool.com?'
+    a: 'Bisa. Masukkan @name Anda saat seine meminta alamat pembayaran, atau berikan dengan --address. seine memeriksa catatan bertanda tangan di blocknet.id, menampilkan alamat lengkap yang ditunjuk nama itu, dan menambang ke alamat itu selama seluruh sesi. Nama pendek membutuhkan seine v0.2.16 atau lebih baru, dan bntpool.com juga menerimanya saat login.'
+  - q: 'Apa yang terjadi pada saldo pool saya jika nama saya diarahkan ke alamat baru?'
+    a: 'Saldo yang sudah ada tetap pada alamat yang menghasilkannya, dan bntpool.com membayarnya ke sana seperti biasa. Pool mencatat share, saldo, dan pembayaran berdasarkan alamat lengkap, jadi perubahan nama tidak pernah mengalihkan saldo yang sudah ada. Saat Anda mulai menambang lagi, alamat untuk nama itu dicari ulang dan share baru masuk ke alamat yang baru.'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+Dengan nama pendek Blocknet ID, orang bisa membayar Anda di `@yourname`, Anda bisa membagikan tautan pembayaran yang muat dalam satu pesan chat, dan Anda bisa menambang di bntpool.com ke nama yang sama. Panduan ini membahas cara kerja nama, cara mengklaimnya di blocknet.id, dan cara memakainya di wallet dan di seine.
+
+## Apa itu nama pendek Blocknet ID?
+
+<Answer>
+Nama pendek Blocknet ID adalah nama singkat seperti @alice atau $alice yang menunjuk ke alamat wallet Blocknet Anda. Anda mendaftarkannya di blocknet.id. Wallet, seine, dan bntpool.com mencari nama tersebut, memeriksa bahwa blocknet.id menandatangani catatannya, lalu memakai alamat lengkap yang terhubung dengan nama itu.
+</Answer>
+
+Aturannya sama di mana pun nama diterima:
+
+- **Dua awalan.** `@name` dan `$name` adalah nama yang sama. Pakai yang Anda sukai.
+- **Tidak membedakan huruf besar dan kecil.** `@Alice` dan `@alice` mengarah ke alamat yang sama.
+- **Karakter sederhana.** Huruf a sampai z, angka 0 sampai 9, garis bawah, tanda hubung, dan titik.
+- **Hingga 64 karakter.**
+
+Setiap catatan di blocknet.id ditandatangani. Saat wallet mencari alamat untuk sebuah nama, wallet mengambil catatannya, lalu memeriksa tanda tangan Ed25519-nya terhadap kunci penandatanganan yang dipublikasikan blocknet.id di `https://blocknet.id/.well-known/blocknet-id.json`. Payload yang ditandatangani berisi nama, alamat, dan waktu terakhir diperbarui, dan wallet memastikan ketiganya cocok sebelum memakai alamat tersebut. Setiap nama juga punya halaman publik di blocknet.id yang menampilkan alamatnya, payload yang ditandatangani, dan tanda tangannya, jadi siapa pun bisa memeriksa catatan itu sendiri.
+
+## Mengapa membayar ke nama, bukan ke alamat?
+
+Alamat Blocknet adalah encoding base58 dari public spend key, public view key, dan checksum Anda, yang totalnya 92 atau 93 karakter. Itu terlalu panjang untuk disalin antar aplikasi, dibacakan, atau dimasukkan ke profil. Nama pendek adalah sesuatu yang bisa Anda ucapkan dalam satu kalimat, cetak di stiker, atau taruh di bio.
+
+Anda juga mendapat langkah konfirmasi yang jelas. Saat Anda mengirim ke sebuah nama, wallet mencetak alamat yang ditemukan untuk nama itu dan menandainya sebagai terverifikasi sebelum Anda menyetujui pembayaran. Nama hanya menggantikan alamat yang toh akan Anda bagikan. Di blockchain, pembayarannya adalah transaksi Blocknet biasa ke [stealth address sekali pakai](/id/blog/blocknet-privacy-features/), jadi tetap sama privatnya dengan pembayaran lain.
+
+## Bagaimana cara mendapatkan Blocknet ID?
+
+<Answer>
+Salin alamat wallet Anda, buka blocknet.id, dan cari nama yang Anda inginkan. Jika tersedia, situs menampilkan harganya; tempel alamat Anda dan kirim. Nama sepanjang sembilan karakter atau lebih gratis selama promosi saat ini. Nama Anda langsung berfungsi di wallet, seine, dan bntpool.com setelah terdaftar.
+</Answer>
+
+1. **Salin alamat Anda.** Di wallet baris perintah, perintah `address` mencetaknya, diikuti baris "Get a short name like @name or $name at https://blocknet.id". Dapatkan wallet dari [rilis baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) atau [rilis desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Cari nama.** Buka [blocknet.id](https://blocknet.id), ketik nama di kotak "find a name", lalu tekan Search. Saat Anda mengetik, halaman memberi tahu jika ada karakter yang tidak diizinkan atau namanya terlalu panjang.
+3. **Periksa hasilnya.** Nama yang tersedia menampilkan harganya. Nama yang sudah terdaftar menampilkan alamatnya, kapan terakhir diperbarui, dan tautan ke halaman publiknya.
+4. **Daftarkan.** Tempel alamat wallet Anda dan tekan "Claim free" (atau "Register" untuk nama berbayar).
+
+Harga dikenakan sekali bayar berdasarkan panjang nama. Pada saat tulisan ini dibuat (Oktober 2026), setiap nama sepanjang sembilan karakter atau lebih gratis dalam sebuah promosi, “tanpa invoice, tanpa pembayaran” menurut kata-kata situs itu. Nama delapan karakter seharga 100 BNT, dan nama yang lebih pendek lebih mahal, hingga 6.000 BNT untuk satu karakter. [Halaman harga](https://blocknet.id/pricing) mencantumkan setiap panjang nama.
+
+Untuk mengelola nama Anda nanti, gunakan "sign in" di blocknet.id dengan alamat Blocknet Anda. Halaman pengelolaan adalah tempat Anda mengarahkan nama ke alamat lain.
+
+## Bagaimana cara mengirim BNT ke sebuah nama?
+
+Di wallet baris perintah, tulis nama di tempat alamat:
+
+```
+send @rock 100 "hello"
+```
+
+Wallet mencari alamat untuk `@rock`, mencetak `Resolved @rock -> <address>` dengan tanda terverifikasi, lalu meminta Anda mengonfirmasi. Konfirmasi menampilkan nama, alamat lengkap, biaya, dan memo Anda. Bentuk `$rock` bekerja dengan cara yang sama, dan `send` menerima jumlah bulat maupun pecahan.
+
+API wallet mengubah nama menjadi alamat dengan cara yang sama untuk setiap penerima dalam request pengiriman, jadi alat yang dibangun di atas wallet langsung mendukung pembayaran ke nama tanpa kerja tambahan.
+
+## Bagaimana tautan pembayaran bekerja dengan nama?
+
+[Tautan pembayaran](/id/blog/blocknet-payment-links/) membawa penerima, jumlah, dan memo opsional. Blocknet mendukung dua bentuk:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+Tautan bntpay.com bisa memakai nama sebagai pengganti alamat, jadi tetap pendek. Membukanya menampilkan halaman berisi "Pay $yourname", jumlah, dan memo, ditambah tombol "Open in Wallet" yang membuka pembayaran sebagai tautan `blocknet://`. Jika Anda menempelkan salah satu bentuk ke wallet baris perintah, wallet mengisi pengiriman untuk Anda konfirmasi. Sertakan kolom `amount`; memo bersifat opsional dan menampung hingga 124 byte teks.
+
+Dengan begitu, Anda mudah memasang satu tautan untuk tip atau mengirim invoice dalam satu pesan.
+
+## Bagaimana cara menambang ke @name Anda?
+
+seine dan bntpool.com sama-sama menerima nama pendek sebagai alamat pembayaran Anda. Saat pertama kali menjalankan [seine](/id/#download), masukkan `@yourname` di prompt alamat dan terima pool bawaan. Untuk memberikannya lewat baris perintah, beri tanda kutip:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Beri tanda kutip pada nama pendek di perintah shell, terutama bentuk `$name`, agar shell meneruskannya tanpa perubahan. Nama pendek membutuhkan seine v0.2.16 atau lebih baru.
+</Note>
+
+Inilah yang terjadi selanjutnya:
+
+- **seine mencari alamat untuk nama itu saat dijalankan.** seine memverifikasi catatan bertanda tangan dari blocknet.id, memeriksa alamatnya, mencatat alamat lengkap yang ditemukan di log, dan memakai alamat itu selama seluruh sesi, termasuk saat menyambung ulang ke pool.
+- **Pool juga menerima nama saat login.** bntpool.com memverifikasi pemetaan bertanda tangan saat penambang terhubung dengan nama, dan memakai alamat lengkap yang ditunjuk nama itu untuk job, share, saldo, dan pembayaran.
+- **Anda bisa mencari statistik Anda dengan nama.** Halaman statistik di [bntpool.com](https://bntpool.com) menerima `@name` dan `$name`, jadi Anda bisa memantau hashrate dan saldo tanpa menempelkan alamat.
+- **Nama yang tersimpan dicari ulang alamatnya pada sesi berikutnya.** seine menyimpan nama di konfigurasinya, jadi setiap kali dijalankan, seine memakai alamat yang ditunjuk nama Anda saat itu.
+
+Karena saldo milik alamat lengkap, perubahan nama di kemudian hari tidak pernah mengalihkan saldo yang sudah ada. Apa pun yang sudah Anda hasilkan tetap pada alamat yang menghasilkannya dan dibayarkan ke sana, sementara penambangan baru masuk ke alamat yang baru. Nama yang sama juga berfungsi dalam mode solo ke node Anda sendiri.
+
+Baru mengenal penambangan? [Panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) menjelaskan cara mengunduh seine, perangkat keras, dan pembayaran di bntpool.com.
+
+<CTA target="pool" title="Menambang ke @name Anda" text="bntpool.com menerima nama pendek Blocknet ID Anda sebagai login pembayaran. Mulai menambang dalam beberapa menit." />

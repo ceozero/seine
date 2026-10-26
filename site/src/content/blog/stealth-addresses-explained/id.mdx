@@ -1,0 +1,94 @@
+---
+title: 'Stealth address dijelaskan: cara kerja alamat sekali pakai'
+description: Stealth address dijelaskan dengan bahasa sederhana. Pelajari bagaimana alamat sekali pakai, view key, spend key, dan pemindaian wallet menjaga privasi setiap pembayaran Anda.
+tags: [Privasi, Stealth address, Wallet, Blocknet]
+faq:
+  - q: 'Apakah stealth address sama dengan alamat sekali pakai?'
+    a: 'Keduanya adalah dua bagian dari satu sistem. Stealth address adalah alamat yang Anda terbitkan, terdiri dari public spend key dan public view key. Alamat sekali pakai adalah kunci baru yang diturunkan pengirim dari alamat itu untuk satu pembayaran. Hanya alamat sekali pakai yang muncul di rantai, dan alamat yang Anda terbitkan tidak pernah muncul.'
+  - q: 'Bisakah seseorang melihat saldo saya jika tahu stealth address saya?'
+    a: 'Tidak. Mengetahui alamat yang Anda terbitkan tidak membuat siapa pun bisa menemukan pembayaran Anda, karena setiap pembayaran masuk ke kunci sekali pakai yang tampak tidak berhubungan dengan alamat itu. Untuk menemukannya diperlukan private view key Anda, jadi hanya wallet Anda yang bisa mendaftar apa yang Anda terima. Di Blocknet jumlahnya juga disembunyikan, sehingga output itu sendiri pun tidak menunjukkan nilai.'
+  - q: 'Apa yang bisa dilakukan seseorang dengan private view key saya?'
+    a: 'Private view key memungkinkan pemegangnya menemukan pembayaran yang dikirim kepada Anda serta membaca jumlah dan memonya. Kunci ini tidak bisa membelanjakan apa pun, karena pembelanjaan membutuhkan private spend key. Di Blocknet, perintah viewkeys mengubah view key Anda menjadi wallet view-only, yang berguna untuk memantau dana di komputer kedua. Bagikan hanya kepada orang yang Anda percayai.'
+  - q: 'Apakah saya harus mengaktifkan stealth address di Blocknet?'
+    a: 'Tidak. Setiap pembayaran Blocknet otomatis masuk ke stealth address sekali pakai, karena format transaksinya tidak punya mode transparan. Wallet Anda membuat kunci sekali pakai saat Anda mengirim dan menemukan pembayaran masuk dengan view key Anda saat sinkronisasi. Tidak ada yang perlu dikonfigurasi, baik Anda membayar ke alamat maupun ke @name.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Stealth address (alamat siluman) memungkinkan Anda menerbitkan satu alamat, tetapi setiap pembayaran kepada Anda tetap masuk ke tempat baru di rantai. Panduan ini menjelaskan cara kerjanya, apa fungsi view key dan spend key Anda masing-masing, dan bagaimana wallet menemukan pembayarannya sendiri, dengan Blocknet sebagai contoh.
+
+## Apa itu stealth address?
+
+<Answer>
+Stealth address adalah alamat publik yang tidak pernah muncul di blockchain. Alamat ini memuat dua public key, spend key dan view key. Untuk setiap pembayaran, wallet pengirim menggabungkan keduanya dengan angka acak baru untuk membuat alamat sekali pakai yang hanya bisa dikenali dan dibelanjakan oleh penerima.
+</Answer>
+
+Di buku besar publik, alamat biasa muncul di setiap pembayaran yang diterimanya. Alamat Bitcoin standar bekerja seperti ini: siapa pun yang mengetahuinya bisa mencari setiap pembayaran dan menjumlahkan totalnya. Karena itulah banyak wallet Bitcoin memberikan alamat baru untuk setiap pembayaran.
+
+Stealth address melakukan tugas itu untuk Anda. Anda membagikan satu alamat, di situs web, di profil, atau sebagai `@name`, dan setiap pengirim menurunkan alamat sekali pakai yang berbeda darinya. Sepuluh pembayaran kepada Anda menjadi sepuluh output yang tidak memiliki kesamaan yang terlihat satu sama lain maupun dengan alamat yang Anda bagikan. Tidak perlu komunikasi bolak-balik: pengirim menghitung alamat sekali pakai sendirian, dari alamat publik Anda dan sebuah angka acak.
+
+## Dari mana asal stealth address?
+
+Desain alamat sekali pakai yang dipakai Monero, Blocknet, dan koin lainnya berasal dari whitepaper CryptoNote v2.0 karya Nicolas van Saberhagen, bertanggal 17 Oktober 2013. Whitepaper itu menyebut gagasannya "pembayaran yang tidak dapat dihubungkan" (unlinkable payments) dan menjelaskan pengirim yang membuat "public key sekali pakai" dari alamat penerima. Dokumentasi Monero menggambarkan stealth address sebagai cara bagi pengirim untuk membuat "alamat sekali pakai acak untuk setiap transaksi atas nama penerima."
+
+Gagasan ini telah menyebar di luar [koin privasi](/id/blog/what-is-a-privacy-coin/). [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) di Bitcoin memungkinkan alamat Bitcoin statis menerima pembayaran yang tidak bisa dihubungkan di rantai, dan [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) di Ethereum, yang dibuat pada 2022, menstandarkan stealth address untuk akun Ethereum. Keduanya adalah fitur opsional di rantai tersebut. Di Blocknet, setiap pembayaran memakai alamat sekali pakai.
+
+## Bagaimana cara kerja stealth address?
+
+<Answer>
+Pengirim memilih angka acak r, menerbitkan R = r·G di transaksi, dan menggabungkan r dengan public view key penerima menjadi rahasia bersama. Menambahkan rahasia itu ke public spend key menghasilkan kunci sekali pakai. Penerima membangun ulang rahasia yang sama dari R dan private view key miliknya, sehingga hanya dia yang menemukan pembayaran itu.
+</Answer>
+
+Wallet Anda memegang dua pasang kunci. Setiap private key adalah angka rahasia (s untuk spend, v untuk view), dan setiap public key adalah angka itu dikalikan titik kurva tetap G. Alamat Anda hanyalah dua public key itu, S dan V. Berikut seluruh pertukarannya:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+Kuncinya adalah pertukaran Diffie-Hellman. Pengirim menghitung r·V dan penerima menghitung v·R, dan keduanya sampai di titik yang sama, karena masing-masing sama dengan r·v·G. Tidak ada orang lain yang tahu r atau v, jadi tidak ada orang lain yang bisa menghitungnya. Hash dari titik itu (H) menghasilkan rahasia bersama, dan kunci sekali pakai P adalah rahasia itu, dalam bentuk titik, yang ditambahkan ke public spend key Anda.
+
+Saat memindai, Anda menghitung ulang rahasia dari R dan private view key Anda, lalu memeriksa apakah hasilnya adalah P. Jika ya, output itu milik Anda. Untuk membelanjakannya, wallet Anda menambahkan rahasia yang sama ke private spend key Anda, yang menghasilkan private key x untuk satu output itu.
+
+Blocknet mengikuti desain ini di grup Ristretto atas Curve25519, dengan hash SHA-256 di bawah tag domain khusus Blocknet. Blocknet juga mencampurkan posisi setiap output dalam transaksi ke dalam hash, sehingga dua output untuk orang yang sama dalam satu transaksi tetap mendapat kunci yang tidak berhubungan. Rahasia bersama yang sama juga menurunkan blinding yang menyembunyikan jumlah output dan kunci yang mengenkripsi memonya, sehingga penerima bisa membaca keduanya.
+
+## Apa fungsi view key dan spend key?
+
+Pemisahan kunci memberi Anda dua tingkat akses:
+
+- **Private view key menemukan pembayaran.** Dengan v dan public spend key Anda, wallet bisa mengenali setiap output yang dikirim kepada Anda, mendekripsi jumlahnya, dan membaca memonya.
+- **Private spend key membelanjakannya.** Hanya s yang bisa mengubah output yang ditemukan menjadi private key x yang bisa menandatangani pembelanjaan.
+
+Pemisahan itu memungkinkan adanya wallet watch-only. Di wallet baris perintah Blocknet, `viewkeys` membuat file wallet terpisah dari view key Anda. Bantuan wallet menggambarkannya sebagai file yang "bisa memantau tetapi tidak bisa membelanjakan", berguna saat "Anda ingin akses watch-only di mesin lain". Saat Anda menjalankannya, wallet menjelaskan apa yang sedang dibuatnya:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Berikan wallet view-only hanya kepada orang yang boleh melihat riwayat Anda, misalnya akuntan Anda, atau simpan di komputer kedua milik Anda sendiri. Bagaimanapun juga, wallet itu bisa memantau dana masuk sementara spend key Anda tetap berada di mesin yang Anda percayai.
+
+## Bagaimana wallet menemukan pembayarannya?
+
+Karena kunci sekali pakai tampak tidak berhubungan dengan alamat Anda, tidak ada apa pun di rantai yang menandai output mana milik Anda. Wallet Anda memeriksanya sendiri. Untuk setiap transaksi di setiap blok baru, wallet mengambil R, menghitung rahasia bersama dengan private view key Anda, dan menguji setiap output dengan rumus di atas. Inilah yang dilakukan wallet saat sinkronisasi.
+
+Pemindai Blocknet menjaga proses ini tetap cepat. Langkah yang mahal, yaitu mengalikan R dengan view key Anda, hanya dijalankan sekali per transaksi, lalu setiap output dalam transaksi itu diperiksa terhadap hasilnya. Saat sebuah output cocok, wallet mendekripsi jumlahnya dan memastikannya terhadap Pedersen commitment output itu sebelum menambahkannya ke saldo Anda.
+
+Pemindaian juga membuat pemulihan menjadi sederhana. Kedua pasang kunci Blocknet berasal dari [seed pemulihan](/id/blog/seed-phrase-explained/) 12 kata Anda, jadi memulihkan seed di komputer baru akan membangun ulang kuncinya, dan wallet memindai ulang rantai untuk menemukan setiap output milik Anda. [Panduan wallet Blocknet](/id/blog/blocknet-wallet-for-mining/) menunjukkan cara mencadangkan seed dan memulihkannya.
+
+## Stealth address di Blocknet
+
+Di Blocknet, stealth address hanyalah alamat Anda. Alamat itu adalah encoding base58 dari public spend key, public view key, dan checksum 4 byte, dengan panjang 92 atau 93 karakter. Setiap pembayaran kepada Anda memakainya, karena format transaksinya tidak punya mode transparan. Imbalan blok juga masuk ke kunci sekali pakai, jadi output coinbase penambang solo ditemukan oleh pemindaian yang sama.
+
+Stealth address bekerja bersama lapisan privasi Blocknet lainnya: [ring berisi 16](/id/blog/ring-signatures-explained/) menyembunyikan output mana asal sebuah pembelanjaan, [commitment](/id/blog/bulletproofs-explained/) menyembunyikan jumlah, dan Dandelion++ menyembunyikan dari mana sebuah transaksi masuk ke jaringan. [Panduan privasi Blocknet](/id/blog/blocknet-privacy-features/) menguraikan setiap lapisan.
+
+Stealth address juga bekerja dengan nama. [Nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) seperti `@yourname` dipetakan secara publik ke alamat Anda, sehingga pengirim bisa mencarinya di blocknet.id. Pembayarannya sendiri tetap masuk ke kunci sekali pakai yang baru, jadi nama Anda tidak menunjukkan apa pun tentang apa yang telah Anda terima.
+
+Karena itu nama pendek menjadi alamat pembayaran yang praktis untuk menambang. Jalankan [seine](/id/#download), masukkan alamat Anda atau `@yourname` saat diminta, dan terima pool bawaan, bntpool.com. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membahas sisanya, dan wallet Anda menemukan BNT yang Anda hasilkan dengan pemindaian view key yang sama seperti dijelaskan di atas.
+
+<CTA target="seine" title="Tambang BNT ke alamat Anda sendiri" text="Unduh seine, masukkan alamat Blocknet atau @name Anda, dan tambang di bntpool.com dalam beberapa menit." />

@@ -1,0 +1,173 @@
+---
+title: 'Obtenir un portefeuille et une adresse Blocknet pour miner'
+description: 'Installez le portefeuille Blocknet officiel, sauvegardez votre phrase de récupération de 12 mots, copiez l''adresse où miner et voyez arriver vos paiements bntpool.com.'
+tags: [Portefeuille, Guide de minage, bntpool]
+faq:
+  - q: 'Ai-je besoin d''un portefeuille Blocknet avant de commencer à miner ?'
+    a: 'Il vous faut une adresse Blocknet vers laquelle miner, et le portefeuille officiel vous en fournit une. Créez un portefeuille dans le portefeuille en ligne de commande ou de bureau, copiez l''adresse et collez-la dans seine. Le portefeuille lui-même reste sur votre propre ordinateur. seine et bntpool.com n''ont jamais besoin que de l''adresse, ou d''un nom court Blocknet ID qui pointe vers elle.'
+  - q: 'Combien de mots compte une phrase de récupération Blocknet ?'
+    a: 'Une phrase de récupération Blocknet compte 12 mots. Dans le portefeuille en ligne de commande, la commande seed l''affiche après un avertissement et la saisie du mot de passe de votre portefeuille. Écrivez les mots sur papier et conservez-les hors ligne. Avec ces 12 mots, la commande import peut reconstruire votre portefeuille sur n''importe quelle machine, même si le fichier du portefeuille et le mot de passe sont perdus.'
+  - q: 'Quand les paiements de bntpool.com apparaissent-ils dans mon portefeuille ?'
+    a: 'Un bloc du pool a besoin de 60 confirmations, soit environ cinq heures avec le temps de bloc de cinq minutes de Blocknet, avant que ses récompenses soient versées. Dès que votre solde confirmé sur le pool atteint 0,1 BNT, le pool l''envoie à votre adresse. Le paiement apparaît dans l''historique comme une transaction ordinaire et devient dépensable après 10 confirmations, soit environ 50 minutes.'
+  - q: 'Puis-je utiliser la même adresse sur plusieurs machines de minage ?'
+    a: 'Oui. Chaque machine qui fait tourner seine peut miner vers la même adresse ou le même nom court Blocknet ID, et bntpool.com additionne leurs shares dans un seul solde. La page de statistiques du pool liste chaque machine connectée sous votre adresse. Le portefeuille et sa phrase de récupération restent tout le temps sur votre propre ordinateur.'
+sourceHash: 4954bfd74d20
+translation: draft
+---
+
+Pour miner Blocknet, il vous faut une adresse qui recevra vos récompenses, et le portefeuille officiel vous en donne une en quelques minutes. Ce guide montre comment créer un portefeuille avec le portefeuille en ligne de commande ou de bureau, sauvegarder sa phrase de récupération, trouver l'adresse à coller dans seine et vérifier votre solde quand bntpool.com vous paie.
+
+## Quel portefeuille Blocknet utiliser pour miner ?
+
+<Answer>
+Utilisez l'un des deux portefeuilles officiels de Blocknet Privacy : le portefeuille en ligne de commande, qui fonctionne sous Windows, macOS et Linux, ou le portefeuille de bureau pour les mêmes systèmes. Tous deux font tourner un nœud Blocknet complet sur votre ordinateur et vous donnent une adresse de réception vers laquelle miner sur bntpool.com avec seine.
+</Answer>
+
+- **Portefeuille en ligne de commande.** Le programme `blocknet` installe, démarre et met à jour un core Blocknet, le processus d'arrière-plan qui fait tourner le nœud, le portefeuille et le réseau. Vous gérez votre portefeuille depuis un shell interactif. Téléchargez-le depuis les [versions en ligne de commande](https://github.com/blocknetprivacy/blocknet/releases/latest), qui proposent des builds pour Windows, macOS et Linux.
+- **Portefeuille de bureau.** Un portefeuille graphique qui intègre le daemon Blocknet. Téléchargez-le depuis les [versions de bureau](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Choisissez celui que vous préférez. Les étapes ci-dessous décrivent le portefeuille en ligne de commande, car chaque commande y est documentée, puis l'installation de la version de bureau.
+
+## Comment créer un portefeuille avec le portefeuille en ligne de commande
+
+1. **Installez et démarrez un core.** Décompressez la version téléchargée et lancez l'assistant de configuration :
+
+   ```sh
+   blocknet setup
+   ```
+
+   L'assistant vous demande si vous voulez garder votre nœud à jour automatiquement, télécharge le dernier core et propose de le démarrer. Sous Windows, le programme s'appelle `blocknet.exe` : lancez donc `blocknet.exe setup`. Pour sauter l'assistant, lancez `blocknet install latest` puis `blocknet start`.
+
+2. **Ouvrez le shell.** Attachez-vous au core en cours d'exécution :
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Vous obtenez une invite `>`. Fermer le shell avec `quit` laisse le core tourner : vous pouvez vous rattacher à tout moment.
+
+3. **Créez le portefeuille.** Tapez `load`. Le portefeuille liste les fichiers de portefeuille qu'il trouve et propose « Create a new wallet ». Choisissez cette option, saisissez un nom et un mot de passe, et le core crée un nouveau portefeuille avec une phrase de récupération toute neuve :
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Le portefeuille est un unique fichier `.wallet.dat`, et votre mot de passe chiffre sa clé de dépense. Le core mémorise le chemin du portefeuille, si bien que le prochain `blocknet start` le charge pour vous. Blocknet copie aussi un portefeuille chargé dans `~/.config/bnt/wallets/`, ce qui vous donne une seconde copie à un emplacement connu.
+
+## Comment sauvegarder votre phrase de récupération ?
+
+Votre phrase de récupération (recovery seed) est la sauvegarde la plus importante. Elle compte 12 mots, et avec eux vous pouvez reconstruire le portefeuille sur n'importe quel ordinateur, même si vous perdez le fichier du portefeuille ou oubliez le mot de passe. Blocknet ne stocke jamais votre mot de passe : la phrase de récupération est donc aussi le moyen de vous en sortir si vous l'oubliez.
+
+Affichez-la avec la commande `seed`. Le portefeuille affiche un avertissement, vous demande de confirmer puis de saisir votre mot de passe, et affiche ensuite les mots :
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Écrivez les 12 mots sur papier et conservez-les en lieu sûr, hors ligne. Le guide du portefeuille recommande de ne pas les enregistrer dans un fichier texte, une application de notes ou un stockage cloud, car quiconque possède les mots contrôle les fonds. Le guide des [phrases de récupération](/fr/blog/seed-phrase-explained/) explique comment les 12 mots deviennent vos clés et comment bien les conserver.
+
+Pour restaurer plus tard, lancez `import`, choisissez `1) 12-word recovery seed`, tapez les mots et donnez un nom et un mot de passe au nouveau portefeuille. Le core analyse alors la chaîne à la recherche de vos sorties.
+
+## Comment trouver votre adresse Blocknet ?
+
+<Answer>
+Dans le portefeuille en ligne de commande, tapez address (ou addr) à l'invite du shell. Le portefeuille affiche votre adresse de réception, une chaîne de 92 ou 93 caractères, suivie d'un renvoi vers blocknet.id pour obtenir un nom court. Copiez l'adresse entière et collez-la dans seine quand il demande une adresse de paiement.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+C'est l'adresse que vous donnez à seine. Quand vous lancez [seine](/fr/#download) pour la première fois, il vous demande votre adresse de paiement puis un pool ; collez l'adresse et appuyez sur Entrée pour accepter bntpool.com. Vous pouvez aussi la passer directement :
+
+```sh
+./seine --address <your-address>
+```
+
+Une fois que seine mine, le panneau du solde du pool sur son [tableau de bord](/fr/blog/seine-dashboard-explained/) affiche les six premiers et les six derniers caractères de l'adresse vers laquelle vous minez, pour que vous puissiez vérifier qu'elle correspond à votre portefeuille.
+
+Si vous préférez miner vers quelque chose de plus court, un [nom court Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) comme `@yourname` pointe vers cette adresse et fonctionne dans seine et sur bntpool.com.
+
+## Installer le portefeuille de bureau
+
+La dernière version du portefeuille de bureau (v0.22.0, publiée le 15 octobre 2026) propose ces téléchargements :
+
+| Système | Fichier |
+|---|---|
+| Windows x86_64 | Installeur `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Chaque version inclut un fichier `SHA256SUMS.txt`, pour que vous puissiez vérifier votre téléchargement avant l'installation :
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Sous Linux, installez le `.deb` ou lancez directement l'`.AppImage`. Sous macOS, déplacez l'application dans Applications et exécutez une fois cette commande dans le Terminal avant le premier lancement, comme l'indique le README :
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Sous Windows, si Defender affiche un avertissement pour l'installeur, cliquez sur « Informations complémentaires » puis sur « Exécuter quand même ».
+
+L'application fait tourner son daemon Blocknet intégré sur votre ordinateur et communique avec lui via `127.0.0.1`, sans aucune requête vers des services extérieurs. Créez votre portefeuille dans l'application, notez sa phrase de récupération et copiez votre adresse de réception dans seine. Le portefeuille de bureau ouvre aussi les [liens de paiement](/fr/blog/blocknet-payment-links/) `blocknet://` et remplit le formulaire d'envoi pour que vous le vérifiiez.
+
+## Gardez vos clés sur votre propre ordinateur
+
+Une machine de minage n'a besoin que de votre adresse. seine n'a besoin que d'une adresse ou d'un nom court pour miner : le fichier du portefeuille et la phrase de récupération peuvent donc rester sur l'ordinateur auquel vous faites confiance. C'est surtout important pour les serveurs loués, les rigs partagés et les machines auxquelles d'autres personnes ont accès.
+
+- **Faites tourner le portefeuille chez vous, minez n'importe où.** Mettez la même adresse sur chaque machine qui fait tourner seine. bntpool.com additionne leurs shares dans un seul solde.
+- **Suivez votre progression sans clés.** Recherchez votre adresse sur [bntpool.com](https://bntpool.com) pour voir votre hashrate, vos shares et votre solde depuis n'importe quel navigateur.
+- **Accès en lecture seule.** Si vous voulez voir les fonds entrants sur un second ordinateur, `viewkeys` exporte des clés de lecture seule. Un portefeuille en lecture seule affiche les fonds entrants et ne peut ni envoyer ni signer.
+- **Verrouillez quand vous vous absentez.** `lock` bloque les dépenses jusqu'à ce que vous fassiez `unlock` avec votre mot de passe.
+
+## Comment les paiements de minage apparaissent-ils dans votre portefeuille ?
+
+bntpool.com verse les récompenses une fois que leur bloc a atteint sa maturité. Un bloc du pool a besoin de 60 confirmations, soit environ cinq heures avec le temps de bloc de cinq minutes de Blocknet. Quand votre solde confirmé atteint le minimum de 0,1 BNT, le pool l'envoie à votre adresse sous forme de transaction Blocknet normale.
+
+Dans le portefeuille, consultez `balance` (ou `bal`) :
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Un nouveau paiement apparaît d'abord sous `confirming`. Les transactions ordinaires deviennent dépensables après 10 confirmations, soit environ 50 minutes, puis passent sous `spendable`. La commande `history` liste les transactions entrantes de la plus ancienne à la plus récente, avec pour chacune son bloc, son montant et son type : les paiements du pool apparaissent comme `regular`, et les blocs que vous trouvez vous-même en mode solo comme `coinbase`, qui nécessitent 60 confirmations avant de pouvoir être dépensés.
+
+Votre portefeuille affiche un paiement dès que son nœud a rattrapé la chaîne. `status` affiche `Syncing: false` quand c'est le cas, et `sync` réanalyse les blocs téléchargés à la recherche de vos sorties.
+
+Vous débutez dans le minage ? Le [guide pour miner Blocknet](/fr/blog/how-to-mine-blocknet/) explique comment télécharger seine, choisir le nombre de threads et ce qui vous attend sur bntpool.com.
+
+<CTA target="pool" title="Minez vers votre nouvelle adresse" text="Collez votre adresse Blocknet dans seine, acceptez bntpool.com et voyez les paiements arriver dans votre portefeuille dès que votre solde atteint 0,1 BNT." />

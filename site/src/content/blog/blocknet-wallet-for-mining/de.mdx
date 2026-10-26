@@ -1,0 +1,173 @@
+---
+title: Blocknet-Wallet und Adresse fürs Mining einrichten
+description: Richte die offizielle Blocknet-Wallet ein, sichere den 12-Wörter-Recovery-Seed, kopiere deine Mining-Adresse und sieh Auszahlungen von bntpool.com im Guthaben ankommen.
+tags: [Wallet, Mining-Anleitung, bntpool]
+faq:
+  - q: 'Brauche ich eine Blocknet-Wallet, bevor ich mit dem Mining anfange?'
+    a: 'Du brauchst eine Blocknet-Adresse, auf die du minst, und die offizielle Wallet gibt dir eine. Erstelle eine Wallet in der Kommandozeilen- oder Desktop-Wallet, kopiere die Adresse und füge sie in seine ein. Die Wallet selbst bleibt auf deinem eigenen Computer. seine und bntpool.com brauchen immer nur die Adresse oder einen Blocknet-ID-Kurznamen, der auf sie zeigt.'
+  - q: 'Aus wie vielen Wörtern besteht ein Blocknet-Recovery-Seed?'
+    a: 'Ein Blocknet-Recovery-Seed besteht aus 12 Wörtern. In der Kommandozeilen-Wallet zeigt ihn der Befehl seed nach einer Warnung und deinem Wallet-Passwort an. Schreib die Wörter auf Papier und bewahre sie offline auf. Mit diesen 12 Wörtern kann der Befehl import deine Wallet auf jedem Rechner wiederherstellen, selbst wenn Wallet-Datei und Passwort verloren sind.'
+  - q: 'Wann erscheinen Auszahlungen von bntpool.com in meiner Wallet?'
+    a: 'Ein Pool-Block braucht 60 Bestätigungen, bei Blocknets Blockzeit von fünf Minuten etwa fünf Stunden, bevor die Belohnungen dafür ausgezahlt werden. Sobald dein bestätigtes Pool-Guthaben 0,1 BNT erreicht, überweist der Pool es an deine Adresse. Die Auszahlung erscheint im Verlauf als normale Transaktion und ist nach 10 Bestätigungen, etwa 50 Minuten, verfügbar.'
+  - q: 'Kann ich dieselbe Adresse auf mehreren Mining-Rechnern verwenden?'
+    a: 'Ja. Jeder Rechner mit seine kann auf dieselbe Adresse oder denselben Blocknet-ID-Kurznamen minen, und bntpool.com fasst ihre Shares zu einem Guthaben zusammen. Die Statistikseite des Pools listet jeden verbundenen Rechner unter deiner Adresse auf. Die Wallet und ihr Recovery Seed bleiben die ganze Zeit auf deinem eigenen Computer.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Um Blocknet zu minen, brauchst du eine Adresse für deine Belohnungen, und die offizielle Wallet gibt dir in wenigen Minuten eine. Diese Anleitung zeigt, wie du mit der Kommandozeilen- oder Desktop-Wallet eine Wallet erstellst, ihren Recovery Seed sicherst, die Adresse findest, die du in seine einfügst, und dein Guthaben prüfst, wenn bntpool.com dich bezahlt.
+
+## Welche Blocknet-Wallet solltest du fürs Mining verwenden?
+
+<Answer>
+Nimm eine der beiden offiziellen Wallets von Blocknet Privacy: die Kommandozeilen-Wallet, die unter Windows, macOS und Linux läuft, oder die Desktop-Wallet für dieselben Systeme. Beide betreiben einen vollständigen Blocknet-Node auf deinem Computer und geben dir eine Empfangsadresse, auf die du mit seine auf bntpool.com minen kannst.
+</Answer>
+
+- **Kommandozeilen-Wallet.** Das Programm `blocknet` installiert, startet und aktualisiert einen Blocknet-Core, den Hintergrundprozess, der Node, Wallet und Netzwerk betreibt. Deine Wallet verwaltest du in einer interaktiven Shell. Lade sie aus den [Kommandozeilen-Releases](https://github.com/blocknetprivacy/blocknet/releases/latest) herunter, die Builds für Windows, macOS und Linux enthalten.
+- **Desktop-Wallet.** Eine grafische Wallet, die den Blocknet-Daemon mitbringt. Lade sie aus den [Desktop-Releases](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) herunter.
+
+Nimm, was dir lieber ist. Die folgenden Schritte gehen die Kommandozeilen-Wallet durch, weil jeder Befehl dokumentiert ist, und behandeln danach die Desktop-Installation.
+
+## So erstellst du eine Wallet mit der Kommandozeilen-Wallet
+
+1. **Einen Core installieren und starten.** Entpacke das Release und starte den Einrichtungsassistenten:
+
+   ```sh
+   blocknet setup
+   ```
+
+   Der Assistent fragt, ob dein Node automatisch aktuell gehalten werden soll, lädt den neuesten Core herunter und bietet an, ihn zu starten. Unter Windows heißt das Programm `blocknet.exe`, du führst also `blocknet.exe setup` aus. Um den Assistenten zu überspringen, führe `blocknet install latest` und dann `blocknet start` aus.
+
+2. **Die Shell öffnen.** Verbinde dich mit dem laufenden Core:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Du bekommst eine `>`-Eingabeaufforderung. Wenn du die Shell mit `quit` schließt, läuft der Core weiter, du kannst dich also jederzeit wieder verbinden.
+
+3. **Die Wallet erstellen.** Tippe `load`. Die Wallet listet alle gefundenen Wallet-Dateien auf und bietet „Create a new wallet“ an. Wähle diese Option, gib einen Namen und ein Passwort ein, und der Core erstellt eine neue Wallet mit einem frischen Recovery Seed:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Die Wallet ist eine einzelne `.wallet.dat`-Datei, und dein Passwort verschlüsselt ihren Spend Key. Der Core merkt sich den Pfad der Wallet, sodass der nächste `blocknet start` sie für dich lädt. Blocknet kopiert eine geladene Wallet außerdem nach `~/.config/bnt/wallets/`, womit du eine zweite Kopie an einem bekannten Ort hast.
+
+## Wie sicherst du deinen Recovery Seed?
+
+Dein Recovery Seed ist die wichtigste Sicherung. Er besteht aus 12 Wörtern, und mit ihnen kannst du die Wallet auf jedem Computer wiederherstellen, selbst wenn du die Wallet-Datei verlierst oder das Passwort vergisst. Blocknet speichert dein Passwort nie, der Seed ist also auch der Weg zurück, wenn du es vergessen hast.
+
+Zeig ihn mit dem Befehl `seed` an. Die Wallet gibt eine Warnung aus, bittet dich um Bestätigung und um dein Passwort und zeigt dann die Wörter:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Schreib die 12 Wörter auf Papier und bewahre sie an einem sicheren Ort offline auf. Die Wallet-Anleitung rät davon ab, sie in einer Textdatei, einer Notiz-App oder einem Cloud-Speicher abzulegen, weil jeder, der die Wörter hat, über das Guthaben verfügt. Der Artikel über [Seed-Phrasen](/de/blog/seed-phrase-explained/) erklärt, wie aus den 12 Wörtern deine Schlüssel werden und wie du sie gut aufbewahrst.
+
+Zum späteren Wiederherstellen führst du `import` aus, wählst `1) 12-word recovery seed`, tippst die Wörter ein und gibst der neuen Wallet einen Namen und ein Passwort. Der Core durchsucht dann die Chain nach deinen Outputs.
+
+## Wie findest du deine Blocknet-Adresse?
+
+<Answer>
+Tippe in der Kommandozeilen-Wallet address (oder addr) in die Shell. Die Wallet gibt deine Empfangsadresse aus, eine Zeichenkette aus 92 oder 93 Zeichen, gefolgt von einem Hinweis auf blocknet.id für einen Kurznamen. Kopiere die ganze Adresse und füge sie in seine ein, wenn es nach einer Auszahlungsadresse fragt.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Diese Adresse gibst du in seine ein. Wenn du [seine](/de/#download) zum ersten Mal startest, fragt es nach deiner Auszahlungsadresse und dann nach einem Pool; füge die Adresse ein und drücke Enter, um bntpool.com zu übernehmen. Du kannst sie auch direkt übergeben:
+
+```sh
+./seine --address <your-address>
+```
+
+Sobald seine mint, zeigt das Pool-Guthaben-Feld im [Dashboard](/de/blog/seine-dashboard-explained/) die ersten und letzten sechs Zeichen der Adresse, auf die du minst, sodass du prüfen kannst, ob sie zu deiner Wallet passt.
+
+Wenn du lieber auf etwas Kürzeres minen willst, zeigt ein [Blocknet-ID-Kurzname](/de/blog/blocknet-id-pay-by-name/) wie `@yourname` auf diese Adresse und funktioniert in seine und auf bntpool.com.
+
+## Die Desktop-Wallet einrichten
+
+Das neueste Release der Desktop-Wallet (v0.22.0, veröffentlicht am 15. Oktober 2026) hat diese Downloads:
+
+| System | Datei |
+|---|---|
+| Windows x86_64 | `.exe`-Installer |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Jedes Release enthält eine `SHA256SUMS.txt`, mit der du deinen Download vor der Installation prüfen kannst:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Unter Linux installierst du das `.deb` oder startest das `.AppImage` direkt. Unter macOS verschiebst du die App in den Ordner „Programme“ und führst vor dem ersten Start einmal diesen Befehl im Terminal aus, wie es die README vorgibt:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Wenn Defender unter Windows beim Installer eine Meldung zeigt, klicke auf „Weitere Informationen“ und dann auf „Trotzdem ausführen“.
+
+Die App betreibt ihren mitgelieferten Blocknet-Daemon auf deinem Computer und spricht über `127.0.0.1` mit ihm, ohne Anfragen an externe Dienste zu senden. Erstelle deine Wallet in der App, schreib ihren Recovery Seed auf und kopiere deine Empfangsadresse in seine. Die Desktop-Wallet öffnet außerdem `blocknet://`-[Zahlungslinks](/de/blog/blocknet-payment-links/) und füllt das Sendeformular aus, damit du es prüfen kannst.
+
+## Behalte deine Schlüssel auf deinem eigenen Computer
+
+Ein Mining-Rechner braucht nur deine Adresse. seine braucht zum Minen nur eine Adresse oder einen Kurznamen, Wallet-Datei und Recovery Seed können also auf dem Computer bleiben, dem du vertraust. Das zählt vor allem bei gemieteten Servern, gemeinsam genutzten Rigs und Rechnern, auf die andere zugreifen können.
+
+- **Wallet zu Hause, Mining überall.** Trage auf jedem Rechner mit seine dieselbe Adresse ein. bntpool.com fasst ihre Shares zu einem Guthaben zusammen.
+- **Fortschritt ohne Schlüssel verfolgen.** Schlag deine Adresse auf [bntpool.com](https://bntpool.com) nach, um Hashrate, Shares und Guthaben in jedem Browser zu sehen.
+- **Watch-only-Zugriff.** Wenn du eingehende Zahlungen auf einem zweiten Computer sehen willst, exportiert `viewkeys` die Schlüssel für eine View-only-Wallet. Eine View-only-Wallet zeigt eingehende Zahlungen und kann weder senden noch signieren.
+- **Sperren, wenn du weggehst.** `lock` blockiert das Ausgeben, bis du mit deinem Passwort `unlock` ausführst.
+
+## Wie erscheinen Mining-Auszahlungen in deiner Wallet?
+
+bntpool.com zahlt Belohnungen aus, sobald ihr Block gereift ist. Ein Pool-Block braucht 60 Bestätigungen, bei Blocknets Blockzeit von fünf Minuten etwa fünf Stunden. Wenn dein bestätigtes Guthaben das Minimum von 0,1 BNT erreicht, überweist der Pool es als normale Blocknet-Transaktion an deine Adresse.
+
+Prüfe in der Wallet `balance` (oder `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Eine neue Auszahlung erscheint zuerst unter `confirming`. Normale Transaktionen sind nach 10 Bestätigungen, etwa 50 Minuten, verfügbar und wandern dann zu `spendable`. Der Befehl `history` listet eingehende Transaktionen von der ältesten zur neuesten, jeweils mit Block, Betrag und Typ: Pool-Auszahlungen erscheinen als `regular`, und Blöcke, die du im Solo-Modus selbst findest, als `coinbase`; diese brauchen 60 Bestätigungen, bevor du sie ausgeben kannst.
+
+Deine Wallet listet eine Auszahlung, sobald ihr Node die Chain eingeholt hat. `status` zeigt dann `Syncing: false`, und `sync` durchsucht die heruntergeladenen Blöcke erneut nach deinen Outputs.
+
+Neu im Mining? Die [Anleitung zum Blocknet-Mining](/de/blog/how-to-mine-blocknet/) behandelt den Download von seine, die Wahl der Threads und was dich auf bntpool.com erwartet.
+
+<CTA target="pool" title="Mine auf deine neue Adresse" text="Füge deine Blocknet-Adresse in seine ein, übernimm bntpool.com und sieh zu, wie Auszahlungen in deiner Wallet ankommen, sobald dein Guthaben 0,1 BNT erreicht." />

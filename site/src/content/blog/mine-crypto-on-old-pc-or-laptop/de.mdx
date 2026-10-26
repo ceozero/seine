@@ -1,0 +1,118 @@
+---
+title: Krypto auf einem alten PC oder Laptop minen
+description: 'Krypto auf einem alten PC oder Laptop minen: warum RAM, Kühlung und Strom zählen, wie viele Threads dein Speicher erlaubt und wie du sicher loslegst.'
+tags: [Mining-Anleitung, Laptop, CPU-Mining, Hardware]
+faq:
+  - q: 'Kann ein Laptop mit 8 GB RAM Krypto minen?'
+    a: 'Ja, bei einer speicherintensiven Coin wie Blocknet. Jeder Blocknet-Mining-Thread braucht etwa 2 GB freien RAM, ein Laptop mit 8 GB schafft also meist etwa zwei Threads, nachdem das Betriebssystem seinen Anteil bekommen hat. seine misst beim Start deinen freien Speicher und wählt für dich eine sichere Thread-Anzahl.'
+  - q: 'Ist Krypto-Mining auf einem alten Laptop sicher?'
+    a: 'Ja, bei guter Belüftung. Mining hält den Prozessor beschäftigt, ähnlich wie ein langer Videoexport oder ein Spiel, und Prozessoren drosseln sich selbst, wenn sie zu heiß werden. Halte die Lüftungsschlitze sauber, stell einen Laptop auf eine harte Unterlage und nutze das Effizienzprofil von seine, wenn du weniger Wärme und Lärm willst.'
+  - q: 'Funktioniert seine auf Prozessoren ohne AVX2?'
+    a: 'Ja. Die x86-Builds von seine enthalten einen portablen Kernel, der auf jedem 64-Bit-x86-Prozessor läuft, dazu AVX2- und AVX-512-Kernel für Chips, die diese unterstützen. seine prüft, welche Befehlssätze dein Prozessor unterstützt, wählt den passenden Kernel und vergleicht auf Chips mit AVX2 und AVX-512 die Kernel während des Minens.'
+  - q: 'Wie viel Strom verbraucht Mining auf einem alten PC?'
+    a: 'Das hängt vom Rechner ab. Miss es mit einem Steckdosen-Strommessgerät, während seine läuft, multipliziere die Watt mit 24 und teile durch 1.000, um die Kilowattstunden pro Tag zu erhalten. Multipliziere das mit deinem Strompreis für die Tageskosten und vergleiche es mit den Coins, die du pro Tag erwartest.'
+sourceHash: 6643bf6169d4
+translation: reviewed
+---
+
+Diese Anleitung zeigt dir, wie du einen alten Desktop-PC oder Laptop zum Krypto-Mining einsetzt: was entscheidet, ob ein Rechner minen kann, wie viele Mining-Threads sein Speicher erlaubt, wie du ihn kühl hältst und wie du sicher mit seine auf bntpool.com startest.
+
+## Kann man auf einem alten PC oder Laptop Krypto minen?
+
+<Answer>
+Ja, wenn du eine Coin wählst, deren Proof of Work zu normalen Computern passt. Speicherintensive Coins wie Blocknet werden mit gewöhnlichen Prozessoren und RAM gemint, ein alter Desktop-PC oder Laptop kann also einem Pool beitreten und einen Anteil an jedem Block verdienen. Der RAM entscheidet, wie viele Threads du betreibst, und die Kühlung hält sie am Laufen.
+</Answer>
+
+Coins unterscheiden sich darin, was ihr Proof of Work belohnt. Das SHA-256 von Bitcoin wird fast ausschließlich mit ASICs gemint, Chips, die für genau diesen einen Hash gebaut sind, ein Allzweckcomputer trägt dort also wenig bei. Speicherintensive Designs funktionieren andersherum. RandomX von Monero ist für Allzweck-CPUs gebaut, und Blocknet nutzt Argon2id mit einem 2-GiB-Speicherblock für jeden Hash, ein Ansatz, der darauf ausgelegt ist, ASICs zu widerstehen. Bei einer Coin wie Blocknet minen die Teile, die jeder Computer schon hat: Prozessor und RAM. Der Leitfaden zum [CPU-Mining im Jahr 2026](/de/blog/cpu-mining-2026/) erklärt, worauf du bei einer Coin achten solltest, die du mit einem Prozessor minst.
+
+Die [Argon2id-Erklärung](/de/blog/argon2id-proof-of-work-explained/) zeigt, wie dieser Proof of Work seinen Speicher füllt und ausliest und warum die Speicherbandbreite das Tempo bestimmt.
+
+## Worauf kommt es bei älterer Hardware am meisten an?
+
+Vier Dinge entscheiden, wie gut ein älterer Rechner eine speicherintensive Coin mint:
+
+- **RAM.** Jeder Blocknet-Mining-Thread hält beim Hashen einen eigenen 2-GiB-Speicherblock, der freie RAM bestimmt also, wie viele Threads passen.
+- **Speicherbandbreite.** Jeder Hash schreibt 2 GiB und liest Daten von überall daraus zurück, das Speichersystem leistet also den Großteil der Arbeit. Dual-Channel-Speicher (zwei gleiche Module) hilft einem älteren Desktop-PC.
+- **Kühlung.** Mining hält den Prozessor stundenlang beschäftigt. Ein kühler Prozessor hält seinen Takt, ein heißer drosselt sich zum Selbstschutz.
+- **Strom.** Mining zieht gleichmäßig Strom, ein Strommessgerät und dein Strompreis sagen dir also, was der Betrieb des Rechners kostet.
+
+Die Kernanzahl spielt eine kleinere Rolle, als du vielleicht erwartest. Ein Quad-Core-Desktop mit 16 GB RAM kann mehr Threads betreiben als ein Achtkern-Laptop mit 8 GB, weil zuerst der RAM ausgeht.
+
+## Wie viel RAM braucht jeder Mining-Thread?
+
+<Answer>
+Jeder Blocknet-Mining-Thread braucht etwa 2 GB freien RAM, weil jeder Hash einen eigenen 2-GiB-Speicherblock füllt. Teile deinen freien Speicher durch zwei, um die Threads zu schätzen. seine macht das beim Start, hält 5 % des RAMs in Reserve und begrenzt die Anzahl auf die logischen Kerne deines Prozessors.
+</Answer>
+
+Die automatische Bemessung von seine nimmt den beim Start freien RAM, zieht 5 % Reserve ab, teilt durch 2 GiB und nimmt diese Zahl oder die Anzahl der logischen Prozessorkerne, je nachdem, was kleiner ist. Hier die Rechnung für gängige Größen, wenn Betriebssystem und ein paar Hintergrund-Apps etwa 2-3 GB belegen:
+
+| RAM | Speicherblöcke rechnerisch | Threads, die seine ungefähr betreiben kann |
+|---|---|---|
+| 4 GB | 2 | 1, wenn das System 2 GB frei lässt |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Schließe den Browser und andere große Apps, bevor du seine startest, dann sieht die Bemessung mehr freien Speicher. Öffnest du Apps, während es mint, prüft seine jede Sekunde den freien RAM, lässt Threads ihren aktuellen Hash beenden und pausieren und holt sie zurück, sobald wieder Speicher frei ist. Du kannst den Computer also weiter benutzen.
+
+Mehr RAM ist das direkteste Upgrade für einen alten Desktop-PC: Je 2 GB zusätzlicher freier Speicher bieten Platz für einen weiteren Thread, bis zu deiner Kernanzahl. Der [Hardware-Leitfaden](/de/blog/blocknet-mining-hardware-hashrate/) enthält gemessene Hashraten und die Bemessung für größere Rechner.
+
+## Funktioniert ein alter Prozessor noch?
+
+Ja. Die x86-Builds von seine enthalten einen portablen Kernel, der auf jedem 64-Bit-x86-Prozessor läuft, dazu AVX2- und AVX-512-Kernel. AVX2 kam 2013 mit den Haswell-Prozessoren von Intel und 2015 mit Excavator von AMD, und der AVX2-Kernel von seine wurde auf Server-Chips der Generationen Haswell und Broadwell gemessen. Prozessoren ohne AVX2 nutzen den portablen Kernel. Arm-Builds enthalten NEON mit einem schnellen SHA3-Pfad. seine prüft, was dein Prozessor unterstützt, vergleicht die Kernel während des Minens und wechselt nur nach bestätigten Gewinnen.
+
+Es gibt Downloads für die meisten Rechner, die du im Schrank finden könntest:
+
+| System | Archiv |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 oder neuer) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+Hat der PC eine NVIDIA-Grafikkarte, probieren die Builds für Windows und Linux auch diese aus und minen darauf parallel zum Prozessor. Startet die Karte nicht, mint seine auf dem Prozessor weiter. Auf einem MacBook mit Apple Silicon mint seine standardmäßig mit dem Prozessor; die [Mac-Anleitung](/de/blog/mine-blocknet-on-mac/) erklärt die Thread-Bemessung nach Arbeitsspeicher des Macs.
+
+## Wie hältst du einen Laptop beim Mining kühl?
+
+Ein paar Gewohnheiten halten einen Laptop auf voller Geschwindigkeit:
+
+- **Gib ihm Luft.** Stell ihn auf einen Tisch oder einen Laptopständer und halte die Lüftungsschlitze frei. Staub aus Lüfter und Kühlkörper eines alten Rechners zu blasen, kann verlorene Geschwindigkeit zurückbringen.
+- **Lass ihn am Netzteil.** Mining im Akkubetrieb leert den Akku schnell, und viele Laptops laufen im Akkubetrieb langsamer.
+- **Verhindere den Ruhezustand.** Während der Computer schläft, stoppt das Mining, also stell den Energieplan so ein, dass er am Netzteil wach bleibt.
+- **Betreibe weniger Threads für weniger Wärme.** Starte seine mit dem Effizienzprofil:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+Das Standardprofil pendelt sich auf die wenigsten Threads ein, die 99 % der besten gemessenen Hashrate erreichen. Das Effizienzprofil behält die wenigsten Threads, die 75 % dieser besten Hashrate erreichen, sodass der Rechner kühler und leiser läuft. Du kannst auch mit `--threads 2` eine feste Anzahl festlegen oder im Dashboard `-` und `+` drücken, um während des Betriebs einen Thread zu entfernen oder hinzuzufügen.
+
+## Wie beginnst du sicher mit dem Mining?
+
+1. **Besorge dir eine Wallet-Adresse.** Installiere die offizielle Blocknet-Wallet auf deinem Hauptcomputer und kopiere deine Adresse. Die [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/) führt dich Schritt für Schritt durch die Einrichtung. Der Miner braucht nur deine Adresse, also halte die Wallet und ihre Wiederherstellungsphrase vom Mining-Zweitrechner fern.
+2. **Lade seine aus dem offiziellen Release herunter.** Du bekommst es im [Download-Bereich](/de/#download). Jedes Release veröffentlicht eine Datei `SHA256SUMS.txt`, mit der du prüfen kannst, ob das Archiv übereinstimmt.
+3. **Starte es.** Unter Windows doppelklickst du `seine.exe`. Unter macOS oder Linux führst du `./seine` im entpackten Ordner aus.
+4. **Gib deine Adresse ein und übernimm den Standard-Pool.** Füge deine Adresse oder deinen `@name` ein und drücke Enter für `stratum+tcp://bntpool.com:3333`.
+5. **Behalte das Dashboard im Blick.** Deine Hashrate und die ersten Shares erscheinen nach wenigen Augenblicken, und seine optimiert Threads und Kernel während des Minens weiter.
+
+Die [Schritt-für-Schritt-Anleitung zum Mining](/de/blog/how-to-mine-blocknet/) behandelt dieselben Schritte und die Auszahlungen ausführlicher. Um den Rechner zu messen, ohne dich vorher mit einem Pool zu verbinden, starte den Offline-Benchmark:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## Warum mit einem kleinen Rechner in einem Pool minen?
+
+Ein Pool bezahlt dich für deinen Anteil an der Arbeit an jedem Block, den er findet. Ein kleiner Rechner wird also aus jedem Pool-Block bezahlt, statt darauf zu warten, selbst einen ganzen Block zu finden. Die Anleitung [Wie Krypto-Mining funktioniert](/de/blog/how-crypto-mining-works/) erklärt Pools und Shares genauer. Auf bntpool.com werden die Belohnungen unter den Shares aufgeteilt, die in den sechs Stunden vor jedem Block eingereicht wurden, und dein Guthaben wird ausgezahlt, sobald es 0,1 BNT erreicht. Deine Hashrate und dein Guthaben kannst du verfolgen, indem du deine Adresse oder deinen `@name` auf [bntpool.com](https://bntpool.com) nachschlägst.
+
+Um deinen Ertrag zu schätzen, nimm die Netzwerk-Hashrate, die das Dashboard von bntpool.com anzeigt. Bei Blöcken im Fünf-Minuten-Takt findet Blocknet 288 Blöcke am Tag, dein erwarteter Anteil an den neuen Coins des Netzwerks pro Tag beträgt also 288 × (deine H/s ÷ Netzwerk-H/s) × die Blockbelohnung, die jeden Monat schrittweise sinkt.
+
+Rechne dann aus, was der Betrieb des Rechners kostet. Miss ihn mit einem Steckdosen-Strommessgerät, während seine mint. Ein Rechner, der rund um die Uhr 65 W zieht, verbraucht 65 × 24 = 1.560 Wh, also 1,56 kWh am Tag; multipliziere das mit deinem Strompreis. Der Vergleich der beiden Zahlen gibt dir das vollständige Bild für deinen Rechner.
+
+<Note>
+Diese Zahlen beziehen sich auf den aktuellen Argon2id-Proof-of-Work von Blocknet. Laut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet um den 16. Februar 2027 ein Netzwerk-Upgrade namens Faraday, das einen leichteren Proof of Work bringen wird. Halte seine aktuell: Es sucht beim Start und alle 12 Stunden nach neuen Releases.
+</Note>
+
+<CTA target="seine" title="Lass deinen alten PC arbeiten" text="seine bemisst die Threads nach deinem RAM und optimiert sich während des Minens selbst. Herunterladen, Adresse einfügen und auf bntpool.com mit dem Mining beginnen." />

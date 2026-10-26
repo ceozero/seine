@@ -1,0 +1,146 @@
+---
+title: 在服务器和矿机上挖 Blocknet
+description: 用 seine 在 EPYC 服务器和多台矿机上挖 Blocknet：自动按 NUMA 节点和 L3 缓存分配线程，无界面运行，并提供控制 API 和 Prometheus 指标。
+tags: [挖矿指南, 服务器, Linux, seine]
+faq:
+  - q: 'seine 支持 NUMA 服务器吗？'
+    a: '支持。在 Linux 上，seine 默认的自动亲和性设置会把挖矿线程分散到各个 NUMA 节点和 L3 缓存组，先给每个物理核心分配一个线程，再使用 SMT 同级线程。每个线程在分配 2 GiB 内存区之前先绑定核心，让内存落在离它最近的位置。在一台双节点 EPYC 机器上，这让 8 个线程的算力提高了 73%。'
+  - q: 'seine 能在没有终端的情况下作为后台服务运行吗？'
+    a: '能。首次运行时传入 --address 和 --pool-url，seine 就会直接启动而不再提问，把这两项保存到数据目录中的 seine.config.json，并在没有连接终端时改为输出纯文本日志。这样就可以方便地用 systemd 或其他会自动重启它的服务管理器来运行。'
+  - q: 'seine 能导出 Prometheus 指标吗？'
+    a: '能。用 --api-server 或 --service 启动 seine，它就会在本地控制 API 的 /metrics 上提供 Prometheus 指标，默认监听 127.0.0.1 的 9977 端口。指标包括挖矿程序是否在运行、它的生命周期状态、已提交、已接受和过期的解，以及后端隔离次数。抓取时需要带上 API 的 Bearer 令牌。'
+  - q: '为什么 seine 控制 API 需要令牌？'
+    a: '从 seine v0.2.23 起，除健康检查外，控制 API 的每个端点都需要 Bearer 令牌，这可以防止你访问的网站修改你的收款地址或设置。seine 每次启动时都会把一个新令牌写入数据目录中的 control-api.cookie，你也可以用 --api-token 设置固定令牌。'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+本指南介绍如何在大型机器和整排矿机上运行 seine：它如何在多核服务器上分配线程，如何用服务管理器无界面运行它，以及如何通过本地控制 API、实时事件流和 Prometheus 指标来启动、停止和监控每一台矿机。
+
+## seine 如何利用大型服务器？
+
+<Answer>
+在 Linux 上，seine 会把挖矿线程分散到各个 NUMA 节点以及每个节点内的 L3 缓存组，先给每个物理核心分配一个线程，再使用 SMT 同级线程。每个线程在分配 2 GiB 内存区之前先绑定到自己的核心，让内存落在离它最近的位置。这是默认行为，无需任何配置。
+</Answer>
+
+Blocknet 的 Argon2id 工作量证明主要是内存读写。每个线程每次哈希都要填满并回读自己的 2 GiB 内存区，所以算力取决于你的线程能同时让多少个内存控制器和缓存组忙起来。[Argon2id 详解](/zh-hans/blog/argon2id-proof-of-work-explained/)解释了其中的原因。
+
+如果线程只是按操作系统的 CPU 顺序排列，就会先占满列表中最前面的核心，而这些核心都在同一个节点、同几个缓存组上。在一台双节点 EPYC 机器上，按操作系统顺序运行的 8 个线程全部落在节点 0 上，16 GiB 内存区几乎全部位于该节点的内存中。seine 的自动分配则在每个节点上各放 4 个线程，每个节点约有 8 GiB 内存区，两个节点的内存同时得到使用。在一台有 8 个 L3 缓存组的单节点 EPYC 8434P 上，按操作系统顺序运行的 24 个线程挤在 4 个缓存组里，每组 6 个。seine 则用满全部 8 个缓存组，每组 3 个。
+
+线程分配遵守你给进程设定的限制。它尊重进程的 CPU 和内存掩码，所以在 `taskset`、cgroups 和容器中都能正常工作，并且只使用你允许的核心。在原生 Windows 上，同样的 `auto` 设置也会先用满物理核心，再使用 SMT 同级线程。
+
+## NUMA 感知的线程分配能快多少？
+
+seine 的开发者于 2026 年 10 月 24 日进行了测量：同一个二进制文件以两种方式交替成对运行，一种是 seine 的自动分配，另一种是按普通操作系统顺序绑定（`--cpu-affinity os`）：
+
+| 机器 | 线程数 | 内存页 | 自动分配带来的提升 |
+|---|---|---|---|
+| 双节点 AMD EPYC · Zen 3（EPYC 7R13，AWS c6a.8xlarge） | 8 | 普通页 | **+73%** |
+| 双节点 AMD EPYC · Zen 3（EPYC 7R13，AWS c6a.8xlarge） | 8 | 2 MiB 大页 | **+108%** |
+| AMD EPYC 服务器（EPYC 8434P，48 核，8 个 L3 缓存组） | 24 | 普通页 | **+16.7%** |
+
+每一组交替测试都是自动分配更快。完整的方法和原始结果见 seine 的[大型服务器指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md)和 [CPU 优化日志](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md)。
+
+当 seine 运行的线程数少于机器的核心数时，这种提升就会体现出来。只要决定线程数的是内存而不是核心数，就会出现这种情况：每个线程约需 2 GB，所以要用满一台 48 核服务器，仅内存区就需要约 96 GB。线程分配确保你能负担的线程分布在每个 NUMA 节点和缓存组上。
+
+线程分配和大页的效果可以叠加，第二行就说明了这一点。如果你预留大页，请在每个运行线程的节点上都预留，因为总数足够并不能保证有本地页。[大页指南](/zh-hans/blog/huge-pages-blocknet-mining/)介绍了大页设置；在 Linux 上，每个节点的 2 MiB 大页池在 `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages` 中设置。
+
+要在你自己的机器上检验效果，请在相同线程数和相同内存页设置下比较 `auto` 和 `os`。`--cpu-affinity off` 则把线程分配完全交给调度器。
+
+### 共享服务器上的内存余量
+
+自动线程数设定会保留总内存的 5% 不用，另外还有为 GPU 保留的部分。可以用 `--cpu-memory-reserve-percent` 修改这个比例。如果其他服务开始占用内存，seine 的自动线程会释放各自的内存区，等内存空出来后再恢复，让挖矿与机器上的其他工作和平共处。调优结果按机器缓存，当允许使用的 CPU 集合或 NUMA 和 L3 布局发生变化时（例如调整虚拟机规格之后），缓存会重置。
+
+## 如何无界面运行 seine？
+
+<Answer>
+在命令行中传入收款地址和矿池，例如用 `--address` 加上你的地址或 `@name`，再加上 `--pool-url stratum+tcp://bntpool.com:3333`。这样 seine 启动时不会提问，会把设置保存到数据目录，并在没有连接终端时输出纯文本日志，因此可以交给服务管理器运行。
+</Answer>
+
+在台式机上，seine 首次运行时会询问地址和矿池。在没有连接终端的服务器上，请提前提供这两项：
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+矿机名称（这里是 `rack1-node04`）就是这台机器在矿池上显示的名字。seine 会把地址、矿池和矿机名称保存到数据目录（默认为 `./seine-data`）中的 `seine.config.json`，所以之后使用同一数据目录启动时不需要其他参数。在默认的 `--ui auto` 下，它在终端中显示[仪表盘](/zh-hans/blog/seine-dashboard-explained/)，在其他情况下输出纯文本日志；`--ui plain` 会强制输出纯文本。在 shell 命令中请给 `@name` 和 `$name` 加上引号。
+
+在 Linux 上，可以用 systemd 单元让 seine 开机启动，并在它退出时自动重启：
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine 在启动时解析短名称，所以这个单元会等待网络就绪。每台矿机都会在挖矿时自行调优，并把选择保存在自己的数据目录中，供下次启动使用。
+
+## 如何通过 API 控制 seine？
+
+seine 提供一个本地 REST API，带有实时事件流和 Prometheus 指标，专为仪表盘和矿机集群工具设计。有两种启动方式：
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+`--service` 模式会启动 API，并让挖矿程序保持空闲，直到控制程序发送 `POST /v1/miner/start`；这个请求可以带上本次运行的地址、矿池、线程数和其他设置。由你的控制程序决定每台机器何时挖矿、使用什么设置。
+
+### API 令牌
+
+从 seine v0.2.23 起，除 `GET /v1/health` 外，每个端点都需要 `Authorization: Bearer <token>`。seine 每次启动时都会把一个新的随机令牌写入数据目录中的 `control-api.cookie`，在 Unix 上只有文件所有者可读，并在关闭时删除它。如果集群工具需要固定的值，可以用 `--api-token` 设置，或用 `--api-cookie` 更改文件位置。API 默认也不发送 CORS 头，并且在绑定回环地址时会拒绝 `Host` 不是本地地址的请求，这可以防止你访问的网站修改你的收款地址或设置。
+
+API 默认绑定到 `127.0.0.1:9977`。要绑定到其他网络接口，需要加上 `--api-allow-unsafe-bind`，所以除非你主动选择，API 只在本机可用。
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### 实时事件
+
+`GET /v1/events/stream` 是一个服务器发送事件（SSE）流。它会实时报告状态变化、后端阶段、自动调优的进度和结果、找到的解以及提交结果，让仪表盘可以实时显示每台矿机。重新连接后，`GET /v1/runtime/state` 会返回完整的当前状态。
+
+### Prometheus 指标
+
+`GET /metrics` 提供 Prometheus 指标，包括 `seine_miner_running`、`seine_miner_lifecycle_info`、`seine_miner_submitted_blocks_total`、`seine_miner_accepted_blocks_total` 和 `seine_miner_stale_submits_total`。由于 cookie 文件在每次启动时都会变化，而且只有 seine 的用户能读取，请给 Prometheus 一个固定令牌：用 `--api-token` 启动 seine，并把同一个值保存到 Prometheus 能读取的文件中。同一台机器上的抓取任务如下：
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+完整的端点列表、请求结构和事件目录见 seine 的[控制 API 文档](https://github.com/zpalmtree/seine/blob/master/docs/API.md)。
+
+## 为矿机挑选机器
+
+无论是一台塔式机还是一整排服务器，线程分配、无界面运行和 API 的用法都一样。哪些处理器挖得最快、每个线程要配多少内存，请看 [Blocknet 挖矿硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)。第一次使用 seine？请从[如何挖 Blocknet](/zh-hans/blog/how-to-mine-blocknet/) 开始。
+
+<CTA target="seine" title="为你的服务器下载 seine" text="seine 会自动把线程分配到各个 NUMA 节点和缓存组，可以无界面运行，并为每台矿机提供带实时事件和 Prometheus 指标的控制 API。" />

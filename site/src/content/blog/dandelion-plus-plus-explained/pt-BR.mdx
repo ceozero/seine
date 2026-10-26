@@ -1,0 +1,91 @@
+---
+title: 'Dandelion++ explicado: retransmissão de transações em caule e floração'
+description: Dandelion++ explicado em palavras simples, da retransmissão em caule e floração ao design do artigo de 2018, e como o Blocknet o usa para ocultar qual nó enviou a transação.
+tags: [Privacidade, Dandelion++, Redes, Blocknet]
+faq:
+  - q: 'O Dandelion++ oculta meu endereço IP?'
+    a: 'Ele oculta qual nó iniciou uma transação dos observadores espalhados pela rede. A transação só se espalha amplamente depois da floração, a vários saltos de você. Seu primeiro par do caule vê a transação chegar do seu nó, mas as mensagens do caule são iguais quer o nó tenha criado a transação, quer esteja apenas repassando, então ele não consegue saber qual é o caso.'
+  - q: 'Qual é a diferença entre o Dandelion e o Dandelion++?'
+    a: 'O Dandelion (2017) introduziu as fases de caule e floração sobre uma única linha de retransmissores. O Dandelion++ (2018) mantém as duas fases e as reforça contra espiões que quebram as regras. Ele usa um grafo em que cada nó escolhe dois retransmissores, envia suas próprias transações por uma aresta fixa, escolhe novos retransmissores a cada época e acrescenta um temporizador de segurança.'
+  - q: 'Quais criptomoedas usam o Dandelion++?'
+    a: 'O Monero adicionou o Dandelion++ na versão 0.16, lançada em maio de 2020, e o Blocknet retransmite toda transação com ele. O Dandelion foi proposto primeiro para o Bitcoin como BIP 156 pelo mesmo grupo de pesquisa. Qualquer moeda construída sobre uma rede peer-to-peer pode adotá-lo, porque ele muda apenas a forma como os nós repassam as novas transações entre si.'
+  - q: 'Quais configurações do Dandelion++ o Blocknet usa?'
+    a: 'Os nós do Blocknet continuam o caule com probabilidade de 0,9 a cada salto, então uma transação floresce com 10% de probabilidade em cada retransmissor. As rotas do caule mudam a cada 10 minutos. Se a sua própria transação não voltar ao seu nó na fase de floração em até 45 segundos, seu nó a transmite por conta própria, então ela sempre chega à rede.'
+sourceHash: 036cbd9214b7
+translation: reviewed
+---
+
+O Dandelion++ é uma forma de retransmitir novas transações por uma rede peer-to-peer de modo que quem observa a rede não consiga descobrir facilmente qual computador as enviou. Este guia explica o problema que ele resolve, como funcionam suas fases de caule e floração, o que o artigo de 2018 acrescentou ao design original e como o Blocknet o usa em todo pagamento.
+
+## O que é o Dandelion++?
+
+<Answer>
+O Dandelion++ é um protocolo de retransmissão de transações que oculta qual nó criou uma transação. Uma transação nova primeiro percorre um "caule" (stem), passada de um nó para um único nó seguinte por vários saltos. Depois ela "floresce" (fluff) e se espalha para toda a rede, parecendo começar em um nó distante do verdadeiro remetente.
+</Answer>
+
+O nome vem do formato do caminho, como um dente-de-leão (dandelion, em inglês): um caule fino e depois um sopro de sementes voando para todo lado. O Dandelion++ foi publicado em 2018 por Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller e Pramod Viswanath nos [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (preprint no [arXiv](https://arxiv.org/abs/1805.11060)) e apresentado na ACM SIGMETRICS 2018. Ele aprimora a proposta de 2017 do mesmo grupo, o Dandelion.
+
+## Por que transmitir uma transação revela de onde ela veio?
+
+Uma mensagem de transação não contém seu endereço IP. A forma como ela se espalha, sim. Em uma rede de criptomoeda típica, o nó que cria uma transação a envia para todos os seus pares, eles a enviam para os deles, e ela se propaga a partir da origem em ondas.
+
+Pesquisadores mostraram que essa propagação pode ser medida. Em 2014, Biryukov, Khovratovich e Pustogarov e, separadamente, Koshy, Koshy e McDaniel rodaram um "supernó" que se conectava a quase todos os nós Bitcoin alcançáveis e registrava quando cada transação chegava de cada par. O nó que entregava uma transação primeiro muitas vezes era o que a tinha criado. O artigo do Dandelion++ chama isso de estimador do primeiro espião: supor que o primeiro nó honesto a entregar uma transação é a sua origem. É simples e funciona bem contra a inundação (flooding).
+
+Acrescentar atrasos aleatórios antes de cada nó repassar uma transação, como o Bitcoin Core faz com um esquema chamado difusão, deixa os tempos de chegada mais ruidosos. A pesquisa do Dandelion seguiu outro caminho e mudou o formato do próprio trajeto.
+
+## Como funcionam as fases de caule e floração?
+
+<Answer>
+Na fase de caule, cada nó passa a transação para exatamente um par. A cada salto, o nó joga uma moeda viciada: geralmente continua o caule, às vezes passa para a floração. Na fase de floração, a transação é transmitida para todos os pares normalmente, então os observadores a veem se espalhar a partir do nó que floresceu.
+</Answer>
+
+Passo a passo:
+
+1. **Seu nó inicia um caule.** Ele envia a nova transação para um único par.
+2. **Cada retransmissor decide.** O par a encaminha para mais um par (caule) ou a transmite para todos (floração).
+3. **A floração espalha a transação por toda parte.** A partir do nó que floresceu, a transação inunda a rede da forma habitual e chega aos mineradores.
+
+Um espião observando muitos nós agora vê a propagação começar no nó que floresceu, que pode estar a muitos saltos de você. O comprimento do caule é aleatório, então o espião não consegue simplesmente contar um número fixo de saltos para trás. O artigo dá o comprimento esperado do caule como 1/q, em que q é a chance de florescer a cada salto. Com q = 0,1, um caule tem em média cerca de dez saltos.
+
+## O que o Dandelion++ mudou em relação ao Dandelion?
+
+O design do Dandelion de 2017 enviava os caules por uma única linha de retransmissores e provava resultados fortes sob três hipóteses: todo nó segue as regras, cada nó envia uma transação e todo nó roda o Dandelion. O artigo de 2018 mostrou como espiões que quebram essas hipóteses poderiam descobrir mais e então mudou o design para que as garantias se mantenham contra eles. Ele funciona em épocas, com cada nó passando para uma nova época "da ordem de 10 minutos", e dentro de cada época usa quatro mecanismos:
+
+| Mecanismo | O que faz |
+|---|---|
+| Um grafo de retransmissão aproximadamente 4-regular | Cada nó escolhe até duas de suas conexões de saída como retransmissores, formando uma teia de caminhos entrelaçados em vez de uma única linha. |
+| Uma aresta para as suas próprias transações | Um nó envia toda transação que cria pela mesma aresta de saída, então enviar várias transações não revela mais. |
+| Retransmissão pseudoaleatória | A cada época, um nó é retransmissor ou difusor para todas as transações que recebe no caule, e associa cada aresta de entrada a uma de saída. |
+| Temporizadores de segurança | Um nó que enviou ou retransmitiu uma transação no caule espera um tempo aleatório para vê-la florescer e a transmite por conta própria se isso não acontecer. |
+
+Para escolher q, as simulações do artigo mostraram que manter q em 0,2 ou menos limita o que um espião pode ganhar manipulando o grafo de retransmissão. Os autores rodaram sua implementação na rede ao vivo do Bitcoin e escolheram q = 0,1 ou q = 0,2 para manter a propagação dentro da meta de 4,5 segundos.
+
+O Dandelion foi proposto para o Bitcoin como [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). O Monero adicionou o Dandelion++ na [versão 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), lançada em maio de 2020.
+
+## Como o Blocknet usa o Dandelion++?
+
+Todo nó do Blocknet retransmite as transações com o Dandelion++, e não há nada para ativar. Quando você envia BNT, seu nó primeiro verifica a transação e a adiciona ao seu próprio pool de memória (mempool), depois a entrega ao roteador do Dandelion++. Estas são as configurações no daemon:
+
+| Configuração | Valor | O que significa |
+|---|---|---|
+| Probabilidade de caule | 0,9 | Cada retransmissor continua o caule 90% das vezes e floresce 10% das vezes (q = 0,1), o mesmo q que o artigo testou. |
+| Época | 10 minutos | As rotas do caule são embaralhadas a cada 10 minutos. |
+| Temporizador de embargo | 45 segundos | Se a sua transação não tiver voltado ao seu nó na fase de floração até lá, seu nó a transmite por conta própria. |
+
+Como um pagamento Blocknet viaja:
+
+- **Seu nó escolhe um par de caule para a época.** Ele envia toda transação que cria para esse mesmo par até a próxima época de 10 minutos, o que segue a regra do artigo para as transações do próprio nó.
+- **Cada retransmissor faz uma escolha nova.** Um nó que recebe uma transação no caule a faz florescer com 10% de probabilidade. Caso contrário, ele a encaminha para um par escolhido aleatoriamente, diferente daquele de onde ela veio. Com q = 0,1, um caule tem em média cerca de dez saltos.
+- **As mensagens do caule são iguais vindas de qualquer nó.** Um nó usa a mesma mensagem para iniciar um caule e para repassá-lo, então o par que a recebe não consegue saber se você criou a transação ou se a está retransmitindo.
+- **A transação sempre chega.** Se um salto do caule não puder ser entregue, o nó faz a transação florescer na hora, e o embargo de 45 segundos cobre qualquer coisa que trave.
+- **Os retransmissores verificam o que carregam.** Um nó confirma que o conteúdo de uma mensagem do caule é uma transação bem formada antes de retransmiti-lo e penaliza o par que envia lixo.
+
+## Como o Dandelion++ se encaixa no resto da privacidade do Blocknet?
+
+O Dandelion++ atua na camada de rede: ele protege a ligação entre uma transação e o computador que a enviou. A privacidade na blockchain que faz do Blocknet uma [moeda de privacidade](/pt-br/blog/what-is-a-privacy-coin/) protege o que a transação diz: um anel CLSAG de 16 em cada entrada oculta o remetente, endereços furtivos de uso único ocultam o destinatário e compromissos de Pedersen com provas de intervalo Bulletproofs ocultam os valores. Essas proteções são obrigatórias, então toda transação parece igual antes mesmo de o Dandelion++ transportá-la.
+
+As duas camadas se complementam. As assinaturas em anel ocultam qual saída pagou, e o Dandelion++ oculta qual nó transmitiu o pagamento. [Como o Blocknet mantém os pagamentos privados](/pt-br/blog/blocknet-privacy-features/) percorre cada camada na blockchain, e [O que é o Blocknet?](/pt-br/blog/what-is-blocknet/) dá a visão geral, incluindo o pagamento por nome com o Blocknet ID.
+
+Para ter seus próprios BNT para enviar, você pode minerá-los em casa. Siga o [guia de mineração de Blocknet](/pt-br/blog/how-to-mine-blocknet/) para baixar o seine, apontá-lo para o bntpool.com e receber os pagamentos no endereço da sua carteira ou no seu `@name`.
+
+<CTA target="seine" title="Minere seus primeiros BNT com o seine" text="O seine se ajusta ao seu computador e minera BNT para o seu endereço ou @name no bntpool.com, prontos para o seu primeiro pagamento privado." />

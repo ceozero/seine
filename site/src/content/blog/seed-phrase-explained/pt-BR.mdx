@@ -1,0 +1,103 @@
+---
+title: 'Seed phrase: o que é e como manter a sua segura'
+description: 'A seed phrase é a lista de palavras que reconstrói sua carteira de criptomoedas. Veja como funciona, como guardá-la offline e por que nunca compartilhá-la.'
+tags: [Carteira, Seed phrase, Segurança]
+faq:
+  - q: 'Qual é a diferença entre uma seed phrase e uma chave privada?'
+    a: 'Uma chave privada controla os fundos diretamente, enquanto uma seed phrase é um backup legível por humanos que a carteira transforma nas suas chaves privadas. Em uma carteira Blocknet, as 12 palavras geram tanto a chave de gasto quanto a chave de visualização, então a frase sozinha basta para reconstruir a carteira e tudo o que ela pode fazer.'
+  - q: 'Consigo recuperar uma carteira se perder a seed phrase?'
+    a: 'Você pode continuar usando a carteira enquanto ainda tiver o arquivo da carteira e a senha dele. A seed phrase é o backup para quando o arquivo ou a senha se perderem. Enquanto a carteira ainda abrir, mostre a frase de novo com o comando seed ou com View Recovery Seed e anote-a.'
+  - q: 'É seguro guardar uma seed phrase em um gerenciador de senhas?'
+    a: 'O guia da carteira Blocknet pede que você guarde a seed offline, em papel, e que a deixe fora de arquivos de texto, apps de notas e armazenamento em nuvem, porque qualquer pessoa que leia as 12 palavras controla os fundos. Cópias em papel guardadas em dois lugares seguros e separados dão a você um backup que nunca passa pela internet.'
+  - q: 'Uma seed phrase funciona em qualquer app de carteira?'
+    a: 'A lista de palavras é um padrão compartilhado, mas cada moeda transforma as palavras em chaves do seu próprio jeito. Restaure uma seed do Blocknet na carteira oficial do Blocknet, de linha de comando ou para desktop. As duas aceitam as 12 palavras e reconstroem o mesmo endereço e o mesmo saldo depois que a carteira examina a blockchain.'
+sourceHash: 8cef30920a89
+translation: reviewed
+---
+
+Uma seed phrase (frase de recuperação) é a pequena lista de palavras capaz de reconstruir sua carteira de criptomoedas em qualquer computador. Este guia explica o que são essas palavras, como uma carteira as transforma em chaves, como guardá-las para nunca perder o acesso e por que mais ninguém deve vê-las. Os exemplos usam a carteira Blocknet e a sua recovery seed de 12 palavras.
+
+## O que é uma seed phrase?
+
+<Answer>
+Uma seed phrase, também chamada de frase de recuperação ou mnemônico, é uma lista de palavras comuns, normalmente 12 ou 24, que codifica o segredo de onde vêm as chaves da sua carteira. Digite as palavras em uma carteira compatível e ela reconstrói as mesmas chaves, endereços e saldo, mesmo que seu computador e o arquivo da carteira tenham se perdido.
+</Answer>
+
+Toda carteira de criptomoedas é construída sobre chaves secretas. Uma chave é um número aleatório longo, difícil de copiar à mão e fácil de errar. Uma seed phrase escreve o mesmo segredo como palavras de uma lista fixa, para que você possa copiá-lo no papel, conferi-lo e digitá-lo anos depois.
+
+A carteira Blocknet chama sua frase de **recovery seed** (seed de recuperação). Ela tem 12 palavras, e a carteira a cria quando você cria uma carteira nova. Guarde-a bem e você sempre conseguirá recuperar sua carteira.
+
+## Como funciona uma seed phrase?
+
+Muitas carteiras seguem o BIP39, um padrão escrito para o Bitcoin em 2013 por Marek Palatinus, Pavol Rusnak, Aaron Voisine e Sean Bowe. Ele funciona em três etapas.
+
+1. **Bits aleatórios.** A carteira sorteia de 128 a 256 bits aleatórios. Uma frase de 12 palavras guarda 128 bits, e uma de 24 palavras guarda 256.
+2. **Um checksum e, depois, palavras.** A carteira calcula o hash desses bits com SHA-256 e acrescenta os primeiros bits do hash como checksum (4 bits para 12 palavras). Depois, divide o resultado em pedaços de 11 bits. Cada pedaço é um número de 0 a 2.047 que escolhe uma palavra de uma lista de 2.048 palavras.
+3. **Uma seed para as chaves.** Para usar a frase, a carteira a passa pelo PBKDF2 com HMAC-SHA512 em 2.048 rodadas e obtém uma seed de 64 bytes. As chaves saem dessa seed.
+
+O checksum é o motivo pelo qual uma carteira consegue dizer que uma frase está errada. Só 1 em cada 16 combinações aleatórias de 12 palavras tem um checksum válido, então a maioria dos erros de digitação e das palavras trocadas é detectada antes que algo aconteça. A lista em inglês também é montada de modo que as quatro primeiras letras de cada palavra sejam únicas, o que ajuda quando a letra à mão é difícil de ler.
+
+### O que 12 palavras significam no Blocknet
+
+A carteira Blocknet usa a lista BIP39 padrão em inglês e 128 bits de aleatoriedade, então toda recovery seed tem 12 palavras. Ela transforma essas palavras na sua seed de 64 bytes com a etapa PBKDF2 do BIP39, sem passphrase extra. Os primeiros 32 bytes viram a sua **chave de gasto** (spend key) e os últimos 32 bytes viram a sua **chave de visualização** (view key). Seu endereço é montado a partir das metades públicas dessas duas chaves, então as mesmas 12 palavras sempre levam de volta ao mesmo endereço. O guia sobre [endereços furtivos (stealth addresses)](/pt-br/blog/stealth-addresses-explained/) explica como a chave de gasto e a chave de visualização trabalham juntas para receber pagamentos com privacidade.
+
+Quão grande é 128 bits? Existem 2^128 seeds possíveis, cerca de 3,4 × 10^38. Ninguém encontra sua carteira chutando palavras. A única forma prática de entrar nela é ver a sua frase, e é por isso que o resto deste guia fala de como guardá-la bem.
+
+## Seed phrase, senha e arquivo da carteira: qual é a diferença?
+
+As pessoas costumam confundir as três coisas que protegem uma carteira. Veja o que cada uma faz na carteira Blocknet.
+
+| | O que é | O que ela dá a você |
+|---|---|---|
+| Recovery seed | 12 palavras que você anota | Controle total da carteira em qualquer computador |
+| Senha da carteira | Uma senha que você escolhe | Abre o arquivo da carteira neste computador |
+| Arquivo da carteira | Um único arquivo `.wallet.dat` | Suas chaves e seu histórico, criptografados com a sua senha |
+
+Sua senha criptografa o arquivo da carteira (a carteira deriva a chave de criptografia com Argon2id e criptografa com AES-GCM), e o Blocknet nunca a armazena em lugar nenhum. A senha não tem nenhum papel na criação das suas chaves. Quando você restaura a partir das 12 palavras, escolhe uma senha nova para o novo arquivo da carteira. Isso faz da seed o backup mais importante: ela funciona mesmo que você perca o arquivo e esqueça a senha.
+
+## Como você deve guardar uma seed phrase?
+
+<Answer>
+Escreva as palavras em papel, na ordem, confira cada palavra com a tela e guarde o papel em um lugar seguro e offline. Faça uma segunda cópia e guarde-a em outro lugar. Deixe a frase fora de fotos, arquivos de texto, apps de notas, e-mail e armazenamento em nuvem, porque qualquer pessoa que a leia controla os fundos.
+</Answer>
+
+Estes hábitos mantêm uma seed phrase segura e utilizável ao mesmo tempo:
+
+- **Papel em primeiro lugar.** O guia da carteira Blocknet diz para escrever a seed em papel e guardá-la em um lugar seguro. Numere as palavras de 1 a 12, já que a ordem importa.
+- **Confira uma vez.** Compare cada palavra com a tela antes de fechá-la. A grafia conta, e as quatro primeiras letras de cada palavra bastam para distingui-la.
+- **Duas cópias, dois lugares.** Uma cópia em casa e outra em outro lugar de sua confiança protegem você de um incêndio, uma enchente ou uma gaveta perdida. Algumas pessoas também gravam as palavras em uma placa de metal pelo mesmo motivo.
+- **Mantenha-a offline.** Capturas de tela, fotos do celular, apps de notas e pastas na nuvem sincronizam ou fazem backup em algum lugar que você não controla. O guia da carteira lista arquivos de texto, apps de notas e armazenamento em nuvem como lugares onde a seed nunca deve ir.
+- **Mantenha-a privada.** Guarde-a onde visitas, colegas de trabalho e assistências técnicas não vão encontrá-la.
+
+## Por que você nunca deve compartilhar sua seed phrase?
+
+As 12 palavras são a sua carteira. Quem as tiver pode reconstruí-la no próprio computador e enviar tudo o que há nela, e uma transação não pode ser revertida depois que está na blockchain. A carteira Blocknet mostra este aviso toda vez que você pede para ver a seed:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Trate qualquer pedido da sua seed como golpe, por mais oficial que pareça. Desenvolvedores de carteira, corretoras, pools e equipes de suporte nunca precisam dela. Um site ou app que pede para você "verificar" ou "sincronizar" sua carteira digitando as palavras está tentando levar suas moedas.
+
+Você nunca precisa compartilhar a seed para fazer o que precisa:
+
+- **Para receber**, compartilhe seu endereço, ou um [shortname do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/) como `@yourname` que aponta para ele.
+- **Para deixar alguém ver os fundos que chegam**, o comando `viewkeys` exporta as chaves para uma carteira somente leitura. Uma carteira somente leitura mostra os pagamentos recebidos e não consegue enviar. O [guia de privacidade](/pt-br/blog/blocknet-privacy-features/) explica o que as chaves de visualização revelam.
+- **Para minerar**, o seine e o bntpool.com precisam apenas do seu endereço ou shortname. A carteira e a seed dela podem ficar no único computador em que você confia, enquanto todas as máquinas de mineração pagam para o mesmo endereço.
+
+## Como ver e restaurar uma recovery seed do Blocknet?
+
+Na carteira de linha de comando, digite `seed` no prompt do shell. A carteira mostra o aviso acima, pede confirmação, pede sua senha e então mostra as 12 palavras em linhas numeradas. Na carteira para desktop, abra as configurações e escolha "View Recovery Seed", que também pede sua senha primeiro.
+
+Para restaurar, use qualquer uma das carteiras:
+
+- **Linha de comando:** rode `import`, escolha `1) 12-word recovery seed`, digite as 12 palavras e depois dê à nova carteira um nome e uma senha.
+- **Desktop:** escolha "Restore from Seed" e digite sua frase de 12 palavras.
+
+A carteira confere as palavras e o checksum, reconstrói suas chaves e examina a blockchain em busca das suas saídas, então seu saldo e seu histórico voltam com o mesmo endereço. O [guia da carteira Blocknet](/pt-br/blog/blocknet-wallet-for-mining/) mostra passo a passo como criar uma carteira, fazer o backup da seed e encontrar seu endereço.
+
+Com a sua seed segura no papel, você está pronto para colocar o endereço para trabalhar. O [guia de mineração de Blocknet](/pt-br/blog/how-to-mine-blocknet/) mostra como apontar o [seine](/pt-br/#download) para ele e começar a minerar no bntpool.com.
+
+<CTA target="pool" title="Minere para a sua carteira com backup seguro" text="Cole seu endereço Blocknet ou @name no seine, aceite o bntpool.com e guarde sua recovery seed no papel, em casa." />

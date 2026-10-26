@@ -1,0 +1,159 @@
+---
+title: Huge pages giúp đào Blocknet nhanh hơn
+description: Dành sẵn huge pages trên Linux và WSL, hoặc large pages trên Windows, để seine ánh xạ mỗi vùng nhớ Argon2id 2 GiB với ít TLB miss hơn và đào Blocknet nhanh hơn.
+tags: [Hướng dẫn đào coin, Huge pages, Linux, Windows, Hiệu năng]
+faq:
+  - q: 'Có cần huge pages để đào Blocknet bằng seine không?'
+    a: 'Không. seine đào trên bộ nhớ thông thường ngay khi bạn khởi động và tự yêu cầu Linux cấp transparent huge pages. Dành sẵn huge pages là phần bổ sung tùy chọn để lấy thêm vài phần trăm cuối cùng: khoảng 4 đến 6% với trang 2 MiB trên máy kiểm chứng và thêm khoảng 2% với trang 1 GiB.'
+  - q: 'Mỗi luồng seine cần bao nhiêu huge pages?'
+    a: 'Mỗi luồng cần 1.024 trang 2 MiB, vừa đúng vùng nhớ Argon2id 2 GiB của luồng đó, hoặc hai trang 1 GiB. Với trang 2 MiB, hãy nhân số luồng với 1.024, cộng thêm 5% dự phòng rồi làm tròn lên. Tám luồng cần 8.602 trang, tức dành sẵn khoảng 16,8 GiB RAM.'
+  - q: 'seine có tự dùng huge pages 1 GiB không?'
+    a: 'Chế độ trang mặc định của seine dùng nhóm trang 2 MiB đã dành sẵn, sau đó đến transparent huge pages. Để dùng trang 1 GiB, hãy dành sẵn hai trang cho mỗi luồng, tốt nhất là lúc khởi động bằng hugepagesz=1G hugepages=N, rồi chạy seine với --cpu-page-mode large-1g. Chế độ này chạy trên Linux x86_64 và WSL, cho thêm khoảng 2% so với trang 2 MiB.'
+  - q: 'Làm sao bật large pages cho seine trên Windows?'
+    a: 'Cấp cho tài khoản Windows của bạn quyền Lock pages in memory trong secpol.msc, mục Local Policies và User Rights Assignment, rồi đăng xuất và đăng nhập lại. seine tự kích hoạt quyền này khi khởi động và cấp phát vùng nhớ 2 GiB của mỗi luồng bằng large pages. Trên các bản Home, hãy cấp quyền bằng một công cụ như ntrights.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+Khi dành sẵn huge pages, seine có thể đặt bộ nhớ của mỗi luồng đào lên vài trang lớn thay vì hàng trăm nghìn trang nhỏ. Bài hướng dẫn này giải thích vì sao điều đó giúp Proof of Work Argon2id của Blocknet chạy nhanh hơn, cần dành sẵn bao nhiêu trang, cùng các lệnh cụ thể cho Linux, WSL2 và Windows.
+
+## Vì sao huge pages giúp đào Blocknet nhanh hơn?
+
+<Answer>
+Mỗi luồng seine băm bên trong một vùng nhớ Argon2id 2 GiB và đọc các khối ở những vị trí không đoán trước được trong đó. Với trang 4 KiB thông thường, vùng nhớ này trải trên 524.288 trang, nhiều phép dịch địa chỉ hơn hẳn mức TLB của CPU có thể lưu đệm. Huge pages phủ nó bằng 1.024 trang, hoặc chỉ 2 trang, nên ít lần đọc phải chờ duyệt bảng trang hơn.
+</Answer>
+
+Mọi truy cập bộ nhớ đều bắt đầu bằng một địa chỉ ảo mà CPU phải dịch sang địa chỉ vật lý. Các phép dịch gần đây nằm trong translation lookaside buffer (TLB), mà [tài liệu nhân Linux](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) mô tả là "bộ đệm cho các phép dịch từ địa chỉ ảo sang vật lý" và là "tài nguyên rất khan hiếm trên bộ xử lý". Khi một địa chỉ không có trong TLB, CPU phải duyệt bảng trang trong bộ nhớ trước khi có thể bắt đầu lấy dữ liệu.
+
+Proof of Work của Blocknet khiến việc duyệt này xảy ra thường xuyên. Mỗi lần băm lấp đầy một vùng nhớ 2 GiB bằng các khối 1 KiB, và ở nửa sau của lượt chạy, mỗi khối mới đọc một khối trước đó có vị trí phụ thuộc vào dữ liệu vừa tính ra ngay trước. Như [bài giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) cho thấy, tổng cộng là khoảng 2 GiB lượt đọc rải rác cho mỗi lần băm. Kích thước trang quyết định số phép dịch mà các lượt đọc đó cần:
+
+| Kích thước trang | Số trang cho mỗi vùng nhớ 2 GiB |
+|---|---|
+| 4 KiB (thông thường) | 524.288 |
+| 2 MiB | 1.024 |
+| 1 GiB | 2 |
+
+Với huge pages, một mục TLB phủ lượng bộ nhớ gấp 512 hoặc 262.144 lần, nên phần lớn hơn của vùng nhớ nằm trong tầm của TLB và mỗi luồng dành nhiều thời gian hơn cho việc băm.
+
+## Đào bằng huge pages nhanh hơn bao nhiêu?
+
+[Hướng dẫn huge pages](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) của seine gọi đây là thiết lập tinh chỉnh có tác động lớn nhất khi đào bằng CPU trên Linux. Trên máy kiểm chứng, trang 2 MiB dành sẵn cho thêm khoảng **4–6%**, và trang 1 GiB cho thêm chừng **2%** nữa. Hướng dẫn cũng lưu ý rằng khi chạy nhiều luồng, độ phủ huge pages thường quan trọng hơn việc tinh chỉnh theo tập lệnh.
+
+Các kết quả máy chủ trên [biểu đồ hiệu năng](/vi/#performance) của seine được đo với huge pages 2 MiB dành sẵn tường minh. Mức 49,4 H/s từ AMD EPYC Zen 5 (EPYC 9R45) ở 32 luồng, đo vào tháng 10 năm 2026, chạy với 34.407 trang dành sẵn, đúng bằng con số ở hàng 32 luồng trong bảng bên dưới. [Hướng dẫn phần cứng đào coin](/vi/blog/blocknet-mining-hardware-hashrate/) có đầy đủ kết quả theo từng thế hệ.
+
+Ngay cả khi không dành sẵn, seine vẫn yêu cầu nhân Linux cấp transparent huge pages. Một nhóm trang dành sẵn còn đi xa hơn vì các trang được để riêng ngay từ đầu, nên mọi luồng đều nhận được chúng dù bộ nhớ đã bị phân mảnh đến đâu.
+
+## seine cần bao nhiêu huge pages?
+
+<Answer>
+Mỗi luồng seine cần 1.024 huge pages 2 MiB để chứa vùng nhớ 2 GiB của nó, hoặc hai trang 1 GiB. Với trang 2 MiB, hãy dành sẵn số luồng × 1.024 × 1,05 rồi làm tròn lên, tức chừa 5% dự phòng. Tám luồng cần 8.602 trang, khoảng 16,8 GiB. seine in ra con số chính xác khi khởi động nếu lượng dành sẵn chưa đủ.
+</Answer>
+
+Số luồng là con số **Threads** trên bảng điều khiển của seine. seine chọn nó dựa trên RAM và số nhân của bạn, vì vậy hãy chạy seine một lần mà không có huge pages và ghi lại con số này. Nếu lượng dành sẵn quá nhỏ, nhật ký khởi động của seine sẽ in một dòng `hugepages |` cho biết số trang cần và lệnh `sysctl` để dành sẵn chúng.
+
+| Số luồng | Trang 2 MiB (kèm 5% dự phòng) | Bộ nhớ dành sẵn | Trang 1 GiB |
+|---|---|---|---|
+| 4 | 4.301 | 8,4 GiB | 8 |
+| 8 | 8.602 | 16,8 GiB | 16 |
+| 16 | 17.204 | 33,6 GiB | 32 |
+| 24 | 25.805 | 50,4 GiB | 48 |
+| 32 | 34.407 | 67,2 GiB | 64 |
+
+Các trang dành sẵn được để riêng cho những chương trình yêu cầu huge pages, vì vậy hãy chọn lượng dành sẵn theo đúng số luồng bạn thực sự đào. seine tính nhóm trang dành sẵn là bộ nhớ khả dụng khi chọn số luồng, nên việc dành sẵn trang giữ nguyên số luồng của bạn.
+
+## Làm sao thiết lập huge pages 2 MiB trên Linux?
+
+Dành sẵn số trang theo số luồng của bạn. Ví dụ này dành cho 4 luồng:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Kiểm tra xem nhân Linux đã cấp đủ chưa:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Nếu `HugePages_Total` trả về thấp hơn số bạn yêu cầu, bộ nhớ đang bị phân mảnh. Hãy xóa bộ đệm, nén bộ nhớ rồi thử lại:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Giữ lượng dành sẵn cố định sau mỗi lần khởi động:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Với lượng dành sẵn lớn, lưu cấu hình rồi khởi động lại máy là cách chắc chắn nhất, vì nhân Linux dành sẵn trang từ sớm trong quá trình khởi động, trước khi bộ nhớ bị phân mảnh. Sau đó chạy seine như bình thường. Chế độ trang mặc định của nó, `auto`, ánh xạ vùng nhớ của mọi luồng từ nhóm trang dành sẵn mà không cần thêm cờ nào.
+
+## Làm sao thêm trang 1 GiB?
+
+Trang 1 GiB cần thiết lập thêm một chút và cho thêm khoảng 2% so với trang 2 MiB. Mỗi vùng nhớ 2 GiB cần đúng hai trang, nên không phải tính phần dự phòng. Chúng hoạt động trên Linux x86_64 và WSL.
+
+Hãy dành sẵn chúng lúc khởi động bằng tham số kernel, đây là cách đáng tin cậy nhất để có được trang lớn cỡ này. Cho 9 luồng:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Trên máy vừa khởi động, bạn cũng có thể thử dành sẵn khi đang chạy, rồi kiểm tra số trang còn trống:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Các dòng `HugePages_*` trong `/proc/meminfo` chỉ tính kích thước mặc định 2 MiB, nên hãy đọc nhóm trang 1 GiB từ `/sys`. Sau đó chạy seine với chế độ 1 GiB:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+Ở chế độ này, mọi luồng ánh xạ vùng nhớ của nó từ nhóm trang 1 GiB, nên bạn biết chắc cả phiên chạy đều dùng trang 1 GiB.
+
+## Làm sao dành sẵn huge pages trên WSL2?
+
+WSL2 chạy một nhân Linux thật, nên các lệnh Linux ở trên đều dùng được bên trong nó. Với trang 1 GiB, hãy truyền tham số khởi động qua `%UserProfile%\.wslconfig` ở phía Windows. Máy ảo cũng cần đủ bộ nhớ cho lượng dành sẵn cộng với Windows và các dịch vụ WSL. Máy kiểm chứng 64 GiB của seine dùng cấu hình này:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Lưu tệp, chạy `wsl --shutdown` từ Windows rồi mở lại bản phân phối của bạn. Xác nhận số trang còn trống đủ cho mọi luồng trước khi bắt đầu đào.
+
+## Làm sao bật large pages trên Windows?
+
+Đào trực tiếp trên Windows thường nhanh hơn WSL trên cùng phần cứng, và ở đó seine dùng large pages của Windows. Nó cần một quyền, **Lock pages in memory**:
+
+1. Mở `secpol.msc`, rồi vào *Local Policies* → *User Rights Assignment*.
+2. Thêm người dùng của bạn vào **Lock pages in memory**.
+3. Đăng xuất và đăng nhập lại, vì quyền này áp dụng cho phiên mới.
+
+`secpol.msc` có sẵn trên Windows Pro, Enterprise và Education. Trên các bản Home, hãy cấp cùng quyền này bằng một công cụ như `ntrights`.
+
+Thiết lập chỉ có vậy. Khi khởi động, seine tự kích hoạt quyền này và cấp phát vùng nhớ 2 GiB của mỗi luồng bằng `VirtualAlloc` với `MEM_LARGE_PAGES`, phương pháp được [Microsoft mô tả](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) cho bộ nhớ large pages. Nếu không có large pages, seine đào trên trang thông thường và ghi lại lý do kèm cách khắc phục cụ thể. seine không bao giờ tự thay đổi quyền tài khoản hay đăng xuất bạn.
+
+## Nên dùng chế độ trang nào?
+
+Chế độ mặc định phù hợp với hầu hết mọi người. Các chế độ khác dành cho trang 1 GiB và cho việc đo đạc:
+
+| Chế độ | Chức năng |
+|---|---|
+| `--cpu-page-mode auto` (mặc định) | Dùng huge pages dành sẵn hoặc large pages của Windows, rồi đến transparent huge pages, rồi đến trang thông thường |
+| `--cpu-page-mode large` | Yêu cầu huge pages dành sẵn hoặc large pages của Windows cho mọi luồng, và dừng lúc khởi động nếu thiếu |
+| `--cpu-page-mode large-1g` | Yêu cầu trang 1 GiB cho mọi luồng (Linux x86_64 và WSL) |
+| `--cpu-page-mode regular` | Chỉ dùng trang thông thường, để đo so sánh trước và sau |
+
+Để đo mức tăng trên máy của bạn, hãy đào một lúc với `--cpu-page-mode regular`, rồi với `auto` hoặc `large-1g`, và so sánh hashrate trên bảng điều khiển. Với máy chủ có nhiều node NUMA, các trang dành sẵn cũng cần nằm trên những node chạy luồng của bạn; [hướng dẫn đào trên máy chủ](/vi/blog/mine-blocknet-on-servers/) có trình bày phần này.
+
+<CTA target="seine" title="Tải seine và dành sẵn trang của bạn" text="seine ánh xạ vùng nhớ 2 GiB của mỗi luồng lên huge pages ngay khi bạn dành sẵn chúng, không cần thêm cờ nào." />

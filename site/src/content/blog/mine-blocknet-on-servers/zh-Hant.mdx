@@ -1,0 +1,146 @@
+---
+title: 在伺服器與礦機上挖 Blocknet
+description: 用 seine 在 EPYC 伺服器與多台礦機上挖 Blocknet：自動依 NUMA 節點與 L3 快取配置執行緒，無介面執行，並提供控制 API 與 Prometheus 指標。
+tags: [挖礦指南, 伺服器, Linux, seine]
+faq:
+  - q: 'seine 支援 NUMA 伺服器嗎？'
+    a: '支援。在 Linux 上，seine 預設的自動親和性設定會把挖礦執行緒分散到各個 NUMA 節點與 L3 快取群組，先讓每個實體核心各跑一個執行緒，再使用 SMT 同級執行緒。每個執行緒在配置 2 GiB 記憶體區之前會先綁定核心，讓記憶體落在離它最近的位置。在一台雙節點 EPYC 機器上，這讓 8 個執行緒的算力提高了 73%。'
+  - q: 'seine 能在沒有終端機的情況下當作背景服務執行嗎？'
+    a: '能。第一次執行時傳入 --address 與 --pool-url，seine 就會直接啟動而不再詢問，把這兩項儲存到資料目錄中的 seine.config.json，並在沒有連接終端機時改為輸出純文字記錄。這樣就能輕鬆用 systemd 或其他會自動重新啟動它的服務管理程式來執行。'
+  - q: 'seine 能匯出 Prometheus 指標嗎？'
+    a: '能。用 --api-server 或 --service 啟動 seine，它就會在本機控制 API 的 /metrics 上提供 Prometheus 指標，預設監聽 127.0.0.1 的 9977 連接埠。指標包括挖礦程式是否在執行、它的生命週期狀態、已提交、已接受與過期的解，以及後端隔離次數。擷取時需要帶上 API 的 Bearer 權杖。'
+  - q: '為什麼 seine 控制 API 需要權杖？'
+    a: '從 seine v0.2.23 起，除了健康檢查以外，控制 API 的每個端點都需要 Bearer 權杖，這能防止你造訪的網站修改你的收款地址或設定。seine 每次啟動時都會把新的權杖寫入資料目錄中的 control-api.cookie，你也可以用 --api-token 設定固定權杖。'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+本指南介紹如何在大型機器與整排礦機上執行 seine：它如何在多核心伺服器上配置執行緒，如何用服務管理程式無介面執行它，以及如何透過本機控制 API、即時事件串流與 Prometheus 指標來啟動、停止並監控每一台礦機。
+
+## seine 如何善用大型伺服器？
+
+<Answer>
+在 Linux 上，seine 會把挖礦執行緒分散到各個 NUMA 節點，以及每個節點內的 L3 快取群組，先讓每個實體核心各跑一個執行緒，再使用 SMT 同級執行緒。每個執行緒在配置 2 GiB 記憶體區之前會先綁定到自己的核心，讓記憶體落在離它最近的位置。這是預設行為，不需要任何設定。
+</Answer>
+
+Blocknet 的 Argon2id 工作量證明主要是記憶體存取。每個執行緒每次雜湊都要填滿並讀回自己的 2 GiB 記憶體區，所以算力取決於你的執行緒能同時讓多少個記憶體控制器與快取群組忙碌。[Argon2id 詳解](/zh-hant/blog/argon2id-proof-of-work-explained/)說明了其中的原因。
+
+如果執行緒只是依照作業系統的 CPU 順序排列，就會先占滿清單中最前面的核心，而這些核心都位在同一個節點、同幾個快取群組上。在一台雙節點 EPYC 機器上，依作業系統順序執行的 8 個執行緒全部落在節點 0，16 GiB 記憶體區幾乎全部位於該節點的記憶體中。seine 的自動配置則在每個節點各放 4 個執行緒，每個節點約有 8 GiB 記憶體區，兩個節點的記憶體同時派上用場。在一台有 8 個 L3 快取群組的單節點 EPYC 8434P 上，依作業系統順序執行的 24 個執行緒擠在 4 個快取群組裡，每組 6 個。seine 則用滿全部 8 個快取群組，每組 3 個。
+
+執行緒配置會遵守你為行程設定的限制。它會遵循行程的 CPU 與記憶體遮罩，所以在 `taskset`、cgroups 與容器中都能正常運作，而且只使用你允許的核心。在原生 Windows 上，同樣的 `auto` 設定也會先用滿實體核心，再使用 SMT 同級執行緒。
+
+## NUMA 感知的執行緒配置能快多少？
+
+seine 的開發者在 2026 年 10 月 24 日進行了量測：同一個二進位檔以兩種方式交替成對執行，一種是 seine 的自動配置，另一種是依一般作業系統順序綁定（`--cpu-affinity os`）：
+
+| 機器 | 執行緒數 | 記憶體分頁 | 自動配置帶來的提升 |
+|---|---|---|---|
+| 雙節點 AMD EPYC · Zen 3（EPYC 7R13，AWS c6a.8xlarge） | 8 | 一般分頁 | **+73%** |
+| 雙節點 AMD EPYC · Zen 3（EPYC 7R13，AWS c6a.8xlarge） | 8 | 2 MiB 大分頁 | **+108%** |
+| AMD EPYC 伺服器（EPYC 8434P，48 核心，8 個 L3 快取群組） | 24 | 一般分頁 | **+16.7%** |
+
+每一組交替測試都是自動配置較快。完整的方法與原始結果請見 seine 的[大型伺服器指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md)與 [CPU 最佳化紀錄](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md)。
+
+當 seine 執行的執行緒數少於機器的核心數時，這項提升就會顯現。只要決定執行緒數的是記憶體而不是核心數，就會出現這種情況：每個執行緒約需 2 GB，所以要用滿一台 48 核心伺服器，光是記憶體區就需要約 96 GB。執行緒配置能確保你負擔得起的執行緒分布在每個 NUMA 節點與快取群組上。
+
+執行緒配置與大分頁的效果可以疊加，第二列就說明了這一點。如果你預留大分頁，請在每個執行執行緒的節點上都預留，因為總數足夠並不保證有本地分頁。[大分頁指南](/zh-hant/blog/huge-pages-blocknet-mining/)介紹了大分頁設定；在 Linux 上，每個節點的 2 MiB 大分頁池在 `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages` 中設定。
+
+若要在你自己的機器上驗證效果，請在相同執行緒數與相同記憶體分頁設定下比較 `auto` 與 `os`。`--cpu-affinity off` 則把執行緒配置完全交給排程器。
+
+### 共用伺服器上的記憶體餘裕
+
+自動設定執行緒數時會保留總記憶體的 5% 不用，另外還有為 GPU 保留的部分。可以用 `--cpu-memory-reserve-percent` 修改這個比例。如果其他服務開始占用記憶體，seine 的自動執行緒會釋放各自的記憶體區，等記憶體空出來後再恢復，讓挖礦與機器上的其他工作和平共處。調校結果依機器快取，當允許使用的 CPU 集合或 NUMA 與 L3 配置改變時（例如調整虛擬機器規格之後），快取會重設。
+
+## 如何無介面執行 seine？
+
+<Answer>
+在命令列中傳入收款地址與礦池，例如用 `--address` 加上你的地址或 `@name`，再加上 `--pool-url stratum+tcp://bntpool.com:3333`。這樣 seine 啟動時不會詢問，會把設定儲存到資料目錄，並在沒有連接終端機時輸出純文字記錄，因此可以交給服務管理程式執行。
+</Answer>
+
+在桌上型電腦上，seine 第一次執行時會詢問地址與礦池。在沒有連接終端機的伺服器上，請事先提供這兩項：
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+礦機名稱（這裡是 `rack1-node04`）就是這台機器在礦池上顯示的名稱。seine 會把地址、礦池與礦機名稱儲存到資料目錄（預設為 `./seine-data`）中的 `seine.config.json`，所以之後使用同一個資料目錄啟動時不需要其他參數。在預設的 `--ui auto` 下，它在終端機中顯示[儀表板](/zh-hant/blog/seine-dashboard-explained/)，在其他情況下輸出純文字記錄；`--ui plain` 會強制輸出純文字。在 shell 指令中請替 `@name` 與 `$name` 加上引號。
+
+在 Linux 上，可以用 systemd 單元讓 seine 開機啟動，並在它結束時自動重新啟動：
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine 會在啟動時解析短名稱，所以這個單元會等待網路就緒。每台礦機都會在挖礦時自行調校，並把選擇儲存在自己的資料目錄中，供下次啟動使用。
+
+## 如何透過 API 控制 seine？
+
+seine 提供本機 REST API，附帶即時事件串流與 Prometheus 指標，專為儀表板與礦機叢集工具設計。有兩種啟動方式：
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+`--service` 模式會啟動 API，並讓挖礦程式保持閒置，直到控制程式送出 `POST /v1/miner/start`；這個請求可以帶上本次執行的地址、礦池、執行緒數與其他設定。由你的控制程式決定每台機器何時挖礦、使用什麼設定。
+
+### API 權杖
+
+從 seine v0.2.23 起，除了 `GET /v1/health` 以外，每個端點都需要 `Authorization: Bearer <token>`。seine 每次啟動時都會把新的隨機權杖寫入資料目錄中的 `control-api.cookie`，在 Unix 上只有檔案擁有者可以讀取，並在關閉時刪除。如果叢集工具需要固定的值，可以用 `--api-token` 設定，或用 `--api-cookie` 變更檔案位置。API 預設也不會送出 CORS 標頭，並且在綁定迴路位址時會拒絕 `Host` 不是本機的請求，這能防止你造訪的網站修改你的收款地址或設定。
+
+API 預設綁定到 `127.0.0.1:9977`。若要綁定到其他網路介面，需要加上 `--api-allow-unsafe-bind`，所以除非你主動選擇，API 只在本機可用。
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### 即時事件
+
+`GET /v1/events/stream` 是一個伺服器推送事件（SSE）串流。它會即時回報狀態變化、後端階段、自動調校的進度與結果、找到的解以及提交結果，讓儀表板能即時顯示每台礦機。重新連線後，`GET /v1/runtime/state` 會傳回完整的目前狀態。
+
+### Prometheus 指標
+
+`GET /metrics` 提供 Prometheus 指標，包括 `seine_miner_running`、`seine_miner_lifecycle_info`、`seine_miner_submitted_blocks_total`、`seine_miner_accepted_blocks_total` 與 `seine_miner_stale_submits_total`。由於 cookie 檔在每次啟動時都會改變，而且只有 seine 的使用者能讀取，請給 Prometheus 一個固定權杖：用 `--api-token` 啟動 seine，並把同一個值存到 Prometheus 能讀取的檔案中。同一台機器上的擷取工作如下：
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+完整的端點清單、請求結構與事件目錄請見 seine 的[控制 API 文件](https://github.com/zpalmtree/seine/blob/master/docs/API.md)。
+
+## 為礦機挑選機器
+
+無論是一台直立式主機還是一整排伺服器，執行緒配置、無介面執行與 API 的用法都相同。哪些處理器挖得最快、每個執行緒要搭配多少記憶體，請參考 [Blocknet 挖礦硬體指南](/zh-hant/blog/blocknet-mining-hardware-hashrate/)。第一次使用 seine？請從[如何挖 Blocknet](/zh-hant/blog/how-to-mine-blocknet/) 開始。
+
+<CTA target="seine" title="為你的伺服器下載 seine" text="seine 會自動把執行緒配置到各個 NUMA 節點與快取群組，可以無介面執行，並為每台礦機提供附帶即時事件與 Prometheus 指標的控制 API。" />

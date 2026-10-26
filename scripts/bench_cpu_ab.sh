@@ -567,6 +567,21 @@ run_single() {
         )
     fi
 
+    if [[ "$bench_kind" == "kernel" ]]; then
+        python3 - "$report_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    report = json.load(handle)
+if report.get("bench_kind") != "kernel" or report.get("schema_version", 0) < 15:
+    raise SystemExit(
+        "error: CPU kernel A/B requires schema-15 reports with hashing time separate "
+        "from memory setup; use updated builds or kernel-effective for legacy lifecycle comparisons"
+    )
+PY
+    fi
+
     local avg_hps
     local median_hps
     local counted_hashes

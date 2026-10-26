@@ -1,0 +1,98 @@
+---
+title: 'Argon2id iş kanıtı (Proof of Work) nedir, nasıl çalışır?'
+description: 'Blocknet''in Argon2id iş kanıtı her hash için 2 GiB belleği nasıl doldurur? Hashrate''i neden RAM ve bellek bant genişliği belirler, seine''in CPU kernel''leri bunu nasıl kullanır?'
+tags: [Argon2id, İş kanıtı, Blocknet, Madencilik]
+faq:
+  - q: 'Blocknet iş kanıtı için hangi Argon2id parametrelerini kullanır?'
+    a: 'Blocknet, Argon2id sürüm 1.3''ü 2 GiB bellek, tek iterasyon, paralellik değeri 1 ve 32 baytlık çıktıyla çalıştırır. 8 baytlık nonce parola, nonce hariç blok başlığı ise salt olarak kullanılır. Bir hash, ağ zorluğunun belirlediği hedefe eşit ya da ondan küçük olduğunda blok kazanır.'
+  - q: 'Her Blocknet madencilik iş parçacığı neden 2 GB RAM ister?'
+    a: 'Her Argon2id hash''i 1 KiB''lik bloklardan oluşan 2 GiB''lık bir bellek alanını doldurur ve bu geçişin ikinci yarısında her yeni blok, madencinin önceden tahmin edemeyeceği verilerle seçilen daha önceki bir bloğu okur. Bir iş parçacığı tüm bellek alanını bellekte tutmak zorundadır, bu yüzden çalıştırdığınız her iş parçacığı yaklaşık 2 GB RAM ister.'
+  - q: 'Argon2id neden ASIC''lere direnecek şekilde tasarlanmıştır?'
+    a: 'Argon2id, her hash''in pahalı kısmını bellek yapar. Her Blocknet hash''i 2 GiB hızlı bellek ister ve içinden gigabaytlarca veri geçirir, bu yüzden yalnızca hash için üretilmiş bir çip bile çekirdek başına büyük miktarda RAM''e ihtiyaç duyar. Daemon kodu bu tercihi, ASIC''lere direnmek ve adil madenciliği sağlamak için bellek yoğun iş kanıtı olarak tanımlar.'
+  - q: 'Ekran kartıyla Blocknet''in Argon2id algoritmasında madencilik yapılabilir mi?'
+    a: 'Evet. Windows ve Linux''ta seine, CPU ile aynı anda bilgisayardaki her NVIDIA ekran kartında madencilik yapar ve hashrate''ler toplanır. Kernel''ler başlangıçta derlenir, ilk açılışta her kart ayarlanır ve sonuç önbelleğe alınır; bu yüzden başlamadan önce yapılandırmanız gereken hiçbir şey yoktur.'
+sourceHash: ddc65bcd4eb2
+translation: reviewed
+---
+
+Bu yazı Argon2id'nin ne olduğunu, Blocknet'in onu nasıl bir iş kanıtına dönüştürdüğünü, neden bol ve hızlı belleği ödüllendirdiğini ve seine'in çalıştığı her CPU'dan nasıl en fazla hash'i çıkardığını açıklar.
+
+## Argon2id nedir?
+
+<Answer>
+Argon2id, parola hash'leme ve iş kanıtı için RFC 9106'da tanımlanan bellek yoğun bir hash fonksiyonudur. Büyük bir bellek alanını 1 KiB'lik bloklarla doldurur; her bloğu bir öncekinden ve bellekte başka bir yerden seçilen daha önceki bir bloktan oluşturur. Bu yüzden bir hash hesaplamak işlemci zamanının yanında gerçek bellek de gerektirir.
+</Answer>
+
+IRTF'nin Crypto Forum Research Group'u tarafından 2021'de yayımlanan [RFC 9106](https://www.rfc-editor.org/rfc/rfc9106), “parola hash'leme ve iş kanıtı uygulamaları için bellek yoğun Argon2 fonksiyonunu” tanımlar. Argon2'nin üç çeşidi vardır:
+
+- **Argon2d**, hangi önceki bloğu okuyacağını daha önce hesapladığı verilere göre seçer. RFC bunu “kripto paralar ve iş kanıtı uygulamaları için uygun” olarak nitelendirir.
+- **Argon2i**, blokları verilere bağlı olmayan bir sırayla seçer; bu da parola hash'lemeye uygundur.
+- **Argon2id**, “bellek üzerindeki ilk geçişin ilk yarısında Argon2i gibi, geri kalanında Argon2d gibi çalışır.” Birincil çeşit budur: RFC, her uygulamanın onu desteklemesi gerektiğini söyler.
+
+Argon2 belleği arka planda 1.024 baytlık blokların uzun bir dizisi olarak ele alır. Her yeni blok, iki girdiye uygulanan bir G sıkıştırma fonksiyonunun çıktısıdır: hemen önceki blok ve bellekte daha önceki bir referans bloğu. G, BLAKE2b hash fonksiyonunun karıştırma turları üzerine kuruludur; bu turlar 64 bitlik sözcükler üzerinde toplama, XOR ve döndürme işlemleriyle çalışır.
+
+## Blocknet Argon2id'yi iş kanıtı olarak nasıl kullanır?
+
+Blocknet her Argon2id ayarını konsensüs kodunda sabitler, böylece her madenci ve her düğüm tamamen aynı fonksiyonu hesaplar:
+
+| Parametre | Blocknet değeri | Anlamı |
+|---|---|---|
+| Çeşit | Argon2id, sürüm 1.3 | RFC 9106'nın birincil çeşidi |
+| Bellek | 2 GiB (2.097.152 KiB) | Hash başına doldurulan 2.097.152 adet 1 KiB'lik blok |
+| İterasyon | 1 | Bellek üzerinde tek geçiş |
+| Paralellik | 1 | Tek şerit, yani bir hash tek iş parçacığında çalışır |
+| Çıktı | 32 bayt | Hedefle karşılaştırılan değer |
+| Parola | 8 baytlık nonce, little-endian | Madencinin her denemede değiştirdiği sayı |
+| Salt | Nonce hariç blok başlığı | Hash'i tek bir blok şablonuna bağlar |
+
+Madencilik bir aramadır. Madenci yayımlamak istediği blok başlığını alır, bir nonce seçer ve Argon2id hash'ini hesaplar. Sayı olarak okunan 32 baytlık sonuç ağın hedefine eşit ya da ondan küçükse blok geçerlidir. Değilse madenci bir sonraki nonce'u dener.
+
+Hedef doğrudan zorluktan gelir: (2^256 − 1) bölü zorluk. Bu, zorluğu kabaca tüm ağın bir blok bulmak için hesaplaması beklenen hash sayısına eşit kılar. Blocknet her beş dakikada bir blok hedefler, bu yüzden ağ hashrate'i yaklaşık zorluk bölü 300 saniyedir. Zorluğun kendisi, 60 blokluk ağırlıklı bir hareketli ortalama aracılığıyla son blok sürelerini izler.
+
+Havuzlar aynı şekilde, daha kolay bir hedefle çalışır. [bntpool.com](https://bntpool.com)'da seine bağlantı başına daha düşük bir zorluğu karşılayan share'ler gönderir ve ağ hedefini de karşılayan her share, bulunmuş bir bloktur.
+
+## Bellek yoğun iş kanıtı neden sıradan bilgisayarlara uygundur?
+
+Yukarıdaki ayarlar belleği her hash'in merkezine koyar. Tek geçiş ve tek şeritle, geçişin ikinci yarısı veriye bağlıdır: her bloğun referansının konumu, hemen önce hesaplanan bloğun ilk 64 bitlik sözcüğünden alınır. Madenci hangi önceki bloğa ihtiyaç duyacağını ihtiyaç duyduğu ana kadar bilemez, bu yüzden 2 GiB'lık bellek alanının tamamını bellekte tutar.
+
+Bir madenci daha az blok saklayıp eksik olanları gerektiğinde yeniden hesaplamayı deneyebilir. RFC 9106 bunlara zaman-bellek takasları der: bellekten tasarruf sağlarlar, ancak “dahili sıkıştırma fonksiyonuna daha fazla çağrı pahasına.” Bellek alanından çıkarılan her blok, ek hesaplamayla yeniden ödenmek zorundadır.
+
+Tasarımı sıradan donanıma uygun kılan da budur. Masaüstü bilgisayarlar, dizüstüler ve sunucular zaten gigabaytlarca RAM ve onu beslemek için üretilmiş bellek denetleyicileriyle gelir. Yalnızca hash için tasarlanmış bir çip bile hash çekirdeklerinin yanında gigabaytlarca hızlı belleğe ihtiyaç duyar. RFC 9106'nın önerdiği ilk ayar, 2 GiB bellek üzerinde tek geçişli Argon2id'dir; bu, Blocknet'in kullandığıyla aynı geçiş sayısı ve bellek boyutudur ve RFC bu ayarın “özel kaba kuvvet donanımında saldırganın maliyetlerini en üst düzeye çıkardığını” söyler. Blocknet'in daemon kodu bu tercihi, “ASIC'lere direnmek ve adil madenciliği sağlamak için” bellek yoğun iş kanıtı olarak tanımlar. Argon2id ASIC'lere direnecek şekilde tasarlanmıştır ve 2 GiB ayarı bu tasarımı devreye sokar; böylece madencilik, insanların zaten sahip olduğu bilgisayarlara açık kalır. [İş kanıtı ile hisse kanıtı](/tr/blog/proof-of-work-vs-proof-of-stake/) rehberi bunun staking ile nasıl karşılaştırıldığını açıklar.
+
+## Hashrate'i neden RAM ve bellek bant genişliği belirler?
+
+<Answer>
+Her madencilik iş parçacığı kendi 2 GiB'lık bellek alanını tutar, bu yüzden kaç iş parçacığı çalıştırabileceğinizi RAM'iniz belirler. Her hash ayrıca 2 GiB yazar ve dağınık yerlerden yaklaşık aynı miktarı geri okur, bu yüzden bu iş parçacıklarının ne kadar hızlı bitireceğini belleğinizin hızı ve gecikmesi belirler. Bellek, çekirdek sayısı kadar önemlidir.
+</Answer>
+
+**İş parçacığı sayısını RAM belirler.** Paralellik değerinin 1 olması, bir hash'in tek bir iş parçacığında çalışması demektir ve her iş parçacığının kendine ait tam bir 2 GiB'lık bellek alanına ihtiyacı vardır. 16 GB'lık bir bilgisayar, sisteme yer bıraktıktan sonra kabaca altı ila yedi iş parçacığı çalıştırabilir. seine belleğinizi ölçer, %5'ini yedekte tutar ve iş parçacığı sayısını sizin için seçer.
+
+**Her iş parçacığının hızını bant genişliği ve gecikme belirler.** Bir hash 2.097.152 yeni blok oluşturur ve her biri bellek alanının bir yerinden 1 KiB'lik bir referans bloğu okur. Bu, her hash için yaklaşık 2 GiB yazma ve yaklaşık 2 GiB okuma demektir. 10 H/s'de bir bilgisayar her saniye bellek üzerinden kabaca 40 GiB veri taşır. Veriye bağlı yarıda her okuma adresi ancak önceki blok bittiğinde bilinir, bu yüzden belleğin yanıt verme süresi ham aktarım hızı kadar önemlidir.
+
+seine'in [performans sayfası](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) bu yüzden hashrate'in “çekirdek sayısı kadar bellek bant genişliğine ve gecikmesine de bağlı” olduğunu söyler. [Blocknet madencilik donanımı rehberi](/tr/blog/blocknet-mining-hardware-hashrate/) her donanım nesli için en iyi sonucu gösterir.
+
+Huge pages da aynı nedenle yardımcı olur. 2 GiB'lık bir bellek alanı 524.288 adet sıradan 4 KiB'lik sayfaya ya da 1.024 adet 2 MiB'lık sayfaya yayılır. Daha az ve daha büyük sayfalar, bu dağınık okumalarda daha az adres çevirisi ıskası demektir; bu da seine'in doğrulama makinesinde yaklaşık %4–6 kazandırdı. Kurulum [huge pages rehberinde](/tr/blog/huge-pages-blocknet-mining/).
+
+## seine'in CPU kernel'leri Argon2id'den nasıl en iyi şekilde yararlanır?
+
+Kernel, blokları hesaplayan iç döngüdür. seine'in x86 sürümleri skaler, AVX2 ve AVX-512 kernel'leri ile bir streaming çeşidi içerir; Arm sürümleri ise SHA3 hızlı yoluna sahip NEON içerir. Her biri belleğe bağlı işe farklı bir yoldan yaklaşır:
+
+- **AVX2 ve AVX-512**, G'nin BLAKE2b tarzı turlarını geniş vektör yazmaçlarında aynı anda birçok 64 bitlik sözcük üzerinde çalıştırır. AVX-512 ayrıca bu turların sürekli kullandığı yerel döndürme komutlarına sahiptir.
+- **Önceden getirme (prefetching)**, referans bloklarını ihtiyaç duyulmadan önce bellekten ister. Geçişin ilk yarısında adresler önceden bilinir, bu yüzden seine blokları birkaç adım önceden ister. İkinci yarıda seine, mevcut bloğun ilk sözcüğü kesinleşir kesinleşmez bir sonraki referans bloğunu ister ve sıkıştırmanın geri kalanı veri gelirken çalışır.
+- **Streaming**, en son 64 bloğu önbellekteki küçük bir halkada tutar ve biten her bloğu streaming yazmalarla 2 GiB'lık bellek alanına yazar; bu yazmalar doğrudan belleğe gider ve önbelleği hash'in hâlâ ihtiyaç duyduğu bloklar için boş bırakır. seine bunu AMD EPYC Zen 5 işlemcilerde otomatik olarak karşılaştırır.
+- **SHA3 ile NEON**, Arm SHA3 uzantısının XOR ve döndürmeyi tek adımda yapan XAR komutunu, daha geniş önceden getirme kapsamıyla birlikte kullanır.
+
+Test ettiğimiz donanımlarda doğru kernel büyük bir fark yarattı. Bunlar, seine'in performans sayfasından, aynı makinede aynı iş parçacığı sayısıyla yapılmış eşleştirilmiş çalıştırmalardır:
+
+| Makine | Kernel değişikliği | Kazanç |
+|---|---|---|
+| AWS Graviton4 (Neoverse V2), 16 iş parçacığı | NEON'dan prefetch'li SHA3'e | +%56 (13,80'den 21,50 H/s'ye) |
+| AWS Graviton3 (Neoverse V1), 16 iş parçacığı | NEON'dan prefetch'li SHA3'e | +%45 (12,52'den 18,17 H/s'ye) |
+| AMD EPYC 9R45 (Zen 5), 24 iş parçacığı | AVX2'den streaming'e | +%30 (34,47'den 44,74 H/s'ye) |
+| Intel Xeon 8375C (Ice Lake), 1–4 iş parçacığı | AVX2'den AVX-512'ye | +%21–29 |
+
+Bunların hiçbirini kendiniz seçmezsiniz. seine CPU'nuzun desteklediği kernel'leri gerçek madencilik işi üzerinde karşılaştırır, yalnızca iki doğrulanmış kazançtan sonra geçiş yapar ve kazananı bir sonraki başlatma için önbelleğe alır. En iyi kernel iş parçacığı sayısına, sayfa boyutuna ve CPU yerleşimine bağlıdır; seine'in bir seçimi koda gömmek yerine bilgisayarınızda ölçüm yapmasının nedeni budur.
+
+Kendi belleğinizi işe koşmak için [seine'i indirin](/tr/#download), çalıştırın ve adresinizi yapıştırın. Gerisini [madencilik rehberi](/tr/blog/how-to-mine-blocknet/) anlatır.
+
+<CTA target="seine" title="Belleğinizi işe koşun" text="seine'in Argon2id kernel'leri AVX2, AVX-512 ve Arm için ayarlanmıştır. Ücretsiz indirin." />

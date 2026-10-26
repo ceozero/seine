@@ -4,7 +4,17 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Result};
+#[cfg(any(
+    feature = "nvidia",
+    feature = "amd",
+    all(feature = "metal", target_os = "macos")
+))]
 use blake2::digest::{Update, VariableOutput};
+#[cfg(any(
+    feature = "nvidia",
+    feature = "amd",
+    all(feature = "metal", target_os = "macos")
+))]
 use blake2::Blake2bVar;
 use crossbeam_channel::Sender;
 
@@ -366,6 +376,15 @@ pub struct DynamicShareTarget {
     version: AtomicU64,
     share_binding_id: AtomicU64,
     target_words: [AtomicU64; 4],
+    // CPU workers check complete hashes; GPU workers also use this cached target.
+    #[cfg_attr(
+        not(any(
+            feature = "nvidia",
+            feature = "amd",
+            all(feature = "metal", target_os = "macos")
+        )),
+        allow(dead_code)
+    )]
     network_target: Option<[u8; 32]>,
 }
 
@@ -388,6 +407,12 @@ impl DynamicShareTarget {
         }
     }
 
+    #[cfg(any(
+        feature = "nvidia",
+        feature = "amd",
+        all(feature = "metal", target_os = "macos"),
+        test
+    ))]
     pub fn network_target(&self) -> Option<[u8; 32]> {
         self.network_target
     }
@@ -456,6 +481,11 @@ impl WorkTemplate {
             })
     }
 
+    #[cfg(any(
+        feature = "nvidia",
+        feature = "amd",
+        all(feature = "metal", target_os = "macos")
+    ))]
     pub fn network_target(&self) -> Option<[u8; 32]> {
         self.dynamic_share_target
             .as_ref()
@@ -485,6 +515,11 @@ pub struct MiningSolution {
     pub backend: &'static str,
 }
 
+#[cfg(any(
+    feature = "nvidia",
+    feature = "amd",
+    all(feature = "metal", target_os = "macos")
+))]
 pub fn pow_hash_from_last_block_words(last_block_words: &[u64; 128]) -> [u8; 32] {
     let mut block_bytes = [0u8; 1024];
     for (idx, word) in last_block_words.iter().enumerate() {
@@ -494,6 +529,11 @@ pub fn pow_hash_from_last_block_words(last_block_words: &[u64; 128]) -> [u8; 32]
     pow_hash_from_last_block_bytes(&block_bytes)
 }
 
+#[cfg(any(
+    feature = "nvidia",
+    feature = "amd",
+    all(feature = "metal", target_os = "macos")
+))]
 pub fn pow_hash_from_last_block_bytes(last_block_bytes: &[u8; 1024]) -> [u8; 32] {
     let mut hash = [0u8; 32];
     let mut digest = Blake2bVar::new(hash.len()).expect("fixed 32-byte output length");
@@ -915,7 +955,28 @@ pub enum BackendCallStatus {
 pub trait PowBackend: Send + Sync {
     fn name(&self) -> &'static str;
 
+    fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
+        seine_telemetry::BackendSettings {
+            backend: self.name().into(),
+            device_model: None,
+            memory_mib: self.device_memory_bytes().map(|v| v / (1024 * 1024)),
+            lanes: self.enabled_lanes() as u32,
+            cpu_kernel: None,
+            cpu_page_mode: None,
+            gpu_register_cap: None,
+            gpu_launch_depth: None,
+            cpu_backing_mib: None,
+            cpu_affinity: None,
+        }
+    }
+
     fn lanes(&self) -> usize;
+
+    /// Workers currently enabled; a resource-paused backend can report zero
+    /// while retaining a nonzero scheduling capacity.
+    fn enabled_lanes(&self) -> usize {
+        self.lanes()
+    }
 
     /// Total device memory in bytes (e.g. GPU VRAM), if known.
     fn device_memory_bytes(&self) -> Option<u64> {

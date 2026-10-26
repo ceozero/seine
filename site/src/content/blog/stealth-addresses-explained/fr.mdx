@@ -1,0 +1,95 @@
+---
+title: 'Les adresses furtives expliquées : le fonctionnement des adresses à usage unique'
+seoTitle: 'Adresses furtives : le fonctionnement des adresses à usage unique'
+description: 'Les adresses furtives en termes simples : comment adresses à usage unique, clés de visualisation et de dépense et analyse du portefeuille protègent vos paiements.'
+tags: [Confidentialité, Adresses furtives, Portefeuille, Blocknet]
+faq:
+  - q: 'Une adresse furtive est-elle la même chose qu''une adresse à usage unique ?'
+    a: 'Ce sont les deux moitiés d''un même système. L''adresse furtive est l''adresse que vous publiez, composée d''une clé publique de dépense et d''une clé publique de visualisation. Une adresse à usage unique est la nouvelle clé qu''un expéditeur en dérive pour un seul paiement. Seules les adresses à usage unique apparaissent sur la chaîne ; votre adresse publiée, jamais.'
+  - q: 'Quelqu''un peut-il voir mon solde s''il connaît mon adresse furtive ?'
+    a: 'Non. Connaître votre adresse publiée ne permet à personne de trouver vos paiements, car chacun arrive sur une clé à usage unique sans lien apparent avec elle. Pour les trouver, il faut votre clé privée de visualisation : seul votre portefeuille peut donc lister ce que vous avez reçu. Dans Blocknet, les montants sont aussi cachés : même les sorties n''affichent aucune valeur.'
+  - q: 'Que peut faire quelqu''un avec ma clé privée de visualisation ?'
+    a: 'Une clé privée de visualisation permet à son détenteur de trouver les paiements qui vous sont envoyés et d''en lire les montants et les mémos. Elle ne permet de rien dépenser, car la dépense exige la clé privée de dépense. Dans Blocknet, la commande viewkeys transforme votre clé de visualisation en portefeuille en lecture seule, pratique pour surveiller des fonds sur un second ordinateur. Ne la partagez qu''avec des personnes de confiance.'
+  - q: 'Faut-il activer les adresses furtives dans Blocknet ?'
+    a: 'Non. Chaque paiement Blocknet va automatiquement vers une adresse furtive à usage unique, car le format de transaction n''a pas de mode transparent. Votre portefeuille crée la clé à usage unique quand vous envoyez et trouve les paiements entrants avec votre clé de visualisation quand il se synchronise. Il n''y a rien à configurer, que vous payiez une adresse ou un @name.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Une adresse furtive vous permet de publier une seule adresse tout en faisant arriver chaque paiement à un nouvel endroit de la chaîne. Ce guide explique comment cela fonctionne, ce que font respectivement votre clé de visualisation et votre clé de dépense, et comment un portefeuille retrouve ses propres paiements, avec Blocknet comme exemple concret.
+
+## Qu'est-ce qu'une adresse furtive ?
+
+<Answer>
+Une adresse furtive est une adresse publique qui n'apparaît jamais sur la blockchain. Elle contient deux clés publiques, une clé de dépense et une clé de visualisation. Pour chaque paiement, le portefeuille de l'expéditeur les combine avec un nouveau nombre aléatoire pour créer une adresse à usage unique que seul le destinataire peut reconnaître et dépenser.
+</Answer>
+
+Sur un registre public, une adresse ordinaire apparaît dans chaque paiement qu'elle reçoit. Une adresse Bitcoin standard fonctionne ainsi : quiconque la connaît peut consulter chaque paiement et faire le total. C'est pourquoi de nombreux portefeuilles Bitcoin génèrent une nouvelle adresse pour chaque paiement.
+
+Une adresse furtive fait ce travail pour vous. Vous partagez une seule adresse, sur un site web, dans un profil ou sous forme de `@name`, et chaque expéditeur en dérive une adresse à usage unique différente. Dix paiements reçus deviennent dix sorties qui ne partagent rien de visible entre elles ni avec l'adresse que vous avez partagée. Aucun échange préalable n'est nécessaire : l'expéditeur calcule seul l'adresse à usage unique, à partir de votre adresse publique et d'un nombre aléatoire.
+
+## D'où viennent les adresses furtives ?
+
+Le modèle d'adresse à usage unique utilisé par Monero, Blocknet et d'autres cryptomonnaies remonte au livre blanc CryptoNote v2.0 de Nicolas van Saberhagen, daté du 17 octobre 2013. Il appelle l'idée « paiements non reliables » (unlinkable payments) et décrit un expéditeur qui génère une « clé publique à usage unique » à partir de l'adresse du destinataire. La documentation de Monero décrit les adresses furtives comme permettant aux expéditeurs de créer « des adresses aléatoires à usage unique pour chaque transaction au nom du destinataire ».
+
+L'idée s'est répandue au-delà des [cryptomonnaies de confidentialité](/fr/blog/what-is-a-privacy-coin/). Le [BIP 352 « Silent Payments »](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) de Bitcoin permet à une adresse Bitcoin statique de recevoir des paiements impossibles à relier sur la chaîne, et l'[ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) d'Ethereum, créé en 2022, normalise les adresses furtives pour les comptes Ethereum. Ce sont dans les deux cas des fonctions facultatives sur ces chaînes. Dans Blocknet, chaque paiement utilise une adresse à usage unique.
+
+## Comment fonctionnent les adresses furtives ?
+
+<Answer>
+L'expéditeur choisit un nombre aléatoire r, publie R = r·G dans la transaction et combine r avec la clé publique de visualisation du destinataire pour obtenir un secret partagé. Ajouter ce secret à la clé publique de dépense donne la clé à usage unique. Le destinataire reconstruit le même secret à partir de R et de sa clé privée de visualisation : lui seul trouve le paiement.
+</Answer>
+
+Votre portefeuille détient deux paires de clés. Chaque clé privée est un nombre secret (s pour la dépense, v pour la visualisation), et chaque clé publique est ce nombre multiplié par un point fixe de la courbe, G. Votre adresse se compose simplement des deux clés publiques, S et V. Voici l'échange complet :
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+L'astuce est un échange Diffie-Hellman. L'expéditeur calcule r·V et le destinataire calcule v·R, et tous deux aboutissent au même point, car chacun vaut r·v·G. Personne d'autre ne connaît r ni v, donc personne d'autre ne peut le calculer. Le hachage de ce point (H) donne un secret partagé, et la clé à usage unique P est ce secret, sous forme de point, ajouté à votre clé publique de dépense.
+
+Quand vous analysez la chaîne, vous recalculez le secret à partir de R et de votre clé privée de visualisation et vérifiez s'il produit P. Si c'est le cas, la sortie vous appartient. Pour la dépenser, votre portefeuille ajoute le même secret à votre clé privée de dépense, ce qui donne la clé privée x de cette sortie précise.
+
+Blocknet suit ce modèle sur le groupe Ristretto au-dessus de Curve25519, avec un hachage SHA-256 sous une étiquette de domaine propre à Blocknet. Il intègre aussi au hachage la position de chaque sortie dans la transaction, si bien que deux sorties destinées à la même personne dans une même transaction obtiennent malgré tout des clés sans lien entre elles. Le même secret partagé sert aussi à dériver le facteur d'aveuglement qui cache le montant de la sortie et la clé qui chiffre son mémo : c'est ainsi que le destinataire peut lire les deux.
+
+## À quoi servent la clé de visualisation et la clé de dépense ?
+
+La séparation des clés vous donne deux niveaux d'accès :
+
+- **La clé privée de visualisation trouve les paiements.** Avec v et votre clé publique de dépense, un portefeuille peut reconnaître chaque sortie qui vous est envoyée, déchiffrer son montant et lire son mémo.
+- **La clé privée de dépense les dépense.** Seule s transforme une sortie trouvée en clé privée x capable de signer une dépense.
+
+Cette séparation rend possibles les portefeuilles en lecture seule. Dans le portefeuille Blocknet en ligne de commande, `viewkeys` crée un fichier de portefeuille distinct à partir de vos clés de visualisation. L'aide du portefeuille le décrit comme un fichier qui « peut surveiller mais ne peut pas dépenser », utile lorsque « vous voulez un accès en lecture seule sur une autre machine ». Quand vous lancez la commande, le portefeuille explique ce qu'il crée :
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Ne confiez un portefeuille en lecture seule qu'à quelqu'un à qui vous montreriez votre historique, comme votre comptable, ou gardez-le sur un second ordinateur à vous. Dans les deux cas, il peut voir les fonds arriver pendant que votre clé de dépense reste sur la machine de confiance.
+
+## Comment un portefeuille trouve-t-il ses paiements ?
+
+Comme les clés à usage unique n'ont aucun lien apparent avec votre adresse, rien sur la chaîne n'indique quelles sorties sont les vôtres. Votre portefeuille vérifie lui-même. Pour chaque transaction de chaque nouveau bloc, il prend R, calcule le secret partagé avec votre clé privée de visualisation et teste chaque sortie avec la formule ci-dessus. C'est ce que fait un portefeuille quand il se synchronise.
+
+L'analyseur de Blocknet garde cette étape rapide. L'opération coûteuse, la multiplication de R par votre clé de visualisation, n'a lieu qu'une fois par transaction, puis chaque sortie de cette transaction est vérifiée à partir du résultat. Quand une sortie correspond, le portefeuille déchiffre le montant et le vérifie par rapport à l'engagement de Pedersen de la sortie avant de l'ajouter à votre solde.
+
+L'analyse rend aussi la récupération simple. Les deux paires de clés Blocknet proviennent de votre [phrase de récupération](/fr/blog/seed-phrase-explained/) de 12 mots : restaurer la phrase sur un nouvel ordinateur reconstruit les clés, et le portefeuille réanalyse la chaîne pour trouver chaque sortie qui vous appartient. Le [guide du portefeuille Blocknet](/fr/blog/blocknet-wallet-for-mining/) montre comment sauvegarder la phrase et la restaurer.
+
+## Les adresses furtives dans Blocknet
+
+Dans Blocknet, une adresse furtive est tout simplement votre adresse. C'est l'encodage base58 de votre clé publique de dépense, de votre clé publique de visualisation et d'une somme de contrôle de 4 octets, soit 92 ou 93 caractères. Chaque paiement qui vous est destiné l'utilise, car le format de transaction n'a pas de mode transparent. Les récompenses de bloc vont aussi vers des clés à usage unique : la sortie coinbase d'un mineur en solo est donc trouvée par la même analyse.
+
+Les adresses furtives se combinent avec le reste de la confidentialité de Blocknet : [un cercle de 16](/fr/blog/ring-signatures-explained/) cache de quelle sortie provient une dépense, [les engagements](/fr/blog/bulletproofs-explained/) cachent les montants et Dandelion++ cache le point d'entrée d'une transaction dans le réseau. Le [guide de la confidentialité de Blocknet](/fr/blog/blocknet-privacy-features/) passe en revue chaque couche.
+
+Elles fonctionnent aussi avec les noms. Un [nom court Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) comme `@yourname` est associé publiquement à votre adresse : les expéditeurs peuvent le rechercher sur blocknet.id. Les paiements eux-mêmes vont toujours vers de nouvelles clés à usage unique, si bien que votre nom ne révèle rien de ce que vous avez reçu.
+
+Un nom court fait donc une adresse de paiement pratique pour le minage. Lancez [seine](/fr/#download), saisissez votre adresse ou `@yourname` à l'invite et acceptez le pool par défaut, bntpool.com. Le [guide de minage](/fr/blog/how-to-mine-blocknet/) explique la suite, et votre portefeuille trouve les BNT que vous gagnez grâce à la même analyse par clé de visualisation décrite plus haut.
+
+<CTA target="seine" title="Minez des BNT vers votre propre adresse" text="Téléchargez seine, saisissez votre adresse Blocknet ou votre @name, et minez sur bntpool.com en quelques minutes." />

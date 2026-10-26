@@ -1,0 +1,118 @@
+---
+title: Crypto minen op een oude pc of laptop
+description: Mine crypto op een oude pc of laptop. Lees waarom RAM, koeling en stroom het belangrijkst zijn, hoeveel threads je geheugen toelaat en hoe je veilig begint met minen.
+tags: [Mininghandleiding, Laptop, CPU-mining, Hardware]
+faq:
+  - q: 'Kan een laptop met 8 GB RAM crypto minen?'
+    a: 'Ja, op een geheugenintensieve coin zoals Blocknet. Elke mining-thread voor Blocknet heeft ongeveer 2 GB vrij RAM nodig, dus een laptop met 8 GB draait meestal ongeveer twee threads zodra het besturingssysteem zijn deel heeft. seine meet bij het starten je vrije geheugen en kiest een veilig aantal threads voor je.'
+  - q: 'Is het veilig om crypto te minen op een oude laptop?'
+    a: 'Ja, met goede luchtstroom. Minen houdt de processor bezig, net als een lange video-export of een game, en processors vertragen zichzelf als ze te warm worden. Houd de ventilatieopeningen schoon, zet een laptop op een harde ondergrond en gebruik het efficiency-profiel van seine als je minder warmte en geluid wilt.'
+  - q: 'Werkt seine op processors zonder AVX2?'
+    a: 'Ja. De x86-builds van seine bevatten een portable kernel die op elke 64-bit x86-processor draait, naast AVX2- en AVX-512-kernels voor chips die die hebben. seine controleert welke instructiesets je processor ondersteunt en kiest de bijpassende kernel, en vergelijkt kernels tijdens het minen op chips die zowel AVX2 als AVX-512 hebben.'
+  - q: 'Hoeveel stroom verbruikt minen op een oude pc?'
+    a: 'Dat hangt af van de machine. Meet het met een energiemeter in het stopcontact terwijl seine draait, vermenigvuldig de watts met 24 en deel door 1.000 voor het aantal kilowattuur per dag. Vermenigvuldig dat met je stroomtarief voor de kosten per dag en vergelijk dat met het aantal coins dat je per dag verwacht.'
+sourceHash: 6643bf6169d4
+translation: draft
+---
+
+Deze handleiding laat zien hoe je een oude desktop of laptop aan het werk zet met het minen van crypto: wat bepaalt of een machine kan minen, hoeveel mining-threads het geheugen toelaat, hoe je hem koel houdt en hoe je veilig begint met seine op bntpool.com.
+
+## Kun je crypto minen op een oude pc of laptop?
+
+<Answer>
+Ja, als je een coin kiest waarvan de proof of work past bij gewone computers. Geheugenintensieve coins zoals Blocknet worden gemined met gewone processors en RAM, dus een oude desktop of laptop kan zich aansluiten bij een pool en een deel van elk blok verdienen. Het RAM bepaalt hoeveel threads je draait, en koeling houdt ze aan de gang.
+</Answer>
+
+Coins verschillen in wat hun proof of work beloont. De SHA-256 van Bitcoin wordt bijna volledig gemined met ASICs, chips die voor die ene hash zijn gebouwd, dus een computer voor algemeen gebruik voegt daar weinig toe. Geheugenintensieve ontwerpen werken andersom. RandomX van Monero is gebouwd voor gewone CPU's, en Blocknet gebruikt Argon2id met een geheugenblok van 2 GiB voor elke hash, een aanpak die is ontworpen om ASICs te weerstaan. Op een coin als Blocknet doen de onderdelen die elke computer al heeft, een processor en RAM, het minen. De gids over [CPU-mining in 2026](/nl/blog/cpu-mining-2026/) behandelt waar je op let bij een coin die je met een processor minet.
+
+De [uitleg over Argon2id](/nl/blog/argon2id-proof-of-work-explained/) behandelt hoe die proof of work zijn geheugen vult en leest, en waarom de geheugenbandbreedte het tempo bepaalt.
+
+## Wat telt het zwaarst op oudere hardware?
+
+Vier dingen bepalen hoe goed een oudere machine een geheugenintensieve coin minet:
+
+- **RAM.** Elke mining-thread voor Blocknet houdt tijdens het hashen zijn eigen geheugenblok van 2 GiB vast, dus het vrije RAM bepaalt hoeveel threads er passen.
+- **Geheugenbandbreedte.** Elke hash schrijft 2 GiB en leest overal daaruit data terug, dus het geheugensysteem doet het meeste werk. Dual-channel-geheugen (twee gelijke modules) helpt een oudere desktop.
+- **Koeling.** Minen houdt de processor urenlang bezig. Een koele processor houdt zijn kloksnelheid vast, en een hete vertraagt zichzelf om zichzelf te beschermen.
+- **Stroom.** Minen trekt een constant vermogen, dus een energiemeter en je stroomtarief vertellen je wat de machine kost om te draaien.
+
+Het aantal cores telt minder zwaar dan je misschien verwacht. Een quadcore-desktop met 16 GB RAM kan meer threads draaien dan een laptop met acht cores en 8 GB, omdat het RAM eerder op is.
+
+## Hoeveel RAM heeft elke mining-thread nodig?
+
+<Answer>
+Elke mining-thread voor Blocknet heeft ongeveer 2 GB vrij RAM nodig, omdat elke hash zijn eigen geheugenblok van 2 GiB vult. Deel je vrije geheugen door twee om het aantal threads te schatten. seine doet dit bij het starten, houdt 5% van het RAM in reserve en begrenst het aantal op het aantal logische cores van je processor.
+</Answer>
+
+De automatische bepaling van seine neemt het RAM dat bij het starten vrij is, trekt daar een reserve van 5% van af, deelt door 2 GiB en gebruikt dat getal of het aantal logische cores van de processor, welke van de twee lager is. Hier is de berekening voor gangbare groottes, uitgaande van ongeveer 2-3 GB voor het besturingssysteem en een paar achtergrondapps:
+
+| RAM | Geheugenblokken op papier | Threads die seine ongeveer kan draaien |
+|---|---|---|
+| 4 GB | 2 | 1, als het systeem 2 GB vrij laat |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Sluit de browser en andere grote apps voordat je seine start, dan ziet de bepaling meer vrij geheugen. Open je apps terwijl het minet, dan controleert seine elke seconde het vrije RAM, laat het threads hun huidige hash afmaken en parkeren, en haalt het ze terug als er geheugen vrijkomt. Je kunt de computer gewoon blijven gebruiken.
+
+Extra RAM is de meest directe upgrade voor een oude desktop: elke extra 2 GB vrij geheugen is ruimte voor nog een thread, tot aan je aantal cores. De [hardwaregids](/nl/blog/blocknet-mining-hardware-hashrate/) heeft gemeten hashrates en de bepaling voor grotere machines.
+
+## Werkt een oude processor nog?
+
+Ja. De x86-builds van seine bevatten een portable kernel die op elke 64-bit x86-processor draait, plus AVX2- en AVX-512-kernels. AVX2 kwam met de Haswell-processors van Intel in 2013 en Excavator van AMD in 2015, en de AVX2-kernel van seine is gemeten op Haswell- en Broadwell-serverchips. Processors zonder AVX2 draaien de portable kernel. Arm-builds bevatten NEON met een snel SHA3-pad. seine controleert wat je processor ondersteunt en vergelijkt kernels tijdens het minen, en schakelt pas over na een bevestigde winst.
+
+Er zijn downloads voor de meeste machines die je in een kast kunt vinden:
+
+| Systeem | Archief |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 of nieuwer) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+Heeft de pc een NVIDIA-videokaart, dan proberen de builds voor Windows en Linux die ook en minen ze erop naast de processor. Kan de kaart niet starten, dan blijft seine op de processor minen. Op een MacBook met Apple Silicon minet seine standaard op de processor; de [Mac-gids](/nl/blog/mine-blocknet-on-mac/) behandelt het aantal threads per hoeveelheid Mac-geheugen.
+
+## Hoe houd je een laptop koel tijdens het minen?
+
+Een paar gewoontes houden een laptop op volle snelheid:
+
+- **Geef hem lucht.** Zet hem op een bureau of een laptopstandaard en houd de ventilatieopeningen vrij. Stof uit de ventilator en het koellichaam van een oude machine blazen kan verloren snelheid terugbrengen.
+- **Houd hem aan de stekker.** Minen op de accu laat die snel leeglopen, en veel laptops draaien langzamer op accustroom.
+- **Voorkom de sluimerstand.** Het minen stopt zolang de computer slaapt, dus stel het energiebeheer zo in dat hij wakker blijft zolang hij aan de stekker zit.
+- **Draai minder threads voor minder warmte.** Start seine met het efficiency-profiel:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+Het standaardprofiel komt uit op het kleinste aantal threads dat 99% van de beste gemeten hashrate haalt. Het efficiency-profiel houdt het kleinste aantal threads aan dat 75% van die beste hashrate haalt, zodat de machine koeler en stiller draait. Je kunt ook een vast aantal instellen met `--threads 2`, of op `-` en `+` drukken in het dashboard om tijdens het draaien een thread weg te halen of toe te voegen.
+
+## Hoe begin je veilig met minen?
+
+1. **Zorg voor een walletadres.** Installeer de officiële Blocknet-wallet op je hoofdcomputer en kopieer je adres. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) loopt het met je door. De miner heeft alleen je adres nodig, dus houd de wallet en de herstelzin van de reservemachine waarop je minet.
+2. **Download seine van de officiële release.** Haal het op via de [downloadsectie](/nl/#download). Elke release bevat een bestand `SHA256SUMS.txt`, zodat je kunt controleren of het archief klopt.
+3. **Start het.** Dubbelklik op Windows op `seine.exe`. Op macOS of Linux voer je `./seine` uit in de uitgepakte map.
+4. **Voer je adres in en accepteer de standaardpool.** Plak je adres of `@name` en druk op Enter voor `stratum+tcp://bntpool.com:3333`.
+5. **Bekijk het dashboard.** Je hashrate en eerste shares verschijnen binnen enkele ogenblikken, en seine blijft threads en kernels afstemmen terwijl het minet.
+
+De [stapsgewijze mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt dezelfde stappen met meer details over uitbetalingen. Om de machine te meten zonder eerst met een pool te verbinden, draai je de offline benchmark:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## Waarom minen in een pool met een kleine machine?
+
+Een pool betaalt je voor jouw deel van het werk aan elk blok dat hij vindt, dus een kleine machine wordt uitbetaald uit elk poolblok in plaats van te wachten tot hij zelf een heel blok vindt. De gids over [hoe crypto minen werkt](/nl/blog/how-crypto-mining-works/) legt pools en shares uitgebreider uit. Op bntpool.com worden de beloningen verdeeld over de shares die in de zes uur vóór elk blok zijn ingediend, en je saldo wordt uitbetaald zodra het 0,1 BNT bereikt. Je kunt je hashrate en saldo volgen door je adres of `@name` op te zoeken op [bntpool.com](https://bntpool.com).
+
+Om je opbrengst te schatten, gebruik je de netwerkhashrate die op het dashboard van bntpool.com staat. Met blokken van vijf minuten vindt Blocknet 288 blokken per dag, dus je verwachte deel van de nieuwe coins van het netwerk is 288 × (jouw H/s ÷ netwerk-H/s) × de blokbeloning per dag, die elke maand een stap lager wordt.
+
+Reken daarna uit wat de machine kost om te draaien. Meet hem met een energiemeter in het stopcontact terwijl seine minet. Een machine die dag en nacht 65 W trekt, verbruikt 65 × 24 = 1.560 Wh, oftewel 1,56 kWh per dag; vermenigvuldig dat met je stroomtarief. Door de twee getallen te vergelijken krijg je het volledige beeld voor je machine.
+
+<Note>
+Deze cijfers gaan over de huidige Argon2id-proof-of-work van Blocknet. Blocknet plant rond 16 februari 2027 een netwerkupgrade met de naam Faraday die een lichtere proof of work zal brengen, volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Houd seine up-to-date: het controleert bij het starten en elke 12 uur op nieuwe releases.
+</Note>
+
+<CTA target="seine" title="Zet je oude pc aan het werk" text="seine stemt het aantal threads af op je RAM en tunet zichzelf terwijl het minet. Download het, plak je adres en begin met minen op bntpool.com." />

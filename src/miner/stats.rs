@@ -14,6 +14,12 @@ pub struct StatsSnapshot {
     pub accepted: u64,
     pub deferred: u64,
     pub dropped: u64,
+    /// Resubmits sent after retryable ("server busy, retry") pool rejects.
+    pub share_retries: u64,
+    /// Shares accepted only after at least one resubmit.
+    pub retry_accepted: u64,
+    /// Shares rejected for good after at least one resubmit.
+    pub retry_rejected: u64,
     pub hps: f64,
 }
 
@@ -26,6 +32,9 @@ pub struct Stats {
     accepted: AtomicU64,
     deferred: AtomicU64,
     dropped: AtomicU64,
+    share_retries: AtomicU64,
+    retry_accepted: AtomicU64,
+    retry_rejected: AtomicU64,
     expected_backends: Mutex<Vec<String>>,
     degraded_warning: Mutex<Option<String>>,
 }
@@ -41,9 +50,16 @@ impl Stats {
             accepted: AtomicU64::new(0),
             deferred: AtomicU64::new(0),
             dropped: AtomicU64::new(0),
+            share_retries: AtomicU64::new(0),
+            retry_accepted: AtomicU64::new(0),
+            retry_rejected: AtomicU64::new(0),
             expected_backends: Mutex::new(Vec::new()),
             degraded_warning: Mutex::new(None),
         }
+    }
+
+    pub(super) fn started_at(&self) -> Instant {
+        self.started_at
     }
 
     /// Registers backends that this run is expected to keep active. Labels
@@ -101,6 +117,21 @@ impl Stats {
         self.accepted.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn bump_share_retries(&self) {
+        self.share_retries.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Records the final outcome of a share that needed resubmits. The share
+    /// still counts once in `accepted` or `stale_shares` via the usual bumps;
+    /// these counters only say how many of those outcomes followed a retry.
+    pub fn record_retried_share_outcome(&self, accepted: bool) {
+        if accepted {
+            self.retry_accepted.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.retry_rejected.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     pub fn add_deferred(&self, count: u64) {
         if count > 0 {
             self.deferred.fetch_add(count, Ordering::Relaxed);
@@ -122,6 +153,9 @@ impl Stats {
         let accepted = self.accepted.load(Ordering::Relaxed);
         let deferred = self.deferred.load(Ordering::Relaxed);
         let dropped = self.dropped.load(Ordering::Relaxed);
+        let share_retries = self.share_retries.load(Ordering::Relaxed);
+        let retry_accepted = self.retry_accepted.load(Ordering::Relaxed);
+        let retry_rejected = self.retry_rejected.load(Ordering::Relaxed);
         let hps = hashes as f64 / elapsed_secs;
 
         StatsSnapshot {
@@ -133,17 +167,28 @@ impl Stats {
             accepted,
             deferred,
             dropped,
+            share_retries,
+            retry_accepted,
+            retry_rejected,
             hps,
         }
     }
 
     pub fn print(&self) {
         let snapshot = self.snapshot();
+        let retry_summary = if snapshot.share_retries > 0 {
+            format!(
+                " retries={} retry_accepted={} retry_rejected={}",
+                snapshot.share_retries, snapshot.retry_accepted, snapshot.retry_rejected
+            )
+        } else {
+            String::new()
+        };
 
         info(
             "STATS",
             format!(
-                "elapsed={:.1}s hashes={} rate={} templates={} submitted={} stale={} accepted={} deferred={} dropped={}",
+                "elapsed={:.1}s hashes={} rate={} templates={} submitted={} stale={} accepted={} deferred={} dropped={}{}",
                 snapshot.elapsed_secs,
                 snapshot.hashes,
                 format_hashrate(snapshot.hps),
@@ -153,6 +198,7 @@ impl Stats {
                 snapshot.accepted,
                 snapshot.deferred,
                 snapshot.dropped,
+                retry_summary,
             ),
         );
         if let Some(warning) = self.degraded_warning() {
@@ -230,6 +276,30 @@ pub fn median(sorted: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retried_share_outcomes_do_not_double_count_rejects() {
+        let stats = Stats::new();
+        // Share rejected busy twice, then accepted.
+        stats.bump_submitted();
+        stats.bump_share_retries();
+        stats.bump_share_retries();
+        stats.bump_accepted();
+        stats.record_retried_share_outcome(true);
+        // Share rejected busy once, then given up.
+        stats.bump_submitted();
+        stats.bump_share_retries();
+        stats.bump_stale_shares();
+        stats.record_retried_share_outcome(false);
+
+        let snapshot = stats.snapshot();
+        assert_eq!(snapshot.submitted, 2);
+        assert_eq!(snapshot.accepted, 1);
+        assert_eq!(snapshot.stale_shares, 1);
+        assert_eq!(snapshot.share_retries, 3);
+        assert_eq!(snapshot.retry_accepted, 1);
+        assert_eq!(snapshot.retry_rejected, 1);
+    }
 
     #[test]
     fn median_handles_even_and_odd() {

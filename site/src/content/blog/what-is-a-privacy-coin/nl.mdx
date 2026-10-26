@@ -1,0 +1,102 @@
+---
+title: Wat is een privacycoin? Zo werken privé-cryptovaluta
+description: Een privacycoin is een cryptovaluta die verbergt wie betaalde, wie werd betaald en hoeveel. Lees hoe privacycoins werken en waarom privacy als standaard belangrijk is.
+tags: [Privacy, Privacycoins, Ringhandtekeningen, Stealth-adressen, Blocknet]
+faq:
+  - q: 'Wat is het verschil tussen een privacycoin en Bitcoin?'
+    a: 'Bitcoin legt elk adres en elk bedrag openlijk vast, dus iedereen kan coins van het ene adres naar het volgende volgen en elk saldo lezen. Een privacycoin gebruikt cryptografie zoals ringhandtekeningen, eenmalige adressen en verborgen bedragen, zodat de chain nog steeds bewijst dat elke betaling geldig is, terwijl buitenstaanders heel weinig te zien krijgen over wie wie betaalde en hoeveel.'
+  - q: 'Maken alle privacycoins privacy verplicht?'
+    a: 'Nee, de ontwerpen verschillen. Sommige coins, zoals Monero en Blocknet, passen hun privacy toe op elke transactie, dus er is helemaal geen openbare modus. Zcash biedt shielded adressen, die de verzender, de ontvanger en het bedrag verbergen met zero-knowledge proofs, naast transparante adressen die grotendeels werken zoals Bitcoin-adressen. Gebruikers kunnen geld tussen die twee verplaatsen.'
+  - q: 'Hoe kan een netwerk betalingen controleren die het niet kan zien?'
+    a: 'Dankzij de cryptografie kunnen nodes een betaling controleren zonder de details te lezen. Een ringhandtekening bewijst dat een van meerdere outputs is uitgegeven, een key image blokkeert een tweede uitgave van dezelfde coins, en commitments van bedragen tellen op, zodat nodes kunnen bevestigen dat de inputs gelijk zijn aan de outputs plus de fee. Range proofs laten zien dat geen enkel verborgen bedrag negatief is.'
+  - q: 'Kun je een privacycoin minen op een gewone computer?'
+    a: 'Ja, als de coin een geheugenintensieve proof of work gebruikt. Blocknet gebruikt Argon2id, dat voor elke hash ongeveer 2 GB geheugen nodig heeft, dus gewone desktops, laptops en servers doen het minen. Download seine, geef het je Blocknet-adres of @name, en het minet op de pool bntpool.com met je CPU en een eventuele NVIDIA-videokaart.'
+sourceHash: 62f9c81926d6
+translation: draft
+---
+
+Deze gids legt uit wat een privacycoin is, wat een gewone blockchain over je betalingen laat zien en welke cryptografie privacycoins gebruiken om de verzender, de ontvanger en het bedrag te verbergen. Hij eindigt met Blocknet als uitgewerkt voorbeeld en met hoe je je eerste privé-coins verdient door te minen.
+
+## Wat is een privacycoin?
+
+<Answer>
+Een privacycoin is een cryptovaluta die zo is gebouwd dat betalingen de verzender, de ontvanger of het bedrag niet openbaar tonen. Hij gebruikt cryptografie zoals ringhandtekeningen, eenmalige stealth-adressen en verborgen bedragen, zodat elke node nog steeds elke betaling kan controleren, terwijl iemand die de blockchain leest er heel weinig over te weten komt.
+</Answer>
+
+Elke cryptovaluta houdt een gedeeld grootboek bij, de blockchain, dat veel onafhankelijke computers kopiëren en controleren. Die openheid is wat vreemden het eens laat worden over wie wat bezit, zonder een bank in het midden. De vraag die een privacycoin beantwoordt, is hoeveel van elke betaling dat grootboek moet laten zien.
+
+Bitcoin laat er het meeste van zien. De whitepaper beschrijft het privacymodel in één regel: "The public can see that someone is sending an amount to someone else, but without information linking the transaction to anyone." Namen ontbreken, maar adressen en bedragen zijn openbaar. Een privacycoin gaat verder en houdt de details van elke betaling buiten het openbare register, terwijl hij nog steeds bewijst dat de betaling de regels volgt.
+
+## Wat verraadt een openbare blockchain over jou?
+
+Op een transparante chain zoals Bitcoin kan iedereen die een van je adressen kent, het opzoeken in een block explorer en het volgende zien:
+
+- **Het saldo**, tot op de laatste eenheid.
+- **Elke betaling erin en eruit**, met bedragen en data.
+- **Waar het geld daarna naartoe ging**, omdat elke betaling het adres noemt waar ze vandaan komt en het adres waar ze naartoe gaat.
+
+Je naam staat er niet bij, maar adressen blijven zelden lang ongekoppeld. Een winkel betalen, geld opnemen van een exchange of een adres plaatsen voor donaties verbindt het met jou, en vanaf dat moment is de hele geschiedenis leesbaar. Het lijkt een beetje op je bankafschrift ophangen op een openbaar prikbord, met je rekeningnummer in plaats van je naam. Iedereen die je betaalt, kan zien wat je bezit, en iedereen die jou betaalt, kan volgen wat je met het geld doet.
+
+Een privacycoin is zo ontworpen dat het prikbord alleen laat zien dat er geldige betalingen hebben plaatsgevonden.
+
+## Hoe verbergen privacycoins de verzender, de ontvanger en het bedrag?
+
+<Answer>
+Veel privacycoins combineren drie technieken. Ringhandtekeningen verbergen de verzender door de echte coin te mengen met decoys, eenmalige stealth-adressen verbergen de ontvanger door elke betaling een nieuw adres te geven, en commitments met range proofs verbergen het bedrag terwijl ze bewijzen dat het geldig is. Veel coins beschermen ook de netwerklaag, zodat de herkomst van een transactie verborgen blijft.
+</Answer>
+
+Elke techniek dekt één deel van een betaling af. Zo werken ze, in gewone woorden.
+
+### Ringhandtekeningen verbergen wie betaalde
+
+Met een [ringhandtekening](/nl/blog/ring-signatures-explained/) onderteken je namens een groep zonder te verraden welk lid heeft ondertekend. Ron Rivest, Adi Shamir en Yael Tauman beschreven het idee in 2001, en het CryptoNote-ontwerp uit 2013 bracht het naar cryptovaluta. Als je uitgeeft, kiest je wallet andere outputs van de chain als decoys en ondertekent hij voor de hele groep. Iedereen kan controleren dat er één van is uitgegeven, en de handtekening zegt niet welke.
+
+Privacycoins gebruiken koppelbare ringhandtekeningen, die een key image toevoegen: een kenmerk dat uniek is voor de echte coin die wordt uitgegeven en dat niets verraadt over welk lid van de ring het is. Duikt hetzelfde key image twee keer op, dan weigert het netwerk de tweede uitgave, dus ook privé-coins kunnen niet twee keer worden uitgegeven. Monero en Blocknet gebruiken een compacte versie die CLSAG heet.
+
+### Stealth-adressen verbergen wie werd betaald
+
+Bij een systeem met [stealth-adressen](/nl/blog/stealth-addresses-explained/) verschijnt het adres dat je deelt nooit op de chain. Je adres bevat twee publieke sleutels, een view key en een spend key. Voor elke betaling mengt de wallet van de verzender die sleutels met een nieuwe willekeurige waarde en leidt hij een adres af dat één keer wordt gebruikt en daarna nooit meer. Aan jouw kant laat de privé view key je wallet de chain scannen en outputs vinden die aan jou zijn geadresseerd, en met de privé spend key geef je ze uit.
+
+Als tien mensen naar het adres op je website betalen, toont de chain tien aparte eenmalige adressen zonder zichtbaar verband ertussen, dus niemand kan optellen wat je hebt ontvangen.
+
+### Commitments en range proofs verbergen het bedrag
+
+Bedragen worden opgeslagen als Pedersen-commitments, die een getal vastleggen zonder het te tonen. Commitments kunnen bij elkaar worden opgeteld, dus elke node kan bevestigen dat wat een transactie ingaat overeenkomt met wat eruit komt, fee inbegrepen, zonder een van de getallen te zien. Een range proof laat vervolgens zien dat geen enkel verborgen bedrag negatief is, zodat niemand coins uit het niets kan maken. [Bulletproofs](/nl/blog/bulletproofs-explained/), in 2018 gepubliceerd door Bünz en collega's, maakten deze bewijzen veel kleiner.
+
+### Netwerkprivacy verbergt waar een betaling begon
+
+Zelfs een volledig privé-transactie zou herleid kunnen worden naar de computer die hem uitzond, door te kijken welke node hem als eerste aankondigde. [Dandelion++](/nl/blog/dandelion-plus-plus-explained/), gepubliceerd in 2018, gaat dit tegen door een nieuwe transactie eerst stil van de ene peer naar de volgende door te geven langs een "stem" en hem daarna vanaf een willekeurig punt verderop over het hele netwerk te laten verspreiden.
+
+Sommige privacycoins kiezen een andere route. Zcash, gelanceerd in 2016, gebruikt zero-knowledge proofs die zk-SNARKs heten: de shielded adressen verbergen de verzender, de ontvanger en het bedrag, en het bewijs laat zien dat de transactie geldig is zonder een van die gegevens te onthullen.
+
+## Waarom is privacy als standaard belangrijk?
+
+Als privacy een functie is die je aanzet, vormen de transacties die haar gebruiken een kleinere groep, en een kleinere groep is makkelijker te bestuderen. Als elke transactie op dezelfde manier is opgebouwd, ziet een privé-betaling eruit als elke andere betaling op de chain, en hoeft niemand eraan te denken haar te beschermen.
+
+Privacy als standaard houdt ook elke coin uitwisselbaar, een eigenschap die fungibiliteit heet. Op een transparante chain draagt een coin zijn volledige geschiedenis mee, en twee coins met dezelfde waarde kunnen verschillend worden behandeld vanwege waar ze zijn geweest. Als geen enkele coin een zichtbaar verleden heeft, is de ene coin net zo goed als de andere, en dat is wat mensen van geld verwachten.
+
+De alledaagse redenen zijn eenvoudig. Een bedrijf wil niet dat concurrenten zijn betalingen aan leveranciers lezen. Een werknemer wil niet dat zijn salaris zichtbaar is voor iedereen bij wie hij koffie koopt. Iemand die aan een goed doel geeft, houdt dat misschien liever voor zichzelf. Contant geld en gewone bankrekeningen geven mensen al dit soort privacy, en een privacycoin brengt die naar digitale betalingen.
+
+## Blocknet als voorbeeld van een privacycoin
+
+Blocknet is een privacycoin die ringhandtekeningen, stealth-adressen, verborgen bedragen en netwerkprivacy op elke betaling toepast. Het transactieformaat heeft geen transparante modus:
+
+- **Verzender:** elke input wordt ondertekend met een CLSAG-ring van precies 16 outputs, de echte en 15 decoys, en de consensus weigert elke andere grootte.
+- **Ontvanger:** elke betaling gaat naar een eenmalig stealth-adres.
+- **Bedrag:** bedragen zijn Pedersen-commitments met 64-bit range proofs met Bulletproofs.
+- **Netwerk:** transacties reizen met Dandelion++, dat de stems elke 10 minuten omleidt.
+- **Memo:** elke output heeft ruimte voor een versleutelde notitie van maximaal 124 bytes, alleen leesbaar voor de verzender en de ontvanger en opgevuld tot vaste 128 bytes, zodat een betaling met een notitie er hetzelfde uitziet als een zonder.
+
+Met Blocknet kun je iemand ook op naam betalen. Een [korte Blocknet ID-naam](/nl/blog/blocknet-id-pay-by-name/) zoals `@alice` vervangt een adres van meer dan 90 tekens, en betalingen aan de naam komen nog steeds op nieuwe stealth-adressen terecht, dus een openbare naam verraadt niets over het inkomen van de eigenaar. Lees voor elke laag in detail [hoe Blocknet betalingen privé houdt](/nl/blog/blocknet-privacy-features/), en voor het bredere plaatje [wat is Blocknet?](/nl/blog/what-is-blocknet/)
+
+De geplande Faraday-upgrade van Blocknet zal de groep waarin elke uitgave zich verbergt groter maken. In de woorden van [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): "Today a spend hides among 16 outputs. After Faraday, it hides among every output on the chain."
+
+## Hoe kom je aan een privacycoin?
+
+Je kunt er een verdienen door te minen. De proof of work van Blocknet, [Argon2id](/nl/blog/argon2id-proof-of-work-explained/), heeft voor elke hash ongeveer 2 GB geheugen nodig, dus de gewone CPU's en het RAM in desktops, laptops en servers doen het minen. Uitbetalingen van de pool bereiken je zoals elke andere Blocknet-betaling, op eenmalige stealth-adressen met verborgen bedragen.
+
+1. **Zorg voor een wallet.** De [gids over een Blocknet-wallet om te minen](/nl/blog/blocknet-wallet-for-mining/) laat zien hoe je er een aanmaakt, een back-up van de seed maakt en je adres kopieert.
+2. **Download seine.** Het is de gratis opensource Blocknet-miner voor Windows, macOS en Linux, te vinden in de [downloadsectie](/nl/#download). Het minet met je CPU en, op Windows en Linux, tegelijk met een eventuele NVIDIA-videokaart, en stemt zichzelf af terwijl het draait.
+3. **Begin met minen op bntpool.com.** Plak je adres of `@name`, accepteer de standaardpool en uitbetalingen komen privé binnen in je wallet. [Blocknet minen](/nl/blog/how-to-mine-blocknet/) loopt elke stap met je door.
+
+<CTA target="seine" title="Mine een privacycoin op je computer" text="seine minet Blocknet met je CPU en NVIDIA-GPU en betaalt op bntpool.com uit naar je privé-adres of @name." />

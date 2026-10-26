@@ -1,0 +1,102 @@
+---
+title: Privacy coin là gì? Cách tiền mã hóa riêng tư hoạt động
+description: Privacy coin là đồng tiền mã hóa che giấu ai đã trả, ai được trả và bao nhiêu. Tìm hiểu cách các đồng coin riêng tư hoạt động và vì sao riêng tư theo mặc định quan trọng.
+tags: [Quyền riêng tư, Coin riêng tư, Chữ ký vòng, Địa chỉ ẩn, Blocknet]
+faq:
+  - q: 'Privacy coin khác Bitcoin như thế nào?'
+    a: 'Bitcoin ghi công khai mọi địa chỉ và số tiền, nên bất kỳ ai cũng có thể lần theo coin từ địa chỉ này sang địa chỉ khác và đọc từng số dư. Một đồng coin riêng tư dùng mật mã như chữ ký vòng, địa chỉ dùng một lần và số tiền được che giấu, nên chuỗi vẫn chứng minh mọi khoản thanh toán là hợp lệ trong khi người ngoài thấy rất ít về việc ai trả cho ai hay bao nhiêu.'
+  - q: 'Mọi privacy coin đều bắt buộc quyền riêng tư phải không?'
+    a: 'Không, mỗi thiết kế một khác. Một số đồng coin, như Monero và Blocknet, áp dụng quyền riêng tư cho mọi giao dịch, nên hoàn toàn không có chế độ công khai. Zcash cung cấp địa chỉ được bảo vệ (shielded), che giấu người gửi, người nhận và số tiền bằng bằng chứng không tiết lộ thông tin, bên cạnh các địa chỉ minh bạch hoạt động gần giống địa chỉ Bitcoin. Người dùng có thể chuyển tiền giữa hai loại.'
+  - q: 'Làm sao mạng kiểm tra được các khoản thanh toán mà nó không nhìn thấy?'
+    a: 'Mật mã cho phép các node xác minh một khoản thanh toán mà không cần đọc chi tiết của nó. Chữ ký vòng chứng minh một trong nhiều output đã được chi tiêu, key image chặn lần chi tiêu thứ hai của cùng số coin đó, và các commitment số tiền cộng được với nhau để node xác nhận input bằng output cộng phí. Range proof cho thấy không có số tiền bị che giấu nào là số âm.'
+  - q: 'Có thể đào privacy coin trên máy tính thông thường không?'
+    a: 'Có, nếu đồng coin đó dùng Proof of Work memory-hard. Blocknet dùng Argon2id, cần khoảng 2 GB bộ nhớ cho mỗi lần băm, nên các máy để bàn, laptop và máy chủ thông thường làm việc đào. Tải seine, cung cấp địa chỉ Blocknet hoặc @name của bạn, và nó sẽ đào trên pool bntpool.com bằng CPU cùng bất kỳ card đồ họa NVIDIA nào bạn có.'
+sourceHash: 62f9c81926d6
+translation: draft
+---
+
+Bài hướng dẫn này giải thích privacy coin (đồng coin riêng tư) là gì, một blockchain thông thường tiết lộ những gì về các khoản thanh toán của bạn, và mật mã mà các đồng coin riêng tư dùng để che giấu người gửi, người nhận và số tiền. Bài kết thúc với Blocknet làm ví dụ minh họa và cách kiếm những đồng coin riêng tư đầu tiên bằng việc đào.
+
+## Privacy coin là gì?
+
+<Answer>
+Privacy coin là một đồng tiền mã hóa được xây dựng để các khoản thanh toán không phơi bày người gửi, người nhận hay số tiền ra công khai. Nó dùng mật mã như chữ ký vòng, địa chỉ ẩn dùng một lần và số tiền được che giấu, nên mọi node vẫn xác minh được từng khoản thanh toán trong khi người đọc blockchain biết được rất ít về nó.
+</Answer>
+
+Mọi đồng tiền mã hóa đều giữ một sổ cái chung, blockchain, được nhiều máy tính độc lập sao chép và kiểm tra. Sự cởi mở đó cho phép những người lạ thống nhất ai sở hữu gì mà không cần ngân hàng đứng giữa. Câu hỏi mà một đồng coin riêng tư trả lời là sổ cái đó cần hiển thị bao nhiêu phần của mỗi khoản thanh toán.
+
+Bitcoin hiển thị gần như tất cả. Whitepaper của nó mô tả mô hình quyền riêng tư trong một dòng: "Công chúng có thể thấy ai đó đang gửi một số tiền cho người khác, nhưng không có thông tin liên kết giao dịch với bất kỳ ai." Không có tên, nhưng địa chỉ và số tiền đều công khai. Một đồng coin riêng tư đi xa hơn, giữ chi tiết của mỗi khoản thanh toán ngoài hồ sơ công khai trong khi vẫn chứng minh khoản thanh toán tuân theo quy tắc.
+
+## Một blockchain công khai tiết lộ gì về bạn?
+
+Trên một chuỗi minh bạch như Bitcoin, bất kỳ ai biết một địa chỉ của bạn đều có thể tra nó trên block explorer và thấy:
+
+- **Số dư của nó**, đến đơn vị nhỏ nhất.
+- **Mọi khoản thanh toán vào và ra**, kèm số tiền và ngày tháng.
+- **Tiền đã đi đâu tiếp theo**, vì mỗi khoản thanh toán ghi rõ địa chỉ gửi và địa chỉ nhận.
+
+Tên bạn không được ghi ở đó, nhưng địa chỉ hiếm khi giữ được trạng thái không liên kết lâu. Thanh toán cho một cửa hàng, rút tiền từ sàn giao dịch hay đăng địa chỉ nhận quyên góp đều gắn nó với bạn, và từ lúc đó toàn bộ lịch sử có thể đọc được. Nó giống như in sao kê ngân hàng của bạn lên một bảng thông báo công cộng, với số tài khoản thay cho tên. Bất kỳ ai bạn trả tiền đều thấy bạn có bao nhiêu, và bất kỳ ai trả tiền cho bạn đều có thể theo dõi bạn làm gì với số tiền đó.
+
+Một đồng coin riêng tư được thiết kế để bảng thông báo đó chỉ cho thấy rằng các khoản thanh toán hợp lệ đã diễn ra.
+
+## Privacy coin che giấu người gửi, người nhận và số tiền như thế nào?
+
+<Answer>
+Nhiều đồng coin riêng tư kết hợp ba kỹ thuật. Chữ ký vòng che giấu người gửi bằng cách trộn đồng coin thật với các output mồi, địa chỉ ẩn dùng một lần che giấu người nhận bằng cách cấp cho mỗi khoản thanh toán một địa chỉ mới, và commitment cùng range proof che giấu số tiền trong khi chứng minh nó hợp lệ. Nhiều đồng coin còn bảo vệ tầng mạng, để nguồn gốc của giao dịch luôn được che giấu.
+</Answer>
+
+Mỗi kỹ thuật bao phủ một phần của khoản thanh toán. Dưới đây là cách chúng hoạt động bằng ngôn ngữ đơn giản.
+
+### Chữ ký vòng che giấu ai đã trả
+
+[Chữ ký vòng](/vi/blog/ring-signatures-explained/) cho phép bạn ký thay mặt một nhóm mà không tiết lộ thành viên nào đã ký. Ron Rivest, Adi Shamir và Yael Tauman mô tả ý tưởng này năm 2001, và thiết kế CryptoNote năm 2013 đưa nó vào tiền mã hóa. Khi bạn chi tiêu, ví chọn các output khác trên chuỗi làm mồi và ký cho cả nhóm. Bất kỳ ai cũng kiểm tra được rằng một trong số chúng đã được chi tiêu, và chữ ký không nói là cái nào.
+
+Các đồng coin riêng tư dùng chữ ký vòng có thể liên kết, có thêm key image: một thẻ duy nhất cho đồng coin thật đang được chi tiêu nhưng không tiết lộ gì về việc nó là thành viên nào trong vòng. Nếu cùng một key image xuất hiện hai lần, mạng từ chối lần chi tiêu thứ hai, nên coin riêng tư vẫn không thể bị tiêu hai lần. Monero và Blocknet dùng một phiên bản gọn gàng gọi là CLSAG.
+
+### Địa chỉ ẩn che giấu ai được trả
+
+Với cơ chế [địa chỉ ẩn](/vi/blog/stealth-addresses-explained/), địa chỉ bạn chia sẻ không bao giờ xuất hiện trên chuỗi. Địa chỉ của bạn chứa hai khóa công khai, một view key và một spend key. Với mỗi khoản thanh toán, ví của người gửi trộn các khóa đó với một giá trị ngẫu nhiên mới và tạo ra một địa chỉ chỉ dùng một lần rồi không bao giờ dùng lại. Về phía bạn, private view key cho phép ví quét chuỗi và nhận ra các output gửi cho bạn, còn private spend key cho phép bạn chi tiêu chúng.
+
+Nếu mười người trả tiền vào địa chỉ trên trang web của bạn, chuỗi hiển thị mười địa chỉ dùng một lần riêng biệt, không có liên kết nào nhìn thấy được giữa chúng, nên không ai có thể cộng tổng số bạn đã nhận.
+
+### Commitment và range proof che giấu số tiền
+
+Số tiền được lưu dưới dạng Pedersen commitment, khóa chặt một con số mà không để lộ nó. Các commitment có thể cộng với nhau, nên mọi node đều xác nhận được rằng những gì đi vào một giao dịch khớp với những gì đi ra, kể cả phí, mà không cần thấy bất kỳ con số nào. Sau đó range proof cho thấy không có số tiền bị che giấu nào là số âm, nên không ai có thể tạo coin từ hư không. [Bulletproofs](/vi/blog/bulletproofs-explained/), được Bünz và các cộng sự công bố năm 2018, làm cho các bằng chứng này nhỏ đi rất nhiều.
+
+### Quyền riêng tư tầng mạng che giấu nơi khoản thanh toán bắt đầu
+
+Ngay cả một giao dịch hoàn toàn riêng tư cũng có thể bị lần ra máy tính đã phát nó, bằng cách theo dõi node nào thông báo nó đầu tiên. [Dandelion++](/vi/blog/dandelion-plus-plus-explained/), công bố năm 2018, chống lại điều này bằng cách trước tiên chuyển một giao dịch mới một cách lặng lẽ từ peer này sang peer khác dọc theo một "thân" (stem), rồi để nó lan ra toàn mạng từ một điểm ngẫu nhiên xa hơn.
+
+Một số đồng coin riêng tư đi theo hướng khác. Zcash, ra mắt năm 2016, dùng bằng chứng không tiết lộ thông tin gọi là zk-SNARK: địa chỉ được bảo vệ (shielded) của nó che giấu người gửi, người nhận và số tiền, còn bằng chứng cho thấy giao dịch hợp lệ mà không tiết lộ bất kỳ điều nào trong số đó.
+
+## Vì sao riêng tư theo mặc định quan trọng?
+
+Khi quyền riêng tư là một tính năng bạn phải bật, các giao dịch dùng nó tạo thành một nhóm nhỏ hơn, và nhóm nhỏ hơn thì dễ phân tích hơn. Khi mọi giao dịch được xây dựng theo cùng một cách, một khoản thanh toán riêng tư trông giống mọi khoản thanh toán khác trên chuỗi, và không ai phải nhớ để bảo vệ nó.
+
+Riêng tư theo mặc định cũng giữ cho mọi đồng coin có thể thay thế cho nhau, một đặc tính gọi là tính hoán đổi (fungibility). Trên một chuỗi minh bạch, một đồng coin mang theo toàn bộ lịch sử của nó, và hai đồng coin cùng giá trị có thể bị đối xử khác nhau vì nơi chúng đã đi qua. Khi không đồng coin nào có quá khứ nhìn thấy được, đồng này cũng tốt như đồng kia, đúng như những gì mọi người mong đợi ở tiền.
+
+Những lý do thường ngày rất đơn giản. Một doanh nghiệp không muốn đối thủ đọc được các khoản thanh toán cho nhà cung cấp. Một nhân viên không muốn mức lương bị lộ cho mọi người họ mua cà phê. Một người ủng hộ một mục đích có thể muốn giữ điều đó cho riêng mình. Tiền mặt và tài khoản ngân hàng thông thường vốn đã cho mọi người loại quyền riêng tư này, và một đồng coin riêng tư mang nó đến các khoản thanh toán số.
+
+## Blocknet, một ví dụ về privacy coin
+
+Blocknet là một đồng coin riêng tư áp dụng chữ ký vòng, địa chỉ ẩn, số tiền được che giấu và quyền riêng tư tầng mạng cho mọi khoản thanh toán. Định dạng giao dịch của nó không có chế độ minh bạch:
+
+- **Người gửi:** mỗi input được ký bằng một vòng CLSAG gồm đúng 16 output, output thật và 15 output mồi, và đồng thuận từ chối mọi kích thước khác.
+- **Người nhận:** mọi khoản thanh toán đều đến một địa chỉ ẩn dùng một lần.
+- **Số tiền:** số tiền là các Pedersen commitment kèm range proof Bulletproofs 64 bit.
+- **Mạng:** giao dịch được truyền bằng Dandelion++, đổi tuyến stem mỗi 10 phút.
+- **Memo:** mỗi output có chỗ cho một ghi chú được mã hóa dài tối đa 124 byte, chỉ người gửi và người nhận đọc được, và được đệm thành cố định 128 byte, nên một khoản thanh toán có ghi chú trông giống hệt khoản không có.
+
+Blocknet còn cho phép bạn thanh toán cho ai đó bằng tên. Một [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) như `@alice` thay thế cho một địa chỉ dài hơn 90 ký tự, và các khoản thanh toán tới tên đó vẫn đến những địa chỉ ẩn mới, nên một cái tên công khai không tiết lộ gì về thu nhập của chủ nhân. Để tìm hiểu sâu từng lớp, hãy đọc [cách Blocknet giữ riêng tư cho các khoản thanh toán](/vi/blog/blocknet-privacy-features/), và để có bức tranh rộng hơn, đọc [Blocknet là gì?](/vi/blog/what-is-blocknet/)
+
+Bản nâng cấp Faraday dự kiến của Blocknet sẽ mở rộng nhóm mà mỗi lần chi tiêu ẩn vào. Theo lời của [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): "Hiện nay, một lần chi tiêu ẩn giữa 16 output. Sau Faraday, nó ẩn giữa mọi output trên chuỗi."
+
+## Làm sao để có một đồng privacy coin?
+
+Bạn có thể kiếm bằng cách đào. Proof of Work của Blocknet, [Argon2id](/vi/blog/argon2id-proof-of-work-explained/), cần khoảng 2 GB bộ nhớ cho mỗi lần băm, nên CPU và RAM thông thường trong máy để bàn, laptop và máy chủ làm việc đào. Các khoản thanh toán từ pool đến với bạn như mọi khoản thanh toán Blocknet khác, trên các địa chỉ ẩn dùng một lần với số tiền được che giấu.
+
+1. **Tạo ví.** [Hướng dẫn ví Blocknet để đào coin](/vi/blog/blocknet-wallet-for-mining/) chỉ cách tạo ví, sao lưu seed và sao chép địa chỉ.
+2. **Tải seine.** Đây là trình đào Blocknet miễn phí, mã nguồn mở cho Windows, macOS và Linux, có trong [mục tải xuống](/vi/#download). Nó đào bằng CPU của bạn và, trên Windows và Linux, cùng lúc với mọi card đồ họa NVIDIA, đồng thời tự tinh chỉnh trong lúc chạy.
+3. **Bắt đầu đào trên bntpool.com.** Dán địa chỉ hoặc `@name` của bạn, chấp nhận pool mặc định, và các khoản thanh toán sẽ đến ví của bạn một cách riêng tư. [Cách đào Blocknet](/vi/blog/how-to-mine-blocknet/) trình bày từng bước.
+
+<CTA target="seine" title="Đào privacy coin trên máy tính của bạn" text="seine đào Blocknet bằng CPU và GPU NVIDIA của bạn và thanh toán trên bntpool.com về địa chỉ riêng tư hoặc @name của bạn." />

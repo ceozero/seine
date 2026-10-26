@@ -1,0 +1,91 @@
+---
+title: 'Dandelion++ nedir: stem ve fluff ile işlem aktarımı'
+description: Stem ve fluff aktarımından 2018 makalesinin tasarımına kadar Dandelion++'ın sade bir anlatımı ve Blocknet'in bir işlemi hangi düğümün gönderdiğini gizlemek için onu nasıl kullandığı.
+tags: [Gizlilik, Dandelion++, Ağ, Blocknet]
+faq:
+  - q: 'Dandelion++ IP adresimi gizler mi?'
+    a: 'Bir işlemi hangi düğümün başlattığını ağın dört bir yanına yayılmış gözlemcilerden gizler. İşlem ancak sizden birkaç adım ötede fluff aşamasına geçtikten sonra geniş çapta yayılır. İlk stem eşiniz işlemin sizin düğümünüzden geldiğini görür, ancak stem mesajları bir düğüm işlemi kendisi oluştursa da yalnızca aktarsa da aynı göründüğünden hangisi olduğunu anlayamaz.'
+  - q: 'Dandelion ile Dandelion++ arasındaki fark nedir?'
+    a: 'Dandelion (2017), tek bir aktarıcı hattı üzerinde stem ve fluff aşamalarını tanıttı. Dandelion++ (2018) iki aşamayı korur ve onları kuralları çiğneyen casuslara karşı güçlendirir. Her düğümün iki aktarıcı seçtiği bir graf kullanır, kendi işlemlerini sabit bir kenar boyunca gönderir, her epoch''ta yeni aktarıcılar seçer ve bir güvenlik zamanlayıcısı ekler.'
+  - q: 'Hangi kripto paralar Dandelion++ kullanıyor?'
+    a: 'Monero, Mayıs 2020''de yayımlanan 0.16 sürümünde Dandelion++''ı ekledi ve Blocknet her işlemi onunla aktarır. Dandelion ilk olarak aynı araştırma grubu tarafından Bitcoin için BIP 156 olarak önerildi. Eşler arası bir ağ üzerine kurulu her coin onu benimseyebilir, çünkü yalnızca düğümlerin yeni işlemleri birbirine nasıl ilettiğini değiştirir.'
+  - q: 'Blocknet hangi Dandelion++ ayarlarını kullanır?'
+    a: 'Blocknet düğümleri her adımda stem''i 0,9 olasılıkla sürdürür, yani bir işlem her aktarıcıda %10 olasılıkla fluff aşamasına geçer. Stem rotaları her 10 dakikada bir değişir. Kendi işleminiz 45 saniye içinde fluff aşamasında düğümünüze geri dönmezse düğümünüz onu kendisi yayınlar, böylece işlem her zaman ağa ulaşır.'
+sourceHash: 036cbd9214b7
+translation: draft
+---
+
+Dandelion++, yeni işlemleri eşler arası bir ağda, ağı izleyenlerin onları hangi bilgisayarın gönderdiğini kolayca çıkaramayacağı şekilde aktarmanın bir yoludur. Bu rehber çözdüğü sorunu, stem ve fluff aşamalarının nasıl çalıştığını, 2018 makalesinin özgün tasarıma neler eklediğini ve Blocknet'in onu her ödemede nasıl kullandığını açıklar.
+
+## Dandelion++ nedir?
+
+<Answer>
+Dandelion++, bir işlemi hangi düğümün oluşturduğunu gizleyen bir işlem aktarım protokolüdür. Yeni bir işlem önce birkaç adım boyunca bir düğümden tek bir sonraki düğüme aktarılarak bir “stem” (gövde) boyunca ilerler. Ardından “fluff” aşamasına geçer ve tüm ağa yayılır; gerçek göndericiden uzaktaki bir düğümden başlıyormuş gibi görünür.
+</Answer>
+
+Ad, yolun şeklinden gelir: ince bir gövde, ardından her yöne savrulan bir tohum bulutu (dandelion, karahindiba demektir). Dandelion++ 2018'de Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller ve Pramod Viswanath tarafından [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) dergisinde yayımlandı ([arXiv](https://arxiv.org/abs/1805.11060)'te ön baskısı mevcut) ve ACM SIGMETRICS 2018'de sunuldu. Aynı grubun 2017'deki önerisi olan Dandelion'ı geliştirir.
+
+## Bir işlemi yayınlamak neden nereden geldiğini açığa çıkarır?
+
+Bir işlem mesajı IP adresinizi içermez. Ancak yayılma biçimi ele verir. Tipik bir kripto para ağında, işlemi oluşturan düğüm onu tüm eşlerine gönderir, onlar da kendi eşlerine gönderir ve işlem kaynaktan halkalar halinde dışa doğru dalgalanır.
+
+Araştırmacılar bu dalgalanmanın ölçülebileceğini gösterdi. 2014'te Biryukov, Khovratovich ve Pustogarov ile bunlardan ayrı olarak Koshy, Koshy ve McDaniel, erişilebilir Bitcoin düğümlerinin neredeyse hepsine bağlanan ve her işlemin her eşten ne zaman geldiğini kaydeden bir “süper düğüm” çalıştırdı. Bir işlemi ilk ileten düğüm çoğu zaman onu oluşturan düğümdü. Dandelion++ makalesi buna ilk casus tahmincisi (first-spy estimator) der: bir işlemi ileten ilk dürüst düğümün onun kaynağı olduğunu tahmin etmek. Basittir ve taşkın yayılmaya (flooding) karşı iyi çalışır.
+
+Her düğümün bir işlemi iletmeden önce rastgele gecikmeler eklemesi, ki Bitcoin Core bunu difüzyon adlı bir yöntemle yapar, zamanlamayı daha gürültülü hale getirir. Dandelion araştırması farklı bir yol izledi ve yolun şeklinin kendisini değiştirdi.
+
+## Stem ve fluff aşamaları nasıl çalışır?
+
+<Answer>
+Stem aşamasında her düğüm işlemi tam olarak bir eşe iletir. Her adımda düğüm ağırlıklı bir yazı tura atar: genellikle stem'i sürdürür, bazen fluff'a geçer. Fluff aşamasında işlem her zamanki gibi tüm eşlere yayınlanır, bu yüzden gözlemciler onun fluff'a geçen düğümden yayıldığını görür.
+</Answer>
+
+Adım adım:
+
+1. **Düğümünüz bir stem başlatır.** Yeni işlemi yalnızca bir eşe gönderir.
+2. **Her aktarıcı karar verir.** Eş, işlemi ya bir eşe daha iletir (stem) ya da yayınlar (fluff).
+3. **Fluff onu her yere yayar.** Fluff'a geçen düğümden itibaren işlem ağı her zamanki şekilde kaplar ve madencilere ulaşır.
+
+Birçok düğümü izleyen bir casus artık dalgalanmanın, sizden birçok adım uzakta olabilecek fluff düğümünde başladığını görür. Stem uzunluğu rastgeledir, bu yüzden casus sabit sayıda adım geriye sayamaz. Makale beklenen stem uzunluğunu 1/q olarak verir; burada q, her adımda fluff'a geçme olasılığıdır. q = 0,1 ile bir stem ortalamada yaklaşık on adım sürer.
+
+## Dandelion++, Dandelion'dan neyi değiştirdi?
+
+2017 Dandelion tasarımı stem'leri tek bir aktarıcı hattı boyunca gönderiyordu ve güçlü sonuçlarını üç varsayım altında kanıtlıyordu: her düğüm kurallara uyar, her düğüm bir işlem gönderir ve her düğüm Dandelion çalıştırır. 2018 makalesi bu varsayımları çiğneyen casusların nasıl daha fazlasını öğrenebileceğini gösterdi, ardından tasarımı garantiler onlara karşı da geçerli olacak şekilde değiştirdi. Tasarım epoch'lar halinde ilerler; her düğüm “10 dakika mertebesinde” yeni bir epoch'a geçer ve her epoch içinde dört mekanizma kullanır:
+
+| Mekanizma | Ne yapar |
+|---|---|
+| Yaklaşık 4-düzenli bir aktarım grafı | Her düğüm giden bağlantılarından en fazla ikisini aktarıcı olarak seçer; tek bir hat yerine iç içe geçmiş yollardan oluşan bir ağ oluşur. |
+| Kendi işlemleriniz için tek kenar | Bir düğüm oluşturduğu her işlemi aynı giden kenar boyunca gönderir, böylece birkaç işlem göndermek daha fazlasını açığa çıkarmaz. |
+| Sözde rastgele aktarım | Her epoch'ta bir düğüm, stem'de aldığı tüm işlemler için ya aktarıcı ya da yayıcıdır ve gelen her kenarı bir giden kenara eşler. |
+| Güvenlik zamanlayıcıları | Bir stem işlemini gönderen veya aktaran düğüm, onun fluff'a geçtiğini görmek için rastgele bir süre bekler; geçmezse onu kendisi yayınlar. |
+
+q'yu seçmek için makalenin simülasyonları, q'yu 0,2 veya altında tutmanın bir casusun aktarım grafını manipüle ederek elde edebileceği kazancı sınırladığını buldu. Yazarlar uygulamalarını Bitcoin'in canlı ağında çalıştırdı ve yayılmayı 4,5 saniyelik hedeflerinin içinde tutmak için q = 0,1 veya q = 0,2'yi seçti.
+
+Dandelion, Bitcoin için [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki) olarak önerildi. Monero, Mayıs 2020'de yayımlanan [0.16 sürümünde](https://www.getmonero.org/2020/05/23/monero-0.16-released.html) Dandelion++'ı ekledi.
+
+## Blocknet Dandelion++'ı nasıl kullanır?
+
+Her Blocknet düğümü işlemleri Dandelion++ ile aktarır ve açmanız gereken hiçbir şey yoktur. BNT gönderdiğinizde düğümünüz önce işlemi kontrol eder ve kendi bellek havuzuna (mempool) ekler, ardından onu Dandelion++ yönlendiricisine teslim eder. Daemon'daki ayarlar şunlardır:
+
+| Ayar | Değer | Anlamı |
+|---|---|---|
+| Stem olasılığı | 0,9 | Her aktarıcı zamanın %90'ında stem'i sürdürür, %10'unda fluff'a geçer (q = 0,1); makalenin test ettiği q ile aynıdır. |
+| Epoch | 10 dakika | Stem rotaları her 10 dakikada bir yeniden karıştırılır. |
+| Ambargo zamanlayıcısı | 45 saniye | İşleminiz o süreye kadar fluff aşamasında düğümünüze geri dönmezse düğümünüz onu kendisi yayınlar. |
+
+Bir Blocknet ödemesi şöyle ilerler:
+
+- **Düğümünüz epoch için bir stem eşi seçer.** Bir sonraki 10 dakikalık epoch'a kadar oluşturduğu her işlemi aynı eşe gönderir; bu, makalenin bir düğümün kendi işlemleri için koyduğu kurala uyar.
+- **Her aktarıcı yeni bir seçim yapar.** Bir stem işlemi alan düğüm onu %10 olasılıkla fluff'a geçirir. Aksi halde onu, geldiği eş dışında rastgele seçilmiş bir eşe iletir. q = 0,1 ile bir stem ortalamada yaklaşık on adım sürer.
+- **Stem mesajları her düğümden aynı görünür.** Bir düğüm stem başlatmak için de, bir stem'i aktarmak için de aynı mesajı kullanır, bu yüzden onu alan eş işlemi sizin mi oluşturduğunuzu yoksa aktardığınızı mı anlayamaz.
+- **İşlem her zaman ulaşır.** Bir stem adımı iletilemezse düğüm işlemi hemen fluff'a geçirir; takılan her şeyi de 45 saniyelik ambargo kapsar.
+- **Aktarıcılar taşıdıklarını kontrol eder.** Bir düğüm, bir stem içeriğini aktarmadan önce onun düzgün biçimlendirilmiş bir işlem olduğunu doğrular ve çöp gönderen bir eşi cezalandırır.
+
+## Dandelion++, Blocknet'in diğer gizlilik katmanlarıyla nasıl uyum sağlar?
+
+Dandelion++ ağ katmanında çalışır: bir işlem ile onu gönderen bilgisayar arasındaki bağı korur. Blocknet'i bir [gizlilik coini](/tr/blog/what-is-a-privacy-coin/) yapan zincir üstü gizlilik ise işlemin ne söylediğini korur: her girdideki 16'lık bir CLSAG halkası göndereni, tek kullanımlık gizli adresler alıcıyı, Bulletproofs aralık kanıtlarıyla Pedersen taahhütleri de tutarları gizler. Bu korumalar zorunludur, bu yüzden Dandelion++ onu taşımadan önce bile her işlem birbirine benzer.
+
+İki katman birbirini tamamlar. Halka imzalar hangi çıktının ödediğini, Dandelion++ ise ödemeyi hangi düğümün yayınladığını gizler. [Blocknet ödemeleri nasıl gizli tutar](/tr/blog/blocknet-privacy-features/) yazısı her zincir üstü katmanı ele alır; [Blocknet nedir?](/tr/blog/what-is-blocknet/) ise Blocknet ID ile isimle ödeme dahil genel bir bakış sunar.
+
+Gönderecek kendi BNT'nizi edinmek için onu evde kazabilirsiniz. seine'i indirmek, onu bntpool.com'a yönlendirmek ve ödemelerin cüzdan adresinize veya `@name` adınıza gelmesini sağlamak için [Blocknet madenciliği rehberini](/tr/blog/how-to-mine-blocknet/) izleyin.
+
+<CTA target="seine" title="seine ile ilk BNT'nizi kazın" text="seine kendini bilgisayarınıza göre ayarlar ve bntpool.com'da adresinize veya @name adınıza BNT kazar; ilk gizli ödemeniz için hazır." />

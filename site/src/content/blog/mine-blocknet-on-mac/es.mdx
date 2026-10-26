@@ -1,0 +1,131 @@
+---
+title: Cómo minar Blocknet en un Mac
+description: Mina Blocknet en un Mac con Apple Silicon usando seine. Configúralo en Terminal, consulta el resultado medido de 30,9 H/s del M4 Max y descubre cuántos hilos admite tu Mac.
+tags: [Guía de minería, macOS, Apple Silicon, seine]
+faq:
+  - q: '¿Se puede minar Blocknet en un MacBook Air?'
+    a: 'Sí. Todos los Mac con Apple Silicon ejecutan seine, incluido el MacBook Air. Descarga seine-macos-aarch64.tar.gz, descomprímelo en Terminal y ejecuta ./seine. Cada hilo necesita unos 2 GB de memoria, así que un MacBook Air de 16 GB admite hasta siete hilos, y seine fija el número por ti según la memoria libre.'
+  - q: '¿seine usa la GPU al minar Blocknet en un Mac?'
+    a: 'En Apple Silicon, seine mina con la CPU de forma predeterminada, porque es la opción más rápida. La CPU y los núcleos gráficos comparten la misma memoria unificada, y la prueba de trabajo Argon2id de Blocknet depende del ancho de banda de memoria. En el M4 Max, minar solo con la CPU dio la tasa de hash más alta, así que seine lo usa automáticamente.'
+  - q: '¿Cuánta memoria necesita un Mac para minar Blocknet?'
+    a: 'Cada hilo de minería trabaja sobre un bloque de memoria de 2 GiB, así que calcula unos 2 GB por hilo. Un Mac de 16 GB admite hasta siete hilos, uno de 32 GB hasta 15 y uno de 64 GB hasta 30. seine cuenta la memoria libre y además ajusta los hilos a tus núcleos.'
+  - q: '¿Se puede minar Blocknet en un Mac con Intel?'
+    a: 'Sí. seine publica un archivo aparte para los Mac con Intel, seine-macos-x86_64.tar.gz, y los pasos son los mismos que en Apple Silicon. Descárgalo, descomprímelo en Terminal, ejecuta ./seine y pega tu dirección de Blocknet o tu @name. seine ajusta sus hilos a tu memoria y empieza a minar en bntpool.com de forma predeterminada.'
+sourceHash: 59ec24375f40
+translation: reviewed
+---
+
+Esta guía te enseña a minar Blocknet en un Mac con Apple Silicon usando **seine**: por qué los chips de la serie M se adaptan bien a la prueba de trabajo de Blocknet, qué resultado dio un M4 Max, cuántos hilos admite la memoria de tu Mac y los pasos exactos en Terminal para empezar a minar en bntpool.com.
+
+## ¿Se puede minar Blocknet en un Mac?
+
+<Answer>
+Sí. Los Mac con Apple Silicon son buenos mineros de Blocknet porque su memoria unificada da mucho ancho de banda a la prueba de trabajo Argon2id, que es intensiva en memoria. Descarga `seine-macos-aarch64.tar.gz`, descomprímelo en Terminal, ejecuta `./seine` y pega tu dirección. Un M4 Max de 48 GB registró 30,9 H/s solo con su CPU.
+</Answer>
+
+seine se encarga por sí mismo de la configuración específica del Mac. Mina con la CPU, coloca sus hilos primero en los núcleos de rendimiento y ajusta el número de hilos a tu memoria, así que a la mayoría le basta con un simple `./seine`.
+
+## ¿Por qué los Mac con Apple Silicon minan bien Blocknet?
+
+La prueba de trabajo de Blocknet es [Argon2id](/es/blog/argon2id-proof-of-work-explained/) con 2 GiB de memoria por hash. Cada hash llena un bloque de memoria de 2 GiB y va releyendo partes anteriores a medida que avanza, así que la velocidad de un hilo de minería depende sobre todo de lo rápido que el chip mueve datos hacia y desde la memoria. Por eso cada hilo de seine necesita unos 2 GB de RAM propios.
+
+Apple Silicon se basa en la memoria unificada, que [Apple describe](https://www.apple.com/newsroom/2020/11/apple-unleashes-m1/) como memoria de alto ancho de banda y baja latencia reunida en un único conjunto. Eso da a cada hilo de minería mucho ancho de banda, justo lo que necesita un hash intensivo en memoria. El resultado es un portátil que mina Blocknet en el mismo rango que los procesadores de servidor.
+
+## ¿A qué velocidad mina Blocknet un M4 Max?
+
+<Answer>
+Un MacBook Pro de 48 GB con el chip M4 Max minó Blocknet a 30,94 H/s con 16 hilos, solo con su CPU. Con 14 hilos y asignación a los núcleos de rendimiento, el ajuste equilibrado que seine usa por defecto en esa máquina, minó a 29,26 H/s y dejó más memoria libre para otras aplicaciones.
+</Answer>
+
+Estos resultados proceden de la batería de validación de seine en un M4 Max de 48 GB (12 núcleos de rendimiento y 4 de eficiencia), realizada el 10 de julio de 2026:
+
+| Ajuste | Hilos | Tasa de hash |
+|---|---|---|
+| Rendimiento máximo | 16, asignación `auto` | 30,94 H/s |
+| Equilibrado (el límite predeterminado de seine en este Mac) | 14, asignación `pcore-only` | 29,26 H/s |
+
+Como referencia, el resultado de 30,9 H/s supera a todos los resultados de servidores Arm e Intel Xeon de las [tablas de rendimiento](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) de seine; solo los servidores AMD EPYC Zen 5 y Zen 4 obtuvieron más. La [guía de hardware para minar Blocknet](/es/blog/blocknet-mining-hardware-hashrate/) compara el mejor resultado de cada generación de hardware, y la [guía de Apple Silicon](https://github.com/zpalmtree/seine/blob/master/docs/guides/apple-silicon.md) recoge todas las notas de ajuste.
+
+## ¿Cuántos hilos puede ejecutar tu Mac?
+
+Cada hilo necesita sus propios 2 GiB de memoria, así que la memoria marca el límite. seine también deja libre un 5% de la memoria de tu Mac como margen cuando se dimensiona. Eso da estos límites máximos:
+
+| Memoria del Mac | Hilos que admite la memoria |
+|---|---|
+| 16 GB | hasta 7 |
+| 24 GB | hasta 11 |
+| 32 GB | hasta 15 |
+| 36 GB | hasta 17 |
+| 48 GB | hasta 22 |
+| 64 GB | hasta 30 |
+
+Dos factores ajustan la cifra final a lo que mejor le va a tu Mac:
+
+- **Memoria libre.** seine cuenta la memoria realmente libre al iniciarse, así que las aplicaciones que tengas abiertas reducen un poco el número. Si la memoria se queda justa mientras funciona, seine aparca hilos y libera su memoria.
+- **Núcleos.** De forma predeterminada en un Mac, seine usa todos los núcleos de rendimiento más la mitad de los núcleos de eficiencia. En el M4 Max de 12+4 núcleos, eso son 14 hilos, el ajuste equilibrado de la tabla anterior.
+
+No tienes que calcular nada de esto. seine elige el número de hilos al iniciarse y sigue probando valores cercanos mientras mina.
+
+## Configuración paso a paso en macOS
+
+### Paso 1: consigue una dirección de Blocknet
+
+Instala la billetera oficial de Blocknet, ya sea la [billetera de línea de comandos](https://github.com/blocknetprivacy/blocknet/releases/latest) o la [billetera de escritorio](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), y copia tu dirección. Si tienes un nombre corto de Blocknet ID de [blocknet.id](https://blocknet.id), puedes minar a `@name` en su lugar.
+
+### Paso 2: descarga seine para Apple Silicon
+
+En la [sección de descargas](/es/#download), descarga `seine-macos-aarch64.tar.gz`. Contiene el programa `seine`, su readme y su licencia, y un archivo `SHA256SUMS.txt` para verificar la descarga.
+
+### Paso 3: descomprímelo en Terminal
+
+Abre Terminal (en Aplicaciones, dentro de Utilidades) y ejecuta estos comandos. Crean una carpeta `seine` en tu carpeta de inicio y descomprimen el archivo en ella:
+
+```sh
+mkdir -p ~/seine
+tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
+cd ~/seine
+```
+
+### Paso 4: ejecuta seine
+
+```sh
+./seine
+```
+
+La versión para macOS tiene una firma ad hoc. Si macOS detiene el primer arranque, abre Ajustes del Sistema, ve a Privacidad y seguridad y permite `seine`. También puedes quitar la marca de descarga desde Terminal y volver a ejecutarlo:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
+
+### Paso 5: escribe tu dirección y empieza a minar
+
+seine te pide tu dirección de pago o tu `@shortname` y después un pool. Pulsa Intro para aceptar el predeterminado, `stratum+tcp://bntpool.com:3333`. [El panel](/es/blog/seine-dashboard-explained/) mostrará entonces tu tasa de hash y tus primeros shares aceptados. El pool bntpool.com envía tu saldo a tu dirección cuando llega a 0,1 BNT, y puedes seguirlo en [bntpool.com](https://bntpool.com) buscando tu dirección.
+
+## ¿Por qué seine mina solo con la CPU en un Mac?
+
+En Apple Silicon, la CPU y los núcleos gráficos comparten un único conjunto de memoria unificada. Argon2id depende del ancho de banda de memoria, así que la CPU y los núcleos gráficos competirían por el mismo ancho de banda. En las pruebas de seine con el M4 Max, minar solo con la CPU dio la tasa de hash más alta, así que seine lo selecciona automáticamente en todos los Mac con Apple Silicon. Obtienes la configuración más rápida sin tener que poner ningún flag.
+
+## ¿Cómo sacarle el máximo partido a un Mac?
+
+- **Deja que seine se ajuste solo.** Compara números de hilos y kernels de CPU con trabajo de minería real, solo cambia tras confirmar una mejora y recuerda el resultado para el siguiente arranque.
+- **Mantén el Mac despierto.** macOS pone en reposo un Mac inactivo, lo que pausa la minería. Inicia seine con el comando integrado `caffeinate` para mantener el Mac despierto mientras seine esté en marcha:
+
+  ```sh
+  caffeinate -i ./seine
+  ```
+
+- **Busca el rendimiento máximo en un Mac dedicado.** Si el Mac no hace otra cosa que minar, el ajuste con el que el M4 Max registró 30,94 H/s usa los 16 núcleos y más memoria que el ajuste equilibrado predeterminado:
+
+  ```sh
+  ./seine --backend cpu --threads 16 --cpu-affinity auto
+  ```
+
+Para ver todas las opciones, consulta la [guía de configuración](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md). La [guía principal de minería](/es/blog/how-to-mine-blocknet/) explica los pagos y las demás plataformas.
+
+<Note>
+Estos resultados corresponden a la prueba de trabajo Argon2id actual de Blocknet. Según [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet planea una actualización de red llamada Faraday hacia el 16 de febrero de 2027 que prevé cambiar la prueba de trabajo. seine busca nuevas versiones al iniciarse y cada 12 horas, así que mantenlo actualizado.
+</Note>
+
+<CTA target="seine" title="Descarga seine para macOS" text="La versión para Apple Silicon mina con la CPU de tu Mac y elige automáticamente su número de hilos." />

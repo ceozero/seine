@@ -1,0 +1,104 @@
+---
+title: 'Proof of work vs proof of stake: perbedaan dan cara kerjanya'
+description: 'Proof of work vs proof of stake: cara keduanya memilih blok, mengamankan rantai, dan menerbitkan koin baru, serta alasan Blocknet memakai proof of work.'
+tags: [Proof of work, Proof of stake, Konsensus, Blocknet, Penambangan]
+faq:
+  - q: 'Apakah Blocknet memakai proof of work atau proof of stake?'
+    a: 'Blocknet memakai proof of work. Penambang menghitung hash Argon2id yang masing-masing membutuhkan memori 2 GiB, blok baru ditemukan sekitar setiap lima menit, dan seluruh imbalan blok diberikan kepada penambang yang menemukannya. Tidak ada staking. Anda bisa menambangnya dengan seine di komputer biasa melalui pool bntpool.com.'
+  - q: 'Kapan Ethereum beralih dari proof of work ke proof of stake?'
+    a: 'Ethereum beralih ke proof of stake melalui upgrade bernama the Merge, yang dijalankan pada 15 September 2022. Sejak itu, validator yang menyetor 32 ETH mengusulkan dan memberi suara atas blok, menggantikan penambang. Bitcoin, Monero, dan Blocknet masih memakai proof of work, di mana blok baru dihasilkan dari kerja komputasi.'
+  - q: 'Apa itu serangan 51%?'
+    a: 'Serangan 51% adalah upaya mengendalikan blok mana yang diterima sebuah rantai dengan menguasai sebagian besar sumber daya yang menentukannya. Dalam proof of work, artinya sebagian besar daya hash jaringan. Dalam proof of stake, artinya sebagian besar koin yang di-stake. Dalam kedua kasus, penyerang harus mengerahkan mayoritas sumber daya nyata.'
+  - q: 'Bisakah menambang koin proof of stake?'
+    a: 'Tidak. Koin proof of stake murni tidak memiliki penambangan. Koin baru dibayarkan kepada validator yang mengunci koin yang sudah ada sebagai stake, jadi Anda harus memiliki koin sebelum bisa mendapatkannya. Untuk mendapatkan koin baru dengan komputer yang sudah Anda miliki, Anda membutuhkan koin proof of work seperti Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: reviewed
+---
+
+Artikel ini menjelaskan bagaimana proof of work dan proof of stake menentukan siapa yang menambahkan blok berikutnya ke blockchain, bagaimana masing-masing menjaga keamanan rantai, dan bagaimana masing-masing menciptakan koin baru. Blocknet, koin proof of work yang bisa Anda tambang di komputer biasa, menjadi contoh di sepanjang artikel.
+
+## Apa perbedaan proof of work dan proof of stake?
+
+<Answer>
+Proof of work dan proof of stake adalah dua cara blockchain menentukan siapa yang menambahkan blok berikutnya. Dalam proof of work, penambang mengerahkan daya komputasi untuk menemukan hash yang valid. Dalam proof of stake, validator mengunci koin sebagai jaminan dan dipilih untuk mengusulkan serta memberi suara atas blok. Keduanya membuat kecurangan menjadi mahal.
+</Answer>
+
+Setiap blockchain harus memecahkan masalah yang sama. Ribuan komputer yang tidak saling percaya harus menyepakati satu riwayat pembayaran, agar tidak ada yang bisa membelanjakan koin yang sama dua kali. Seseorang harus mengusulkan setiap blok baru, dan semua pihak lain membutuhkan alasan untuk menerimanya. Aturan itu disebut mekanisme konsensus, dan proof of work serta proof of stake adalah dua desain yang paling dikenal.
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Siapa yang membuat blok | Penambang yang pertama kali menemukan hash yang sama dengan atau di bawah target jaringan | Validator yang dipilih dari mereka yang mengunci koin |
+| Apa yang mereka pertaruhkan | Perangkat keras dan listrik | Koin yang disetor sebagai stake |
+| Rantai mana yang menang | Rantai dengan akumulasi kerja terbanyak | Rantai yang didukung suara validator terbanyak, dengan checkpoint finalitas |
+| Ke mana koin baru mengalir | Imbalan blok untuk penambang yang menemukan blok | Imbalan untuk validator karena mengusulkan dan memberi suara |
+| Apa yang dibutuhkan untuk ikut | Komputer yang bisa menghitung hash | Koin untuk di-stake (32 ETH untuk validator Ethereum) |
+| Contoh | Bitcoin, Monero, Blocknet | Ethereum sejak 2022 |
+
+## Bagaimana proof of work memilih blok berikutnya?
+
+Dalam proof of work, penambang berlomba memecahkan teka-teki yang sulit dipecahkan tetapi mudah diperiksa. Penambang mengambil blok yang ingin diterbitkannya, menambahkan angka yang disebut nonce, lalu menghitung hash dari hasilnya. Jika hash itu, dibaca sebagai angka, sama dengan atau di bawah target jaringan, bloknya valid. Jika tidak, penambang mengganti nonce dan mencoba lagi. Satu-satunya cara untuk menang adalah mencoba banyak nonce, sehingga peluang penambang menemukan blok berikutnya sebanding dengan bagiannya dari daya hash jaringan.
+
+[Makalah Bitcoin](https://bitcoin.org/bitcoin.pdf) yang ditulis Satoshi Nakamoto pada 2008 merumuskannya sebagai "Proof-of-work pada dasarnya adalah satu CPU, satu suara." Node mengikuti rantai dengan upaya proof of work terbesar yang tertanam di dalamnya, dan pengaturan tingkat kesulitan (difficulty) menaikkan atau menurunkan target agar blok terus datang dengan kecepatan stabil, berapa pun daya hash yang bergabung. Panduan [cara kerja penambangan kripto](/id/blog/how-crypto-mining-works/) menjelaskan hash, difficulty, dan pool langkah demi langkah.
+
+Blocknet bekerja dengan cara yang sama, dengan angka-angka yang ditetapkan dalam kode konsensusnya:
+
+- **Hash-nya adalah Argon2id** dengan memori 2 GiB, sehingga setiap hash membutuhkan memori sungguhan selain waktu prosesor. [Penjelasan Argon2id](/id/blog/argon2id-proof-of-work-explained/) menunjukkan cara kerjanya.
+- **Targetnya adalah (2^256 − 1) dibagi difficulty**, yang membuat difficulty kira-kira setara dengan jumlah hash yang dibutuhkan jaringan untuk menemukan satu blok.
+- **Satu blok datang sekitar setiap lima menit**, 288 blok sehari. Difficulty mengikuti waktu blok terbaru melalui rata-rata bergerak tertimbang 60 blok (LWMA).
+- **Node mengikuti rantai terberat.** Setiap node menjumlahkan difficulty setiap blok di sebuah rantai dan hanya beralih ke rantai pesaing jika total kerjanya lebih tinggi.
+
+## Bagaimana proof of stake memilih blok berikutnya?
+
+Proof of stake mengganti penghitungan hash dengan setoran jaminan. Untuk ikut serta, validator mengunci koin di protokol, dan protokol memilih validator untuk mengusulkan dan menyetujui blok. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), yang diluncurkan pada 2012, adalah mata uang kripto pertama yang memakainya, dan Ethereum beralih pada 15 September 2022 melalui upgrade bernama [the Merge](https://ethereum.org/en/roadmap/merge/).
+
+Desain Ethereum memperlihatkan komponen-komponennya. Dari [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Validator menyetor 32 ETH ke kontrak setoran.
+- Waktu dibagi menjadi slot 12 detik, yang dikelompokkan menjadi epoch berisi 32 slot.
+- Di setiap slot, satu validator dipilih secara acak untuk mengusulkan blok, dan validator lain memberi suara atasnya melalui attestation.
+- Checkpoint menjadi final ketika validator yang memegang setidaknya dua pertiga dari seluruh ETH yang di-stake memberi suara untuknya.
+- Validator yang mengusulkan dua blok untuk slot yang sama, atau memberikan suara yang saling bertentangan, terkena slashing: sebagian stake-nya, hingga seluruhnya, dimusnahkan.
+
+Stake menjalankan peran yang dijalankan listrik dalam proof of work. Melanggar aturan membuat validator kehilangan koin yang sudah dimilikinya.
+
+## Bagaimana proof of work dan proof of stake tetap aman?
+
+Kedua desain membuat biaya serangan lebih besar daripada yang bisa dihasilkannya, dan keduanya menempatkan biaya itu di tempat yang berbeda.
+
+**Dalam proof of work, biayanya adalah komputasi yang terus-menerus.** Untuk menulis ulang blok lama, penyerang harus mengulang kerja blok itu dan setiap blok sesudahnya, lalu menyalip jaringan yang jujur. Nakamoto menunjukkan bahwa peluang penyerang yang lebih lambat untuk mengejar menyusut secara eksponensial dengan setiap blok baru. Mengendalikan rantai ke depannya berarti menjalankan daya hash yang lebih besar daripada gabungan semua pihak lain, selama serangan berlangsung.
+
+**Dalam proof of stake, biayanya adalah modal yang dipertaruhkan.** Dokumentasi Ethereum menyebut penyerang "akan membutuhkan 51% dari ETH yang di-stake" untuk mengendalikan rantai, bahwa sepertiga stake sudah cukup untuk menghentikan blok menjadi final, dan bahwa membatalkan blok yang sudah final berarti kehilangan setidaknya sepertiga dari seluruh ETH yang di-stake akibat slashing.
+
+Blocknet juga menetapkan dua ambang batas di atas proof of work-nya. Jaringan menganggap 10 konfirmasi, sekitar 50 menit, sebagai aman, dan node menolak reorganisasi apa pun yang lebih dalam dari 100 blok, sekitar delapan jam, sehingga blok dengan kedalaman 100 sudah final.
+
+## Bagaimana kedua model menerbitkan koin baru?
+
+<Answer>
+Koin proof of work membayar koin baru kepada penambang yang menemukan setiap blok, sehingga siapa pun yang menyumbang daya komputasi bisa mendapatkan koin tanpa harus memilikinya terlebih dahulu. Koin proof of stake membayar koin baru kepada validator sebanding dengan stake mereka, sehingga imbalan mengalir ke orang yang sudah memegang koin. Setiap protokol menetapkan jadwalnya sendiri.
+</Answer>
+
+Dalam proof of work, transaksi pertama di setiap blok menciptakan koin baru untuk penambang yang menemukannya. Makalah Bitcoin menggambarkannya sebagai "cara untuk mendistribusikan koin ke dalam peredaran pada awalnya, karena tidak ada otoritas pusat yang menerbitkannya." Imbalan Bitcoin berkurang separuh setiap 210.000 blok, sekitar setiap empat tahun, dan total pasokannya tetap sedikit di bawah 21 juta.
+
+Dalam proof of stake Ethereum, imbalan ditambahkan ke saldo validator sekali per epoch untuk attestation, usulan blok, dan tugas sync committee. [Imbalan dasar](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) menyusut seiring bertambahnya total stake, sementara total penerbitan naik seiring bergabungnya lebih banyak validator.
+
+Penerbitan Blocknet sepenuhnya berjalan melalui penambangan. Blok genesis-nya sama sekali tidak berisi transaksi, jadi tidak ada koin yang ada sebelum penambangan dimulai, dan konsensusnya tidak memiliki premine, treasury, atau output untuk pendiri. Setiap blok membayar seluruh imbalannya dalam satu output kepada penambang yang menemukannya. Imbalan dimulai dari 723,25 BNT per blok, turun bertahap setiap bulan 30 hari mengikuti kurva eksponensial selama 48 bulan, lalu tetap 2 BNT per blok untuk seterusnya.
+
+## Mengapa Blocknet memakai proof of work?
+
+Blocknet memilih proof of work agar siapa pun yang punya komputer bisa mendapatkan koin baru sejak blok pertama, tanpa harus membeli lebih dulu. Daemon-nya menggambarkan Argon2id sebagai "PoW memory-hard untuk menahan ASIC dan memastikan penambangan yang adil," dan menjalankan setiap hash di satu thread "demi keadilan."
+
+Kebutuhan memori inilah yang menjaga penambangan tetap terbuka. Setiap hash mengisi memori 2 GiB, jadi setiap thread penambangan membutuhkan sekitar 2 GB RAM, dan komputer yang sudah dimiliki orang, baik desktop, laptop, maupun server, punya memori itu beserta pengendali untuk mengolahnya. Blocknet termasuk dalam keluarga koin proof of work yang dibangun untuk perangkat keras serbaguna: Monero, misalnya, telah memakai [RandomX](https://github.com/tevador/RandomX), yang "dioptimalkan untuk CPU serbaguna," sejak November 2019.
+
+Proof of work tetap ada dalam rencana Blocknet. Upgrade Faraday, yang direncanakan sekitar Februari 2027 menurut [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), akan membawa "proof of work yang lebih ringan" agar node baru lebih cepat menyusul rantai.
+
+## Bagaimana cara mulai menambang koin proof of work?
+
+Untuk Blocknet, Anda membutuhkan alamat wallet dan seine, penambang gratis dan sumber terbuka:
+
+1. Dapatkan alamat dari wallet resmi. [Panduan wallet](/id/blog/blocknet-wallet-for-mining/) menjelaskan langkah-langkahnya.
+2. [Unduh seine](/id/#download) untuk Windows, macOS, atau Linux, lalu jalankan.
+3. Tempel alamat atau `@name` Anda, dan terima pool bawaan, bntpool.com.
+
+seine memilih jumlah thread berdasarkan RAM Anda, membandingkan kernel CPU selama menambang dan memakai yang tercepat, serta menambahkan kartu grafis NVIDIA apa pun di Windows dan Linux di samping prosesor. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membahas perangkat keras dan pembayaran secara rinci.
+
+<CTA target="seine" title="Tambang Blocknet dengan seine" text="Unduh seine, tempel alamat atau @name Anda, dan komputer Anda mulai menambang BNT di bntpool.com dalam beberapa menit." />

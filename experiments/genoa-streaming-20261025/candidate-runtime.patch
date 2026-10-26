@@ -1,0 +1,62 @@
+diff --git a/src/miner/adaptive_kernel.rs b/src/miner/adaptive_kernel.rs
+index 953aecc..fb5008a 100644
+--- a/src/miner/adaptive_kernel.rs
++++ b/src/miner/adaptive_kernel.rs
+@@ -43,13 +43,16 @@ fn candidates_for(
+     .into_iter()
+     .filter(|k| supported.contains(k))
+     .collect();
+-    // Repeated native wins on Turin and Ryzen 9950X3D (family 1Ah, models 02h/44h).
++    // Native Genoa 9R14: +27.19% at 24 workers; Turin and Ryzen 9950X3D
++    // also have repeated streaming wins. See high-end-streaming-20261025.
+     // Identity limits automatic experiments; the independent ISA/OS support
+     // check remains mandatory. Turin needs a measured win per worker
+     // count/backing; validated Ryzen also starts on it (`startup_kernel_for`).
+     if identity.vendor.as_deref() == Some("AuthenticAMD")
+-        && identity.family == Some(0x1a)
+-        && matches!(identity.model, Some(0x02 | 0x44))
++        && matches!(
++            (identity.family, identity.model),
++            (Some(0x19), Some(0x11)) | (Some(0x1a), Some(0x02 | 0x44))
++        )
+         && supported.contains(&CpuKernel::Avx512256Stream)
+     {
+         paths.push(CpuKernel::Avx512256Stream);
+@@ -785,7 +788,7 @@ mod tests {
+                     model: Some(0x11),
+                     ..turin.clone()
+                 },
+-                false,
++                true,
+                 false,
+             ),
+             (
+@@ -1075,6 +1078,14 @@ mod tests {
+         };
+         assert_eq!(candidates_for(&ryzen, &supported), supported);
+         assert_eq!(candidates_for(&ryzen, &supported[..2]), supported[..2]);
++        let genoa = CpuIdentity {
++            family: Some(0x19),
++            model: Some(0x11),
++            ..turin.clone()
++        };
++        assert_eq!(candidates_for(&genoa, &supported), supported);
++        assert_eq!(candidates_for(&genoa, &supported[..2]), supported[..2]);
++        assert_eq!(startup_kernel_for(&genoa, &supported), None);
+         for identity in [
+             CpuIdentity {
+                 vendor: Some("GenuineIntel".into()),
+@@ -1082,7 +1093,12 @@ mod tests {
+             },
+             CpuIdentity {
+                 family: Some(25),
+-                model: Some(17),
++                model: Some(0x10),
++                ..turin.clone()
++            },
++            CpuIdentity {
++                family: Some(25),
++                model: Some(0x12),
+                 ..turin.clone()
+             },
+             CpuIdentity {

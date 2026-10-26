@@ -1,0 +1,97 @@
+---
+title: 'Bulletproofs nedir: gizli tutarlar nasıl doğrulanır'
+description: Bulletproofs'un sade bir anlatımı. Pedersen taahhütlerinin işlem tutarlarını nasıl gizlediğini ve aralık kanıtlarının her düğümün hesabı kontrol etmesini nasıl sağladığını öğrenin.
+tags: [Bulletproofs, Gizlilik, Kriptografi, Blocknet]
+faq:
+  - q: 'Bulletproofs güvenilir kurulum (trusted setup) gerektirir mi?'
+    a: 'Hayır. Bulletproofs yalnızca eliptik eğri imzalarının da dayandığı ayrık logaritma varsayımına dayanır ve herkesin türetebileceği genel parametreler kullanır. Kurulum töreni de, sonradan birinin yok etmesi gereken bir sır da yoktur; Monero ve Blocknet dahil gizlilik coinleri aralık kanıtları için onları kullanır.'
+  - q: 'Bir Bulletproofs aralık kanıtı ne kadar büyüktür?'
+    a: 'Tek bir 64 bitlik Bulletproof 2 × log2(64) + 9 = 21 öğe içerir. Ristretto grubunda her öğe 32 bayt kaplar, bu yüzden her kanıt 672 bayttır ve Blocknet gezgini her çıktı için tam olarak bunu gösterir. Boyut aralığın logaritmasıyla büyür, bu yüzden bit uzunluğunu iki katına çıkarmak yalnızca iki öğe ekler.'
+  - q: 'Bir Blocknet işleminin tutarını kim görebilir?'
+    a: 'Yalnızca gönderen ve alıcı. Zincir her çıktı için bir Pedersen taahhüdü ve bir aralık kanıtı, ayrıca iki cüzdanın paylaştığı sırla şifrelenmiş tutarı saklar. Alıcının cüzdanı onu özel görüntüleme anahtarıyla çözer. Ağ ücreti tek açık sayıdır, böylece düğümler onu bakiye kontrolüne ekleyebilir.'
+  - q: 'Tutarlar gizliyse düğümler hiç coin yaratılmadığını nasıl bilir?'
+    a: 'Her düğüm her işlem için iki şeyi kontrol eder. Pedersen taahhütlerinin toplamı tutmalıdır, yani girdiler çıktılara ücret eklenmiş haline eşit olmalıdır; ve her çıktı, tutarının 0 ile 2^64 arasında olduğunu gösteren geçerli bir aralık kanıtı taşımalıdır. Bu ikisi birlikte, tek bir tutarı bile açığa çıkarmadan gizli enflasyonu dışarıda bırakır.'
+sourceHash: e02793933862
+translation: draft
+---
+
+Bulletproofs, bir kripto paranın her işlem tutarını gizlerken her düğümün yine de hiç coin yaratılmadığını kontrol etmesini sağlayan kısa sıfır bilgi aralık kanıtlarıdır. Bu rehber Pedersen taahhütlerini, gizli tutarların neden aralık kanıtlarına ihtiyaç duyduğunu, Bulletproofs'un bu kanıtları nasıl küçük tuttuğunu ve Blocknet'in onları her çıktıda nasıl kullandığını açıklar.
+
+## Bulletproofs nedir?
+
+<Answer>
+Bulletproofs, Bünz, Bootle, Boneh, Poelstra, Wuille ve Maxwell tarafından 2018'de yayımlanan kısa sıfır bilgi kanıtlarıdır. Kripto paralarda gizli bir tutarın 0 ile 2^64 gibi geçerli bir aralıkta olduğunu, tutarı açığa çıkarmadan kanıtlarlar. Güvenilir kurulum gerektirmezler ve boyutları yalnızca aralığın logaritmasıyla büyür.
+</Answer>
+
+[Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) makalesi 2018'de IEEE Symposium on Security and Privacy'de yayımlandı. Yazarlar onları, bir blok zincirindeki tutarların yerini taahhütlerin aldığı gizli işlemler (confidential transactions) için tasarladı. Böyle bir kanıta neden gerek olduğunu görmek için taahhütle başlayalım.
+
+## Pedersen taahhüdü nedir?
+
+Taahhüt, mühürlü bir zarfın kriptografik karşılığıdır. İçine bir sayı koyarsınız, zarfı herkese gösterirsiniz ve daha sonra içinde ne olduğunu kanıtlayabilirsiniz. Zarftan sayıyı kimse okuyamaz ve siz de sonradan farklı bir sayı koyamazsınız.
+
+Torben Pedersen'in 1991'de tanımladığı Pedersen taahhüdü bunu eliptik eğri noktalarıyla yapar. Bir `v` tutarına taahhütte bulunmak için cüzdan, körleme faktörü (blinding factor) adı verilen rastgele bir `r` sırrı seçer ve şunu hesaplar:
+
+```
+C = v·G + r·H
+```
+
+`G` ve `H`, eğri üzerinde, hiç kimsenin birini diğerinin katı olarak yazmayı bilmeyeceği şekilde seçilmiş iki sabit genel noktadır. Sonuç olan `C`, 32 baytlık tek bir noktadır. İki özelliği vardır:
+
+- **Gizleme.** `r` rastgele olduğundan `C` rastgele bir nokta gibi görünür. Aynı tutara iki kez taahhütte bulunmak birbiriyle ilgisiz iki taahhüt verir ve taahhüt tek başına bir gözlemciye `v` hakkında hiçbir şey söylemez.
+- **Bağlayıcılık.** `C` yayımlandıktan sonra cüzdan onu farklı bir tutara açamaz. Bunu yapmak, eğri üzerindeki ayrık logaritma problemini çözmek anlamına gelirdi.
+
+## Düğümler okuyamadıkları bir işlemi nasıl kontrol edebilir?
+
+<Answer>
+Pedersen taahhütleri toplanabilir. İki taahhüdün toplamı, tutarlarının toplamına yapılmış bir taahhüttür ve körleme faktörleri de toplanır. Bir düğüm bir işlemin girdi taahhütlerini ve çıktı taahhütleri ile ücreti toplar ve iki toplamın eşleştiğini kontrol eder; böylece hiçbir tutarı görmeden bakiyeyi doğrular.
+</Answer>
+
+İki taahhüdü toplamak `(v1 + v2)·G + (r1 + r2)·H` verir ve bu da kendi başına `v1 + v2` için bir taahhüttür. Gönderen, körleme faktörlerini girdilerin toplam körlemesi çıktılarınkine eşit olacak şekilde ayarlar. Tutarlar da dengeliyse girdi toplamı ile çıktı toplamı arasındaki fark tam olarak sıfırdır ve herhangi bir düğüm bunu doğrulayabilir.
+
+Ağ ücreti, bir işlemdeki tek açık sayıdır. Düğümler onu sıfır körleme faktörlü bir taahhüde dönüştürür ve çıktılar tarafına ekler, böylece kontrol şöyle okunur: girdiler = çıktılar + ücret.
+
+## Gizli tutarlar neden aralık kanıtlarına ihtiyaç duyar?
+
+Taahhüt aritmetiği çok büyük bir sayıya, yaklaşık 2^252 olan eğri grubunun mertebesine göre modüler çalışır. Bu aritmetikte “negatif” bir tutar sadece çok büyük pozitif bir sayıdır. Biri 10 coin değerinde bir girdiyi harcayıp biri 11, diğeri “eksi 1” değerinde iki çıktı oluşturabilirdi. Taahhütler kusursuz biçimde dengelenir ve her gözlemciden gizlenmiş olarak yoktan 1 coin ortaya çıkardı.
+
+Aralık kanıtı bu açığı kapatır. Bir taahhüdün içindeki tutarın ne olduğunu söylemeden 0 ile 2^64 arasında olduğunu kanıtlar. Her çıktı bu şekilde sınırlandırıldığında birkaç çıktı asla grup mertebesini aşıp başa saracak kadar büyük bir sayıya ulaşamaz; böylece dengeli taahhütler dengeli tutarlar anlamına gelir.
+
+Daha önceki gizli işlem tasarımları, bit sayısıyla doğrusal olarak büyüyen aralık kanıtları kullanıyordu. Bulletproofs ise yalnızca logaritmayla büyür; bu da 64 bitlik bir kanıtı birkaç yüz bayta indirir.
+
+## Bulletproofs nasıl çalışır?
+
+Bir Bulletproof, bir aralığı üç adımda kanıtlar.
+
+1. **Tutarı bitlere ayırın.** 64 bitlik bir tutar 64 bitlik bir vektöre dönüşür. Kanıtlayıcı bu vektöre taahhütte bulunur ve onun hakkında iki gerçeği gösterir: her öğe 0 veya 1'dir ve bitler, ikinin kuvvetleriyle ağırlıklandırıldığında taahhüt edilen tutara eşittir.
+2. **Bu gerçekleri tek bir iç çarpıma dönüştürün.** Kanıtlayıcı rastgele meydan okumalar (challenge) kullanarak tüm bu koşulları iki vektörün iç çarpımı hakkında tek bir iddiada birleştirir. Meydan okumalar rastgele olduğu için yanlış bir iddia yalnızca ihmal edilebilir bir olasılıkla geçer.
+3. **İç çarpımı yarıya indirerek kanıtlayın.** Her turda kanıtlayıcı iki eğri noktası, `L` ve `R`, gönderir ve her iki vektör de yarı uzunluğa katlanır. log2(64) = 6 turdan sonra geriye tek bir sayı çifti kalır.
+
+Boyut bu yarıya indirmeden gelir. Makalenin özeti, `n` bitlik bir aralık için bir aralık kanıtını `2·log2(n) + 9` grup ve alan öğesi olarak verir. 64 bit için bu, altı turdan gelen 12 nokta artı 9 öğe daha, toplamda 21 öğe, yani her öğe 32 bayt olduğunda 672 bayttır.
+
+Kanıt etkileşimsizdir. Canlı bir doğrulayıcının meydan okuma göndermesi yerine her iki taraf da onları kanıt dökümünü hash'leyerek türetir; bu, Fiat-Shamir sezgiseli olarak bilinen standart bir tekniktir. Bulletproofs ayrıca güvenilir kurulum gerektirmez: üreteçler geneldir ve açıkça türetilir, güvenlik yalnızca ayrık logaritma varsayımına dayanır. Birkaç kanıt, yalnızca logaritmik sayıda öğe eklenerek birleştirilebilir ve doğrulama toplu yapılabilir.
+
+## Bulletproofs'u kimler kullanıyor?
+
+Monero, işlem boyutlarını küçültmek için Bulletproofs'u 18 Ekim 2018'deki ağ yükseltmesinde (v0.13.0 sürümü) etkinleştirdi. dalek-cryptography projesinin [Rust bulletproofs kütüphanesi](https://github.com/dalek-cryptography/bulletproofs) onları Curve25519'un Ristretto grubu üzerinde uygular ve Blocknet'in kriptografi kütüphanesi bunun üzerine kuruludur.
+
+## Blocknet her tutarı nasıl gizler?
+
+Blocknet'te her işlemin her çıktısı, tutar yerine bir Pedersen taahhüdü tutar ve her çıktı kendi 64 bitlik Bulletproof'unu taşır. Gizlilik, şeffaf bir modu olmayan işlem formatının bir parçasıdır, bu yüzden görünür tutarlı bir ödeme göndermenin bir yolu yoktur.
+
+Bir düğüm bir işlemi kabul etmeden önce şunları kontrol eder:
+
+- **Her aralık kanıtı.** Her çıktının Bulletproof'u kendi taahhüdüne karşı doğrulanmalı ve tutarın 0 ile 2^64 arasında olduğunu kanıtlamalıdır. Kanıtlar, her kanıtı Blocknet'e bağlayan "Blocknet Range Proof" etiketli bir döküm kullanır.
+- **Bakiye.** Her girdi bir sözde çıktı (pseudo-output) taahhüdü taşır ve halka imza, bunun harcanan gerçek coinle aynı tutara taahhütte bulunduğunu, hangi halka üyesinin gerçek olduğunu açığa çıkarmadan kanıtlar. Düğüm ardından sözde çıktıların toplamının çıktılara ücret eklenmiş haline eşit olduğunu kontrol eder.
+- **Yeni coinler.** Bir bloğun ödülü açık bir programı izler; bu yüzden kazılan çıktı için düğüm, o yükseklikte beklediği taahhüdü yeniden oluşturur ve eşleştiğini kontrol eder.
+
+Bunu [Blocknet gezgininde](https://explorer.blocknetcrypto.com) görebilirsiniz. Bir işlem sayfası tutarlarını "hidden · Pedersen commitments" olarak listeler ve her çıktı kendi taahhüdünü, şifreli bir memo'yu ve "672 bytes · Bulletproof" şeklinde bir aralık kanıtını gösterir; bu, yukarıdaki hesabın öngördüğü boyuttur.
+
+Alıcı yine de gerçek rakamı görür. Her çıktı, gönderenin ve alıcının cüzdanlarının paylaştığı sırla şifrelenmiş tutarı taşır ve alıcının cüzdanı onu özel görüntüleme anahtarıyla çözer. Tutar ödemedeki iki kişiye görünür, başka hiç kimseye görünmez.
+
+Gizli tutarlar Blocknet'in diğer katmanlarıyla birlikte çalışır: 16 çıktı üzerinde [halka imzalar](/tr/blog/ring-signatures-explained/) göndereni, [tek kullanımlık gizli adresler](/tr/blog/stealth-addresses-explained/) alıcıyı gizler ve [Dandelion++](/tr/blog/dandelion-plus-plus-explained/) bir işlemin ağa nereden girdiğini gizler. [Blocknet'in gizlilik özellikleri rehberi](/tr/blog/blocknet-privacy-features/) her birini ele alır.
+
+## Kendinize ait gizli BNT edinin
+
+Gizli tutarlı coin edinmenin basit bir yolu onları kazmaktır. Blocknet, sıradan bir bilgisayarda kazabileceğiniz bellek yoğun bir [Argon2id iş kanıtı](/tr/blog/argon2id-proof-of-work-explained/) kullanır ve seine onu CPU'nuzda, varsa NVIDIA GPU'larınızla birlikte kazar ve hiçbir kurulum gerektirmeden kendini ayarlar. bntpool.com'un size gönderdiği her ödeme, bir taahhüt ve bir Bulletproof içeren gizli bir çıktı olarak gelir. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) sizi indirmeden kabul edilen share'lere birkaç dakikada ulaştırır.
+
+<CTA target="seine" title="seine ile gizli BNT kazın" text="seine'i indirin, adresinizi veya @name adınızı yapıştırın ve zincirdeki her tutarı gizli olarak Blocknet kazanmaya başlayın." />

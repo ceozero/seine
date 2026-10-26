@@ -1,0 +1,125 @@
+---
+title: seine 儀表板詳解
+description: 逐一介紹 seine 挖礦儀表板的每個面板（算力、份額、狀態、執行緒、礦池餘額、日誌），並說明如何在挖礦時觀察它自動調校。
+tags: [seine, 挖礦指南, 儀表板, 自動調校]
+faq:
+  - q: '為什麼 seine 的平均算力比目前算力低？'
+    a: 'Average 是用本次工作階段完成的全部雜湊除以挖礦時間，所以它包含最初幾分鐘：那時每個執行緒還在完成第一個雜湊，調校器也從低於滿載的執行緒數開始，再逐步往上調。Current 只看最近五秒。seine 執行得越久，兩者越接近。'
+  - q: '如何在 seine 執行時變更執行緒數？'
+    a: '按加號鍵或等號鍵為每個 CPU 後端增加一個執行緒，按減號鍵減少一個。seine 會用新的執行緒數重新啟動挖礦後端，同時保留工作階段統計、執行時間與平均算力。手動變更會在本次執行中關閉執行緒自動調校，也不會儲存為新的預設值。'
+  - q: '標題列裡的金色菱形代表什麼？'
+    a: '在礦池挖礦時，每個菱形代表一個被接受的份額；單獨挖礦時，代表一個被接受的區塊。它出現在波浪的最右端，每秒向左移動一欄，所以你看得到的菱形就是最近兩分鐘左右被接受的工作。'
+  - q: '可以不用儀表板執行 seine 嗎？'
+    a: '可以。用 --ui plain 啟動，就會得到一般的捲動日誌，而不是全螢幕儀表板，適合伺服器、記錄檔與行程管理工具。預設的 --ui auto 只在互動式終端機中顯示儀表板，所以輸出被重新導向時本來就是一般日誌。'
+sourceHash: 97304325a24d
+translation: reviewed
+---
+
+啟動 seine 後，它會在終端機裡顯示一個即時儀表板：你的雜湊速度、礦池接受了多少份額、你應得多少，以及它所做每件事的日誌。本文以 seine v0.2.22 為例，逐一講解每個面板中標籤的意義與數字的來源，並展示挖礦時自動調校與鍵盤控制是什麼樣子。
+
+![seine 終端機儀表板，Apple M4 Max 在 bntpool.com 挖礦：目前算力 30.63 H/s，14 個執行緒，已提交 5 個份額、0 個被拒、5 個被接受，下方是礦池餘額以及工作與已接受份額的日誌](/assets/blog/seine-dashboard.webp "Apple M4 Max 上的 seine 儀表板")
+
+截圖是一台 Apple M4 Max 在 bntpool.com 挖礦約十分鐘時的畫面，於 2026 年 10 月為 seine 的 README 擷取。本文其餘部分都以它為參照。
+
+## seine 的儀表板顯示什麼？
+
+<Answer>
+seine 的儀表板顯示即時算力與平均算力、已完成的雜湊數、區塊高度與全網算力、礦工狀態、已提交、被拒與被接受的份額、每個裝置的算力、礦池位址與執行緒數、你在 bntpool.com 的餘額，以及附時間的日誌。挖礦時大約每秒更新一次。
+</Answer>
+
+由上到下依序是標題列、一排三個統計面板（`HASHRATE`、`NETWORK`、`MINING`）、`DEVICES`、`CONFIG`、`POOL BALANCE` 與 `LOG`。終端機寬度達到 148 欄時，`CONFIG` 與餘額面板會左右並排。
+
+## 標題列：版本、波浪與執行時間
+
+標題列顯示 seine 的版本，例如 `seine v0.2.22`。有新版本發布時，旁邊會出現醒目的 `update vX.Y.Z available` 標記，日誌中也會多一行下載連結。seine 在啟動時以及每 12 小時檢查一次 GitHub，檢查從不中斷挖礦。
+
+標題下方是兩行波浪，每秒移動一格。礦池每接受你的一個份額（單獨挖礦時則是節點接受你的區塊），就會有一個金色菱形出現在上面一行的最右端，並每秒向左移動一欄。終端機寬約 130 欄時，你看得到的菱形就是最近兩分鐘左右被接受的工作。`uptime`（執行時間）位於下面一行的末端。
+
+## seine 如何測量算力？
+
+`HASHRATE` 面板有三行：
+
+- **Current** 是最近五秒滾動視窗內的算力。這裡的一個雜湊是一次完整的 2 GiB Argon2id 計算，所以 H/s 統計的是每秒完成的雜湊數。NVIDIA 顯示卡是成批完成工作的，所以它們的目前算力使用 30 秒視窗，讀數更穩定。
+- **Average** 是本次工作階段的全部雜湊除以挖礦時間。等待的時間（等待節點同步、等待錢包密碼，或地址無效時）不計入，變更執行緒數後平均值也會延續。
+- **Total** 是自啟動 seine 以來完成的雜湊總數。
+
+截圖中 Current 為 30.63 H/s，Average 為 29.33 H/s。Average 起初較低，因為它包含最初幾分鐘：那時每個執行緒還在完成第一個雜湊，調校器也從低於滿載的執行緒數開始，再逐步往上調。seine 執行得越久，兩者越接近。
+
+## 網路與狀態
+
+`NETWORK` 面板顯示你正在挖的區塊高度 `Height` 與全網算力 `Global`。在礦池模式下，seine 從 bntpool.com 的公開統計資料讀取全網算力，最多每 30 秒更新一次。
+
+`State` 告訴你礦工正在做什麼。綠色的 `working` 就是你想看到的狀態。在礦池模式下，啟動與重新連線期間還會看到這些狀態：
+
+| 狀態 | 意義 |
+|---|---|
+| `pool-connecting` | 正在建立 Stratum 連線 |
+| `pool-connected` | 已連線，正在登入 |
+| `pool-authenticated` | 登入已被接受，等待第一份工作 |
+| `working` | 正在為目前的工作計算雜湊 |
+| `pool-disconnected` | 連線中斷；seine 會自動重新連線 |
+| `pool-login-rejected` | 礦池拒絕了登入；日誌中的 `AUTH` 行會說明原因 |
+
+用自己的節點單獨挖礦時還有 `daemon-syncing`、`stale-tip`（新區塊已到達，正在取得新的範本）與 `solved` 等狀態。seine 在等待時，Current 會降為零，因此它從不顯示並未產生的算力。
+
+## Submitted、Rejected 與 Accepted 是什麼意思？
+
+`MINING` 面板統計本次工作階段的份額：
+
+- **Submitted：** seine 已傳送給礦池的份額。
+- **Rejected：** 礦池沒有接受的份額。單獨挖礦時這一行顯示為 `Stale`，統計在鏈已經前進之後才送達節點的解。
+- **Accepted：** 礦池記入你名下的份額。
+
+bntpool.com 會為每個連線調整份額難度，目標是每五分鐘約 10 個份額，所以無論你的算力多高，大約每 30 秒一個份額都是正常的。截圖中十分鐘後已提交 5 個、被接受 5 個，是一個良好的開始。你的收益取決於被接受的份額，Rejected 為零表示你傳送的每個份額都已記入。
+
+## 裝置、設定與礦池餘額
+
+`DEVICES` 列出每個挖礦後端的目前算力與平均算力：CPU 為 `cpu#1`，每張 NVIDIA 顯示卡依序為 `nvidia#1`、`nvidia#2` 等。仍在啟動的顯示卡會顯示進度，從 `starting CUDA runtime` 到 `preparing NVIDIA backend`。第一次啟動時會編譯並調校顯示卡運算核心程式，所以比之後的啟動花更久時間。
+
+`CONFIG` 顯示本次執行的設定：
+
+- **Endpoint** 是礦池位址（預設為 `stratum+tcp://bntpool.com:3333`），單獨挖礦時則是節點的 API 位址。旁邊是這台機器登入礦池時使用的名稱。
+- **Threads** 是 CPU 挖礦執行緒數，後面跟著鍵盤控制的提示 `[+] [-]`。
+- **Backends** 描述每個後端。`cpu#1 (14 lanes, ~28.0 GiB RAM)` 表示 14 個執行緒，每個執行緒占用一塊 2 GiB 的記憶體區，所以 14 × 2 GiB = 28 GiB。
+
+要讓礦機在礦池上有一個好辨認的名稱，可在啟動時傳入：
+
+```sh
+./seine --pool-worker rig-01
+```
+
+`POOL BALANCE` 每隔幾秒從 bntpool.com 讀取你的餘額。`Pending` 是你已經賺到但尚未支付的金額，`Paid` 是礦池已傳送到你地址的金額，右側的 `Miner` 是你的地址，縮寫為前六個與後六個字元。餘額達到 0.1 BNT 時 bntpool.com 就會付款。單獨挖礦時這個面板變為 `WALLET`，顯示節點錢包的 `Pending` 與 `Unlocked` 餘額。
+
+## 閱讀日誌
+
+`LOG` 保留最近 200 筆紀錄，最新的在最下面，每筆都附有層級標記、標籤與發生在多久以前。層級標記有 `INFO`、`OK`（某項操作成功）、`WARN`、`ERR`，以及代表解出區塊的 `**`。在礦池挖礦時最常見的標籤有：
+
+- `AUTH`：礦池登入，例如 `login accepted (protocol v2, required=submit_claimed_hash)`
+- `JOB`：礦池派發的新工作，附有高度與難度
+- `SHARE`：先是 `submitted (backend=cpu#1)`，然後是 `accepted (backend=cpu#1)`
+- `VARDIFF`：礦池調整了你的份額難度
+- `MINER`：自動調校的決定
+
+## seine 執行時自動調校是什麼樣子？
+
+seine 一啟動就開始挖礦，並用真實的挖礦工作進行調校，你可以在日誌中看著它進行。第一筆 `MINER` 日誌是 `cpu-autotune | starting with N threads`，在新機器上後面接著 `initial estimate`，如果 seine 已經認得這台機器，則是 `cached starting point`。
+
+之後它會輪流比較設定：目前的執行緒數、一個候選值，再回到目前的執行緒數。每個視窗至少持續 30 秒，至少收集 20 個雜湊。你會看到 `measuring useful mining work` 與 `checking baseline again` 這樣的日誌，`CONFIG` 中的 Threads 數字也會跟著變化。確定之後，日誌會顯示 `done` 以及保留的執行緒數。
+
+CPU 運算核心程式也用同樣的方式比較，例如 `comparing avx2 and avx512 while mining`，只有兩次比較都確認有提升，seine 才會切換：`confirmed faster ... path in two comparisons`。這些選擇會被快取，下次啟動時從這次停下的地方繼續。調校從不重新連線礦池，也不重新啟動顯示卡。[自動調校指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md)介紹了更多細節，[Argon2id 詳解](/zh-hant/blog/argon2id-proof-of-work-explained/)則解釋了為什麼記憶體頻寬決定了最佳執行緒數落在哪裡。
+
+## 可以在儀表板裡變更執行緒數嗎？
+
+<Answer>
+可以。按 +（或 =，不必按 Shift）為每個 CPU 後端增加一個執行緒，按 - 減少一個。seine 會用新的執行緒數重新啟動挖礦後端，同時保留工作階段統計、執行時間與平均算力。按 q 或 Ctrl+C 結束。手動變更會在本次執行中關閉執行緒自動調校。
+</Answer>
+
+變更生效期間，`CONFIG` 會顯示 `Restarting: 14 -> 15 threads...`，在變更完成之前再按鍵不會生效。增加執行緒的上限是自動計算的 CPU 與記憶體上限，你選擇的執行緒數不會儲存為新的預設值。如果想從一開始就固定執行緒數，請使用 `--threads`。
+
+## 小型終端機與一般輸出
+
+終端機寬度不足 80 欄時，三個統計面板會上下排列。視窗較矮時，seine 會切換到精簡檢視，在日誌上方保留 Threads、State、Current、Average、份額計數與 Height。預設的 `--ui auto` 只在互動式終端機中顯示儀表板；`--ui plain` 輸出一般的捲動日誌，適合伺服器、記錄檔與行程管理工具。
+
+如果你還沒有設定 seine，[Blocknet 挖礦指南](/zh-hant/blog/how-to-mine-blocknet/)會帶你從下載一路到第一個被接受的份額。
+
+<CTA target="seine" title="下載 seine，看它自動調校" text="一行指令開始挖礦，seine 為你的機器調校執行緒與運算核心程式時，儀表板會顯示你的算力、份額與 bntpool.com 餘額。" />

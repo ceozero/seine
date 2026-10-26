@@ -1,0 +1,159 @@
+---
+title: Huge pages dla szybszego kopania Blocknetu
+description: Zarezerwuj huge pages w systemie Linux i WSL lub large pages w systemie Windows, a seine zmapuje każdą arenę Argon2id 2 GiB z mniejszą liczbą chybień TLB i szybciej wykopie Blocknet.
+tags: [Poradnik kopania, Huge pages, Linux, Windows, Wydajność]
+faq:
+  - q: 'Czy do kopania Blocknetu programem seine potrzebuję huge pages?'
+    a: 'Nie. seine kopie na zwykłej pamięci od razu po uruchomieniu i sam prosi system Linux o transparent huge pages. Rezerwacja huge pages to opcjonalny dodatek na ostatnie kilka procent: na hoście walidacyjnym strony 2 MiB dały około 4–6%, a strony 1 GiB mniej więcej 2% więcej.'
+  - q: 'Ile huge pages potrzebuje każdy wątek seine?'
+    a: 'Każdy wątek potrzebuje 1024 stron po 2 MiB, które dokładnie mieszczą jego arenę Argon2id 2 GiB, albo dwóch stron 1 GiB. Dla stron 2 MiB pomnóż liczbę wątków przez 1024, dodaj 5% zapasu i zaokrąglij w górę. Osiem wątków potrzebuje 8602 stron, co rezerwuje około 16,8 GiB RAM.'
+  - q: 'Czy seine automatycznie używa huge pages 1 GiB?'
+    a: 'Domyślny tryb stron seine używa zarezerwowanej puli stron 2 MiB, a potem transparent huge pages. Aby użyć stron 1 GiB, zarezerwuj dwie na wątek, najlepiej przy starcie systemu przez hugepagesz=1G hugepages=N, i uruchom seine z --cpu-page-mode large-1g. Ten tryb działa w systemie Linux x86_64 i WSL i daje około 2% ponad strony 2 MiB.'
+  - q: 'Jak włączyć large pages dla seine w systemie Windows?'
+    a: 'Nadaj swojemu kontu Windows prawo Blokowanie stron w pamięci w secpol.msc w sekcji Zasady lokalne i Przypisywanie praw użytkownika, a potem wyloguj się i zaloguj ponownie. seine sam włącza to prawo przy starcie i przydziela arenę 2 GiB każdego wątku na large pages. W wersjach Home nadaj to prawo narzędziem takim jak ntrights.'
+sourceHash: ef216c34d813
+translation: draft
+---
+
+Rezerwacja huge pages pozwala programowi seine umieścić pamięć każdego wątku kopiącego na kilku dużych stronach zamiast na setkach tysięcy małych. Ten poradnik wyjaśnia, dlaczego przyspiesza to dowód pracy Argon2id w Blocknecie, ile stron zarezerwować, i podaje dokładne polecenia dla systemów Linux, WSL2 i Windows.
+
+## Dlaczego huge pages przyspieszają kopanie Blocknetu?
+
+<Answer>
+Każdy wątek seine liczy hashe wewnątrz areny Argon2id o rozmiarze 2 GiB i odczytuje z niej bloki z nieprzewidywalnych miejsc. Przy zwykłych stronach 4 KiB ta arena zajmuje 524 288 stron, czyli o wiele więcej translacji adresów, niż TLB procesora jest w stanie zapamiętać. Huge pages pokrywają ją 1024 lub zaledwie 2 stronami, więc mniej odczytów czeka na przejście tablic stron.
+</Answer>
+
+Każdy dostęp do pamięci zaczyna się od adresu wirtualnego, który procesor musi przetłumaczyć na fizyczny. Ostatnie translacje są przechowywane w buforze TLB (translation lookaside buffer), który [dokumentacja jądra Linux](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) opisuje jako „pamięć podręczną translacji adresów wirtualnych na fizyczne” i „bardzo deficytowy zasób procesora”. Gdy adresu nie ma w TLB, procesor musi przejść przez tablice stron w pamięci, zanim w ogóle zacznie pobierać dane.
+
+Dowód pracy Blocknetu sprawia, że takie przejścia zdarzają się często. Każdy hash wypełnia arenę 2 GiB blokami po 1 KiB, a w drugiej połowie przebiegu każdy nowy blok odczytuje wcześniejszy blok, którego położenie zależy od danych obliczonych chwilę wcześniej. Jak pokazuje [artykuł o Argon2id](/pl/blog/argon2id-proof-of-work-explained/), daje to około 2 GiB rozproszonych odczytów na każdy hash. Rozmiar strony decyduje o tym, ilu translacji te odczyty wymagają:
+
+| Rozmiar strony | Stron na arenę 2 GiB |
+|---|---|
+| 4 KiB (zwykła) | 524 288 |
+| 2 MiB | 1024 |
+| 1 GiB | 2 |
+
+Z huge pages jeden wpis w TLB obejmuje 512 lub 262 144 razy więcej pamięci, więc znacznie większa część areny pozostaje w zasięgu TLB, a większa część czasu każdego wątku idzie na liczenie hashy.
+
+## O ile szybciej kopie się z huge pages?
+
+[Poradnik o huge pages](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) w dokumentacji seine nazywa je największą pojedynczą dźwignią strojenia przy kopaniu na CPU w systemie Linux. Na hoście walidacyjnym zarezerwowane strony 2 MiB dały około **4–6%**, a strony 1 GiB dodały kolejne mniej więcej **2%**. Poradnik zauważa też, że przy wielu działających wątkach pokrycie huge pages zwykle znaczy więcej niż strojenie pod zestaw instrukcji.
+
+Wyniki serwerów na [wykresie wydajności](/pl/#performance) seine zmierzono z jawnie zarezerwowanymi huge pages 2 MiB. Wynik 49,4 H/s z procesora AMD EPYC Zen 5 (EPYC 9R45) przy 32 wątkach, zmierzony w październiku 2026, uzyskano z 34 407 zarezerwowanymi stronami, czyli tyle, ile podaje wiersz dla 32 wątków w tabeli poniżej. [Poradnik o sprzęcie do kopania](/pl/blog/blocknet-mining-hardware-hashrate/) zawiera pełne wyniki według generacji.
+
+Nawet bez rezerwacji seine prosi jądro systemu Linux o transparent huge pages. Zarezerwowana pula daje więcej, bo strony są odłożone z góry, więc każdy wątek je dostaje, niezależnie od tego, jak bardzo pamięć zdążyła się pofragmentować.
+
+## Ile huge pages potrzebuje seine?
+
+<Answer>
+Każdy wątek seine potrzebuje 1024 huge pages po 2 MiB, aby pomieścić swoją arenę 2 GiB, albo dwóch stron 1 GiB. Dla stron 2 MiB zarezerwuj wątki × 1024 × 1,05 i zaokrąglij w górę, co zostawia 5% zapasu. Osiem wątków potrzebuje 8602 stron, czyli około 16,8 GiB. Gdy rezerwacja jest za mała, seine wypisuje przy starcie dokładną liczbę.
+</Answer>
+
+Liczba wątków to wartość **Threads** w panelu seine. seine dobiera ją na podstawie ilości RAM i liczby rdzeni, więc uruchom go raz bez huge pages i zanotuj tę wartość. Jeśli rezerwacja jest za mała, log startowy seine wypisuje wiersz `hugepages |` z potrzebną liczbą stron i poleceniem `sysctl`, które je rezerwuje.
+
+| Wątki | Strony 2 MiB (z 5% zapasu) | Zarezerwowana pamięć | Strony 1 GiB |
+|---|---|---|---|
+| 4 | 4301 | 8,4 GiB | 8 |
+| 8 | 8602 | 16,8 GiB | 16 |
+| 16 | 17 204 | 33,6 GiB | 32 |
+| 24 | 25 805 | 50,4 GiB | 48 |
+| 32 | 34 407 | 67,2 GiB | 64 |
+
+Zarezerwowane strony są odłożone dla programów, które proszą o huge pages, więc dopasuj rezerwację do liczby wątków, z którą faktycznie kopiesz. seine wlicza zarezerwowaną pulę do dostępnej pamięci, gdy dobiera liczbę wątków, więc rezerwacja stron nie zmienia Twojej liczby wątków.
+
+## Jak skonfigurować huge pages 2 MiB w systemie Linux?
+
+Zarezerwuj strony dla swojej liczby wątków. Ten przykład dotyczy 4 wątków:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Sprawdź, czy jądro znalazło je wszystkie:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Jeśli `HugePages_Total` pokazuje mniej, niż zażądano, pamięć jest pofragmentowana. Wyczyść cache, skompaktuj pamięć i spróbuj ponownie:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Utrwal rezerwację:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Przy dużych rezerwacjach najpewniejszą drogą jest utrwalone ustawienie plus restart, bo jądro rezerwuje strony na wczesnym etapie startu, zanim pamięć się pofragmentuje. Potem uruchom seine jak zwykle. Jego domyślny tryb stron, `auto`, mapuje arenę każdego wątku z zarezerwowanej puli bez dodatkowych flag.
+
+## Jak dodać strony 1 GiB?
+
+Strony 1 GiB wymagają nieco więcej konfiguracji i dają około 2% ponad strony 2 MiB. Każda arena 2 GiB potrzebuje dokładnie dwóch takich stron, więc nie trzeba liczyć zapasu. Działają w systemie Linux x86_64 i WSL.
+
+Zarezerwuj je przy starcie systemu parametrami jądra, co jest najpewniejszym sposobem na uzyskanie tak dużych stron. Dla 9 wątków:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Na świeżo uruchomionej maszynie możesz też spróbować rezerwacji w trakcie działania, a potem sprawdzić liczbę wolnych stron:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Wiersze `HugePages_*` w `/proc/meminfo` dotyczą tylko domyślnego rozmiaru 2 MiB, więc stan puli 1 GiB odczytaj z `/sys`. Następnie uruchom seine w trybie 1 GiB:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+W tym trybie każdy wątek mapuje swoją arenę z puli 1 GiB, więc masz pewność, że całe kopanie odbyło się na stronach 1 GiB.
+
+## Jak zarezerwować huge pages w WSL2?
+
+WSL2 uruchamia prawdziwe jądro Linux, więc powyższe polecenia dla systemu Linux działają w nim bez zmian. W przypadku stron 1 GiB przekaż parametry startowe przez plik `%UserProfile%\.wslconfig` po stronie Windows. Maszyna wirtualna potrzebuje też wystarczająco dużo pamięci na rezerwację oraz na usługi Windows i WSL. Zweryfikowany host seine z 64 GiB używał takiej konfiguracji:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Zapisz plik, uruchom `wsl --shutdown` w systemie Windows i ponownie otwórz swoją dystrybucję. Zanim zaczniesz kopać, upewnij się, że liczba wolnych stron wystarcza dla każdego wątku.
+
+## Jak włączyć large pages w systemie Windows?
+
+Natywne kopanie w systemie Windows jest zwykle szybsze niż w WSL na tym samym sprzęcie, a seine używa tam large pages systemu Windows. Potrzebuje do tego jednego uprawnienia, **Blokowanie stron w pamięci** (Lock pages in memory):
+
+1. Otwórz `secpol.msc`, a następnie *Zasady lokalne* → *Przypisywanie praw użytkownika*.
+2. Dodaj swojego użytkownika do **Blokowanie stron w pamięci**.
+3. Wyloguj się i zaloguj ponownie, bo prawo obowiązuje w nowych sesjach.
+
+`secpol.msc` jest dostępny w systemie Windows w wersjach Pro, Enterprise i Education. W wersjach Home nadaj to samo prawo narzędziem takim jak `ntrights`.
+
+To cała konfiguracja. Przy starcie seine sam włącza to prawo i przydziela arenę 2 GiB każdego wątku przez `VirtualAlloc` z `MEM_LARGE_PAGES`, czyli metodą, którą [Microsoft dokumentuje](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) dla pamięci na large pages. Jeśli large pages nie są dostępne, seine kopie na zwykłych stronach i zapisuje w logu przyczynę razem z dokładnym rozwiązaniem. seine nigdy sam nie zmienia praw konta ani Cię nie wylogowuje.
+
+## Którego trybu stron używać?
+
+Ustawienie domyślne pasuje prawie wszystkim. Pozostałe tryby służą do stron 1 GiB i do pomiarów:
+
+| Tryb | Co robi |
+|---|---|
+| `--cpu-page-mode auto` (domyślny) | Używa zarezerwowanych huge pages lub large pages systemu Windows, potem transparent huge pages, a potem zwykłych stron |
+| `--cpu-page-mode large` | Wymaga zarezerwowanych huge pages lub large pages systemu Windows dla każdego wątku i zatrzymuje się przy starcie, jeśli ich brakuje |
+| `--cpu-page-mode large-1g` | Wymaga stron 1 GiB dla każdego wątku (Linux x86_64 i WSL) |
+| `--cpu-page-mode regular` | Tylko zwykłe strony, do pomiaru przed i po |
+
+Aby zmierzyć zysk na własnej maszynie, pokop przez jakiś czas z `--cpu-page-mode regular`, a potem z `auto` lub `large-1g`, i porównaj hashrate w panelu. Na serwerach z kilkoma węzłami NUMA zarezerwowane strony muszą też znajdować się na węzłach, na których działają Twoje wątki; opisuje to [poradnik o kopaniu na serwerach](/pl/blog/mine-blocknet-on-servers/).
+
+<CTA target="seine" title="Pobierz seine i zarezerwuj strony" text="seine mapuje arenę 2 GiB każdego wątku na huge pages, gdy tylko je zarezerwujesz, bez dodatkowych flag." />

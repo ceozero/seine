@@ -1,0 +1,104 @@
+---
+title: Preuve de travail ou preuve d'enjeu, expliquées
+description: 'Preuve de travail et preuve d''enjeu : comment chacune choisit le bloc suivant, sécurise la chaîne et émet des coins, et pourquoi Blocknet utilise la preuve de travail.'
+tags: [Preuve de travail, Preuve d'enjeu, Consensus, Blocknet, Minage]
+faq:
+  - q: 'Blocknet utilise-t-il la preuve de travail ou la preuve d''enjeu ?'
+    a: 'Blocknet utilise la preuve de travail. Les mineurs calculent des hachages Argon2id qui demandent chacun 2 GiB de mémoire, un nouveau bloc est trouvé environ toutes les cinq minutes et toute la récompense de bloc revient au mineur qui l''a trouvé. Il n''y a pas de staking. Vous pouvez le miner avec seine sur un ordinateur ordinaire via le pool bntpool.com.'
+  - q: 'Quand Ethereum est-il passé de la preuve de travail à la preuve d''enjeu ?'
+    a: 'Ethereum est passé à la preuve d''enjeu lors d''une mise à niveau appelée le Merge, exécutée le 15 septembre 2022. Depuis, ce sont des validateurs ayant déposé 32 ETH qui proposent les blocs et votent dessus, à la place des mineurs. Bitcoin, Monero et Blocknet utilisent toujours la preuve de travail, où les nouveaux blocs naissent d''un travail de calcul.'
+  - q: 'Qu''est-ce qu''une attaque des 51 % ?'
+    a: 'Une attaque des 51 % est une tentative de contrôler les blocs qu''une chaîne accepte en détenant la majorité de la ressource qui en décide. En preuve de travail, cela signifie la majorité de la puissance de hachage du réseau. En preuve d''enjeu, la majorité des coins mis en jeu. Dans les deux cas, l''attaquant doit engager une majorité de ressources réelles.'
+  - q: 'Peut-on miner une cryptomonnaie en preuve d''enjeu ?'
+    a: 'Non. Une cryptomonnaie en pure preuve d''enjeu n''a pas de minage. Les nouveaux coins sont versés aux validateurs qui bloquent des coins existants en garantie : il faut donc posséder des coins avant de pouvoir en gagner. Pour gagner de nouveaux coins avec l''ordinateur que vous avez déjà, il vous faut une cryptomonnaie en preuve de travail comme Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: draft
+---
+
+Cet article explique comment la preuve de travail et la preuve d'enjeu décident qui ajoute le bloc suivant à une blockchain, comment chacune garde la chaîne sûre et comment chacune crée de nouveaux coins. Blocknet sert d'exemple concret tout du long : c'est une cryptomonnaie en preuve de travail que vous pouvez miner sur un ordinateur ordinaire.
+
+## Quelle est la différence entre preuve de travail et preuve d'enjeu ?
+
+<Answer>
+La preuve de travail et la preuve d'enjeu sont deux façons pour une blockchain de décider qui ajoute le bloc suivant. En preuve de travail, les mineurs dépensent de la puissance de calcul pour trouver un hachage valide. En preuve d'enjeu, des validateurs bloquent des coins en dépôt et sont choisis pour proposer des blocs et voter dessus. Les deux rendent la triche coûteuse.
+</Answer>
+
+Toutes les blockchains doivent résoudre le même problème. Des milliers d'ordinateurs qui ne se font pas confiance doivent s'accorder sur un seul historique des paiements, pour que personne ne puisse dépenser deux fois le même coin. Quelqu'un doit proposer chaque nouveau bloc, et tous les autres ont besoin d'une raison de l'accepter. Cette règle s'appelle le mécanisme de consensus, et la preuve de travail et la preuve d'enjeu en sont les deux modèles les plus connus.
+
+| | Preuve de travail | Preuve d'enjeu |
+|---|---|---|
+| Qui produit un bloc | Le premier mineur qui trouve un hachage inférieur ou égal à la cible du réseau | Un validateur choisi parmi ceux qui ont bloqué des coins |
+| Ce qu'il engage | Du matériel et de l'électricité | Des coins déposés en garantie |
+| Quelle chaîne l'emporte | La chaîne qui cumule le plus de travail | La chaîne soutenue par le plus de votes de validateurs, avec des points de contrôle de finalité |
+| Où vont les nouveaux coins | Une récompense de bloc au mineur qui a trouvé le bloc | Des récompenses aux validateurs pour leurs propositions et leurs votes |
+| Ce qu'il faut pour participer | Un ordinateur capable de calculer des hachages | Des coins à mettre en jeu (32 ETH pour un validateur Ethereum) |
+| Exemples | Bitcoin, Monero, Blocknet | Ethereum depuis 2022 |
+
+## Comment la preuve de travail choisit-elle le bloc suivant ?
+
+En preuve de travail, les mineurs rivalisent pour résoudre une énigme difficile à résoudre et facile à vérifier. Un mineur prend le bloc qu'il veut publier, y ajoute un nombre appelé nonce et calcule le hachage du résultat. Si le hachage, lu comme un nombre, est inférieur ou égal à la cible du réseau, le bloc est valide. Sinon, le mineur change le nonce et réessaie. La seule façon de gagner est d'essayer beaucoup de nonces : la probabilité qu'un mineur trouve le bloc suivant correspond donc à sa part de la puissance de hachage du réseau.
+
+Le [livre blanc de Bitcoin](https://bitcoin.org/bitcoin.pdf) publié par Satoshi Nakamoto en 2008 le résume ainsi : « la preuve de travail revient essentiellement à un CPU, une voix ». Les nœuds suivent la chaîne dans laquelle le plus d'effort de preuve de travail a été investi, et un réglage de difficulté monte ou abaisse la cible pour que les blocs continuent d'arriver à un rythme régulier, quelle que soit la puissance de hachage qui rejoint le réseau. Le guide sur [le fonctionnement du minage de cryptomonnaies](/fr/blog/how-crypto-mining-works/) détaille pas à pas les hachages, la difficulté et les pools.
+
+Blocknet fonctionne de la même façon, avec des valeurs fixées dans son code de consensus :
+
+- **Le hachage est Argon2id** avec 2 GiB de mémoire : chaque hachage demande donc de la vraie mémoire en plus du temps processeur. L'[explication d'Argon2id](/fr/blog/argon2id-proof-of-work-explained/) montre son fonctionnement.
+- **La cible vaut (2^256 − 1) divisé par la difficulté**, ce qui fait de la difficulté à peu près le nombre de hachages dont le réseau a besoin pour trouver un bloc.
+- **Un bloc arrive environ toutes les cinq minutes**, soit 288 blocs par jour. La difficulté suit les temps de bloc récents grâce à une moyenne mobile pondérée sur 60 blocs (LWMA).
+- **Les nœuds suivent la chaîne la plus lourde.** Chaque nœud additionne la difficulté de tous les blocs d'une chaîne et ne passe à une chaîne concurrente que si son travail total est plus élevé.
+
+## Comment la preuve d'enjeu choisit-elle le bloc suivant ?
+
+La preuve d'enjeu remplace le hachage par un dépôt. Pour participer, un validateur bloque des coins auprès du protocole, et le protocole choisit des validateurs pour proposer et approuver les blocs. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), lancé en 2012, a été la première cryptomonnaie à l'utiliser, et Ethereum a basculé le 15 septembre 2022 lors d'une mise à niveau appelée [le Merge](https://ethereum.org/en/roadmap/merge/).
+
+Le modèle d'Ethereum montre les rouages. D'après [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/) :
+
+- Un validateur dépose 32 ETH dans le contrat de dépôt.
+- Le temps est découpé en créneaux de 12 secondes, regroupés en époques de 32 créneaux.
+- À chaque créneau, un validateur est tiré au sort pour proposer un bloc, et d'autres votent dessus par des attestations.
+- Les points de contrôle deviennent définitifs quand des validateurs détenant au moins deux tiers de tout l'ETH mis en jeu votent pour eux.
+- Un validateur qui propose deux blocs pour le même créneau, ou émet des votes contradictoires, subit un slashing : une partie de sa mise, jusqu'à la totalité, est détruite.
+
+La mise joue le rôle que joue l'électricité en preuve de travail. Enfreindre les règles coûte au validateur des coins qu'il possède déjà.
+
+## Comment la preuve de travail et la preuve d'enjeu restent-elles sûres ?
+
+Les deux modèles font qu'une attaque coûte plus qu'elle ne pourrait rapporter, et placent ce coût à des endroits différents.
+
+**En preuve de travail, le coût est un calcul continu.** Pour réécrire un bloc passé, un attaquant doit refaire le travail de ce bloc et de tous les blocs suivants, puis dépasser le réseau honnête. Nakamoto a montré que la probabilité qu'un attaquant plus lent rattrape son retard diminue de façon exponentielle à chaque nouveau bloc. Prendre le contrôle de la chaîne pour la suite suppose de faire tourner plus de puissance de hachage que tous les autres réunis, aussi longtemps que dure l'attaque.
+
+**En preuve d'enjeu, le coût est un capital en jeu.** La documentation d'Ethereum indique qu'un attaquant « aurait besoin de 51 % de l'ETH mis en jeu » pour contrôler la chaîne, qu'un tiers de la mise suffit à empêcher les blocs de devenir définitifs, et qu'annuler un bloc finalisé signifierait perdre au moins un tiers de tout l'ETH mis en jeu par slashing.
+
+Blocknet fixe aussi deux seuils en plus de sa preuve de travail. Le réseau considère 10 confirmations, environ 50 minutes, comme sûres, et les nœuds refusent toute réorganisation de plus de 100 blocs, environ huit heures : un bloc à 100 blocs de profondeur est donc définitif.
+
+## Comment les deux modèles émettent-ils de nouveaux coins ?
+
+<Answer>
+Les cryptomonnaies en preuve de travail versent les nouveaux coins au mineur qui trouve chaque bloc : toute personne qui apporte de la puissance de calcul peut gagner des coins sans en posséder au départ. Les cryptomonnaies en preuve d'enjeu versent les nouveaux coins aux validateurs au prorata de leur mise : les récompenses vont à ceux qui détiennent déjà des coins. Chaque protocole fixe son propre calendrier.
+</Answer>
+
+En preuve de travail, la première transaction de chaque bloc crée de nouveaux coins pour le mineur qui l'a trouvé. Le livre blanc de Bitcoin y voit « un moyen de mettre initialement des coins en circulation, puisqu'il n'existe aucune autorité centrale pour les émettre ». La récompense de Bitcoin est divisée par deux tous les 210 000 blocs, environ tous les quatre ans, et l'offre totale reste juste sous les 21 millions.
+
+Dans la preuve d'enjeu d'Ethereum, les récompenses sont ajoutées aux soldes des validateurs une fois par époque, pour les attestations, les propositions de blocs et la participation au comité de synchronisation. La [récompense de base](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) diminue à mesure que la mise totale augmente, tandis que l'émission totale croît à mesure que des validateurs rejoignent le réseau.
+
+L'émission de Blocknet passe entièrement par le minage. Son bloc genesis ne contient aucune transaction : aucun coin n'existait avant le début du minage, et le consensus ne prévoit ni premine, ni trésorerie, ni sortie pour les fondateurs. Chaque bloc verse toute sa récompense en une seule sortie au mineur qui l'a trouvé. La récompense a commencé à 723,25 BNT par bloc, baisse par paliers à chaque mois de 30 jours selon une courbe exponentielle pendant 48 mois, puis reste définitivement à 2 BNT par bloc.
+
+## Pourquoi Blocknet utilise-t-il la preuve de travail ?
+
+Blocknet a choisi la preuve de travail pour que toute personne disposant d'un ordinateur puisse gagner de nouveaux coins dès le premier bloc, sans avoir à en acheter d'abord. Son daemon décrit Argon2id comme une « PoW gourmande en mémoire pour résister aux ASIC et garantir un minage équitable », et exécute chaque hachage sur un seul thread « par équité ».
+
+C'est l'exigence en mémoire qui garde le minage ouvert. Chaque hachage remplit 2 GiB de mémoire, donc chaque thread de minage a besoin d'environ 2 GB de RAM, et les ordinateurs que les gens possèdent déjà, ordinateurs de bureau, portables et serveurs, disposent de cette mémoire et des contrôleurs pour l'alimenter. Blocknet fait partie d'une famille de cryptomonnaies en preuve de travail conçues autour du matériel généraliste : Monero, par exemple, utilise depuis novembre 2019 [RandomX](https://github.com/tevador/RandomX), « optimisé pour les CPU généralistes ».
+
+La preuve de travail reste au programme de Blocknet. La mise à niveau Faraday, prévue vers février 2027 selon [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), apportera « une preuve de travail plus légère » pour que les nouveaux nœuds rattrapent la chaîne plus vite.
+
+## Comment commencer à miner une cryptomonnaie en preuve de travail ?
+
+Pour Blocknet, il vous faut une adresse de portefeuille et seine, le mineur gratuit et open source :
+
+1. Obtenez une adresse dans le portefeuille officiel. Le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/) vous accompagne pas à pas.
+2. [Téléchargez seine](/fr/#download) pour Windows, macOS ou Linux et lancez-le.
+3. Collez votre adresse ou votre `@name`, et acceptez le pool par défaut, bntpool.com.
+
+seine choisit le nombre de threads d'après votre RAM, compare les kernels CPU pendant qu'il mine et garde le plus rapide, et ajoute toute carte graphique NVIDIA sous Windows et Linux en plus du processeur. Le [guide de minage](/fr/blog/how-to-mine-blocknet/) détaille le matériel et les paiements.
+
+<CTA target="seine" title="Minez Blocknet avec seine" text="Téléchargez seine, collez votre adresse ou votre @name, et votre ordinateur commence à miner des BNT sur bntpool.com en quelques minutes." />

@@ -1,0 +1,97 @@
+---
+title: 'Bulletproofs explicados: cómo se verifican importes ocultos'
+description: 'Bulletproofs en palabras sencillas: cómo los compromisos de Pedersen ocultan los importes y cómo las pruebas de rango dejan que cada nodo compruebe las cuentas.'
+tags: [Bulletproofs, Privacidad, Criptografía, Blocknet]
+faq:
+  - q: '¿Necesitan los Bulletproofs una configuración de confianza?'
+    a: 'No. Los Bulletproofs se basan solo en la suposición del logaritmo discreto, la misma que sostiene las firmas de curva elíptica, y usan parámetros públicos que cualquiera puede derivar. No hay ceremonia de configuración ni ningún secreto que alguien tenga que destruir después, y monedas de privacidad como Monero y Blocknet los usan para sus pruebas de rango.'
+  - q: '¿Qué tamaño tiene una prueba de rango Bulletproofs?'
+    a: 'Un solo Bulletproof de 64 bits contiene 2 × log2(64) + 9 = 21 elementos. Sobre el grupo Ristretto, cada elemento ocupa 32 bytes, así que cada prueba ocupa 672 bytes, y el explorador de Blocknet muestra exactamente eso para cada salida. El tamaño crece con el logaritmo del rango, así que duplicar el número de bits solo añade dos elementos.'
+  - q: '¿Quién puede ver el importe de una transacción de Blocknet?'
+    a: 'Solo el emisor y el receptor. La cadena guarda un compromiso de Pedersen y una prueba de rango por cada salida, además del importe cifrado con el secreto que comparten las dos billeteras. La billetera del receptor lo descifra con la clave privada de visualización. La comisión de red es la única cifra pública, para que los nodos puedan sumarla en la comprobación del saldo.'
+  - q: '¿Cómo saben los nodos que no se han creado monedas si los importes están ocultos?'
+    a: 'Cada nodo comprueba dos cosas en cada transacción. Los compromisos de Pedersen deben cuadrar, de modo que las entradas sean iguales a las salidas más la comisión, y cada salida debe llevar una prueba de rango válida que demuestre que su importe está entre 0 y 2^64. Juntas, estas comprobaciones descartan la inflación oculta sin revelar un solo importe.'
+sourceHash: e02793933862
+translation: reviewed
+---
+
+Los Bulletproofs son las pruebas de rango cortas de conocimiento cero que permiten a una criptomoneda ocultar todos los importes de las transacciones mientras cada nodo sigue comprobando que no se han creado monedas. Esta guía explica los compromisos de Pedersen, por qué los importes ocultos necesitan pruebas de rango, cómo los Bulletproofs mantienen pequeñas esas pruebas y cómo los usa Blocknet en cada salida.
+
+## ¿Qué son los Bulletproofs?
+
+<Answer>
+Los Bulletproofs son pruebas de conocimiento cero cortas, publicadas por Bünz, Bootle, Boneh, Poelstra, Wuille y Maxwell en 2018. En las criptomonedas demuestran que un importe oculto está en un rango válido, como de 0 a 2^64, sin revelarlo. No necesitan configuración de confianza, y su tamaño crece solo con el logaritmo del rango.
+</Answer>
+
+El artículo, [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066), se presentó en el IEEE Symposium on Security and Privacy en 2018. Sus autores los diseñaron para las transacciones confidenciales, en las que los importes de una blockchain se sustituyen por compromisos. Para entender por qué hace falta una prueba así, hay que empezar por el compromiso.
+
+## ¿Qué es un compromiso de Pedersen?
+
+Un compromiso es la versión criptográfica de un sobre cerrado. Metes un número dentro, enseñas el sobre a todo el mundo y más adelante puedes demostrar qué había dentro. Nadie puede leer el número desde el sobre, y tú no puedes cambiarlo por otro número después.
+
+Un compromiso de Pedersen, descrito por Torben Pedersen en 1991, hace esto con puntos de una curva elíptica. Para comprometerse con un importe `v`, una billetera elige un secreto aleatorio `r`, llamado factor de cegado, y calcula:
+
+```
+C = v·G + r·H
+```
+
+`G` y `H` son dos puntos públicos fijos de la curva, elegidos de forma que nadie sepa escribir uno como múltiplo del otro. El resultado `C` es un único punto de 32 bytes. Tiene dos propiedades:
+
+- **Ocultación.** Como `r` es aleatorio, `C` parece un punto aleatorio. El mismo importe comprometido dos veces da dos compromisos sin relación, y el compromiso por sí solo no le dice nada a un observador sobre `v`.
+- **Vinculación.** Una vez publicado `C`, la billetera no puede abrirlo con otro importe. Hacerlo supondría resolver el problema del logaritmo discreto en la curva.
+
+## ¿Cómo pueden los nodos comprobar una transacción que no pueden leer?
+
+<Answer>
+Los compromisos de Pedersen se pueden sumar. La suma de dos compromisos es un compromiso con la suma de sus importes, con los factores de cegado también sumados. Un nodo suma los compromisos de entrada de una transacción y sus compromisos de salida más la comisión, y comprueba que los dos totales coinciden, así que confirma el saldo sin ver ningún importe.
+</Answer>
+
+Sumar dos compromisos da `(v1 + v2)·G + (r1 + r2)·H`, que es a su vez un compromiso con `v1 + v2`. El emisor ajusta los factores de cegado para que el cegado total de las entradas sea igual al de las salidas. Si los importes también cuadran, la diferencia entre la suma de entradas y la suma de salidas es exactamente cero, y cualquier nodo puede verificarlo.
+
+La comisión de red es la única cifra pública de una transacción. Los nodos la convierten en un compromiso con un factor de cegado de cero y la suman al lado de las salidas, así que la comprobación queda: entradas = salidas + comisión.
+
+## ¿Por qué los importes ocultos necesitan pruebas de rango?
+
+La aritmética de los compromisos funciona módulo un número muy grande, el orden del grupo de la curva, que es aproximadamente 2^252. En esa aritmética, un importe «negativo» no es más que uno positivo enorme. Alguien podría gastar una entrada de 10 monedas y crear dos salidas, una de 11 y otra de «menos 1». Los compromisos cuadrarían perfectamente, y aparecería 1 moneda de la nada, oculta a todos los observadores.
+
+Una prueba de rango cierra esa puerta. Demuestra que el importe dentro de un compromiso está entre 0 y 2^64 sin decir cuál es. Con cada salida acotada así, un puñado de salidas nunca puede sumar un número lo bastante grande como para dar la vuelta al orden del grupo, así que unos compromisos que cuadran significan unos importes que cuadran.
+
+Los diseños anteriores de transacciones confidenciales usaban pruebas de rango que crecían linealmente con el número de bits. Los Bulletproofs crecen solo con el logaritmo, lo que reduce una prueba de 64 bits a unos pocos cientos de bytes.
+
+## ¿Cómo funcionan los Bulletproofs?
+
+Un Bulletproof demuestra un rango en tres pasos.
+
+1. **Divide el importe en bits.** Un importe de 64 bits se convierte en un vector de 64 bits. El probador se compromete con ese vector y demuestra dos hechos sobre él: cada entrada es 0 o 1, y los bits, ponderados por potencias de dos, suman el importe comprometido.
+2. **Convierte esos hechos en un solo producto interno.** Mediante desafíos aleatorios, el probador pliega todas esas condiciones en una única afirmación sobre el producto interno de dos vectores. Como los desafíos son aleatorios, una afirmación falsa solo pasa con una probabilidad despreciable.
+3. **Demuestra el producto interno dividiendo a la mitad.** En cada ronda, el probador envía dos puntos de la curva, `L` y `R`, y ambos vectores se pliegan a la mitad de su longitud. Tras log2(64) = 6 rondas, queda un solo par de números.
+
+De esa división a la mitad sale el tamaño. El resumen del artículo sitúa una prueba de rango en `2·log2(n) + 9` elementos de grupo y de cuerpo para un rango de `n` bits. Para 64 bits son 12 puntos de las seis rondas más otros 9, 21 elementos en total, o 672 bytes cuando cada elemento ocupa 32 bytes.
+
+La prueba no es interactiva. En lugar de un verificador en directo que envía desafíos, las dos partes los derivan calculando el hash de la transcripción de la prueba, una técnica estándar conocida como heurística de Fiat-Shamir. Los Bulletproofs tampoco necesitan configuración de confianza: los generadores son públicos y se derivan abiertamente, y la seguridad se basa solo en la suposición del logaritmo discreto. Varias pruebas se pueden agregar, añadiendo solo un número logarítmico de elementos, y la verificación se puede hacer por lotes.
+
+## ¿Quién usa Bulletproofs?
+
+Monero activó los Bulletproofs en su actualización de red del 18 de octubre de 2018 (la versión v0.13.0) para reducir el tamaño de las transacciones. La [biblioteca bulletproofs de Rust](https://github.com/dalek-cryptography/bulletproofs) del proyecto dalek-cryptography los implementa sobre el grupo Ristretto de Curve25519, y la biblioteca criptográfica de Blocknet está construida sobre ella.
+
+## ¿Cómo oculta Blocknet cada importe?
+
+En Blocknet, cada salida de cada transacción contiene un compromiso de Pedersen en lugar de un importe, y cada salida lleva su propio Bulletproof de 64 bits. La privacidad forma parte del formato de transacción, sin modo transparente, así que no hay forma de enviar un pago con un importe visible.
+
+Esto es lo que comprueba un nodo antes de aceptar una transacción:
+
+- **Cada prueba de rango.** El Bulletproof de cada salida debe verificarse frente a su compromiso, demostrando que el importe está entre 0 y 2^64. Las pruebas usan una transcripción con la etiqueta "Blocknet Range Proof", que vincula cada prueba a Blocknet.
+- **El saldo.** Cada entrada lleva un compromiso de pseudosalida, y la firma de anillo demuestra que se compromete con el mismo importe que la moneda real que se gasta, sin revelar qué miembro del anillo es. Después, el nodo comprueba que las pseudosalidas suman las salidas más la comisión.
+- **Las monedas nuevas.** La recompensa de un bloque sigue un calendario público, así que para la salida minada el nodo reconstruye el compromiso que espera para esa altura y comprueba que coincide.
+
+Puedes verlo en el [explorador de Blocknet](https://explorer.blocknetcrypto.com). La página de una transacción muestra sus importes como "hidden · Pedersen commitments", y cada salida muestra su compromiso, un memo cifrado y una prueba de rango de "672 bytes · Bulletproof", el tamaño que predicen las cuentas anteriores.
+
+El receptor sigue viendo la cifra real. Cada salida lleva el importe cifrado con el secreto que comparten las billeteras del emisor y del receptor, y la billetera del receptor lo descifra con la clave privada de visualización. El importe es visible para las dos personas del pago y para nadie más.
+
+Los importes ocultos funcionan junto con las demás capas de Blocknet: las [firmas de anillo](/es/blog/ring-signatures-explained/) sobre 16 salidas ocultan al emisor, las [direcciones sigilosas de un solo uso](/es/blog/stealth-addresses-explained/) ocultan al receptor y [Dandelion++](/es/blog/dandelion-plus-plus-explained/) oculta por dónde entró una transacción en la red. La [guía de las funciones de privacidad de Blocknet](/es/blog/blocknet-privacy-features/) las recorre una a una.
+
+## Consigue tus propios BNT privados
+
+Una forma sencilla de conseguir monedas con importes ocultos es minarlas. Blocknet usa una [prueba de trabajo Argon2id](/es/blog/argon2id-proof-of-work-explained/) intensiva en memoria que puedes minar con una computadora corriente, y seine la mina con tu CPU, junto con cualquier GPU NVIDIA, y se ajusta solo sin configuración. Cada pago que te envía bntpool.com llega como una salida privada con un compromiso y un Bulletproof. La [guía de minería](/es/blog/how-to-mine-blocknet/) te lleva de la descarga a los shares aceptados en pocos minutos.
+
+<CTA target="seine" title="Mina BNT privados con seine" text="Descarga seine, pega tu dirección o tu @name y empieza a ganar Blocknet con cada importe oculto en la cadena." />

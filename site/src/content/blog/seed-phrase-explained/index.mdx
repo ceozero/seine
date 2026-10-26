@@ -1,0 +1,103 @@
+---
+title: Seed phrase explained, and how to keep yours safe
+description: A seed phrase is the list of words that can rebuild your crypto wallet. Learn how it works, how to store it offline and why you should never share it.
+date: 2026-10-25
+tags: [Wallet, Seed phrase, Security]
+faq:
+  - q: What is the difference between a seed phrase and a private key?
+    a: A private key controls funds directly, while a seed phrase is a human-readable backup that a wallet turns into its private keys. In a Blocknet wallet, the 12 words produce both the spend key and the view key, so the phrase alone is enough to rebuild the wallet and everything it can do.
+  - q: Can I recover a wallet if I lose the seed phrase?
+    a: You can keep using the wallet as long as you still have the wallet file and its password. The seed phrase is the backup for when the file or the password is gone. While the wallet still opens, show the phrase again with the seed command or View Recovery Seed and write it down.
+  - q: Is it safe to store a seed phrase in a password manager?
+    a: The Blocknet wallet guide asks you to keep the seed offline on paper and to leave it out of text files, notes apps and cloud storage, because anyone who reads the 12 words controls the funds. Paper copies kept in two separate safe places give you a backup that never touches the internet.
+  - q: Does a seed phrase work in any wallet app?
+    a: The word list is a shared standard, but each coin turns the words into keys its own way. Restore a Blocknet seed in the official Blocknet command-line or desktop wallet. Both accept the 12 words and rebuild the same address and balance after the wallet scans the chain.
+related: [blocknet-wallet-for-mining, stealth-addresses-explained, blocknet-privacy-features]
+---
+
+A seed phrase is the short list of words that can rebuild your crypto wallet on any computer. This guide explains what those words are, how a wallet turns them into keys, how to store them so you never lose access, and why nobody else should ever see them. The examples use the Blocknet wallet and its 12-word recovery seed.
+
+## What is a seed phrase?
+
+<Answer>
+A seed phrase, also called a recovery phrase or mnemonic, is a list of ordinary words, usually 12 or 24, that encodes the secret your wallet's keys come from. Type the words into a compatible wallet and it rebuilds the same keys, addresses and balance, even if your computer and wallet file are gone.
+</Answer>
+
+Every crypto wallet is built on secret keys. A key is a long random number, which is hard to copy by hand and easy to get wrong. A seed phrase writes the same secret as words from a fixed list, so you can copy it onto paper, read it back and type it in years later.
+
+The Blocknet wallet calls its phrase a **recovery seed**. It is 12 words long, and the wallet creates it when you create a new wallet. Keep it safe and you can always get your wallet back.
+
+## How does a seed phrase work?
+
+Many wallets follow BIP39, a standard written for Bitcoin in 2013 by Marek Palatinus, Pavol Rusnak, Aaron Voisine and Sean Bowe. It works in three steps.
+
+1. **Random bits.** The wallet draws 128 to 256 random bits. A 12-word phrase holds 128 bits and a 24-word phrase holds 256.
+2. **A checksum, then words.** The wallet hashes those bits with SHA-256 and adds the first few bits of the hash as a checksum (4 bits for 12 words). It then splits the result into 11-bit pieces. Each piece is a number from 0 to 2,047 that picks one word from a 2,048-word list.
+3. **A seed for the keys.** To use the phrase, the wallet runs it through PBKDF2 with HMAC-SHA512 for 2,048 rounds and gets a 64-byte seed. The keys come from that seed.
+
+The checksum is why a wallet can tell you a phrase is wrong. Only 1 in 16 random 12-word combinations has a valid checksum, so most typos and swapped words are caught before anything happens. The English list is also built so the first four letters of every word are unique, which helps when your handwriting is hard to read.
+
+### What 12 words mean in Blocknet
+
+The Blocknet wallet uses the standard English BIP39 list and 128 bits of randomness, so every recovery seed is 12 words. It turns those words into its 64-byte seed with BIP39's PBKDF2 step and no extra passphrase. The first 32 bytes become your **spend key** and the last 32 bytes become your **view key**. Your address is built from the public halves of those two keys, so the same 12 words always lead back to the same address. The guide to [stealth addresses](/blog/stealth-addresses-explained/) explains how the spend key and view key work together to receive payments privately.
+
+How big is 128 bits? There are 2^128 possible seeds, about 3.4 × 10^38. Nobody finds your wallet by guessing words. The only practical way into it is to see your phrase, which is why the rest of this guide is about storing it well.
+
+## Seed phrase, password and wallet file: what is the difference?
+
+People often mix up the three things that protect a wallet. Here is what each one does in the Blocknet wallet.
+
+| | What it is | What it gives you |
+|---|---|---|
+| Recovery seed | 12 words you write down | Full control of the wallet on any computer |
+| Wallet password | A password you choose | Opens the wallet file on this computer |
+| Wallet file | One `.wallet.dat` file | Your keys and history, encrypted with your password |
+
+Your password encrypts the wallet file (the wallet derives the encryption key with Argon2id and encrypts with AES-GCM), and Blocknet never stores it anywhere. The password plays no part in making your keys. When you restore from the 12 words, you choose a new password for the new wallet file. That makes the seed the one backup that matters most: it works even if you lose the file and forget the password.
+
+## How should you store a seed phrase?
+
+<Answer>
+Write the words on paper in order, check every word against the screen, and keep the paper somewhere safe and offline. Make a second copy and store it in a different place. Leave the phrase out of photos, text files, notes apps, email and cloud storage, because anyone who reads it controls the funds.
+</Answer>
+
+These habits keep a seed phrase both safe and usable:
+
+- **Paper first.** The Blocknet wallet guide says to write the seed on paper and keep it somewhere safe. Number the words 1 to 12, since order matters.
+- **Check it once.** Compare each word with the screen before you close it. Spelling counts, and the first four letters of each word are enough to tell it apart.
+- **Two copies, two places.** One copy at home and one somewhere else you trust protects you from a fire, a flood or a lost drawer. Some people also stamp the words into a metal plate for the same reason.
+- **Keep it offline.** Screenshots, phone photos, notes apps and cloud folders all sync or back up somewhere you don't control. The wallet guide lists text files, notes apps and cloud storage as places the seed should never go.
+- **Keep it private.** Store it where guests, coworkers and repair shops won't come across it.
+
+## Why should you never share your seed phrase?
+
+The 12 words are your wallet. Whoever has them can rebuild it on their own computer and send everything in it, and a transaction can't be reversed once it is on the chain. The Blocknet wallet prints this warning every time you ask to see the seed:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Treat any request for your seed as a scam, however official it looks. Wallet developers, exchanges, pools and support staff never need it. A website or app that asks you to "verify" or "sync" your wallet by typing the words is trying to take your coins.
+
+You never have to share the seed to get things done:
+
+- **To get paid**, share your address, or a [Blocknet ID shortname](/blog/blocknet-id-pay-by-name/) such as `@yourname` that points to it.
+- **To let someone see incoming funds**, the `viewkeys` command exports view-only keys. A view-only wallet shows incoming payments and cannot send. The [privacy guide](/blog/blocknet-privacy-features/) explains what view keys reveal.
+- **To mine**, seine and bntpool.com need only your address or shortname. The wallet and its seed can stay on the one computer you trust, while every mining machine pays into the same address.
+
+## How do you view and restore a Blocknet recovery seed?
+
+In the command-line wallet, type `seed` at the shell prompt. The wallet shows the warning above, asks you to confirm, asks for your password and then prints the 12 words in numbered rows. In the desktop wallet, open settings and choose "View Recovery Seed", which also asks for your password first.
+
+To restore, use either wallet:
+
+- **Command line:** run `import`, choose `1) 12-word recovery seed`, type the 12 words, then give the new wallet a name and a password.
+- **Desktop:** choose "Restore from Seed" and enter your 12-word phrase.
+
+The wallet checks the words and the checksum, rebuilds your keys and scans the chain for your outputs, so your balance and history come back with the same address. The [Blocknet wallet guide](/blog/blocknet-wallet-for-mining/) walks through creating a wallet, backing up the seed and finding your address step by step.
+
+Once your seed is safe on paper, you are ready to put the address to work. The [guide to mining Blocknet](/blog/how-to-mine-blocknet/) shows how to point [seine](/#download) at it and start mining on bntpool.com.
+
+<CTA target="pool" title="Mine to your safely backed-up wallet" text="Paste your Blocknet address or @name into seine, accept bntpool.com and keep your recovery seed on paper at home." />

@@ -1,0 +1,104 @@
+---
+title: Proof of work ile proof of stake arasındaki fark
+description: İş kanıtı (proof of work) ve hisse kanıtı (proof of stake) açıklaması. Her biri sonraki bloğu nasıl seçer, zinciri nasıl korur, yeni coin nasıl çıkarır ve Blocknet neden iş kanıtı kullanır.
+tags: [İş kanıtı, Hisse kanıtı, Konsensüs, Blocknet, Madencilik]
+faq:
+  - q: 'Blocknet iş kanıtı mı yoksa hisse kanıtı mı kullanıyor?'
+    a: 'Blocknet iş kanıtı kullanır. Madenciler her biri 2 GiB bellek gerektiren Argon2id hash''leri hesaplar, yaklaşık her beş dakikada bir yeni blok bulunur ve blok ödülünün tamamı onu bulan madenciye gider. Staking yoktur. Blocknet''i sıradan bir bilgisayarda seine ile bntpool.com havuzu üzerinden kazabilirsiniz.'
+  - q: 'Ethereum iş kanıtından hisse kanıtına ne zaman geçti?'
+    a: 'Ethereum, 15 Eylül 2022''de gerçekleştirilen ve Merge adı verilen bir yükseltmeyle hisse kanıtına geçti. O zamandan beri bloklar madenciler yerine 32 ETH yatıran validatörler tarafından önerilir ve oylanır. Bitcoin, Monero ve Blocknet ise yeni blokların hesaplama işinden geldiği iş kanıtını kullanmaya devam ediyor.'
+  - q: '%51 saldırısı nedir?'
+    a: '%51 saldırısı, bir zincirin hangi blokları kabul edeceğini, buna karar veren kaynağın çoğunluğunu elinde tutarak kontrol etme girişimidir. İş kanıtında bu, ağın hash gücünün çoğunluğu anlamına gelir. Hisse kanıtında ise stake edilmiş coinlerin çoğunluğu. Her iki durumda da saldırganın gerçek kaynakların çoğunluğunu ortaya koyması gerekir.'
+  - q: 'Hisse kanıtı kullanan bir coin kazılabilir mi?'
+    a: 'Hayır. Saf hisse kanıtı kullanan bir coinde madencilik yoktur. Yeni coinler, mevcut coinleri stake olarak kilitleyen validatörlere ödenir; bu yüzden kazanmaya başlamadan önce coin sahibi olmanız gerekir. Zaten sahip olduğunuz bilgisayarla yeni coin kazanmak için Blocknet gibi iş kanıtı kullanan bir coine ihtiyacınız vardır.'
+sourceHash: 8fc2705e78fd
+translation: draft
+---
+
+Bu yazı, iş kanıtının (proof of work) ve hisse kanıtının (proof of stake) bir blokzincire sonraki bloğu kimin ekleyeceğine nasıl karar verdiğini, her birinin zinciri nasıl güvende tuttuğunu ve her birinin nasıl yeni coin oluşturduğunu açıklıyor. Sıradan bir bilgisayarla kazabileceğiniz, iş kanıtı kullanan bir coin olan Blocknet, yazı boyunca örnek olarak kullanılıyor.
+
+## İş kanıtı ile hisse kanıtı arasındaki fark nedir?
+
+<Answer>
+İş kanıtı ve hisse kanıtı, bir blokzincirin sonraki bloğu kimin ekleyeceğine karar vermesinin iki yoludur. İş kanıtında madenciler geçerli bir hash bulmak için hesaplama gücü harcar. Hisse kanıtında validatörler coinlerini teminat olarak kilitler ve blok önermek ve oylamak için seçilir. İkisi de hile yapmayı pahalı hale getirir.
+</Answer>
+
+Her blokzincir aynı sorunu çözmek zorundadır. Birbirine güvenmeyen binlerce bilgisayarın, kimse aynı coini iki kez harcayamasın diye tek bir ödeme geçmişi üzerinde anlaşması gerekir. Birinin her yeni bloğu önermesi, diğer herkesin de onu kabul etmek için bir nedeni olması gerekir. Bu kurala konsensüs mekanizması denir ve iş kanıtı ile hisse kanıtı en bilinen iki tasarımdır.
+
+| | İş kanıtı | Hisse kanıtı |
+|---|---|---|
+| Bloğu kim oluşturur | Ağın hedef değerine eşit veya altında bir hash'i ilk bulan madenci | Coin kilitleyenler arasından seçilen bir validatör |
+| Neyi ortaya koyarlar | Donanım ve elektrik | Stake olarak yatırılan coinler |
+| Hangi zincir kazanır | En fazla birikmiş işe sahip zincir | Kesinlik kontrol noktalarıyla en fazla validatör oyunun desteklediği zincir |
+| Yeni coinler nereye gider | Bloğu bulan madenciye blok ödülü | Önerme ve oylama için validatörlere ödüller |
+| Katılmak için ne gerekir | Hash hesaplayabilen bir bilgisayar | Stake edilecek coinler (bir Ethereum validatörü için 32 ETH) |
+| Örnekler | Bitcoin, Monero, Blocknet | 2022'den beri Ethereum |
+
+## İş kanıtı sonraki bloğu nasıl seçer?
+
+İş kanıtında madenciler, çözmesi zor ve kontrol etmesi kolay bir bulmacayı çözmek için yarışır. Madenci yayınlamak istediği bloğu alır, nonce adı verilen bir sayı ekler ve sonucun hash'ini hesaplar. Hash, bir sayı olarak okunduğunda ağın hedef değerine eşit veya altındaysa blok geçerlidir. Değilse madenci nonce'u değiştirir ve yeniden dener. Kazanmanın tek yolu çok sayıda nonce denemektir; bu yüzden bir madencinin sonraki bloğu bulma şansı, ağın hash gücündeki payına eşittir.
+
+Satoshi Nakamoto, 2008 tarihli [Bitcoin makalesinde](https://bitcoin.org/bitcoin.pdf) bunu "İş kanıtı özünde bir CPU, bir oydur." diye ifade etti. Düğümler, içine en fazla iş kanıtı emeği harcanmış zinciri izler ve bir zorluk (difficulty) ayarı, ağa ne kadar hash gücü katılırsa katılsın blokların sabit bir hızda gelmeye devam etmesi için hedefi yukarı veya aşağı kaydırır. [Kripto madenciliği nasıl çalışır](/tr/blog/how-crypto-mining-works/) rehberi hash'leri, zorluğu ve havuzları adım adım anlatır.
+
+Blocknet de aynı şekilde çalışır; sayılar konsensüs kodunda belirlenmiştir:
+
+- **Hash, 2 GiB bellekle Argon2id'dir**, bu yüzden her hash işlemci zamanının yanında gerçek bellek de gerektirir. [Argon2id açıklaması](/tr/blog/argon2id-proof-of-work-explained/) nasıl çalıştığını gösterir.
+- **Hedef, (2^256 − 1) bölü zorluktur**; bu da zorluğu kabaca ağın bir blok bulmak için ihtiyaç duyduğu hash sayısı yapar.
+- **Yaklaşık her beş dakikada bir blok gelir**, yani günde 288 blok. Zorluk, son blok sürelerini 60 blokluk ağırlıklı hareketli ortalama (LWMA) ile izler.
+- **Düğümler en ağır zinciri izler.** Her düğüm bir zincirdeki tüm blokların zorluğunu toplar ve rakip bir zincire yalnızca toplam işi daha yüksekse geçer.
+
+## Hisse kanıtı sonraki bloğu nasıl seçer?
+
+Hisse kanıtı, hash hesaplamanın yerine bir teminat koyar. Katılmak için bir validatör coinlerini protokole kilitler ve protokol blokları önermek ve onaylamak için validatörleri seçer. 2012'de başlatılan [Peercoin](https://en.wikipedia.org/wiki/Peercoin) bunu kullanan ilk kripto paraydı; Ethereum ise 15 Eylül 2022'de [Merge](https://ethereum.org/en/roadmap/merge/) adı verilen bir yükseltmeyle geçiş yaptı.
+
+Ethereum'un tasarımı işleyen parçaları gösterir. [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/) kaynağına göre:
+
+- Bir validatör, yatırma sözleşmesine 32 ETH yatırır.
+- Zaman, 32 slotluk epoch'lar halinde gruplanan 12 saniyelik slotlara bölünür.
+- Her slotta bir validatör blok önermek için rastgele seçilir, diğerleri de onaylarla (attestation) onu oylar.
+- Kontrol noktaları, stake edilmiş tüm ETH'nin en az üçte ikisini elinde tutan validatörler onlara oy verdiğinde kesinleşir.
+- Aynı slot için iki blok öneren veya çelişkili oy veren bir validatör slashing cezası alır: stake'inin bir kısmı, tamamına kadar, yok edilir.
+
+İş kanıtında elektriğin gördüğü işi stake görür. Kuralları çiğnemek, validatöre zaten sahip olduğu coinlere mal olur.
+
+## İş kanıtı ve hisse kanıtı nasıl güvende kalır?
+
+Her iki tasarım da bir saldırının maliyetini kazandırabileceğinden fazla yapar ve bu maliyeti farklı yerlere koyar.
+
+**İş kanıtında maliyet, süregelen hesaplamadır.** Geçmiş bir bloğu yeniden yazmak için saldırganın o bloğun ve ondan sonraki her bloğun işini yeniden yapması, ardından dürüst ağı geçmesi gerekir. Nakamoto, daha yavaş bir saldırganın yetişme şansının her yeni blokla üstel olarak azaldığını gösterdi. Zincirin bundan sonraki kontrolünü ele geçirmek, saldırı sürdüğü müddetçe diğer herkesin toplamından daha fazla hash gücü çalıştırmak demektir.
+
+**Hisse kanıtında maliyet, risk altındaki sermayedir.** Ethereum'un belgelerine göre bir saldırganın zinciri kontrol etmek için "stake edilmiş ETH'nin %51'ine ihtiyacı olurdu"; stake'in üçte biri blokların kesinleşmesini durdurmaya yeter ve kesinleşmiş bir bloğu geri almak, stake edilmiş tüm ETH'nin en az üçte birini slashing yoluyla kaybetmek anlamına gelir.
+
+Blocknet ayrıca iş kanıtının üzerine iki eşik koyar. Ağ 10 onayı, yani yaklaşık 50 dakikayı güvenli kabul eder ve düğümler 100 bloktan, yani yaklaşık sekiz saatten daha derin bir yeniden düzenlemeyi (reorg) reddeder; bu yüzden 100 blok derinliğindeki bir blok kesindir.
+
+## İki model yeni coinleri nasıl çıkarır?
+
+<Answer>
+İş kanıtı kullanan coinler yeni coinleri her bloğu bulan madenciye öder; böylece hesaplama gücü katan herkes önceden coin sahibi olmadan coin kazanabilir. Hisse kanıtı kullanan coinler ise yeni coinleri validatörlere stake'leriyle orantılı olarak öder; bu yüzden ödüller zaten coin tutan kişilere gider. Her protokol kendi takvimini belirler.
+</Answer>
+
+İş kanıtında her bloktaki ilk işlem, onu bulan madenci için yeni coinler oluşturur. Bitcoin makalesi bunu "coinleri başlangıçta dolaşıma sokmanın bir yolu, çünkü onları çıkaracak merkezi bir otorite yoktur" diye tanımlar. Bitcoin'in ödülü her 210.000 blokta, yani yaklaşık her dört yılda bir yarıya iner ve toplam arz 21 milyonun hemen altında kalır.
+
+Ethereum'un hisse kanıtında ödüller, onaylar, blok önerileri ve senkronizasyon komitesi görevi için her epoch'ta bir kez validatör bakiyelerine eklenir. [Temel ödül](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) toplam stake büyüdükçe küçülür, toplam ihraç ise daha fazla validatör katıldıkça artar.
+
+Blocknet'in ihracı tamamen madencilik üzerinden işler. Genesis bloğu hiç işlem içermez; bu yüzden madencilik başlamadan önce hiç coin yoktu ve konsensüste premine, hazine veya kurucu çıktısı bulunmaz. Her blok, ödülünün tamamını tek bir çıktıda onu bulan madenciye öder. Ödül blok başına 723,25 BNT ile başladı, 48 ay boyunca her 30 günlük ayda üstel bir eğri boyunca kademeli olarak azalır ve ardından kalıcı olarak blok başına 2 BNT'de kalır.
+
+## Blocknet neden iş kanıtı kullanıyor?
+
+Blocknet, bilgisayarı olan herkesin önceden coin satın almadan ilk bloktan itibaren yeni coin kazanabilmesi için iş kanıtını seçti. Daemon'u Argon2id'yi "ASIC'lere direnmek ve adil madenciliği sağlamak için bellek yoğun PoW" olarak tanımlar ve her hash'i "adalet için" tek bir iş parçacığında çalıştırır.
+
+Madenciliği açık tutan şey bellek gereksinimidir. Her hash 2 GiB belleği doldurur, bu yüzden her madencilik iş parçacığı yaklaşık 2 GB RAM gerektirir; insanların zaten sahip olduğu bilgisayarlar, yani masaüstüler, dizüstüler ve sunucular, bu belleğe ve onu besleyecek denetleyicilere sahiptir. Blocknet, genel amaçlı donanım etrafında kurulmuş iş kanıtı coinleri ailesinin bir parçasıdır: örneğin Monero, Kasım 2019'dan beri "genel amaçlı CPU'lar için optimize edilmiş" [RandomX](https://github.com/tevador/RandomX)'i kullanır.
+
+İş kanıtı Blocknet'in planlarında kalmaya devam ediyor. [blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Şubat 2027 civarı için planlanan Faraday yükseltmesi, yeni düğümlerin zincire daha hızlı yetişmesi için "daha hafif bir iş kanıtı" getirecek.
+
+## İş kanıtı kullanan bir coinde madenciliğe nasıl başlanır?
+
+Blocknet için bir cüzdan adresine ve ücretsiz, açık kaynaklı madenci yazılımı seine'e ihtiyacınız var:
+
+1. Resmi cüzdandan bir adres alın. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) bunu adım adım anlatır.
+2. Windows, macOS veya Linux için [seine'i indirin](/tr/#download) ve çalıştırın.
+3. Adresinizi veya `@name` adınızı yapıştırın ve varsayılan havuz olan bntpool.com'u kabul edin.
+
+seine iş parçacığı sayısını RAM'inize göre seçer, madencilik yaparken CPU kernel'lerini karşılaştırıp en hızlısını tutar ve Windows ile Linux'ta varsa NVIDIA ekran kartını da işlemcinin yanına ekler. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) donanımı ve ödemeleri ayrıntılı olarak anlatır.
+
+<CTA target="seine" title="seine ile Blocknet madenciliği yapın" text="seine'i indirin, adresinizi veya @name adınızı yapıştırın; bilgisayarınız birkaç dakika içinde bntpool.com'da BNT madenciliğine başlasın." />

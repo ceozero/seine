@@ -1,0 +1,112 @@
+---
+title: 'Blocknet mit einer NVIDIA-GPU minen'
+description: 'Mine Blocknet mit einer NVIDIA-GPU und seine. Richte Windows oder Linux ein, nutze CPU und GPU, prüfe Hashraten und behebe Probleme beim Start des Miners.'
+tags: ['Mining-Anleitung', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'Kann seine CPU und NVIDIA-GPU gleichzeitig nutzen?'
+    a: 'Ja. seine wählt automatisch die CPU und erkannte NVIDIA-GPUs aus, wenn du keine Backend-Option angibst. Das Panel Devices zeigt jedes Backend einzeln. Um eine bestimmte Karte auszuwählen und weiter mit der CPU zu minen, wähle cpu und nvidia und gib anschließend den NVIDIA-Geräteindex an.'
+  - q: 'Brauche ich unter Windows das CUDA Toolkit?'
+    a: 'Das offizielle Windows-Archiv enthält die NVRTC-Laufzeitbibliotheken, mit denen seine seine GPU-Kernel kompiliert. Installiere einen kompatiblen NVIDIA-Grafiktreiber und lasse die entpackten DLLs neben seine.exe. Für diese fertig gepackte Windows-Version musst du das CUDA Toolkit nicht separat installieren.'
+  - q: 'Wie mine ich mit einer NVIDIA-GPU ohne CPU?'
+    a: 'Starte seine mit der Backend-Option nvidia. Für jede erkannte Karte wird ein NVIDIA-Backend erstellt. Mit der Option nvidia-devices kannst du bestimmte Geräteindizes auswählen. Prüfe nach dem Start im Panel Devices, ob die gewünschten GPUs angezeigt werden und Hashes berechnen.'
+  - q: 'Wo sehe ich, ob meine GPU-Shares angenommen werden?'
+    a: 'Das Mining-Dashboard zeigt eingereichte, abgelehnte und angenommene Shares. Im Protokoll steht bei Share-Ereignissen das jeweilige Backend. Prüfe die lokale Hashrate in der NVIDIA-Gerätezeile und suche nach Meldungen über angenommene Shares dieses Backends. Mit der Pool-Tracking-Anleitung prüfst du die angerechnete Arbeit.'
+---
+
+seine mint Blocknet auf deiner NVIDIA-GPU zusammen mit der CPU. Diese Anleitung behandelt die Einrichtung unter Windows und Linux, die Kartenauswahl, angenommene Shares und einen gemessenen Vergleich mit der RTX 5090. Die Befehle beziehen sich auf seine v0.2.26 und das aktuelle Argon2id-Netzwerk, Stand Oktober 2026.
+
+## Wie beginnst du mit dem Blocknet-Mining auf einer NVIDIA-GPU?
+
+<Answer>
+Lade das seine-Archiv für Windows x86_64 oder Linux x86_64 herunter, bereite den NVIDIA-Treiber und die Laufzeitbibliotheken für dein System vor und starte den Miner. Gib deine Auszahlungsadresse ein und bestätige den voreingestellten Pool. seine wählt automatisch die CPU und erkannte NVIDIA-Karten aus und bereitet anschließend jedes GPU-Backend vor und stimmt es ab.
+</Answer>
+
+Wähle dein Archiv im [Downloadbereich](/de/#download): `seine-windows-x86_64.zip` für Windows oder `seine-linux-x86_64.tar.gz` für Linux x86_64. Die [allgemeine Mining-Anleitung](/de/blog/how-to-mine-blocknet/) erklärt, wie du eine Auszahlungsadresse erhältst und die erste Verbindung herstellst.
+
+Beginne mit den Standardeinstellungen. Lass Kernel, Registerlimit, GPU-Lane-Anzahl und CPU-Thread-Anzahl ungesetzt, damit seine die Konfiguration wählen kann. Das Panel Devices zeigt nach der Initialisierung, welche Backends mitarbeiten.
+
+## Die NVIDIA-Laufzeit unter Windows oder Linux einrichten
+
+| Plattform | Was du vorbereiten musst | Startbefehl |
+|---|---|---|
+| Windows x86_64 | NVIDIA-Grafiktreiber; mitgelieferte Laufzeit-DLLs neben der ausführbaren Datei | `.\seine.exe` |
+| Linux x86_64 | NVIDIA-Treiber und kompatible NVRTC-Laufzeitbibliotheken | `./seine` |
+
+Entpacke unter Windows die vollständige ZIP-Datei in einen beschreibbaren Ordner. Lass `nvrtc64_120_0.dll` und `nvrtc-builtins64_128.dll` neben `seine.exe`. Die fertige Version verwendet diese mitgelieferten Bibliotheken; eine separate Installation des CUDA Toolkit ist nicht erforderlich.
+
+![Das Windows-Archiv in der offiziellen Downloadtabelle von seine](/assets/blog/windows-download.png)
+
+Installiere den passenden Treiber für deine Karte und dein Betriebssystem von der [NVIDIA-Treiberseite](https://www.nvidia.com/en-us/drivers/). Die [Windows-Anleitung](/de/blog/mine-blocknet-on-windows/) führt dich durch Download, Prüfsumme und Entpacken.
+
+Installiere unter Linux den NVIDIA-Treiber und kompatible NVRTC-Pakete für deine Distribution. NVRTC kompiliert die CUDA-Kernel von seine zur Laufzeit. Die [NVRTC-Dokumentation](https://docs.nvidia.com/cuda/nvrtc/) von NVIDIA beschreibt den Compiler und die passende Builtins-Bibliothek; die [NVIDIA-Anforderungen von seine](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) dokumentieren die Laufzeitvoraussetzungen des Miners.
+
+Starte die ausführbare Datei aus ihrem Ordner. Verwende dasselbe Arbeitsverzeichnis erneut, damit deine Einstellungen in `seine-data` erhalten bleiben. Gib beim ersten Start deine Empfangsadresse ein und bestätige `stratum+tcp://bntpool.com:3333` als Pool.
+
+## Kannst du eine NVIDIA-Karte auswählen und weiter mit der CPU minen?
+
+Wähle beide Backends und den Geräteindex aus. Dieser PowerShell-Befehl behält CPU-Mining bei und wählt NVIDIA-Gerät `0`:
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Verwende dieselben Optionen mit der ausführbaren Linux-Datei:
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+Diese Befehle verwenden deine gespeicherte Adresse und deinen Pool oder fragen beim Start danach. Um die Verbindung ausdrücklich anzugeben, ergänze deine öffentliche Empfangsadresse mit `--address` und die Pool-URL mit `--pool-url`.
+
+Der Index bezeichnet eine GPU, die von der NVIDIA-Laufzeit aufgelistet wird. Prüfe nach dem Start die Geräteliste. `--nvidia-devices 0,1` wählt diese beiden Karten aus; ohne diese Auswahl werden alle erkannten NVIDIA-Geräte verwendet.
+
+Wähle für reines GPU-Mining `nvidia`:
+
+```bash
+./seine --backend nvidia
+```
+
+Verwende in PowerShell `.\seine.exe --backend nvidia`. Nimm `cpu` in die Backend-Liste auf, wenn du beide Hardwaretypen nutzen möchtest. Starte seine nach einer Änderung dieser Auswahl mit dem gewünschten Befehl neu.
+
+## Wie prüfst du, ob die GPU mint?
+
+<Answer>
+Suche im Panel Devices nach den NVIDIA-Backend-Zeilen mit ihren aktuellen und durchschnittlichen Hashraten. Während der Initialisierung kann eine Zeile den Startfortschritt anzeigen, während die CUDA-Kernel vorbereitet werden. Sobald Hashes berechnet werden, prüfe im Protokoll die Share-Ereignisse dieses Backends und im Panel Mining die angenommenen Shares.
+</Answer>
+
+NVIDIA-Backends erscheinen als `nvidia#1`, `nvidia#2` und so weiter; die CPU hat eine eigene Zeile. Die gesamte Hashrate umfasst alle aktiven Backends. Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die übrigen Panels und Protokollkennzeichnungen.
+
+![Eine echte seine-Sitzung mit einer RTX 5090, Geräte-Hashraten und angenommenen Shares](/assets/blog/nvidia-rtx5090-session.png)
+
+Diese Aufnahme zeigt eine laufende Pool-Sitzung mit der RTX 5090. Die zeitlich begrenzten Benchmarks unten wurden separat ausgeführt. Die Hashrate eines Geräts misst die lokale Aktivität; ein angenommener Share bestätigt, dass der Pool die eingereichte Arbeit angerechnet hat. Verfolge die angerechnete Arbeit mit der [Miner-Tracking-Anleitung](https://bntpool.com/blog/track-your-miner-on-bntpool/).
+
+Beim ersten Start werden die GPU-Kernel vorbereitet und abgestimmt. seine speichert die Ergebnisse der NVIDIA-Autotune-Funktion in `seine-data/seine.nvidia-autotune.json`. Verwende dieses Datenverzeichnis erneut, damit spätere Starts kompatible gespeicherte Ergebnisse laden können, oder wähle mit `--data-dir` ausdrücklich ein Verzeichnis aus.
+
+## Wie schnell war die RTX 5090 in unserem Test?
+
+Wir haben am 25. Oktober 2026 mit Windows 11, einer NVIDIA GeForce RTX 5090, einem AMD Ryzen 9 9950X3D, 125,4 GiB nutzbarem RAM, seine v0.2.26 und dem NVIDIA-Treiber `610.88` getestet. Wir haben drei abwechselnde Testpaare mit `--bench-kind backend` ausgeführt. Jeder Durchlauf bestand aus einer Aufwärmphase von 20 Sekunden und drei Messrunden von jeweils 20 Sekunden, mit 20 Sekunden zwischen den Durchläufen. Kernel, Registerlimit, Lanes und Threads wurden automatisch eingestellt.
+
+| Modus | Durchschnittliche H/s |
+|---|---|
+| Nur RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Die Tabelle zeigt den Mittelwert von drei Durchläufen pro Modus auf diesem Desktop, während die bereits geöffneten Apps geöffnet blieben. Beide Modi verwendeten GPU `0` und denselben NVIDIA-Autotune-Cache. Dies sind lokale Benchmark-Hashraten; angenommene Shares bestätigen die Anrechnung durch den Pool. Die [Messnotizen](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) dokumentieren die Einstellungen und Einzelergebnisse.
+
+## Was solltest du prüfen, wenn eine NVIDIA-Zeile fehlt?
+
+Prüfe zuerst die entpackte ausführbare Datei und die Laufzeitbibliotheken. Lass unter Windows die mitgelieferten NVRTC-DLLs neben `seine.exe`. Installiere unter Linux den Treiber und die NVRTC-Bibliotheken in der Umgebung, in der du den Miner startest.
+
+Prüfe dann deinen Befehl. `--backend cpu` wählt nur die CPU aus. Verwende den Standardbefehl oder `--backend cpu,nvidia` für beide. Wenn du `--nvidia-devices` angibst, stelle sicher, dass die Indizes auf deinem Rechner existieren.
+
+Lies das Startprotokoll für dieses Backend: Es unterscheidet zwischen laufender Vorbereitung und einem Initialisierungsfehler. Behebe das gemeldete Laufzeit- oder Auswahlproblem und starte neu. Die [NVIDIA-Anleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) behandelt auch die Voraussetzungen zum Kompilieren aus dem Quellcode.
+
+Für die aktuelle Argon2id-Berechnung benötigt jede aktive GPU-Lane einen Speicherbereich von 2 GiB zuzüglich Laufzeitaufwand. seine bemisst die GPU-Arbeit anhand des verfügbaren Gerätespeichers und der Speicherzuweisungsprüfungen. Lass manuelle Lane-Vorgaben ungesetzt; allein die beworbene VRAM-Kapazität bestimmt nicht, wie viele Lanes während einer Desktop-Sitzung verfügbar sind.
+
+Wenn das Gerät Hashes berechnet, der Pool aber null anzeigt, verwende die [Checkliste zur Pool-Hashrate](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate), um Adresse, Verbindung und angenommene Shares zu prüfen.
+
+[Windows blockiert deinen Miner? Download prüfen](/de/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="seine für NVIDIA-Mining herunterladen" text="Wähle das Archiv für Windows oder Linux x86_64 und starte mit automatischer Auswahl von CPU und NVIDIA-GPU." />

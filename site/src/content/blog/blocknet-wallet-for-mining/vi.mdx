@@ -1,0 +1,173 @@
+---
+title: Tạo ví và địa chỉ Blocknet để đào coin
+description: Thiết lập ví Blocknet chính thức, sao lưu cụm từ khôi phục 12 từ, sao chép địa chỉ để đào về, và xem các khoản thanh toán từ bntpool.com cộng vào số dư của bạn.
+tags: [Ví, Hướng dẫn đào coin, bntpool]
+faq:
+  - q: 'Có cần ví Blocknet trước khi bắt đầu đào không?'
+    a: 'Bạn cần một địa chỉ Blocknet để đào về, và ví chính thức cung cấp cho bạn địa chỉ đó. Tạo ví trong ví dòng lệnh hoặc ví desktop, sao chép địa chỉ và dán vào seine. Bản thân ví vẫn nằm trên máy tính của riêng bạn. seine và bntpool.com chỉ cần địa chỉ, hoặc một tên ngắn Blocknet ID trỏ tới địa chỉ đó.'
+  - q: 'Cụm từ khôi phục Blocknet gồm bao nhiêu từ?'
+    a: 'Cụm từ khôi phục Blocknet gồm 12 từ. Trong ví dòng lệnh, lệnh seed hiển thị nó sau một cảnh báo và mật khẩu ví của bạn. Hãy viết các từ ra giấy và cất giữ ngoại tuyến. Với 12 từ đó, lệnh import có thể dựng lại ví của bạn trên bất kỳ máy nào, kể cả khi tệp ví và mật khẩu bị mất.'
+  - q: 'Khi nào khoản thanh toán từ bntpool.com hiện trong ví?'
+    a: 'Một khối của pool cần 60 xác nhận, khoảng năm giờ với thời gian khối năm phút của Blocknet, trước khi phần thưởng được trả. Khi số dư đã xác nhận trên pool của bạn đạt 0,1 BNT, pool sẽ gửi nó về địa chỉ của bạn. Khoản thanh toán hiện trong history như một giao dịch thông thường và chi tiêu được sau 10 xác nhận, khoảng 50 phút.'
+  - q: 'Có thể dùng cùng một địa chỉ trên nhiều máy đào không?'
+    a: 'Có. Mọi máy chạy seine đều có thể đào về cùng một địa chỉ hoặc tên ngắn Blocknet ID, và bntpool.com cộng share của chúng vào một số dư. Trang thống kê của pool liệt kê từng máy đang kết nối dưới địa chỉ của bạn. Ví và cụm từ khôi phục luôn nằm trên máy tính của riêng bạn trong suốt thời gian đó.'
+sourceHash: 4954bfd74d20
+translation: draft
+---
+
+Để đào Blocknet, bạn cần một địa chỉ để nhận phần thưởng, và ví chính thức cung cấp cho bạn địa chỉ đó chỉ trong vài phút. Hướng dẫn này chỉ cách tạo ví bằng ví dòng lệnh hoặc ví desktop, sao lưu cụm từ khôi phục, tìm địa chỉ để dán vào seine, và kiểm tra số dư khi bntpool.com trả tiền cho bạn.
+
+## Nên dùng ví Blocknet nào để đào coin?
+
+<Answer>
+Hãy dùng một trong hai ví chính thức của Blocknet Privacy: ví dòng lệnh, chạy trên Windows, macOS và Linux, hoặc ví desktop cho cùng các hệ thống đó. Cả hai đều chạy một node Blocknet đầy đủ trên máy tính của bạn và cung cấp địa chỉ nhận để đào về trên bntpool.com bằng seine.
+</Answer>
+
+- **Ví dòng lệnh.** Chương trình `blocknet` cài đặt, khởi động và cập nhật một Blocknet core, tiến trình nền chạy node, ví và mạng lưới. Bạn quản lý ví từ một shell tương tác. Tải về từ [bản phát hành dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest), có bản dựng cho Windows, macOS và Linux.
+- **Ví desktop.** Một ví có giao diện đồ họa đi kèm daemon Blocknet. Tải về từ [bản phát hành desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Chọn loại nào bạn thích. Các bước dưới đây hướng dẫn với ví dòng lệnh, vì mọi lệnh đều được ghi tài liệu đầy đủ, sau đó trình bày cách cài ví desktop.
+
+## Cách tạo ví bằng ví dòng lệnh
+
+1. **Cài đặt và khởi động core.** Giải nén bản phát hành và chạy trình hướng dẫn thiết lập:
+
+   ```sh
+   blocknet setup
+   ```
+
+   Trình hướng dẫn hỏi bạn có muốn tự động cập nhật node hay không, tải core mới nhất và đề nghị khởi động nó. Trên Windows, chương trình là `blocknet.exe`, nên hãy chạy `blocknet.exe setup`. Để bỏ qua trình hướng dẫn, chạy `blocknet install latest` rồi `blocknet start`.
+
+2. **Mở shell.** Kết nối vào core đang chạy:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Bạn sẽ thấy dấu nhắc `>`. Đóng shell bằng `quit` vẫn để core tiếp tục chạy, nên bạn có thể kết nối lại bất cứ lúc nào.
+
+3. **Tạo ví.** Gõ `load`. Ví liệt kê các tệp ví nó tìm thấy và đưa ra lựa chọn "Create a new wallet". Chọn mục đó, nhập tên và mật khẩu, và core sẽ tạo một ví mới với cụm từ khôi phục mới:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Ví là một tệp `.wallet.dat` duy nhất, và mật khẩu của bạn mã hóa spend key trong đó. Core ghi nhớ đường dẫn của ví, nên lần `blocknet start` tiếp theo sẽ tự tải ví cho bạn. Blocknet cũng sao chép ví đã tải vào `~/.config/bnt/wallets/`, cho bạn một bản sao thứ hai ở một vị trí đã biết.
+
+## Làm sao để sao lưu cụm từ khôi phục?
+
+Cụm từ khôi phục là bản sao lưu quan trọng nhất. Nó gồm 12 từ, và với chúng bạn có thể dựng lại ví trên bất kỳ máy tính nào, kể cả khi bạn mất tệp ví hoặc quên mật khẩu. Blocknet không bao giờ lưu mật khẩu của bạn, nên cụm từ khôi phục cũng là cách để khôi phục khi quên mật khẩu.
+
+Hiển thị nó bằng lệnh `seed`. Ví in ra một cảnh báo, yêu cầu bạn xác nhận và hỏi mật khẩu, rồi hiển thị các từ:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Hãy viết 12 từ ra giấy và cất ở nơi an toàn, ngoại tuyến. Hướng dẫn của ví khuyên không lưu chúng trong tệp văn bản, ứng dụng ghi chú hay lưu trữ đám mây, vì bất kỳ ai có các từ này đều kiểm soát số tiền. Bài hướng dẫn về [seed phrase](/vi/blog/seed-phrase-explained/) giải thích cách 12 từ trở thành khóa của bạn và cách cất giữ chúng cẩn thận.
+
+Để khôi phục về sau, chạy `import`, chọn `1) 12-word recovery seed`, gõ các từ, rồi đặt tên và mật khẩu cho ví mới. Core sau đó quét chuỗi để tìm các output của bạn.
+
+## Làm sao để tìm địa chỉ Blocknet của bạn?
+
+<Answer>
+Trong ví dòng lệnh, gõ address (hoặc addr) tại dấu nhắc của shell. Ví in ra địa chỉ nhận của bạn, một chuỗi dài 92 hoặc 93 ký tự, kèm lời gợi ý tới blocknet.id để có tên ngắn. Sao chép toàn bộ địa chỉ và dán vào seine khi nó hỏi địa chỉ nhận thanh toán.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Đây là địa chỉ bạn đưa cho seine. Khi bạn khởi động [seine](/vi/#download) lần đầu, nó hỏi địa chỉ nhận thanh toán rồi hỏi pool; dán địa chỉ và nhấn Enter để chấp nhận bntpool.com. Bạn cũng có thể truyền trực tiếp:
+
+```sh
+./seine --address <your-address>
+```
+
+Khi seine đã đào, bảng số dư pool trên [bảng điều khiển](/vi/blog/seine-dashboard-explained/) của nó hiển thị sáu ký tự đầu và sáu ký tự cuối của địa chỉ bạn đang đào về, để bạn kiểm tra xem nó có khớp với ví hay không.
+
+Nếu bạn muốn đào về thứ gì đó ngắn hơn, một [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) như `@yourname` trỏ tới địa chỉ này và dùng được trong seine lẫn trên bntpool.com.
+
+## Thiết lập ví desktop
+
+Bản phát hành mới nhất của ví desktop (v0.22.0, phát hành ngày 15 tháng 10 năm 2026) có các bản tải sau:
+
+| Hệ thống | Tệp |
+|---|---|
+| Windows x86_64 | Trình cài đặt `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Mỗi bản phát hành đều có tệp `SHA256SUMS.txt`, để bạn kiểm tra tệp đã tải trước khi cài:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Trên Linux, cài gói `.deb` hoặc chạy trực tiếp tệp `.AppImage`. Trên macOS, chuyển ứng dụng vào Applications và chạy lệnh này một lần trong Terminal trước lần mở đầu tiên, theo hướng dẫn trong README:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Trên Windows, nếu Defender hiện lời nhắc cho trình cài đặt, hãy nhấp "More info" rồi "Run anyway".
+
+Ứng dụng chạy daemon Blocknet đi kèm trên máy tính của bạn và giao tiếp với nó qua `127.0.0.1`, và không gửi yêu cầu nào tới dịch vụ bên ngoài. Tạo ví trong ứng dụng, ghi lại cụm từ khôi phục, và sao chép địa chỉ nhận vào seine. Ví desktop cũng mở được [liên kết thanh toán](/vi/blog/blocknet-payment-links/) `blocknet://` và điền sẵn biểu mẫu gửi để bạn xem lại.
+
+## Giữ khóa trên máy tính của riêng bạn
+
+Một máy đào chỉ cần địa chỉ của bạn. seine chỉ cần địa chỉ hoặc tên ngắn để đào, nên tệp ví và cụm từ khôi phục có thể ở lại trên chiếc máy tính bạn tin tưởng. Điều này quan trọng nhất với máy chủ thuê, dàn máy đào dùng chung và những máy người khác có thể truy cập.
+
+- **Chạy ví ở nhà, đào ở bất cứ đâu.** Đặt cùng một địa chỉ trên mọi máy chạy seine. bntpool.com cộng share của chúng vào một số dư.
+- **Theo dõi tiến độ mà không cần khóa.** Tra cứu địa chỉ của bạn trên [bntpool.com](https://bntpool.com) để xem hashrate, share và số dư từ bất kỳ trình duyệt nào.
+- **Truy cập chỉ xem.** Nếu bạn muốn xem tiền đến trên máy tính thứ hai, `viewkeys` xuất các khóa chỉ xem. Ví chỉ xem hiển thị tiền đến và không thể gửi hay ký.
+- **Khóa ví khi rời đi.** `lock` chặn việc chi tiêu cho đến khi bạn `unlock` bằng mật khẩu.
+
+## Khoản thanh toán từ việc đào hiện trong ví như thế nào?
+
+bntpool.com trả phần thưởng khi khối của chúng đã trưởng thành. Một khối của pool cần 60 xác nhận, khoảng năm giờ với thời gian khối năm phút của Blocknet. Khi số dư đã xác nhận của bạn đạt mức tối thiểu 0,1 BNT, pool gửi nó về địa chỉ của bạn dưới dạng một giao dịch Blocknet bình thường.
+
+Trong ví, kiểm tra `balance` (hoặc `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Một khoản thanh toán mới đầu tiên hiện dưới `confirming`. Giao dịch thông thường chi tiêu được sau 10 xác nhận, khoảng 50 phút, rồi chuyển sang `spendable`. Lệnh `history` liệt kê các giao dịch đến từ cũ nhất đến mới nhất, kèm khối, số tiền và loại của từng giao dịch: khoản thanh toán từ pool hiện là `regular`, còn các khối bạn tự tìm được ở chế độ solo hiện là `coinbase`, cần 60 xác nhận trước khi bạn chi tiêu được.
+
+Ví của bạn liệt kê một khoản thanh toán khi node của nó đã bắt kịp chuỗi. `status` hiển thị `Syncing: false` khi đã bắt kịp, và `sync` quét lại các khối đã tải để tìm output của bạn.
+
+Mới làm quen với đào coin? [Hướng dẫn đào Blocknet](/vi/blog/how-to-mine-blocknet/) trình bày cách tải seine, chọn số luồng và những gì cần biết trên bntpool.com.
+
+<CTA target="pool" title="Đào về địa chỉ mới của bạn" text="Dán địa chỉ Blocknet vào seine, chấp nhận bntpool.com, và xem các khoản thanh toán về ví khi số dư của bạn đạt 0,1 BNT." />

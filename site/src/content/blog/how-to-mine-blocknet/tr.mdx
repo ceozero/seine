@@ -1,0 +1,103 @@
+---
+title: Blocknet madenciliği nasıl yapılır
+description: Birkaç dakika içinde Windows, macOS veya Linux'ta Blocknet madenciliğine başlayın. Bir adres alın, seine'i indirin ve CPU ile NVIDIA GPU'nuzla bntpool.com'da kazın.
+tags: [Madencilik rehberi, Blocknet, Argon2id, bntpool]
+faq:
+  - q: 'Blocknet madenciliği için ne kadar RAM gerekir?'
+    a: 'Her madencilik iş parçacığı yaklaşık 2 GB RAM ister, çünkü her Argon2id hash''i 2 GiB''lık bir bellek bloğunu baştan sona işler. Bu yüzden 16 GB RAM''li bir bilgisayar, sisteme yer bıraktıktan sonra kabaca altı ila yedi iş parçacığı çalıştırabilir. seine belleğinizi ölçer ve güvenli iş parçacığı sayısını otomatik olarak seçer.'
+  - q: 'bntpool.com''da Blocknet madenciliği ödemeleri ne zaman gelir?'
+    a: 'bntpool.com havuzu altı saatlik bir pencereyle PPLNS yöntemiyle ödeme yapar. Bir bloğun ödülü ancak blok 60 blok derinliğe ulaştıktan sonra, yani beş dakikalık bloklarla yaklaşık beş saat sonra ödenebilir ve bakiyeler 0,1 BNT''ye ulaştığında gönderilir. İlk ödemeyi, ilk kabul edilen share''lerinizden birkaç saat sonra bekleyin.'
+  - q: 'Blocknet madenciliğini CPU ve GPU ile aynı anda yapabilir miyim?'
+    a: 'Evet. Windows ve Linux''ta seine, bilgisayardaki her CPU çekirdeğinde ve her NVIDIA ekran kartında aynı anda madencilik yapar ve iki hashrate toplanır. Çalışırken işlemciyi ve her kartı ayrı ayrı ayarlar, böylece hiçbir ayarı değiştirmeden tüm donanımınızdan en yüksek verimi alırsınız.'
+sourceHash: ad835df628e2
+translation: draft
+---
+
+Bu rehber, **seine**'i indirmekten bntpool.com havuzunda ilk kabul edilen share'lerinize ve ödemelerinize kadar Windows, macOS veya Linux'ta size yol gösterir. Madenciliğe yeni mi başlıyorsunuz? [Kripto madenciliği nasıl çalışır](/tr/blog/how-crypto-mining-works/) yazısı önce blokları, zorluğu ve havuzları anlatır.
+
+## Blocknet madenciliği nasıl yapılır?
+
+<Answer>
+Bir Blocknet adresi veya Blocknet ID kısa adı edinin, sisteminize uygun seine'i indirin, çalıştırın ve istendiğinde adresinizi yapıştırın. Varsayılan havuz bntpool.com'u kabul ettiğinizde madencilik başlar. seine hemen hash hesaplamaya başlar ve çalışırken iş parçacığı sayısını ve CPU kernel'ini ayarlamaya devam eder.
+</Answer>
+
+## Başlamadan önce neye ihtiyacınız var?
+
+- **Bir Blocknet adresi.** Resmi Blocknet cüzdanını, yani [komut satırı cüzdanını](https://github.com/blocknetprivacy/blocknet/releases/latest) veya [masaüstü cüzdanını](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) kurun ve adresinizi kopyalayın. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) bunu adım adım anlatır. Cüzdanı ve kurtarma ifadesini kendi bilgisayarınızda tutun; ortak kullanılan bir madencilik rig'ine koymayın.
+- **Ya da bir kısa ad.** [blocknet.id](https://blocknet.id) üzerinden alınmış bir [Blocknet ID kısa adınız](/tr/blog/blocknet-id-pay-by-name/) varsa, uzun adresi yapıştırmak yerine `@name` adına madencilik yapabilirsiniz.
+- **Madencilik iş parçacığı başına yaklaşık 2 GB RAM.** seine kendini bilgisayarınıza göre boyutlandırır ve sisteme pay bırakır, bu yüzden bunu önceden hesaplamanız gerekmez.
+- **Windows, macOS veya Linux.** Windows ve Linux'ta güncel bir sürücü kuruluysa NVIDIA ekran kartları otomatik olarak kullanılır.
+
+## 1. adım: seine'i indirin
+
+Sisteminize uygun arşivi [indirme bölümünden](/tr/#download) alın. Kurulacak bir şey yok: arşivi çıkarın ve hazırsınız.
+
+| Sistem | Arşiv | Ekran kartları |
+|---|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; CUDA çalışma zamanı dahildir |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, sürücü kurulu olarak |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 veya daha yeni) |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
+
+Her sürümde ayrıca bir `SHA256SUMS.txt` dosyası yayımlanır; böylece indirdiğiniz dosyanın sürümle eşleştiğini kontrol edebilirsiniz.
+
+## 2. adım: çalıştırın
+
+Windows'ta `seine.exe` dosyasına çift tıklayın. macOS veya Linux'ta, arşivden çıkardığınız klasörde bir terminal açın ve şunu çalıştırın:
+
+```sh
+./seine
+```
+
+## 3. adım: adresinizi girin ve madenciliğe başlayın
+
+seine önce ödeme adresinizi veya `@shortname` adınızı, ardından bir havuz sorar. Varsayılanı, yani `stratum+tcp://bntpool.com:3333` adresini kabul etmek için Enter'a basın. Birkaç saniye içinde [panel](/tr/blog/seine-dashboard-explained/) hashrate'inizi ve ilk share'lerinizi gösterir.
+
+Bundan sonra seine madencilik yaparken ayar yapmaya devam eder. Gerçek madencilik işi üzerinde iş parçacığı sayılarını ve CPU kernel'lerini karşılaştırır, yalnızca doğrulanmış bir kazançtan sonra geçiş yapar, bellek daralırsa geri çekilir ve işe yarayanı bir sonraki başlatma için hatırlar. Bunun için havuza asla yeniden bağlanmaz, bu yüzden ayar yapmak size madencilik süresi kaybettirmez.
+
+## Ödeme almak ne kadar sürer?
+
+bntpool.com havuzu PPLNS kullanır: her bloğun ödülü, blok bulunmadan önceki altı saat içinde gönderilen share'ler arasında paylaştırılır. Bir ödül, bloğu 60 blok derinliğe ulaşana kadar harcanamaz; bu, Blocknet'in beş dakikalık blok süresiyle yaklaşık beş saattir. Onaylanmış bakiyeniz 0,1 BNT'ye ulaştığında havuz bunu adresinize gönderir.
+
+Hashrate'inizi, share'lerinizi ve bakiyenizi [bntpool.com](https://bntpool.com) üzerinde adresinizi arayarak takip edebilirsiniz. Havuz, henüz onaylanmamış bloklardan gelen ödülleri ayrı gösterir, çünkü bunlar hâlâ değişebilir.
+
+## Bilgisayarınız ne kadar hızlı madencilik yapar?
+
+Hashrate büyük ölçüde bellek bant genişliğine ve RAM'inizin izin verdiği iş parçacığı sayısına bağlıdır. Bunlar, her nesil için seine ile ölçülen en iyi sonuçlardır:
+
+| Donanım | İş parçacığı | Hashrate |
+|---|---|---|
+| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| Arm sunucu (AWS Graviton4) | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
+| Apple M4 Max (48 GB MacBook Pro) | 16 | 30,9 H/s |
+| Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Test edilen her CPU'nun sonuçları [performans sayfasında](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) yer alır; [Blocknet madencilik donanımı rehberi](/tr/blog/blocknet-mining-hardware-hashrate/) ise RAM'in ve bellek bant genişliğinin bu sayıları nasıl belirlediğini açıklar.
+
+## seine aynı CPU'dan nasıl daha fazlasını alır?
+
+seine her işlemci ailesi için birkaç Argon2id kernel'i ile gelir ve madencilik yaparken bunları bilgisayarınızda ölçer. Test ettiğimiz donanımlarda doğru kernel büyük bir fark yarattı:
+
+- **AWS Graviton4:** önceden getirme (prefetching) kullanan SHA3 kernel'i, düz NEON'dan %56 daha hızlı madencilik yapar (13,80'den 21,50 H/s'ye).
+- **AMD EPYC 9R45 (Zen 5):** streaming kernel'i, AVX2'den %30 daha hızlı madencilik yapar (24 iş parçacığında 34,47'den 44,74 H/s'ye).
+
+Bunların hiçbirini sizin seçmeniz gerekmez. seine kernel'i yalnızca doğrulanmış bir kazançtan sonra değiştirir ve sonucu bir sonraki başlatma için hatırlar.
+
+## Daha fazla hashrate nasıl elde edilir?
+
+- **CPU ve GPU ile birlikte madencilik yapın.** seine bunu Windows ve Linux'ta varsayılan olarak yapar ve iki hashrate toplanır.
+- **Linux ve WSL'de huge pages ayırın.** Her iş parçacığının belleğini 2 MiB'lık sayfalarla desteklemek, doğrulama makinesinde yaklaşık %4–6 kazandırdı; 1 GiB'lık sayfalar ise yaklaşık %2 daha ekledi. Komutlar [huge pages rehberinde](/tr/blog/huge-pages-blocknet-mining/).
+- **Büyük sunucuların yayılmasına izin verin.** Linux'ta seine iş parçacıklarını NUMA düğümlerine ve önbellek gruplarına otomatik olarak yerleştirir. Ayrıntılar [büyük sunucular rehberinde](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md).
+- **Apple Silicon'da yalnızca CPU ile madencilik yapın.** M serisi Mac'lerde en hızlı seçenek budur ve seine varsayılan olarak bunu yapar.
+
+## Blocknet madenciliğini solo yapabilir misiniz?
+
+Evet. Kendi senkronize Blocknet düğümünüzü çalıştırıyorsanız, seine'i `./seine --mode daemon` ile başlatın; bir havuz yerine doğrudan düğüme karşı madencilik yapar. Bulduğunuz her blok sizin olur, ancak ödemeler yalnızca bütün bir blok bulduğunuzda gelir; bu yüzden çoğu kişi bir havuzla başlar. [Solo madencilik rehberi](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md) kurulumu açıklar.
+
+<Note>
+[blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, 2027-02-16 civarında Faraday adlı bir ağ yükseltmesi planlıyor. Bu yükseltmenin iş kanıtını değiştirmesi planlandığından seine'i güncel tutun: seine başlarken ve her 12 saatte bir yeni sürümleri kontrol eder.
+</Note>
+
+<CTA target="seine" title="seine'i indirin" text="Windows, macOS ve Linux için ücretsiz. Çalıştırın, adresinizi yapıştırın ve bntpool.com'da madenciliğe başlayın." />

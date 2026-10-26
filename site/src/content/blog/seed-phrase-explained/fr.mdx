@@ -1,0 +1,103 @@
+---
+title: La phrase de récupération expliquée, et comment la protéger
+description: 'La phrase de récupération (seed phrase) reconstruit votre portefeuille crypto. Son fonctionnement, comment la stocker hors ligne et pourquoi ne jamais la partager.'
+tags: [Portefeuille, Phrase de récupération, Sécurité]
+faq:
+  - q: 'Quelle est la différence entre une phrase de récupération et une clé privée ?'
+    a: 'Une clé privée contrôle directement les fonds, tandis qu''une phrase de récupération est une sauvegarde lisible qu''un portefeuille transforme en clés privées. Dans un portefeuille Blocknet, les 12 mots produisent à la fois la clé de dépense et la clé de visualisation : la phrase suffit donc à elle seule à reconstruire le portefeuille et tout ce qu''il permet de faire.'
+  - q: 'Peut-on récupérer un portefeuille si l''on perd sa phrase de récupération ?'
+    a: 'Vous pouvez continuer à utiliser le portefeuille tant que vous avez encore le fichier du portefeuille et son mot de passe. La phrase de récupération est la sauvegarde pour le jour où le fichier ou le mot de passe a disparu. Tant que le portefeuille s''ouvre encore, affichez à nouveau la phrase avec la commande seed ou View Recovery Seed et notez-la.'
+  - q: 'Est-il sûr de stocker une phrase de récupération dans un gestionnaire de mots de passe ?'
+    a: 'Le guide du portefeuille Blocknet demande de garder la phrase hors ligne sur papier et de ne pas la mettre dans des fichiers texte, des applications de notes ou un stockage cloud, car quiconque lit les 12 mots contrôle les fonds. Des copies papier conservées dans deux endroits sûrs distincts vous donnent une sauvegarde qui ne touche jamais internet.'
+  - q: 'Une phrase de récupération fonctionne-t-elle dans n''importe quelle application de portefeuille ?'
+    a: 'La liste de mots est un standard commun, mais chaque cryptomonnaie transforme les mots en clés à sa façon. Restaurez une phrase Blocknet dans le portefeuille Blocknet officiel, en ligne de commande ou de bureau. Les deux acceptent les 12 mots et reconstruisent la même adresse et le même solde une fois que le portefeuille a parcouru la chaîne.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Une phrase de récupération est la courte liste de mots qui permet de reconstruire votre portefeuille crypto sur n'importe quel ordinateur. Ce guide explique ce que sont ces mots, comment un portefeuille les transforme en clés, comment les stocker pour ne jamais perdre l'accès et pourquoi personne d'autre ne doit jamais les voir. Les exemples utilisent le portefeuille Blocknet et sa phrase de récupération de 12 mots.
+
+## Qu'est-ce qu'une phrase de récupération ?
+
+<Answer>
+Une phrase de récupération, aussi appelée seed phrase ou phrase mnémonique, est une liste de mots ordinaires, généralement 12 ou 24, qui encode le secret dont proviennent les clés de votre portefeuille. Saisissez ces mots dans un portefeuille compatible et il reconstruit les mêmes clés, adresses et solde, même si votre ordinateur et le fichier du portefeuille ont disparu.
+</Answer>
+
+Tout portefeuille crypto repose sur des clés secrètes. Une clé est un long nombre aléatoire, difficile à recopier à la main et facile à mal transcrire. Une phrase de récupération écrit le même secret sous forme de mots tirés d'une liste fixe : vous pouvez la recopier sur papier, la relire et la saisir des années plus tard.
+
+Le portefeuille Blocknet appelle sa phrase **recovery seed** (graine de récupération). Elle compte 12 mots, et le portefeuille la crée lorsque vous créez un nouveau portefeuille. Gardez-la en sécurité et vous pourrez toujours récupérer votre portefeuille.
+
+## Comment fonctionne une phrase de récupération ?
+
+Beaucoup de portefeuilles suivent BIP39, un standard rédigé pour Bitcoin en 2013 par Marek Palatinus, Pavol Rusnak, Aaron Voisine et Sean Bowe. Il fonctionne en trois étapes.
+
+1. **Des bits aléatoires.** Le portefeuille tire de 128 à 256 bits aléatoires. Une phrase de 12 mots contient 128 bits et une phrase de 24 mots en contient 256.
+2. **Une somme de contrôle, puis des mots.** Le portefeuille hache ces bits avec SHA-256 et ajoute les premiers bits du hachage comme somme de contrôle (4 bits pour 12 mots). Il découpe ensuite le résultat en morceaux de 11 bits. Chaque morceau est un nombre de 0 à 2 047 qui désigne un mot dans une liste de 2 048 mots.
+3. **Une graine pour les clés.** Pour utiliser la phrase, le portefeuille la passe dans PBKDF2 avec HMAC-SHA512 sur 2 048 tours et obtient une graine de 64 octets. Les clés proviennent de cette graine.
+
+C'est grâce à la somme de contrôle qu'un portefeuille peut vous dire qu'une phrase est fausse. Seule 1 combinaison aléatoire de 12 mots sur 16 a une somme de contrôle valide : la plupart des fautes de frappe et des mots inversés sont donc détectés avant que quoi que ce soit ne se passe. La liste anglaise est aussi construite pour que les quatre premières lettres de chaque mot soient uniques, ce qui aide quand votre écriture est difficile à relire.
+
+### Ce que signifient 12 mots dans Blocknet
+
+Le portefeuille Blocknet utilise la liste BIP39 anglaise standard et 128 bits d'aléa : chaque phrase de récupération compte donc 12 mots. Il transforme ces mots en sa graine de 64 octets avec l'étape PBKDF2 de BIP39, sans phrase secrète supplémentaire. Les 32 premiers octets deviennent votre **clé de dépense** et les 32 derniers votre **clé de visualisation**. Votre adresse est construite à partir des moitiés publiques de ces deux clés : les mêmes 12 mots mènent donc toujours à la même adresse. Le guide des [adresses furtives](/fr/blog/stealth-addresses-explained/) explique comment la clé de dépense et la clé de visualisation fonctionnent ensemble pour recevoir des paiements de façon confidentielle.
+
+Que représentent 128 bits ? Il existe 2^128 graines possibles, environ 3,4 × 10^38. Personne ne trouvera votre portefeuille en devinant des mots. La seule façon concrète d'y accéder est de voir votre phrase, et c'est pourquoi le reste de ce guide porte sur la manière de bien la stocker.
+
+## Phrase de récupération, mot de passe et fichier du portefeuille : quelle différence ?
+
+On confond souvent les trois éléments qui protègent un portefeuille. Voici le rôle de chacun dans le portefeuille Blocknet.
+
+| | Ce que c'est | Ce que cela vous donne |
+|---|---|---|
+| Phrase de récupération | 12 mots que vous notez | Le contrôle total du portefeuille sur n'importe quel ordinateur |
+| Mot de passe du portefeuille | Un mot de passe que vous choisissez | L'ouverture du fichier du portefeuille sur cet ordinateur |
+| Fichier du portefeuille | Un seul fichier `.wallet.dat` | Vos clés et votre historique, chiffrés avec votre mot de passe |
+
+Votre mot de passe chiffre le fichier du portefeuille (le portefeuille dérive la clé de chiffrement avec Argon2id et chiffre avec AES-GCM), et Blocknet ne le stocke nulle part. Le mot de passe ne joue aucun rôle dans la création de vos clés. Quand vous restaurez à partir des 12 mots, vous choisissez un nouveau mot de passe pour le nouveau fichier du portefeuille. La phrase est donc la sauvegarde qui compte le plus : elle fonctionne même si vous perdez le fichier et oubliez le mot de passe.
+
+## Comment stocker une phrase de récupération ?
+
+<Answer>
+Écrivez les mots sur papier dans l'ordre, vérifiez chaque mot par rapport à l'écran et gardez le papier dans un endroit sûr, hors ligne. Faites une seconde copie et rangez-la ailleurs. N'utilisez pour la phrase ni photos, ni fichiers texte, ni applications de notes, ni e-mail, ni stockage cloud, car quiconque la lit contrôle les fonds.
+</Answer>
+
+Ces habitudes gardent une phrase de récupération à la fois sûre et utilisable :
+
+- **Le papier d'abord.** Le guide du portefeuille Blocknet indique d'écrire la phrase sur papier et de la garder en lieu sûr. Numérotez les mots de 1 à 12, car l'ordre compte.
+- **Vérifiez-la une fois.** Comparez chaque mot avec l'écran avant de le fermer. L'orthographe compte, et les quatre premières lettres de chaque mot suffisent à le distinguer.
+- **Deux copies, deux endroits.** Une copie chez vous et une autre dans un autre lieu de confiance vous protègent d'un incendie, d'une inondation ou d'un tiroir égaré. Certaines personnes gravent aussi les mots sur une plaque de métal pour la même raison.
+- **Gardez-la hors ligne.** Les captures d'écran, les photos de téléphone, les applications de notes et les dossiers cloud se synchronisent ou se sauvegardent tous quelque part que vous ne contrôlez pas. Le guide du portefeuille cite les fichiers texte, les applications de notes et le stockage cloud parmi les endroits où la phrase ne doit jamais aller.
+- **Gardez-la privée.** Rangez-la là où les invités, les collègues et les réparateurs ne tomberont pas dessus.
+
+## Pourquoi ne jamais partager sa phrase de récupération ?
+
+Les 12 mots sont votre portefeuille. Quiconque les possède peut le reconstruire sur son propre ordinateur et envoyer tout ce qu'il contient, et une transaction ne peut pas être annulée une fois qu'elle est sur la chaîne. Le portefeuille Blocknet affiche cet avertissement chaque fois que vous demandez à voir la phrase :
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Considérez toute demande de votre phrase comme une arnaque, aussi officielle qu'elle paraisse. Les développeurs de portefeuilles, les plateformes d'échange, les pools et les équipes d'assistance n'en ont jamais besoin. Un site web ou une application qui vous demande de « vérifier » ou de « synchroniser » votre portefeuille en saisissant les mots cherche à prendre vos coins.
+
+Vous n'avez jamais besoin de partager la phrase pour faire quoi que ce soit :
+
+- **Pour être payé**, partagez votre adresse, ou un [nom court Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) comme `@yourname` qui pointe vers elle.
+- **Pour permettre à quelqu'un de voir les fonds entrants**, la commande `viewkeys` exporte des clés de visualisation seule. Un portefeuille en lecture seule affiche les paiements entrants et ne peut pas envoyer. Le [guide de la confidentialité](/fr/blog/blocknet-privacy-features/) explique ce que révèlent les clés de visualisation.
+- **Pour miner**, seine et bntpool.com n'ont besoin que de votre adresse ou de votre nom court. Le portefeuille et sa phrase peuvent rester sur le seul ordinateur de confiance, tandis que chaque machine de minage paie vers la même adresse.
+
+## Comment afficher et restaurer une phrase de récupération Blocknet ?
+
+Dans le portefeuille en ligne de commande, tapez `seed` à l'invite. Le portefeuille affiche l'avertissement ci-dessus, vous demande de confirmer, demande votre mot de passe, puis affiche les 12 mots en lignes numérotées. Dans le portefeuille de bureau, ouvrez les paramètres et choisissez « View Recovery Seed », qui demande aussi d'abord votre mot de passe.
+
+Pour restaurer, utilisez l'un ou l'autre portefeuille :
+
+- **En ligne de commande :** lancez `import`, choisissez `1) 12-word recovery seed`, tapez les 12 mots, puis donnez un nom et un mot de passe au nouveau portefeuille.
+- **Sur le bureau :** choisissez « Restore from Seed » et saisissez votre phrase de 12 mots.
+
+Le portefeuille vérifie les mots et la somme de contrôle, reconstruit vos clés et parcourt la chaîne à la recherche de vos sorties : votre solde et votre historique reviennent avec la même adresse. Le [guide du portefeuille Blocknet](/fr/blog/blocknet-wallet-for-mining/) explique pas à pas comment créer un portefeuille, sauvegarder la phrase et trouver votre adresse.
+
+Une fois votre phrase en sécurité sur papier, vous pouvez mettre l'adresse à profit. Le [guide du minage de Blocknet](/fr/blog/how-to-mine-blocknet/) montre comment y diriger [seine](/fr/#download) et commencer à miner sur bntpool.com.
+
+<CTA target="pool" title="Minez vers votre portefeuille bien sauvegardé" text="Collez votre adresse Blocknet ou votre @name dans seine, acceptez bntpool.com et gardez votre phrase de récupération sur papier chez vous." />

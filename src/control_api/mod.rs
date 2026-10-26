@@ -8,10 +8,11 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_stream::stream;
-use axum::extract::State;
-use axum::http::StatusCode;
+use axum::extract::{Request, State};
+use axum::http::{header, HeaderMap, Method, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -23,7 +24,9 @@ use crate::config::{
     read_token_from_cookie_file, BackendKind, BackendSpec, Config, CpuAffinityMode, CpuPageMode,
     CpuPerformanceProfile, MiningMode, UiMode, WorkAllocation,
 };
-use crate::dev_fee::{effective_pool_dev_fee_percent, DEV_ADDRESS, DEV_FEE_PERCENT};
+use crate::dev_fee::{DEV_ADDRESS, DEV_FEE_PERCENT};
+use crate::miner::session::SessionHistory;
+use crate::miner::thread_control::{ThreadChangeRequest, ThreadControl};
 use crate::miner::ui::{set_log_sink, UiLogEvent};
 use crate::shortname::validate_destination;
 
@@ -56,6 +59,22 @@ impl ApiError {
         Self {
             status: StatusCode::CONFLICT,
             code,
+            message: message.into(),
+        }
+    }
+
+    fn unauthorized(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            code: "unauthorized",
+            message: message.into(),
+        }
+    }
+
+    fn forbidden(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            code: "forbidden",
             message: message.into(),
         }
     }
@@ -122,6 +141,7 @@ struct ApiConfigView {
     api_allow_unsafe_bind: bool,
     api_cors: String,
     api_key_required: bool,
+    api_cookie_path: Option<String>,
     mode: String,
     api_url: String,
     pool_url: Option<String>,
@@ -193,7 +213,11 @@ impl From<&Config> for ApiConfigView {
             api_bind: cfg.api_bind.clone(),
             api_allow_unsafe_bind: cfg.api_allow_unsafe_bind,
             api_cors: cfg.api_cors.clone(),
-            api_key_required: false,
+            api_key_required: true,
+            api_cookie_path: cfg
+                .api_token
+                .is_none()
+                .then(|| cfg.api_cookie_path.display().to_string()),
             mode: mining_mode_to_str(cfg.mode).to_string(),
             api_url: cfg.api_url.clone(),
             pool_url: cfg.pool_url.clone(),
@@ -319,6 +343,7 @@ struct SupervisorState {
     stopped_at_unix_ms: Option<u64>,
     last_error: Option<String>,
     session_shutdown: Option<Arc<AtomicBool>>,
+    session_history: Option<Arc<SessionHistory>>,
     effective_config: Option<Config>,
     staged_config: Option<Config>,
     pending_wallet_password: Option<String>,
@@ -338,6 +363,7 @@ impl Default for SupervisorState {
             stopped_at_unix_ms: None,
             last_error: None,
             session_shutdown: None,
+            session_history: None,
             effective_config: None,
             staged_config: None,
             pending_wallet_password: None,
@@ -356,17 +382,25 @@ struct MinerSupervisor {
     state: Arc<Mutex<SupervisorState>>,
     events_tx: broadcast::Sender<StreamEnvelope>,
     seq: Arc<AtomicU64>,
+    // Serialize user operations so a queued TUI restart cannot stop an API-started session.
+    operations: Mutex<()>,
+    thread_changes_tx: crossbeam_channel::Sender<ThreadChangeRequest>,
+    thread_changes_rx: crossbeam_channel::Receiver<ThreadChangeRequest>,
 }
 
 impl MinerSupervisor {
     fn new(base_config: Config, process_shutdown: Arc<AtomicBool>) -> Self {
         let (events_tx, _) = broadcast::channel(API_EVENT_CHANNEL_CAPACITY.max(64));
+        let (thread_changes_tx, thread_changes_rx) = crossbeam_channel::bounded(1);
         Self {
             base_config,
             process_shutdown,
             state: Arc::new(Mutex::new(SupervisorState::default())),
             events_tx,
             seq: Arc::new(AtomicU64::new(0)),
+            operations: Mutex::new(()),
+            thread_changes_tx,
+            thread_changes_rx,
         }
     }
 
@@ -383,19 +417,6 @@ impl MinerSupervisor {
             .state
             .lock()
             .expect("supervisor state lock poisoned during snapshot");
-        let active_cfg = state
-            .effective_config
-            .as_ref()
-            .or(state.staged_config.as_ref());
-        let dev_fee_percent = active_cfg
-            .and_then(|cfg| {
-                if cfg.mode != MiningMode::Pool {
-                    return None;
-                }
-                cfg.pool_url.as_deref().map(effective_pool_dev_fee_percent)
-            })
-            .unwrap_or(DEV_FEE_PERCENT);
-
         RuntimeStateSnapshot {
             lifecycle: state.lifecycle,
             run_id: state.run_id,
@@ -408,7 +429,7 @@ impl MinerSupervisor {
             last_error: state.last_error.clone(),
             pending_wallet_password: state.pending_wallet_password.is_some(),
             pending_nvidia_count: state.pending_nvidia_count,
-            dev_fee_percent,
+            dev_fee_percent: DEV_FEE_PERCENT,
             dev_fee_mode: state.dev_fee_mode.clone(),
             dev_fee_address: DEV_ADDRESS,
             effective_config: state
@@ -548,6 +569,22 @@ impl MinerSupervisor {
     }
 
     fn start(&self, patch: StartRequest, allow_wallet_prompt: bool) -> Result<ActionResponse> {
+        let _operation = self
+            .operations
+            .lock()
+            .map_err(|_| anyhow!("supervisor operation lock poisoned"))?;
+        self.start_session(patch, allow_wallet_prompt, None)
+    }
+
+    fn start_session(
+        &self,
+        patch: StartRequest,
+        allow_wallet_prompt: bool,
+        preserved_history: Option<Arc<SessionHistory>>,
+    ) -> Result<ActionResponse> {
+        if self.process_shutdown.load(Ordering::SeqCst) {
+            bail!("miner is shutting down");
+        }
         let (pending_password, mut cfg) = {
             let state = self
                 .state
@@ -620,6 +657,7 @@ impl MinerSupervisor {
             }
         }
 
+        let history = preserved_history.unwrap_or_else(|| Arc::new(SessionHistory::new()));
         let run_shutdown = Arc::new(AtomicBool::new(false));
         let run_shutdown_for_worker = Arc::clone(&run_shutdown);
         let cfg_for_worker = cfg.clone();
@@ -643,7 +681,8 @@ impl MinerSupervisor {
             state.lifecycle = MinerLifecycle::Starting;
             state.run_id = state.run_id.saturating_add(1).max(1);
             let run_id = state.run_id;
-            state.started_at_unix_ms = Some(now_unix_millis());
+            state.started_at_unix_ms = Some(history.started_at_unix_ms);
+            state.session_history = Some(Arc::clone(&history));
             state.stopped_at_unix_ms = None;
             state.last_error = None;
             state.session_shutdown = Some(Arc::clone(&run_shutdown));
@@ -657,6 +696,14 @@ impl MinerSupervisor {
         let state_handle = Arc::clone(&self.state);
         let events_tx = self.events_tx.clone();
         let seq = Arc::clone(&self.seq);
+        let thread_control = ThreadControl {
+            run_id,
+            sender: self.thread_changes_tx.clone(),
+            memory: None,
+            max_threads: cfg.cpu_auto_threads_cap,
+            current_threads: cfg.threads,
+            quit_requested: Arc::new(AtomicBool::new(false)),
+        };
 
         let spawn_result = thread::Builder::new()
             .name("seine-api-miner-session".to_string())
@@ -680,8 +727,15 @@ impl MinerSupervisor {
                     }
                 }
 
-                let result =
-                    crate::miner::run(&cfg_for_worker, Arc::clone(&run_shutdown_for_worker));
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    crate::miner::run_with_thread_control(
+                        &cfg_for_worker,
+                        Arc::clone(&run_shutdown_for_worker),
+                        Some(thread_control),
+                        history,
+                    )
+                }))
+                .unwrap_or_else(|_| Err(anyhow!("miner session panicked")));
 
                 if let Ok(mut state) = state_handle.lock() {
                     if state.run_id != run_id {
@@ -739,6 +793,14 @@ impl MinerSupervisor {
     }
 
     fn stop(&self, request: StopRequest) -> ActionResponse {
+        let _operation = self
+            .operations
+            .lock()
+            .expect("supervisor operation lock poisoned");
+        self.stop_session(request)
+    }
+
+    fn stop_session(&self, request: StopRequest) -> ActionResponse {
         let wait = request
             .wait_ms
             .map(Duration::from_millis)
@@ -794,17 +856,96 @@ impl MinerSupervisor {
     }
 
     fn restart(&self, patch: StartRequest, allow_wallet_prompt: bool) -> Result<ActionResponse> {
-        {
+        let _operation = self
+            .operations
+            .lock()
+            .map_err(|_| anyhow!("supervisor operation lock poisoned"))?;
+        self.restart_session(patch, allow_wallet_prompt, None)
+    }
+
+    fn restart_session(
+        &self,
+        patch: StartRequest,
+        allow_wallet_prompt: bool,
+        quit_requested: Option<&AtomicBool>,
+    ) -> Result<ActionResponse> {
+        let preserved_history = {
             let mut state = self
                 .state
                 .lock()
                 .map_err(|_| anyhow!("supervisor state lock poisoned"))?;
             state.metrics.restart_requests = state.metrics.restart_requests.saturating_add(1);
-        }
-        let _ = self.stop(StopRequest {
+            // Only a thread adjustment continues the logical mining session.
+            // An explicit API restart still starts a fresh session.
+            quit_requested.and_then(|_| state.session_history.clone())
+        };
+        let _ = self.stop_session(StopRequest {
             wait_ms: Some(15_000),
         });
-        self.start(patch, allow_wallet_prompt)
+        if quit_requested.is_some_and(|flag| flag.load(Ordering::SeqCst)) {
+            return Ok(ActionResponse {
+                ok: true,
+                message: "thread restart canceled by quit".to_string(),
+                requires_restart: false,
+                state: self.snapshot(),
+            });
+        }
+        self.start_session(patch, allow_wallet_prompt, preserved_history)
+    }
+
+    fn apply_pending_thread_change(&self) -> Result<()> {
+        let Ok(request) = self.thread_changes_rx.try_recv() else {
+            return Ok(());
+        };
+        let _operation = self
+            .operations
+            .lock()
+            .map_err(|_| anyhow!("supervisor operation lock poisoned"))?;
+        if self.process_shutdown.load(Ordering::SeqCst)
+            || request.quit_requested.load(Ordering::SeqCst)
+        {
+            return Ok(());
+        }
+        {
+            let mut state = self
+                .state
+                .lock()
+                .map_err(|_| anyhow!("supervisor state lock poisoned"))?;
+            // A delayed keypress from a previous session must never restart a new one.
+            if state.run_id != request.run_id || state.lifecycle != MinerLifecycle::Running {
+                return Ok(());
+            }
+            let mut cfg = state
+                .staged_config
+                .as_ref()
+                .or(state.effective_config.as_ref())
+                .cloned()
+                .ok_or_else(|| anyhow!("no active mining configuration"))?;
+            let admission = request
+                .memory
+                .as_ref()
+                .ok_or_else(|| anyhow!("RAM check unavailable; try again."))
+                .and_then(|guard| guard.validate(request.threads))
+                .and_then(|()| {
+                    apply_runtime_thread_count(&mut cfg, request.threads, request.max_threads)
+                });
+            if let Err(err) = admission {
+                if let Some(reply) = &request.rejection {
+                    let _ = reply.try_send(format!("{err:#}"));
+                }
+                return Err(err);
+            }
+            state.staged_config = Some(cfg);
+        }
+        crate::miner::ui::info(
+            "THREADS",
+            format!(
+                "restarting mining with {} threads per CPU backend; session statistics preserved",
+                request.threads
+            ),
+        );
+        self.restart_session(StartRequest::default(), true, Some(&request.quit_requested))?;
+        Ok(())
     }
 
     fn set_wallet_password(&self, password: String) -> ActionResponse {
@@ -827,6 +968,10 @@ impl MinerSupervisor {
     }
 
     fn patch_live_config(&self, patch: StartRequest) -> Result<ActionResponse> {
+        let _operation = self
+            .operations
+            .lock()
+            .map_err(|_| anyhow!("supervisor operation lock poisoned"))?;
         let mut cfg = {
             let mut state = self
                 .state
@@ -1033,12 +1178,147 @@ pub fn run(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     runtime.block_on(async move { run_async(cfg, shutdown).await })
 }
 
+/// The same session supervisor as the API, without opening an HTTP listener.
+pub(crate) fn run_interactive(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
+    let supervisor = Arc::new(MinerSupervisor::new(cfg, Arc::clone(&shutdown)));
+    let log_supervisor = Arc::clone(&supervisor);
+    set_log_sink(Some(Arc::new(move |event| {
+        log_supervisor.ingest_log(event)
+    })));
+    let result = (|| {
+        supervisor.start(StartRequest::default(), true)?;
+        loop {
+            if shutdown.load(Ordering::SeqCst) {
+                supervisor.stop(StopRequest {
+                    wait_ms: Some(60_000),
+                });
+                return Ok(());
+            }
+            if let Err(err) = supervisor.apply_pending_thread_change() {
+                crate::miner::ui::warn("THREADS", format!("could not change threads: {err:#}"));
+            }
+            // Avoid copying the log history and API config on every UI control tick.
+            let (lifecycle, last_error) = {
+                let state = supervisor
+                    .state
+                    .lock()
+                    .map_err(|_| anyhow!("supervisor state lock poisoned"))?;
+                (state.lifecycle, state.last_error.clone())
+            };
+            match lifecycle {
+                MinerLifecycle::Idle => return Ok(()),
+                MinerLifecycle::Error => bail!(
+                    "{}",
+                    last_error.unwrap_or_else(|| "mining failed".to_string())
+                ),
+                _ => thread::sleep(Duration::from_millis(50)),
+            }
+        }
+    })();
+    set_log_sink(None);
+    result
+}
+
+struct ThreadControlWorker {
+    stop: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl ThreadControlWorker {
+    fn spawn(supervisor: Arc<MinerSupervisor>) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = Arc::clone(&stop);
+        let handle = thread::spawn(move || {
+            while !worker_stop.load(Ordering::Relaxed)
+                && !supervisor.process_shutdown.load(Ordering::Relaxed)
+            {
+                if let Err(err) = supervisor.apply_pending_thread_change() {
+                    crate::miner::ui::warn("THREADS", format!("could not change threads: {err:#}"));
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+        });
+        Self {
+            stop,
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for ThreadControlWorker {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+fn apply_runtime_thread_count(cfg: &mut Config, threads: usize, limit: usize) -> Result<()> {
+    // This channel is internal to the TUI. Use the live bound supplied by the
+    // mining controller instead of the supervisor's pre-start RAM estimate.
+    if threads == 0 || threads > limit {
+        bail!("thread request exceeds the current runtime limit");
+    }
+    let mut next = cfg.clone();
+    next.cpu_auto_threads_cap = limit;
+    apply_thread_count(&mut next, threads)?;
+    *cfg = next;
+    Ok(())
+}
+
+fn apply_thread_count(cfg: &mut Config, threads: usize) -> Result<()> {
+    let cpu_specs: Vec<_> = cfg
+        .backend_specs
+        .iter()
+        .filter(|spec| spec.kind == BackendKind::Cpu)
+        .collect();
+    if cpu_specs.is_empty() {
+        bail!("no CPU backend is active");
+    }
+    let limit = cfg.cpu_auto_threads_cap.max(
+        cpu_specs
+            .iter()
+            .map(|spec| spec.cpu_threads.unwrap_or(cfg.threads))
+            .min()
+            .unwrap_or(1),
+    );
+    if threads == 0 || threads > limit {
+        bail!("threads must be between 1 and {limit}");
+    }
+    apply_start_patch(
+        cfg,
+        &StartRequest {
+            threads: Some(threads),
+            cpu_autotune_threads: Some(false),
+            ..StartRequest::default()
+        },
+    )
+}
+
 async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     let supervisor = Arc::new(MinerSupervisor::new(cfg.clone(), Arc::clone(&shutdown)));
     let log_supervisor = Arc::clone(&supervisor);
     set_log_sink(Some(Arc::new(move |event| {
         log_supervisor.ingest_log(event);
     })));
+
+    let api_token = match cfg.api_token.clone() {
+        Some(token) => token,
+        None => {
+            let token = generate_api_token()?;
+            write_api_cookie(&cfg.api_cookie_path, &token)?;
+            eprintln!(
+                "control API token written to {}",
+                cfg.api_cookie_path.display()
+            );
+            token
+        }
+    };
+    let guard = Arc::new(ApiGuard {
+        token: api_token,
+        require_loopback_host: is_loopback_bind_addr(&cfg.api_bind),
+    });
 
     if cfg.api_server_enabled && !cfg.service_mode {
         let _ = supervisor.start(StartRequest::default(), true);
@@ -1062,9 +1342,12 @@ async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         .route("/v1/wallet/unlock", post(post_wallet_unlock))
         .route("/v1/events/stream", get(get_events_stream))
         .route("/metrics", get(get_metrics))
-        .with_state(app_state);
+        .with_state(app_state)
+        .layer(middleware::from_fn_with_state(guard, require_api_auth));
 
-    app = app.layer(build_cors_layer(&cfg.api_cors)?);
+    if let Some(cors) = build_cors_layer(&cfg.api_cors)? {
+        app = app.layer(cors);
+    }
 
     let bind_addr = parse_api_bind_addr(&cfg.api_bind)?;
     let listener = tokio::net::TcpListener::bind(bind_addr)
@@ -1074,9 +1357,15 @@ async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
     let server =
         axum::serve(listener, app).with_graceful_shutdown(wait_for_shutdown(Arc::clone(&shutdown)));
 
+    let thread_control_worker = ThreadControlWorker::spawn(Arc::clone(&supervisor));
+
     let result = server.await;
 
+    if cfg.api_token.is_none() {
+        let _ = std::fs::remove_file(&cfg.api_cookie_path);
+    }
     supervisor.initiate_global_shutdown();
+    drop(thread_control_worker);
     let _ = supervisor.stop(StopRequest {
         wait_ms: Some(15_000),
     });
@@ -1092,21 +1381,128 @@ async fn wait_for_shutdown(shutdown: Arc<AtomicBool>) {
     }
 }
 
-fn build_cors_layer(cors_value: &str) -> Result<CorsLayer> {
+struct ApiGuard {
+    token: String,
+    require_loopback_host: bool,
+}
+
+/// Every route except `/v1/health` needs `Authorization: Bearer <token>`. On a loopback
+/// bind, requests must also name a loopback Host so DNS-rebinding pages are refused.
+async fn require_api_auth(
+    State(guard): State<Arc<ApiGuard>>,
+    request: Request,
+    next: Next,
+) -> Response {
+    if guard.require_loopback_host && !host_header_is_loopback(request.headers()) {
+        return ApiError::forbidden("control API only accepts loopback Host headers")
+            .into_response();
+    }
+    let public = request.method() == Method::GET && request.uri().path() == "/v1/health";
+    if !public && !bearer_token_matches(request.headers(), &guard.token) {
+        return ApiError::unauthorized(
+            "missing or invalid bearer token; read it from the control API cookie file",
+        )
+        .into_response();
+    }
+    next.run(request).await
+}
+
+fn bearer_token_matches(headers: &HeaderMap, expected: &str) -> bool {
+    let Some(provided) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+    else {
+        return false;
+    };
+    let (provided, expected) = (provided.trim().as_bytes(), expected.as_bytes());
+    provided.len() == expected.len()
+        && provided
+            .iter()
+            .zip(expected)
+            .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+            == 0
+}
+
+fn host_header_is_loopback(headers: &HeaderMap) -> bool {
+    // Browsers always send Host; non-browser clients that omit it are not a rebinding risk.
+    let Some(host) = headers.get(header::HOST) else {
+        return true;
+    };
+    let Ok(host) = host.to_str() else {
+        return false;
+    };
+    let host = host.trim();
+    let name = if let Some(rest) = host.strip_prefix('[') {
+        rest.split(']').next().unwrap_or_default()
+    } else {
+        host.rsplit_once(':').map_or(host, |(name, _)| name)
+    };
+    name.eq_ignore_ascii_case("localhost")
+        || name
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
+}
+
+fn is_loopback_bind_addr(bind: &str) -> bool {
+    parse_api_bind_addr(bind).is_ok_and(|addr| addr.ip().is_loopback())
+}
+
+fn generate_api_token() -> Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|err| anyhow!("failed to generate control API token: {err}"))?;
+    Ok(hex::encode(bytes))
+}
+
+fn write_api_cookie(path: &std::path::Path, token: &str) -> Result<()> {
+    use std::io::Write;
+
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let _ = std::fs::remove_file(path);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .with_context(|| format!("failed to create control API cookie {}", path.display()))?;
+    file.write_all(token.as_bytes())
+        .with_context(|| format!("failed to write control API cookie {}", path.display()))?;
+    Ok(())
+}
+
+fn build_cors_layer(cors_value: &str) -> Result<Option<CorsLayer>> {
     let trimmed = cors_value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
     if trimmed == "*" {
-        return Ok(CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any));
+        return Ok(Some(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        ));
     }
 
     let value = axum::http::HeaderValue::from_str(trimmed)
         .with_context(|| format!("invalid CORS origin '{trimmed}'"))?;
-    Ok(CorsLayer::new()
-        .allow_origin(value)
-        .allow_methods(Any)
-        .allow_headers(Any))
+    Ok(Some(
+        CorsLayer::new()
+            .allow_origin(value)
+            .allow_methods(Any)
+            .allow_headers(Any),
+    ))
 }
 
 fn parse_api_bind_addr(bind: &str) -> Result<SocketAddr> {
@@ -1534,12 +1930,24 @@ fn apply_start_patch(cfg: &mut Config, patch: &StartRequest) -> Result<()> {
     }
     if let Some(specs) = patch.backend_specs.as_ref() {
         cfg.backend_specs = parse_backend_specs_patch(specs)?;
+        if patch.cpu_autotune_threads.is_none()
+            && cfg
+                .backend_specs
+                .iter()
+                .any(|s| s.kind == BackendKind::Cpu && s.cpu_threads.is_some())
+        {
+            cfg.cpu_autotune_threads = false;
+        }
     }
     if let Some(threads) = patch.threads {
         if threads == 0 {
             bail!("threads must be >= 1");
         }
         cfg.threads = threads;
+        cfg.cpu_manual_memory_check = true;
+        if patch.cpu_autotune_threads.is_none() {
+            cfg.cpu_autotune_threads = false;
+        }
         for spec in cfg
             .backend_specs
             .iter_mut()
@@ -1927,10 +2335,11 @@ fn parse_cpu_profile(value: &str) -> Result<CpuPerformanceProfile> {
 
 fn parse_cpu_affinity(value: &str) -> Result<CpuAffinityMode> {
     match value.trim().to_ascii_lowercase().as_str() {
+        "os" => Ok(CpuAffinityMode::Os),
         "off" => Ok(CpuAffinityMode::Off),
         "auto" => Ok(CpuAffinityMode::Auto),
         "pcore-only" => Ok(CpuAffinityMode::PcoreOnly),
-        other => bail!("invalid cpu_affinity '{other}' (expected: off|auto|pcore-only)"),
+        other => bail!("invalid cpu_affinity '{other}' (expected: off|auto|os|pcore-only)"),
     }
 }
 
@@ -1978,6 +2387,7 @@ fn cpu_profile_to_str(value: CpuPerformanceProfile) -> &'static str {
 
 fn cpu_affinity_to_str(value: CpuAffinityMode) -> &'static str {
     match value {
+        CpuAffinityMode::Os => "os",
         CpuAffinityMode::Off => "off",
         CpuAffinityMode::Auto => "auto",
         CpuAffinityMode::PcoreOnly => "pcore-only",
@@ -2003,6 +2413,369 @@ fn ui_mode_to_str(value: UiMode) -> &'static str {
 mod tests {
     use super::*;
     use anyhow::anyhow;
+
+    fn headers(pairs: &[(header::HeaderName, &str)]) -> HeaderMap {
+        let mut map = HeaderMap::new();
+        for (name, value) in pairs {
+            map.insert(name.clone(), value.parse().unwrap());
+        }
+        map
+    }
+
+    #[test]
+    fn snapshot_reports_flat_dev_fee_for_every_pool_and_solo() {
+        for (mode, pool_url) in [
+            (MiningMode::Pool, Some("stratum+tcp://bntpool.com:3333")),
+            (MiningMode::Pool, Some("stratum+tcp://eu.bntpool.com:3333")),
+            (MiningMode::Pool, Some("stratum+tcp://example.com:3333")),
+            (MiningMode::Daemon, None),
+        ] {
+            let mut cfg = crate::miner::tests::test_config();
+            cfg.mode = mode;
+            cfg.pool_url = pool_url.map(str::to_string);
+            let supervisor = MinerSupervisor::new(cfg.clone(), Arc::new(AtomicBool::new(false)));
+            assert_eq!(supervisor.snapshot().dev_fee_percent, 2.0);
+            supervisor.state.lock().unwrap().effective_config = Some(cfg);
+            assert_eq!(supervisor.snapshot().dev_fee_percent, 2.0);
+        }
+    }
+
+    #[test]
+    fn bearer_token_must_match_exactly() {
+        let ok = headers(&[(header::AUTHORIZATION, "Bearer secret-token")]);
+        assert!(bearer_token_matches(&ok, "secret-token"));
+        assert!(!bearer_token_matches(&ok, "secret-tokeN"));
+        assert!(!bearer_token_matches(&ok, "secret-token-longer"));
+        assert!(!bearer_token_matches(&headers(&[]), "secret-token"));
+        let basic = headers(&[(header::AUTHORIZATION, "Basic secret-token")]);
+        assert!(!bearer_token_matches(&basic, "secret-token"));
+    }
+
+    #[test]
+    fn host_header_check_rejects_rebinding_names() {
+        for host in [
+            "127.0.0.1:9977",
+            "localhost:9977",
+            "LOCALHOST",
+            "[::1]:9977",
+            "127.1.2.3",
+        ] {
+            assert!(
+                host_header_is_loopback(&headers(&[(header::HOST, host)])),
+                "{host}"
+            );
+        }
+        for host in [
+            "evil.example:9977",
+            "127.0.0.1.evil.example",
+            "10.0.0.5:9977",
+            "[::2]:9977",
+        ] {
+            assert!(
+                !host_header_is_loopback(&headers(&[(header::HOST, host)])),
+                "{host}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn router_requires_token_and_loopback_host() {
+        use tower::ServiceExt;
+
+        let guard = Arc::new(ApiGuard {
+            token: "t0ken".to_string(),
+            require_loopback_host: true,
+        });
+        let app = Router::new()
+            .route("/v1/health", get(|| async { "ok" }))
+            .route("/v1/miner/live-config", patch(|| async { "patched" }))
+            .layer(middleware::from_fn_with_state(guard, require_api_auth));
+        let send = |method: Method, path: &str, host: &str, auth: Option<&str>| {
+            let mut builder = axum::http::Request::builder()
+                .method(method)
+                .uri(path)
+                .header(header::HOST, host);
+            if let Some(auth) = auth {
+                builder = builder.header(header::AUTHORIZATION, auth);
+            }
+            app.clone()
+                .oneshot(builder.body(axum::body::Body::empty()).unwrap())
+        };
+
+        let status = |res: Result<Response, std::convert::Infallible>| res.unwrap().status();
+        assert_eq!(
+            status(send(Method::GET, "/v1/health", "127.0.0.1:9977", None).await),
+            StatusCode::OK
+        );
+        assert_eq!(
+            status(
+                send(
+                    Method::PATCH,
+                    "/v1/miner/live-config",
+                    "127.0.0.1:9977",
+                    None
+                )
+                .await
+            ),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            status(
+                send(
+                    Method::PATCH,
+                    "/v1/miner/live-config",
+                    "127.0.0.1:9977",
+                    Some("Bearer nope")
+                )
+                .await
+            ),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            status(
+                send(
+                    Method::PATCH,
+                    "/v1/miner/live-config",
+                    "127.0.0.1:9977",
+                    Some("Bearer t0ken")
+                )
+                .await
+            ),
+            StatusCode::OK
+        );
+        assert_eq!(
+            status(
+                send(
+                    Method::PATCH,
+                    "/v1/miner/live-config",
+                    "evil.example:9977",
+                    Some("Bearer t0ken")
+                )
+                .await
+            ),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            status(send(Method::GET, "/v1/health", "evil.example:9977", None).await),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[test]
+    fn cors_is_off_unless_configured() {
+        assert!(build_cors_layer("").unwrap().is_none());
+        assert!(build_cors_layer("  ").unwrap().is_none());
+        assert!(build_cors_layer("http://localhost:3000").unwrap().is_some());
+    }
+
+    #[test]
+    fn api_thread_override_disables_adaptation_unless_explicitly_requested() {
+        for forced in [None, Some(true)] {
+            let mut cfg = crate::miner::tests::test_config();
+            cfg.cpu_autotune_threads = true;
+            apply_start_patch(
+                &mut cfg,
+                &StartRequest {
+                    threads: Some(2),
+                    cpu_autotune_threads: forced,
+                    ..StartRequest::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(cfg.cpu_autotune_threads, forced.unwrap_or(false));
+            assert_eq!(cfg.threads, 2);
+        }
+    }
+
+    #[test]
+    fn runtime_thread_limit_overrides_stale_startup_ram_estimate_in_both_directions() {
+        let mut cfg = crate::miner::tests::test_config();
+        cfg.cpu_autotune_threads = true;
+        cfg.cpu_auto_threads_cap = 1;
+        apply_runtime_thread_count(&mut cfg, 3, 4).unwrap();
+        assert_eq!(cfg.threads, 3);
+        assert_eq!(cfg.cpu_auto_threads_cap, 4);
+        assert!(!cfg.cpu_autotune_threads);
+        assert!(apply_runtime_thread_count(&mut cfg, 3, 2).is_err());
+        assert_eq!(
+            cfg.cpu_auto_threads_cap, 4,
+            "rejected request cannot mutate config"
+        );
+        apply_runtime_thread_count(&mut cfg, 1, 2).unwrap();
+        assert_eq!(cfg.threads, 1);
+        assert_eq!(cfg.cpu_auto_threads_cap, 2);
+    }
+
+    #[test]
+    fn manual_threads_disable_autotune_and_preserve_other_settings() {
+        let mut cfg = crate::miner::tests::test_config();
+        cfg.cpu_auto_threads_cap = 8;
+        cfg.cpu_autotune_threads = true;
+        let mut gpu = cfg.backend_specs[0];
+        gpu.kind = BackendKind::Nvidia;
+        gpu.cpu_threads = None;
+        gpu.device_index = Some(3);
+        cfg.backend_specs.push(gpu);
+        let endpoint = cfg.api_url.clone();
+        apply_thread_count(&mut cfg, 4).unwrap();
+        assert_eq!(cfg.threads, 4);
+        assert_eq!(cfg.backend_specs[0].cpu_threads, Some(4));
+        assert!(cfg.cpu_manual_memory_check);
+        assert_eq!(cfg.backend_specs[1], gpu);
+        assert_eq!(cfg.api_url, endpoint);
+        assert!(!cfg.cpu_autotune_threads);
+    }
+
+    #[test]
+    fn manual_thread_limits_reject_invalid_counts_without_mutation() {
+        let mut cfg = crate::miner::tests::test_config();
+        cfg.cpu_auto_threads_cap = 4;
+        for count in [0, 5, usize::MAX] {
+            assert!(apply_thread_count(&mut cfg, count).is_err());
+            assert_eq!(cfg.threads, 1);
+            assert_eq!(cfg.backend_specs[0].cpu_threads, Some(1));
+        }
+        // An explicitly oversized configuration can be reduced without
+        // increasing the other CPU backend to that oversized count.
+        cfg.backend_specs[0].cpu_threads = Some(8);
+        let mut second = cfg.backend_specs[0];
+        second.cpu_threads = Some(2);
+        cfg.backend_specs.push(second);
+        assert!(apply_thread_count(&mut cfg, 8).is_err());
+        apply_thread_count(&mut cfg, 3).unwrap();
+        assert!(cfg
+            .backend_specs
+            .iter()
+            .all(|spec| spec.cpu_threads == Some(3)));
+        cfg.backend_specs.clear();
+        assert!(apply_thread_count(&mut cfg, 1).is_err());
+    }
+
+    #[test]
+    fn rejected_thread_request_keeps_session_and_config_and_replies() {
+        let mut cfg = crate::miner::tests::test_config();
+        // Deterministic zero headroom without allocating RAM or relying on this host.
+        cfg.cpu_memory_reserve_percent = 100;
+        let supervisor = MinerSupervisor::new(cfg.clone(), Arc::new(AtomicBool::new(false)));
+        let session_shutdown = Arc::new(AtomicBool::new(false));
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.lifecycle = MinerLifecycle::Running;
+            state.run_id = 2;
+            state.effective_config = Some(cfg.clone());
+            state.session_shutdown = Some(Arc::clone(&session_shutdown));
+        }
+        let (reply, received) = crossbeam_channel::bounded(1);
+        supervisor
+            .thread_changes_tx
+            .send(ThreadChangeRequest {
+                max_threads: 8,
+                run_id: 2,
+                threads: 2,
+                memory: Some(Arc::new(
+                    crate::miner::thread_control::ThreadMemoryGuard::new(&cfg, vec![]),
+                )),
+                rejection: Some(reply),
+                quit_requested: Arc::new(AtomicBool::new(false)),
+            })
+            .unwrap();
+        assert!(supervisor.apply_pending_thread_change().is_err());
+        assert!(received.try_recv().unwrap().contains("Not enough RAM"));
+        assert!(!session_shutdown.load(Ordering::SeqCst));
+        let state = supervisor.state.lock().unwrap();
+        assert!(state.staged_config.is_none());
+        assert_eq!(
+            state.effective_config.as_ref().unwrap().threads,
+            cfg.threads
+        );
+        assert_eq!(state.metrics.restart_requests, 0);
+    }
+
+    #[test]
+    fn stale_thread_requests_cannot_stop_or_modify_a_new_session() {
+        let cfg = crate::miner::tests::test_config();
+        let supervisor = MinerSupervisor::new(cfg.clone(), Arc::new(AtomicBool::new(false)));
+        let session_shutdown = Arc::new(AtomicBool::new(false));
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.lifecycle = MinerLifecycle::Running;
+            state.run_id = 2;
+            state.effective_config = Some(cfg);
+            state.session_shutdown = Some(Arc::clone(&session_shutdown));
+        }
+        supervisor
+            .thread_changes_tx
+            .send(ThreadChangeRequest {
+                max_threads: 8,
+                memory: None,
+                rejection: None,
+                run_id: 1,
+                threads: 1,
+                quit_requested: Arc::new(AtomicBool::new(false)),
+            })
+            .unwrap();
+        supervisor.apply_pending_thread_change().unwrap();
+        assert!(!session_shutdown.load(Ordering::SeqCst));
+        let state = supervisor.state.lock().unwrap();
+        assert!(state.staged_config.is_none());
+        assert_eq!(state.metrics.restart_requests, 0);
+    }
+
+    #[test]
+    fn shutdown_prevents_a_queued_thread_restart() {
+        let shutdown = Arc::new(AtomicBool::new(true));
+        let supervisor = MinerSupervisor::new(crate::miner::tests::test_config(), shutdown);
+        supervisor
+            .thread_changes_tx
+            .send(ThreadChangeRequest {
+                max_threads: 8,
+                memory: None,
+                rejection: None,
+                run_id: 0,
+                threads: 1,
+                quit_requested: Arc::new(AtomicBool::new(false)),
+            })
+            .unwrap();
+        supervisor.apply_pending_thread_change().unwrap();
+        assert!(supervisor.start(StartRequest::default(), false).is_err());
+        assert_eq!(supervisor.snapshot().run_id, 0);
+    }
+
+    #[test]
+    fn quit_during_teardown_cancels_the_replacement_session() {
+        let supervisor = MinerSupervisor::new(
+            crate::miner::tests::test_config(),
+            Arc::new(AtomicBool::new(false)),
+        );
+        let session_shutdown = Arc::new(AtomicBool::new(false));
+        let quit = Arc::new(AtomicBool::new(false));
+        {
+            let mut state = supervisor.state.lock().unwrap();
+            state.lifecycle = MinerLifecycle::Running;
+            state.run_id = 1;
+            state.session_shutdown = Some(Arc::clone(&session_shutdown));
+        }
+        let state = Arc::clone(&supervisor.state);
+        let quit_during_stop = Arc::clone(&quit);
+        let worker = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !session_shutdown.load(Ordering::SeqCst) {
+                assert!(Instant::now() < deadline, "stop was not requested");
+                thread::sleep(Duration::from_millis(1));
+            }
+            quit_during_stop.store(true, Ordering::SeqCst);
+            let mut state = state.lock().unwrap();
+            state.lifecycle = MinerLifecycle::Idle;
+            state.session_shutdown = None;
+        });
+        supervisor
+            .restart_session(StartRequest::default(), true, Some(&quit))
+            .unwrap();
+        worker.join().unwrap();
+        let snapshot = supervisor.snapshot();
+        assert_eq!(snapshot.run_id, 1);
+        assert_eq!(snapshot.lifecycle, MinerLifecycle::Idle);
+    }
 
     #[test]
     fn parse_backend_phase_extracts_quarantined_backend_label() {

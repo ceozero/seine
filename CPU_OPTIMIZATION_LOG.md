@@ -2,6 +2,310 @@
 
 This log tracks CPU backend/hash-kernel tuning attempts and measured outcomes.
 
+## 2026-10-25 joint tuner interruption diagnostics
+
+The native Windows EPYC 9R14 comparison exposed an observability gap: an inner
+kernel trial could reject noisy baseline samples and cancel the enclosing
+thread-count comparison, but the second abort replaced the measured diagnostic
+with a generic outer cancellation. Preserve the inner message alongside the
+existing outer restoration message. Selection thresholds, retry delays, cache
+writes and count/kernel restoration are unchanged; this is not a speedup.
+
+A synthetic productive trial with baseline rates of 100 then 120 H/s and a
+200 H/s challenger verifies both the retained rejection rates and restoration
+of the original eight-worker AVX-512 configuration without caching a winner.
+All 75 active adaptive CPU/kernel tests passed (three existing ignored tests).
+The running native comparison uses frozen binaries and is unaffected.
+
+## 2026-10-25 default CPU tuning objective — requested policy correction
+
+The default balanced profile allowed a smaller worker count at 99% of the
+measured peak. The explicitly requested default is highest hashrate, with efficiency
+tradeoffs opt-in. Its floor is therefore 100%; explicit efficiency retains its
+75% floor. Polling/batching presets, significant-gain requirements, confirmation,
+memory pressure and allocation safeguards are unchanged. Source fingerprints
+already invalidate caches across this policy change.
+
+Regression coverage checks a close offline peak, equal-rate tie breaking and a
+productive A/B/A comparison of eight workers at 100 H/s against four at 99.5 H/s.
+Balanced and throughput keep eight; efficiency may keep four. A subsequent RAM
+limit still reduces every profile to two. Canonical CPU-only workspace validation
+passed 583 tests with eight existing ignored tests. This lands the explicitly
+requested selection objective; hardware-specific startup hints remain separate
+experiments. Native speedup attribution is pending, so this change carries no
+measured performance claim.
+
+## 2026-10-25 Turin high-count sample windows — accepted
+
+On the same EPYC 9355P with 32 cores/64 threads and twelve DDR5-4800 channels,
+four paired 1,200-second cold productive windows improved **7.316%**
+(descriptive 95% interval +6.988 to +7.598%). Four paired 180-second own-cache
+restarts improved **15.323%** (+13.857 to +17.839%). Rates are completed-hash
+lower bounds over service start through shutdown, with automatic count/kernel
+selection, balanced profile, explicit 2 MiB pages and the stock 280 W cap.
+Package, DRAM and wall power are unmeasured. The baseline already includes the
+earlier accepted challenger ordering; do not multiply independent gains.
+
+Only AuthenticAMD family 1Ah/model 02h, a supported streaming candidate and the
+default six-second tuning setting qualify. Samples may finish after both ten
+seconds and 256 hashes; slow samples retain the original rule. The 2% gain,
+quantization, drift, two-cycle confirmation, acknowledgements and resource gates
+remain unchanged. The affected kernel-cache fingerprint changes once.
+
+Cold runs started at 32 workers. Candidate counts finished at 64, versus 47–48
+for control, and first streaming confirmation was observed near 80 rather than
+201 seconds with ten-second snapshots. Own-cache starts restored their own
+counts; streaming restoration appeared at 4.6 versus 36.5–37.0 seconds.
+Candidate cached runs ended at 63–64 workers. This does not establish full
+convergence, first-upgrade cache behavior or a fixed-kernel throughput gain.
+The fixed-streaming build control changed only +0.074% without correction.
+
+All 21 full-size reference/dirty-arena/guard transitions passed. The raw audit
+recomputed all 68 productive decisions and five resource decisions, including
+all eight promotions. Candidate productive samples exercised 120 sub-30-second
+windows; the resource fixture also exercised three 28–29-second samples once
+their counts reached 256. Real reclaim produced 4,257 memory-high events and
+32.258 seconds of memory PSI, with parking at zero workers and no OOM/swap.
+The remembered count of three survived a one-worker restart cap; recovery
+allocated multiple arenas, including a three-worker probe. Opt-out and settings
+restoration passed. All 303 archive entries verified.
+
+Uninstrumented shipping logic passed 566 CPU-only workspace tests (six ignored)
+and 586 AMD-feature workspace tests (nine ignored). The exact ignored cases are
+disclosed in the result report; the three native AMD GPU tests did not run.
+Eighteen Python experiment tests cover admission, evidence and export, including
+JSON round-trip binding of raw decisions and rejection of changed samples.
+
+[Full results, acceptance review, plots and four graph records](experiments/amd-trial-windows-20261025/RESULTS.md).
+
+## 2026-10-25 Turin page size and streaming-buffer locality
+
+On the qualified 32-core/64-thread EPYC 9355P, four alternating same-binary
+120-second whole-invocation pairs compared explicit 2 MiB and 1 GiB HugeTLB at
+64 fixed streaming workers and the stock 280 W cap. One-GiB pages measured
+**68.256 H/s, 251.618 package W and 3.6864 J/hash**, versus **67.642 H/s,
+250.180 W and 3.6986 J/hash** for two-MiB pages. Paired H/s improved **0.908%**
+(descriptive 95% interval +0.859 to +0.966%); package J/hash fell **0.330%**
+(−0.455 to −0.168%). Package watts rose 0.575%; this is an energy-per-hash
+improvement, not lower power. No automatic page policy changed.
+
+The host reserved all 128 one-GiB pages. The actual-mapping verifier passed 21
+full-size dirty-reuse/guard transitions. Every run verified 64 requested arenas
+without fallback or allocation failure; no swap/OOM appeared. Both pools and
+swap were restored, and all 104 archive entries verified. The metric includes
+startup/work/fences/teardown, excludes pool setup and unmeasured DRAM/wall energy,
+and describes four pairs on one host. The combined 1 GiB/240 W configuration
+was not measured in this experiment.
+
+Separately, smaller streaming buffers were screened at 32 and 64 workers.
+At 32 workers, 32/16-block buffers changed completed backend H/s by −1.153%/
+−3.164%; at 64, changes were −0.021%/+0.245%. Fresh four-pair confirmation of
+16 blocks at 64 workers gave **+0.367%** (descriptive interval +0.282 to +0.459%),
+below the required lower bound above +1%. No energy phase ran and the shipping
+64-block buffer remains. All variants passed 21 native reference transitions;
+143 final archive entries verified. Diagnostic core-L2 counters and non-atomic
+HSMP bandwidth estimates are preserved separately and are not DRAM byte counts.
+
+[Page-size results and two graph records](experiments/amd-page-size-20261025/RESULTS.md).
+[Buffer screening, confirmation and ten records](experiments/amd-ring-locality-20261025/RESULTS.md).
+Validation also passed the expanded ring-boundary integration test, scoped Rust
+1.93 formatting, 15 ring evidence tests and 14 page comparison/admission/export tests.
+
+## 2026-10-25 Turin challenger ordering — accepted
+
+On the bare-metal EPYC 9355P (32 cores/64 threads, 192 GiB, twelve DDR5-4800
+channels), trying streaming before AVX2 improved four paired 1,200-second cold
+productive windows by **0.685%** (descriptive 95% interval +0.603 to +0.751%).
+Four paired 180-second own-cache restarts changed **−0.092%** (−0.241 to +0.057%).
+All runs used automatic count/kernel selection, the default balanced profile,
+explicit 2 MiB HugeTLB, automatic affinity and the stock 280 W cap. Power was
+unmeasured. Rates are logged completed-hash lower bounds over start through
+shutdown; finite windows and differently timed phases are not steady-state peaks.
+
+First streaming confirmation was observed roughly 90 seconds earlier (10-second
+sampling). All eight cold legs passed two A/B/A cycles; cached legs reused their
+own counts and logged streaming restoration. Selected counts were 47–48, with
+no claim of complete convergence. Three fixed-streaming build-control pairs were
+effectively unchanged (−0.0048%). All 21 full-size reference transitions passed.
+
+The original final resource fixture failed to create actual reclaim, despite
+exercising worker-budget changes. Its FAILED outcome remains preserved. A full
+separate resource retest with the identical binary added bounded allocation and
+passed with 4,190 memory-high events, positive memory PSI, no OOM/swap and restored
+settings. Constrained restart retained the cached count of 3 and grew from 1 to
+2 workers with at least 4 GiB anonymous backing; return to 3 was not demonstrated.
+The helper required bounded supervisor termination after pressure (not an OOM).
+
+Only AuthenticAMD family 1Ah/model 02h ordering changes; all challengers, ISA,
+two-confirmation, cache and resource gates remain. Integration passed 563 CPU-only
+workspace tests (six ignored), scoped Rust 1.93 formatting and 12 Python audit/
+export/helper tests. Four graph records and both archive hashes are preserved in
+[the complete report](experiments/amd-overnight-20261025/RESULTS.md).
+
+## 2026-10-25 Genoa automatic streaming eligibility — accepted
+
+On an AWS c7a.8xlarge EPYC 9R14 VM (32 guest vCPUs, 64 GiB allocated RAM),
+adding AuthenticAMD family 19h/model 11h to streaming trial eligibility improved
+paired productive cold windows by **2.85%** and own-cache restarts by **7.99%**.
+Two 900-second cold pairs and two 180-second cached pairs used automatic worker
+and kernel selection, an explicit 24-worker ceiling and reserved 2 MiB HugeTLB.
+Rates count logged completed hashes over service-start request through stopped;
+they include startup, exploration and shutdown and omit final unlogged hashes.
+
+Both cold candidate legs independently confirmed streaming through two A/B/A
+cycles at 12 workers, then selected 18 workers; their cached restarts restored
+18 workers and subsequently logged streaming-cache reuse. The controls selected
+24/23 workers. Fixed AVX2 build controls were **0.59% slower** in the candidate
+(-0.82/-0.36% pairs); the automatic gains are not adjusted for that variation.
+All 21 full-size dirty-arena/guard parity transitions passed. Memory pressure,
+parking, CPU contention, constrained restart and opt-out completed without
+swap or OOM. The remembered count of 3 survived pressure; restart recovery
+reached 2 from 1 within its window, not a demonstrated return to 3.
+
+Only candidate eligibility changes: startup, ISA checks, confirmation thresholds,
+count-specific comparisons and resource handling remain intact. Neighbouring
+Genoa models remain excluded. Finite windows in one VM do not establish a
+population confidence interval or bare-metal full-socket throughput; physical
+memory channels, package power and wall power were unmeasured.
+
+[Protocol, frozen source patch, decision and graph records](experiments/genoa-streaming-20261025/README.md).
+All 156 evidence files verified before immediate rental termination at 07:44 EDT.
+Integration passed 562 CPU-only workspace tests (six ignored), nine evidence/export
+tests and scoped Rust 1.93 formatting.
+
+## 2026-10-25 bare-metal EPYC 9355P SMT and package-power efficiency
+
+Qualified one Cherry EPYC 9355P (AuthenticAMD family 26/model 2), 32 physical
+cores/64 hardware threads, one socket/NUMA node, and twelve populated 16 GiB
+DDR5-4800 channels. Linux powercap package energy and the stock HSMP 280 W cap
+were readable. All 21 full-size reference transitions passed with dirty arenas
+and guard blocks intact. Frozen miner source: `36f40e6`; no kernel/default change
+was made for this experiment.
+
+At the stock cap, the fresh 32/48/64-worker SMT sweep measured 59.10/64.63/65.92
+whole-invocation H/s. Four paired 64-versus-32 comparisons gave **+11.54% H/s**
+and **-8.12% package J/hash**. Actual package power at 64 workers averaged
+246.63 W; 64 workers led the observed throughput/efficiency points.
+
+The separate 120-second power comparison fixed 64 workers and alternated stock
+280 W versus 240 W caps in four fresh pairs. Stock measured **67.63 H/s at
+249.98 package W**; 240 W cap measured **66.56 H/s at 213.03 package W**. The
+paired changes were **-13.41% J/hash** (descriptive 95% interval -13.49 to
+-13.31%), **-14.78% package watts**, and **-1.58% H/s**. All four energy pairs
+improved and the throughput interval retained more than 95%, passing the
+predeclared efficiency gate. This is a manual host power setting, not a new
+miner default or evidence of wall-plug efficiency.
+
+Both phases use fixed streaming, explicit 2 MiB HugeTLB, automatic affinity and
+the legacy 2 GiB workload. Their different invocation lengths explain why
+their absolute H/s should stay in separate series. Energy includes startup,
+allocation, work, fences and teardown; it excludes separately unmeasured DRAM
+and wall losses. The counters and workload are repeatable within this one host,
+not an architecture-wide confidence statement.
+
+The 269-file collected archive verified before further host work. Cap, hugepage
+pool and unused swap were restored after measurements. Nine reusable JSON/CSV
+records retain sample counts, raw numerators/denominators, configuration, source
+identity and evidence hashes. Protocol, plots and raw-analysis entry point:
+[`experiments/cherry-epyc-energy-20261025`](experiments/cherry-epyc-energy-20261025/README.md).
+Separate productive cold/cached tuning validation is still required for any
+automatic-policy change; the rental remains owned by that follow-up campaign.
+
+## 2026-10-25 native AMD tuner tests retain hardware identity
+
+Found a validation blocker while auditing AMD tuning without a new rental:
+`cfg!(test)` replaced the real CPU identity with a neutral identity and disabled
+the validated startup path in every test binary, including the ignored native
+EPYC productive-selection test. That test therefore could not pass its initial
+streaming-eligibility assertion on its intended machine.
+
+The native constructor now applies the shipping identity/ISA gates in every
+build. Synthetic kernel/count fixtures explicitly use an identity-neutral
+constructor. Injected-identity tests cover Turin, Ryzen, Genoa exclusion, a
+non-AMD vendor, startup selection and candidate-set cache fingerprints. The
+24-worker hardware test also checks the exact validated Turin identity before
+starting workers, avoiding accidental execution on a streaming-capable desktop.
+
+The new native-constructor regression first failed on the local Zen 5 host:
+actual candidates were `[Avx512, Avx2]`, while runtime identity required the
+additional `Avx512256Stream`. It passes after the fix. CPU-only workspace
+validation passed 537 tests, with six existing hardware/resource tests ignored;
+scoped Rust 1.93.0 formatting and diff checks passed. No 48 GiB EPYC run or
+new throughput/energy measurement was performed. Shipping eligibility and
+selection policy are unchanged. Genoa automatic trials and Turin cold-start
+ordering remain follow-ups in `docs/AMD_CPU_EFFICIENCY.md`.
+
+## 2026-10-25 joint tuning on v0.2.22: isolated integration
+
+Ports the count/kernel crossover policy and per-context retry fix from PR46/47
+onto v0.2.22, preserving the merged EPYC multi-challenger sweep and hardware
+eligibility. Excludes the old branch's unmerged ARM and worker/PID provisioning
+changes. Stopped backends no longer contribute hashes or block acknowledgements;
+cache schema 3 includes stable membership and the eligible candidate set.
+
+Kernel cooldowns are keyed by membership/count, independent of page backing.
+Count comparisons pause while their kernel context is cooling or being sampled.
+Pressure, allocation failure, disconnection, changed backing and bounded trial
+deadlines still discard outer evidence and restore the original configuration.
+The outer budget now covers two A/B/A cycles per eligible challenger, six count
+windows, a retry cooldown and switch slack. A synthetic three-path regression
+requires more than the former 900-second limit and confirms the streaming winner
+only after the second outer comparison.
+
+Final CPU-only workspace validation: 508 tests passed (500 miner, five kernel,
+three integration), five existing resource tests ignored. Includes interruption
+between pending challengers and corrected cache-fixture schema restoration with
+an explicit positive compatibility assertion. Scoped Rust 1.93.0 formatting
+passes. Native binaries remain frozen at `7477914`; the later Rust edit changes
+only test fixtures. Campaign protocol and identities:
+`experiments/cpu-followups-20261025/README.md`.
+
+**Native results (2026-10-25).** Both builds (v0.2.22 control and frozen
+`7477914` candidate) ran against a loopback pool on 2 MiB HugeTLB. Cold windows
+ran 900 s in A/B/B/A order. Cached restarts ran 180 s in reverse order, each from
+its own cold leg's cache. Rates are completed-hash lower bounds including
+startup and shutdown. Per-run counts, kernel winners and archive checksums are
+in `experiments/cpu-followups-20261025/joint-native-results.json`.
+
+| Host | Cold pairs | Cold | Cached pairs | Cached |
+|---|---|---|---|---|
+| c5.4xlarge, Xeon 8275CL (12 workers max) | +1.94, +2.08% | +2.01% | +5.37, +5.43% | **+5.40%** |
+| c6i.4xlarge, Xeon 8375C (12 max) | −1.67, −0.56% | −1.12% | −0.16% (one pair) | −0.16% |
+| c8a.8xlarge, EPYC 9R45 Turin (24 max) | +8.68, −1.37% | +3.53% | +20.52, +19.36% | **+19.94%** |
+
+- **C5.** The candidate finds 12 workers with AVX2 in both cold runs, a
+  fixed-kernel gain of +11.84% at 12 workers over AVX-512. The control stays at
+  8 workers on AVX-512, where AVX2 is 8.93% slower. The candidate build is only
+  +0.19% at fixed AVX2, so the gain comes from the policy, not the build.
+- **Ice Lake.** AVX-512 stays best at every count, so there is no crossover to
+  find. The extra kernel trials cost about 1% in cold windows and nothing
+  measurable once cached. The fixed-kernel build delta is ±0.8%. The second
+  cached pair is missing: the takeover stopped the controller during
+  `joint-warm-control-a` to run the PR49 alignment test before the lease expired.
+- **Turin.** The control confirms streaming only at 18 workers, then settles on
+  24 workers without testing streaming there, so it stays on AVX-512 at about
+  33.8 H/s. The candidate compares kernels at each count and caches streaming at
+  24 (run A) or 18 (run B). Cached restarts restore it about 2 s after startup
+  and run 40.3–40.8 H/s.
+
+Every cached restart restored its cold leg's worker count. The candidate's warm
+runs also restored the confirmed streaming kernel on Turin and AVX2 on C5. The
+cold cost of searching more contexts is visible: +3.5% cold versus +19.9% cached
+on Turin, and −1.1% cold on Ice Lake.
+
+C5 RAM/load/restart lifecycle, frozen candidate without PR43: the pressure,
+CPU-load, parking and constrained-restart phases passed. Recovery above the
+temporary one-arena cap failed, staying at 1 thread for all 104 samples, which
+is the v0.2.22 bug PR43 fixes.
+
+Rerun on the merged build (`211657d`, master with PR43 plus this branch;
+Linux CPU-only SHA-256 `41a33332…`) on a fresh c5.4xlarge: **COMPLETE**, with
+no swap or OOM and all 21 archive files verified. A 3 GiB memory limit
+interrupted the joint comparison and restored the safe baseline. The
+remembered 3-worker count survived the constrained restart. After RAM
+returned, recovery grew 1 → 2 → 3 workers (45/43/16 samples), followed by the
+explicit opt-out check. Runner: `run_lifecycle_merged.py`.
+
 ## Conventions
 
 - Attempt numbers are historical labels and may repeat across platform-specific sections (`x86_64` vs `Apple`).
@@ -11,6 +315,27 @@ This log tracks CPU backend/hash-kernel tuning attempts and measured outcomes.
 
 ## Newest-first index
 
+- `2026-10-25 native Ice Lake: the x86 regression follows function layout`
+- `2026-10-24 parked CPU worker task budgets and spawn failure recovery`
+- `2026-10-24 streaming-store kernel integration on validated EPYC`
+- `2026-10-24 sequential Milan/Turin investigation and streaming-store candidate`
+
+- `2026-10-24 automatic joint CPU kernel and worker selection`
+- `2026-10-24 stable efficiency selections during productive rechecks`
+- `2026-10-24 productive CPU autotuning and changing resource budgets`
+
+- `2026-10-24 cross-generation CPU kernel matrix`
+- `2026-10-24 EPYC 9R14 256-bit AVX-512 kernel experiment`
+- `2026-10-24 explicit CPU kernel benchmarks and architecture identity`
+- `2026-10-24 CPU sampler panic handling`
+- `2026-10-24 CPU autotuner warmed sampling and lifecycle timing`
+- `2026-10-24 independent two-node Milan release validation`
+- `2026-10-24 Intel AVX2 release validation`
+- `2026-10-24 two-node EPYC placement and autotuner validation`
+- `2026-10-24 automatic Linux L3 placement: worker-only EPYC validation`
+- `2026-10-24 EPYC 8534P hourly rental: cache placement, threads, and page backing`
+- `2026-10-23 Linux NUMA defaults and automatic RAM headroom`
+- `2026-10-24 AVX2 paired rounds and contiguous column loads/stores`
 - `Updated summary of cumulative adopted optimizations`
 - `2026-07-11 1 GiB explicit hugepages on WSL Zen 5 (adopted, pending boot pool)`
 - `2026-07-11 verifiable page modes, native Windows, and WSL HugeTLB confirmation`
@@ -43,6 +368,941 @@ This log tracks CPU backend/hash-kernel tuning attempts and measured outcomes.
 - `Baseline`
 - `Benchmark protocol`
 
+## 2026-10-25 native Ice Lake: the x86 regression follows function layout
+
+These are native paired timings on an AWS c6i.4xlarge (Xeon Platinum 8375C).
+Runs used 12 workers on 2 MiB HugeTLB arenas, 15-second windows with one warmup
+round, and completed hashes per second including the fence. All binaries are
+CPU-only Rust 1.93.0 release builds. Their identities, per-pair rates and the
+archive checksum are in `experiments/arm-enum-isolation/native-icelake-20261025.json`.
+
+| Comparison | Kernel | Paired deltas | Geometric |
+|---|---|---|---|
+| ungated `f20e7bb` vs v0.2.21 | AVX2 | +0.39, −0.47% | −0.04% |
+| ungated `f20e7bb` vs v0.2.21 | AVX-512 | −1.09, −1.09% | −1.09% |
+| gated `c68ade5` vs ungated | AVX2 | −3.21, +0.41, −2.58, −1.54% | −1.74% |
+| gated `c68ade5` vs ungated | AVX-512 | +1.07, −0.23, +2.74, +0.65% | +1.05% |
+
+Gating the enum to AArch64 moves the AVX-512 result toward baseline but makes
+AVX2 worse. It is a layout perturbation, not a fix.
+
+**2×2 alignment ablation (AVX-512).** v0.2.21 and ungated `f20e7bb` were each
+built twice: normally, and with `-C llvm-args=-align-all-functions=6`, using
+separate target directories and four distinct verified binaries. Four passes
+rotated and reversed the run order on the same host.
+
+| Pair | Paired deltas | Geometric |
+|---|---|---|
+| ARM vs v0.2.21, original builds | −1.46, −0.87, −0.85, −1.28% | **−1.11%** |
+| ARM vs v0.2.21, both 64-byte aligned | −0.72, +0.24, −0.06, +2.20% | **+0.41%** |
+
+Mean completed rates were v0.2.21 11.33, ARM 11.20, aligned v0.2.21 11.37
+and aligned ARM 11.41 H/s. The consistent −1.1% disappears once both builds
+use the same function-entry alignment. The ARM refactor does not make x86
+hashing code slower; it moves where the x86 fill loops land. This is
+consistent with, but does not uniquely prove, a layout cause. Forced alignment
+can still change other layout properties. PR49's enum gating (`c68ade5`) is
+not adopted: it only shifted the loss between AVX2 and AVX-512. The independent −0.8 to −1.0% seen
+for tuner-only PR41 fits the same explanation.
+
+Protocol deviation: Codex's usage ran out before the main Ice Lake controller
+finished. The takeover stopped the controller during its last cached-restart
+episode and ran the unchanged alignment protocol with only the
+"main controller COMPLETE" precondition removed. All miners were stopped and
+the hugepage pool was verified empty before it started. The lease was
+terminated and verified after collection.
+
+## 2026-10-24 parked CPU worker task budgets and spawn failure recovery
+
+The memory-recovery change preserved CPU-sized parked lanes but also eagerly
+created an OS thread for every lane. The architecture campaign reproduced the
+resulting startup regression from `fbe9e86`: with affinity restricted to 16 CPUs,
+`memory.high=3 GiB`, and `pids.max=12`, the legacy one-slot backend starts while
+the 16-slot backend fails creating worker 9 with EAGAIN. This is backend startup
+evidence, not a full pool-session or performance measurement.
+
+This follow-up separates the CPU/user search maximum, startup worker slots, and
+the RAM-safe manual/offline limit. Linux cgroup-v2 PID headroom takes the minimum
+remaining budget across ancestors. The startup reserve accounts for event and
+control threads, both user/dev pool clients, HTTP runtimes, optional TUI/API/daemon
+threads, plus explicit DNS/driver margin. Already-running API Tokio workers are
+included in `pids.current`; they are not reserved a second time. This remains a
+best-effort preflight, not a guarantee against competing tasks or driver threads.
+Zero residual capacity reports a clear error instead of forcing one worker.
+
+Automatic CPU worker creation also handles resource exhaustion after preflight:
+join and release the failed attempt, then retry at half the successfully spawned
+count (at least one). Attempts strictly decrease; an inability to create the
+first worker returns an error. Explicit fixed counts and non-resource errors
+remain failures. The original nonce stride never changes; the controller caps
+active workers to actual provisioned slots. Restarting can provision more slots;
+the saved higher count and CPU-only cache maximum survive the restriction.
+Manual TUI requests carry their live RAM/worker limit to the supervisor so its
+pre-start RAM estimate cannot widen a reduced limit or reject later recovery.
+
+Validation in this implementation worktree: 485 root-binary CPU-only tests passed, five
+hardware/resource-dependent tests ignored; Linux all-feature compile check passed.
+Windows GNU CPU-only cross-compilation, including the tests, also passed.
+Injected spawn failures exercise real small-arena workers, cleanup, manual-count
+failure, recovery, park/resume, nonce uniqueness and fixed-stride coverage, plus
+cancel/fence completion. Filesystem fixtures cover nested/sibling PID usage,
+unlimited levels and invalid/missing usage. Policy/manual-control tests cover
+bounded probing, unchanged cache maxima, and stale supervisor limits.
+
+Windows portability follow-up: the spawn retry classifier also recognizes
+155/164 (thread limits) and 1451 through 1455 (pool/quota/commit exhaustion), in
+addition to 8/14/1450. Values are checked against Microsoft's
+[0–499 error codes](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-)
+and [1300–1699 error codes](https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--1300-1699-).
+Two additional pure tests run on Linux and cover supported Windows codes,
+non-resource failures, and keeping Windows raw-code interpretation Windows-only.
+The 485-test figure above excludes these new tests and the workspace libraries'
+seven tests; combined/native confirmation remains with the architecture campaign.
+
+Native confirmation is owned by the architecture campaign. The ignored
+`miner::adaptive_cpu::tests::pid_budget_startup_probe` keeps its existing controller
+interface (`SEINE_PID_PROBE_LEGACY`, `--expect all-pass`). Its candidate deliberately
+bypasses PID preflight to exercise OS spawn failure and retry under `TasksMax=12`;
+it logs provisioned slots and the unchanged stride. A full startup/preflight test
+needs a larger budget for networking/control (for example, 24 tasks with 16 CPUs
+in plain CPU-only pool mode). A 12-task backend-only pass must not be presented
+as proof that the full pool/API runtime fits. No release or hardware run was
+performed by the implementation session.
+## 2026-10-24 streaming-store kernel integration on validated EPYC
+
+- Adopted the distinct `avx512-256-stream` implementation: a 64 KiB recent-block
+  ring with non-temporal arena stores, preserving the full 2 GiB arena and PoW.
+  Automatic trials require AMD family 26/model 2 and independent ISA/OS checks.
+  The existing fallback and opt-out remain. No fixed worker threshold forces it.
+- Kernel tuning now visits every eligible challenger, retains a confirmed
+  incumbent, and caches only a completed sweep for the exact count/backing.
+  Schema 2 includes the candidate set; noisy/interrupted trials do not cache a
+  loss. This includes the retry semantics from PR #41, with the complete final
+  candidate independently checked on Intel in both feature profiles.
+- Native EPYC 9R45, 24 workers / 48 GiB explicit 2 MiB pages, portable default
+  release binary: streaming measured **+29.80% versus AVX2** (34.4705→44.7420
+  H/s), **+32.32% versus full-width AVX-512** (33.8080→44.7359), and **+27.37%
+  versus uniform 256-bit AVX-512** (35.1175→44.7295). Both orders were positive
+  for each control. These are within-host results, not universal EPYC gains.
+- Productive native tuning confirmed AVX2 first, then streaming in two A/B/A
+  comparisons, cached it for the measured context, completed 14,096 hashes,
+  and released all worker arenas. Full 2 GiB parity, 21 switches, 34 native
+  tuner/coordinator tests and 488 local CPU/workspace tests passed.
+- Intel Ice Lake 12-worker controls: CPU-only AVX2 +0.43%, full-width +0.08%;
+  default-profile controls showed no repeatable loss but up to 10% variation
+  between legs, so no Intel speedup or tight regression bound is claimed there. Cross-platform checks, formatting,
+  strict kernel Clippy and workspace Clippy with existing warnings passed.
+- All 148 native archive files verified; both instances, disks, security groups
+  and private keys were deleted. Conservative compute estimate: $0.7009,
+  excluding storage/IP/transfer. Source/binary identities, every pair, exact
+  productive transcript, limitations and cleanup receipts are in the
+  [integrated validation report](experiments/epyc-investigation/INTEGRATED_VALIDATION.md)
+  and its numeric evidence. The original low-count streaming regression remains
+  relevant; automatic selection still requires measured gains for each context.
+
+## 2026-10-24 sequential Milan/Turin investigation and streaming-store candidate
+
+- Investigated eight proposed directions in isolated experiments against
+  **785a06f**, with portable Rust 1.93.0 CPU-only builds. The full report,
+  reproducible generators, exact streaming patch, numeric comparisons and
+  integration requirements are in
+  [experiments/epyc-investigation](experiments/epyc-investigation/README.md).
+  Production allocation, automatic ISA selection and autotuning are unchanged.
+- Hosts: two-node EPYC 7R13 (c6a.8xlarge, 16 physical cores / 32 threads) for NUMA
+  and page sizes; EPYC 9R45 (c8a.8xlarge, 32 physical cores, one exposed NUMA node,
+  four L3 groups) for Zen 5 kernels. Both advertise 64 GiB. These are guests, not
+  complete physical sockets; guest page backing does not prove host backing.
+- **NUMA:** balanced pools were neutral (+0.057%). With a deliberately one-node
+  HugeTLB pool, strict local allocation plus local THP fallback improved eight
+  workers by **40.40%**, with all three pairs positive. It restored both locality
+  and memory-node distribution; this is not a pure remote-latency percentage or
+  a general EPYC gain. A balanced all-remote control lost about 7%.
+- **1 GiB pages:** +0.056% against verified 2 MiB HugeTLB at 12 workers, with mixed
+  pair signs. No useful advantage on the Milan guest.
+- **Earlier DD seed/prefetch:** 256-bit path regressed 0.88–4.96%; full-width path
+  was +0.39% at one worker and -0.64% at 24. Assembly verified earlier prefetch
+  placement. Rejected.
+- **Different DI/DD kernels:** apparent low-count improvements over uniform
+  256-bit AVX-512 lost to uniform full-width AVX-512. Reverse mixtures also lost
+  to stronger controls. Rejected tested mixtures; no per-phase policy adopted.
+- **DD prefetch hints:** T1 regressed 3–7% in both widths. NTA stayed within 0.3%
+  across eight/24-worker screens. Retain T0.
+- **Streaming stores with a cached ring:** a 64 KiB ring retains recent outputs
+  while aligned full-line non-temporal stores populate the unchanged 2 GiB
+  arena. MFENCE orders each 64-block batch and the final arena read. At exactly
+  64 blocks of reference distance, read the arena to avoid ring/output aliasing.
+  At 24 workers, three alternating pairs of two 20-second measured rounds after
+  one warmup confirmed **+27.78% versus AVX2** (35.3282 to 45.1427 completed H/s;
+  pair changes +27.34% to +28.42%) and **+25.27% versus uniform 256-bit AVX-512**
+  (36.0373 to 45.1441; +24.99% to +25.52%). Rates include final completed hashes
+  and end-fence elapsed time. The short one-worker screen regressed **3.53%**;
+  eight workers were flat (-0.20%). Retain as an experimental candidate with
+  explicit benchmark selection; no universal worker cutoff is established.
+- **Four independent row rounds:** additional YMM registers improved the weak
+  256-bit control at low counts, but lost **3.49% / 1.97%** against full-width
+  AVX-512 at one/eight workers and lost 1.24% against the 256-bit path at 24.
+  Rejected as a replacement.
+- **Hardware diagnostics:** four grouped core PMCs and DI/DD loop timings were
+  available on Turin. At 24 workers, full-width AVX-512 retired far fewer
+  instructions than AVX2 yet consumed more cycles. HugeTLB DTLB walks were few;
+  this does not establish a socket-bandwidth or clock explanation. No BIOS/NPS,
+  DIMM-channel controls, IBS, L3 or memory-controller PMUs were exposed. Physical
+  server controls remain hardware-limited; broader optional request/fill PMCs
+  were deferred before measurement to prioritize the confirmed throughput runs.
+- A final normal-loop streaming-store probe at 24 workers measured 24.06% fewer
+  cycles, 8.68% more retired instructions, and 42.70% fewer L2 data-cache store
+  requests per hash. This is one ordered diagnostic pass, consistent with less
+  cache-store pressure; it is not a socket-bandwidth measurement.
+- Correctness: kernel unit/integration checks, supported ISA outputs against
+  full-size RustCrypto, plus streaming ring/slice/rounding boundaries, three
+  inputs, dirty reuse and arena guards. Disassembly records actual instruction
+  changes. Normal production integration still needs an explicit candidate
+  identity/feature gate, live kernel-switch validation, and broader hardware
+  measurements; the architecture-dispatch session owns that follow-up.
+- Accepted backend comparisons verified arena backing/locality and retained
+  allocation, swap, OOM, steal and fence evidence. An entire NUMA pilot with an
+  incorrect startup-fallback assertion is excluded and preserved. Short screens
+  are directional; descriptive pair intervals do not quantify cross-host
+  uncertainty. Raw reports and binaries are archived under the worktree's
+  ignored `data/epyc-investigation/` with SHA-256 manifests and rental cleanup
+  records. All 136 Milan and 786 Turin archive files verified; both instances,
+  disks and security groups were deleted and their private keys removed.
+
+## 2026-10-24 automatic joint CPU kernel and worker selection
+
+Automatic mining tuning now serializes established AVX2/AVX-512 kernel trials
+with adaptive worker-count trials. The widest supported ISA remains the startup
+fallback. Two productive A/B/A comparisons must each exceed a 2% gain plus hash
+quantization, with baseline drift capped at 5%, before promoting another path.
+Windows run 30–60 seconds and require 32 completed hashes; a trial has a ten-minute
+hard limit. Interrupted comparisons return to the prior path. ARM/NEON and
+AVX2-only hosts do not spend time testing scalar alternatives. Experimental
+`avx512-256` remains benchmark-only.
+
+Workers switch only between complete hashes, retaining their arenas, precomputed
+reference addresses, assignments, and nonce cursors. Per-worker generation
+acknowledgements include a completed hash and counter flush before measurement.
+Kernel choices and their raw sample counts/times are cached per worker-count and
+observed backing vectors, with CPU/build/topology/configuration identity. Stable
+contexts are revisited after 30 minutes. The existing CPU autotune opt-out also
+disables automatic path selection; fixed-thread and offline benchmark behavior
+remain explicit and deterministic.
+
+Integration review caught two regressions before handoff. Resetting the joint
+peak/search direction on cached path changes could cycle efficiency mode between
+low- and high-count winners; the joint profile frontier and search direction now
+survive confirmed path changes while count-specific reference samples reset.
+Clearing scores also preserves a higher cached count when current RAM limits a
+run to fewer workers. Four-hour stable-load simulations assert every later
+confirmed selection, rather than checking one endpoint.
+
+Validation on Ryzen 9 9950X3D:
+
+- Linux CPU workspace: **477 tests passed**, four resource-heavy tests excluded
+  from the normal suite. The new full-size test was then run separately.
+- Optimized one-worker **2 GiB** live AVX2 → AVX-512 → preferred-path smoke passed
+  in 10.96 s: stable arena accounting, no allocation failures, distinct sampled
+  nonces, and all three outputs matching RustCrypto. Reference allocation followed
+  worker teardown so peak arena use stayed at 2 GiB. This is correctness evidence,
+  not a throughput comparison.
+- **35 native Windows GNU tests passed**, covering adaptive policies, hash-boundary
+  switching, request guards, and reference parity. Windows all-target cross-check
+  and default-feature all-target check also passed.
+- ARM/macOS pow-kernel cross-check passed. Full macOS application cross-check was
+  unavailable because this Linux environment lacks a Darwin C cross-compiler;
+  native macOS runtime validation remains outstanding.
+- Formatting, diff checks, and Clippy completed; existing repository warnings
+  remain. No AWS instances or other external benchmark resources were created.
+
+These checks establish correctness and simulated convergence, not an all-host
+hashrate gain or global optimality. The earlier architecture matrix motivates
+count-dependent path selection; actual gains are decided on each mining host.
+
+## 2026-10-24 stable efficiency selections during productive rechecks
+
+- Review of the merged productive controller found that efficiency mode could
+  repeatedly commit higher counts even when its current count already delivered
+  at least 75% of the tracked peak. A four-hour deterministic simulation using
+  rates `[0,24,48,72,96,112,124,132,136]` reproduced a confirmation of seven workers
+  at 1,859 seconds, although five workers met the profile floor. The previous
+  endpoint-only test missed the repeated climb and descent.
+- Initial exploration still discovers the peak. Once discovery completes,
+  upward acceptance also requires the current count to fall below the profile
+  floor. Probes continue, and a genuinely new peak can queue a farther probe
+  while retaining the lower operating count between measurements. CPU-rate
+  changes, unstable comparisons, and returning RAM reopen discovery.
+- Recovery tests cover normal/load/normal operation selecting 5→2→5 workers,
+  including a load change that leaves the two-worker rate unchanged, plus a RAM
+  ceiling growing from two to eight workers. These check every confirmation
+  after settling, not just the final count. The steady-load regression checks
+  repeated confirmations over four simulated hours.
+- Validation: CPU-only workspace suite **465 passed**, three opt-in tests
+  ignored; default-feature all-target check, Windows GNU CPU-only cross-check,
+  scoped formatting, and Clippy completed. Clippy retains the existing 61
+  binary/63 test warnings, with none in the edited policy module. This follow-up
+  changes only selection policy; the prior full-size lifecycle validation below
+  was not repeated. Logs are retained locally under
+  `data/adaptive-autotune-20261024/efficiency-cycling/`.
+
+## 2026-10-24 productive CPU autotuning and changing resource budgets
+
+- Automatic mining previously ran an offline startup search and kept its selected
+  count for the session. Temporary CPU load or low available RAM could therefore
+  determine the operating count long after conditions improved.
+- Mining now starts from a compatible cached count, or half the stable automatic
+  capacity, capped by current RAM. Productive baseline/candidate/baseline trials
+  measure completed hashes while the miner remains connected. Every arena warms
+  before measurement; each window takes at least 30 seconds and 20 hashes.
+  Baseline drift above 8%, sustained work loss, and RAM changes invalidate trials.
+  Balanced/efficiency floors remain 99%/75% of the tracked peak; upward changes
+  require a gain exceeding 2% plus hash-count quantization. Periodic local and
+  occasional wider probes revisit changing CPU load without a new startup sweep.
+- CPU lanes keep fixed nonce strides and individual cursors. Disabled workers
+  release their arenas and reference tables; survivors keep theirs. Zero enabled
+  workers is supported. Recovery waits for 30 seconds of headroom; failed arena
+  allocations wait five minutes and do not quarantine healthy workers. Explicit
+  CLI/API/TUI counts retain manual control unless automatic tuning is requested.
+- Budgets include allocations in progress as well as resident arenas. A real
+  two-worker pilot exposed a race where first-touch RAM was initially attributed
+  to other applications, causing the new worker to be immediately removed.
+  A blocked-allocator regression now verifies the credit before backing appears.
+  CPU/user ceilings are kept separate from RAM headroom for pressure decisions.
+- Linux reads the actual cgroup-v2 membership and inherited `memory.high` and
+  `memory.max`, crediting clean inactive file cache. The pinned sysinfo version
+  only checked the mount root. The ordinary tool process's 4 GiB `memory.high`
+  correctly permits only one 2 GiB arena after reserve/overhead. Linux PSI prefers
+  the miner's own cgroup to avoid reacting to unrelated host stalls; system PSI is
+  the fallback. Pressure and Windows low-memory notifications require three
+  consecutive samples and tight headroom before shedding workers; byte-budget
+  reductions apply immediately.
+- Schema 11 stores mining observations and the resource-limit flag. Compatible
+  schema-10 records remain startup seeds. A temporarily lower RAM ceiling retains
+  a previous higher selected count on disk. Offline kernel and live mining scores
+  remain distinct; hardware/build/topology/page-mode compatibility still applies.
+- Validation after integration with v0.2.20: CPU-only workspace suite **462 passed**,
+  three opt-in tests ignored;
+  default-feature all-target check, Windows GNU CPU-only cross-check, scoped
+  formatting and Clippy completed (existing warnings retained). Deterministic
+  simulations cover a peak changing 8→2→8 workers, noncompounding efficiency
+  selection, interrupted trials, constrained-cache preservation, and recovery.
+  Real small-arena workers cover nonce uniqueness, allocation failure, parking,
+  new work while parked, cancellation, resumed accounting, and bounded shutdown.
+- An optimized full-size backend lifecycle smoke after v0.2.20 integration
+  (at most 4 GiB of arenas) passed 1→2→0→1 resizing: startup **0.808 s**, first
+  two hashes **2.036 s**, release **0.844 s**, 12 completed hashes.
+  These are local lifecycle observations, not a
+  cross-host throughput improvement claim. Native Windows/macOS runtime testing
+  remains outstanding; the macOS cross-check lacked an Apple C toolchain/SDK.
+- Before integration, the live controller completed 445 hashes while responding to pressure and
+  discarding an unstable comparison, then confirmed two workers after 223.614 s.
+  After stopping the first backend, cached preparation reused that count in
+  **0.0112 s**. The run used a bounded scope under `agents-tool.slice` with
+  `MemoryHigh=6G`, `MemoryMax=8G`, and `CPUQuota=200%`; arenas remained at most
+  4 GiB. The integrated rerun using the shipping `auto` affinity completed
+  **192 hashes** and confirmed two workers after **94.935 s**, then reused the
+  cache in **0.0112 s**. Both full-size opt-in tests passed on the integrated code.
+- Local evidence is retained under ignored `data/adaptive-autotune-20261024/`,
+  including failed/interrupted pilots. No cloud resources or GPU jobs were used.
+
+## 2026-10-24 cross-generation CPU kernel matrix
+
+- Real x86-64 EC2 guests cover AMD Zen 1/Naples, Zen 2/Rome, Zen 3/Milan,
+  Zen 4/Genoa, Zen 5/Turin, and Intel Broadwell, Cascade Lake, Ice Lake,
+  Sapphire Rapids and Granite Rapids. Full 2 GiB reference parity runs on
+  every host before timing. An ISA override on a newer CPU is not used as a
+  substitute for an older architecture.
+- AVX2-only hosts compare pre-pairing against paired AVX2; AVX-512 hosts
+  compare two explicit paths in one portable binary. Fixed workers, page
+  backing, affinity and disabled autotuning isolate each comparison.
+  Four alternating pairs use a warmup plus two measured rounds per invocation.
+  The main matrix uses 12-second rounds; independent Turin and larger Genoa
+  followups use 20 seconds. Completed H/s includes round-end fence time.
+- Full protocol, generation/CPUID identity, rates, paired intervals, source and
+  executable hashes, followups, limitations and cloud cleanup are recorded in
+  [the architecture matrix](experiments/cpu-architecture-20261024/README.md).
+  Its machine-readable summary preserves counted and completed rates separately.
+- Paired AVX2 improves every tested AVX2-only configuration (+3.2% to +34.4%).
+  Existing AVX-512 improves every measured Intel case (+6.1% to +28.7%). Genoa
+  favors AVX2 across the measured one/four/eight/twelve-worker configurations.
+  Turin repeats a worker-count crossover on a second VM: AVX-512 gains about
+  15% at one HugeTLB worker but loses 1.7% and 2.6% at four. The larger Genoa
+  guest has two L3 groups and fixed `os` placement; production `auto` placement
+  differs. These results do not justify a blanket generation-specific default.
+- `avx512-256` integrates the cooperating EPYC experiment under a distinct,
+  explicit benchmark label. AVX2 + AVX-512F/VL and OS vector support are required.
+  It is never automatically selected. The module is unchanged from its full-size
+  Genoa/local reference checks; the rejected row-fusion prototype is not included.
+- Integration preserves the upstream warmed sampler and panic barriers from
+  `2ed5beb`. After that merge: 438 Rust tests passed, one existing 1 GiB HugeTLB
+  test remained ignored, and 10 architecture-analysis tests passed. Full-size
+  one-worker CLI smoke checks passed for automatic and explicit SIMD backends,
+  all four benchmark modes for the new path, and cross-kernel baseline rejection.
+  Default-feature compilation and CPU-only Clippy passed with existing warnings.
+  Earlier kernel/test cross-checks passed for Windows x86-64 GNU and macOS
+  AArch64; those operating systems were not executed in this matrix.
+- Normal ISA preference and CPU autotune policy remain unchanged. Existing
+  cache keys include the full build fingerprint, so integrating kernel/source
+  changes invalidates old tuning observations without a separate schema bump.
+  The new benchmark override is never persisted into a tuning cache.
+
+## 2026-10-24 EPYC 9R14 256-bit AVX-512 kernel experiment
+
+- Added an isolated 256-bit AVX-512 compression module (`7cf7981`) and handed it
+  to the architecture session, which integrated explicit benchmark selection as
+  `avx512-256` in `ac4feba`. No automatic kernel preference or autotuning policy
+  changes are made by this experiment.
+- Host: EC2 c7a.2xlarge, AMD EPYC 9R14, AuthenticAMD family 25/model 17/stepping 1,
+  eight physical cores, one NUMA node and one L3 group. Portable Rust 1.93.0
+  CPU-only release builds, fixed workers, verified page backing, autotuning off.
+- The candidate combines paired 256-bit rows/columns, native AVX-512VL rotates,
+  and data-dependent prefetch after column zero. It requires AVX2 + AVX-512F/VL.
+  The disassembly uses no ZMM operations or high YMM registers; no speedup is
+  attributed to an expanded register file.
+- Three alternating pairs, each with one warmup and two measured 20-second
+  backend rounds, found these completed-hash gains against existing AVX-512:
+  **+5.71% at one HugeTLB worker**, **+5.53% at four HugeTLB workers**, and
+  **+1.86% at four ordinary-page workers**. Every pair improved.
+- The necessary same-binary AVX2 control changes the interpretation: the new
+  path beats paired AVX2 by **+2.13% at one HugeTLB worker**, but only **+0.27%
+  at four**, with mixed pair signs (+0.34%, -0.12%, +0.58%). A useful four-worker
+  advantage over AVX2 is not established by that comparison.
+- Native integrated confirmation checked all three SIMD paths at four workers
+  with two opposite-order passes. AVX2 beat existing AVX-512 by +4.07% with
+  HugeTLB and +2.06% with ordinary pages. The new path was +1.30% / -0.08%
+  relative to AVX2. These shorter checks confirm integration and the weaker
+  existing AVX-512 default, but do not establish a broad generation preference.
+- Both experimental builds and the distinct-label integration passed full 2 GiB
+  RustCrypto parity on the EPYC host. The module's scalar-comparison tests cover
+  shared inputs, edge/random words, ordinary/mid-prefetch paths and guarded
+  outputs. Six kernel tests pass; Windows x86-64 GNU and macOS AArch64 checks
+  compile. The architecture session separately reports 432 workspace tests
+  passed, one existing 1 GiB HugeTLB test ignored, and strict kernel Clippy.
+- No memory-backing failures, backend timeouts, swapping or OOM events occurred.
+  All paired results and the integrated check have checksummed local archives.
+  A pilot stopped on a checker field-name error and is excluded. See
+  `experiments/epyc-avx512vl/README.md`, `results.json`, source hashes and runners.
+  Raw evidence is under `data/epyc-avx512vl`, `data/epyc-control` and
+  `data/epyc-final` in the EPYC worktree.
+- A second candidate fused the 256-bit input XOR/backup with row rounds to
+  remove a scratch-buffer store/reload. It passed full-size reference checks but
+  regressed four-worker HugeTLB throughput by **13.37%** in all three paired
+  comparisons (7.40367 to 6.41361 completed H/s). It is rejected and retained only
+  as an experimental patch/results, not in the kernel module.
+- Scope: an eight-core guest with one/four-worker measurements, not a full EPYC
+  socket or Siena/Zen 4c. The architecture session owns the subsequent 8/12-worker
+  Genoa check and coordinates any cache/default change with the autotune session.
+
+## 2026-10-24 explicit CPU kernel benchmarks and architecture identity
+
+- Added benchmark-only `--bench-cpu-kernel scalar|avx2|avx512|neon`. Selection
+  is passed per backend, requires fixed threads and CPU-only benchmarking with
+  autotuning disabled, and rejects unsupported paths before arena allocation.
+  Normal mining and autotuning retain the existing automatic ISA preference.
+- Schema-14 reports record selected/requested kernels, supported kernels and
+  guest-visible x86 vendor/family/model/stepping. CPU baseline comparisons now
+  require matching known kernel identities, including under ignore-environment.
+  Auto and explicit selection of the same kernel remain comparable. The paired
+  A/B harness supports intentional cross-kernel experiments; see
+  `docs/benchmarks.md`. No generation-specific kernel preference is introduced.
+- Validation host: Ryzen 9 9950X3D, WSL2, AuthenticAMD family 26/model 68/stepping 0.
+  CPU-only generic release build, Rust 1.93.0; executable SHA-256
+  `cfc9cda0a7ef16a1c7ba0a36f12f730b60c4fc4d2d92074bb58bfdd404668d27`.
+- All 431 workspace tests passed; the existing test requiring a reserved 1 GiB
+  HugeTLB pool was ignored. Supported explicit kernels match RustCrypto for
+  three memory sizes and three nonces each, including a non-aligned memory size.
+  Unsupported kernels fail before precomputation/allocation.
+- Full 2 GiB, one-worker, regular-page CLI smoke runs completed for automatic,
+  scalar, AVX2 and AVX-512 backend selection; AVX2 also completed kernel,
+  kernel-effective and end-to-end modes. CLI restrictions, same/different-kernel
+  baseline behavior and unchanged autotune-cache contents/mtime were checked.
+  These two-second rounds validate plumbing, not relative throughput.
+- CPU-only Clippy and default-feature compilation passed (existing Clippy
+  warnings remain). Kernel/tests cross-checks passed for Windows x86-64 GNU and
+  macOS AArch64; neither target was executed. Edited-file formatting passed.
+- Local evidence and the CLI validation runner are in ignored
+  `data/kernel-selection-validation/`. No AWS resources were provisioned.
+
+## 2026-10-24 CPU sampler panic handling
+
+- Review of the warmed sampler (`f35e6c1`) found that a lane panic during
+  measured hashing strands its peers at the finish barrier. An injected panic
+  reproduced the hang; a five-second process timeout was required to stop it.
+- Setup/warmup and measured hash actions now convert unwinding panics into
+  lane-specific errors, allowing every worker to reach the synchronization
+  barriers. Sampling rejects the failed measurement. Normal score calculation
+  and warmup policy are unchanged.
+- A bounded regression covers panics during setup, warmup, and measured hashing;
+  errors preserve the failing lane, phase, and panic message. The test fails
+  after five seconds if a barrier stops releasing workers. Integrated with the
+  v0.2.19 source and cancellation coverage, 428 CPU-only workspace tests pass,
+  with one pre-reserved 1 GiB HugeTLB test ignored. Default-feature compilation and
+  CPU-only Clippy pass with existing warnings. Scoped Rust 1.93.0 formatting
+  and `git diff --check` pass.
+- Reproduction and validation logs are retained in
+  `data/sampler-review/` in the sampler review worktree. This is failure-path
+  validation; the warmed sampler's performance comparison is recorded separately.
+
+## 2026-10-24 CPU autotuner warmed sampling and lifecycle timing
+
+- Prior two-node EPYC validation found a fresh tune selecting 10 workers while
+  an alternating 10/12-worker comparison favored 12 by 4.42%. Its trace stopped
+  the ascending search at 11 workers: arena setup and teardown were included
+  in the short-sample denominator, and first-touch hashing was not warmed.
+- Candidate `f35e6c1` keeps the search thresholds, profile policy, memory cap,
+  page policy, and affinity unchanged. Each worker allocates after pinning and
+  completes one warmup hash before a shared measurement start. Scoring uses
+  completed hashes divided by elapsed time through the last worker's actual
+  completion, before a final barrier releases any arena for teardown. Warmup
+  hashes are excluded; last-hash overrun is included. Total lifecycle time is
+  logged separately.
+- The generic kernel benchmark retains its full-wall accounting and no added
+  warmup; warmed timing is used only for CPU autotune. Sampling propagates
+  setup/hash errors, releases all lanes on setup/warmup failure, and skips
+  incomplete samples on shutdown. Schema 10 invalidates old autotune scores.
+- Local validation after integrating current mainline: 425 CPU-binary tests
+  passed, one pre-reserved 1 GiB HugeTLB test ignored; default-feature compilation and CPU-only Clippy passed with
+  existing warnings. Tests cover excluded warmup/lifecycle time, included
+  last-hash overrun, barrier release on setup/warmup failure, cancellation,
+  weighting confirmation scores by hashing time instead of lifecycle time, and
+  releasing barriers after panics in setup, warmup, or measured hashing.
+- Native comparison uses identical portable Rust 1.93.0 CPU-only builds apart
+  from this sampler change, baseline `cb682a8` and candidate `f35e6c1`, on an
+  EC2 `c6a.8xlarge` EPYC 7R13 guest with two NUMA nodes, 16 physical cores,
+  32 vCPUs and 64 GiB RAM. Artifacts, exact runners and binary hashes are kept
+  in `data/autotune-steady-20261024/`. A 12-worker warmup preconditions the host;
+  three fresh-cache pairs alternate old/new order, with ordinary pages,
+  automatic affinity, default balanced profile and six-second sample windows.
+  Each selected count is checked with one warmup and two 20-second backend
+  rounds. A final run checks cache reuse. These are offline measurements.
+  Final integration `fb3a4ba` includes newer mainline terminal/session controls,
+  version metadata, and panic-to-error guards without changing the scoring rule
+  or hash kernel. It receives a separate bounded 12..16-worker fresh tune and
+  cache-hit smoke check; those samples are excluded from paired means. An earlier
+  partial pilot predating the finish barrier is also retained separately.
+
+| Pair | Old workers | New workers | Old counted H/s | New counted H/s | Gain |
+|---|---:|---:|---:|---:|---:|
+| 1 | 11 | 16 | 11.195 | 11.693 | +4.45% |
+| 2 | 10 | 14 | 10.972 | 11.608 | +5.80% |
+| 3 | 12 | 14 | 11.405 | 11.719 | +2.76% |
+
+- All three pairs favor the corrected sampler. Mean counted throughput rises
+  from 11.191 to 11.674 H/s (+4.32%); all-completed throughput rises from
+  11.724 to 12.380 H/s (+5.59%). These gains come from selecting more effective
+  worker counts, not a faster hash kernel. Exact selection still varies (14/16);
+  this removes a systematic scoring bias but does not guarantee a global optimum
+  or the same gain on other hardware, page modes, or profiles.
+- Selected scores underestimate subsequent completed-hash throughput by
+  21.45% on average before the fix versus 0.69% afterward (individual new
+  errors: -0.44%, -0.40%, -1.22%). This metric compares each score with that
+  same run's selected count, not with a separately assumed optimal count.
+- Tradeoffs: mean fresh-tuning time increases from 174.7 to 277.1 seconds
+  (+58.6%, approximately 102 extra seconds). Each sample adds a warmup, and
+  corrected scores allow the unchanged search to explore higher thread counts.
+  Selected arena memory rises from 20–24 GiB to 28–32 GiB on this 64 GiB guest;
+  the default 5% RAM reserve still bounds the search. Cached launches skip tuning.
+- Final integrated binary `fb3a4ba` passes a fresh 12..16-worker tune, selecting
+  14 at 12.064 sample H/s and measuring 11.508 counted / 12.185 completed H/s.
+  Its cache-hit run reuses 14 and measures 11.599 / 12.283 H/s. Both the frozen
+  candidate and final build log cache reuse without repeating the search.
+- Every benchmark report verifies ordinary-page backing and zero allocation
+  failures, dropped events, or assignment/control timeouts. Host counters show
+  no swap/OOM activity and negligible CPU steal (under 0.001%). Several runs
+  emit the existing slow-stop/interrupt warning after writing their reports;
+  all exit successfully, and the runner waits for each exit before starting
+  the next process. Final inspection confirms no Seine process remains.
+- All 47 final artifact files pass the remote SHA-256 manifest after download.
+  Exact scripts, binaries, fingerprints, timings, logs, raw reports and cleanup
+  evidence are retained in `data/autotune-steady-20261024/`. The rental was
+  terminated after approximately 49 minutes; its root disk and dedicated
+  security group were deleted, its Spot request cancelled, and its private SSH
+  key removed. Observed compute pricing was $0.5276/hour (about $0.43 compute,
+  before storage/network charges), with a $0.60/hour request ceiling.
+
+## 2026-10-24 independent two-node Milan release validation
+
+- **Host/build**: a separate EC2 `c6a.8xlarge` on-demand VM, AMD EPYC 7R13,
+  16 physical cores/32 vCPUs, 64 GiB RAM, Ubuntu 24.04. The guest exposes two
+  NUMA nodes, each with eight physical cores and one L3 sharing group. Both
+  variants use the same generic Rust 1.93.0 CPU-only release binary from the
+  combined AVX2 + NUMA/L3 merge `8e96bba`, SHA-256
+  `2015385d5487d4d085f6190cd7103627f9f354549a760b9bff50d3490cbf6dd1`.
+  This independently repeats the placement comparison below; it does not
+  repeat the fresh-autotune experiment.
+- **Method**: `--cpu-affinity os` versus `auto`, fixed worker counts, autotuning
+  disabled, four order-balanced pairs per configuration. Each backend sample
+  has one warmup and two 12-second measured rounds, with three-second cooldowns.
+  Ordinary pages disable THP; explicit 2 MiB HugeTLB backing is verified for
+  every large-page worker. A 32 GiB HugeTLB pool is released after the trials.
+- **Observed placement**: separate live probes verify both page modes. OS order
+  pins eight workers to CPUs 0-7, placing all 16 GiB of arenas on node 0. Auto
+  uses CPUs 0,8,1,9,2,10,3,11: four workers and 8 GiB of arenas per node. Every
+  worker uses a distinct physical core. These CPU IDs describe this guest;
+  they are not recommended settings for other hosts.
+
+| Workers | Backing | OS-order completed H/s | Auto completed H/s | Completed gain | Paired bootstrap 95% interval |
+|---|---|---:|---:|---:|---:|
+| 8 | Regular | 6.1885 | 10.2441 | +65.53% | +64.29%..+66.63% |
+| 8 | 2 MiB HugeTLB | 5.9944 | 11.8514 | +97.71% | +97.36%..+98.20% |
+| 16 | 2 MiB HugeTLB | 11.6764 | 11.7535 | +0.66% | +0.42%..+0.91% |
+
+- **Accounting/limits**: this table counts all completed hashes over actual
+  elapsed time, including the round-end fence. Deadline-counted backend
+  `avg_hps` changes are 5.5548 to 9.5994 (+72.81%), 5.3582 to 11.2108 (+109.23%),
+  and 10.4080 to 10.4818 (+0.71%), respectively. Every pair favors auto under
+  both metrics. The all-core control changes by less than 1%; the large gains
+  occur where OS order crowds eight workers into one of the two nodes.
+  Four-pair intervals describe repeatability on this VM, not variation across
+  machines. This measures combined NUMA/L3 placement and does not isolate
+  memory-bandwidth and cache contributions or establish a universal gain.
+- **Checks**: binary hashes match before/after testing. Allocation failures,
+  page fallback, dropped events, assignment/control timeouts, swap activity,
+  and OOM counter deltas are zero. Maximum aggregate CPU steal is 0.0011%; the
+  longest measurement fence is 0.775 seconds. The earlier Intel checks cover
+  reference-hash correctness of the kernel changes, while this run exercises
+  the combined release code on the exposed two-node topology.
+- **Evidence/cleanup**: `data/numa-milan-20261024/` retains exact source/binary
+  identities, runner/analyzer scripts, `comparison.json`, raw benchmark reports,
+  live worker/arena snapshots, and host counters. `cleanup.json` records the
+  terminated instance and deleted root disk/security group. The temporary SSH
+  key is removed and the expiry timer stopped after collection.
+
+## 2026-10-24 Intel AVX2 release validation
+
+- **Host/builds**: EC2 `r4.8xlarge`, Intel Xeon E5-2686 v4 (Broadwell),
+  16 cores/32 vCPUs, 244 GiB advertised RAM (239 GiB visible), Ubuntu 24.04.
+  The guest exposes AVX2, no AVX-512, and one NUMA node. Fresh, independent
+  generic Rust 1.93.0 release builds compare `v0.2.17` (`710ea09`) with the
+  AVX2 merge (`ac213e9`); this comparison excludes the later NUMA/L3 change.
+  Audited AVX2 function sizes are 1888/2544 bytes versus 2596/3736 bytes.
+- **Method**: persistent CPU backend, fixed worker counts, affinity `auto`,
+  autotuning disabled, four order-balanced A/B pairs per configuration.
+  Each sample has one warmup and two 12-second measured rounds, with a
+  three-second cooldown. Regular pages disable THP; large-page runs verify
+  explicit 2 MiB HugeTLB backing for every worker. The 32 GiB pool is released
+  after testing. Local/guest binary hashes match and remain stable.
+
+| Workers | Page backing | Baseline H/s | Candidate H/s | Gain | Paired bootstrap 95% interval |
+|---------|--------------|-------------:|--------------:|-----:|-----------------------------:|
+| 1 | Regular | 0.6902 | 0.7713 | +11.74% | +11.33%..+12.25% |
+| 1 | 2 MiB HugeTLB | 0.8856 | 0.9984 | +12.74% | +12.41%..+13.21% |
+| 8 | 2 MiB HugeTLB | 6.4700 | 7.2453 | +11.98% | +11.85%..+12.12% |
+| 16 | 2 MiB HugeTLB | 9.9549 | 10.2222 | +2.69% | +1.78%..+3.60% |
+
+- **Accounting**: the table uses backend `avg_hps`, excluding late hashes and
+  including fence time. All-completed throughput gains are +10.63%, +11.88%,
+  +11.06% and +2.68%, respectively. Every pair favors the candidate under both
+  metrics. The paired bootstrap intervals describe four pairs on this VM, not variance
+  across Intel machines or every AVX2 implementation.
+- **Correctness/controls**: both builds match full 2 GiB RustCrypto reference
+  hashes; all three kernel tests and 18 CPU-backend tests pass on the guest.
+  Allocation fallback, allocation failures, dropped events, assignment/control
+  timeouts, swap activity and OOM counter deltas are zero. Maximum aggregate
+  CPU steal is 0.0349%; the longest round-end fence is 1.116 seconds.
+- **Combined release check**: the later AVX2 + NUMA/L3 build (`8e96bba`) passes
+  separate 8-worker backend smoke runs on both regular and explicit 2 MiB
+  pages, with verified backing and no dropped events or control timeouts.
+  The combined code also passes 410 local workspace tests; one pre-reserved
+  1 GiB HugeTLB test is ignored. The Intel guest's single-node layout does not
+  establish multi-node placement performance.
+- **Evidence/cleanup**: `data/intel-avx2-20261024/` retains `sources.json`,
+  `comparison.json`, raw reports/test logs in `results/`, the combined-build
+  manifest and smoke reports in `results/integration/`, and exact run/analysis
+  scripts. The instance is terminated and its disk and temporary security
+  group are deleted; `cleanup.json` records verification.
+
+## 2026-10-24 two-node EPYC placement and autotuner validation
+
+- Host: EC2 `c6a.8xlarge` Spot instance, AMD EPYC 7R13, 16 physical cores /
+  32 vCPUs, 64 GiB RAM, Ubuntu 24.04. Linux exposes two NUMA nodes with eight
+  physical cores each: node 0 CPUs `0-7,16-23`, node 1 `8-15,24-31`. Each node
+  is also one L3 sharing group. These results validate the exposed VM topology;
+  they do not establish a universal bare-metal speedup or isolate cache effects
+  from memory bandwidth.
+- Tested source `e00089c` has the same tree as merge `8e96bba` (PR #29).
+  Portable Rust 1.93.0 CPU-only release binary SHA-256:
+  `c20fc2a248c205ab591ad8b56998fb993e0b78030d7bada72ed5b380562c9610`.
+  Both variants use that identical binary, differing only in affinity policy:
+  `--cpu-affinity os` versus `auto`. Artifacts and exact runner/analyzer scripts are retained in
+  `data/numa-autotune-20261024/`.
+- Fixed-count comparisons use two measured 20-second backend rounds plus one
+  warmup, three alternating pairs at eight workers, two pairs at 16 workers,
+  and three-second cooldowns. Ordinary pages disable THP. Huge-page runs require
+  verified explicit 2 MiB backing; 16 GiB is reserved on each node beforehand.
+  This is offline backend throughput, not pool mining hashrate.
+
+| Workers | Backing | OS-order mean H/s | Automatic mean H/s | Counted delta |
+|---|---|---:|---:|---:|
+| 8 | Ordinary pages | 5.790 | 10.031 | +73.25% |
+| 8 | 2 MiB HugeTLB | 5.635 | 11.720 | +107.98% |
+| 16 | 2 MiB HugeTLB | 11.177 | 11.211 | +0.30% (effectively unchanged) |
+
+- All three eight-worker pairs favor `auto` in each page mode. Counting all
+  completed hashes over actual elapsed time also improves: +68.68% with
+  ordinary pages and +101.14% with HugeTLB. The smaller all-core delta is not
+  evidence of a meaningful gain when both policies already use every core.
+- Live inspection verifies eight OS-order workers occupy node 0, with nearly
+  all 16 GiB of arenas on that node. Automatic placement uses four workers per
+  node and approximately 8 GiB of arenas on each. Helper threads retain the
+  full CPU mask. Per-process NUMA maps, `numastat`, worker affinity, and backing
+  telemetry are retained alongside the raw reports.
+- Fresh autotuner checks use the default balanced profile, ordinary pages,
+  automatic affinity, default six-second sampling, no explicit thread count,
+  and separate empty caches. Explicit huge pages are released first. The
+  default 5% RAM reserve yields a cap of 28 workers on this guest; each selected
+  count is then evaluated with one warmup and two 20-second backend rounds.
+
+| Fresh cache | Selected workers | Arena GiB | Short-sample H/s | Warm counted H/s | Warm completed H/s |
+|---|---:|---:|---:|---:|---:|
+| 1 | 12 | 24 | 9.271 | 11.351 | 11.931 |
+| 2 | 10 | 20 | 8.950 | 10.944 | 11.428 |
+| 3 | 12 | 24 | 9.391 | 11.405 | 11.983 |
+
+- All caches use schema 9 with a nonempty topology fingerprint and match the
+  benchmark worker count. A subsequent cache hit reuses 12 workers without a
+  search and measures 11.306 counted H/s. Thread selection is not fully stable:
+  one fresh run chooses 10 workers, below the other runs' warm throughput.
+- A separate three-pair alternating comparison holds automatic affinity and
+  ordinary pages constant and compares explicit 10 versus 12 workers. It uses
+  the same 20-second rounds, warmup, and cooldown protocol as above. Twelve
+  workers average 11.050 versus 10.582 counted H/s (+4.42%); paired gains are
+  +4.67%, +4.06%, and +4.54%. All-completed throughput improves 5.06%. This
+  confirms a measurable opportunity missed by that fresh tune, beyond the
+  balanced profile's 1% near-peak target; it does not justify hard-coding 12
+  workers for other machines.
+- Follow-up: investigate short-sample scoring and search repeatability. Source
+  inspection shows autotune's outer wall timer includes kernel benchmark
+  setup/teardown, while the hashing deadline starts after arena allocation.
+  This is a possible source of ranking bias, not an established cause from
+  these measurements. No autotuner sampling or selection code was changed by
+  this validation; the existing longer finalist remeasurements do not guarantee
+  steady-state optimal selection.
+- All fixed-count, fresh-tune, and cache-hit reports verify expected page
+  backing and zero allocation failures, dropped events, or assignment/control
+  timeouts. Main-run host counters show no swap/OOM activity and negligible CPU
+  steal (under 0.001%). The cache-hit process emitted a slow-stop/detach warning
+  after producing its report, exited successfully, and was confirmed gone
+  before the separate thread-count comparison. Measurement fences completed.
+- The merged source passed 407 CPU-binary tests (one pre-reserved 1 GiB HugeTLB
+  test ignored), default-feature compilation, CPU-only Clippy with existing
+  warnings, scoped formatting, and diff checks. The earlier 416-test count
+  included unrelated work present on the original development branch.
+- All 118 final result files passed the downloaded SHA-256 manifest, including
+  raw reports, live placement snapshots, and runner logs. HugeTLB reservations
+  were returned to zero and no Seine process remained before shutdown. The
+  rental was terminated after approximately 39 minutes; its root disk and
+  dedicated security group were deleted, its one-time Spot request cancelled,
+  and its dedicated local SSH private key removed. No benchmark VM is retained.
+  Observed Spot compute pricing was $0.5276/hour (about $0.35 for this run,
+  before storage/network charges); the request ceiling was $0.60/hour.
+
+## 2026-10-24 automatic Linux L3 placement: worker-only EPYC validation
+
+- Linux `--cpu-affinity auto` now interleaves physical cores across L3 sharing
+  groups within each NUMA node, retaining node balance before cache balance and
+  all eligible physical cores before SMT siblings. `--cpu-affinity os` preserves
+  the OS-order pinning opt-out; `off` still leaves placement to the scheduler.
+- Discovery uses sysfs unified level-3 sharing masks, intersected with allowed
+  CPUs. It validates symmetric membership and consistent SMT siblings instead
+  of assuming cache IDs or index numbers are globally meaningful. Missing or
+  inconsistent cache data retains NUMA-only placement. Incomplete NUMA/core
+  data or a single node/cache retains OS order. Workers still pin before arena
+  allocation; helper-thread affinity and memory policies are unchanged.
+- Autotune schema 9 invalidates old placement measurements and fingerprints
+  cache sharing domains as well as allowed CPUs and NUMA/core topology.
+  Benchmark policy metadata identifies the NUMA/L3 strategy. Thread counts
+  remain adaptive; this does not impose an EPYC-specific count or page policy.
+- Local validation: 416 CPU-binary tests passed, one pre-reserved 1 GiB HugeTLB
+  test ignored. CPU-only Clippy and default-feature compilation passed with
+  existing warnings. Edited Rust files pass pinned-toolchain formatting;
+  `git diff --check` passes. Topology coverage includes restricted CPU masks,
+  one-node cache spreading, uneven NUMA/cache groups, SMT, shared caches across
+  NUMA nodes, malformed/incomplete sysfs, and the original 64-core EPYC layout.
+- Native validation artifacts, frozen source/binary, and exact scripts are in
+  `data/epyc-l3-validation-20261024/`. This uses a second rental because the
+  original 64-core offer was out of stock: AMD EPYC 8434P, 48 cores / 96 threads,
+  384 GB advertised RAM (377 GiB visible), one NUMA node, eight L3 groups.
+  The identical portable CPU-only binary is used for `os` and `auto`, SHA-256
+  `b174c46e833c3e401dc602c7769f24da1149377dc56ef8c2b3e5113c4dca7332`.
+- Live inspection verified 32 automatic workers occupy all eight L3 groups,
+  four per group. OS order occupies six groups (6/6/6/6/6/2). Helper threads
+  retain CPUs 0-95 in both variants. At 24 workers, `auto` uses three per group
+  versus six per group in four groups for `os`. At 48 workers, both policies
+  use every physical core, six per group. RAID resync was paused throughout
+  all comparisons and restored afterward. Every measured arena reported
+  ordinary pages, with zero allocation failures.
+- Measurements used alternating A/B order, two measured rounds plus one warmup
+  per invocation, and five-second cooldowns. The 24/32-worker comparisons used
+  three pairs of 30-second rounds; the 48-worker control used two pairs of
+  20-second rounds. These are offline backend measurements, not pool hashrate.
+
+| Workers | OS-order mean H/s | Automatic mean H/s | Counted delta | Interpretation |
+|---|---:|---:|---:|---|
+| 24 | 18.376 | 21.449 | +16.72% | Consistent gain in all three pairs |
+| 32 | 21.745 | 22.052 | +1.41% | Small, variable; inconclusive |
+| 48 | 19.715 | 21.325 | +8.17% | Slow first baseline; not a reliable gain |
+
+- **Adopted**: automatic L3 spreading with the existing `os` opt-out. The
+  strongest implementation evidence is 24 workers: paired gains of 16.01%,
+  17.44%, and 16.73%. Including all completed hashes instead of only hashes
+  counted within the deadline also improves, 19.157 to 22.230 H/s (+16.04%).
+- At 32 workers, paired deltas were +2.62%, +2.09%, and -0.59%; both variants
+  slowed in the third pair. At 48 workers, the first baseline was 17.985 H/s
+  versus 21.445 in the second; the second pair was essentially tied (+0.008%).
+  A background snapshot found no large competing userspace workload and the
+  mirror remained paused, but this does not establish the source of variance.
+  Do not advertise the 48-worker mean as an affinity gain or compare its shorter
+  deadline-counted windows directly with the 24/32-worker runs.
+- This validates the worker-only implementation on a second EPYC model, not a
+  universal percentage gain. Multi-node NUMA throughput was unmeasured at this
+  stage; the newer two-node validation above supplies that evidence.
+  All 37 downloaded result files passed their remote SHA-256 manifest. The
+  hourly server was deleted after about 42 minutes, its dedicated SSH key was
+  removed, and the task browser tab was closed; no rental was retained.
+
+## 2026-10-24 EPYC 8534P hourly rental: cache placement, threads, and page backing
+
+- Host: Scaleway EM-I620E-NVMe, AMD EPYC 8534P, 64 cores / 128 threads,
+  576 GB advertised RAM (566 GiB visible), Ubuntu 26.04.1, kernel 7.0.0-38.
+  Linux exposed **one NUMA node** and eight L3 sharing groups. This rental
+  therefore does **not** validate the new multi-node NUMA default.
+- CPU-only portable release binary, Rust 1.93.0, base `b19904e` plus the NUMA/RAM
+  changes; SHA-256
+  `f7f4fffa7e1835381f26bea0b0bd5286d8f07b58cf3656b1913dff6715dbd33b`.
+  Source patch, new topology module, provenance, and binary are retained in
+  `data/epyc-rental-8le6c9cd/`; raw reports are under `results/`.
+- Main comparisons used three alternating A/B pairs, 30-second backend rounds,
+  two measured rounds plus one warmup, five-second cooldowns, explicit thread
+  counts, and disabled autotuning. Page backing was verified for every run.
+  Rates below are benchmark deadline-counted H/s including the end fence;
+  they are not pool mining measurements.
+
+| Comparison | Baseline mean H/s | Candidate mean H/s | Candidate delta |
+|---|---:|---:|---:|
+| 64 vs 32 workers, 2 MiB HugeTLB | 16.209 | 17.429 | +7.53% (unstable baseline) |
+| Ordinary vs 2 MiB pages, 32 workers | 17.614 | 17.412 | -1.14% |
+| Compact vs cache-spread placement, 32 workers, ordinary pages | 17.614 | 20.842 | +18.32% |
+
+- The 64-worker runs ranged from 14.372 to 18.766 H/s, so their average is not
+  sufficient evidence for a universal 32-worker limit. The fresh OS was also
+  synchronizing its RAID mirror; this was recorded, paused for both later
+  comparisons, and resumed afterward. Its contribution to the variance was
+  not established. The short 16/32/64/128 sweep is directional only.
+- Cache-spread used `taskset` with CPUs `0,2,4,...,62`: four physical cores in
+  each of eight L3 groups, instead of CPUs `0-31` occupying four groups.
+  Both variants used 32 workers and 64 GiB of arena memory. Live per-thread
+  affinity inspection confirmed the spread. Candidate runs were 21.467,
+  20.410, and 20.649 H/s; baselines were 17.645, 17.609, and 17.590 H/s.
+  Counting all completed hashes including late hashes also improved, from
+  18.650 to 21.878 H/s (+17.31%). The taskset mask restricts the whole process,
+  including helper threads, so a worker-only implementation needs its own A/B.
+- No page-policy or single-node affinity default was changed from this test.
+  The next supported experiment is automatic L3-group spreading with an OS-order
+  opt-out, followed by a native-host A/B of that implementation. Do not hard-code
+  this machine's CPU IDs on other hosts or claim a multi-node speedup.
+- All downloaded result files passed their remote SHA-256 manifest. The hourly
+  server was deleted after about 51 minutes; no benchmark resource was retained.
+
+## 2026-10-23 Linux NUMA defaults and automatic RAM headroom
+
+- Default Linux `auto` placement now interleaves physical cores across usable NUMA
+  nodes before SMT siblings, respecting allowed CPU/memory masks. Single-node,
+  memoryless/restricted-local-memory, and incomplete/inconsistent topologies
+  retain OS order. Arena allocation already occurs after worker pinning.
+- `--cpu-affinity os` restores OS ordering with pinning; `off` disables pinning.
+- Automatic sizing/autotuning subtracts 5% of effective total RAM from available
+  memory; `--cpu-memory-reserve-percent 0` opts out. Explicit worker counts retain
+  existing semantics, and the existing minimum-one-worker rule still applies.
+- Autotune schema 8 includes allowed CPUs and detected NUMA layout in cache
+  identity. Benchmark reports distinguish the new placement policy from OS order.
+- Synthetic tests cover node spreading, SMT ordering, sparse/asymmetric CPU sets,
+  memory restrictions, inconsistent/missing topology, and RAM budget arithmetic.
+- This initial implementation had no measured EPYC speedup. The newer two-node
+  validations above supply controlled regular/HugeTLB evidence. They do not
+  supersede the earlier WSL results; single-node WSL placement remains unchanged.
+
+## 2026-10-24 AVX2 paired rounds and contiguous column loads/stores
+
+- **Adopted**: interleave two independent AVX2 BLAMKA row/column rounds and
+  combine adjacent columns into 256-bit loads/stores with 128-bit-half
+  permutations. The data-dependent path retains column 0 before the existing
+  mid-compress prefetch, then pairs columns 1+2, 3+4, 5+6 and handles column 7
+  separately. Runtime ISA selection and the AVX-512/NEON/scalar kernels are unchanged.
+- **Host/method**: Ryzen 9 9950X3D, WSL, pinned logical CPU 0, Rust 1.93.0,
+  generic release build with fat LTO. Six order-balanced samples per variant,
+  at least six seconds each, measuring complete 2 GiB Argon2id hashes using
+  actual elapsed time. The reused arena had verified 2 GiB THP backing;
+  allocation, reference-index precomputation and warmup were outside timing.
+- **Full-hash kernel**: stock AVX2 `1.9501 H/s`, candidate `2.0644 H/s`
+  (**+5.86%**, winning all six paired rounds). Paired bootstrap 95% interval
+  was `+3.62%..+8.20%`; it describes these short local samples only. Stock
+  AVX-512 remained faster at `2.2144 H/s` and stays preferred on this host.
+- **Compression only**: `131.15 ns` to `115.12 ns` per 1 KiB block
+  (**+13.92% throughput**, five samples). This is not a full-miner gain.
+- **Correctness**: the investigation passed 640 reference comparisons across
+  eight configurations and matched full 2 GiB warmup hashes. In-repo regression
+  coverage now forces AVX2 on AVX-512 hosts and compares complete hashes with
+  RustCrypto Argon2. Direct compression tests cover both prefetch paths,
+  shared immutable inputs, varied block words and output boundary guards.
+- **Applied validation**: kernel tests pass in debug and release; kernel Clippy
+  passes with `-D warnings`. Workspace/all-target compilation and kernel/test
+  compile checks for Windows x86-64 and macOS ARM64 pass. Applied AVX2 hot
+  functions retain the measured candidate's sizes (2596/3736 bytes) and contain
+  no EVEX instructions or ZMM register operands.
+- **Evidence**: `data/isa-audit-8bn0w33f/REPORT.txt`, `hash-confirmation.jsonl`,
+  `micro-contiguous.jsonl`, `summary.json` and assembly dumps. The candidate's
+  hot functions contain no AVX-512 instructions. Nearby variants (unrolling,
+  phase fusion, pairing rows only, and 256-bit AVX-512 rotates) were screened
+  separately; only the pure-AVX2 paired/contiguous variant was adopted.
+- **AVX2-only cloud follow-up**: Ubuntu 24.04 on an EC2 `c6a.8xlarge`, AMD
+  EPYC 7R13 (Milan/Zen 3), 16 physical cores/32 vCPUs, 64 GiB RAM and two NUMA
+  nodes. The guest exposes AVX2 and no AVX-512. Generic Rust 1.93.0 release
+  builds with fat LTO compare baseline `b19904e` with candidate `ecf200b`;
+  the only code difference is `pow-kernel/src/fixed_argon.rs`. These builds
+  exclude the separate Linux NUMA-default changes in the main working tree.
+- **Cloud method**: persistent CPU backend, fixed 1/8/16 workers, affinity
+  `auto`, autotuning disabled, four order-balanced A/B pairs per configuration.
+  Each sample has one warmup and two 12-second measured rounds, with a
+  three-second cooldown between samples. Regular pages disable THP; large-page
+  runs require verified explicit 2 MiB HugeTLB backing for every worker.
+  The large-page pool reserves 32 GiB and is released after the tests.
+- **Build provenance**: the baseline was rebuilt in a fresh, separate target
+  directory, and the AVX2 function sizes were audited: baseline 1888/2544 bytes,
+  candidate 2596/3736 bytes. An earlier batch reused a cached candidate kernel
+  in the baseline build and was discarded; none of those timings appear below.
+  Local and guest binary SHA-256 values match and remain unchanged across runs.
+- **Cloud correctness/controls**: both builds match the RustCrypto reference
+  for a full 2 GiB hash; all three kernel tests and 18 CPU-backend tests pass
+  on the AVX2-only guest. Benchmark reports show no allocation fallback,
+  allocation failures, dropped events or assignment/control timeouts. Swap
+  and OOM counter deltas remain zero; aggregate CPU steal stays below 0.001%
+  in every trial. The longest measured round-end fence is 0.788 seconds.
+
+| Workers | Page backing | Baseline H/s | Candidate H/s | Gain | Paired bootstrap 95% interval |
+|---------|--------------|-------------:|--------------:|-----:|-----------------------------:|
+| 1 | Regular | 1.4748 | 1.5907 | +7.85% | +7.06%..+8.41% |
+| 1 | 2 MiB HugeTLB | 1.8845 | 2.1639 | +14.83% | +14.53%..+15.09% |
+| 8 | 2 MiB HugeTLB | 5.2100 | 5.3684 | +3.04% | +2.78%..+3.43% |
+| 16 | 2 MiB HugeTLB | 10.2070 | 10.4470 | +2.35% | +1.12%..+3.61% |
+
+- **Accounting/interpretation**: the table uses reported backend `avg_hps`,
+  which excludes late hashes but includes fence time. Counting all completed
+  hashes over actual measured elapsed time gives gains of +7.47%, +14.23%,
+  +2.51% and +2.22%, respectively. Every pair favors the candidate under both
+  metrics. The intervals enumerate all 256 resamples of four paired deltas;
+  they describe these short samples, not variation across machines. The
+  smaller multi-worker gains are consistent with shared-memory bandwidth
+  limiting throughput; hardware bandwidth counters were not measured.
+- **Cloud evidence**: `data/cloud-avx2-2026-10-24/comparison.json`, `sources.json`,
+  `run_cloud.py`, `analyze_cloud.py` and `results/` retain the binary identities,
+  raw reports, backing checks, test logs and analysis. The instance was
+  terminated, and its root disk and temporary security group were deleted
+  after collection; verification is recorded in `cleanup.json`.
+- **Limits**: these measurements cover one Zen 5/WSL host and one AVX2-only
+  Milan cloud VM. The Intel release-validation section above adds Broadwell
+  coverage. These AVX2 comparisons do not measure the separate NUMA-default
+  changes. The external screenshot's claimed C# advantage remains unverified.
+
 ## Updated summary of cumulative adopted optimizations
 
 ### x86_64 (AMD Ryzen 9 5900X, Zen 3)
@@ -70,6 +1330,7 @@ Cumulative x86_64: from ~1.19 H/s (original) to ~2.34 H/s, **~97% total improvem
 | 48 | Compile AVX-512 x86 path into normal builds and keep runtime dispatch | +19.65% (1T kernel) | -0.28% at 16T backend (effectively flat) | Adopted |
 | 49 | `target-cpu=native` on top of the AVX-512-enabled build | +0.00% (1T kernel) | +0.71% at 16T backend | Recommended for host-local builds |
 | 51 | AVX-512 256-bit contiguous column gather/scatter + MaybeUninit q buffer | +1.5% (1T kernel) | memory-bound at 14T | Adopted |
+| 2026-10-24 | AVX2 paired rounds + contiguous column loads/stores | +5.86% (forced AVX2, 1T kernel) | Unmeasured | Adopted |
 
 Zen 5 result: AVX-512 materially reduces per-hash compute cost, but once 16 CPU
 lanes are active the backend is mostly memory/hugepage limited on this host, so
@@ -80,6 +1341,24 @@ Operational note: a partial runtime HugeTLB reservation (`6136 / 16384` pages)
 raised the same host's 16T native backend from ~`7.998 H/s` to ~`8.479 H/s`
 (~**+6.0%**), which makes early hugepage reservation the highest-leverage next
 step on this machine.
+
+### x86_64 (AMD EPYC 7R13, Zen 3 / AVX2-only EC2)
+
+| Attempt | Change | Kernel delta | Backend delta | Status |
+|---------|--------|-------------|---------------|--------|
+| 2026-10-24 | AVX2 paired rounds + contiguous column loads/stores | Unmeasured | +7.85% at 1T regular; +14.83% / +3.04% / +2.35% at 1T / 8T / 16T HugeTLB | Adopted |
+
+### x86_64 (AMD EPYC 9R45, Zen 5 / EC2)
+
+| Attempt | Change | Kernel delta | Backend delta | Status |
+|---------|--------|-------------|---------------|--------|
+| 2026-10-24 | Streaming-store recent-block ring and complete kernel sweeps | Count-dependent | +32.32% vs full-width AVX-512 at 24 workers, +29.80% vs AVX2 | Adopted via measured selection on family 26/model 2 |
+
+### x86_64 (Intel Xeon E5-2686 v4, Broadwell / AVX2-only EC2)
+
+| Attempt | Change | Kernel delta | Backend delta | Status |
+|---------|--------|-------------|---------------|--------|
+| 2026-10-24 | AVX2 paired rounds + contiguous column loads/stores | Unmeasured | +11.74% at 1T regular; +12.74% / +11.98% / +2.69% at 1T / 8T / 16T HugeTLB | Adopted |
 
 ### AArch64 (Apple M4 Max)
 
@@ -2382,3 +3661,33 @@ cargo run --release -- --bench --bench-kind kernel --backend cpu --threads 1 --d
 ```bash
 cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --disable-cpu-autotune-threads --bench-secs 12 --bench-rounds 4 --bench-warmup-rounds 1 --ui plain --bench-output <report.json>
 ```
+
+## 2026-10-25 CPU kernel benchmark lifecycle accounting
+
+The native EPYC 9R14 fixed-kernel screen revealed that `--bench-kind kernel`
+used the generic `BenchBackend::kernel_bench_samples` fallback. CPU's internal
+sampler already timed synchronized hashing separately, but `kernel_bench`
+returned only its hash count. The fallback then divided by an outer wall timer
+that included fresh arena allocation and teardown for every round. One 16-lane
+AVX2 round reported 1558 hashes over 73.95 seconds for a configured 60-second
+hashing window. The existing screen is preserved as lifecycle evidence and
+must not be ranked as isolated steady-state throughput.
+
+CPU now overrides the sample method to retain both timers from its existing
+warmed sampler. The hashing duration still includes the last in-flight hash;
+`wall_secs` retains complete lifecycle cost. `kernel-effective` and live mining
+are unchanged. No actual mining speedup is claimed by this reporting fix.
+
+Validation: 580 CPU-only workspace tests passed on the landing branch, eight hardware tests ignored.
+The dedicated real 2 GiB regression test was then explicitly run and passed:
+positive completed hashes, at least the requested hashing duration, and a
+strictly longer lifecycle timer. Cancellation before a round avoids allocation.
+
+The corrected timing is identified by report schema 15. CPU kernel baseline
+comparisons reject earlier schemas even when environment checks are disabled;
+the CPU A/B shell workflow also refuses to summarize legacy or mixed kernel
+reports. Backend, end-to-end, kernel-effective and GPU timing compatibility
+remain unchanged. Tests exercise each case and run the shell workflow with
+fixture executables, including both directions of a mixed-version pair. The
+CPU-only landing workspace passed 581 tests with eight hardware tests ignored; the
+three shell-workflow tests passed without allocating mining arenas.

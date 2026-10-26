@@ -1,0 +1,86 @@
+---
+title: 'Podpisy pierścieniowe: jak kryptowaluty ukrywają nadawcę'
+description: 'Podpisy pierścieniowe od pomysłu z 2001 roku po obrazy kluczy i CLSAG: jak podpisujący ukrywa się wśród kluczy publicznych i jak Blocknet podpisuje każde wejście pierścieniem 16.'
+tags: [Prywatność, Podpisy pierścieniowe, Kryptografia, Blocknet]
+faq:
+  - q: 'Czym różni się podpis pierścieniowy od podpisu grupowego?'
+    a: 'Podpis grupowy wymaga zarządcy, który z góry tworzy grupę i może ujawnić, kto podpisał. Podpis pierścieniowy nie ma zarządcy ani konfiguracji: podpisujący na miejscu wybiera dowolny zestaw kluczy publicznych i nikt, także osoby, których klucze użyto, nie może później udowodnić, który członek złożył podpis.'
+  - q: 'Czym jest obraz klucza w podpisie pierścieniowym?'
+    a: 'Obraz klucza (key image) to wartość obliczana z klucza prywatnego wydawanego wyjścia. To samo wyjście zawsze daje ten sam obraz klucza, więc sieć odrzuca jego ponowne wydanie, a mimo to obraz klucza nie ujawnia, który członek pierścienia jest prawdziwy. Zamienia on podpis pierścieniowy w powiązywalny podpis pierścieniowy, który zapobiega podwójnemu wydawaniu.'
+  - q: 'Czym jest CLSAG?'
+    a: 'CLSAG to schemat powiązywalnego podpisu pierścieniowego opisany przez Brandona Goodella, Saranga Noethera i Arthura Blue w 2019 roku. Dowodzi, że podpisujący jest właścicielem jednego wyjścia w pierścieniu i że kwoty się bilansują, a obraz klucza zapobiega podwójnemu wydawaniu. Monero wprowadziło go w październiku 2020 roku, a Blocknet podpisuje każde wejście za pomocą CLSAG i RingCT.'
+  - q: 'Jakiego rozmiaru pierścienia używa Blocknet?'
+    a: 'Blocknet używa pierścienia o rozmiarze dokładnie 16 dla każdego wejścia: prawdziwe wyjście plus 15 wabików, z których każdy jest prawdziwym wyjściem już zapisanym w łańcuchu. Konsensus odrzuca każdy inny rozmiar. Ponieważ każde wejście ma ten sam rozmiar, rozmiar pierścienia nigdy nie wyróżni transakcji, a prawdziwe wyjście zajmuje losową pozycję w pierścieniu.'
+  - q: 'Czy podpisy pierścieniowe ukrywają kwotę płatności?'
+    a: 'Nie. Podpis pierścieniowy ukrywa, które wyjście zapłaciło. Kwoty ukrywa osobna warstwa: zobowiązania Pedersena, które utrwalają liczbę, nie pokazując jej, oraz dowody zakresu Bulletproofs, które dowodzą, że każda kwota jest prawidłowa. Blocknet stosuje je wszystkie razem w każdej transakcji, obok jednorazowych adresów stealth, które ukrywają odbiorcę.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Podpis pierścieniowy pozwala podpisać się w imieniu grupy tak, że każdy może sprawdzić, iż podpis pochodzi od jednego z kluczy grupy, a nikt nie potrafi stwierdzić, od którego. Ten artykuł wyjaśnia, jak działają podpisy pierścieniowe, od pracy z 2001 roku, która je wprowadziła, po obrazy kluczy i CLSAG, i pokazuje, jak Blocknet używa pierścienia 16, aby nadawca każdej płatności pozostał prywatny.
+
+## Czym jest podpis pierścieniowy?
+
+<Answer>
+Podpis pierścieniowy to podpis cyfrowy złożony jednym kluczem prywatnym i zestawem kluczy publicznych innych osób. Weryfikujący może potwierdzić, że podpisał posiadacz jednego z tych kluczy, ale nie może stwierdzić którego. Podpisujący wybiera grupę na miejscu, bez żadnej konfiguracji i bez współpracy pozostałych członków.
+</Answer>
+
+Zwykły podpis cyfrowy wiąże wiadomość z jednym kluczem publicznym. Podpis pierścieniowy wiąże ją z zestawem kluczy publicznych, zwanym pierścieniem. Podpisujący potrzebuje tylko własnego klucza prywatnego; pozostali członkowie nie wnoszą nic poza kluczami publicznymi, które już opublikowali. Dla osoby z zewnątrz każdy członek pierścienia jest równie prawdopodobnym podpisującym.
+
+## Skąd wzięły się podpisy pierścieniowe?
+
+Ron Rivest, Adi Shamir i Yael Tauman przedstawili podpisy pierścieniowe na konferencji ASIACRYPT 2001 w pracy zatytułowanej [„How to Leak a Secret”](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Ich przykładem jest członek rządu, który chce przekazać dziennikarzowi informację w sposób dowodzący, że pochodzi ona z rządu, bez ujawniania, który minister ją przekazał. Podpisuje się własnym kluczem oraz kluczami publicznymi pozostałych członków rządu, a dziennikarz może zweryfikować podpis, nie dowiadując się, kto go złożył.
+
+Pomysł wyróżniały dwie cechy. Nie ma zarządcy grupy, który mógłby zdemaskować podpisującego, co odróżnia podpisy pierścieniowe od starszych podpisów grupowych. A pierścień jest spontaniczny: podpisujący może go złożyć z dowolnych opublikowanych kluczy w chwili podpisywania. Autorzy wybrali tę nazwę, bo „pierścienie to obszary geometryczne o jednolitym obwodzie i bez środka”: każdy członek leży na krawędzi i nikt nie rządzi. Algorytm podpisywania ma ten sam kształt: to łańcuch obliczeń, który zamyka się sam na sobie.
+
+## Jak działa podpis pierścieniowy?
+
+Nowoczesne schematy stosowane w kryptowalutach budują tę pętlę z hashy i kluczy na krzywych eliptycznych. Oto idea w prostych krokach dla pierścienia 16 kluczy publicznych:
+
+1. **Zacznij od własnego miejsca.** Podpisujący wybiera losową tajną liczbę i haszuje ją razem z wiadomością. Ten hash staje się wyzwaniem dla następnego miejsca w pierścieniu.
+2. **Sfałszuj odpowiedź dla każdego innego miejsca.** Dla każdego z pozostałych 15 członków podpisujący wybiera losową odpowiedź i łączy ją z kluczem publicznym tego członka oraz bieżącym wyzwaniem, aby obliczyć wyzwanie dla kolejnego miejsca.
+3. **Zamknij pierścień.** Po przejściu całego okręgu łańcuch wraca na miejsce podpisującego. Tylko ktoś, kto posiada klucz prywatny tego miejsca, może obliczyć jedyną odpowiedź, dzięki której łańcuch wraca dokładnie tam, gdzie się zaczął.
+
+Podpis to wyzwanie początkowe plus 16 odpowiedzi. Weryfikujący zaczyna w dowolnym miejscu, obchodzi pierścień, ponownie obliczając każde wyzwanie z kluczy publicznych i odpowiedzi, i sprawdza, czy pętla się zamyka. Każde miejsce wygląda tak samo: klucz publiczny i losowo wyglądająca odpowiedź. Nic nie wskazuje, gdzie zaczął podpisujący, więc weryfikujący dowiaduje się, że jeden klucz prywatny zamknął pierścień, i niczego o tym, który.
+
+## Jak obrazy kluczy zapobiegają podwójnemu wydawaniu?
+
+Zwykły podpis pierścieniowy ma w przypadku pieniędzy jedną lukę: jeśli każde wydanie ukrywa się wśród innych wyjść, sieć nie widzi, że te same monety wydano dwa razy. Rozwiązują to powiązywalne podpisy pierścieniowe. Joseph Liu, Victor Wei i Duncan Wong opisali pierwszy taki schemat, LSAG, na konferencji ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Dwa podpisy złożone tym samym kluczem prywatnym można ze sobą powiązać, a podpisujący nadal ukrywa się w pierścieniu.
+
+Projekt CryptoNote z 2013 roku przekształcił to w obraz klucza. Dla wyjścia z kluczem prywatnym `x` i kluczem publicznym `P` portfel oblicza `I = x · Hp(P)`, gdzie `Hp` haszuje klucz publiczny do punktu na krzywej. Podpis dowodzi, że `I` należy do tego członka pierścienia, który podpisał, nie mówiąc, który to. Ponieważ obraz klucza zależy wyłącznie od wydawanego wyjścia, ponowne wydanie tego wyjścia zawsze daje to samo `I`. Każdy węzeł prowadzi listę już widzianych obrazów kluczy i odrzuca każdą transakcję, która któryś powtarza.
+
+## Od MLSAG do CLSAG
+
+Kryptowaluty, które ukrywają także kwoty, potrzebują podpisu pierścieniowego dowodzącego drugiego faktu: że ukryta kwota wejścia odpowiada temu, co transakcja wydaje. Praca Shena Noethera z 2015 roku [„Ring Signature Confidential Transactions for Monero”](https://eprint.iacr.org/2015/1098) (RingCT) zrobiła to za pomocą MLSAG, podpisu pierścieniowego na dwóch zestawach kluczy: jednym dla własności i jednym dla zobowiązań kwot.
+
+CLSAG, autorstwa Brandona Goodella, Saranga Noethera i Arthura Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), dowodzi tych samych dwóch faktów w bardziej zwięzły sposób. Monero przeszło z MLSAG na CLSAG w aktualizacji z października 2020 roku. [Dokumentacja Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) podaje około 20% szybszą weryfikację, a typowa transakcja z dwoma wejściami i dwoma wyjściami zmalała z około 2,5 kB do 1,9 kB.
+
+## Co rozmiar pierścienia oznacza dla prywatności?
+
+<Answer>
+Rozmiar pierścienia to liczba wyjść w każdym pierścieniu: prawdziwe wyjście plus wabiki. Pierścień 16 oznacza, że obserwator widzi 16 równie prawdopodobnych kandydatów dla każdego wejścia. Stały rozmiar jest równie ważny jak duży, bo gdy każde wejście ma ten sam rozmiar, sam rozmiar nie zdradza niczego o tym, kto zbudował transakcję.
+</Answer>
+
+Wabiki to prawdziwe wyjścia z łańcucha, więc każde z nich naprawdę mogłoby być wydawaną monetą. Gdyby pierścienie mogły się różnić, portfel wybierający nietypowy rozmiar oznaczałby własne transakcje. Monero zwiększyło rozmiar pierścienia z 11 do 16 w aktualizacji z sierpnia 2022 roku, a Blocknet na mocy konsensusu używa 16 dla każdego wejścia.
+
+## Jak Blocknet używa podpisów pierścieniowych
+
+Każde wejście w Blocknecie jest podpisywane za pomocą CLSAG i RingCT na pierścieniu dokładnie 16 wyjść. Zasady są egzekwowane przez konsensus, więc żaden portfel nie może z nich zrezygnować:
+
+- **Stały pierścień 16.** Demon odrzuca każde wejście, którego pierścień nie ma dokładnie 16 członków. Jego kod ustala ten rozmiar, „aby zapobiec wyciekowi informacji ze zmiennych rozmiarów pierścieni”.
+- **Tylko prawdziwe wyjścia.** Każdy członek pierścienia musi być prawdziwym wyjściem już zapisanym w łańcuchu, więc każdy wabik to moneta, która naprawdę mogłaby zostać wydana.
+- **Losowe wabiki i losowa pozycja.** Portfel tasuje wyjścia z łańcucha kryptograficznie bezpiecznym generatorem liczb losowych, aby wybrać 15 wabików, a potem umieszcza Twoje prawdziwe wyjście na losowej pozycji w pierścieniu.
+- **Własność i kwota w jednym dowodzie.** Każdy podpis dowodzi, że jesteś właścicielem jednego członka pierścienia i że ukryta kwota Twojego wejścia odpowiada zobowiązaniu tego członka, więc kwoty się bilansują, nie będąc pokazane.
+- **Obrazy kluczy sprawdzane względem łańcucha.** Obraz klucza jest częścią podpisywanych danych, a sieć odrzuca transakcję, jeśli ten obraz klucza został już wydany lub pojawia się dwa razy w tej samej transakcji.
+
+Format transakcji nie ma trybu jawnego, więc każda płatność w łańcuchu zawiera takie pierścienie. Podpisy pierścieniowe ukrywają nadawcę; [jednorazowe adresy stealth](/pl/blog/stealth-addresses-explained/) ukrywają odbiorcę, a [zobowiązania Pedersena z Bulletproofs](/pl/blog/bulletproofs-explained/) ukrywają kwotę. Artykuł o tym, [jak Blocknet chroni prywatność płatności](/pl/blog/blocknet-privacy-features/), omawia każdą z tych warstw i to, co oznaczają, gdy komuś płacisz.
+
+## Co przyniesie aktualizacja Faraday
+
+Blocknet planuje aktualizację sieci o nazwie Faraday, której aktywacja według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) jest planowana na około 2027-02-16. Słowami tej strony: „Dziś wydanie ukrywa się wśród 16 wyjść. Po Faradayu ukryje się wśród wszystkich wyjść w łańcuchu”. Faraday przyniesie też nowe dowody wydania, które strona opisuje jako „zbudowane tak, by komputer kwantowy nie mógł sfałszować wydania”. Trwają prace projektowe, testy i przegląd pod kątem ataków, a daty są planowane, a nie ostateczne.
+
+## Zdobądź BNT, aby wysyłać prywatnie
+
+Prostym sposobem na zdobycie monet, które korzystają z tych pierścieni, jest ich wykopanie. Miner seine jest darmowy, open source i sam dopasowuje się do Twojego komputera, a bntpool.com to jego domyślna pula, więc możesz zacząć kopać w kilka minut. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) opisuje konfigurację, a kopać możesz bezpośrednio na swój adres lub na [nazwę Blocknet ID](/pl/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Wykop swoje pierwsze prywatne BNT" text="Pobierz seine, kop na bntpool.com i otrzymuj monety, których każde wydanie chroni pierścień 16." />

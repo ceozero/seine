@@ -1,0 +1,143 @@
+---
+title: Encrypted memos on Blocknet payments
+description: Add an encrypted memo to any Blocknet payment for an invoice, order number or note. Up to 124 bytes, readable by sender and receiver, padded to blend in.
+date: 2026-10-25
+tags: [Memos, Privacy, Wallet, Payments]
+faq:
+  - q: How long can a Blocknet memo be?
+    a: A memo holds up to 124 bytes. Plain text is stored as UTF-8, so that is 124 letters, digits or punctuation marks in English, or about 41 Chinese characters at three bytes each. The wallet stops a longer memo before it builds the transaction and tells you the 124-byte maximum.
+  - q: Can a block explorer read a Blocknet memo?
+    a: No. An explorer shows the memo field as 128 bytes of ciphertext marked encrypted. The key comes from the secret shared by the sender and the receiver for that output, so only their wallets can open it. Because every memo is padded to full size, an explorer can't even tell which outputs carry a note.
+  - q: Does a memo make a Blocknet transaction bigger?
+    a: No. Every output already carries a 128-byte encrypted memo field, whether you write a note or leave it empty. Adding a memo fills space that is there anyway, so a payment with an invoice number is exactly the same size as the same payment without one, and the two look identical on the chain.
+  - q: Can I add a memo when I pay a Blocknet ID name?
+    a: Yes. Put the name where the address goes and the memo after the amount, for example send @rock 100 "invoice 1042". The wallet resolves the name, shows the verified address, the fee and the memo, and asks you to confirm. The memo is encrypted for the wallet the name points to.
+related: [blocknet-payment-links, blocknet-privacy-features, blocknet-id-pay-by-name]
+---
+
+Every Blocknet payment can carry a short encrypted note. You can use it for an invoice number, an order reference or a message to the person you're paying, and only the two of you can read it. This guide shows how to add a memo when you send BNT, who can read it, why memos never stand out on the chain, and where to find the memos you receive.
+
+## What is a Blocknet memo?
+
+A Blocknet memo is a 128-byte encrypted field attached to every transaction output. It holds up to 124 bytes of your own text or data, such as an invoice number or a short note. It is encrypted with a secret shared only by the sender and the receiver, and padded so an empty memo looks like a full one.
+
+The memo is part of the transaction format itself. Every output on the chain has one, including change outputs that return coins to your own wallet. That gives three useful properties:
+
+- **Private by default.** The contents are encrypted for the receiver of that output. Nobody else sees what you wrote.
+- **Fixed size.** The field is always 128 bytes on the chain, whatever you put in it.
+- **Always present.** Since every output carries a memo, a payment with a note looks exactly like a payment without one.
+
+## What can you put in a memo?
+
+Anything that fits in 124 bytes. Plain text is stored as UTF-8, so in English that's 124 letters, digits and spaces. Characters outside the Latin alphabet take more bytes: a Chinese character takes three, so a memo fits about 41 of them.
+
+Common uses:
+
+- **Invoices.** Put the invoice number in the memo, and the person who receives the payment can match it to the right bill without asking.
+- **Order numbers.** A shop or service can ask customers to include an order reference, then read it straight from the incoming payment.
+- **Notes.** "Rent for November", "Thanks for the help" or "Split for dinner" travel with the coins.
+- **Binary data.** The wallet also accepts raw bytes written as hex, for reference codes that software generates and reads.
+
+## How do you add a memo when sending BNT?
+
+<Answer>
+In the command-line wallet, type the memo after the amount: send @rock 100 "invoice 1042". The wallet shows the memo on the confirmation screen next to the fee, encrypts it for the receiver and sends the payment once you confirm. Raw bytes work too, with a hex: prefix.
+</Answer>
+
+The wallet's `send` command takes the memo as an optional last argument:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+A memo can contain spaces, and quotes around it are optional. The wallet removes a matching pair of quotes before it encrypts the text. Here is a payment to a Blocknet ID name with an invoice number:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+The confirmation step shows the memo the receiver will read, so you can check the memo before anything is sent. If a memo is longer than 124 bytes, the wallet stops before building the transaction with `memo too long: max 124 bytes`, and you can shorten it and try again.
+
+To send raw bytes, prefix the memo with `hex:`. The wallet decodes the hex and encrypts the bytes:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+[Payment links](/blog/blocknet-payment-links/) can carry a memo too. When you paste a `blocknet://` link or a `bntpay.com` link into the wallet, it fills in the address, the amount and the memo for you to confirm, so the person you're paying can set the invoice reference in advance. You can read more about names and links in the [Blocknet ID guide](/blog/blocknet-id-pay-by-name/).
+
+### Memos from your own software
+
+The wallet API takes a memo for each recipient of a send. In a request to `POST /api/wallet/send`, give each recipient either `memo_text` for plain text or `memo_hex` for raw bytes:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Amounts here are in atomic units, where 1 BNT is 100,000,000 units, so the example sends 100 BNT and 25 BNT. Each recipient gets their own memo, encrypted for their wallet alone. The same 124-byte maximum applies.
+
+## Who can read a Blocknet memo?
+
+<Answer>
+The sender and the receiver. Each memo is encrypted with the secret the two wallets share for that output, the same secret that creates the receiver's one-time stealth address. Anyone else, including node operators and block explorers, sees 128 bytes of random-looking data and can't tell whether a note is inside.
+</Answer>
+
+When your wallet builds a payment, it combines a fresh random transaction key with the receiver's public view key to get a shared secret. That secret is what makes the receiver's [one-time stealth address](/blog/blocknet-privacy-features/), and the wallet also uses it to encrypt the memo. It hashes the secret with SHA3-256, together with the output's position in the transaction and the network's identifier, to make a 128-byte mask, then combines the mask with the memo. Each output gets its own mask, so two memos in the same transaction are encrypted separately.
+
+The receiver's wallet finds the same secret from the other side, using its private view key, while it scans each block. It decrypts the memo and stores it with the payment. On your side, the wallet keeps the memos you wrote in its send history.
+
+Two points worth knowing:
+
+- **A view-only wallet shows memos too.** Your private view key is what reads incoming payments, so a view-only wallet built from it sees each payment's amount and memo. Share that key only with people you'd let see your incoming payments.
+- **Mining rewards carry empty memos.** Consensus requires the memo on every block reward to be empty, so the chain's coinbase outputs can never be used as a public message channel.
+
+## Why every memo looks the same on the chain
+
+A memo that showed its length would give something away. A 30-byte note looks different from a 100-byte one, and an empty memo would stand out from both. Blocknet's wallet closes that gap with a fixed layout and random padding.
+
+Before encrypting, the wallet packs the memo into a 128-byte envelope:
+
+| Bytes | Contents |
+|---|---|
+| 1 | Envelope version |
+| 1 | Length of your memo |
+| 2 | Checksum of the memo |
+| 0 to 124 | Your memo |
+| The rest | Random padding |
+
+The padding comes from the system's cryptographic random number generator, so the unused space is unpredictable. After encryption, a short note, a full note and an empty memo are all 128 bytes of random-looking data. Change outputs get an empty, padded memo of their own, so even the coins you send back to yourself blend in.
+
+The checksum lets the receiver's wallet confirm it decrypted the memo correctly before showing it. Nodes also refuse any block containing an output whose memo field is all zeros, so every output on the chain carries a properly filled memo.
+
+## Where to find memos you've received
+
+The command-line wallet shows memos wherever it lists payments:
+
+- **`history`** lists incoming and outgoing payments, with a `memo:` line under any payment that carried one.
+- **`outputs tx <txid>`** shows every output your wallet owns in that transaction, memo included. `outputs <n>` does the same for a single output from the list.
+- **The wallet API** returns each received output's memo as `memo_hex` from `GET /api/wallet/history`, ready for an order system to match against invoices.
+
+Text memos appear in quotes. A memo that isn't printable text, such as raw bytes sent with `hex:`, appears as hex.
+
+If a payment ever needs settling, the sender can prove it. The wallet's `prove <txid>` command prints the transaction key for a payment you sent. Anyone with that key, the transaction ID and the receiver's address can check the payment through the `POST /api/verify-proof` endpoint, which needs no wallet. It confirms the transaction and shows the outputs that address received, their amounts and their memos.
+
+## Earn the BNT you'll send
+
+A simple way to get your first BNT is to mine it. Seine runs on your own computer, tunes itself while it mines and pays out through bntpool.com straight to your address or your `@name`. The [mining guide](/blog/how-to-mine-blocknet/) gets it running in a few minutes.
+
+<CTA target="seine" title="Download seine and mine BNT" text="Mine Blocknet on your own computer with zero setup, then pay with private, memo-tagged payments from your wallet." />

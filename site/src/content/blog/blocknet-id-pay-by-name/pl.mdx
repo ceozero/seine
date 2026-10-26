@@ -1,0 +1,104 @@
+---
+title: Odbieraj płatności na @name dzięki Blocknet ID
+description: Zarejestruj krótką nazwę Blocknet ID na blocknet.id i odbieraj BNT, udostępniaj linki płatności i kop na bntpool.com na @name zamiast ponad 90-znakowego adresu.
+tags: [Blocknet ID, Portfel, Płatności, bntpool]
+faq:
+  - q: 'Czy w krótkich nazwach Blocknet ID ma znaczenie wielkość liter?'
+    a: 'Nie. Wielkość liter w krótkiej nazwie nie ma znaczenia, więc @Alice, @alice i $ALICE trafiają do tego samego portfela. Nazwy mogą zawierać litery od a do z, cyfry od 0 do 9, podkreślnik, myślnik i kropkę oraz mieć do 64 znaków. Oba prefiksy, @ i $, działają wszędzie tam, gdzie nazwa jest akceptowana.'
+  - q: 'Czy Blocknet ID jest darmowy?'
+    a: 'Według stanu na październik 2026 roku nazwy mające dziewięć lub więcej znaków są darmowe, dopóki trwa promocja blocknet.id, bez faktury i bez płatności. Krótsze nazwy mają jednorazową cenę, która rośnie wraz ze skracaniem nazwy, od 100 BNT za osiem znaków. Strona z cennikiem na blocknet.id podaje cenę dla każdej długości.'
+  - q: 'Czy mogę kopać na bntpool.com na krótką nazwę Blocknet ID?'
+    a: 'Tak. Wpisz swoje @name, gdy seine poprosi o adres wypłat, albo przekaż je przez --address. seine sprawdza podpisany rekord na blocknet.id, pokazuje pełny adres, na który nazwa została rozwiązana, i kopie na ten adres przez cały czas działania. Krótkie nazwy wymagają seine v0.2.16 lub nowszego, a bntpool.com akceptuje je również przy logowaniu.'
+  - q: 'Co się stanie z moim saldem w puli, jeśli skieruję nazwę na nowy adres?'
+    a: 'Twoje dotychczasowe saldo zostaje przy adresie, który je wypracował, i bntpool.com wypłaca je tam jak zwykle. Pula śledzi udziały, salda i wypłaty według pełnego adresu, więc zmiana nazwy nigdy nie przekierowuje istniejącego salda. Przy następnym uruchomieniu kopania nazwa zostaje rozwiązana ponownie, a nowe udziały trafiają na nowy adres.'
+sourceHash: ec25796b2073
+translation: draft
+---
+
+Dzięki krótkiej nazwie Blocknet ID inni mogą płacić Ci na `@yourname`, możesz udostępnić link płatności, który zmieści się w wiadomości na czacie, i możesz kopać na bntpool.com na tę samą nazwę. Ten poradnik wyjaśnia, jak działają nazwy, jak zarejestrować nazwę na blocknet.id i jak używać jej w portfelu i w seine.
+
+## Czym jest krótka nazwa Blocknet ID?
+
+<Answer>
+Krótka nazwa Blocknet ID (shortname) to krótka nazwa, taka jak @alice albo $alice, która wskazuje na adres Twojego portfela Blocknet. Rejestrujesz ją na blocknet.id. Portfele, seine i bntpool.com wyszukują nazwę, sprawdzają, czy blocknet.id podpisał rekord, a następnie używają pełnego adresu, na który nazwa wskazuje.
+</Answer>
+
+Zasady są takie same wszędzie, gdzie nazwa jest akceptowana:
+
+- **Dwa prefiksy.** `@name` i `$name` to ta sama nazwa. Używaj tego, który wolisz.
+- **Bez rozróżniania wielkości liter.** `@Alice` i `@alice` wskazują na ten sam adres.
+- **Proste znaki.** Litery od a do z, cyfry od 0 do 9, podkreślnik, myślnik i kropka.
+- **Do 64 znaków.**
+
+Każdy rekord na blocknet.id jest podpisany. Gdy portfel rozwiązuje nazwę, pobiera rekord, a następnie sprawdza jego podpis Ed25519 kluczem podpisującym, który blocknet.id publikuje pod adresem `https://blocknet.id/.well-known/blocknet-id.json`. Podpisane dane zawierają nazwę, adres i czas ostatniej aktualizacji, a portfel potwierdza zgodność wszystkich trzech, zanim użyje adresu. Każda nazwa ma też publiczną stronę na blocknet.id, która pokazuje jej adres, podpisane dane i podpis, więc każdy może sam sprawdzić rekord.
+
+## Dlaczego płacić na nazwę zamiast na adres?
+
+Adres Blocknet to zakodowane w base58 Twój publiczny klucz wydawania (spend key), Twój publiczny klucz podglądu (view key) i suma kontrolna, co daje 92 lub 93 znaki. To sporo do kopiowania między aplikacjami, czytania na głos czy zmieszczenia w profilu. Krótką nazwę możesz powiedzieć w jednym zdaniu, wydrukować na naklejce albo dodać do opisu profilu.
+
+Dostajesz też wyraźny krok potwierdzenia. Gdy wysyłasz na nazwę, portfel wyświetla adres, na który ją rozwiązał, i oznacza go jako zweryfikowany, zanim zatwierdzisz płatność. Nazwa zastępuje tylko adres, który i tak byś udostępnił. W łańcuchu płatność jest zwykłą transakcją Blocknet na [jednorazowy adres stealth](/pl/blog/blocknet-privacy-features/), więc pozostaje tak samo prywatna jak każda inna płatność.
+
+## Jak zdobyć Blocknet ID?
+
+<Answer>
+Skopiuj adres swojego portfela, otwórz blocknet.id i wyszukaj nazwę, którą chcesz. Jeśli jest dostępna, strona pokaże jej cenę; wklej swój adres i zatwierdź. Nazwy mające dziewięć lub więcej znaków są darmowe w ramach obecnej promocji. Po rejestracji Twoja nazwa działa w portfelach, w seine i na bntpool.com.
+</Answer>
+
+1. **Skopiuj swój adres.** W portfelu wiersza poleceń wyświetla go polecenie `address`, a po nim wiersz „Get a short name like @name or $name at https://blocknet.id”. Portfel pobierzesz z [wydań wersji wiersza poleceń](https://github.com/blocknetprivacy/blocknet/releases/latest) albo z [wydań wersji desktopowej](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Wyszukaj nazwę.** Wejdź na [blocknet.id](https://blocknet.id), wpisz nazwę w pole „find a name” i naciśnij Search. Już podczas pisania strona informuje, jeśli jakiś znak jest niedozwolony albo nazwa jest za długa.
+3. **Sprawdź wynik.** Dostępna nazwa pokazuje swoją cenę. Nazwa, która jest już zarejestrowana, pokazuje swój adres, datę ostatniej aktualizacji i link do swojej publicznej strony.
+4. **Zarejestruj ją.** Wklej adres swojego portfela i naciśnij „Claim free” (albo „Register” w przypadku płatnej nazwy).
+
+Cena to jednorazowa opłata zależna od długości nazwy. W chwili pisania (październik 2026) każda nazwa mająca dziewięć lub więcej znaków jest darmowa w ramach promocji, „no invoice, no payment”, jak pisze strona. Nazwy ośmioznakowe kosztują 100 BNT, a krótsze więcej, aż do 6 000 BNT za jeden znak. [Strona z cennikiem](https://blocknet.id/pricing) podaje ceny dla każdej długości.
+
+Aby później zarządzać swoimi nazwami, użyj „sign in” na blocknet.id ze swoim adresem Blocknet. Na stronie zarządzania możesz skierować nazwę na inny adres.
+
+## Jak wysłać BNT na nazwę?
+
+W portfelu wiersza poleceń wpisz nazwę tam, gdzie wpisałbyś adres:
+
+```
+send @rock 100 "hello"
+```
+
+Portfel rozwiązuje `@rock`, wyświetla `Resolved @rock -> <address>` ze znacznikiem weryfikacji, a następnie prosi o potwierdzenie. Potwierdzenie pokazuje nazwę, pełny adres, opłatę i Twoje memo. Forma `$rock` działa tak samo, a `send` przyjmuje kwoty całkowite i ułamkowe.
+
+API portfela rozwiązuje nazwy w ten sam sposób dla każdego odbiorcy w żądaniu wysyłki, więc narzędzia zbudowane na portfelu obsługują płatności na nazwy bez dodatkowej pracy.
+
+## Jak działają linki płatności z nazwą?
+
+[Link płatności](/pl/blog/blocknet-payment-links/) zawiera odbiorcę, kwotę i opcjonalne memo. Blocknet obsługuje dwie formy:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+Link bntpay.com działa z nazwą zamiast adresu, więc pozostaje krótki. Po jego otwarciu pojawia się strona z napisem „Pay $yourname”, kwotą i memo oraz przyciskiem „Open in Wallet”, który otwiera płatność jako link `blocknet://`. Jeśli wkleisz dowolną z tych form do portfela wiersza poleceń, portfel przygotuje wysyłkę do potwierdzenia. Dodaj pole `amount`; memo jest opcjonalne i mieści do 124 bajtów tekstu.
+
+Dzięki temu łatwo opublikować jeden link na napiwki albo wysłać fakturę w jednej wiadomości.
+
+## Jak kopać na swoje @name?
+
+seine i bntpool.com akceptują krótką nazwę jako adres wypłat. Gdy pierwszy raz uruchomisz [seine](/pl/#download), wpisz `@yourname` przy pytaniu o adres i zaakceptuj domyślną pulę. Aby podać nazwę w wierszu poleceń, ujmij ją w cudzysłów:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+W poleceniach powłoki ujmuj krótkie nazwy w cudzysłów, zwłaszcza w formie `$name`, aby powłoka przekazała je bez zmian. Krótkie nazwy wymagają seine v0.2.16 lub nowszego.
+</Note>
+
+Oto co dzieje się dalej:
+
+- **seine rozwiązuje nazwę przy starcie.** Weryfikuje podpisany rekord z blocknet.id, sprawdza adres, zapisuje w logu pełny adres, na który nazwa została rozwiązana, i trzyma się tego adresu przez cały czas działania, także przy ponownych połączeniach z pulą.
+- **Pula akceptuje nazwy również przy logowaniu.** bntpool.com weryfikuje podpisane powiązanie, gdy miner łączy się z nazwą, i używa rozwiązanego pełnego adresu dla zadań, udziałów, sald i wypłat.
+- **Możesz sprawdzić swoje statystyki po nazwie.** Strona statystyk na [bntpool.com](https://bntpool.com) przyjmuje `@name` i `$name`, więc możesz śledzić swój hashrate i saldo bez wklejania adresu.
+- **Zapisana nazwa jest rozwiązywana ponownie przy kolejnym uruchomieniu.** seine przechowuje nazwę w swojej konfiguracji, więc każdy nowy start pobiera adres, na który Twoja nazwa wskazuje w danej chwili.
+
+Ponieważ salda należą do pełnego adresu, późniejsza zmiana nazwy nigdy nie przekierowuje istniejącego salda. Wszystko, co już wykopałeś, zostaje przy adresie, który to wypracował, i jest tam wypłacane, a nowe kopanie trafia na nowy adres. Ta sama nazwa działa też w trybie solo z Twoim własnym węzłem.
+
+Dopiero zaczynasz kopać? [Poradnik kopania Blocknet](/pl/blog/how-to-mine-blocknet/) prowadzi przez pobranie seine, sprzęt i wypłaty na bntpool.com.
+
+<CTA target="pool" title="Kop na swoje @name" text="bntpool.com przyjmuje Twoją krótką nazwę Blocknet ID jako login do wypłat. Zacznij kopać w kilka minut." />

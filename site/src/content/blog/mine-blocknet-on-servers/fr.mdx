@@ -1,0 +1,146 @@
+---
+title: Miner Blocknet sur des serveurs et des rigs
+description: 'Minez Blocknet sur serveurs EPYC et parcs de rigs avec seine : placement NUMA et L3 automatique, exécution sans écran, API de contrôle et métriques Prometheus.'
+tags: [Guide de minage, Serveurs, Linux, seine]
+faq:
+  - q: 'seine prend-il en charge les serveurs NUMA ?'
+    a: 'Oui. Sous Linux, l''affinité automatique par défaut de seine répartit les threads de minage sur les nœuds NUMA et les groupes de cache L3, un par cœur physique avant les cœurs SMT jumeaux, et chaque thread s''épingle avant d''allouer sa zone de 2 GiB pour que la mémoire se trouve près de lui. Sur une machine EPYC à deux nœuds, le hashrate a augmenté de 73 % à huit threads.'
+  - q: 'seine peut-il tourner sans terminal, comme service en arrière-plan ?'
+    a: 'Oui. Passez --address et --pool-url au premier lancement : seine démarre sans aucune question, enregistre les deux dans seine.config.json dans son répertoire de données et passe à de simples lignes de journal quand aucun terminal n''est attaché. Il est ainsi facile de le faire tourner sous systemd ou un autre gestionnaire de services qui le redémarre automatiquement.'
+  - q: 'seine exporte-t-il des métriques Prometheus ?'
+    a: 'Oui. Lancez seine avec --api-server ou --service et il sert des métriques Prometheus sur /metrics via son API de contrôle locale, qui écoute par défaut sur 127.0.0.1, port 9977. Les métriques indiquent si le mineur tourne, son état de cycle de vie, les solutions soumises, acceptées et périmées, et les mises en quarantaine de backends. Les collectes envoient le jeton bearer de l''API.'
+  - q: 'Pourquoi l''API de contrôle de seine demande-t-elle un jeton ?'
+    a: 'Depuis seine v0.2.23, chaque endpoint de l''API de contrôle, sauf le contrôle de santé, exige un jeton bearer, ce qui empêche les sites web que vous visitez de modifier votre adresse de paiement ou vos réglages. seine écrit un nouveau jeton dans control-api.cookie dans son répertoire de données à chaque démarrage, ou vous pouvez en fixer un avec --api-token.'
+sourceHash: 186b1dc3c49e
+translation: draft
+---
+
+Ce guide traite de l'exécution de seine sur de grosses machines et sur une baie de rigs de minage : comment il place les threads sur les serveurs à nombreux cœurs, comment le faire tourner sans écran sous un gestionnaire de services, et comment démarrer, arrêter et surveiller chaque rig via son API de contrôle locale, son flux d'événements en direct et ses métriques Prometheus.
+
+## Comment seine exploite-t-il un gros serveur ?
+
+<Answer>
+Sous Linux, seine répartit ses threads de minage sur les nœuds NUMA et sur les groupes de cache L3 de chaque nœud, avec un thread par cœur physique avant tout cœur SMT jumeau. Chaque thread s'épingle à son cœur avant d'allouer sa zone de 2 GiB, si bien que la mémoire se trouve près de lui. C'est le comportement par défaut : il n'y a rien à configurer.
+</Answer>
+
+La preuve de travail Argon2id de Blocknet consiste surtout en trafic mémoire. Chaque thread remplit et relit sa propre zone de 2 GiB pour chaque hachage : le hashrate dépend donc du nombre de contrôleurs mémoire et de groupes de cache que vos threads occupent en même temps. L'[explication d'Argon2id](/fr/blog/argon2id-proof-of-work-explained/) détaille pourquoi.
+
+Si les threads suivent simplement l'ordre des CPU du système d'exploitation, ils remplissent les premiers cœurs de la liste, qui se trouvent tous sur le même nœud et dans les mêmes quelques groupes de cache. Sur une machine EPYC à deux nœuds, huit threads dans l'ordre du système se sont tous retrouvés sur le nœud 0, avec la quasi-totalité des 16 GiB de zones dans la mémoire de ce nœud. Le placement automatique de seine a mis quatre threads sur chaque nœud et environ 8 GiB de zones sur chacun, de sorte que la mémoire des deux nœuds travaillait en même temps. Sur un EPYC 8434P à un seul nœud avec huit groupes L3, 24 threads dans l'ordre du système se sont entassés à six par groupe dans quatre groupes. seine a utilisé les huit groupes, à trois threads chacun.
+
+Le placement suit les limites que vous donnez au processus. Il respecte les masques de CPU et de mémoire du processus : il fonctionne donc dans `taskset`, les cgroups et les conteneurs, et n'utilise que les cœurs que vous autorisez. Sous Windows natif, le même réglage `auto` remplit les cœurs physiques avant les cœurs SMT jumeaux.
+
+## Quel gain apporte le placement adapté au NUMA ?
+
+Les développeurs de seine l'ont mesuré le 24 octobre 2026 avec le même binaire lancé de deux façons, par paires alternées : le placement automatique de seine, et l'épinglage dans l'ordre simple du système (`--cpu-affinity os`) :
+
+| Machine | Threads | Pages mémoire | Gain du placement automatique |
+|---|---|---|---|
+| AMD EPYC · Zen 3 à deux nœuds (EPYC 7R13, AWS c6a.8xlarge) | 8 | Ordinaires | **+73 %** |
+| AMD EPYC · Zen 3 à deux nœuds (EPYC 7R13, AWS c6a.8xlarge) | 8 | Huge pages de 2 MiB | **+108 %** |
+| Serveur AMD EPYC (EPYC 8434P, 48 cœurs, huit groupes L3) | 24 | Ordinaires | **+16,7 %** |
+
+Chaque paire alternée a donné l'avantage au placement automatique ; la méthode complète et les résultats bruts figurent dans le [guide des gros serveurs](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) et le [journal d'optimisation CPU](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md) de seine.
+
+Le gain apparaît quand seine fait tourner moins de threads que la machine n'a de cœurs. C'est le cas chaque fois que la RAM, plutôt que le nombre de cœurs, fixe le nombre de threads : chaque thread a besoin d'environ 2 GB, donc remplir un serveur de 48 cœurs demande environ 96 GB rien que pour les zones. Le placement garantit que les threads permis par votre RAM sont répartis sur tous les nœuds NUMA et tous les groupes de cache.
+
+Le placement et les huge pages se cumulent, comme le montre la deuxième ligne. Si vous réservez des huge pages, réservez-les sur chaque nœud qui héberge des threads, car un total suffisant ne garantit pas des pages locales. Le [guide des huge pages](/fr/blog/huge-pages-blocknet-mining/) explique la configuration des pages ; sous Linux, le pool de pages de 2 MiB de chaque nœud se règle dans `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages`.
+
+Pour vérifier l'effet sur votre propre machine, comparez `auto` et `os` avec le même nombre de threads et la même configuration de pages. `--cpu-affinity off` laisse entièrement le placement à l'ordonnanceur.
+
+### Marge mémoire sur les serveurs partagés
+
+Le dimensionnement automatique des threads garde 5 % de la RAM totale libre, en plus de toute réservation pour le GPU. Modifiez-le avec `--cpu-memory-reserve-percent`. Si d'autres services se mettent à consommer de la mémoire, les threads automatiques de seine libèrent leurs zones et reviennent dès que la mémoire se libère : le minage s'adapte ainsi au reste de la machine. Les résultats d'optimisation sont mis en cache par machine, et le cache est réinitialisé quand l'ensemble de CPU autorisés ou la disposition NUMA et L3 change, par exemple après le redimensionnement d'une VM.
+
+## Comment faire tourner seine sans écran ?
+
+<Answer>
+Passez votre adresse de paiement et votre pool en ligne de commande, par exemple `--address` avec votre adresse ou votre `@name` et `--pool-url stratum+tcp://bntpool.com:3333`. seine démarre alors sans poser de questions, enregistre les réglages dans son répertoire de données et affiche de simples lignes de journal quand aucun terminal n'est attaché, ce qui permet à un gestionnaire de services de le faire tourner.
+</Answer>
+
+Sur un ordinateur de bureau, seine demande une adresse et un pool au premier lancement. Sur un serveur sans terminal attaché, fournissez-lui les deux d'emblée :
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+Le nom du rig (ici `rack1-node04`) est le nom sous lequel cette machine apparaît sur le pool. seine enregistre l'adresse, le pool et le nom du rig dans `seine.config.json` dans le répertoire de données (`./seine-data` par défaut) : les lancements suivants avec le même répertoire de données n'ont besoin d'aucune autre option. Avec le réglage par défaut `--ui auto`, il affiche [le tableau de bord](/fr/blog/seine-dashboard-explained/) dans un terminal et de simples lignes de journal partout ailleurs ; `--ui plain` force la sortie simple. Mettez `@name` et `$name` entre guillemets dans les commandes shell.
+
+Sous Linux, une unité systemd lance seine au démarrage et le redémarre s'il s'arrête :
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine résout un nom court au démarrage : l'unité attend donc le réseau. Chaque rig s'optimise pendant qu'il mine et conserve ses choix dans son propre répertoire de données pour le lancement suivant.
+
+## Comment piloter seine via son API ?
+
+seine dispose d'une API REST locale avec un flux d'événements en direct et des métriques Prometheus, conçue pour les tableaux de bord et les outils de gestion de parc. Il y a deux façons de la lancer :
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+Le mode `--service` lance l'API et laisse le mineur inactif jusqu'à ce qu'un contrôleur envoie `POST /v1/miner/start`, qui peut transmettre l'adresse, le pool, le nombre de threads et d'autres réglages pour cette session. C'est votre contrôleur qui décide quand chaque machine mine et avec quels réglages.
+
+### Le jeton de l'API
+
+Depuis seine v0.2.23, chaque endpoint sauf `GET /v1/health` exige `Authorization: Bearer <token>`. seine écrit un nouveau jeton aléatoire dans `control-api.cookie` dans le répertoire de données à chaque démarrage, lisible uniquement par son propriétaire sous Unix, et le supprime à l'arrêt. Pour les outils de gestion de parc qui ont besoin d'une valeur stable, fixez-en une avec `--api-token`, ou déplacez le fichier avec `--api-cookie`. Par défaut, l'API n'envoie pas non plus d'en-têtes CORS et, quand elle est liée à l'interface loopback, rejette les requêtes dont le `Host` n'est pas local, ce qui empêche les sites web que vous visitez de modifier votre adresse de paiement ou vos réglages.
+
+L'API se lie par défaut à `127.0.0.1:9977`. Se lier à une autre interface demande `--api-allow-unsafe-bind` : l'API reste donc sur la machine, sauf si vous en décidez autrement.
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### Événements en direct
+
+`GET /v1/events/stream` est un flux d'événements SSE (server-sent events). Il signale en temps réel les changements d'état, les phases des backends, la progression et les résultats de l'optimisation automatique, les solutions trouvées et les résultats de soumission : un tableau de bord peut ainsi afficher chaque rig en direct. Après une reconnexion, `GET /v1/runtime/state` renvoie l'état actuel complet.
+
+### Métriques Prometheus
+
+`GET /metrics` sert des métriques Prometheus, dont `seine_miner_running`, `seine_miner_lifecycle_info`, `seine_miner_submitted_blocks_total`, `seine_miner_accepted_blocks_total` et `seine_miner_stale_submits_total`. Comme le cookie change à chaque démarrage et que seul l'utilisateur de seine peut le lire, donnez à Prometheus un jeton fixe : lancez seine avec `--api-token` et enregistrez la même valeur dans un fichier que Prometheus peut lire. Une tâche de collecte sur la même machine ressemble alors à ceci :
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+La liste complète des endpoints, les schémas de requêtes et le catalogue des événements figurent dans la [documentation de l'API de contrôle](https://github.com/zpalmtree/seine/blob/master/docs/API.md) de seine.
+
+## Choisir les machines d'un rig
+
+Le placement, l'exécution sans écran et l'API fonctionnent de la même façon sur une simple tour et sur une baie de serveurs. Pour savoir quels processeurs minent le plus vite et combien de RAM prévoir par thread, consultez le [guide du matériel de minage Blocknet](/fr/blog/blocknet-mining-hardware-hashrate/). Vous découvrez seine ? Commencez par [comment miner Blocknet](/fr/blog/how-to-mine-blocknet/).
+
+<CTA target="seine" title="Téléchargez seine pour vos serveurs" text="seine place de lui-même les threads sur les nœuds NUMA et les groupes de cache, tourne sans écran et donne à chaque rig une API de contrôle avec événements en direct et métriques Prometheus." />

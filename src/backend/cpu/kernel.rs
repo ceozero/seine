@@ -11,10 +11,10 @@ use crate::types::hash_meets_target;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 use super::emit_warning;
 use super::{
-    emit_error, emit_event, fixed_argon, flush_hashes, lane_quota_for_chunk, mark_worker_active,
+    activate_worker, emit_error, emit_event, fixed_argon, flush_hashes, lane_quota_for_chunk,
     mark_worker_inactive, mark_worker_ready, request_shutdown, request_work_pause,
-    set_thread_high_perf, should_flush_hashes, wait_for_work_update, Shared,
-    MAX_DEADLINE_CHECK_INTERVAL, SOLVED_MASK,
+    set_thread_high_perf, should_flush_hashes, wait_for_work_update, wait_for_worker_enabled,
+    CpuWorkUpdate, Shared, MAX_DEADLINE_CHECK_INTERVAL, SOLVED_MASK,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -83,47 +83,38 @@ pub(super) fn cpu_worker_loop(
     thread_idx: usize,
     core_id: Option<core_affinity::CoreId>,
 ) {
+    worker_loop::<POW_MEMORY_KB>(shared, thread_idx, core_id);
+}
+
+// Small-memory instantiations exercise the real worker lifecycle in tests.
+// Production always instantiates the consensus memory size above.
+fn worker_loop<const MEMORY_KB: u32>(
+    shared: Arc<Shared>,
+    thread_idx: usize,
+    core_id: Option<core_affinity::CoreId>,
+) {
+    worker_loop_with_allocator::<MEMORY_KB>(shared, thread_idx, core_id, PowArena::new);
+}
+
+fn worker_loop_with_allocator<const MEMORY_KB: u32>(
+    shared: Arc<Shared>,
+    thread_idx: usize,
+    core_id: Option<core_affinity::CoreId>,
+    mut allocate: impl FnMut(usize, CpuPageMode) -> Result<PowArena, String>,
+) {
     set_thread_high_perf();
     if let Some(core_id) = core_id {
         let _ = core_affinity::set_for_current(core_id);
     }
 
-    let hasher = fixed_argon::FixedArgon2id::new(POW_MEMORY_KB);
-    let block_count = hasher.block_count();
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    let block_bytes = block_count * std::mem::size_of::<fixed_argon::PowBlock>();
-
-    let mut arena = match PowArena::new(block_count, shared.page_mode) {
-        Ok(arena) => arena,
-        Err(err) => {
-            let message = format!(
-                "cpu thread {thread_idx}: {} page-mode arena allocation failed ({err})",
-                shared.page_mode.as_str()
-            );
-            shared
-                .arena_allocation_failures
-                .fetch_add(1, Ordering::AcqRel);
-            if let Ok(mut slot) = shared.startup_error.lock() {
-                if slot.is_none() {
-                    *slot = Some(message.clone());
-                }
-            }
-            shared.startup_failed.store(true, Ordering::Release);
-            emit_error(&shared, message);
-            shared.ready_cv.notify_all();
-            request_shutdown(&shared);
-            return;
-        }
-    };
-    record_arena_backing(&shared, &arena, block_count);
-    #[cfg(target_os = "linux")]
-    emit_linux_hugepage_diagnostics(&shared, thread_idx, &arena, block_bytes);
-    #[cfg(target_os = "windows")]
-    emit_windows_large_page_diagnostics(&shared, thread_idx, &arena, block_bytes);
-    let memory_blocks = arena.as_mut_slice();
-
+    let mut hasher = None;
+    let mut active_kernel_request = 0;
+    let arena_bytes = u64::from(MEMORY_KB) * 1024;
+    let mut arena: Option<PowArena> = None;
+    let mut backing = None;
+    let mut warmed = false;
     let mut output = [0u8; POW_OUTPUT_LEN];
-    mark_worker_ready(&shared);
+    let mut ready = false;
     let mut local_generation = 0u64;
     let mut local_work = None;
     let mut worker_active = false;
@@ -139,14 +130,113 @@ pub(super) fn cpu_worker_loop(
     let mut next_deadline_check_at = Instant::now();
 
     loop {
+        if thread_idx >= shared.desired_workers.load(Ordering::Acquire) {
+            flush_hashes(&shared, thread_idx, &mut pending_hashes);
+            mark_worker_inactive(&shared, &mut worker_active);
+            // Free the arena before advertising the recovered headroom.
+            drop(arena.take());
+            drop(hasher.take());
+            active_kernel_request = 0;
+            shared.kernel_acknowledgements[thread_idx].store(0, Ordering::Release);
+            if warmed {
+                shared.warmed_workers.fetch_sub(1, Ordering::AcqRel);
+                warmed = false;
+            }
+            if let Some(observation) = backing.take() {
+                release_arena_backing(&shared, observation);
+                shared
+                    .arena_committed_bytes
+                    .fetch_sub(arena_bytes, Ordering::AcqRel);
+            }
+            if !ready {
+                mark_worker_ready(&shared);
+                ready = true;
+            }
+            if !wait_for_worker_enabled(&shared, thread_idx) {
+                break;
+            }
+            continue;
+        }
+        if arena.is_none() {
+            // Account for first-touch memory before allocation completes. A
+            // concurrent budget refresh must not treat our own new arena as
+            // competing RAM and immediately cancel the worker being added.
+            shared
+                .arena_committed_bytes
+                .fetch_add(arena_bytes, Ordering::AcqRel);
+            let initialized = fixed_argon::FixedArgon2id::with_kernel(MEMORY_KB, shared.kernel)
+                .expect("kernel support checked before CPU backend starts");
+            let block_count = initialized.block_count();
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            let block_bytes = block_count * std::mem::size_of::<fixed_argon::PowBlock>();
+            match allocate(block_count, shared.page_mode) {
+                Ok(allocated) => {
+                    backing = Some(allocated.backing_observation(
+                        (block_count * std::mem::size_of::<fixed_argon::PowBlock>()) as u64,
+                    ));
+                    apply_arena_backing(&shared, backing.expect("just observed arena"));
+                    #[cfg(target_os = "linux")]
+                    emit_linux_hugepage_diagnostics(&shared, thread_idx, &allocated, block_bytes);
+                    #[cfg(target_os = "windows")]
+                    emit_windows_large_page_diagnostics(
+                        &shared,
+                        thread_idx,
+                        &allocated,
+                        block_bytes,
+                    );
+                    arena = Some(allocated);
+                    hasher = Some(initialized);
+                    if !ready {
+                        mark_worker_ready(&shared);
+                        ready = true;
+                    }
+                }
+                Err(err) => {
+                    shared
+                        .arena_committed_bytes
+                        .fetch_sub(arena_bytes, Ordering::AcqRel);
+                    let message = format!(
+                        "cpu thread {thread_idx}: {} page-mode arena allocation failed ({err})",
+                        shared.page_mode.as_str()
+                    );
+                    shared
+                        .arena_allocation_failures
+                        .fetch_add(1, Ordering::AcqRel);
+                    shared
+                        .worker_allocation_failures
+                        .fetch_add(1, Ordering::AcqRel);
+                    if shared.adaptive {
+                        // Keep healthy workers alive; the controller retries after a cooldown.
+                        if let Ok(_control) = shared.work_control.lock() {
+                            shared
+                                .desired_workers
+                                .fetch_min(thread_idx, Ordering::AcqRel);
+                            shared.work_cv.notify_all();
+                        }
+                        super::emit_warning(&shared, message);
+                        continue;
+                    }
+                    if let Ok(mut slot) = shared.startup_error.lock() {
+                        if slot.is_none() {
+                            *slot = Some(message.clone());
+                        }
+                    }
+                    shared.startup_failed.store(true, Ordering::Release);
+                    emit_error(&shared, message);
+                    shared.ready_cv.notify_all();
+                    request_shutdown(&shared);
+                    break;
+                }
+            }
+        }
         let global_generation = shared.work_generation.load(Ordering::Acquire);
         if global_generation != local_generation || local_work.is_none() {
             if local_work.is_some() {
                 flush_hashes(&shared, thread_idx, &mut pending_hashes);
                 mark_worker_inactive(&shared, &mut worker_active);
             }
-            match wait_for_work_update(&shared, local_generation) {
-                Ok(Some((generation, work))) => {
+            match wait_for_work_update(&shared, local_generation, thread_idx) {
+                Ok(CpuWorkUpdate::Work(generation, work)) => {
                     nonce = work.nonce_chunk.start_nonce.wrapping_add(thread_idx as u64);
                     lane_iters = 0;
                     lane_quota = lane_quota_for_chunk(
@@ -159,14 +249,15 @@ pub(super) fn cpu_worker_loop(
                     next_deadline_check_at = Instant::now();
                     local_generation = generation;
                     local_work = Some(work);
-                    if lane_quota > 0 {
-                        mark_worker_active(&shared, &mut worker_active);
-                    } else {
+                    if lane_quota == 0 {
+                        shared.finished_generations[thread_idx]
+                            .store(local_generation, Ordering::Release);
                         local_work = None;
                     }
                     continue;
                 }
-                Ok(None) => break,
+                Ok(CpuWorkUpdate::Park) => continue,
+                Ok(CpuWorkUpdate::Shutdown) => break,
                 Err(err) => {
                     emit_error(
                         &shared,
@@ -184,6 +275,7 @@ pub(super) fn cpu_worker_loop(
         let template = &work.template;
 
         if lane_iters >= lane_quota {
+            shared.finished_generations[thread_idx].store(local_generation, Ordering::Release);
             flush_hashes(&shared, thread_idx, &mut pending_hashes);
             mark_worker_inactive(&shared, &mut worker_active);
             local_work = None;
@@ -191,6 +283,7 @@ pub(super) fn cpu_worker_loop(
         }
 
         if shared.solution_state.load(Ordering::Acquire) != template.work_id {
+            shared.finished_generations[thread_idx].store(local_generation, Ordering::Release);
             flush_hashes(&shared, thread_idx, &mut pending_hashes);
             mark_worker_inactive(&shared, &mut worker_active);
             local_work = None;
@@ -201,6 +294,7 @@ pub(super) fn cpu_worker_loop(
         let deadline_check_due = loop_started_at >= next_deadline_check_at;
         if control_hashes_remaining == 0 || deadline_check_due {
             if loop_started_at >= template.stop_at {
+                shared.finished_generations[thread_idx].store(local_generation, Ordering::Release);
                 flush_hashes(&shared, thread_idx, &mut pending_hashes);
                 mark_worker_inactive(&shared, &mut worker_active);
                 local_work = None;
@@ -217,14 +311,40 @@ pub(super) fn cpu_worker_loop(
             }
         }
 
+        match activate_worker(&shared, thread_idx, local_generation, &mut worker_active) {
+            Ok(true) => {}
+            Ok(false) => continue,
+            Err(err) => {
+                emit_error(&shared, err.to_string());
+                request_shutdown(&shared);
+                break;
+            }
+        }
+        // Finish the previous hash before changing ISA. Keep the same arena,
+        // nonce cursor and assignment; switching must never repeat mining work.
+        let request = shared.kernel_request.load(Ordering::Acquire);
+        if active_kernel_request != request {
+            flush_hashes(&shared, thread_idx, &mut pending_hashes);
+            hasher
+                .as_mut()
+                .expect("enabled worker has a hasher")
+                .set_kernel(super::kernel_from_request(request))
+                .expect("requested kernel was checked before publication");
+            active_kernel_request = request;
+        }
         let target_snapshot = template.target_snapshot();
         let nonce_bytes = nonce.to_le_bytes();
         if hasher
+            .as_ref()
+            .expect("enabled worker has a hasher")
             .hash_password_into_with_memory(
                 &nonce_bytes,
                 &template.header_base,
                 &mut output,
-                memory_blocks,
+                arena
+                    .as_mut()
+                    .expect("enabled worker has an arena")
+                    .as_mut_slice(),
             )
             .is_err()
         {
@@ -237,8 +357,22 @@ pub(super) fn cpu_worker_loop(
         }
 
         lane_iters += 1;
+        if !warmed {
+            shared.warmed_workers.fetch_add(1, Ordering::AcqRel);
+            warmed = true;
+        }
         control_hashes_remaining -= 1;
         pending_hashes += 1;
+
+        if shared.kernel_acknowledgements[thread_idx].load(Ordering::Acquire)
+            != active_kernel_request
+        {
+            // Publish completion only after flushing old and warm-up work. A
+            // sampler starts a fresh counter window after every lane has acked.
+            flush_hashes(&shared, thread_idx, &mut pending_hashes);
+            shared.kernel_acknowledgements[thread_idx]
+                .store(active_kernel_request, Ordering::Release);
+        }
 
         let hash_completed_at = Instant::now();
         let should_flush = should_flush_hashes(
@@ -262,6 +396,8 @@ pub(super) fn cpu_worker_loop(
                 output,
             ) {
                 Ok(SolutionDisposition::PauseAssignment) => {
+                    shared.finished_generations[thread_idx]
+                        .store(local_generation, Ordering::Release);
                     flush_hashes(&shared, thread_idx, &mut pending_hashes);
                     mark_worker_inactive(&shared, &mut worker_active);
                     local_work = None;
@@ -281,6 +417,16 @@ pub(super) fn cpu_worker_loop(
 
     flush_hashes(&shared, thread_idx, &mut pending_hashes);
     mark_worker_inactive(&shared, &mut worker_active);
+    drop(arena);
+    if warmed {
+        shared.warmed_workers.fetch_sub(1, Ordering::AcqRel);
+    }
+    if let Some(observation) = backing {
+        release_arena_backing(&shared, observation);
+        shared
+            .arena_committed_bytes
+            .fetch_sub(arena_bytes, Ordering::AcqRel);
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -407,6 +553,10 @@ pub(super) fn record_arena_backing(shared: &Shared, arena: &PowArena, block_coun
         .saturating_mul(std::mem::size_of::<fixed_argon::PowBlock>())
         .min(u64::MAX as usize) as u64;
     let observation = arena.backing_observation(requested_bytes);
+    apply_arena_backing(shared, observation);
+}
+
+fn apply_arena_backing(shared: &Shared, observation: ArenaBackingObservation) {
     shared
         .arena_explicit_large_workers
         .fetch_add(observation.explicit_large_workers, Ordering::AcqRel);
@@ -442,6 +592,39 @@ pub(super) fn record_arena_backing(shared: &Shared, arena: &PowArena, block_coun
         .fetch_add(observation.allocation_failures, Ordering::AcqRel);
 }
 
+fn release_arena_backing(shared: &Shared, observation: ArenaBackingObservation) {
+    shared
+        .arena_explicit_large_workers
+        .fetch_sub(observation.explicit_large_workers, Ordering::AcqRel);
+    shared
+        .arena_explicit_large_1g_workers
+        .fetch_sub(observation.explicit_large_1g_workers, Ordering::AcqRel);
+    shared
+        .arena_transparent_huge_workers
+        .fetch_sub(observation.transparent_huge_workers, Ordering::AcqRel);
+    shared
+        .arena_regular_workers
+        .fetch_sub(observation.regular_workers, Ordering::AcqRel);
+    shared
+        .arena_heap_workers
+        .fetch_sub(observation.heap_workers, Ordering::AcqRel);
+    shared
+        .arena_explicit_large_bytes
+        .fetch_sub(observation.explicit_large_bytes, Ordering::AcqRel);
+    shared
+        .arena_explicit_large_1g_bytes
+        .fetch_sub(observation.explicit_large_1g_bytes, Ordering::AcqRel);
+    shared
+        .arena_transparent_huge_bytes
+        .fetch_sub(observation.transparent_huge_bytes, Ordering::AcqRel);
+    shared
+        .arena_regular_bytes
+        .fetch_sub(observation.regular_bytes, Ordering::AcqRel);
+    shared
+        .arena_heap_bytes
+        .fetch_sub(observation.heap_bytes, Ordering::AcqRel);
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(target_os = "linux")]
@@ -457,6 +640,681 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
+
+    #[test]
+    #[ignore = "real 2 GiB kernel switches and sequential RustCrypto parity; run optimized"]
+    fn adaptive_kernel_real_arena_smoke() {
+        use crate::backend::cpu::CpuBackendTuning;
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        use blocknet_pow_kernel::CpuKernel;
+        let backend = CpuBackend::adaptive(
+            1,
+            1,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        let (tx, rx) = unbounded();
+        backend.set_instance_id(1);
+        backend.set_event_sink(tx);
+        backend.start().unwrap();
+        let mut solutions = Vec::new();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            backend
+                .assign_work(WorkAssignment {
+                    template: Arc::new(WorkTemplate {
+                        work_id: 1,
+                        epoch: 1,
+                        header_base: Arc::from(vec![0u8; POW_HEADER_BASE_LEN]),
+                        target: [0xff; 32],
+                        dynamic_share_target: None,
+                        pause_on_solution: false,
+                        stop_at: Instant::now() + Duration::from_secs(180),
+                    }),
+                    nonce_chunk: NonceChunk {
+                        start_nonce: 100,
+                        nonce_count: 1_000_000,
+                    },
+                })
+                .unwrap();
+            let paths: Vec<_> = [
+                CpuKernel::Avx2,
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Avx512,
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Avx512256,
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Neon,
+                CpuKernel::NeonSha3,
+            ]
+            .into_iter()
+            .filter(|k| k.is_supported())
+            .collect();
+            for kernel in paths
+                .into_iter()
+                .chain(std::iter::once(CpuKernel::preferred()))
+            {
+                backend.set_active_kernel(kernel).unwrap();
+                let deadline = Instant::now() + Duration::from_secs(60);
+                while !backend.adaptive_snapshot().kernel_ready {
+                    assert!(Instant::now() < deadline, "kernel switch timed out");
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                while rx.try_recv().is_ok() {}
+                loop {
+                    match rx.recv_timeout(Duration::from_secs(60)).unwrap() {
+                        BackendEvent::Solution(solution) => {
+                            solutions.push(solution);
+                            break;
+                        }
+                        BackendEvent::Error { message, .. } => panic!("backend error: {message}"),
+                        _ => {}
+                    }
+                }
+                let s = backend.adaptive_snapshot();
+                assert_eq!(s.kernel, kernel);
+                assert_eq!(s.resident_bytes, blocknet_pow_spec::CPU_LANE_MEMORY_BYTES);
+                assert_eq!(s.allocation_failures, 0);
+            }
+        }));
+        backend.stop();
+        result.unwrap();
+        // Reference allocation follows worker teardown; never hold two 2 GiB arenas.
+        let params = argon2::Params::new(blocknet_pow_spec::POW_MEMORY_KB, 1, 1, Some(32)).unwrap();
+        let mut arena = vec![argon2::Block::default(); params.block_count()];
+        let reference =
+            argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+        let mut nonces = std::collections::HashSet::new();
+        for solution in solutions {
+            assert!(nonces.insert(solution.nonce));
+            let mut expected = [0; 32];
+            reference
+                .hash_password_into_with_memory(
+                    &solution.nonce.to_le_bytes(),
+                    &[0u8; POW_HEADER_BASE_LEN],
+                    &mut expected,
+                    &mut arena,
+                )
+                .unwrap();
+            assert_eq!(solution.hash, Some(expected));
+        }
+    }
+
+    #[test]
+    fn switching_kernel_preserves_arena_nonces_and_correct_hashes() {
+        use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        use blocknet_pow_kernel::CpuKernel;
+        use std::collections::HashSet;
+        let backend = CpuBackend::adaptive(
+            1,
+            1,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        backend.shared.started.store(true, Ordering::Release);
+        let (tx, rx) = unbounded();
+        *backend.shared.event_dispatch_tx.write().unwrap() = Some(tx);
+        let allocations = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&allocations);
+        let shared = Arc::clone(&backend.shared);
+        let handle = std::thread::spawn(move || {
+            super::worker_loop_with_allocator::<32>(shared, 0, None, |blocks, page| {
+                counted.fetch_add(1, Ordering::Relaxed);
+                super::PowArena::new(blocks, page)
+            });
+        });
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            backend
+                .assign_work(WorkAssignment {
+                    template: Arc::new(WorkTemplate {
+                        work_id: 1,
+                        epoch: 1,
+                        header_base: Arc::from(vec![0u8; POW_HEADER_BASE_LEN]),
+                        target: [0xff; 32],
+                        dynamic_share_target: None,
+                        pause_on_solution: false,
+                        stop_at: Instant::now() + Duration::from_secs(60),
+                    }),
+                    nonce_chunk: NonceChunk {
+                        start_nonce: 100,
+                        nonce_count: 1_000_000,
+                    },
+                })
+                .unwrap();
+            let reference = argon2::Argon2::new(
+                argon2::Algorithm::Argon2id,
+                argon2::Version::V0x13,
+                argon2::Params::new(32, 1, 1, Some(32)).unwrap(),
+            );
+            let mut nonces = HashSet::new();
+            for kernel in CpuKernel::ALL.into_iter().filter(|k| k.is_supported()) {
+                backend.set_active_kernel(kernel).unwrap();
+                let until = Instant::now() + Duration::from_secs(5);
+                loop {
+                    let snapshot = backend.adaptive_snapshot();
+                    if snapshot.kernel_ready && snapshot.kernel == kernel {
+                        break;
+                    }
+                    assert!(
+                        Instant::now() < until,
+                        "switch not acknowledged: {snapshot:?}"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                for _ in 0..10 {
+                    if let BackendEvent::Solution(solution) =
+                        rx.recv_timeout(Duration::from_secs(5)).unwrap()
+                    {
+                        assert!(nonces.insert(solution.nonce), "switch repeated nonce");
+                        let mut expected = [0; 32];
+                        reference
+                            .hash_password_into(
+                                &solution.nonce.to_le_bytes(),
+                                &[0u8; POW_HEADER_BASE_LEN],
+                                &mut expected,
+                            )
+                            .unwrap();
+                        assert_eq!(solution.hash, Some(expected));
+                    }
+                }
+                assert_eq!(
+                    allocations.load(Ordering::Relaxed),
+                    1,
+                    "switch reallocated arena"
+                );
+                assert_eq!(backend.adaptive_snapshot().resident_bytes, 32 * 1024);
+            }
+            // An A -> B -> A switch cannot reuse the first A acknowledgement.
+            if CpuKernel::preferred() != CpuKernel::Scalar {
+                let old = backend.shared.kernel_request.load(Ordering::Acquire);
+                backend.set_active_kernel(CpuKernel::Scalar).unwrap();
+                backend.set_active_kernel(CpuKernel::preferred()).unwrap();
+                assert_ne!(old, backend.shared.kernel_request.load(Ordering::Acquire));
+            }
+        }));
+        request_shutdown(&backend.shared);
+        handle.join().unwrap();
+        result.unwrap();
+    }
+
+    #[test]
+    fn allocation_in_progress_is_credited_before_backing_is_published() {
+        use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
+        let backend = CpuBackend::adaptive(
+            1,
+            1,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        let (entered_tx, entered_rx) = crossbeam_channel::bounded(1);
+        let (resume_tx, resume_rx) = crossbeam_channel::bounded(1);
+        let shared = Arc::clone(&backend.shared);
+        let handle = std::thread::spawn(move || {
+            super::worker_loop_with_allocator::<32>(shared, 0, None, |blocks, page| {
+                entered_tx.send(()).unwrap();
+                resume_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                super::PowArena::new(blocks, page)
+            });
+        });
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            let snapshot = backend.adaptive_snapshot();
+            assert_eq!(snapshot.committed_bytes, 32 * 1024);
+            assert_eq!(snapshot.resident_bytes, 0);
+            backend.set_active_threads(0);
+            resume_tx.send(()).unwrap();
+            let until = Instant::now() + Duration::from_secs(5);
+            while backend.adaptive_snapshot().committed_bytes != 0 {
+                assert!(Instant::now() < until, "parked allocation was not released");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 0);
+        }));
+        let _ = resume_tx.try_send(());
+        request_shutdown(&backend.shared);
+        handle.join().unwrap();
+        result.unwrap();
+    }
+
+    #[test]
+    fn failed_adaptive_allocation_keeps_healthy_lane_and_can_retry() {
+        use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        let backend = CpuBackend::adaptive(
+            2,
+            2,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        backend.shared.started.store(true, Ordering::Release);
+        let (tx, rx) = unbounded();
+        *backend.shared.event_dispatch_tx.write().unwrap() = Some(tx);
+        let (done_tx, done_rx) = unbounded();
+        let mut handles = Vec::new();
+        for index in 0..2 {
+            let shared = Arc::clone(&backend.shared);
+            let done = done_tx.clone();
+            handles.push(std::thread::spawn(move || {
+                let mut first = true;
+                super::worker_loop_with_allocator::<32>(shared, index, None, |blocks, page| {
+                    if index == 1 && first {
+                        first = false;
+                        Err("injected allocation failure".into())
+                    } else {
+                        super::PowArena::new(blocks, page)
+                    }
+                });
+                done.send(()).unwrap();
+            }));
+        }
+        let wait = |predicate: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(5);
+            while !predicate() {
+                assert!(Instant::now() < until, "allocation recovery timed out");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            wait(&|| backend.shared.ready_workers.load(Ordering::Acquire) == 2);
+            assert_eq!(backend.enabled_lanes(), 1);
+            assert!(!backend.shared.startup_failed.load(Ordering::Acquire));
+            assert_eq!(backend.adaptive_snapshot().allocation_failures, 1);
+            assert_eq!(backend.adaptive_snapshot().committed_bytes, 32 * 1024);
+            backend
+                .assign_work(WorkAssignment {
+                    template: Arc::new(WorkTemplate {
+                        work_id: 1,
+                        epoch: 1,
+                        header_base: Arc::from(vec![0; POW_HEADER_BASE_LEN]),
+                        target: [0; 32],
+                        dynamic_share_target: None,
+                        pause_on_solution: false,
+                        stop_at: Instant::now() + Duration::from_secs(30),
+                    }),
+                    nonce_chunk: NonceChunk {
+                        start_nonce: 0,
+                        nonce_count: 1_000_000,
+                    },
+                })
+                .unwrap();
+            wait(&|| backend.adaptive_snapshot().hashes >= 3);
+            backend.set_active_threads(2);
+            wait(&|| backend.adaptive_snapshot().warmed == 2);
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 2 * 32 * 1024);
+            assert!(rx
+                .try_iter()
+                .all(|event| !matches!(event, BackendEvent::Error { .. })));
+        }));
+        request_shutdown(&backend.shared);
+        for _ in 0..2 {
+            done_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        result.unwrap();
+    }
+
+    #[test]
+    fn spawn_exhaustion_retries_smaller_pool_without_changing_nonce_stride() {
+        use crate::backend::cpu::CpuBackendTuning;
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        use crate::config::CpuPageMode;
+        use std::collections::HashSet;
+        let backend = CpuBackend::adaptive(
+            1,
+            8,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        let (tx, rx) = unbounded();
+        backend.set_event_sink(tx);
+        let mut attempted = Vec::new();
+        backend
+            .start_with_spawner(|shared, index, _| {
+                attempted.push(index);
+                if index == 4 {
+                    return Err(std::io::ErrorKind::WouldBlock.into());
+                }
+                std::thread::Builder::new()
+                    .spawn(move || super::worker_loop::<32>(shared, index, None))
+            })
+            .unwrap();
+        let wait = |predicate: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(5);
+            while !predicate() {
+                assert!(Instant::now() < until, "worker transition timed out");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        let work = |epoch, start, count| WorkAssignment {
+            template: Arc::new(WorkTemplate {
+                work_id: epoch,
+                epoch,
+                header_base: Arc::from(vec![0u8; POW_HEADER_BASE_LEN]),
+                target: [0xff; 32],
+                dynamic_share_target: None,
+                pause_on_solution: false,
+                stop_at: Instant::now() + Duration::from_secs(60),
+            }),
+            nonce_chunk: NonceChunk {
+                start_nonce: start,
+                nonce_count: count,
+            },
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert_eq!(attempted, [0, 1, 2, 3, 4, 0, 1]);
+            assert_eq!(backend.worker_capacity(), 2);
+            assert_eq!(backend.lanes(), 8, "nonce reservation stride stays fixed");
+            assert_eq!(backend.worker_handles.lock().unwrap().len(), 2);
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 32 * 1024);
+            backend.assign_work(work(1, 100, 1_000_000)).unwrap();
+            let mut seen = HashSet::new();
+            for count in [0, 2, 1, usize::MAX, 0] {
+                if backend.enabled_lanes() > 0 {
+                    let mut solutions = 0;
+                    while solutions < 20 {
+                        if let BackendEvent::Solution(s) =
+                            rx.recv_timeout(Duration::from_secs(5)).unwrap()
+                        {
+                            assert_eq!(s.epoch, 1);
+                            assert!((s.nonce - 100) % 8 < 2);
+                            assert!(seen.insert(s.nonce), "nonce repeated after resize");
+                            solutions += 1;
+                        }
+                    }
+                }
+                backend.set_active_threads(count);
+                assert_eq!(backend.enabled_lanes(), count.min(2));
+                wait(&|| {
+                    backend.adaptive_snapshot().resident_bytes == count.min(2) as u64 * 32 * 1024
+                });
+            }
+            backend
+                .cancel_work_with_deadline(Instant::now() + Duration::from_secs(2))
+                .unwrap();
+            backend
+                .fence_with_deadline(Instant::now() + Duration::from_secs(2))
+                .unwrap();
+            backend.assign_work(work(2, 2_000_100, 37)).unwrap();
+            backend.set_active_threads(8);
+            let expected: HashSet<_> = (2_000_100..2_000_137)
+                .filter(|n| (n - 2_000_100) % 8 < 2)
+                .collect();
+            let mut next = HashSet::new();
+            while next.len() < expected.len() {
+                if let BackendEvent::Solution(s) = rx.recv_timeout(Duration::from_secs(5)).unwrap()
+                {
+                    if s.epoch == 1 {
+                        assert!(seen.insert(s.nonce));
+                        continue;
+                    }
+                    assert_eq!(s.epoch, 2);
+                    assert!(next.insert(s.nonce));
+                }
+            }
+            assert_eq!(
+                next, expected,
+                "all provisioned residues of the fixed stride are covered"
+            );
+            wait(&|| !super::super::has_pending_work(&backend.shared));
+            backend
+                .fence_with_deadline(Instant::now() + Duration::from_secs(2))
+                .unwrap();
+            backend.set_active_threads(0);
+            wait(&|| backend.adaptive_snapshot().resident_bytes == 0);
+        }));
+        backend.stop();
+        assert!(backend.worker_handles.lock().unwrap().is_empty());
+        assert_eq!(backend.adaptive_snapshot().committed_bytes, 0);
+        result.unwrap();
+    }
+
+    #[test]
+    fn spawn_failure_cleans_up_fixed_counts_and_unrecoverable_adaptive_startup() {
+        use crate::backend::cpu::CpuBackendTuning;
+        use crate::backend::PowBackend;
+        for (adaptive, fail_at, kind) in [
+            (false, 2, std::io::ErrorKind::WouldBlock),
+            (true, 0, std::io::ErrorKind::WouldBlock),
+            (true, 2, std::io::ErrorKind::PermissionDenied),
+        ] {
+            let backend = if adaptive {
+                CpuBackend::adaptive(1, 4, CpuAffinityMode::Off, CpuBackendTuning::default())
+            } else {
+                CpuBackend::new(4, CpuAffinityMode::Off)
+            };
+            let mut calls = 0;
+            let result = backend.start_with_spawner(|shared, index, _| {
+                calls += 1;
+                if index == fail_at {
+                    return Err(kind.into());
+                }
+                std::thread::Builder::new()
+                    .spawn(move || super::worker_loop::<32>(shared, index, None))
+            });
+            assert!(result.is_err());
+            assert_eq!(
+                calls,
+                fail_at + 1,
+                "manual/non-resource failures must not silently downsize"
+            );
+            assert!(!backend.adaptive_snapshot().running);
+            assert_eq!(backend.adaptive_snapshot().committed_bytes, 0);
+            assert!(backend.worker_handles.lock().unwrap().is_empty());
+            assert!(backend.event_forward_handle.lock().unwrap().is_none());
+            backend
+                .start_with_spawner(|shared, index, _| {
+                    std::thread::Builder::new()
+                        .spawn(move || super::worker_loop::<32>(shared, index, None))
+                })
+                .unwrap();
+            backend.stop();
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 0);
+        }
+    }
+
+    #[test]
+    fn adaptive_workers_release_ram_resume_unique_nonces_and_stop_parked() {
+        use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        use std::collections::HashSet;
+        let backend = CpuBackend::adaptive(
+            2,
+            4,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        backend.shared.started.store(true, Ordering::Release);
+        let (tx, rx) = unbounded();
+        *backend.shared.event_dispatch_tx.write().unwrap() = Some(tx);
+        let (done_tx, done_rx) = unbounded();
+        let mut handles = Vec::new();
+        for index in 0..4 {
+            let shared = Arc::clone(&backend.shared);
+            let done = done_tx.clone();
+            handles.push(std::thread::spawn(move || {
+                super::worker_loop::<32>(shared, index, None);
+                done.send(()).unwrap();
+            }));
+        }
+        let wait = |predicate: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(5);
+            while !predicate() {
+                assert!(Instant::now() < until, "worker transition timed out");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        let work = |epoch, start, count| WorkAssignment {
+            template: Arc::new(WorkTemplate {
+                work_id: epoch,
+                epoch,
+                header_base: Arc::from(vec![0u8; POW_HEADER_BASE_LEN]),
+                target: [0xff; 32],
+                dynamic_share_target: None,
+                pause_on_solution: false,
+                stop_at: Instant::now() + Duration::from_secs(60),
+            }),
+            nonce_chunk: NonceChunk {
+                start_nonce: start,
+                nonce_count: count,
+            },
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            wait(&|| backend.shared.ready_workers.load(Ordering::Acquire) == 4);
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 2 * 32 * 1024);
+            backend.assign_work(work(1, 100, 1_000_000)).unwrap();
+            let mut seen = HashSet::new();
+            for count in [0, 3, 1, 4, 0, 2, 0] {
+                if backend.enabled_lanes() > 0 {
+                    for _ in 0..40 {
+                        if let BackendEvent::Solution(solution) =
+                            rx.recv_timeout(Duration::from_secs(5)).unwrap_or_else(|err| panic!("before resize to {count}: {err:?}, snapshot={:?}, generation={}, assignment={}", backend.adaptive_snapshot(), backend.shared.work_generation.load(Ordering::Acquire), backend.shared.assignment_generation.load(Ordering::Acquire)))
+                        {
+                            assert_eq!(solution.epoch, 1);
+                            assert!(seen.insert(solution.nonce), "duplicate nonce after resize");
+                        }
+                    }
+                }
+                backend.set_active_threads(count);
+                wait(&|| backend.adaptive_snapshot().resident_bytes == count as u64 * 32 * 1024);
+            }
+            for event in rx.try_iter() {
+                if let BackendEvent::Solution(solution) = event {
+                    assert!(
+                        seen.insert(solution.nonce),
+                        "duplicate nonce queued during resize"
+                    );
+                }
+            }
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 0);
+            assert!(
+                super::super::has_pending_work(&backend.shared),
+                "a resource pause must retain the unfinished assignment"
+            );
+            backend
+                .cancel_work_with_deadline(Instant::now() + Duration::from_secs(1))
+                .unwrap();
+            backend.assign_work(work(2, 1_000_100, 37)).unwrap();
+            backend.set_active_threads(4);
+            let mut next = Vec::new();
+            while next.len() < 37 {
+                if let BackendEvent::Solution(solution) =
+                    rx.recv_timeout(Duration::from_secs(5)).unwrap()
+                {
+                    assert_eq!(
+                        solution.epoch, 2,
+                        "resuming must observe the latest assignment"
+                    );
+                    next.push(solution.nonce);
+                }
+            }
+            next.sort_unstable();
+            assert_eq!(next, (1_000_100..1_000_137).collect::<Vec<_>>());
+            wait(&|| !super::super::has_pending_work(&backend.shared));
+            backend.set_active_threads(0);
+            wait(&|| backend.adaptive_snapshot().resident_bytes == 0);
+        }));
+        request_shutdown(&backend.shared);
+        for _ in 0..4 {
+            done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("parked worker must stop");
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        result.unwrap();
+    }
+
+    #[test]
+    #[ignore = "allocates up to 4 GiB and hashes real consensus-size arenas; run optimized"]
+    fn adaptive_real_arena_smoke() {
+        use crate::backend::cpu::CpuBackendTuning;
+        use crate::backend::{NonceChunk, PowBackend, WorkAssignment};
+        let backend = CpuBackend::adaptive(
+            1,
+            2,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        let started = Instant::now();
+        backend.start().unwrap();
+        let startup = started.elapsed().as_secs_f64();
+        let wait = |predicate: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(60);
+            while !predicate() {
+                assert!(Instant::now() < until, "real worker transition timed out");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            backend
+                .assign_work(WorkAssignment {
+                    template: Arc::new(WorkTemplate {
+                        work_id: 1,
+                        epoch: 1,
+                        header_base: Arc::from(vec![0; POW_HEADER_BASE_LEN]),
+                        target: [0; 32],
+                        dynamic_share_target: None,
+                        pause_on_solution: false,
+                        stop_at: Instant::now() + Duration::from_secs(120),
+                    }),
+                    nonce_chunk: NonceChunk {
+                        start_nonce: 0,
+                        nonce_count: 1_000_000,
+                    },
+                })
+                .unwrap();
+            wait(&|| backend.adaptive_snapshot().hashes >= 2);
+            let first_hashes = backend.adaptive_snapshot().hashes;
+            let first_work = started.elapsed().as_secs_f64();
+            backend.set_active_threads(2);
+            wait(&|| {
+                backend.adaptive_snapshot().warmed == 2
+                    && backend.adaptive_snapshot().hashes >= first_hashes + 6
+            });
+            assert_eq!(
+                backend.adaptive_snapshot().resident_bytes,
+                4 * 1024 * 1024 * 1024
+            );
+            let pause = Instant::now();
+            backend.set_active_threads(0);
+            wait(&|| backend.adaptive_snapshot().resident_bytes == 0);
+            let release_secs = pause.elapsed().as_secs_f64();
+            let paused_hashes = backend.adaptive_snapshot().hashes;
+            backend.set_active_threads(1);
+            wait(&|| backend.adaptive_snapshot().hashes >= paused_hashes + 2);
+            assert_eq!(
+                backend.adaptive_snapshot().resident_bytes,
+                2 * 1024 * 1024 * 1024
+            );
+            println!("adaptive_real_arena_smoke startup_secs={startup:.3} first_two_hashes_secs={first_work:.3} release_secs={release_secs:.3} total_hashes={}", backend.adaptive_snapshot().hashes);
+        }));
+        backend.stop();
+        result.unwrap();
+    }
 
     #[cfg(target_os = "linux")]
     #[test]
@@ -687,6 +1545,7 @@ impl VirtualArena {
             if large_page_minimum == 0 {
                 allocation_failures = allocation_failures.saturating_add(1);
                 if page_mode == CpuPageMode::Large {
+                    crate::diagnostics::allocation_failure(true, byte_len, None);
                     return Err("GetLargePageMinimum reported no supported large-page size".into());
                 }
             } else {
@@ -719,6 +1578,11 @@ impl VirtualArena {
                 }
                 allocation_failures = allocation_failures.saturating_add(1);
                 if page_mode == CpuPageMode::Large {
+                    crate::diagnostics::allocation_failure(
+                        true,
+                        byte_len,
+                        Some(i64::from(large_page_error)),
+                    );
                     return Err(format!(
                         "MEM_LARGE_PAGES VirtualAlloc unavailable (Win32 error {large_page_error})"
                     ));
@@ -736,6 +1600,7 @@ impl VirtualArena {
         };
         if ptr.is_null() {
             let error = unsafe { GetLastError() };
+            crate::diagnostics::allocation_failure(false, byte_len, Some(i64::from(error)));
             return Err(format!(
                 "regular VirtualAlloc failed for {byte_len} bytes (Win32 error {error})"
             ));
@@ -940,6 +1805,11 @@ impl MmapArena {
                 let error = std::io::Error::last_os_error();
                 allocation_failures = allocation_failures.saturating_add(1);
                 if page_mode == CpuPageMode::Large {
+                    crate::diagnostics::allocation_failure(
+                        true,
+                        byte_len,
+                        error.raw_os_error().map(i64::from),
+                    );
                     return Err(format!(
                         "MAP_HUGETLB mmap failed for {byte_len} bytes: {error}"
                     ));
@@ -964,6 +1834,11 @@ impl MmapArena {
             };
             if ptr == libc::MAP_FAILED {
                 let error = std::io::Error::last_os_error();
+                crate::diagnostics::allocation_failure(
+                    false,
+                    byte_len,
+                    error.raw_os_error().map(i64::from),
+                );
                 return Err(format!("regular mmap failed for {byte_len} bytes: {error}"));
             }
             let backing = if page_mode == CpuPageMode::Regular {
@@ -1010,6 +1885,11 @@ impl MmapArena {
             };
             if ptr == libc::MAP_FAILED {
                 let error = std::io::Error::last_os_error();
+                crate::diagnostics::allocation_failure(
+                    false,
+                    byte_len,
+                    error.raw_os_error().map(i64::from),
+                );
                 return Err(format!("mmap failed for {byte_len} bytes: {error}"));
             }
             Ok(Self {
@@ -1057,6 +1937,11 @@ impl MmapArena {
             };
             if ptr == libc::MAP_FAILED {
                 let error = std::io::Error::last_os_error();
+                crate::diagnostics::allocation_failure(
+                    true,
+                    map_len,
+                    error.raw_os_error().map(i64::from),
+                );
                 return Err(format!(
                     "MAP_HUGETLB|MAP_HUGE_1GB mmap failed for {map_len} bytes: {error}; reserve \
                      1 GiB pages via /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages"

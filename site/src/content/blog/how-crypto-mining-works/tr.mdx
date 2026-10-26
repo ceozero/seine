@@ -1,0 +1,117 @@
+---
+title: Kripto madenciliği nasıl çalışır
+description: Bloklar, hash'ler ve zorluktan blok ödüllerine ve madencilik havuzlarına kadar kripto madenciliğinin sade bir anlatımı; örnek olarak Blocknet'in beş dakikalık blokları.
+tags: [Madencilik, İş kanıtı, Blocknet, bntpool]
+faq:
+  - q: 'Bir kripto madencisi aslında neyi hesaplar?'
+    a: 'Madenci bir blok başlığını tekrar tekrar hash''ler ve her seferinde nonce adı verilen bir sayıyı değiştirir; ta ki sonuç ağın hedefine eşit ya da ondan küçük olana kadar. Blocknet''te her deneme, 2 GiB bellek üzerinde çalışan bir Argon2id hash''idir. Hangi nonce''un kazanacağını kimse tahmin edemez, bu yüzden blok bulmanın tek yolu denemeye devam etmektir.'
+  - q: 'Bir blok kazmak ne kadar sürer?'
+    a: 'Her ağ kendi hedefini belirler. Bitcoin her on dakikada bir blok hedefler, Blocknet ise her beş dakikada bir, yani günde 288 blok. Madenciler katıldıkça veya ayrıldıkça zorluk bu hızı korumak için ayarlanır, böylece toplam hashrate ne olursa olsun blok süresi hedefe yakın kalır.'
+  - q: 'Madencilik havuzunda share nedir?'
+    a: 'Share, havuzun bağlantınız için belirlediği daha kolay bir hedefi karşılayan bir hash''tir. Share''ler, tam bir blok beklemeden ne kadar iş katkısı yaptığınızı kanıtlar. bntpool.com''da havuz, her bağlantının share zorluğunu beş dakikada yaklaşık on share hedefleyecek şekilde ayarlar ve blok ödülleri share''lere göre paylaştırılır.'
+  - q: 'Normal bir bilgisayarla kripto para madenciliği yapabilir miyim?'
+    a: 'Evet, iş kanıtı sıradan donanım için tasarlanmış coinlerde. Blocknet bellek yoğun Argon2id kullanır, bu yüzden yeterli RAM''e sahip bir masaüstü, dizüstü, Mac veya sunucu onu kazabilir. Her madencilik iş parçacığı yaklaşık 2 GB bellek ister ve seine bilgisayarınız için doğru iş parçacığı sayısını kendi başına belirler.'
+sourceHash: d05a84885aae
+translation: draft
+---
+
+Bu rehber, kripto madencilerinin ne yaptığını ve neden yaptığını açıklar: işlemlerin nasıl bloklara dönüştüğünü, hash ve nonce'un ne olduğunu, zorluğun blokları nasıl programda tuttuğunu, ödülün nereden geldiğini ve çoğu kişinin neden bir havuzda madencilik yaptığını. Baştan sona örnek olarak Blocknet kullanılır, bu yüzden her sayı kontrol edebileceğiniz gerçek bir sayıdır.
+
+## Kripto madenciliği nedir?
+
+<Answer>
+Kripto madenciliği, iş kanıtı kullanan bir blok zincirine yeni blokların eklenme yöntemidir. Madenciler bekleyen işlemleri bir blokta toplar, ardından o bloğun bir zorluk hedefini karşılayan bir hash'ini bulmak için yarışır. Bunu ilk bulan madenci bloğu yayınlar, her düğüm onu kontrol eder ve kazanan, yeni oluşturulan blok ödülünü alır.
+</Answer>
+
+Madencilik aynı anda iki iş görür. İşlemleri sıraya koyar, böylece herkes hangi ödemenin önce geldiği konusunda hemfikir olur; ve yeni coinleri sabit bir programla çıkarır, böylece onları oluşturmak için kimseye güvenmek gerekmez. Bitcoin bu fikri 2008'de ortaya koydu ve bugün Blocknet dahil birçok coin onu kullanıyor. Ethereum gibi bazı zincirler ise 2022'den beri bunun yerine hisse kanıtı kullanıyor; [iş kanıtı ile hisse kanıtı](/tr/blog/proof-of-work-vs-proof-of-stake/) yazısı ikisini karşılaştırır.
+
+## Bir blokta neler bulunur?
+
+Bir blok, bir grup işlem ile onu tanımlayan kısa bir başlıktan oluşur. Blocknet'in blok başlığında yedi alan vardır:
+
+| Alan | İçerdiği |
+|---|---|
+| Version | Protokol sürümü |
+| Height | Bloğun zincirdeki konumu |
+| Previous hash | Kendinden önceki bloğun kimliği |
+| Merkle root | Bloktaki her işlemin parmak izi |
+| Timestamp | Bloğun oluşturulduğu zaman |
+| Difficulty | Bu bloğu bulmanın ne kadar zor olduğu |
+| Nonce | Madencinin her denemede değiştirdiği sayı |
+
+Zinciri zincir yapan, previous hash alanıdır. Her blok kendinden öncekine işaret eder, bu yüzden eski bir işlemi değiştirmek o bloğun parmak izini değiştirir ve sonraki her bağlantıyı koparır. Her bloktaki ilk işlem coinbase'dir; ödülü bloğu bulan madenciye öder.
+
+## Bir madenci bloğu nasıl bulur?
+
+<Answer>
+Madenci blok başlığını hash'ler, sonucun ağın hedefine eşit ya da ondan küçük olup olmadığını kontrol eder; değilse nonce'u değiştirip yeniden dener. İyi bir hash fonksiyonu çıktıyı tahmin edilemez kılar, bu yüzden kazanmanın tek yolu çok sayıda deneme yapmaktır. Hashrate'iniz, saniyede kaç deneme yaptığınızdır.
+</Answer>
+
+Bir hash fonksiyonu her girdiyi rastgele görünen sabit uzunlukta bir sayıya dönüştürür. Girdinin tek bir bitini değiştirin, çıktı tamamen değişir. Bu çıktıyı çok büyük bir sayı olarak düşünün: hedefe eşit ya da ondan küçükse blok geçerlidir. Daha düşük bir hedef, daha az kazanan hash, dolayısıyla ortalamada daha fazla deneme demektir.
+
+Blocknet'te her deneme bir Argon2id hash'idir. 8 baytlık nonce parola, başlığın geri kalanı ise salt olarak kullanılır ve her hash 32 baytlık bir sonuç üretmeden önce 2 GiB belleği baştan sona işler. Bir madenci hedefe eşit ya da ondan küçük bir hash bulduğunda bloğu ağa gönderir. Her düğüm onu doğrulamak için bu tek hash'i tekrarlar; bu, bloğu bulmak için harcanan işin çok küçük bir kısmıdır.
+
+[Argon2id açıklaması](/tr/blog/argon2id-proof-of-work-explained/) bu hash'in her adımını ve neden bu kadar çok bellek gerektirdiğini anlatır.
+
+## Madencilik zorluğu nedir?
+
+Zorluk, hedefi belirleyen sayıdır. Blocknet'te hedef (2^256 − 1) bölü zorluktur; yani zorluk, kabaca tüm ağın bir blok bulmak için ortalamada ihtiyaç duyduğu hash sayısıdır.
+
+Bu, ağı hızlıca okumanın bir yolunu verir. Blocknet her 300 saniyede bir blok hedefler, bu yüzden ağ hashrate'i yaklaşık zorluk ÷ 300'dür. Örneğin 6.000.000'luk bir zorluk, ağın saniyede yaklaşık 20.000 hash ürettiği anlamına gelir.
+
+Ağ, madenciler gelip gittikçe blokları programda tutmak için zorluğu ayarlar:
+
+- **Bitcoin** on dakikalık blokları hedefler ve zorluğu her 2.016 blokta bir, yaklaşık iki haftada bir yeniden hesaplar.
+- **Blocknet** beş dakikalık blokları hedefler ve zorluğu her bloktan sonra LWMA, yani doğrusal ağırlıklı hareketli ortalama ile yeniden hesaplar. Son 60 bloğa bakar ve en yeni olanlara en fazla ağırlığı verir; böylece hashrate değişikliklerini hızla takip eder: pencerenin tamamı yaklaşık beş saatlik blokları kapsar.
+
+LWMA, tek bir sıra dışı bloğun sonucu ne kadar oynatabileceğini de sınırlar: her bloğun çözülme süresi en az 1 saniye, en fazla hedefin altı katı olan 1.800 saniye olarak sayılır. Bloklar beş dakikadan daha sık gelirse zorluk artar; daha seyrek gelirse düşer.
+
+## Madenciler nasıl kazanç elde eder?
+
+Her blok, coinbase işleminde yeni coinler oluşturur. Blocknet'te coinbase'in tam olarak bir çıktısı vardır; değeri tam olarak blok ödülü kadardır ve madencinin seçtiği adrese ödenir. Genesis bloğunda hiç işlem yoktu, bu yüzden dolaşımdaki her coin madencilikle çıkarıldı.
+
+Ödül, yayımlanmış bir programı izler. Blocknet'in ödülü blok başına 723,25 BNT ile başladı ve 8.640 blokluk her 30 günlük ayda bir kademeli olarak düzgün biçimde azalır. Dört yıl sonunda çıkarılan miktar yaklaşık 100 milyon BNT'ye ulaşır ve o andan itibaren her blok kalıcı olarak 2 BNT'lik bir kuyruk ödülü öder; böylece madencilerin kazacak bir şeyi her zaman olur.
+
+Kazılan coinler harcanabilmeden önce 60 blok, yani yaklaşık beş saat bekler. Bu bekleme, yeni bir ödül harcanmadan önce zincirdeki kısa süreli ayrılmaların netleşmesini sağlar.
+
+## Madencilerin çoğu neden bir havuza katılır?
+
+Bir havuz, birçok madencinin hashrate'ini birleştirir; böylece grup sık sık blok bulur ve ardından her ödülü her üyenin katkıda bulunduğu işe göre paylaştırır. Tek başına küçük bir madenci bütün bir blok için günlerce ya da haftalarca bekleyebilir; bir havuzda aynı hashrate düzenli bir küçük ödemeler akışı kazandırır.
+
+Hesap bunun nedenini gösterir. Blocknet günde 288 blok üretir, bu yüzden günlük beklenen solo blok sayınız 288 × (sizin hashrate'iniz ÷ ağ hashrate'i) olur. Bilgisayarınız ağın binde biri kadarsa, ortalamada günde yaklaşık 0,29 blok, yani üç buçuk günde bir blok bulursunuz; gerçek aralık ise bloktan bloğa değişir.
+
+Havuz işinizi **share**'lerle ölçer. Share, havuzun bağlantınız için belirlediği daha kolay bir hedefi karşılayan bir hash'tir. Her share ödüldeki payınıza sayılır; ağın tam hedefini de karşılayan bir share ise gerçek bir bloktur ve havuz onu blok zincirine gönderir. bntpool.com'da:
+
+- **Share zorluğu her bağlantı için ayarlanır** ve beş dakikada yaklaşık on share hedefler; böylece hem hızlı hem yavaş makineler düzenli olarak iş bildirir.
+- **Ödüller PPLNS ile** altı saatlik bir pencerede paylaştırılır: her bloğun ödülü, blok bulunmadan önceki altı saatte gönderilen share'lere gider.
+- **Ödemeler 0,1 BNT'den başlar**, blok 60 blok derinliğe ulaştığında.
+
+Kendi düğümünüzü çalıştırıyorsanız solo madencilik de yapabilir ve bulduğunuz her bloğu kendinize saklayabilirsiniz. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) her ikisini de anlatır.
+
+## Ne kadar hızlı madencilik yapacağınızı ne belirler?
+
+Hangi donanımın iyi sonuç vereceğini hash fonksiyonu belirler. Bitcoin'in SHA-256'sı neredeyse hiç bellek gerektirmez, bu yüzden bugün Bitcoin madenciliğinin çoğunu ASIC adı verilen özel çipler yapar. Blocknet, ASIC'lere direnecek şekilde tasarlanmış, bellek yoğun bir fonksiyon olan Argon2id'yi seçti: her hash 2 GiB RAM doldurur, bu yüzden hızınızı bellek boyutu ve bellek bant genişliği belirler.
+
+Bu, sıradan bir bilgisayar için hesabı değiştirir:
+
+- **İş parçacığı sayısını RAM belirler.** Her madencilik iş parçacığının kendine ait 2 GiB'lık bir bellek bloğuna ihtiyacı vardır, bu yüzden 16 GB'lık bir bilgisayar sisteme yer bıraktıktan sonra yaklaşık altı veya yedi iş parçacığı çalıştırır.
+- **Toplam hızı bellek bant genişliği belirler.** Her hash yaklaşık 2 GiB yazar ve yaklaşık 2 GiB okur, bu yüzden belleği daha hızlı taşıyan bir makine saniyede daha fazla hash tamamlar.
+- **Hem CPU'lar hem GPU'lar madencilik yapabilir.** Windows ve Linux'ta seine aynı anda CPU'da ve her NVIDIA kartında madencilik yapar ve hashrate'ler toplanır.
+
+seine'in ölçtüğü en iyi sonuç, bir AMD EPYC Zen 5 sunucuda (EPYC 9R45, 32 iş parçacığı) 49,4 H/s'dir; Apple M4 Max'li bir MacBook Pro ise 30,9 H/s'ye ulaşır. [Donanım rehberinde](/tr/blog/blocknet-mining-hardware-hashrate/) test edilen her neslin sonuçları yer alır; [2026'da CPU madenciliği](/tr/blog/cpu-mining-2026/) rehberi ise bellek yoğun coinlerin sıradan işlemcilere neden uygun olduğunu açıklar.
+
+## Zinciri kim dürüst tutar?
+
+Her düğüm her bloğu kontrol eder: hash hedefi karşılıyor mu, işlemler geçerli mi ve ödül tam olarak doğru mu. Herhangi bir kontrolü geçemeyen blok, içine ne kadar iş harcanmış olursa olsun reddedilir.
+
+İki madenci neredeyse aynı anda bir blok bulduğunda zincir kısa süreliğine ayrılır. Blocknet düğümleri toplam işi en fazla olan zinciri, yani her bloğun zorluklarının toplamı en büyük olanı izler; bu yüzden ayrılma, bir sonraki blok taraflardan birine eklenir eklenmez çözülür. Cüzdanların onay saymasının nedeni budur: Blocknet'te 10 onay (yaklaşık 50 dakika) güvenli sayılır ve hiçbir düğüm 100 bloktan daha derine yeniden düzenleme yapmaz.
+
+## Kendi bilgisayarınızda deneyin
+
+Blocknet madenciliği üç adımdır: bir adres edinin, [seine](/tr/#download)'i indirin, çalıştırın ve varsayılan havuz bntpool.com'u kabul edin. seine madencilik yaparken iş parçacığı sayısını, CPU kernel'ini ve bellek düzenini kendisi seçer, böylece ilk share'lerinizin birkaç dakika içinde geldiğini izleyebilirsiniz.
+
+<Note>
+[blocknetcrypto.com](https://blocknetcrypto.com/#faraday)'a göre Blocknet, 2027-02-16 civarında Faraday adlı bir ağ yükseltmesi planlıyor ve bu yükseltmenin daha hafif bir iş kanıtı getirmesi planlanıyor. Yukarıdaki iş kanıtı ayrıntıları ağın Faraday öncesi halini anlatır. seine başlarken ve her 12 saatte bir yeni sürümleri kontrol eder.
+</Note>
+
+<CTA target="seine" title="Blocknet madenciliğine başlayın" text="Windows, macOS veya Linux için seine'i indirin, adresinizi yapıştırın ve birkaç dakika içinde bntpool.com'a share göndermeye başlayın." />

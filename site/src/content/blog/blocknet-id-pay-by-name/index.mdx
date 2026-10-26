@@ -1,0 +1,104 @@
+---
+title: Get paid to @name with Blocknet ID
+description: Claim a Blocknet ID shortname at blocknet.id, then receive BNT, share payment links and mine on bntpool.com with @name instead of a 90-plus-character address.
+date: 2026-10-25
+tags: [Blocknet ID, Wallet, Payments, bntpool]
+faq:
+  - q: Are Blocknet ID shortnames case-sensitive?
+    a: No. A shortname is case-insensitive, so @Alice, @alice and $ALICE all reach the same wallet. Names use the letters a to z, the digits 0 to 9, underscore, hyphen and dot, and can be up to 64 characters long. Both the @ and $ prefixes work everywhere a name is accepted.
+  - q: Is a Blocknet ID free?
+    a: As of October 2026, names of nine characters or more are free while the blocknet.id promotion runs, with no invoice and no payment. Shorter names have a one-time price that rises as the name gets shorter, from 100 BNT for eight characters. The pricing page at blocknet.id lists the price for every length.
+  - q: Can I mine to a Blocknet ID shortname on bntpool.com?
+    a: Yes. Enter your @name when seine asks for a payout address, or pass it with --address. Seine checks the signed record at blocknet.id, shows the full address it resolved to, and mines to that address for the whole run. Shortnames need seine v0.2.16 or newer, and bntpool.com accepts them at login too.
+  - q: What happens to my pool balance if I point my name at a new address?
+    a: Your existing balance stays with the address that earned it, and bntpool.com pays it there as usual. The pool tracks shares, balances and payouts by the full address, so a name change never redirects an existing balance. The next time you start mining, the name resolves again and new shares go to the new address.
+related: [what-is-blocknet, blocknet-privacy-features, how-to-mine-blocknet]
+---
+
+With a Blocknet ID shortname, people can pay you at `@yourname`, you can share a payment link that fits in a chat message, and you can mine on bntpool.com to the same name. This guide covers how names work, how to claim one at blocknet.id, and how to use it in the wallet and in seine.
+
+## What is a Blocknet ID shortname?
+
+<Answer>
+A Blocknet ID shortname is a short name such as @alice or $alice that points to your Blocknet wallet address. You register it at blocknet.id. Wallets, seine and bntpool.com look the name up, check that blocknet.id signed the record, and then use the full address it maps to.
+</Answer>
+
+The rules are the same everywhere a name is accepted:
+
+- **Two prefixes.** `@name` and `$name` are the same name. Use whichever you prefer.
+- **Case-insensitive.** `@Alice` and `@alice` resolve to the same address.
+- **Simple characters.** Letters a to z, digits 0 to 9, underscore, hyphen and dot.
+- **Up to 64 characters.**
+
+Every record at blocknet.id is signed. When the wallet resolves a name, it fetches the record, then checks its Ed25519 signature against the signing key that blocknet.id publishes at `https://blocknet.id/.well-known/blocknet-id.json`. The signed payload contains the name, the address and the time it was last updated, and the wallet confirms all three match before it uses the address. Each name also has a public page at blocknet.id that shows its address, the signed payload and the signature, so anyone can check a record themselves.
+
+## Why pay a name instead of an address?
+
+A Blocknet address is the base58 encoding of your public spend key, your public view key and a checksum, which comes to 92 or 93 characters. That is a lot to copy between apps, read aloud or fit into a profile. A shortname is something you can say in a sentence, print on a sticker or put in a bio.
+
+You also get a clear confirmation step. When you send to a name, the wallet prints the address it resolved to and marks it as verified before you approve the payment. The name only replaces the address you would have shared anyway. On chain, the payment is a normal Blocknet transaction to a [one-time stealth address](/blog/blocknet-privacy-features/), so it stays as private as any other payment.
+
+## How do you get a Blocknet ID?
+
+<Answer>
+Copy your wallet address, open blocknet.id and search for the name you want. If it is available, the site shows its price; paste your address and submit. Names of nine or more characters are free during the current promotion. Your name works in wallets, seine and bntpool.com once registered.
+</Answer>
+
+1. **Copy your address.** In the command-line wallet, the `address` command prints it, followed by the line "Get a short name like @name or $name at https://blocknet.id". Get the wallet from the [command-line releases](https://github.com/blocknetprivacy/blocknet/releases/latest) or the [desktop releases](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+2. **Search for a name.** Go to [blocknet.id](https://blocknet.id), type a name into the "find a name" box and press Search. As you type, the page tells you if a character isn't allowed or the name is too long.
+3. **Check the result.** An available name shows its price. A name that is already registered shows its address, when it was last updated, and a link to its public page.
+4. **Register it.** Paste your wallet address and press "Claim free" (or "Register" for a priced name).
+
+Pricing is a one-time charge by name length. At the time of writing (October 2026), every name of nine characters or more is free under a promotion, "no invoice, no payment" in the site's words. Names of eight characters cost 100 BNT, and shorter names cost more, up to 6,000 BNT for a single character. The [pricing page](https://blocknet.id/pricing) lists every length.
+
+To manage your names later, use "sign in" at blocknet.id with your Blocknet address. The management page is where you point a name at a different address.
+
+## How do you send BNT to a name?
+
+In the command-line wallet, put the name where the address would go:
+
+```
+send @rock 100 "hello"
+```
+
+The wallet resolves `@rock`, prints `Resolved @rock -> <address>` with a verified mark, and then asks you to confirm. The confirmation shows the name, the full address, the fee and your memo. The `$rock` form works the same way, and `send` takes whole or fractional amounts.
+
+The wallet's API resolves names in the same way for every recipient of a send request, so tools built on the wallet get name payments without extra work.
+
+## How do payment links work with a name?
+
+A [payment link](/blog/blocknet-payment-links/) carries the recipient, the amount and an optional memo. Blocknet supports two forms:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+The bntpay.com link works with a name in place of an address, so it stays short. Opening it shows a page with "Pay $yourname", the amount and the memo, plus an "Open in Wallet" button that opens the payment as a `blocknet://` link. If you paste either form into the command-line wallet, it fills in a send for you to confirm. Include the `amount` field; the memo is optional and holds up to 124 bytes of text.
+
+This makes it easy to post one link for tips or to send an invoice in a single message.
+
+## How do you mine to your @name?
+
+Seine and bntpool.com both accept a shortname as your payout address. When you start [seine](/#download) for the first time, enter `@yourname` at the address prompt and accept the default pool. To pass it on the command line, quote it:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Quote shortnames in shell commands, especially the `$name` form, so the shell passes them through unchanged. Shortnames need seine v0.2.16 or newer.
+</Note>
+
+Here is what happens next:
+
+- **Seine resolves the name when it starts.** It verifies the signed record from blocknet.id, checks the address, logs the full address it resolved to, and keeps that address for the whole run, including pool reconnects.
+- **The pool accepts names at login too.** bntpool.com verifies the signed mapping when a miner connects with a name, and uses the resolved full address for jobs, shares, balances and payouts.
+- **You can look yourself up by name.** The stats page on [bntpool.com](https://bntpool.com) accepts `@name` and `$name`, so you can follow your hashrate and balance without pasting the address.
+- **A saved name resolves again on the next run.** Seine stores the name in its config, so each new start picks up the address your name points to at that moment.
+
+Because balances belong to the full address, a later name change never redirects an existing balance. Anything you have already earned stays with the address that earned it and is paid there, while new mining goes to the new address. The same name also works in solo mode against your own node.
+
+New to mining? The [guide to mining Blocknet](/blog/how-to-mine-blocknet/) walks through downloading seine, hardware and payouts on bntpool.com.
+
+<CTA target="pool" title="Mine to your @name" text="bntpool.com accepts your Blocknet ID shortname as your payout login. Start mining in a few minutes." />

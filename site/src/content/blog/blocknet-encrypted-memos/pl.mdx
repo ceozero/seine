@@ -1,0 +1,143 @@
+---
+title: Zaszyfrowane memo w płatnościach Blocknet
+description: 'Dodaj zaszyfrowane memo do płatności Blocknet: numer faktury, zamówienia lub notatkę. Do 124 bajtów, czytelne dla nadawcy i odbiorcy, zawsze pełnej długości.'
+tags: [Memo, Prywatność, Portfel, Płatności]
+faq:
+  - q: 'Jak długie może być memo w Blocknet?'
+    a: 'Memo mieści do 124 bajtów. Zwykły tekst jest zapisywany w UTF-8, więc to 124 litery, cyfry lub znaki interpunkcyjne po angielsku albo około 41 znaków chińskich po trzy bajty każdy. Portfel zatrzymuje dłuższe memo, zanim zbuduje transakcję, i informuje o limicie 124 bajtów.'
+  - q: 'Czy eksplorator bloków może odczytać memo w Blocknet?'
+    a: 'Nie. Eksplorator pokazuje pole memo jako 128 bajtów szyfrogramu oznaczonych jako zaszyfrowane. Klucz pochodzi z sekretu, który dzielą nadawca i odbiorca dla tego wyjścia, więc otworzyć je mogą tylko ich portfele. Ponieważ każde memo jest dopełniane do pełnego rozmiaru, eksplorator nie potrafi nawet rozpoznać, które wyjścia zawierają notatkę.'
+  - q: 'Czy memo powiększa transakcję Blocknet?'
+    a: 'Nie. Każde wyjście już zawiera 128-bajtowe zaszyfrowane pole memo, niezależnie od tego, czy wpiszesz notatkę, czy zostawisz je puste. Memo wypełnia miejsce, które i tak istnieje, więc płatność z numerem faktury ma dokładnie ten sam rozmiar co ta sama płatność bez niego, a w łańcuchu obie wyglądają identycznie.'
+  - q: 'Czy mogę dodać memo, płacąc na nazwę Blocknet ID?'
+    a: 'Tak. Wpisz nazwę w miejscu adresu, a memo po kwocie, na przykład send @rock 100 "invoice 1042". Portfel rozwiązuje nazwę, pokazuje zweryfikowany adres, opłatę i memo, a potem prosi o potwierdzenie. Memo jest szyfrowane dla portfela, na który wskazuje nazwa.'
+sourceHash: 6df2e7728647
+translation: draft
+---
+
+Każda płatność Blocknet może zawierać krótką zaszyfrowaną notatkę. Możesz w niej podać numer faktury, numer zamówienia albo wiadomość dla osoby, której płacisz, i tylko Wy dwoje możecie ją przeczytać. Ten poradnik pokazuje, jak dodać memo przy wysyłaniu BNT, kto może je odczytać, dlaczego memo nigdy nie wyróżnia się w łańcuchu i gdzie znaleźć otrzymane memo.
+
+## Czym jest memo w Blocknet?
+
+Memo w Blocknet to 128-bajtowe zaszyfrowane pole dołączone do każdego wyjścia (output) transakcji. Mieści do 124 bajtów Twojego tekstu lub danych, na przykład numer faktury albo krótką notatkę. Jest szyfrowane sekretem znanym tylko nadawcy i odbiorcy oraz dopełniane tak, by puste memo wyglądało jak pełne.
+
+Memo jest częścią samego formatu transakcji. Ma je każde wyjście w łańcuchu, także wyjścia reszty, które zwracają monety do Twojego własnego portfela. Daje to trzy przydatne cechy:
+
+- **Prywatne domyślnie.** Treść jest szyfrowana dla odbiorcy danego wyjścia. Nikt inny nie widzi, co napisałeś.
+- **Stały rozmiar.** Pole zajmuje w łańcuchu zawsze 128 bajtów, cokolwiek w nim umieścisz.
+- **Zawsze obecne.** Ponieważ każde wyjście ma memo, płatność z notatką wygląda dokładnie tak samo jak płatność bez niej.
+
+## Co można umieścić w memo?
+
+Wszystko, co mieści się w 124 bajtach. Zwykły tekst jest zapisywany w UTF-8, więc po angielsku to 124 litery, cyfry i spacje. Znaki spoza alfabetu łacińskiego zajmują więcej bajtów: znak chiński zajmuje trzy, więc w memo zmieści się ich około 41.
+
+Typowe zastosowania:
+
+- **Faktury.** Wpisz numer faktury w memo, a osoba, która otrzyma płatność, dopasuje ją do właściwego rachunku bez dopytywania.
+- **Numery zamówień.** Sklep lub usługa może poprosić klientów o podanie numeru zamówienia, a potem odczytać go prosto z przychodzącej płatności.
+- **Notatki.** „Czynsz za listopad”, „Dzięki za pomoc” albo „Moja część za kolację” wędrują razem z monetami.
+- **Dane binarne.** Portfel przyjmuje też surowe bajty zapisane szesnastkowo, na przykład kody referencyjne generowane i odczytywane przez oprogramowanie.
+
+## Jak dodać memo przy wysyłaniu BNT?
+
+<Answer>
+W portfelu wiersza poleceń wpisz memo po kwocie: send @rock 100 "invoice 1042". Portfel pokazuje memo na ekranie potwierdzenia obok opłaty, szyfruje je dla odbiorcy i wysyła płatność, gdy ją potwierdzisz. Działają też surowe bajty z prefiksem hex:.
+</Answer>
+
+Polecenie portfela `send` przyjmuje memo jako opcjonalny ostatni argument:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Memo może zawierać spacje, a cudzysłowy wokół niego są opcjonalne. Portfel usuwa pasującą parę cudzysłowów przed zaszyfrowaniem tekstu. Oto płatność na nazwę Blocknet ID z numerem faktury:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+Krok potwierdzenia pokazuje memo, które przeczyta odbiorca, więc możesz je sprawdzić, zanim cokolwiek zostanie wysłane. Jeśli memo jest dłuższe niż 124 bajty, portfel zatrzymuje się przed zbudowaniem transakcji z komunikatem `memo too long: max 124 bytes`, a Ty możesz je skrócić i spróbować ponownie.
+
+Aby wysłać surowe bajty, dodaj przed memo prefiks `hex:`. Portfel dekoduje zapis szesnastkowy i szyfruje bajty:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+[Linki płatności](/pl/blog/blocknet-payment-links/) też mogą zawierać memo. Gdy wkleisz do portfela link `blocknet://` albo link `bntpay.com`, portfel wypełni adres, kwotę i memo, a Ty tylko to potwierdzasz, więc osoba, której płacisz, może z góry ustawić numer faktury. Więcej o nazwach i linkach przeczytasz w [poradniku o Blocknet ID](/pl/blog/blocknet-id-pay-by-name/).
+
+### Memo z Twojego własnego oprogramowania
+
+API portfela przyjmuje memo dla każdego odbiorcy wysyłki. W żądaniu do `POST /api/wallet/send` podaj dla każdego odbiorcy albo `memo_text` dla zwykłego tekstu, albo `memo_hex` dla surowych bajtów:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Kwoty są tu podane w jednostkach atomowych, gdzie 1 BNT to 100 000 000 jednostek, więc przykład wysyła 100 BNT i 25 BNT. Każdy odbiorca dostaje własne memo, zaszyfrowane tylko dla jego portfela. Obowiązuje ten sam limit 124 bajtów.
+
+## Kto może odczytać memo w Blocknet?
+
+<Answer>
+Nadawca i odbiorca. Każde memo jest szyfrowane sekretem, który oba portfele dzielą dla danego wyjścia, tym samym, z którego powstaje jednorazowy adres stealth odbiorcy. Wszyscy inni, w tym operatorzy węzłów i eksploratory bloków, widzą 128 bajtów danych wyglądających na losowe i nie potrafią stwierdzić, czy jest w nich notatka.
+</Answer>
+
+Gdy Twój portfel buduje płatność, łączy świeży, losowy klucz transakcji z publicznym kluczem podglądu (view key) odbiorcy, aby uzyskać wspólny sekret. Z tego sekretu powstaje [jednorazowy adres stealth](/pl/blog/blocknet-privacy-features/) odbiorcy, a portfel używa go też do zaszyfrowania memo. Haszuje sekret funkcją SHA3-256 razem z pozycją wyjścia w transakcji i identyfikatorem sieci, tworząc 128-bajtową maskę, a następnie łączy maskę z memo. Każde wyjście dostaje własną maskę, więc dwa memo w tej samej transakcji są szyfrowane osobno.
+
+Portfel odbiorcy dochodzi do tego samego sekretu z drugiej strony, używając swojego prywatnego klucza podglądu, gdy skanuje kolejne bloki. Odszyfrowuje memo i zapisuje je razem z płatnością. Po Twojej stronie portfel przechowuje napisane przez Ciebie memo w historii wysyłek.
+
+Dwie rzeczy warte uwagi:
+
+- **Portfel tylko do podglądu (view-only) też pokazuje memo.** To Twój prywatny klucz podglądu odczytuje przychodzące płatności, więc portfel tylko do podglądu zbudowany z tego klucza widzi kwotę i memo każdej płatności. Udostępniaj ten klucz tylko osobom, którym pozwoliłbyś oglądać swoje przychodzące płatności.
+- **Nagrody za kopanie mają puste memo.** Konsensus wymaga, aby memo w każdej nagrodzie za blok było puste, więc wyjść coinbase w łańcuchu nigdy nie da się użyć jako publicznego kanału wiadomości.
+
+## Dlaczego każde memo wygląda w łańcuchu tak samo
+
+Memo, które zdradzałoby swoją długość, ujawniałoby informację. 30-bajtowa notatka wygląda inaczej niż 100-bajtowa, a puste memo wyróżniałoby się na tle obu. Portfel Blocknet zamyka tę lukę stałym układem i losowym dopełnieniem.
+
+Przed zaszyfrowaniem portfel pakuje memo do 128-bajtowej koperty:
+
+| Bajty | Zawartość |
+|---|---|
+| 1 | Wersja koperty |
+| 1 | Długość Twojego memo |
+| 2 | Suma kontrolna memo |
+| od 0 do 124 | Twoje memo |
+| Reszta | Losowe dopełnienie |
+
+Dopełnienie pochodzi z kryptograficznego generatora liczb losowych systemu, więc niewykorzystane miejsce jest nieprzewidywalne. Po zaszyfrowaniu krótka notatka, pełna notatka i puste memo to zawsze 128 bajtów danych wyglądających na losowe. Wyjścia reszty dostają własne puste, dopełnione memo, więc nawet monety, które odsyłasz sam sobie, nie wyróżniają się.
+
+Suma kontrolna pozwala portfelowi odbiorcy potwierdzić, że poprawnie odszyfrował memo, zanim je pokaże. Węzły odrzucają też każdy blok zawierający wyjście, którego pole memo składa się z samych zer, więc każde wyjście w łańcuchu ma prawidłowo wypełnione memo.
+
+## Gdzie znaleźć otrzymane memo
+
+Portfel wiersza poleceń pokazuje memo wszędzie tam, gdzie wyświetla płatności:
+
+- **`history`** wyświetla płatności przychodzące i wychodzące, z wierszem `memo:` pod każdą płatnością, która je zawierała.
+- **`outputs tx <txid>`** pokazuje każde wyjście Twojego portfela w danej transakcji, łącznie z memo. `outputs <n>` robi to samo dla pojedynczego wyjścia z listy.
+- **API portfela** zwraca memo każdego otrzymanego wyjścia jako `memo_hex` w odpowiedzi na `GET /api/wallet/history`, gotowe do dopasowania do faktur przez system zamówień.
+
+Memo tekstowe są wyświetlane w cudzysłowie. Memo, które nie jest tekstem do wydrukowania, na przykład surowe bajty wysłane z `hex:`, jest wyświetlane szesnastkowo.
+
+Jeśli płatność kiedyś wymaga rozliczenia, nadawca może ją udowodnić. Polecenie portfela `prove <txid>` wyświetla klucz transakcji dla wysłanej przez Ciebie płatności. Każdy, kto ma ten klucz, identyfikator transakcji i adres odbiorcy, może sprawdzić płatność przez punkt końcowy `POST /api/verify-proof`, który nie wymaga portfela. Potwierdza on transakcję i pokazuje wyjścia otrzymane przez ten adres, ich kwoty i ich memo.
+
+## Wykop BNT, które potem wyślesz
+
+Prostym sposobem na zdobycie pierwszych BNT jest ich wykopanie. seine działa na Twoim własnym komputerze, sam się dostraja podczas kopania i wypłaca środki przez bntpool.com prosto na Twój adres lub Twoje `@name`. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) pomoże Ci go uruchomić w kilka minut.
+
+<CTA target="seine" title="Pobierz seine i kop BNT" text="Kop Blocknet na własnym komputerze bez żadnej konfiguracji, a potem płać z portfela prywatnymi płatnościami z memo." />

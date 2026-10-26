@@ -1,0 +1,103 @@
+---
+title: 'Qu''est-ce qu''une cryptomonnaie de confidentialité ? Le fonctionnement des cryptos privées'
+seoTitle: 'Cryptomonnaie de confidentialité : définition et fonctionnement'
+description: 'Une cryptomonnaie de confidentialité cache qui a payé, qui a été payé et combien. Découvrez comment elle fonctionne et pourquoi la confidentialité par défaut compte.'
+tags: [Confidentialité, Cryptomonnaies de confidentialité, Signatures de cercle, Adresses furtives, Blocknet]
+faq:
+  - q: 'Quelle est la différence entre une cryptomonnaie de confidentialité et Bitcoin ?'
+    a: 'Bitcoin enregistre chaque adresse et chaque montant en clair : n''importe qui peut suivre les coins d''une adresse à l''autre et lire chaque solde. Une cryptomonnaie de confidentialité utilise une cryptographie comme les signatures de cercle, les adresses à usage unique et les montants cachés : la chaîne prouve toujours que chaque paiement est valide tout en montrant très peu aux observateurs extérieurs sur qui a payé qui, ou combien.'
+  - q: 'Toutes les cryptomonnaies de confidentialité rendent-elles la confidentialité obligatoire ?'
+    a: 'Non, les conceptions diffèrent. Certaines, comme Monero et Blocknet, appliquent leur confidentialité à chaque transaction : il n''existe aucun mode public. Zcash propose des adresses blindées, qui cachent l''expéditeur, le destinataire et le montant grâce à des preuves à divulgation nulle de connaissance, à côté d''adresses transparentes qui fonctionnent à peu près comme des adresses Bitcoin. Les utilisateurs peuvent transférer des fonds entre les deux.'
+  - q: 'Comment un réseau peut-il vérifier des paiements qu''il ne voit pas ?'
+    a: 'La cryptographie permet aux nœuds de vérifier un paiement sans en lire les détails. Une signature de cercle prouve que l''une de plusieurs sorties a été dépensée, une image de clé bloque une seconde dépense des mêmes coins, et les engagements de montant s''additionnent pour que les nœuds confirment que les entrées égalent les sorties plus les frais. Les preuves d''intervalle montrent qu''aucun montant caché n''est négatif.'
+  - q: 'Peut-on miner une cryptomonnaie de confidentialité sur un ordinateur ordinaire ?'
+    a: 'Oui, si elle utilise une preuve de travail gourmande en mémoire. Blocknet utilise Argon2id, qui demande environ 2 GB de mémoire pour chaque hachage : ce sont donc des ordinateurs de bureau, des portables et des serveurs ordinaires qui minent. Téléchargez seine, donnez-lui votre adresse Blocknet ou votre @name, et il mine sur le pool bntpool.com avec votre CPU et toute carte graphique NVIDIA.'
+sourceHash: 62f9c81926d6
+translation: draft
+---
+
+Ce guide explique ce qu'est une cryptomonnaie de confidentialité, ce qu'une blockchain ordinaire révèle de vos paiements et la cryptographie qu'utilisent les cryptomonnaies de confidentialité pour cacher l'expéditeur, le destinataire et le montant. Il se termine sur l'exemple concret de Blocknet et sur la façon de gagner vos premiers coins confidentiels en minant.
+
+## Qu'est-ce qu'une cryptomonnaie de confidentialité ?
+
+<Answer>
+Une cryptomonnaie de confidentialité est conçue pour que les paiements n'exposent publiquement ni l'expéditeur, ni le destinataire, ni le montant. Elle utilise une cryptographie comme les signatures de cercle, les adresses furtives à usage unique et les montants cachés : chaque nœud peut toujours vérifier chaque paiement, tandis que la personne qui lit la blockchain n'en apprend presque rien.
+</Answer>
+
+Toute cryptomonnaie tient un registre partagé, la blockchain, que de nombreux ordinateurs indépendants copient et vérifient. C'est cette ouverture qui permet à des inconnus de s'accorder sur qui possède quoi sans banque au milieu. La question à laquelle répond une cryptomonnaie de confidentialité est la suivante : quelle part de chaque paiement ce registre doit-il montrer ?
+
+Bitcoin en montre l'essentiel. Son livre blanc décrit son modèle de confidentialité en une phrase : « Le public peut voir que quelqu'un envoie un montant à quelqu'un d'autre, mais sans information reliant la transaction à qui que ce soit. » Les noms n'y figurent pas, mais les adresses et les montants sont publics. Une cryptomonnaie de confidentialité va plus loin et garde les détails de chaque paiement hors du registre public, tout en prouvant que le paiement respecte les règles.
+
+## Que révèle une blockchain publique sur vous ?
+
+Sur une chaîne transparente comme Bitcoin, quiconque connaît l'une de vos adresses peut la consulter dans un explorateur de blocs et voir :
+
+- **Son solde**, jusqu'à la dernière unité.
+- **Chaque paiement entrant et sortant**, avec les montants et les dates.
+- **Où l'argent est allé ensuite**, car chaque paiement indique l'adresse d'où il vient et celle où il va.
+
+Votre nom n'y est pas écrit, mais les adresses restent rarement longtemps sans lien avec vous. Payer un commerçant, retirer des fonds d'une plateforme d'échange ou publier une adresse pour recevoir des dons la relie à vous, et à partir de là tout l'historique est lisible. C'est un peu comme afficher votre relevé bancaire sur un panneau public avec votre numéro de compte à la place de votre nom. Toute personne que vous payez peut voir ce que vous détenez, et toute personne qui vous paie peut observer ce que vous faites de l'argent.
+
+Une cryptomonnaie de confidentialité est conçue pour que le panneau montre seulement que des paiements valides ont eu lieu.
+
+## Comment les cryptomonnaies de confidentialité cachent-elles l'expéditeur, le destinataire et le montant ?
+
+<Answer>
+Beaucoup de cryptomonnaies de confidentialité combinent trois techniques. Les signatures de cercle cachent l'expéditeur en mêlant le vrai coin à des leurres, les adresses furtives à usage unique cachent le destinataire en donnant à chaque paiement une nouvelle adresse, et les engagements avec preuves d'intervalle cachent le montant tout en prouvant qu'il est valide. Beaucoup protègent aussi la couche réseau, pour que l'origine d'une transaction reste cachée.
+</Answer>
+
+Chaque technique couvre une partie d'un paiement. Voici leur fonctionnement en termes simples.
+
+### Les signatures de cercle cachent qui a payé
+
+Une [signature de cercle](/fr/blog/ring-signatures-explained/) vous permet de signer au nom d'un groupe sans révéler quel membre a signé. Ron Rivest, Adi Shamir et Yael Tauman ont décrit l'idée en 2001, et la conception CryptoNote de 2013 l'a introduite dans les cryptomonnaies. Quand vous dépensez, votre portefeuille choisit d'autres sorties de la chaîne comme leurres et signe pour tout le groupe. N'importe qui peut vérifier que l'une d'elles a été dépensée, et la signature ne dit pas laquelle.
+
+Les cryptomonnaies de confidentialité utilisent des signatures de cercle liables, qui ajoutent une image de clé : une marque propre au vrai coin dépensé, qui ne révèle rien sur le membre du cercle concerné. Si la même image de clé apparaît deux fois, le réseau rejette la seconde dépense : les coins confidentiels ne peuvent donc toujours pas être dépensés deux fois. Monero et Blocknet utilisent une version compacte appelée CLSAG.
+
+### Les adresses furtives cachent qui a été payé
+
+Avec un système d'[adresses furtives](/fr/blog/stealth-addresses-explained/), l'adresse que vous partagez n'apparaît jamais sur la chaîne. Votre adresse contient deux clés publiques, une clé de visualisation et une clé de dépense. Pour chaque paiement, le portefeuille de l'expéditeur mélange ces clés avec une nouvelle valeur aléatoire et en dérive une adresse utilisée une seule fois. De votre côté, la clé privée de visualisation permet à votre portefeuille d'analyser la chaîne et de repérer les sorties qui vous sont adressées, et la clé privée de dépense vous permet de les dépenser.
+
+Si dix personnes paient l'adresse affichée sur votre site web, la chaîne montre dix adresses à usage unique distinctes sans lien visible entre elles : personne ne peut faire le total de ce que vous avez reçu.
+
+### Les engagements et les preuves d'intervalle cachent le montant
+
+Les montants sont stockés sous forme d'engagements de Pedersen, qui fixent un nombre sans le montrer. Les engagements peuvent s'additionner : chaque nœud peut donc confirmer que ce qui entre dans une transaction correspond à ce qui en sort, frais compris, sans voir aucun des chiffres. Une preuve d'intervalle montre ensuite qu'aucun montant caché n'est négatif, si bien que personne ne peut créer des coins à partir de rien. Les [Bulletproofs](/fr/blog/bulletproofs-explained/), publiés par Bünz et ses collègues en 2018, ont rendu ces preuves beaucoup plus petites.
+
+### La confidentialité réseau cache d'où part un paiement
+
+Même une transaction parfaitement confidentielle pourrait être remontée jusqu'à l'ordinateur qui l'a diffusée, en observant quel nœud l'a annoncée en premier. [Dandelion++](/fr/blog/dandelion-plus-plus-explained/), publié en 2018, contre cela en faisant d'abord passer discrètement une nouvelle transaction d'un pair à l'autre le long d'une « tige » (stem), puis en la laissant se propager à tout le réseau depuis un point aléatoire plus loin sur le trajet.
+
+Certaines cryptomonnaies de confidentialité prennent une autre voie. Zcash, lancé en 2016, utilise des preuves à divulgation nulle de connaissance appelées zk-SNARKs : ses adresses blindées cachent l'expéditeur, le destinataire et le montant, et la preuve montre que la transaction est valide sans révéler aucun de ces éléments.
+
+## Pourquoi la confidentialité par défaut compte-t-elle ?
+
+Quand la confidentialité est une option à activer, les transactions qui l'utilisent forment un groupe plus petit, et un groupe plus petit est plus facile à étudier. Quand chaque transaction est construite de la même façon, un paiement confidentiel ressemble à tous les autres paiements de la chaîne, et personne n'a à penser à le protéger.
+
+La confidentialité par défaut garde aussi tous les coins interchangeables, une propriété appelée fongibilité. Sur une chaîne transparente, un coin porte tout son historique, et deux coins de même valeur peuvent être traités différemment selon leur passé. Quand aucun coin n'a de passé visible, un coin en vaut un autre, ce que l'on attend de la monnaie.
+
+Les raisons du quotidien sont simples. Une entreprise ne veut pas que ses concurrents lisent ses paiements aux fournisseurs. Un salarié ne veut pas que son salaire soit visible par tous ceux à qui il achète un café. Une personne qui donne à une cause peut préférer le garder pour elle. L'argent liquide et les comptes bancaires ordinaires offrent déjà ce type de confidentialité, et une cryptomonnaie de confidentialité l'apporte aux paiements numériques.
+
+## Blocknet, exemple de cryptomonnaie de confidentialité
+
+Blocknet est une cryptomonnaie de confidentialité qui applique les signatures de cercle, les adresses furtives, les montants cachés et la confidentialité réseau à chaque paiement. Son format de transaction n'a pas de mode transparent :
+
+- **Expéditeur :** chaque entrée est signée avec un cercle CLSAG d'exactement 16 sorties, la vraie et 15 leurres, et le consensus rejette toute autre taille.
+- **Destinataire :** chaque paiement va vers une adresse furtive à usage unique.
+- **Montant :** les montants sont des engagements de Pedersen avec des preuves d'intervalle Bulletproofs sur 64 bits.
+- **Réseau :** les transactions circulent avec Dandelion++, qui réoriente les tiges toutes les 10 minutes.
+- **Mémo :** chaque sortie peut contenir une note chiffrée de 124 octets au maximum, lisible uniquement par l'expéditeur et le destinataire et complétée à une taille fixe de 128 octets : un paiement avec note ressemble à un paiement sans note.
+
+Blocknet vous permet aussi de payer quelqu'un par son nom. Un [nom court Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) comme `@alice` remplace une adresse de plus de 90 caractères, et les paiements vers ce nom arrivent toujours sur de nouvelles adresses furtives : un nom public ne révèle donc rien des revenus de son propriétaire. Pour le détail de chaque couche, lisez [comment Blocknet garde les paiements confidentiels](/fr/blog/blocknet-privacy-features/), et pour une vue d'ensemble, [qu'est-ce que Blocknet ?](/fr/blog/what-is-blocknet/)
+
+La mise à niveau Faraday prévue par Blocknet élargira le groupe dans lequel se cache chaque dépense. Selon les termes de [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) : « Aujourd'hui, une dépense se cache parmi 16 sorties. Après Faraday, elle se cachera parmi toutes les sorties de la chaîne. »
+
+## Comment obtenir une cryptomonnaie de confidentialité ?
+
+Vous pouvez en gagner en minant. La preuve de travail de Blocknet, [Argon2id](/fr/blog/argon2id-proof-of-work-explained/), demande environ 2 GB de mémoire pour chaque hachage : ce sont donc les CPU et la RAM ordinaires des ordinateurs de bureau, des portables et des serveurs qui minent. Les paiements du pool vous parviennent comme n'importe quel autre paiement Blocknet, sur des adresses furtives à usage unique avec des montants cachés.
+
+1. **Procurez-vous un portefeuille.** Le [guide du portefeuille Blocknet pour le minage](/fr/blog/blocknet-wallet-for-mining/) montre comment en créer un, sauvegarder la phrase de récupération et copier votre adresse.
+2. **Téléchargez seine.** C'est le mineur Blocknet gratuit et open source pour Windows, macOS et Linux, disponible dans la [section Téléchargement](/fr/#download). Il mine avec votre CPU et, sous Windows et Linux, avec toute carte graphique NVIDIA en même temps, et s'optimise pendant qu'il tourne.
+3. **Commencez à miner sur bntpool.com.** Collez votre adresse ou votre `@name`, acceptez le pool par défaut, et les paiements arrivent de façon confidentielle dans votre portefeuille. [Comment miner Blocknet](/fr/blog/how-to-mine-blocknet/) détaille chaque étape.
+
+<CTA target="seine" title="Minez une cryptomonnaie de confidentialité sur votre ordinateur" text="seine mine Blocknet avec votre CPU et votre GPU NVIDIA et paie sur bntpool.com vers votre adresse confidentielle ou votre @name." />

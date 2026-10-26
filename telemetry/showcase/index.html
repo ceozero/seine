@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seine hardware telemetry · local showcase</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: dark; font: 16px/1.55 system-ui,sans-serif; color:#eff4f4; background:#101b20 }
+  body { max-width:960px; margin:0 auto; padding:48px 24px }
+  h1 { line-height:1.15; font-size:clamp(28px,5vw,46px); margin:12px 0 20px }
+  h2 { font-size:20px; margin:0 0 12px } p { color:#c4d1d3 }
+  .eyebrow { color:#77d7cd; letter-spacing:.08em; font-size:13px; text-transform:uppercase }
+  section { border-top:1px solid #3b5157; padding:24px 0; margin-top:24px }
+  button { background:#23363d; color:inherit; border:1px solid #658087; border-radius:6px; min-height:44px; padding:10px 16px; font:inherit; cursor:pointer }
+  button:hover { background:#344c53 } button:focus-visible { outline:3px solid #77d7cd; outline-offset:3px }
+  button:disabled { opacity:.45; cursor:default } .actions { display:flex; flex-wrap:wrap; gap:10px }
+  label { display:flex; gap:12px; align-items:center; margin:20px 0 } input { width:20px; height:20px; accent-color:#77d7cd }
+  #result { padding:18px; border-left:3px solid #77d7cd; background:#182a30; margin-top:24px; overflow-wrap:anywhere }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; color:#c4d1d3; font-size:13px; max-height:420px; overflow:auto; padding:20px; background:#0d161a }
+  .small { font-size:13px } @media(max-width:480px) { body { padding:28px 18px } .actions button { flex:1 1 100% } }
+</style>
+<div class="eyebrow">Seine · developer showcase</div>
+<h1>Hardware and reliability telemetry</h1>
+<p>Exercise the real local collector with a synthetic CPU and warning report. This page sends no information about your browser or computer.</p>
+<p class="small">Source revision: <span id="revision">loading</span> · fixture data only · no production endpoint</p>
+<section>
+  <h2>Collector responses</h2>
+  <label><input id="enabled" type="checkbox"> Enable fixture submission</label>
+  <div class="actions">
+    <button id="send" disabled>Send valid report</button>
+    <button id="invalid" disabled>Send unknown field</button>
+    <button id="empty" disabled>Send empty report</button>
+    <button id="repeat" disabled>Repeat last report</button>
+  </div>
+  <div id="result" role="status" aria-live="polite">Disabled. No report has been sent.</div>
+  <p class="small">The checkbox controls this test harness only. The miner preference is stored by <code>seine --telemetry on|off</code>.</p>
+</section>
+<section><h2>Upload allowlist</h2><p>Schema 4 adds specific failure reasons, operation names, OS error codes, allocation sizes and the last observed phase of an interrupted run. Older reports remain readable. Wallet addresses, worker names, hostnames, credentials and logs are excluded.</p><pre id="payload">Loading fixture…</pre></section>
+<script>
+let fixture, last;
+const buttons=[...document.querySelectorAll('button')];
+const result=document.querySelector('#result'), enabled=document.querySelector('#enabled');
+function setButtons(busy=false){ buttons.forEach(b=>b.disabled=busy||!enabled.checked||(b.id==='repeat'&&!last)); }
+enabled.onchange=()=>{setButtons();result.textContent=enabled.checked?'Ready. No report has been sent.':'Disabled. No further reports will be sent.';};
+async function submit(payload){
+  setButtons(true); result.textContent='Sending report to the local collector…';
+  try {
+    const response=await fetch('/submit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await response.json();
+    const labels={204:'Accepted. The collector stored the fixture report.',422:'Rejected. The payload does not match the upload allowlist.',429:'Rate limited. This installation has reported recently.',413:'Rejected. The report exceeds the size limit.',503:'Unavailable. Mining would continue; the miner may retain one bounded diagnostic report for a later attempt.'};
+    result.textContent=`HTTP ${data.status} — ${labels[data.status]||'Request rejected.'}`;
+  } catch {result.textContent='Unavailable. Could not reach the local test harness.';}
+  setButtons();
+}
+function newReport(){ const report=structuredClone(fixture);report.installation_id=crypto.randomUUID().replaceAll('-','');report.report_id=crypto.randomUUID().replaceAll('-','');return report; }
+document.querySelector('#send').onclick=()=>{last=newReport();submit(last);};
+document.querySelector('#invalid').onclick=()=>submit({...newReport(),hostname:'fixture-private-field'});
+document.querySelector('#empty').onclick=()=>submit({});
+document.querySelector('#repeat').onclick=()=>submit(last);
+fetch('/fixture.json').then(r=>r.json()).then(v=>{fixture=v;document.querySelector('#payload').textContent=JSON.stringify(v,null,2);});
+fetch('/revision').then(r=>r.text()).then(v=>document.querySelector('#revision').textContent=v);
+</script>
+</html>

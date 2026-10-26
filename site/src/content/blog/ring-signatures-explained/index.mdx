@@ -1,0 +1,86 @@
+---
+title: "Ring signatures explained: how crypto hides the sender"
+description: "Ring signatures explained, from the 2001 idea to key images and CLSAG: how a signer hides among public keys and how Blocknet signs each input with a ring of 16."
+date: 2026-10-25
+tags: [Privacy, Ring signatures, Cryptography, Blocknet]
+faq:
+  - q: What is the difference between a ring signature and a group signature?
+    a: "A group signature needs a manager who sets up the group in advance and can reveal who signed. A ring signature has no manager and no setup: the signer picks any set of public keys on the spot, and nobody, including the people whose keys were used, can later prove which member produced the signature."
+  - q: What is a key image in a ring signature?
+    a: "A key image is a value computed from the private key of the output being spent. The same output always produces the same key image, so the network rejects a second spend of it, yet the key image doesn't reveal which ring member is the real one. It turns a ring signature into a linkable ring signature that prevents double spending."
+  - q: What is CLSAG?
+    a: "CLSAG is a linkable ring signature scheme described by Brandon Goodell, Sarang Noether and Arthur Blue in 2019. It proves that the signer owns one output in the ring and that the amounts balance, with a key image to stop double spends. Monero adopted it in October 2020, and Blocknet signs every input with CLSAG and RingCT."
+  - q: What ring size does Blocknet use?
+    a: "Blocknet uses a ring of exactly 16 for every input: the real output plus 15 decoys, each a real output already on the chain. Consensus rejects any other size. Because every input uses the same size, ring size can never single out a transaction, and the real output sits at a random position in the ring."
+  - q: Do ring signatures hide the amount of a payment?
+    a: "No. A ring signature hides which output paid. Amounts are hidden by a separate layer: Pedersen commitments, which lock in a number without showing it, plus Bulletproofs range proofs, which prove each amount is valid. Blocknet uses all of these together on every transaction, alongside one-time stealth addresses that hide the receiver."
+related: [stealth-addresses-explained, bulletproofs-explained, what-is-a-privacy-coin]
+---
+
+A ring signature lets you sign on behalf of a group so that anyone can check the signature came from one of the group's keys, while nobody can tell which one. This post explains how ring signatures work, from the 2001 paper that introduced them to key images and CLSAG, and shows how Blocknet uses a ring of 16 to keep the sender of every payment private.
+
+## What is a ring signature?
+
+<Answer>
+A ring signature is a digital signature made with one private key and a set of other people's public keys. A verifier can confirm that the holder of one of those keys signed, but can't tell which one. The signer picks the group on the spot, with no setup and no cooperation from the other members.
+</Answer>
+
+An ordinary digital signature ties a message to one public key. A ring signature ties it to a set of public keys, called the ring. The signer needs only their own private key; the other members contribute nothing except public keys they have already published. To an outsider, every member of the ring is an equally plausible signer.
+
+## Where did ring signatures come from?
+
+Ron Rivest, Adi Shamir and Yael Tauman introduced ring signatures at ASIACRYPT 2001 in a paper titled ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Their example is a cabinet member who wants to leak a story to a journalist in a way that proves it came from the cabinet without revealing which member. He signs with his own key plus the public keys of the other cabinet members, and the journalist can verify the signature without learning who wrote it.
+
+Two properties made the idea stand out. There is no group manager who can unmask the signer, which sets ring signatures apart from the older group signatures. And the ring is spontaneous: the signer can assemble it from any published keys at the moment of signing. The authors chose the name because "rings are geometric regions with uniform periphery and no center": every member sits on the edge, and nobody is in charge. The signing algorithm has the same shape, a chain of calculations that loops back on itself.
+
+## How does a ring signature work?
+
+The modern schemes used in cryptocurrencies build the loop out of hashes and elliptic-curve keys. Here is the idea in plain steps for a ring of 16 public keys:
+
+1. **Start at your own slot.** The signer picks a random secret number and hashes it together with the message. That hash becomes the challenge for the next slot in the ring.
+2. **Fake a response for every other slot.** For each of the other 15 members, the signer picks a random response and combines it with that member's public key and the current challenge to compute the challenge for the slot after it.
+3. **Close the ring.** After going all the way around, the chain arrives back at the signer's own slot. Only someone who holds that slot's private key can compute the one response that makes the chain land exactly where it began.
+
+The signature is the starting challenge plus the 16 responses. A verifier starts anywhere, walks around the ring recomputing each challenge from the public keys and responses, and checks that the loop closes. Every slot looks the same: a public key and a random-looking response. Nothing marks where the signer started, so the verifier learns that one private key closed the ring and nothing about which.
+
+## How do key images stop double spending?
+
+A plain ring signature has one gap for money: if every spend hides among other outputs, the network can't see that the same coins were spent twice. Linkable ring signatures fix this. Joseph Liu, Victor Wei and Duncan Wong described the first such scheme, LSAG, at ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Two signatures made with the same private key can be linked to each other, while the signer still hides among the ring.
+
+The CryptoNote design of 2013 turned this into the key image. For an output with private key `x` and public key `P`, the wallet computes `I = x · Hp(P)`, where `Hp` hashes the public key to a point on the curve. The signature proves that `I` belongs to whichever ring member signed, without saying which one. Because the key image depends only on the output being spent, spending that output again always produces the same `I`. Every node keeps a list of key images already seen and rejects any transaction that repeats one.
+
+## From MLSAG to CLSAG
+
+Cryptocurrencies that also hide amounts need the ring signature to prove a second fact: that the hidden input amount matches what the transaction spends. Shen Noether's 2015 paper ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT) did this with MLSAG, a ring signature over two sets of keys, one for ownership and one for the amount commitments.
+
+CLSAG, from Brandon Goodell, Sarang Noether and Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), proves the same two facts more compactly. Monero switched from MLSAG to CLSAG in its October 2020 upgrade. The [Monero documentation](https://www.getmonero.org/resources/moneropedia/clsag.html) reports about 20% faster verification and a typical two-input, two-output transaction shrinking from about 2.5 kB to 1.9 kB.
+
+## What does ring size mean for privacy?
+
+<Answer>
+Ring size is the number of outputs in each ring: the real one plus the decoys. A ring of 16 means an observer sees 16 equally valid candidates for every input. A fixed size matters as much as a large one, because when every input uses the same size, the size itself reveals nothing about who built the transaction.
+</Answer>
+
+The decoys are real outputs from the chain, so each one could genuinely be the coin being spent. If rings could vary, a wallet that chose an unusual size would mark its own transactions. Monero raised its ring size from 11 to 16 in its August 2022 upgrade, and Blocknet uses 16 by consensus for every input.
+
+## How Blocknet uses ring signatures
+
+Every Blocknet input is signed with CLSAG and RingCT over a ring of exactly 16 outputs. The rules are enforced by consensus, so no wallet can opt out:
+
+- **Fixed ring of 16.** The daemon rejects any input whose ring isn't exactly 16 members. Its code fixes the size "to prevent information leakage from variable ring sizes".
+- **Real outputs only.** Every ring member must be a real output already on the chain, so each decoy is a coin that could genuinely be spent.
+- **Random decoys and a random position.** The wallet shuffles the chain's outputs with a cryptographically secure random generator to pick 15 decoys, then places your real output at a random position in the ring.
+- **Ownership and amount in one proof.** Each signature proves that you own one ring member and that your input's hidden amount matches that member's commitment, so amounts balance without being shown.
+- **Key images checked against the chain.** The key image is part of the signed data, and the network rejects a transaction if that key image was already spent or appears twice in the same transaction.
+
+The transaction format has no transparent mode, so every payment on the chain carries rings like these. Ring signatures hide the sender; [one-time stealth addresses](/blog/stealth-addresses-explained/) hide the receiver, and [Pedersen commitments with Bulletproofs](/blog/bulletproofs-explained/) hide the amount. [How Blocknet keeps payments private](/blog/blocknet-privacy-features/) walks through each of those layers and what they mean when you pay someone.
+
+## What comes next with the Faraday upgrade
+
+Blocknet plans a network upgrade called Faraday, with activation planned for around 2027-02-16 according to [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). In the site's words: "Today a spend hides among 16 outputs. After Faraday, it hides among every output on the chain." Faraday will also bring new spend proofs, which the site describes as "Built so a quantum computer cannot forge a spend." Design, testing and adversarial review are in progress, and the dates are planned rather than final.
+
+## Get some BNT to send privately
+
+A simple way to get coins that use these rings is to mine them. The seine miner is free, open source and sizes itself to your computer, and bntpool.com is its default pool, so you can be mining in a few minutes. The [mining guide](/blog/how-to-mine-blocknet/) covers the setup, and you can mine straight to your address or a [Blocknet ID name](/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Mine your first private BNT" text="Download seine, mine on bntpool.com and receive coins that every spend protects with a ring of 16." />

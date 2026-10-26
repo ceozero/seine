@@ -1,0 +1,94 @@
+---
+title: 'Direcciones sigilosas explicadas: cómo funcionan las direcciones de un solo uso'
+description: 'Direcciones sigilosas en palabras sencillas: cómo las direcciones de un solo uso, las claves de visualización y de gasto y el escaneo mantienen privados tus pagos.'
+tags: [Privacidad, Direcciones sigilosas, Billetera, Blocknet]
+faq:
+  - q: '¿Una dirección sigilosa es lo mismo que una dirección de un solo uso?'
+    a: 'Son las dos mitades de un mismo sistema. La dirección sigilosa es la dirección que publicas, formada por una clave pública de gasto y una clave pública de visualización. Una dirección de un solo uso es la clave nueva que un remitente deriva de ella para un único pago. En la cadena solo aparecen direcciones de un solo uso, nunca tu dirección publicada.'
+  - q: '¿Alguien puede ver mi saldo si conoce mi dirección sigilosa?'
+    a: 'No. Conocer tu dirección publicada no permite a nadie encontrar tus pagos, porque cada uno llega a una clave de un solo uso que no parece tener relación con ella. Para encontrarlos hace falta tu clave privada de visualización, así que solo tu billetera puede listar lo que has recibido. En Blocknet los importes también están ocultos, así que ni siquiera las propias salidas muestran un valor.'
+  - q: '¿Qué puede hacer alguien con mi clave privada de visualización?'
+    a: 'Una clave privada de visualización permite a quien la tiene encontrar los pagos que te han enviado y leer sus importes y memos. No puede gastar nada, porque para gastar hace falta la clave privada de gasto. En Blocknet, el comando viewkeys convierte tu clave de visualización en una billetera de solo lectura, útil para vigilar los fondos desde una segunda computadora. Compártela solo con personas de confianza.'
+  - q: '¿Tengo que activar las direcciones sigilosas en Blocknet?'
+    a: 'No. Todos los pagos de Blocknet van automáticamente a una dirección sigilosa de un solo uso, porque el formato de transacción no tiene modo transparente. Tu billetera crea la clave de un solo uso cuando envías y encuentra los pagos entrantes con tu clave de visualización cuando se sincroniza. No hay nada que configurar, tanto si pagas a una dirección como a un @name.'
+sourceHash: df06dcbe3a7b
+translation: reviewed
+---
+
+Una dirección sigilosa te permite publicar una sola dirección y, aun así, que cada pago que recibes llegue a un sitio nuevo de la cadena. Esta guía explica cómo funciona, qué hacen tu clave de visualización y tu clave de gasto, y cómo una billetera encuentra sus propios pagos, con Blocknet como ejemplo práctico.
+
+## ¿Qué es una dirección sigilosa?
+
+<Answer>
+Una dirección sigilosa es una dirección pública que nunca aparece en la blockchain. Contiene dos claves públicas, una clave de gasto y una clave de visualización. Para cada pago, la billetera del remitente las combina con un número aleatorio nuevo para crear una dirección de un solo uso que solo el destinatario puede reconocer y desde la que solo él puede gastar.
+</Answer>
+
+En un registro público, una dirección normal aparece en cada pago que recibe. Una dirección estándar de Bitcoin funciona así: cualquiera que la conozca puede buscar cada pago y sumar el total. Por eso muchas billeteras de Bitcoin dan una dirección nueva para cada pago.
+
+Una dirección sigilosa hace ese trabajo por ti. Compartes una sola dirección, en un sitio web, en un perfil o como `@name`, y cada remitente deriva de ella una dirección de un solo uso distinta. Diez pagos que te hagan se convierten en diez salidas que no comparten nada visible entre sí ni con la dirección que compartiste. No hace falta ningún intercambio previo: el remitente calcula por su cuenta la dirección de un solo uso a partir de tu dirección pública y un número aleatorio.
+
+## ¿De dónde salieron las direcciones sigilosas?
+
+El diseño de direcciones de un solo uso que usan Monero, Blocknet y otras monedas se remonta al whitepaper CryptoNote v2.0 de Nicolas van Saberhagen, fechado el 17 de octubre de 2013. Llama a la idea «pagos no vinculables» (unlinkable payments) y describe cómo un remitente genera una «clave pública de un solo uso» a partir de la dirección del destinatario. La documentación de Monero describe que las direcciones sigilosas permiten a los remitentes crear «direcciones aleatorias de un solo uso para cada transacción en nombre del destinatario».
+
+La idea se ha extendido más allá de las [monedas de privacidad](/es/blog/what-is-a-privacy-coin/). El [BIP 352 «Silent Payments»](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) de Bitcoin permite que una dirección de Bitcoin fija reciba pagos que no se pueden vincular en la cadena, y el [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) de Ethereum, creado en 2022, estandariza las direcciones sigilosas para las cuentas de Ethereum. Ambas son funciones opcionales en esas cadenas. En Blocknet, todos los pagos usan una dirección de un solo uso.
+
+## ¿Cómo funcionan las direcciones sigilosas?
+
+<Answer>
+El remitente elige un número aleatorio r, publica R = r·G en la transacción y combina r con la clave pública de visualización del destinatario para obtener un secreto compartido. Sumar ese secreto a la clave pública de gasto da la clave de un solo uso. El destinatario reconstruye el mismo secreto a partir de R y su clave privada de visualización, así que solo él encuentra el pago.
+</Answer>
+
+Tu billetera tiene dos pares de claves. Cada clave privada es un número secreto (s para gasto, v para visualización), y cada clave pública es ese número multiplicado por un punto fijo de la curva, G. Tu dirección son simplemente las dos claves públicas, S y V. Este es el intercambio completo:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+El truco es un intercambio Diffie-Hellman. El remitente calcula r·V y el destinatario calcula v·R, y ambos llegan al mismo punto, porque los dos son r·v·G. Nadie más conoce r ni v, así que nadie más puede calcularlo. El hash de ese punto (H) da un secreto compartido, y la clave de un solo uso P es ese secreto, como punto, sumado a tu clave pública de gasto.
+
+Al escanear, recalculas el secreto a partir de R y tu clave privada de visualización y compruebas si produce P. Si es así, la salida es tuya. Para gastarla, tu billetera suma el mismo secreto a tu clave privada de gasto, lo que da la clave privada x de esa salida concreta.
+
+Blocknet sigue este diseño sobre el grupo Ristretto en Curve25519, con hashes SHA-256 bajo una etiqueta de dominio propia de Blocknet. Además, mezcla en el hash la posición de cada salida dentro de la transacción, así que dos salidas para la misma persona en una misma transacción siguen teniendo claves sin relación entre sí. El mismo secreto compartido deriva también el factor de cegado que oculta el importe de la salida y la clave que cifra su memo, y así es como el destinatario lee ambos.
+
+## ¿Qué hacen la clave de visualización y la clave de gasto?
+
+Separar las claves te da dos niveles de acceso:
+
+- **La clave privada de visualización encuentra los pagos.** Con v y tu clave pública de gasto, una billetera puede reconocer cada salida que te envían, descifrar su importe y leer su memo.
+- **La clave privada de gasto los gasta.** Solo s convierte una salida encontrada en una clave privada x que puede firmar un gasto.
+
+Esa separación hace posibles las billeteras de solo lectura. En la billetera de línea de comandos de Blocknet, `viewkeys` crea un archivo de billetera aparte a partir de tus claves de visualización. La ayuda de la billetera lo describe como un archivo que «puede vigilar pero no puede gastar», útil cuando «quieres acceso de solo lectura en otra máquina». Cuando lo ejecutas, la billetera explica lo que está creando:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Da una billetera de solo lectura únicamente a alguien a quien le enseñarías tu historial, como tu contable, o guárdala en una segunda computadora tuya. En cualquier caso, puede ver llegar los fondos mientras tu clave de gasto se queda en la máquina en la que confías.
+
+## ¿Cómo encuentra una billetera sus pagos?
+
+Como las claves de un solo uso no parecen tener relación con tu dirección, nada en la cadena indica qué salidas son tuyas. Tu billetera lo comprueba por sí misma. Para cada transacción de cada bloque nuevo, toma R, calcula el secreto compartido con tu clave privada de visualización y prueba cada salida con la fórmula anterior. Eso es lo que hace una billetera cuando se sincroniza.
+
+El escáner de Blocknet hace que esto sea rápido. El paso costoso, multiplicar R por tu clave de visualización, se ejecuta una vez por transacción, y después cada salida de esa transacción se comprueba con el resultado. Cuando una salida coincide, la billetera descifra el importe y lo verifica contra el compromiso de Pedersen de la salida antes de añadirlo a tu saldo.
+
+El escaneo también simplifica la recuperación. Los dos pares de claves de Blocknet salen de tu [semilla de recuperación](/es/blog/seed-phrase-explained/) de 12 palabras, así que restaurar la semilla en una computadora nueva reconstruye las claves, y la billetera vuelve a escanear la cadena para encontrar todas las salidas que te pertenecen. La [guía de la billetera de Blocknet](/es/blog/blocknet-wallet-for-mining/) muestra cómo hacer la copia de seguridad de la semilla y cómo restaurarla.
+
+## Las direcciones sigilosas en Blocknet
+
+En Blocknet, una dirección sigilosa es simplemente tu dirección. Es la codificación base58 de tu clave pública de gasto, tu clave pública de visualización y una suma de verificación de 4 bytes, lo que da 92 o 93 caracteres. Todos los pagos que recibes la usan, porque el formato de transacción no tiene modo transparente. Las recompensas de bloque también van a claves de un solo uso, así que la salida coinbase de un minero en solitario se encuentra con el mismo escaneo.
+
+Las direcciones sigilosas se combinan con el resto de la privacidad de Blocknet: [un anillo de 16](/es/blog/ring-signatures-explained/) oculta de qué salida procede un gasto, los [compromisos](/es/blog/bulletproofs-explained/) ocultan los importes y Dandelion++ oculta por dónde entró una transacción en la red. La [guía de privacidad de Blocknet](/es/blog/blocknet-privacy-features/) repasa cada capa.
+
+También funcionan con nombres. Un [nombre corto de Blocknet ID](/es/blog/blocknet-id-pay-by-name/) como `@yourname` se asocia públicamente a tu dirección, así que los remitentes pueden buscarlo en blocknet.id. Los pagos en sí siguen yendo a claves de un solo uso nuevas, así que tu nombre no muestra nada de lo que has recibido.
+
+Eso hace de un nombre corto una dirección de pago práctica para minar. Inicia [seine](/es/#download), escribe tu dirección o `@yourname` cuando te lo pida y acepta el pool predeterminado, bntpool.com. La [guía de minería](/es/blog/how-to-mine-blocknet/) explica el resto, y tu billetera encuentra los BNT que ganas con el mismo escaneo mediante la clave de visualización que se describe arriba.
+
+<CTA target="seine" title="Mina BNT a tu propia dirección" text="Descarga seine, escribe tu dirección de Blocknet o tu @name y mina en bntpool.com en pocos minutos." />

@@ -377,6 +377,7 @@ const BACKEND_ASSIGN_BATCH_TIMEOUT_SCALE_MAX: u32 = 16;
 
 #[derive(Clone)]
 pub(super) struct BackendExecutor {
+    hardware_telemetry: Arc<std::sync::OnceLock<crate::hardware_telemetry::Recorder>>,
     workers: Arc<RwLock<BTreeMap<BackendWorkerKey, BackendWorker>>>,
     quarantined: Arc<Mutex<BTreeSet<BackendWorkerKey>>>,
     quarantine_cv: Arc<Condvar>,
@@ -385,9 +386,20 @@ pub(super) struct BackendExecutor {
 impl BackendExecutor {
     pub(super) fn new() -> Self {
         Self {
+            hardware_telemetry: Arc::new(std::sync::OnceLock::new()),
             workers: Arc::new(RwLock::new(BTreeMap::new())),
             quarantined: Arc::new(Mutex::new(BTreeSet::new())),
             quarantine_cv: Arc::new(Condvar::new()),
+        }
+    }
+
+    pub(super) fn set_hardware_telemetry(&self, recorder: crate::hardware_telemetry::Recorder) {
+        let _ = self.hardware_telemetry.set(recorder);
+    }
+
+    pub(super) fn record_hardware_sample(&self, slot: &super::BackendSlot, hashes: u64) {
+        if let Some(recorder) = self.hardware_telemetry.get() {
+            recorder.record(slot.id, slot.backend.hardware_telemetry(), hashes);
         }
     }
 

@@ -1,0 +1,98 @@
+---
+title: Argon2id là gì? Giải thích Proof of Work Argon2id
+description: Cách Proof of Work Argon2id của Blocknet lấp đầy 2 GiB bộ nhớ cho mỗi lần băm, vì sao RAM và băng thông bộ nhớ quyết định hashrate, và cách các kernel CPU của seine tận dụng nó.
+tags: [Argon2id, Proof of Work, Blocknet, Đào coin]
+faq:
+  - q: 'Blocknet dùng tham số Argon2id nào cho Proof of Work?'
+    a: 'Blocknet chạy Argon2id phiên bản 1.3 với 2 GiB bộ nhớ, một vòng lặp, mức song song 1 và đầu ra 32 byte. Nonce 8 byte là mật khẩu, còn tiêu đề khối không có nonce là salt. Một lần băm thắng khối khi kết quả bằng hoặc nhỏ hơn mục tiêu do độ khó của mạng lưới đặt ra.'
+  - q: 'Vì sao mỗi luồng đào Blocknet cần 2 GB RAM?'
+    a: 'Mỗi lần băm Argon2id lấp đầy một vùng nhớ 2 GiB gồm các khối 1 KiB, và ở nửa sau của lượt xử lý, mỗi khối mới đọc một khối trước đó được chọn bằng dữ liệu mà thợ đào không thể đoán trước. Một luồng phải giữ toàn bộ vùng nhớ của mình trong bộ nhớ, nên mỗi luồng bạn chạy cần khoảng 2 GB RAM.'
+  - q: 'Vì sao Argon2id được thiết kế để chống ASIC?'
+    a: 'Argon2id biến bộ nhớ thành phần tốn kém nhất của mỗi lần băm. Mỗi lần băm Blocknet cần 2 GiB bộ nhớ nhanh và chuyển hàng gigabyte dữ liệu qua đó, nên một con chip chỉ được chế tạo để băm vẫn cần lượng RAM lớn cho mỗi nhân. Mã nguồn của daemon mô tả lựa chọn này là Proof of Work memory-hard nhằm chống ASIC và đảm bảo đào công bằng.'
+  - q: 'Card đồ họa có đào được Argon2id của Blocknet không?'
+    a: 'Có. Trên Windows và Linux, seine đào trên mọi card đồ họa NVIDIA trong máy cùng lúc với CPU, và hashrate được cộng dồn. Kernel được biên dịch khi khởi động, lần chạy đầu tiên tinh chỉnh từng card và lưu kết quả vào bộ nhớ đệm, nên bạn không cần cấu hình gì trước khi bắt đầu.'
+sourceHash: ddc65bcd4eb2
+translation: reviewed
+---
+
+Bài viết này giải thích Argon2id là gì, Blocknet biến nó thành Proof of Work như thế nào, vì sao nó ưu ái máy có nhiều bộ nhớ nhanh, và cách seine đạt số lần băm cao nhất trên mỗi CPU mà nó chạy.
+
+## Argon2id là gì?
+
+<Answer>
+Argon2id là một hàm băm memory-hard được đặc tả trong RFC 9106, dùng cho băm mật khẩu và Proof of Work. Nó lấp đầy một vùng bộ nhớ lớn bằng các khối 1 KiB, tạo mỗi khối từ khối liền trước và một khối trước đó được chọn ở nơi khác trong bộ nhớ, nên việc tính một lần băm cần bộ nhớ thật cũng như thời gian xử lý.
+</Answer>
+
+[RFC 9106](https://www.rfc-editor.org/rfc/rfc9106), được nhóm Crypto Forum Research Group của IRTF công bố năm 2021, mô tả “hàm memory-hard Argon2 cho các ứng dụng băm mật khẩu và Proof of Work.” Argon2 có ba biến thể:
+
+- **Argon2d** chọn khối trước đó cần đọc dựa trên dữ liệu đã tính. RFC gọi biến thể này là “phù hợp cho tiền mã hóa và các ứng dụng Proof of Work.”
+- **Argon2i** chọn khối theo thứ tự không phụ thuộc vào dữ liệu, phù hợp với băm mật khẩu.
+- **Argon2id** “hoạt động như Argon2i trong nửa đầu của lượt đầu tiên qua bộ nhớ và như Argon2d cho phần còn lại.” Đây là biến thể chính: RFC yêu cầu mọi bản triển khai đều phải hỗ trợ nó.
+
+Về bên trong, Argon2 coi bộ nhớ là một dãy dài các khối 1.024 byte. Mỗi khối mới là đầu ra của hàm nén G áp dụng lên hai đầu vào: khối ngay trước nó và một khối tham chiếu ở vị trí trước đó trong bộ nhớ. G được xây dựng trên các vòng trộn của hàm băm BLAKE2b, làm việc trên các word 64 bit bằng phép cộng, XOR và phép xoay.
+
+## Blocknet dùng Argon2id làm Proof of Work như thế nào?
+
+Blocknet cố định mọi thiết lập Argon2id trong mã đồng thuận, nên mọi thợ đào và mọi node đều tính chính xác cùng một hàm:
+
+| Tham số | Giá trị của Blocknet | Ý nghĩa |
+|---|---|---|
+| Biến thể | Argon2id, phiên bản 1.3 | Biến thể chính của RFC 9106 |
+| Bộ nhớ | 2 GiB (2.097.152 KiB) | 2.097.152 khối 1 KiB được lấp đầy cho mỗi lần băm |
+| Số vòng lặp | 1 | Một lượt qua bộ nhớ |
+| Mức song song | 1 | Một làn, nên mỗi lần băm chạy trên một luồng |
+| Đầu ra | 32 byte | Giá trị được so sánh với mục tiêu |
+| Mật khẩu | Nonce 8 byte, little-endian | Con số thợ đào thay đổi ở mỗi lần thử |
+| Salt | Tiêu đề khối không có nonce | Gắn lần băm với một mẫu khối |
+
+Đào coin là một cuộc tìm kiếm. Thợ đào lấy tiêu đề của khối muốn công bố, chọn một nonce và tính băm Argon2id. Nếu kết quả 32 byte, khi đọc như một con số, bằng hoặc nhỏ hơn mục tiêu của mạng lưới, khối đó hợp lệ. Nếu không, thợ đào thử nonce tiếp theo.
+
+Mục tiêu được suy ra trực tiếp từ độ khó: nó bằng (2^256 − 1) chia cho độ khó. Nhờ vậy, độ khó xấp xỉ bằng số lần băm mà toàn mạng lưới dự kiến phải tính để tìm được một khối. Blocknet nhắm tới một khối mỗi năm phút, nên hashrate của mạng lưới vào khoảng độ khó chia cho 300 giây. Bản thân độ khó bám theo thời gian khối gần đây qua trung bình động có trọng số của 60 khối.
+
+Pool hoạt động theo cùng cách nhưng với mục tiêu dễ hơn. Trên [bntpool.com](https://bntpool.com), seine gửi các share đạt độ khó thấp hơn được đặt riêng cho từng kết nối, và share nào đồng thời đạt mục tiêu của mạng lưới là một khối được tìm thấy.
+
+## Vì sao Proof of Work memory-hard phù hợp với máy tính thông thường?
+
+Các thiết lập trên đặt bộ nhớ vào trung tâm của mỗi lần băm. Với một lượt và một làn, nửa sau của lượt xử lý phụ thuộc vào dữ liệu: vị trí khối tham chiếu của mỗi khối được xác định bởi word 64 bit đầu tiên của khối vừa tính ngay trước đó. Thợ đào không thể biết mình sẽ cần khối nào trước đó cho đến đúng lúc cần, nên phải giữ toàn bộ vùng nhớ 2 GiB trong bộ nhớ.
+
+Thợ đào có thể thử lưu ít khối hơn và tính lại các khối còn thiếu khi cần. RFC 9106 gọi đây là đánh đổi thời gian–bộ nhớ: chúng tiết kiệm bộ nhớ “với cái giá là phải gọi hàm nén nội bộ nhiều lần hơn.” Mỗi khối bị bỏ khỏi vùng nhớ đều phải trả giá lại bằng khối lượng tính toán tăng thêm.
+
+Chính điều đó làm cho thiết kế này thân thiện với phần cứng thông thường. Máy để bàn, laptop và máy chủ vốn đã có hàng gigabyte RAM và bộ điều khiển bộ nhớ được thiết kế để cung cấp dữ liệu cho nó. Một con chip chỉ được thiết kế để băm vẫn cần hàng gigabyte bộ nhớ nhanh đi kèm các nhân băm. Thiết lập khuyến nghị đầu tiên của RFC 9106 là Argon2id với một lượt qua 2 GiB bộ nhớ, đúng số lượt và dung lượng bộ nhớ mà Blocknet dùng, và RFC cho biết thiết lập đó “tối đa hóa chi phí của đối thủ trên phần cứng brute-force chuyên dụng.” Mã nguồn daemon của Blocknet mô tả lựa chọn này là Proof of Work memory-hard “nhằm chống ASIC và đảm bảo đào công bằng.” Argon2id được thiết kế để chống ASIC, và thiết lập 2 GiB đưa thiết kế đó vào thực tế, nhờ vậy việc đào coin vẫn mở cho những chiếc máy tính mọi người đang có. Bài [Proof of Work và Proof of Stake](/vi/blog/proof-of-work-vs-proof-of-stake/) so sánh cách làm này với staking.
+
+## Vì sao RAM và băng thông bộ nhớ quyết định hashrate?
+
+<Answer>
+Mỗi luồng đào giữ một vùng nhớ 2 GiB riêng, nên RAM quyết định bạn chạy được bao nhiêu luồng. Mỗi lần băm cũng ghi 2 GiB và đọc lại khoảng chừng đó từ các vị trí rải rác, nên tốc độ và độ trễ của bộ nhớ quyết định các luồng đó hoàn thành nhanh đến đâu. Bộ nhớ quan trọng không kém số nhân.
+</Answer>
+
+**RAM quyết định số luồng.** Mức song song 1 nghĩa là mỗi lần băm chạy trên một luồng, và mỗi luồng cần trọn một vùng nhớ 2 GiB của riêng nó. Một máy có 16 GB có thể chạy khoảng sáu đến bảy luồng sau khi chừa chỗ cho hệ thống. seine đo bộ nhớ của bạn, giữ lại 5% dự phòng và chọn số luồng thay cho bạn.
+
+**Băng thông và độ trễ quyết định tốc độ của mỗi luồng.** Một lần băm tạo ra 2.097.152 khối mới, và mỗi khối đọc một khối tham chiếu 1 KiB ở đâu đó trong vùng nhớ. Tính ra, mỗi lần băm ghi khoảng 2 GiB và đọc khoảng 2 GiB. Ở mức 10 H/s, một máy chuyển khoảng 40 GiB dữ liệu qua bộ nhớ mỗi giây. Ở nửa phụ thuộc dữ liệu, mỗi địa chỉ cần đọc chỉ được biết khi khối trước đó đã xong, nên thời gian bộ nhớ phản hồi quan trọng không kém thông lượng thô.
+
+Đó là lý do [trang hiệu năng](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) của seine cho biết hashrate “phụ thuộc vào băng thông và độ trễ bộ nhớ nhiều như vào số nhân.” [Hướng dẫn phần cứng đào Blocknet](/vi/blog/blocknet-mining-hardware-hashrate/) trình bày kết quả tốt nhất cho từng thế hệ phần cứng.
+
+Huge pages giúp ích cũng vì lý do đó. Một vùng nhớ 2 GiB trải trên 524.288 trang 4 KiB thông thường, hoặc 1.024 trang 2 MiB. Ít trang hơn và lớn hơn đồng nghĩa với ít lần trượt khi dịch địa chỉ (TLB miss) hơn trên những lần đọc rải rác đó, giúp tăng khoảng 4–6% trên máy kiểm thử của seine. [Hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) có cách thiết lập.
+
+## Các kernel CPU của seine tận dụng tối đa Argon2id như thế nào?
+
+Kernel là vòng lặp bên trong tính các khối. Bản x86 của seine có kernel scalar, AVX2 và AVX-512 cùng một biến thể streaming, còn bản Arm có NEON với nhánh tối ưu SHA3. Mỗi kernel xử lý phần việc bị giới hạn bởi bộ nhớ theo một cách khác nhau:
+
+- **AVX2 và AVX-512** chạy các vòng kiểu BLAKE2b của G trên nhiều word 64 bit cùng lúc trong các thanh ghi vector rộng. AVX-512 còn có sẵn lệnh xoay bit, thứ mà các vòng này dùng liên tục.
+- **Prefetch** yêu cầu bộ nhớ gửi các khối tham chiếu trước khi cần đến. Ở nửa đầu của lượt xử lý, các địa chỉ đã biết trước, nên seine yêu cầu các khối trước vài bước. Ở nửa sau, seine yêu cầu khối tham chiếu tiếp theo ngay khi word đầu tiên của khối hiện tại đã có giá trị cuối cùng, và phần còn lại của phép nén chạy trong khi dữ liệu đang về.
+- **Streaming** giữ 64 khối gần nhất trong một vòng đệm nhỏ nằm trong cache và ghi mỗi khối đã xong ra vùng nhớ 2 GiB bằng lệnh ghi streaming, đi thẳng tới bộ nhớ và để cache trống cho những khối mà lần băm vẫn còn cần. seine tự động so sánh kernel này trên bộ xử lý AMD EPYC Zen 5.
+- **NEON với SHA3** dùng lệnh XAR của phần mở rộng SHA3 trên Arm, thực hiện XOR và xoay trong một bước, kết hợp với phạm vi prefetch rộng hơn.
+
+Trên phần cứng chúng tôi đã thử, chọn đúng kernel tạo ra khác biệt lớn. Đây là các lần chạy theo cặp trên cùng một máy với cùng số luồng, lấy từ trang hiệu năng của seine:
+
+| Máy | Thay đổi kernel | Mức tăng |
+|---|---|---|
+| AWS Graviton4 (Neoverse V2), 16 luồng | NEON sang SHA3 có prefetch | +56% (từ 13,80 lên 21,50 H/s) |
+| AWS Graviton3 (Neoverse V1), 16 luồng | NEON sang SHA3 có prefetch | +45% (từ 12,52 lên 18,17 H/s) |
+| AMD EPYC 9R45 (Zen 5), 24 luồng | AVX2 sang streaming | +30% (từ 34,47 lên 44,74 H/s) |
+| Intel Xeon 8375C (Ice Lake), 1–4 luồng | AVX2 sang AVX-512 | +21–29% |
+
+Bạn không phải tự chọn bất kỳ điều gì trong số này. seine so sánh các kernel mà CPU của bạn hỗ trợ trên công việc đào thực tế, chỉ chuyển đổi sau hai lần xác nhận có cải thiện, và lưu kernel tốt nhất cho lần khởi động sau. Kernel tốt nhất phụ thuộc vào số luồng, kích thước trang và cách phân bổ CPU, đó là lý do seine đo trên máy của bạn thay vì cố định sẵn một lựa chọn.
+
+Để tận dụng bộ nhớ của bạn, hãy [tải seine](/vi/#download), chạy nó và dán địa chỉ của bạn. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) trình bày các bước còn lại.
+
+<CTA target="seine" title="Tận dụng bộ nhớ của bạn" text="Các kernel Argon2id của seine được tinh chỉnh cho AVX2, AVX-512 và Arm. Tải miễn phí." />

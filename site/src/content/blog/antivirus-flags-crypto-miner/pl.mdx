@@ -1,0 +1,78 @@
+---
+title: 'Windows blokuje minera? Sprawdź pobrany plik'
+description: 'Sprawdź pobrany seine zablokowany przez Windows: rozpoznaj komunikat, zweryfikuj oficjalny ZIP przez SHA-256 i zbierz szczegóły potrzebne do analizy wykrycia.'
+tags: ["Poradnik kopania", "Windows", "Pobieranie"]
+faq:
+  - q: 'Czy zgodny SHA-256 dowodzi, że miner jest bezpieczny?'
+    a: 'Zgodny skrót potwierdza, że pobrany plik odpowiada sumie użytej do porównania. Pobierz oba z oficjalnego wydania. Sprawdza to integralność pliku, lecz nie zastępuje analizy wykrycia przez antywirusa ani samodzielnie nie dowodzi, że uruchomienie programu jest bezpieczne.'
+  - q: 'Której sumy użyć do ZIP-a dla Windows?'
+    a: 'Użyj zasobu SHA256SUMS.txt z tego samego wydania co seine-windows-x86_64.zip. Zawiera sumy archiwów. Drugi SHA256SUMS.txt wewnątrz ZIP-a opisuje rozpakowaną zawartość. Porównaj archiwum z zasobem wydania i pilnuj zgodności wersji.'
+  - q: 'Co dołączyć do zgłoszenia zablokowanego pobierania?'
+    a: 'Podaj wersję seine, oficjalny URL, nazwę pliku, skrót SHA-256, wersję Windows oraz dokładną nazwę wykrycia lub treść ostrzeżenia. Wskaż, czy dotyczyło ZIP-a, czy rozpakowanego pliku. Ukryj prywatne ścieżki i nie pokazuj fraz odzyskiwania, kluczy prywatnych ani tokenów API.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Jeśli Windows blokuje pobrany seine lub rozpakowany plik znika, najpierw ustal dokładny plik i komunikat. Ten poradnik pokazuje, jak sprawdzić oficjalne wydanie, porównać sumę SHA-256 i zebrać informacje do zgłoszenia. Przykład wykorzystuje seine v0.2.26, sprawdzony 25 października 2026 roku.
+
+## Co sprawdzić, gdy Windows blokuje minera?
+
+<Answer>
+Przed zmianami zapisz ostrzeżenie, nazwę pliku i wersję wydania. Otwórz Zabezpieczenia Windows i sprawdź Historię ochrony pod kątem wykrycia. Następnie pobierz archiwum i sumę z oficjalnego wydania seine. Dopasuj dokładny plik i wersję, zanim zdecydujesz, co zrobić z alertem.
+</Answer>
+
+Rozwiń odpowiedni wpis w [Historii ochrony](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app). Windows może wymagać uprawnień administratora do pokazania szczegółów zagrożenia. Zanotuj, czy chodzi o pobrany ZIP, `seine.exe`, czy bibliotekę DLL. Brak programu i ostrzeżenie przeglądarki mogą pojawić się na innych etapach; zachowaj nazwę pliku razem z komunikatem.
+
+## Ostrzeżenie SmartScreen czy wykrycie przez antywirusa?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) ocenia pobrane aplikacje według reputacji pliku i wydawcy. Komunikat o nieznanej aplikacji różni się od nazwanego wykrycia antywirusowego. Zapisz faktyczny tekst: słowo miner w nazwie pliku nie wskazuje, która kontrola zadziałała ani dlaczego nastąpiła blokada.
+
+Microsoft wymienia też programy do kopania kryptowalut w [kryteriach potencjalnie niechcianych aplikacji](https://learn.microsoft.com/en-us/defender-xdr/criteria), konkretnie dla środowisk firmowych. Na zarządzanym komputerze służbowym lub szkolnym zapytaj administratora o obowiązujące zasady. To kategoria oprogramowania, nie ocena konkretnego pliku. Wyjaśnij dany alert zamiast zakładać, że każde ostrzeżenie o minerze jest fałszywym alarmem.
+
+## Pobierz ZIP i sumę z tego samego wydania
+
+Otwórz [oficjalne wydania seine](https://github.com/zpalmtree/seine/releases) przez [stronę pobierania](/pl/#download). Sprawdź repozytorium `zpalmtree/seine`. Wybierz `seine-windows-x86_64.zip` i osobny zasób `SHA256SUMS.txt` z jednego wydania. Zapisz wersję. Suma ze starszej lub nowszej wersji nie jest odniesieniem dla pobranego archiwum.
+
+![Windows ZIP i SHA256SUMS.txt w oficjalnych zasobach seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+To rzeczywisty zrzut listy zasobów v0.2.26. Plik sum wydania obejmuje archiwa do pobrania. W ZIP-ie znajduje się drugi `SHA256SUMS.txt` dotyczący rozpakowanych plików. Przy pierwszej kontroli użyj zasobu pobranego osobno. Nie myl obu list mimo identycznej nazwy.
+
+Używaj bezpośrednio oficjalnego archiwum. Porównanie sumy oficjalnego ZIP-a nie weryfikuje programu o zmienionej nazwie, przepakowanej paczki od innej osoby ani pliku z czatu. Zapisz ZIP i sumę razem w łatwym do znalezienia folderze, a następnie wykonaj tam poniższe polecenia.
+
+## Jak porównać sumę SHA-256?
+
+Otwórz PowerShell w folderze z oboma plikami. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) oblicza SHA-256 archiwum. Porównanie wybiera wpis z dokładną nazwą archiwum Windows, wymaga jednego pasującego wpisu i kończy się błędem przy różnicy skrótów. Odczytuje pliki bez uruchamiania minera lub zmieniania ochrony Windows.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Komunikat powodzenia to `PASS: ZIP matches SHA256SUMS.txt`. Jeśli brakuje pliku, sprawdź bieżący folder i nazwy. Brak wpisu sumy lub duplikat oznacza konieczność ponownego pobrania oryginalnego zasobu. Przy niezgodności zatrzymaj się: sprawdź wersję, pobierz ponownie oficjalne archiwum i sumę, a potem powtórz porównanie.
+
+## Co pokazał zweryfikowany przykład?
+
+Wykonaliśmy porównanie w Windows PowerShell 5.1 na oficjalnym ZIP-ie Windows v0.2.26. Obliczony skrót odpowiadał sumie wydania. Obraz przedstawia rzeczywisty wynik polecenia jako wyrenderowany zapis, nie powiadomienie Zabezpieczeń Windows. [Zapis tekstowy](/assets/blog/seine-v0.2.26-verification.txt) zawiera pełny skrót i listę plików archiwum.
+
+![Rzeczywisty wynik sprawdzania sumy archiwum Windows seine v0.2.26 w PowerShell](/assets/blog/seine-checksum-result.png)
+
+Porównanie skrótów mówi, czy bajty odpowiadają podanemu wzorcowi. Nie uwierzytelnia sumy z obcego źródła, nie dowodzi braku złośliwego oprogramowania i nie wyjaśnia konkretnego wykrycia. Jeśli alert dotyczy rozpakowanego programu, zapisz jego nazwę i wykrycie osobno; skrót ZIP-a identyfikuje archiwum.
+
+## Co jeśli sprawdzony plik nadal jest blokowany?
+
+Pozostaw element w kwarantannie na czas analizy niewyjaśnionego wykrycia. Zbierz wersję, URL, nazwę pliku, SHA-256 i dokładny tekst ostrzeżenia. Dodaj wersję Windows oraz etap blokady: pobieranie, rozpakowywanie lub uruchamianie. To pozwala odtworzyć zgłoszenie bez ujawniania prywatnej konfiguracji.
+
+Użyj [systemu zgłoszeń seine](https://github.com/zpalmtree/seine/issues) dla projektu i [portalu przesyłania plików Microsoft](https://www.microsoft.com/en-us/wdsi/filesubmission) przy podejrzeniu błędnego wykrycia. Sprawdź załączniki przed wysłaniem. Na prośbę udostępnij publiczny plik wydania lub jego identyfikatory, nie folder danych kopania. Usuń prywatne ścieżki, dane portfela i tokeny uwierzytelniania ze zrzutów.
+
+Windows udostępnia dla części wykryć działania dotyczące konkretnego elementu. Rozważ zezwolenie dopiero po wyjaśnieniu źródła i wykrycia, jeśli ufasz dokładnie temu plikowi; postępuj zgodnie z instrukcjami zapisanego alertu. Pozostaw ochronę systemu włączoną. Na zarządzanym urządzeniu o dopuszczeniu decyduje administrator.
+
+## Kontynuuj ze sprawdzonym archiwum Windows
+
+Po dopuszczeniu pliku rozpakuj cały ZIP do folderu z prawem zapisu i zachowaj DLL obok `seine.exe`. [Poradnik kopania w Windows](/pl/blog/mine-blocknet-on-windows/) opisuje pierwsze uruchomienie i adres wypłat. Sterowniki, biblioteki i wybór urządzeń omawia [poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/). Są to kontrole oddzielne od weryfikacji pobrania.
+
+<CTA target="seine" title="Pobierz oficjalne wydanie seine" text="Wybierz archiwum Windows i sprawdź sumę tego samego wydania przed konfiguracją." />

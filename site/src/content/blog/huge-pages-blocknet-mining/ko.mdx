@@ -1,0 +1,159 @@
+---
+title: 더 빠른 Blocknet 채굴을 위한 휴즈 페이지
+description: Linux·WSL 휴즈 페이지나 Windows 라지 페이지를 예약해 seine의 Argon2id 영역 TLB 미스를 줄이고 Blocknet을 더 빠르게 채굴합니다.
+tags: [채굴 가이드, 휴즈 페이지, Linux, Windows, 성능]
+faq:
+  - q: 'seine로 Blocknet을 채굴하려면 휴즈 페이지가 꼭 필요합니까?'
+    a: '아닙니다. seine는 실행하자마자 일반 메모리로 채굴하며, Linux에는 스스로 투명 휴즈 페이지를 요청합니다. 휴즈 페이지 예약은 마지막 몇 퍼센트를 위한 선택 사항으로, 검증 머신 기준으로 2 MiB 페이지는 약 4~6%, 1 GiB 페이지는 여기에 약 2%를 더 올려 줍니다.'
+  - q: 'seine 스레드 하나에 휴즈 페이지가 몇 개 필요합니까?'
+    a: '스레드 하나에는 2 GiB Argon2id 영역을 정확히 담는 2 MiB 페이지 1,024개, 또는 1 GiB 페이지 2개가 필요합니다. 2 MiB 페이지라면 스레드 수에 1,024를 곱하고 5% 여유분을 더한 뒤 올림하십시오. 8스레드에는 8,602페이지가 필요하며, 약 16.8 GiB의 RAM이 예약됩니다.'
+  - q: 'seine는 1 GiB 휴즈 페이지를 자동으로 사용합니까?'
+    a: 'seine의 기본 페이지 모드는 예약된 2 MiB 풀을 먼저 사용하고, 그다음 투명 휴즈 페이지를 사용합니다. 1 GiB 페이지를 쓰려면 스레드당 2개를 예약하고(가급적 부팅 시 hugepagesz=1G hugepages=N으로), --cpu-page-mode large-1g로 seine를 실행하십시오. 이 모드는 x86_64 Linux와 WSL에서 동작하며 2 MiB 페이지보다 약 2% 더 빠릅니다.'
+  - q: 'Windows에서 seine용 라지 페이지는 어떻게 켭니까?'
+    a: 'secpol.msc의 로컬 정책(Local Policies) 아래 사용자 권한 할당(User Rights Assignment)에서 Windows 계정에 메모리에 페이지 잠금(Lock pages in memory) 권한을 부여한 뒤 로그아웃했다가 다시 로그인하십시오. seine는 시작할 때 이 권한을 스스로 활성화하고 각 스레드의 2 GiB 영역을 라지 페이지로 할당합니다. Home 에디션에서는 ntrights 같은 도구로 권한을 부여하십시오.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+휴즈 페이지를 예약하면 seine는 각 채굴 스레드의 메모리를 수십만 개의 작은 페이지 대신 몇 개의 큰 페이지로 할당할 수 있습니다. 이 가이드에서는 휴즈 페이지가 Blocknet의 Argon2id 작업 증명을 빠르게 만드는 이유, 예약할 페이지 수, 그리고 Linux, WSL2, Windows용 명령어를 정확히 설명합니다.
+
+## 휴즈 페이지는 왜 Blocknet 채굴을 빠르게 합니까?
+
+<Answer>
+seine의 각 스레드는 2 GiB Argon2id 영역 안에서 해시를 계산하며, 그 안의 예측할 수 없는 위치에서 블록을 읽습니다. 일반적인 4 KiB 페이지로는 이 영역이 524,288페이지에 걸쳐 있어, CPU의 TLB가 캐시할 수 있는 것보다 훨씬 많은 주소 변환이 필요합니다. 휴즈 페이지는 이 영역을 1,024개 또는 단 2개의 페이지로 덮기 때문에, 페이지 테이블 탐색 때문에 멈추는 읽기가 줄어듭니다.
+</Answer>
+
+모든 메모리 접근은 CPU가 물리 주소로 변환해야 하는 가상 주소에서 시작합니다. 최근의 변환 결과는 TLB(translation lookaside buffer)에 저장되는데, [Linux 커널 문서](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html)는 이를 "가상-물리 주소 변환의 캐시"이자 "프로세서에서 매우 희소한 자원"이라고 설명합니다. 주소가 TLB에 없으면 CPU는 데이터를 가져오기 전에 먼저 메모리에 있는 페이지 테이블을 탐색해야 합니다.
+
+Blocknet의 작업 증명에서는 이런 탐색이 자주 일어납니다. 해시 하나를 계산할 때마다 2 GiB 영역을 1 KiB 블록으로 채우며, 패스의 후반부에서는 새 블록마다 직전에 계산된 데이터에 따라 위치가 정해지는 이전 블록을 읽습니다. [Argon2id 해설](/ko/blog/argon2id-proof-of-work-explained/)에서 보듯이, 이는 해시 하나당 약 2 GiB의 흩어진 읽기가 됩니다. 이 읽기에 필요한 변환 횟수는 페이지 크기가 결정합니다.
+
+| 페이지 크기 | 2 GiB 영역당 페이지 수 |
+|---|---|
+| 4 KiB (일반) | 524,288 |
+| 2 MiB | 1,024 |
+| 1 GiB | 2 |
+
+휴즈 페이지를 쓰면 TLB 항목 하나가 512배 또는 262,144배 더 많은 메모리를 담당하므로, 영역의 훨씬 많은 부분이 TLB 범위 안에 머물고 각 스레드는 더 많은 시간을 해시 계산에 씁니다.
+
+## 휴즈 페이지로 채굴은 얼마나 빨라집니까?
+
+seine의 [휴즈 페이지 가이드](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md)는 휴즈 페이지를 Linux CPU 채굴에서 가장 큰 단일 튜닝 요소로 꼽습니다. 검증 머신에서 예약된 2 MiB 페이지는 약 **4~6%**, 1 GiB 페이지는 추가로 약 **2%**의 향상을 보였습니다. 가이드에 따르면 많은 스레드가 실행될 때는 보통 명령어 집합 튜닝보다 휴즈 페이지 적용 범위가 더 중요합니다.
+
+seine [성능 차트](/ko/#performance)의 서버 결과는 명시적으로 예약한 2 MiB 휴즈 페이지로 측정했습니다. 2026년 10월에 AMD EPYC Zen 5(EPYC 9R45)에서 32스레드로 측정한 49.4 H/s는 34,407페이지를 예약한 상태에서 나왔으며, 이는 아래 표의 32스레드 행과 같은 수치입니다. 세대별 전체 결과는 [채굴 하드웨어 가이드](/ko/blog/blocknet-mining-hardware-hashrate/)에 있습니다.
+
+예약하지 않아도 seine는 Linux에서 커널에 투명 휴즈 페이지를 요청합니다. 예약된 풀은 페이지를 미리 확보해 두기 때문에, 메모리가 아무리 단편화되어도 모든 스레드가 휴즈 페이지를 받을 수 있어 효과가 더 큽니다.
+
+## seine에는 휴즈 페이지가 몇 개 필요합니까?
+
+<Answer>
+seine 스레드 하나가 2 GiB 영역을 담으려면 2 MiB 휴즈 페이지 1,024개 또는 1 GiB 페이지 2개가 필요합니다. 2 MiB 페이지는 스레드 수 × 1,024 × 1.05를 계산해 올림한 만큼 예약하면 5%의 여유분이 생깁니다. 8스레드에는 8,602페이지, 약 16.8 GiB가 필요합니다. 예약이 부족하면 seine가 시작할 때 정확한 숫자를 출력합니다.
+</Answer>
+
+스레드 수는 seine 대시보드의 **Threads** 값입니다. seine는 RAM과 코어 수를 보고 스레드 수를 정하므로, 먼저 휴즈 페이지 없이 seine를 한 번 실행해 그 값을 확인하십시오. 예약이 너무 적으면 seine의 시작 로그에 필요한 페이지 수와 예약용 `sysctl` 명령어가 담긴 `hugepages |` 줄이 출력됩니다.
+
+| 스레드 | 2 MiB 페이지 (5% 여유분 포함) | 예약되는 메모리 | 1 GiB 페이지 |
+|---|---|---|---|
+| 4 | 4,301 | 8.4 GiB | 8 |
+| 8 | 8,602 | 16.8 GiB | 16 |
+| 16 | 17,204 | 33.6 GiB | 32 |
+| 24 | 25,805 | 50.4 GiB | 48 |
+| 32 | 34,407 | 67.2 GiB | 64 |
+
+예약된 페이지는 휴즈 페이지를 요청하는 프로그램을 위해 따로 확보되므로, 실제로 채굴할 스레드 수에 맞춰 예약 크기를 정하십시오. seine는 스레드 수를 정할 때 예약된 풀을 사용 가능한 메모리로 계산하므로, 페이지를 예약해도 스레드 수는 그대로 유지됩니다.
+
+## Linux에서 2 MiB 휴즈 페이지는 어떻게 설정합니까?
+
+스레드 수에 맞게 페이지를 예약합니다. 다음은 4스레드 예시입니다.
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+커널이 페이지를 모두 확보했는지 확인합니다.
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+`HugePages_Total`이 요청한 값보다 낮게 나오면 메모리가 단편화된 것입니다. 캐시를 비우고 메모리를 압축한 뒤 다시 시도하십시오.
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+예약을 영구적으로 적용합니다.
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+예약량이 크다면 설정을 저장한 뒤 재부팅하는 방법이 가장 확실합니다. 커널이 메모리가 단편화되기 전인 부팅 초기에 페이지를 예약하기 때문입니다. 그다음 평소처럼 seine를 실행하십시오. 기본 페이지 모드인 `auto`가 별도 플래그 없이 모든 스레드의 영역을 예약된 풀에서 할당합니다.
+
+## 1 GiB 페이지는 어떻게 추가합니까?
+
+1 GiB 페이지는 설정이 조금 더 필요하며, 2 MiB 페이지보다 약 2% 더 빠릅니다. 2 GiB 영역 하나에 정확히 2개가 필요하므로 여유분을 계산할 필요가 없습니다. x86_64 Linux와 WSL에서 동작합니다.
+
+이렇게 큰 페이지를 확보하는 가장 확실한 방법은 부팅 시 커널 파라미터로 예약하는 것입니다. 9스레드 예시입니다.
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+막 부팅한 머신이라면 실행 중에 예약한 뒤 남은 페이지 수를 확인해 볼 수도 있습니다.
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+`/proc/meminfo`의 `HugePages_*` 줄은 기본 2 MiB 크기만 표시하므로, 1 GiB 풀은 `/sys`에서 확인하십시오. 그다음 1 GiB 모드로 seine를 실행합니다.
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+이 모드에서는 모든 스레드가 1 GiB 풀에서 영역을 할당하므로, 실행 전체가 1 GiB 페이지를 사용했다는 것을 확실히 알 수 있습니다.
+
+## WSL2에서 휴즈 페이지는 어떻게 예약합니까?
+
+WSL2는 실제 Linux 커널에서 실행되므로 위의 Linux 명령어가 그대로 동작합니다. 1 GiB 페이지를 쓰려면 Windows 쪽의 `%UserProfile%\.wslconfig`를 통해 부팅 파라미터를 전달하십시오. VM에는 예약분에 더해 Windows와 WSL 서비스가 쓸 메모리도 충분히 있어야 합니다. seine의 64 GiB 검증 머신에서는 다음 설정을 사용했습니다.
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+파일을 저장하고 Windows에서 `wsl --shutdown`을 실행한 뒤 배포판을 다시 여십시오. 채굴을 시작하기 전에 남은 페이지 수가 모든 스레드를 감당하는지 확인하십시오.
+
+## Windows에서 라지 페이지는 어떻게 켭니까?
+
+같은 하드웨어에서는 보통 Windows 네이티브 채굴이 WSL보다 빠르며, seine는 Windows에서 라지 페이지를 사용합니다. 필요한 권한은 **메모리에 페이지 잠금(Lock pages in memory)** 하나입니다.
+
+1. `secpol.msc`를 열고 *로컬 정책(Local Policies)* → *사용자 권한 할당(User Rights Assignment)*으로 이동합니다.
+2. **메모리에 페이지 잠금**에 자신의 사용자를 추가합니다.
+3. 권한은 새 세션에 적용되므로 로그아웃했다가 다시 로그인합니다.
+
+`secpol.msc`는 Windows Pro, Enterprise, Education에 포함되어 있습니다. Home 에디션에서는 `ntrights` 같은 도구로 같은 권한을 부여하십시오.
+
+설정은 이것으로 끝입니다. seine는 시작할 때 이 권한을 스스로 활성화하고, [Microsoft가 문서화한](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) 라지 페이지 메모리 할당 방식인 `VirtualAlloc`과 `MEM_LARGE_PAGES`로 각 스레드의 2 GiB 영역을 할당합니다. 라지 페이지를 사용할 수 없으면 seine는 일반 페이지로 채굴하면서 그 이유와 정확한 해결 방법을 로그에 남깁니다. seine가 직접 계정 권한을 바꾸거나 로그아웃시키는 일은 없습니다.
+
+## 어떤 페이지 모드를 써야 합니까?
+
+거의 모든 사람에게는 기본값이 맞습니다. 다른 모드는 1 GiB 페이지와 측정을 위한 것입니다.
+
+| 모드 | 동작 |
+|---|---|
+| `--cpu-page-mode auto` (기본값) | 예약된 휴즈 페이지 또는 Windows 라지 페이지를 쓰고, 그다음 투명 휴즈 페이지, 그다음 일반 페이지를 사용 |
+| `--cpu-page-mode large` | 모든 스레드에 예약된 휴즈 페이지 또는 Windows 라지 페이지를 요구하며, 없으면 시작 단계에서 중지 |
+| `--cpu-page-mode large-1g` | 모든 스레드에 1 GiB 페이지를 요구 (x86_64 Linux 및 WSL) |
+| `--cpu-page-mode regular` | 전후 비교 벤치마크용으로 일반 페이지만 사용 |
+
+자신의 머신에서 향상 폭을 측정하려면 `--cpu-page-mode regular`로 잠시 채굴한 다음 `auto` 또는 `large-1g`로 채굴하고, 대시보드의 해시레이트를 비교하십시오. NUMA 노드가 여러 개인 서버에서는 예약된 페이지가 스레드를 실행하는 노드에 있어야 합니다. 이 내용은 [서버 채굴 가이드](/ko/blog/mine-blocknet-on-servers/)에서 다룹니다.
+
+<CTA target="seine" title="seine를 다운로드하고 페이지를 예약하십시오" text="페이지를 예약하는 즉시 seine가 별도 플래그 없이 각 스레드의 2 GiB 영역을 휴즈 페이지에 할당합니다." />

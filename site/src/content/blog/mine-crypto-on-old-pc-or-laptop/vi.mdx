@@ -1,0 +1,118 @@
+---
+title: Cách đào coin trên PC hoặc laptop cũ
+description: Đào coin trên PC hoặc laptop cũ. Tìm hiểu vì sao RAM, tản nhiệt và điện năng quan trọng nhất, bộ nhớ cho phép bao nhiêu luồng và cách bắt đầu đào an toàn.
+tags: [Hướng dẫn đào coin, Laptop, Đào bằng CPU, Phần cứng]
+faq:
+  - q: 'Laptop 8 GB RAM có đào coin được không?'
+    a: 'Có, với một đồng coin memory-hard như Blocknet. Mỗi luồng đào Blocknet cần khoảng 2 GB RAM trống, nên một chiếc laptop 8 GB thường chạy được khoảng hai luồng sau khi hệ điều hành đã dùng phần của nó. seine đo bộ nhớ trống khi khởi động và chọn số luồng an toàn cho bạn.'
+  - q: 'Đào coin trên laptop cũ có an toàn không?'
+    a: 'Có, nếu thông gió tốt. Đào coin giữ bộ xử lý bận rộn, giống như xuất một video dài hay chơi game, và bộ xử lý tự giảm tốc khi quá nóng. Giữ khe tản nhiệt sạch sẽ, đặt laptop trên bề mặt cứng và dùng chế độ efficiency của seine nếu bạn muốn ít nhiệt và ít ồn hơn.'
+  - q: 'seine có chạy trên bộ xử lý không có AVX2 không?'
+    a: 'Có. Các bản x86 của seine có một kernel portable chạy trên mọi bộ xử lý x86 64-bit, bên cạnh các kernel AVX2 và AVX-512 cho những chip có hỗ trợ. Nó kiểm tra bộ xử lý của bạn hỗ trợ tập lệnh nào và chọn kernel phù hợp, đồng thời so sánh các kernel trong lúc đào trên những chip có cả AVX2 lẫn AVX-512.'
+  - q: 'Đào coin trên PC cũ tốn bao nhiêu điện?'
+    a: 'Còn tùy máy. Hãy đo bằng một đồng hồ đo điện cắm ổ trong lúc seine chạy, rồi nhân số watt với 24 và chia cho 1.000 để ra số kilowatt giờ mỗi ngày. Nhân con số đó với giá điện của bạn để ra chi phí mỗi ngày, rồi so sánh với số coin dự kiến nhận được mỗi ngày.'
+sourceHash: 6643bf6169d4
+translation: reviewed
+---
+
+Bài hướng dẫn này chỉ cho bạn cách tận dụng một chiếc máy tính để bàn hoặc laptop cũ để đào coin: điều gì quyết định một máy có đào được hay không, bộ nhớ cho phép bao nhiêu luồng đào, cách giữ máy mát, và cách bắt đầu an toàn với seine trên bntpool.com.
+
+## Có thể đào coin trên PC hoặc laptop cũ không?
+
+<Answer>
+Có, nếu bạn chọn một đồng coin có Proof of Work phù hợp với máy tính thông thường. Các đồng coin memory-hard như Blocknet được đào bằng bộ xử lý và RAM thông thường, nên một máy để bàn hoặc laptop cũ có thể tham gia pool và nhận một phần của mỗi khối. RAM quyết định bạn chạy được bao nhiêu luồng, còn tản nhiệt giữ cho chúng chạy ổn định.
+</Answer>
+
+Mỗi đồng coin có Proof of Work thưởng cho những thứ khác nhau. SHA-256 của Bitcoin gần như hoàn toàn được đào bằng ASIC, loại chip chế tạo riêng cho một thuật toán băm đó, nên một máy tính đa dụng đóng góp rất ít ở đó. Các thiết kế memory-hard đi theo hướng ngược lại. RandomX của Monero được xây dựng cho CPU đa dụng, còn Blocknet dùng Argon2id với một vùng nhớ 2 GiB cho mỗi lần băm, một cách tiếp cận được thiết kế để chống ASIC. Với một đồng coin như Blocknet, chính những linh kiện máy tính nào cũng có sẵn là bộ xử lý và RAM sẽ đảm nhận việc đào. Hướng dẫn [đào bằng CPU năm 2026](/vi/blog/cpu-mining-2026/) trình bày những điều cần xem xét ở một đồng coin đào bằng bộ xử lý.
+
+[Bài giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) trình bày cách Proof of Work đó lấp đầy và đọc bộ nhớ, và vì sao băng thông bộ nhớ quyết định tốc độ.
+
+## Điều gì quan trọng nhất trên phần cứng cũ?
+
+Bốn yếu tố quyết định một máy cũ đào một đồng coin memory-hard tốt đến đâu:
+
+- **RAM.** Mỗi luồng đào Blocknet giữ một vùng nhớ 2 GiB của riêng nó trong lúc băm, nên RAM trống quyết định số luồng chạy được.
+- **Băng thông bộ nhớ.** Mỗi lần băm ghi 2 GiB và đọc lại dữ liệu từ khắp vùng đó, nên hệ thống bộ nhớ làm phần lớn công việc. Bộ nhớ kênh đôi (hai thanh RAM giống nhau) giúp ích cho máy để bàn cũ.
+- **Tản nhiệt.** Đào coin giữ bộ xử lý bận rộn hàng giờ. Bộ xử lý mát giữ được xung nhịp, còn bộ xử lý nóng sẽ tự giảm tốc để bảo vệ chính nó.
+- **Điện năng.** Đào coin tiêu thụ điện ổn định, nên một đồng hồ đo điện và giá điện của bạn sẽ cho biết chi phí vận hành máy.
+
+Số nhân ít quan trọng hơn bạn nghĩ. Một máy để bàn bốn nhân với 16 GB RAM có thể chạy nhiều luồng hơn một laptop tám nhân với 8 GB, vì RAM hết trước.
+
+## Mỗi luồng đào cần bao nhiêu RAM?
+
+<Answer>
+Mỗi luồng đào Blocknet cần khoảng 2 GB RAM trống, vì mỗi lần băm lấp đầy một vùng nhớ 2 GiB riêng. Hãy chia bộ nhớ trống cho hai để ước tính số luồng. seine làm việc này khi khởi động, chừa 5% RAM dự phòng và giới hạn số luồng ở số nhân logic của bộ xử lý.
+</Answer>
+
+Cơ chế tự chọn của seine lấy lượng RAM còn trống khi khởi động, trừ đi 5% dự phòng, chia cho 2 GiB, rồi dùng con số đó hoặc số nhân logic của bộ xử lý, tùy số nào nhỏ hơn. Dưới đây là phép tính cho các dung lượng phổ biến, giả sử hệ điều hành và vài ứng dụng chạy nền dùng khoảng 2-3 GB:
+
+| RAM | Số vùng nhớ trên lý thuyết | Số luồng seine chạy được, xấp xỉ |
+|---|---|---|
+| 4 GB | 2 | 1, nếu hệ thống còn trống 2 GB |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Hãy đóng trình duyệt và các ứng dụng lớn khác trước khi khởi động seine, khi đó cơ chế chọn số luồng sẽ thấy nhiều bộ nhớ trống hơn. Nếu bạn mở ứng dụng trong lúc đào, seine kiểm tra RAM trống mỗi giây, để các luồng hoàn tất lần băm hiện tại rồi tạm dừng, và đưa chúng trở lại khi bộ nhớ trống ra. Bạn vẫn có thể tiếp tục dùng máy tính.
+
+Thêm RAM là cách nâng cấp trực tiếp nhất cho một máy để bàn cũ: mỗi 2 GB bộ nhớ trống thêm vào là chỗ cho thêm một luồng, cho đến khi bằng số nhân. [Hướng dẫn phần cứng](/vi/blog/blocknet-mining-hardware-hashrate/) có hashrate đo thực tế và cách chọn cấu hình cho các máy lớn hơn.
+
+## Bộ xử lý cũ có còn dùng được không?
+
+Có. Các bản x86 của seine có một kernel portable (tương thích rộng) chạy trên mọi bộ xử lý x86 64-bit, cùng các kernel AVX2 và AVX-512. AVX2 xuất hiện cùng bộ xử lý Haswell của Intel năm 2013 và Excavator của AMD năm 2015, và kernel AVX2 của seine đã được đo trên các chip máy chủ Haswell và Broadwell. Bộ xử lý không có AVX2 chạy kernel portable. Các bản Arm có NEON kèm đường xử lý nhanh SHA3. seine kiểm tra bộ xử lý của bạn hỗ trợ những gì và so sánh các kernel trong lúc đào, chỉ chuyển đổi sau khi xác nhận có cải thiện.
+
+Có bản tải xuống cho hầu hết những chiếc máy bạn có thể tìm thấy trong kho:
+
+| Hệ điều hành | Gói |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 trở lên) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+Nếu PC có card đồ họa NVIDIA, các bản Windows và Linux cũng thử dùng nó và đào trên card cùng với bộ xử lý. Nếu card không khởi động được, seine tiếp tục đào bằng bộ xử lý. Trên MacBook Apple Silicon, seine mặc định đào bằng bộ xử lý; [hướng dẫn cho Mac](/vi/blog/mine-blocknet-on-mac/) trình bày số luồng theo bộ nhớ của Mac.
+
+## Làm sao giữ laptop mát khi đào?
+
+Vài thói quen giúp laptop chạy hết tốc độ:
+
+- **Để máy thoáng khí.** Đặt máy trên bàn hoặc giá đỡ laptop và giữ khe tản nhiệt thông thoáng. Thổi sạch bụi trong quạt và tản nhiệt của máy cũ có thể lấy lại tốc độ đã mất.
+- **Luôn cắm sạc.** Đào bằng pin làm pin cạn nhanh, và nhiều laptop chạy chậm hơn khi dùng pin.
+- **Không để máy ngủ.** Việc đào dừng lại khi máy tính ngủ, nên hãy đặt chế độ nguồn giữ máy thức khi cắm sạc.
+- **Chạy ít luồng hơn để giảm nhiệt.** Khởi động seine với chế độ efficiency:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+Chế độ mặc định chọn số luồng ít nhất đạt 99% hashrate tốt nhất mà nó đo được. Chế độ efficiency giữ số luồng ít nhất đạt 75% hashrate tốt nhất đó, nên máy chạy mát hơn và êm hơn. Bạn cũng có thể đặt số luồng cố định bằng `--threads 2`, hoặc nhấn `-` và `+` trên bảng điều khiển để bớt hoặc thêm một luồng trong lúc chạy.
+
+## Làm sao bắt đầu đào an toàn?
+
+1. **Tạo địa chỉ ví.** Cài ví Blocknet chính thức trên máy tính chính của bạn và sao chép địa chỉ. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) trình bày từng bước. Trình đào chỉ cần địa chỉ của bạn, nên hãy giữ ví và cụm từ khôi phục của nó ngoài chiếc máy đào phụ.
+2. **Tải seine từ bản phát hành chính thức.** Tải từ [mục tải xuống](/vi/#download). Mỗi bản phát hành có tệp `SHA256SUMS.txt` để bạn kiểm tra gói tải về có khớp không.
+3. **Chạy chương trình.** Trên Windows, nhấp đúp vào `seine.exe`. Trên macOS hoặc Linux, chạy `./seine` trong thư mục đã giải nén.
+4. **Nhập địa chỉ và chấp nhận pool mặc định.** Dán địa chỉ hoặc `@name` của bạn, rồi nhấn Enter để chọn `stratum+tcp://bntpool.com:3333`.
+5. **Theo dõi bảng điều khiển.** Hashrate và những share đầu tiên xuất hiện chỉ sau giây lát, và seine tiếp tục tinh chỉnh số luồng và kernel trong lúc đào.
+
+[Hướng dẫn đào từng bước](/vi/blog/how-to-mine-blocknet/) trình bày các bước tương tự cùng chi tiết hơn về thanh toán. Để đo hiệu năng của máy mà chưa cần kết nối pool, hãy chạy benchmark ngoại tuyến:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## Vì sao nên đào trên pool với máy nhỏ?
+
+Pool trả cho bạn theo phần công việc bạn đóng góp vào mỗi khối mà pool tìm được, nên một máy nhỏ được trả từ mỗi khối của pool thay vì phải chờ tự tìm được cả một khối. Hướng dẫn [đào coin hoạt động như thế nào](/vi/blog/how-crypto-mining-works/) giải thích kỹ hơn về pool và share. Trên bntpool.com, phần thưởng được chia theo các share gửi trong sáu giờ trước mỗi khối, và số dư của bạn được thanh toán khi đạt 0,1 BNT. Bạn có thể theo dõi hashrate và số dư bằng cách tra địa chỉ hoặc `@name` của mình trên [bntpool.com](https://bntpool.com).
+
+Để ước tính sản lượng, hãy dùng hashrate mạng hiển thị trên bảng điều khiển của bntpool.com. Với khối năm phút, Blocknet tìm được 288 khối mỗi ngày, nên phần coin mới của mạng mà bạn dự kiến nhận được mỗi ngày là 288 × (H/s của bạn ÷ H/s của mạng) × phần thưởng khối, và phần thưởng khối giảm theo từng bậc mỗi tháng.
+
+Sau đó hãy tính chi phí vận hành máy. Đo bằng một đồng hồ đo điện cắm ổ trong lúc seine đào. Một máy tiêu thụ 65 W suốt ngày đêm dùng 65 × 24 = 1.560 Wh, tức 1,56 kWh mỗi ngày; nhân với giá điện của bạn. So sánh hai con số sẽ cho bạn bức tranh đầy đủ về chiếc máy của mình.
+
+<Note>
+Các số liệu này mô tả Proof of Work Argon2id hiện tại của Blocknet. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), Blocknet dự kiến có một bản nâng cấp mạng tên là Faraday vào khoảng ngày 16 tháng 2 năm 2027, mang đến một Proof of Work nhẹ hơn. Hãy luôn cập nhật seine: nó kiểm tra bản phát hành mới khi khởi động và cứ mỗi 12 giờ.
+</Note>
+
+<CTA target="seine" title="Tận dụng chiếc PC cũ của bạn" text="seine chọn số luồng theo RAM và tự tinh chỉnh trong lúc đào. Tải về, dán địa chỉ và bắt đầu đào trên bntpool.com." />

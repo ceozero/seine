@@ -1,230 +1,136 @@
-# seine — Architecture & Tuning Reference
+# seine — Agent Guide
 
-This file preserves the full engineering reference for AI agents doing optimization work on seine.
+seine is the external Blocknet miner other people run on their own hardware.
+The goal of almost every change: **the best hashrate on each user's exact
+hardware, with zero configuration.** A user who runs `seine --address ...`
+and touches nothing should get the right kernel, thread/lane count, page
+mode, and affinity for their CPU and GPUs.
 
-## Agent Formatting Policy
+## Principles
 
-- Use the repository-pinned Rust toolchain for formatting (`rust-toolchain.toml` currently pins `1.93.0`).
-- Run formatting via the pinned toolchain explicitly: `cargo +1.93.0 fmt` (or `rustup run 1.93.0 rustfmt`).
-- Do not run repository-wide formatting (`cargo fmt --all`) unless the user explicitly asks for it.
-- By default, format only the files that were edited for the task.
-- Do not include unrelated formatting-only changes in commits unless the user explicitly requests them.
+- **Zero-config first.** A win that needs a flag helps nobody but us. Land it
+  as an automatic default (gated to the hardware it was measured on) or as a
+  candidate the runtime tuner can find by itself. Flags are for experiments
+  and overrides, not the shipping path.
+- **Gate by precise identity, not one global policy.** If something helps
+  one architecture and is neutral or harmful on others, enable it only where
+  it was measured: x86 vendor/family/model, aarch64 features, CUDA compute
+  capability or exact device name, HIP `gcnArchName`. Don't reject it because
+  it doesn't win everywhere, and don't extend it to "similar" hardware
+  without evidence.
+- **Two independent gates.** Identity decides whether we *try* a path. The
+  runtime ISA/OS support check (`is_x86_feature_detected!`, etc.) decides
+  whether we *can*. Never let identity bypass the support check, and always
+  keep a safe fallback (`CpuKernel::preferred()`, the generic GPU candidate
+  set).
+- **Evidence before defaults.** A new default needs a paired A/B on the
+  target hardware (interleaved, thermally stable, see Measuring), recorded in
+  the relevant optimization log. Kernel micro-opts are mostly exhausted:
+  read the REJECTED entries in the logs before proposing kernel work.
+- **Correctness is non-negotiable.** Every kernel variant must match the
+  reference Argon2id output. Consensus validation stays in the daemon, so a
+  wrong hash costs users rejected shares, not chain safety.
 
-## Status
+## Where per-arch decisions live
 
-- CPU backend: implemented (Argon2id, consensus-compatible params).
-- CPU optimization journal: see `CPU_OPTIMIZATION_LOG.md` for measured tuning history and kept/reverted attempts.
-- NVIDIA backend: native CUDA Argon2id lane-fill engine with runtime NVRTC compilation, persistent VRAM-sized lanes, full-warp cooperative compression, and multi-hash-per-launch batching.
-- NVIDIA optimization journal: see `NVIDIA_OPTIMIZATION_LOG.md` for measured tuning history and kept/reverted attempts.
-- AMD backend (feature `amd`, OFF by default): HIP/ROCm port of the CUDA lane-fill engine with runtime hipRTC compilation and dlopen'd FFI (no ROCm needed at build time). Wave32/RDNA3-only for now; correctness-first, no measured tuning yet. Bring-up checklist: `docs/AMD_BRINGUP.md`. Select with `--backend amd` (never auto-detected); `--amd-devices <csv>` and `--amd-max-lanes` mirror the NVIDIA flags. A bare `--backend amd` (no `--amd-devices`) enumerates HIP devices at config time and creates one instance per wave32 GPU (wave64/CDNA devices are skipped with a startup notice).
-- Runtime architecture: supports multiple backends in one process with persistent workers, configurable bounded backend event queues with lossless `Solution` delivery and deduplicated backend `Error` events (prevents multi-thread error storms from stalling worker teardown), coalesced tip notifications (deduped across SSE reconnects), template prefetch overlap to reduce round-boundary idle, and optional strict quiesce barriers for round-accurate hash accounting.
-  - Backend assignment/control dispatch now runs through one shared per-backend task executor with panic capture and timeout quarantine to avoid duplicated control paths and extra thread churn.
-  - Per-backend executors prioritize control commands (cancel/fence/stop) on a dedicated control lane, so queued assignment bursts do not delay control enqueue.
-  - Backend dispatch deadlines are now scoped per task dispatch (not one shared batch deadline) to avoid false timeout quarantine as backend counts grow.
-  - Mining control flow no longer performs direct template/submit HTTP calls; dedicated template-prefetch and submit workers own network I/O so scheduler/control loops stay responsive under network jitter.
-  - Submit backlog handling is non-blocking for the mining control loop; when the backlog hard cap is saturated, new submit attempts are deferred (not dropped), and retryable submit failures are re-queued through deferred-solution flow.
-  - `PowBackend` now exposes optional non-blocking assign/cancel/fence hooks (`*_nonblocking`) for future persistent-kernel GPU backends that need queue-pressure signaling.
-  - Runtime assigns disjoint nonce chunks per backend per round (backend-local scheduling inside each chunk) so CPU and future GPU implementations can iterate independently without nonce overlap.
-  - Runtime supports batched per-backend work assignment via backend queue-depth hints (`max_inflight_assignments`) so future GPU backends can overlap control and kernel scheduling.
-  - Backends explicitly advertise deadline semantics (`cooperative` vs `best-effort`) so timeout behavior is visible before mixing heterogeneous devices.
-  - Mining mode supports adaptive weighted nonce allocation (`--work-allocation adaptive`) based on observed backend throughput, with `--work-allocation static` available for fixed lane-based splitting.
-  - Multi-GPU is plug-and-play: config-time device enumeration fans a bare `nvidia`/`amd` backend selection out to one instance per detected GPU (auto-detect and `--backend nvidia` both mine all NVIDIA GPUs). `--nvidia-devices` / `--amd-devices` (for example `--backend nvidia --nvidia-devices 0,1`) subset or pin explicit device instances and disable auto-expansion; the control API mirrors this (a spec without `device_index` expands to all detected devices at parse time).
-  - Runtime is split into `src/miner/{mining,template_prefetch,tip,bench,scheduler,stats,work_allocator,backend_control,round_control}.rs` to keep orchestration, scheduling, and backend control isolated for faster iteration.
+| Decision | Location |
+|---|---|
+| CPU kernel variants + ISA support check + fallback order | `pow-kernel/src/cpu_kernel.rs` (`CpuKernel`, `is_supported`, `preferred`) |
+| Kernel implementations | `pow-kernel/src/fixed_argon.rs`, `pow-kernel/src/fixed_argon/` |
+| Which CPU kernels the live tuner may try, per identity | `src/miner/adaptive_kernel.rs` (`candidates_for`) |
+| CPU identity (vendor/family/model) and build/runtime fingerprint | `src/runtime_identity.rs` (`cpu_identity`) |
+| Live CPU worker count tuning, joint count/kernel comparisons (each candidate count finishes its kernel sweep), memory/PSI shedding | `src/miner/adaptive_cpu.rs` (`tick_joint`), `src/miner/adaptive_kernel.rs` |
+| CPU topology / affinity (NUMA, L3, SMT, macOS P-cores) | `src/backend/cpu/topology.rs`, `src/config.rs` (`pcore_count`, `macos_hybrid_pcore_parallelism_cap`) |
+| Page mode (HugeTLB / Windows large pages / THP) | `src/config.rs`, `src/backend/cpu.rs` |
+| NVIDIA per-arch/per-device tuning (regcap candidates, launch depth, cancel interval) | `src/backend/nvidia.rs` (`*_RTX_5090`, `BLACKWELL_*`, `select_cancel_check_block_interval`) |
+| AMD arch gating (wave32 only) and hipRTC flags | `src/config.rs` (`partition_wave32_amd_devices`), `src/backend/amd/engine.rs` (`build_hiprtc_options`) |
+| Apple GPU | `src/backend/metal.rs` |
 
-## Runtime Tuning Knobs
+Every autotune cache is keyed by host/build/topology/page-mode fingerprints.
+When you add an identity-gated path, add it to the fingerprint or candidate
+set so stale caches from a different path get re-tuned, not reused.
 
-- `--backend-event-capacity` (default `1024`) controls bounded backend event queue size.
-- `--backend-assign-timeout-ms` (default `1000`) bounds per-backend assignment dispatch calls.
-- `--backend-assign-timeout-strikes` (default `3`) sets consecutive assignment timeout strikes before backend quarantine.
-- `--backend-control-timeout-ms` (default `60000`) bounds `cancel/fence` control calls; timed-out backends are quarantined.
-- By default, backends reporting best-effort deadlines are quarantined; pass `--allow-best-effort-deadlines` to keep them active.
-- Active backends run a startup deadline probe (`cancel`/`fence`) with a bounded watchdog timeout before mining/benchmark rounds begin; probe failures are quarantined.
-- `--hash-poll-ms` (default `200`) controls backend hash counter polling cadence.
-  - Runtime may tighten this cadence based on backend capability hints (for example non-CPU accelerators) while preserving the configured upper bound.
-  - CPU backend does not force a lower poll hint, so CPU-only runs keep `--hash-poll-ms` as the effective poll cadence.
+## Adding or changing an arch-specific path
 
-### CPU Backend Tuning
+1. Measure on the exact target hardware (rented or remote is fine; the dev
+   box is not a mining rig, so tear down hugepages and miners afterwards).
+2. Gate it in the matching location above, with a one-line comment naming
+   the identity and the measured win.
+3. Add a unit test for the gate: the intended identity selects the path, a
+   neighbouring identity doesn't, and an unsupported ISA never does (see the
+   `candidates_for` tests).
+4. Check parity: kernel reference tests in `pow-kernel`, plus
+   `pow-kernel/examples/verify_streaming_dispatch.rs` for streaming/ring
+   kernels.
+5. Record the result (kept or reverted) in `CPU_OPTIMIZATION_LOG.md` or
+   `NVIDIA_OPTIMIZATION_LOG.md`, and add a user-facing line to `CHANGELOG.md`
+   if defaults change.
 
-- `--cpu-page-mode` (`auto`, `regular`, `large`, `large-1g`; default `auto`) controls the CPU arena page contract.
-  - `auto` prefers explicit Windows large pages/Linux HugeTLB, then retains the platform fallback chain.
-  - `regular` forces ordinary pages and disables Linux THP for a controlled baseline.
-  - `large` requires every worker to allocate explicit large pages and fails CPU backend startup on any fallback; it is rejected on macOS.
-  - `large-1g` requires explicit 1 GiB HugeTLB pages (`MAP_HUGETLB|MAP_HUGE_1GB`, two pages per 2 GiB worker arena) and also fails closed; supported on Linux x86_64/aarch64 systems whose kernels expose a 1 GiB pool. Telemetry reports it as `large1g`/`large1g_bytes`, separate from 2 MiB `large`.
-  - CPU autotune caches and benchmark compatibility are separated by page mode. Schema-12 benchmark reports retain measured backing workers/bytes and allocation failures.
-- `--cpu-profile` (`balanced`, `throughput`, `efficiency`; default `balanced`) applies preset CPU threading/poll/flush defaults.
-  - Profile defaults apply when related knobs are omitted; explicit flags still override profile defaults.
-- `--cpu-hash-batch-size` (default `64`) controls per-worker hash counter flush batch size.
-- `--cpu-control-check-interval-hashes` (default `1`) controls per-worker control polling cadence.
-  - CPU stop/deadline checks are additionally time-bounded to keep round-end late-hash skew stable under coarse hash-interval settings.
-- `--cpu-hash-flush-ms` (default `50`) controls time-based hash counter flush cadence.
-- `--cpu-event-dispatch-capacity` (default `256`) controls internal CPU backend event dispatch buffering.
-- CPU thread autotuning is enabled by default when `--threads` is omitted.
-  - Results are persisted to `<seine-data-dir>/seine.cpu-autotune.json` and reused on subsequent runs.
-  - `--cpu-autotune-threads` forces autotuning even when `--threads` is set.
-  - `--disable-cpu-autotune-threads` disables autotuning.
-  - `--cpu-autotune-min-threads`, `--cpu-autotune-max-threads`, and `--cpu-autotune-secs` bound autotuner search range and base sample window (`--cpu-autotune-secs` default: `6`).
-  - Autotune uses a binary-style peak search for larger thread ranges, then locally sweeps neighboring candidates for final selection.
-  - Final thread selection is profile-aware: `throughput` picks peak H/s, while `balanced` and `efficiency` bias toward lower thread counts when they remain close to peak throughput (reducing RAM pressure).
-  - Candidate sampling auto-extends up to an internal cap to collect a minimum hash count on very slow lanes (reduces variance vs fixed very short windows).
-  - When balanced-profile finalists are close, the tuner remeasures them with a longer window in descending thread order before caching. This reduces short-window and ascending-ramp bias without changing the profile's memory-saving threshold.
-  - `--cpu-autotune-config` overrides the persisted autotune config path.
+## Measuring
 
-### NVIDIA Backend Tuning
+- Before choosing hardware optimization targets or answering a telemetry status
+  request, run `python3 telemetry/agent_report.py` when production SSH access is
+  available. It checks service/storage health and returns aggregate inventory and
+  comparable performance cohorts without installation IDs or raw reports.
+- Handle the analysis for the user: summarize collection health, adoption and the
+  next evidence-backed experiment. Do not direct them to a dashboard or require
+  manual SQL. If data is sparse or the query fails, say so; do not infer a regression
+  from missing reports or treat live hashrates as benchmark proof. See
+  `telemetry/README.md#agent-analysis` for interpretation and operating limits.
+- Use the interleaved A/B harnesses, not single runs:
+  `scripts/bench_cpu_ab.sh`, `scripts/bench_nvidia_ab.sh`,
+  `scripts/benchctl.py` (paired runs with CIs). Leave tuning flags unset so
+  both sides use their shipping defaults, unless the flag is the experiment.
+- `--bench-kind kernel` isolates the hash kernel. `backend` measures
+  steady-state workers. `end-to-end` includes start/fence/teardown and is
+  closest to what users see.
+- The zero-config path is what matters: also check a cold start with an
+  empty `--data-dir` and see what the tuner picks, not only a hand-pinned
+  config.
+- More harness detail: `docs/PERFORMANCE.md`, `docs/benchmarks.md`.
 
-- `--nvidia-autotune-secs` (default `5`) controls per-candidate benchmark window for regcap autotune.
-- `--nvidia-autotune-samples` (default `2`) runs multiple samples per candidate; autotune prioritizes median deadline-window counted H/s (then mean counted H/s, then throughput tie-breaks).
-- `--nvidia-autotune-config` overrides the persisted NVIDIA autotune cache path (`<seine-data-dir>/seine.nvidia-autotune.json` by default).
-  - New records retain the complete candidate trace (raw counted/throughput samples, failures, per-candidate elapsed time, and total autotune elapsed time) so future search policies can be replayed across hardware. Older winner-only records remain readable.
-- `--nvidia-max-rregcount` forces a fixed register cap and skips autotune/cache lookup.
-- `--nvidia-max-lanes` caps active NVIDIA lanes per device instance.
-- `--nvidia-dispatch-iters-per-lane` and `--nvidia-allocation-iters-per-lane` override scheduler/allocator lane-iteration hints.
-- `--nvidia-hashes-per-launch-per-lane` (default `2`) controls CUDA launch depth per lane (`higher => fewer launches`, often higher H/s on this workload, but coarser cancel/fence preemption).
-  - On Blackwell, if the flag is left unset and a cached/default tuning record resolves to depth `2`, Seine clamps the runtime depth to `1` for finer preemption. Explicit CLI overrides keep the requested depth.
-  - Blackwell fresh autotune also re-probes regcap+depth jointly and breaks near ties toward shallower full-lane profiles, with a soft preference for the measured `rreg=208` frontier.
-  - The exact desktop `NVIDIA GeForce RTX 5090` on compute capability 12 uses the repeatedly measured `[240, 224, 208]` regcap frontier during fresh autotune. Other devices, including 5090 laptop/regional variants, retain the exhaustive architecture-wide candidate set.
-- `--nvidia-no-adaptive-launch-depth` disables backend pressure/deadline-based launch-depth shaping.
-- `--nvidia-fused-target-check` enables in-fill-kernel target checking (disabled by default; can regress throughput on some GPUs).
-- `--nvidia-template-stop-policy` (`auto`, `on`, `off`) controls whether NVIDIA workers enforce template `stop_at`; `auto` follows `--strict-round-accounting`.
+## Runtime invariants (don't break these)
 
-### Scheduler & Stats Tuning
+- Backends get disjoint nonce chunks per round. Solutions are never dropped
+  (lossless `Solution` events, deferred re-queue on submit backlog).
+- A faulty backend is quarantined alone; mining continues on the rest.
+- Mining control loops do no network I/O (prefetch/submit workers own it).
 
-- `--stats-secs` (default `10`) controls periodic stats log emission cadence.
-- `--work-allocation` (`adaptive` or `static`) controls backend nonce-chunk splitting policy in mining mode.
-  - Adaptive mode now also incorporates solved/stale rounds with reduced gain so weights stay fresh under frequent tip churn.
-- `--sub-round-rebalance-ms` (default `0`, disabled) enables optional in-round redistribution cadence for adaptive mode when you want faster response to live throughput shifts.
-- `--request-timeout-secs` (default `10`) controls JSON API request timeout for template/submit/wallet calls.
-- `--events-stream-timeout-secs` (default `10`) controls SSE connect timeout per attempt (stream itself is long-lived).
-- `--events-idle-timeout-secs` (default `90`) bounds one SSE stream request lifetime before reconnect to avoid liveness stalls.
-- `--prefetch-wait-ms` (default `250`) bounds how long mining waits for prefetched templates before falling back to direct fetch.
-- `--tip-listener-join-wait-ms` (default `250`) bounds shutdown wait for SSE listener thread before detaching.
-- `--submit-join-wait-ms` (default `2000`) bounds shutdown wait for submit worker thread before detaching.
+## Formatting
 
-### Round Accounting & Nonce Management
+- Use the pinned toolchain: `cargo +1.93.0 fmt` (see `rust-toolchain.toml`).
+- Format only files you edited. No repo-wide `cargo fmt --all` and no
+  formatting-only churn in commits unless asked.
 
-- Relaxed accounting is now the default (higher throughput, less exact round attribution).
-- `--strict-round-accounting` enables per-round quiesce barriers for exact accounting.
-  - If any backend reports append assignment semantics, relaxed mode still issues round-boundary cancels to prevent stale queue carry-over.
-- `--refresh-on-same-height` forces immediate refresh on same-height `new_block` hash changes.
-- Nonce space is reserved deterministically per epoch via `--nonce-iters-per-lane` (default `2^36` iterations per lane), avoiding overlap between refresh rounds without relying on sampled hash counters.
-  - Assignment retry windows now consume additional scheduler span so backend quarantine/retry paths also stay non-overlapping across future rounds.
-  - The runtime logs backend preemption granularity on startup so strict round-accounting fence behavior is visible (`per-hash`, `every N hashes`, or `unknown`).
+## Release notes (`CHANGELOG.md`)
 
-### Misc Runtime Notes
+- Write for miners deciding whether to upgrade: what improves, who benefits,
+  and any action they need to take. Lead with the biggest user benefit; put
+  measured hashrate gains and the affected hardware first when available.
+- Use short, plain-language bullets, usually one sentence each. Aim for 3–5
+  bullets; small releases may need only one. Combine related fixes. A useful
+  example is "About 33% higher CPU hashrate on Ryzen 9 9950X3D at 8 threads."
+- Omit internal test data and implementation details: no run counts, sampling
+  windows, confidence intervals, cache schemas, kernel internals, code symbols,
+  or validation narratives. Keep those in engineering docs. Users need the
+  benefit, not an explanation of how we implemented or tested it.
+- Never show losses, regressions or no-gain results in release notes. Those
+  belong in `CPU_OPTIMIZATION_LOG.md` / `NVIDIA_OPTIMIZATION_LOG.md`.
+- Quote only measured gains on named hardware, and don't extrapolate to
+  untested models. Round sensibly, retain a short qualifier when needed for
+  accuracy, and distinguish faster startup from higher sustained hashrate.
+  Use a qualitative benefit when a number needs a lengthy explanation.
+- Keep required upgrade steps and compatibility changes, including API auth
+  and changed flags, in a brief note for affected users. Link to instructions
+  when needed. Never hide a required action to make the notes shorter.
+- Keep `CHANGELOG.md` and published GitHub release notes in sync. Publish the
+  edited notes plus a full-changelog link, without generated commit/PR lists.
+  When editing existing releases, preserve tags, binaries and release status.
 
-- Late-solution template retention is timeout-aware (derived from refresh/control/assign/prefetch timing) with time-based eviction and a bounded cache (entry and memory caps) to reduce stale drops during backend lag/spiky tip churn.
-- Deferred solution submission deduplicates by `(epoch, nonce)` across backends and suppresses repeat submit attempts across later rounds.
-- `--cpu-affinity` (`auto`, `pcore-only`, or `off`) controls CPU worker affinity/scheduler hints.
-  - Default is `pcore-only` on macOS Apple Silicon (`auto` on other platforms).
-  - Native Windows `auto` spreads workers across complete physical-core topology groups before using SMT siblings; Linux/WSL retain the OS order because WSL topology and page coverage produced unstable results.
-  - On macOS, `core_affinity` uses Mach affinity tags rather than hard CPU IDs. `pcore-only` limits the tag set using the perflevel0 count and combines it with a high-QoS preference, but cannot guarantee P-core placement.
-- `--ui` (`auto`, `tui`, `plain`) controls rendering mode. `auto` enables TUI only when stdout/stderr are terminals.
-- A backend runtime fault quarantines only that backend; mining continues on remaining active backends when possible.
-- CPU backend runtime errors are latched per assignment so only the first fault event is emitted, avoiding queue saturation during shutdown.
-- This miner is intentionally external so consensus-critical validation remains in the daemon.
+## References
 
-## Performance Benchmarking
-
-Run deterministic local benchmarking (no API connection needed):
-
-- `--bench-kind kernel`: hash kernel only (single backend).
-- `--bench-kind kernel-effective`: kernel path with wall-time accounting and target/eval enabled (single backend), useful for isolating backend orchestration overhead.
-- `--bench-kind backend`: persistent backend workers (steady-state throughput).
-- `--bench-kind end-to-end`: lifecycle throughput including backend start, measured work/fence, and backend teardown per round.
-- With `--bench-warmup-rounds 0`, the first end-to-end round includes cold backend initialization such as autotune and NVRTC/cache loading; warmups intentionally consume that cold-start cost before measured rounds.
-- Kernel benchmarks calculate H/s from actual elapsed time (including completed-batch overrun), not the configured duration. Reports retain configured, actual, overrun, and wall timing per round.
-- Worker benchmarks always apply a round-end measurement fence so round H/s is comparable across strict/relaxed accounting modes.
-  - Worker benchmarks now honor `--work-allocation` (`adaptive`/`static`) so scheduler tuning can be measured without mining mode.
-  - Benchmark reports now expose `counted_hashes`, `late_hashes`, and `late_hash_pct` per round plus aggregate late-hash accounting in the summary; throughput uses measured elapsed + fence time to avoid inflation when backend preemption is coarse.
-  - `--bench-warmup-rounds` runs unreported warmup rounds before measured rounds to reduce startup/cache jitter in short benchmark runs.
-  - Baseline compatibility now gates on measurement-critical runtime settings; context-only timeout knobs remain in the report but do not block comparisons.
-  - Baseline comparison validates benchmark/config/environment compatibility (including report schema, runtime fingerprint, and PoW fingerprint) before computing deltas.
-  - In benchmark mode, default `start_nonce` is deterministic (`0`) unless `--start-nonce` is explicitly provided.
-
-```bash
-cd seine
-cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --bench-secs 20 --bench-rounds 3 --bench-output bench.json
-```
-
-Compare against a previous baseline:
-
-```bash
-cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --bench-secs 20 --bench-rounds 3 --bench-baseline bench.json
-```
-
-Allow cross-build baseline comparison while keeping runtime/config/PoW compatibility checks:
-
-```bash
-cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --bench-secs 20 --bench-rounds 3 --bench-baseline bench.json --bench-baseline-policy ignore-environment
-```
-
-Fail CI on regression versus baseline (example: fail below `-5%`):
-
-```bash
-cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --bench-secs 20 --bench-rounds 3 --bench-baseline bench.json --bench-fail-below-pct 5
-```
-
-### Host-native CPU build
-
-Build with host ISA tuning (`target-cpu=native`) and the `release-native` profile:
-
-```bash
-./scripts/build_cpu_native.sh --cpu-only
-```
-
-On x86_64, standard CPU builds now compile both AVX2 and AVX-512 kernels and
-dispatch at runtime when the host supports them. `target-cpu=native` is still
-worth testing for dedicated host-local deployments because it can improve
-backend throughput slightly even when kernel throughput is unchanged.
-
-### Thermal-stable CPU A/B harness
-
-Run interleaved baseline/candidate CPU benchmarks with cooldown gaps to reduce thermal drift bias:
-
-```bash
-./scripts/bench_cpu_ab.sh \
-  --baseline-dir ../seine-baseline \
-  --candidate-dir . \
-  --bench-kind backend \
-  --pairs 4 \
-  --bench-secs 20 \
-  --bench-rounds 3 \
-  --bench-warmup-rounds 1 \
-  --threads 1 \
-  --cooldown-secs 20 \
-  --profile release
-```
-
-Output goes to `data/bench_cpu_ab_<kind>_<timestamp>/` and includes:
-- `results.tsv` with per-run metrics.
-- `summary.txt` with baseline/candidate means and percent delta.
-- Optional: use `--baseline-profile` / `--candidate-profile` and `--baseline-native` / `--candidate-native` to A/B build profiles or ISA flags in one interleaved run.
-- Optional: use `--page-mode` or `--baseline-page-mode` / `--candidate-page-mode` for verified page-policy comparisons; the harness rejects fallback or inconsistent backing.
-- Optional: use `--no-default-features`, `--baseline-no-default-features`,
-  `--candidate-no-default-features`, `--features`, `--baseline-features`, and
-  `--candidate-features` to A/B CPU-only or feature-gated builds without
-  editing the script.
-
-### Thermal-stable NVIDIA A/B harness
-
-Run interleaved baseline/candidate NVIDIA benchmarks with cooldown gaps to reduce thermal drift bias:
-
-```bash
-./scripts/bench_nvidia_ab.sh \
-  --baseline-dir ../seine-baseline \
-  --candidate-dir . \
-  --bench-kind backend \
-  --pairs 4 \
-  --bench-secs 20 \
-  --bench-rounds 3 \
-  --bench-warmup-rounds 1 \
-  --cooldown-secs 20 \
-  --nvidia-devices 0 \
-  --nvidia-max-rregcount 208 \
-  --profile release
-```
-
-Output goes to `data/bench_nvidia_ab_<kind>_<timestamp>/` and includes:
-- `results.tsv` with per-run benchmark metrics plus GPU start/end snapshots (`temp/sm_clock/mem_clock/power/util`).
-- `summary.txt` with baseline/candidate means, percent delta, and averaged late-hash percentage.
-- Launch depth is omitted by default so both variants exercise their shipping defaults (including Blackwell's implicit depth handling); pass `--nvidia-hashes-per-launch-per-lane` only for an explicit depth experiment.
-- Optional: use `--nvidia-fused-target-check`, `--nvidia-no-adaptive-launch-depth`, and trailing `-- <extra miner args>` for controlled A/B sweeps.
+- Every flag: `docs/MINER_FLAGS.md` / `seine --help`.
+- Tuning history and rejected ideas: `CPU_OPTIMIZATION_LOG.md`,
+  `NVIDIA_OPTIMIZATION_LOG.md`, `docs/NVIDIA_5090_TUNING.md`.
+- Hardware-specific notes: `docs/AMD_BRINGUP.md`, `docs/CPU_ENERGY.md`,
+  `docs/validation/`.

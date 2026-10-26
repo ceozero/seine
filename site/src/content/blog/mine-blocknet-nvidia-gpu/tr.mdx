@@ -1,0 +1,112 @@
+---
+title: 'NVIDIA GPU ile Blocknet madenciliği nasıl yapılır?'
+description: 'seine ile NVIDIA GPU''da Blocknet kazın. Windows veya Linux''u kurun, CPU ve GPU kullanın, cihaz hash hızlarını kontrol edin ve başlangıç sorunlarını çözün.'
+tags: ['Madencilik rehberi', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'seine CPU ve NVIDIA GPU''yu birlikte kullanabilir mi?'
+    a: 'Evet. Backend seçeneğini ayarlamadığınızda seine CPU''yu ve algılanan NVIDIA GPU''ları otomatik seçer. Devices paneli her backend''i ayrı gösterir. CPU madenciliğini koruyarak belirli bir kartı seçmek için cpu ve nvidia seçeneklerini birlikte seçin, ardından NVIDIA cihaz indeksini belirtin.'
+  - q: 'Windows''ta CUDA Toolkit gerekli mi?'
+    a: 'Resmî Windows arşivi, seine''in GPU kernel''lerini derlemek için kullandığı NVRTC çalışma zamanı kütüphanelerini içerir. Uyumlu bir NVIDIA ekran sürücüsü kurun ve çıkarılan DLL dosyalarını seine.exe yanında tutun. Bu paketlenmiş Windows sürümü için ayrı bir CUDA Toolkit kurulumu gerekmez.'
+  - q: 'CPU kullanmadan NVIDIA GPU ile nasıl madencilik yaparım?'
+    a: 'seine''i backend seçeneği nvidia olarak ayarlanmış şekilde başlatın. Algılanan her kart için bir NVIDIA backend''i oluşturur. Belirli cihaz indekslerini seçmek için nvidia-devices seçeneğini ekleyin. Başlangıçtan sonra Devices panelinde istediğiniz GPU''ların göründüğünü ve hash hesapladığını doğrulayın.'
+  - q: 'GPU paylarımın kabul edildiğini nereden görebilirim?'
+    a: 'Madencilik paneli gönderilen, reddedilen ve kabul edilen payları gösterir; günlükte her pay olayının backend''i belirtilir. NVIDIA cihaz satırındaki yerel hash hızını kontrol edin, ardından o backend''den kabul edilen pay mesajlarını arayın. Hesaba yazılan işi kontrol etmek için havuz takip rehberini kullanın.'
+---
+
+seine, CPU ile birlikte NVIDIA GPU'nuzda Blocknet kazımı yapar. Bu rehber Windows ve Linux kurulumunu, kart seçimini, kabul edilen payları ve RTX 5090 üzerinde ölçülmüş bir karşılaştırmayı kapsar. Komutlar seine v0.2.26 ve Ekim 2026 itibarıyla mevcut Argon2id ağı için geçerlidir.
+
+## NVIDIA GPU ile Blocknet madenciliğine nasıl başlanır?
+
+<Answer>
+Windows x86_64 veya Linux x86_64 seine arşivini indirin, platformunuz için NVIDIA sürücüsünü ve çalışma zamanı kütüphanelerini hazırlayın, ardından madenciyi çalıştırın. Ödeme adresinizi girin ve varsayılan havuzu kabul edin. seine CPU'yu ve algılanan NVIDIA kartlarını otomatik seçer, ardından her GPU backend'ini hazırlar ve ayarlar.
+</Answer>
+
+[İndirme bölümünden](/tr/#download) arşivinizi seçin: Windows için `seine-windows-x86_64.zip` veya Linux x86_64 için `seine-linux-x86_64.tar.gz`. [Genel madencilik rehberi](/tr/blog/how-to-mine-blocknet/), ödeme adresi edinmeyi ve ilk bağlantıyı kurmayı açıklar.
+
+Varsayılan ayarlarla başlayın. seine'in yapılandırmayı seçebilmesi için kernel, yazmaç sınırı, GPU lane sayısı ve CPU iş parçacığı sayısını ayarlamayın. Başlatma işlemi tamamlandığında Devices paneli hangi backend'lerin katkı sağladığını gösterir.
+
+## Windows veya Linux'ta NVIDIA çalışma ortamını kurma
+
+| Platform | Hazırlanacaklar | Başlatma komutu |
+|---|---|---|
+| Windows x86_64 | NVIDIA ekran sürücüsü; çalıştırılabilir dosyanın yanında paketle gelen çalışma zamanı DLL'leri | `.\seine.exe` |
+| Linux x86_64 | NVIDIA sürücüsü ve uyumlu NVRTC çalışma zamanı kütüphaneleri | `./seine` |
+
+Windows'ta ZIP'in tamamını yazılabilir bir klasöre çıkarın. `nvrtc64_120_0.dll` ve `nvrtc-builtins64_128.dll` dosyalarını `seine.exe` yanında tutun. Paketlenmiş sürüm, beraberinde gelen bu kütüphaneleri kullanır; ayrı bir CUDA Toolkit kurulumu gerekmez.
+
+![Resmî seine indirme tablosundaki Windows arşivi](/assets/blog/windows-download.png)
+
+Kartınız ve işletim sisteminiz için sürücüyü [NVIDIA sürücü sayfasından](https://www.nvidia.com/en-us/drivers/) kurun. [Windows kurulum rehberi](/tr/blog/mine-blocknet-on-windows/) indirme, sağlama toplamı ve arşivden çıkarma adımlarını açıklar.
+
+Linux'ta dağıtımınız için NVIDIA sürücüsünü ve uyumlu NVRTC paketlerini kurun. NVRTC, seine'in CUDA kernel'lerini çalışma sırasında derler. NVIDIA'nın [NVRTC belgeleri](https://docs.nvidia.com/cuda/nvrtc/), derleyiciyi ve eşleşen builtins kütüphanesini açıklar; [seine NVIDIA gereksinimleri](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md), madencinin beklediği çalışma ortamını belgeler.
+
+Programı bulunduğu klasörden başlatın. `seine-data` içindeki kayıtlı ayarlarınızı korumak için aynı çalışma dizinini yeniden kullanın. İlk başlatmada alıcı adresinizi girin ve havuz olarak `stratum+tcp://bntpool.com:3333` adresini kabul edin.
+
+## Bir NVIDIA kartı seçip CPU madenciliğini sürdürebilir misiniz?
+
+Her iki backend'i ve cihaz indeksini seçin. PowerShell'de bu komut CPU madenciliğini korur ve NVIDIA cihazı `0`'ı seçer:
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Linux programıyla aynı seçenekleri kullanın:
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+Bu komutlar kayıtlı adresinizi ve havuzunuzu kullanır veya başlangıçta bunları sorar. Bağlantıyı açıkça belirtmek için herkese açık alıcı adresinizi `--address`, havuz URL'sini ise `--pool-url` ile ekleyin.
+
+İndeks, NVIDIA çalışma ortamının listelediği bir GPU'yu tanımlar. Başlangıçtan sonra cihaz listesini doğrulayın. `--nvidia-devices 0,1` bu iki kartı seçer; seçiciyi belirtmezseniz algılanan tüm NVIDIA cihazları kullanılır.
+
+Yalnızca GPU ile madencilik için `nvidia` seçin:
+
+```bash
+./seine --backend nvidia
+```
+
+PowerShell'de `.\seine.exe --backend nvidia` kullanın. Her iki donanım türünü istediğinizde backend listesine `cpu` ekleyin. Bu seçimi değiştirirken seine'i istediğiniz komutla yeniden başlatın.
+
+## GPU'nun madencilik yaptığını nasıl doğrularsınız?
+
+<Answer>
+Devices panelinde NVIDIA backend satırlarını, anlık ve ortalama hash hızlarını inceleyin. Başlatma sırasında CUDA kernel'leri hazırlanırken bir satır başlangıç ilerlemesini gösterebilir. Hash hesaplaması başladığında günlükte o backend'in pay olaylarını, Mining panelinde ise kabul edilen payları kontrol edin.
+</Answer>
+
+NVIDIA backend'leri `nvidia#1`, `nvidia#2` ve devamı olarak görünür; CPU'nun kendi satırı vardır. Toplam hash hızı tüm etkin backend'leri içerir. [Panel rehberi](/tr/blog/seine-dashboard-explained/) diğer panelleri ve günlük etiketlerini açıklar.
+
+![RTX 5090, cihaz hash hızları ve kabul edilen payları gösteren gerçek bir seine oturumu](/assets/blog/nvidia-rtx5090-session.png)
+
+Bu görüntü, RTX 5090 ile gerçek bir havuz oturumunu gösterir. Aşağıdaki süreli performans testleri ayrı çalıştırılmıştır. Cihaz hash hızı yerel etkinliği ölçer; kabul edilen bir pay, havuzun gönderilen işi hesaba yazdığını doğrular. Hesaba yazılan işi [madenci takip rehberiyle](https://bntpool.com/blog/track-your-miner-on-bntpool/) izleyin.
+
+İlk başlatma GPU kernel'lerini hazırlar ve ayarlar. seine, NVIDIA otomatik ayarlama sonuçlarını `seine-data/seine.nvidia-autotune.json` dosyasına kaydeder. Sonraki başlatmalarda uyumlu kayıtlı sonuçların yüklenebilmesi için bu veri dizinini yeniden kullanın veya `--data-dir` ile bir dizini açıkça seçin.
+
+## Testimizde RTX 5090 ne kadar hızlıydı?
+
+Testleri 25 Ekim 2026'da Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, 125,4 GiB kullanılabilir RAM, seine v0.2.26 ve NVIDIA sürücüsü `610.88` ile yaptık. `--bench-kind backend` kullanarak sırayla değişen üç test çifti çalıştırdık. Her çalıştırmada bir 20 saniyelik ısınma ve üç 20 saniyelik ölçüm turu kullandık; çalıştırmalar arasında 20 saniye bekledik. Kernel, yazmaç sınırı, lane ve iş parçacığı ayarları otomatikti.
+
+| Mod | Ortalama H/s |
+|---|---|
+| Yalnızca RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Tablo, mevcut uygulamalar açık bırakılarak bu masaüstünde her mod için yapılan üç çalıştırmanın ortalamasını gösterir. Her iki mod da GPU `0` ve aynı NVIDIA otomatik ayarlama önbelleğini kullandı. Bunlar yerel performans testi hash hızlarıdır; kabul edilen paylar, işin havuz tarafından hesaba yazıldığını doğrular. [Ölçüm notları](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) ayarları ve tek tek sonuçları kaydeder.
+
+## Bir NVIDIA satırı eksikse neyi kontrol etmelisiniz?
+
+Önce arşivden çıkarılan programı ve çalışma zamanı kütüphanelerini kontrol edin. Windows'ta paketle gelen NVRTC DLL'lerini `seine.exe` yanında tutun. Linux'ta sürücüyü ve NVRTC kütüphanelerini madenciyi başlattığınız ortama kurun.
+
+Ardından komutunuzu kontrol edin. `--backend cpu` yalnızca CPU'yu seçer. İkisi için varsayılan komutu veya `--backend cpu,nvidia` kullanın. `--nvidia-devices` ayarladıysanız indekslerin makinenizde bulunduğunu doğrulayın.
+
+O backend'in başlangıç günlüğünü okuyun: devam eden hazırlık ile başlatma hatasını ayırt eder. Bildirilen çalışma ortamı veya seçim sorununu düzeltip yeniden başlatın. [NVIDIA rehberi](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md), kaynak koddan derleme gereksinimlerini de kapsar.
+
+Mevcut Argon2id iş yükünde her etkin GPU lane'i 2 GiB alan ve ek çalışma zamanı belleği gerektirir. seine, GPU işinin boyutunu kullanılabilir cihaz belleğine ve bellek ayırma kontrollerine göre belirler. Lane sayısını elle değiştirmeyin; belirtilen VRAM kapasitesi tek başına bir masaüstü oturumunda kaç lane kullanılabileceğini belirlemez.
+
+Cihaz hash hesaplıyor ancak havuz sıfır gösteriyorsa adres, bağlantı ve kabul edilen pay kontrolleri için [havuz hash hızı kontrol listesini](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate) izleyin.
+
+[Windows madenciyi engelledi mi? İndirmeyi doğrulayın](/tr/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="NVIDIA madenciliği için seine'i indirin" text="Windows veya Linux x86_64 arşivini seçin; otomatik CPU ve NVIDIA GPU seçimiyle başlayın." />

@@ -1,0 +1,159 @@
+---
+title: Huge pages per minare Blocknet più velocemente
+description: Riserva le huge pages su Linux e WSL, o le large pages su Windows, così seine mappa ogni area Argon2id da 2 GiB con meno TLB miss e mina Blocknet più velocemente.
+tags: [Guida al mining, Huge pages, Linux, Windows, Prestazioni]
+faq:
+  - q: 'Servono le huge pages per minare Blocknet con seine?'
+    a: 'No. seine mina sulla memoria normale appena lo avvii e chiede da solo a Linux le transparent huge pages. Riservare le huge pages è un extra opzionale per ottenere gli ultimi punti percentuali: sull''host di validazione le pagine da 2 MiB hanno aggiunto circa il 4-6% e le pagine da 1 GiB circa un altro 2%.'
+  - q: 'Quante huge pages servono a ogni thread di seine?'
+    a: 'Ogni thread ha bisogno di 1.024 pagine da 2 MiB, che contengono esattamente la sua area Argon2id da 2 GiB, oppure di due pagine da 1 GiB. Per le pagine da 2 MiB, moltiplica il numero di thread per 1.024, aggiungi il 5% di margine e arrotonda per eccesso. Otto thread richiedono 8.602 pagine, che riservano circa 16,8 GiB di RAM.'
+  - q: 'seine usa automaticamente le huge pages da 1 GiB?'
+    a: 'La modalità di pagina predefinita di seine usa la riserva di pagine da 2 MiB e poi le transparent huge pages. Per usare le pagine da 1 GiB, riservane due per thread, preferibilmente all''avvio con hugepagesz=1G hugepages=N, e avvia seine con --cpu-page-mode large-1g. Questa modalità funziona su Linux x86_64 e WSL e aggiunge circa il 2% rispetto alle pagine da 2 MiB.'
+  - q: 'Come attivo le large pages per seine su Windows?'
+    a: 'Assegna al tuo account Windows il diritto Blocco di pagine in memoria (Lock pages in memory) in secpol.msc, sotto Criteri locali e Assegnazione diritti utente, poi esci e rientra. seine attiva il diritto per sé all''avvio e alloca l''area da 2 GiB di ogni thread con le large pages. Sulle edizioni Home, concedi il diritto con uno strumento come ntrights.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+Riservando le huge pages, seine può coprire la memoria di ogni thread di mining con poche pagine grandi invece che con centinaia di migliaia di pagine piccole. Questa guida spiega perché questo accelera la proof of work Argon2id di Blocknet, quante pagine riservare e i comandi esatti per Linux, WSL2 e Windows.
+
+## Perché le huge pages accelerano il mining di Blocknet?
+
+<Answer>
+Ogni thread di seine calcola gli hash dentro un'area Argon2id da 2 GiB e legge blocchi da posizioni imprevedibili al suo interno. Con le normali pagine da 4 KiB, quell'area occupa 524.288 pagine, molte più traduzioni di indirizzi di quante il TLB della CPU possa tenere in cache. Le huge pages la coprono con 1.024 pagine o con appena 2, quindi meno letture restano ferme a percorrere le tabelle delle pagine.
+</Answer>
+
+Ogni accesso alla memoria parte da un indirizzo virtuale che la CPU deve tradurre in un indirizzo fisico. Le traduzioni recenti stanno nel translation lookaside buffer (TLB), che la [documentazione del kernel Linux](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) descrive come «una cache delle traduzioni da virtuale a fisico» e «una risorsa molto scarsa sul processore». Quando un indirizzo non è nel TLB, la CPU percorre le tabelle delle pagine in memoria prima ancora di poter iniziare a leggere i dati.
+
+La proof of work di Blocknet rende frequente questo percorso. Ogni hash riempie un'area da 2 GiB con blocchi da 1 KiB e, nella seconda metà del passaggio, ogni nuovo blocco legge un blocco precedente la cui posizione dipende da dati calcolati un attimo prima. Come mostra la [guida ad Argon2id](/it/blog/argon2id-proof-of-work-explained/), questo si traduce in circa 2 GiB di letture sparse per ogni hash. La dimensione della pagina decide quante traduzioni servono per quelle letture:
+
+| Dimensione della pagina | Pagine per area da 2 GiB |
+|---|---|
+| 4 KiB (normale) | 524.288 |
+| 2 MiB | 1.024 |
+| 1 GiB | 2 |
+
+Con le huge pages, una voce del TLB copre 512 o 262.144 volte più memoria, quindi una parte molto più grande dell'area resta alla portata del TLB e una quota maggiore del tempo di ogni thread va nel calcolo degli hash.
+
+## Quanto è più veloce il mining con le huge pages?
+
+La [guida alle huge pages](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) di seine le indica come la singola leva di ottimizzazione più importante per il mining con CPU su Linux. Sull'host di validazione, le pagine riservate da 2 MiB hanno aggiunto circa il **4-6%** e le pagine da 1 GiB circa un altro **2%**. La guida nota anche che, quando girano molti thread, la copertura con huge pages di solito conta più dell'ottimizzazione per set di istruzioni.
+
+I risultati dei server nel [grafico delle prestazioni](/it/#performance) di seine sono stati misurati con huge pages esplicite da 2 MiB. I 49,4 H/s di un AMD EPYC Zen 5 (EPYC 9R45) con 32 thread, misurati a ottobre 2026, sono stati ottenuti con 34.407 pagine riservate, lo stesso valore della riga da 32 thread nella tabella qui sotto. La [guida all'hardware per il mining](/it/blog/blocknet-mining-hardware-hashrate/) riporta tutti i risultati per generazione.
+
+Anche senza una riserva, seine chiede al kernel le transparent huge pages su Linux. Una riserva va oltre perché le pagine vengono messe da parte in anticipo, quindi ogni thread le ottiene a prescindere da quanto sia diventata frammentata la memoria.
+
+## Quante huge pages servono a seine?
+
+<Answer>
+Ogni thread di seine ha bisogno di 1.024 huge pages da 2 MiB per contenere la sua area da 2 GiB, oppure di due pagine da 1 GiB. Per le pagine da 2 MiB, riserva thread × 1.024 × 1,05 e arrotonda per eccesso, così resta un margine del 5%. Otto thread richiedono 8.602 pagine, circa 16,8 GiB. Quando la riserva non basta, seine stampa all'avvio il numero esatto.
+</Answer>
+
+Il numero di thread è il valore **Threads** nella dashboard di seine. seine lo sceglie in base alla RAM e al numero di core, quindi avvia seine una volta senza huge pages e annotalo. Se la riserva è troppo piccola, il log di avvio di seine stampa una riga `hugepages |` con le pagine necessarie e il comando `sysctl` per riservarle.
+
+| Thread | Pagine da 2 MiB (con 5% di margine) | Memoria riservata | Pagine da 1 GiB |
+|---|---|---|---|
+| 4 | 4.301 | 8,4 GiB | 8 |
+| 8 | 8.602 | 16,8 GiB | 16 |
+| 16 | 17.204 | 33,6 GiB | 32 |
+| 24 | 25.805 | 50,4 GiB | 48 |
+| 32 | 34.407 | 67,2 GiB | 64 |
+
+Le pagine riservate sono messe da parte per i programmi che chiedono huge pages, quindi dimensiona la riserva sul numero di thread con cui mini davvero. seine conta la riserva come memoria disponibile quando decide i thread, quindi riservare pagine lascia il numero di thread dov'era.
+
+## Come si configurano le huge pages da 2 MiB su Linux?
+
+Riserva le pagine per il tuo numero di thread. Questo esempio è per 4 thread:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Controlla che il kernel le abbia trovate tutte:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Se `HugePages_Total` risulta più basso di quanto hai chiesto, la memoria è frammentata. Svuota le cache, compatta la memoria e riprova:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Rendi la riserva permanente:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Per riserve grandi, l'impostazione permanente più un riavvio è la strada più affidabile, perché il kernel riserva le pagine all'inizio del boot, prima che la memoria si frammenti. Poi avvia seine come al solito. La sua modalità di pagina predefinita, `auto`, mappa l'area di ogni thread dalla riserva senza flag aggiuntivi.
+
+## Come si aggiungono le pagine da 1 GiB?
+
+Le pagine da 1 GiB richiedono un po' più di configurazione e aggiungono circa il 2% rispetto alle pagine da 2 MiB. Ogni area da 2 GiB ne richiede esattamente due, quindi non c'è margine da calcolare. Funzionano su Linux x86_64 e WSL.
+
+Riservale all'avvio con i parametri del kernel, il modo più affidabile per ottenere pagine così grandi. Per 9 thread:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Su una macchina appena avviata puoi anche provare una riserva a runtime, poi controllare il numero di pagine libere:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Le righe `HugePages_*` in `/proc/meminfo` riguardano solo la dimensione predefinita da 2 MiB, quindi leggi la riserva da 1 GiB in `/sys`. Poi avvia seine con la modalità da 1 GiB:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+In questa modalità ogni thread mappa la sua area dalla riserva da 1 GiB, così sai che l'intera sessione ha usato pagine da 1 GiB.
+
+## Come si riservano le huge pages su WSL2?
+
+WSL2 esegue un vero kernel Linux, quindi i comandi Linux qui sopra funzionano al suo interno. Per le pagine da 1 GiB, passa i parametri di avvio tramite `%UserProfile%\.wslconfig` dal lato Windows. La VM ha anche bisogno di memoria sufficiente per la riserva più i servizi di Windows e WSL. L'host validato da 64 GiB di seine ha usato questa configurazione:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Salva il file, esegui `wsl --shutdown` da Windows e riapri la tua distribuzione. Prima di iniziare a minare, verifica che il numero di pagine libere copra ogni thread.
+
+## Come si attivano le large pages su Windows?
+
+Il mining nativo su Windows di solito è più veloce di WSL sullo stesso hardware, e lì seine usa le large pages di Windows. Serve un solo permesso, **Blocco di pagine in memoria** (Lock pages in memory):
+
+1. Apri `secpol.msc`, poi *Criteri locali* → *Assegnazione diritti utente*.
+2. Aggiungi il tuo utente a **Blocco di pagine in memoria**.
+3. Esci e rientra, perché il diritto si applica alle nuove sessioni.
+
+`secpol.msc` è incluso in Windows Pro, Enterprise ed Education. Sulle edizioni Home, concedi lo stesso diritto con uno strumento come `ntrights`.
+
+Non serve altro. All'avvio seine attiva il diritto per sé e alloca l'area da 2 GiB di ogni thread con `VirtualAlloc` e `MEM_LARGE_PAGES`, il metodo che [Microsoft documenta](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) per la memoria a large pages. Se le large pages non sono disponibili, seine mina su pagine normali e registra nel log il motivo con la correzione esatta. seine non modifica mai da solo i diritti dell'account e non ti disconnette mai.
+
+## Quale modalità di pagina conviene usare?
+
+La modalità predefinita va bene quasi per tutti. Le altre modalità servono per le pagine da 1 GiB e per le misurazioni:
+
+| Modalità | Cosa fa |
+|---|---|
+| `--cpu-page-mode auto` (predefinita) | Usa le huge pages riservate o le large pages di Windows, poi le transparent huge pages, poi le pagine normali |
+| `--cpu-page-mode large` | Richiede huge pages riservate o large pages di Windows per ogni thread e si ferma all'avvio se mancano |
+| `--cpu-page-mode large-1g` | Richiede pagine da 1 GiB per ogni thread (Linux x86_64 e WSL) |
+| `--cpu-page-mode regular` | Solo pagine normali, per un benchmark prima e dopo |
+
+Per misurare il guadagno sulla tua macchina, mina per un po' con `--cpu-page-mode regular`, poi con `auto` o `large-1g`, e confronta l'hashrate nella dashboard. Sui server con più nodi NUMA, le pagine riservate devono anche trovarsi sui nodi che eseguono i tuoi thread; la [guida al mining sui server](/it/blog/mine-blocknet-on-servers/) spiega come fare.
+
+<CTA target="seine" title="Scarica seine e riserva le tue pagine" text="seine mappa l'area da 2 GiB di ogni thread sulle huge pages appena le riservi, senza flag aggiuntivi." />

@@ -1,0 +1,103 @@
+---
+title: 'O que é uma moeda de privacidade? Como funcionam as criptomoedas privadas'
+seoTitle: 'O que é uma moeda de privacidade (privacy coin) e como funciona'
+description: Uma moeda de privacidade é uma criptomoeda que oculta quem pagou, quem recebeu e quanto. Veja como elas funcionam e por que a privacidade por padrão importa.
+tags: [Privacidade, Moedas de privacidade, Assinaturas em anel, Endereços furtivos, Blocknet]
+faq:
+  - q: 'Qual é a diferença entre uma moeda de privacidade e o Bitcoin?'
+    a: 'O Bitcoin registra cada endereço e cada valor às claras, então qualquer pessoa pode seguir as moedas de um endereço para o outro e ler cada saldo. Uma moeda de privacidade usa criptografia como assinaturas em anel, endereços de uso único e valores ocultos, de modo que a blockchain continua provando que cada pagamento é válido enquanto mostra muito pouco a quem está de fora sobre quem pagou a quem ou quanto.'
+  - q: 'Todas as moedas de privacidade tornam a privacidade obrigatória?'
+    a: 'Não, os designs variam. Algumas moedas, como o Monero e o Blocknet, aplicam a privacidade a toda transação, então não existe nenhum modo público. O Zcash oferece endereços blindados (shielded), que ocultam o remetente, o destinatário e o valor com provas de conhecimento zero, ao lado de endereços transparentes que funcionam de forma parecida com os endereços do Bitcoin. Os usuários podem mover fundos entre os dois.'
+  - q: 'Como uma rede consegue conferir pagamentos que ela não vê?'
+    a: 'A criptografia permite que os nós verifiquem um pagamento sem ler os detalhes dele. Uma assinatura em anel prova que uma entre várias saídas foi gasta, uma key image bloqueia um segundo gasto das mesmas moedas, e os compromissos de valor se somam para que os nós confirmem que as entradas são iguais às saídas mais a taxa. As provas de intervalo mostram que nenhum valor oculto é negativo.'
+  - q: 'Dá para minerar uma moeda de privacidade em um computador comum?'
+    a: 'Sim, se a moeda usar uma prova de trabalho com uso intensivo de memória. O Blocknet usa o Argon2id, que precisa de cerca de 2 GB de memória para cada hash, então desktops, notebooks e servidores comuns fazem a mineração. Baixe o seine, informe seu endereço Blocknet ou @name, e ele minera no pool bntpool.com com a sua CPU e qualquer placa de vídeo NVIDIA.'
+sourceHash: 62f9c81926d6
+translation: reviewed
+---
+
+Este guia explica o que é uma moeda de privacidade, o que uma blockchain comum revela sobre os seus pagamentos e a criptografia que as moedas de privacidade usam para ocultar o remetente, o destinatário e o valor. No fim, ele usa o Blocknet como exemplo prático e mostra como ganhar suas primeiras moedas privadas minerando.
+
+## O que é uma moeda de privacidade?
+
+<Answer>
+Uma moeda de privacidade é uma criptomoeda construída para que os pagamentos não exponham publicamente o remetente, o destinatário nem o valor. Ela usa criptografia como assinaturas em anel, endereços furtivos de uso único e valores ocultos, de modo que cada nó continua podendo verificar cada pagamento enquanto quem lê a blockchain descobre muito pouco sobre ele.
+</Answer>
+
+Toda criptomoeda mantém um registro compartilhado, a blockchain, que muitos computadores independentes copiam e conferem. É essa abertura que permite que desconhecidos concordem sobre quem é dono do quê sem um banco no meio. A pergunta que uma moeda de privacidade responde é quanto de cada pagamento esse registro precisa mostrar.
+
+O Bitcoin mostra quase tudo. O whitepaper dele descreve o modelo de privacidade em uma linha: "O público pode ver que alguém está enviando um valor para outra pessoa, mas sem informações que vinculem a transação a alguém." Os nomes não aparecem, mas os endereços e os valores são públicos. Uma moeda de privacidade vai além e mantém os detalhes de cada pagamento fora do registro público, enquanto continua provando que o pagamento segue as regras.
+
+## O que uma blockchain pública revela sobre você?
+
+Em uma blockchain transparente como a do Bitcoin, qualquer pessoa que conheça um dos seus endereços pode consultá-lo em um explorador de blocos e ver:
+
+- **O saldo dele**, até a última unidade.
+- **Cada pagamento recebido e enviado**, com valores e datas.
+- **Para onde o dinheiro foi depois**, porque cada pagamento indica o endereço de onde veio e o endereço para onde vai.
+
+Seu nome não está escrito ali, mas os endereços raramente ficam desvinculados por muito tempo. Pagar uma loja, sacar de uma corretora ou publicar um endereço para doações o vincula a você e, a partir daí, todo o histórico pode ser lido. É mais ou menos como imprimir o seu extrato bancário em um mural público, com o número da sua conta no lugar do seu nome. Qualquer pessoa a quem você paga pode ver o que você tem, e qualquer pessoa que paga você pode acompanhar o que você faz com o dinheiro.
+
+Uma moeda de privacidade é projetada para que o mural mostre apenas que pagamentos válidos aconteceram.
+
+## Como as moedas de privacidade ocultam o remetente, o destinatário e o valor?
+
+<Answer>
+Muitas moedas de privacidade combinam três técnicas. As assinaturas em anel ocultam o remetente misturando a moeda real com iscas, os endereços furtivos de uso único ocultam o destinatário dando a cada pagamento um endereço novo, e os compromissos com provas de intervalo ocultam o valor enquanto provam que ele é válido. Muitas também protegem a camada de rede, para que a origem de uma transação continue oculta.
+</Answer>
+
+Cada técnica cobre uma parte de um pagamento. Veja como elas funcionam em termos simples.
+
+### As assinaturas em anel ocultam quem pagou
+
+Uma [assinatura em anel](/pt-br/blog/ring-signatures-explained/) permite assinar em nome de um grupo sem revelar qual membro assinou. Ron Rivest, Adi Shamir e Yael Tauman descreveram a ideia em 2001, e o design CryptoNote, de 2013, a levou para as criptomoedas. Quando você gasta, sua carteira escolhe outras saídas da blockchain como iscas e assina pelo grupo inteiro. Qualquer pessoa pode conferir que uma delas foi gasta, e a assinatura não diz qual.
+
+As moedas de privacidade usam assinaturas em anel vinculáveis, que acrescentam uma key image (imagem de chave): uma marca única da moeda real que está sendo gasta e que não revela nada sobre qual membro do anel ela é. Se a mesma key image aparecer duas vezes, a rede rejeita o segundo gasto, então, mesmo privadas, as moedas não podem ser gastas duas vezes. O Monero e o Blocknet usam uma versão compacta chamada CLSAG.
+
+### Os endereços furtivos ocultam quem recebeu
+
+Em um esquema de [endereço furtivo (stealth address)](/pt-br/blog/stealth-addresses-explained/), o endereço que você compartilha nunca aparece na blockchain. Seu endereço contém duas chaves públicas, uma chave de visualização (view key) e uma chave de gasto (spend key). Para cada pagamento, a carteira do remetente mistura essas chaves com um valor aleatório novo e deriva um endereço que é usado uma vez e nunca mais. Do seu lado, a chave privada de visualização permite que sua carteira varra a blockchain e identifique as saídas endereçadas a você, e a chave privada de gasto permite que você as gaste.
+
+Se dez pessoas pagarem o endereço do seu site, a blockchain mostra dez endereços de uso único separados, sem nenhum vínculo visível entre eles, então ninguém consegue somar o que você recebeu.
+
+### Os compromissos e as provas de intervalo ocultam o valor
+
+Os valores são armazenados como compromissos de Pedersen, que fixam um número sem mostrá-lo. Os compromissos podem ser somados, então cada nó consegue confirmar que o que entra em uma transação corresponde ao que sai, incluindo a taxa, sem ver nenhum dos números. Uma prova de intervalo (range proof) mostra então que nenhum valor oculto é negativo, para que ninguém consiga criar moedas do nada. Os [Bulletproofs](/pt-br/blog/bulletproofs-explained/), publicados por Bünz e colegas em 2018, deixaram essas provas muito menores.
+
+### A privacidade de rede oculta onde um pagamento começou
+
+Mesmo uma transação perfeitamente privada poderia ser rastreada até o computador que a transmitiu, observando qual nó a anunciou primeiro. O [Dandelion++](/pt-br/blog/dandelion-plus-plus-explained/), publicado em 2018, combate isso passando primeiro uma transação nova discretamente de um par para o seguinte ao longo de um "caule" (stem) e só depois deixando que ela se espalhe para a rede inteira a partir de um ponto aleatório mais adiante.
+
+Algumas moedas de privacidade seguem outro caminho. O Zcash, lançado em 2016, usa provas de conhecimento zero chamadas zk-SNARKs: seus endereços blindados ocultam o remetente, o destinatário e o valor, e a prova mostra que a transação é válida sem revelar nenhum deles.
+
+## Por que a privacidade por padrão importa?
+
+Quando a privacidade é um recurso que você ativa, as transações que a usam formam um grupo menor, e um grupo menor é mais fácil de estudar. Quando todas as transações são construídas da mesma forma, um pagamento privado se parece com qualquer outro pagamento da blockchain, e ninguém precisa se lembrar de protegê-lo.
+
+A privacidade por padrão também mantém todas as moedas intercambiáveis, uma propriedade chamada fungibilidade. Em uma blockchain transparente, uma moeda carrega todo o seu histórico, e duas moedas de mesmo valor podem ser tratadas de forma diferente por causa de por onde passaram. Quando nenhuma moeda tem um passado visível, uma moeda vale tanto quanto qualquer outra, que é o que as pessoas esperam do dinheiro.
+
+Os motivos do dia a dia são simples. Uma empresa não quer que os concorrentes leiam os pagamentos aos seus fornecedores. Um funcionário não quer que o salário fique visível para todo mundo de quem ele compra um café. Quem faz uma doação para uma causa pode preferir guardar isso para si. O dinheiro em espécie e as contas bancárias comuns já dão às pessoas esse tipo de privacidade, e uma moeda de privacidade a leva para os pagamentos digitais.
+
+## O Blocknet como exemplo de moeda de privacidade
+
+O Blocknet é uma moeda de privacidade que aplica assinaturas em anel, endereços furtivos, valores ocultos e privacidade de rede a todo pagamento. Seu formato de transação não tem modo transparente:
+
+- **Remetente:** cada entrada é assinada com um anel CLSAG de exatamente 16 saídas, a real e 15 iscas, e o consenso rejeita qualquer outro tamanho.
+- **Destinatário:** todo pagamento vai para um endereço furtivo de uso único.
+- **Valor:** os valores são compromissos de Pedersen com provas de intervalo Bulletproofs de 64 bits.
+- **Rede:** as transações trafegam com Dandelion++, que muda a rota dos caules a cada 10 minutos.
+- **Memo:** cada saída tem espaço para uma nota criptografada de até 124 bytes, legível apenas pelo remetente e pelo destinatário e preenchida até um tamanho fixo de 128 bytes, então um pagamento com nota parece igual a um sem nota.
+
+O Blocknet também permite pagar alguém pelo nome. Um [shortname do Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/) como `@alice` substitui um endereço de mais de 90 caracteres, e os pagamentos para o nome continuam caindo em endereços furtivos novos, então um nome público não revela nada sobre o que o dono recebe. Para ver cada camada em profundidade, leia [como o Blocknet mantém os pagamentos privados](/pt-br/blog/blocknet-privacy-features/) e, para o panorama geral, [o que é o Blocknet?](/pt-br/blog/what-is-blocknet/)
+
+A atualização Faraday planejada para o Blocknet vai ampliar o grupo em que cada gasto se esconde. Nas palavras do [blocknetcrypto.com](https://blocknetcrypto.com/#faraday): "Hoje um gasto se esconde entre 16 saídas. Depois da Faraday, ele se esconde entre todas as saídas da blockchain."
+
+## Como conseguir uma moeda de privacidade?
+
+Você pode ganhar uma minerando. A prova de trabalho do Blocknet, o [Argon2id](/pt-br/blog/argon2id-proof-of-work-explained/), precisa de cerca de 2 GB de memória para cada hash, então as CPUs e a RAM comuns de desktops, notebooks e servidores fazem a mineração. Os pagamentos do pool chegam a você como qualquer outro pagamento do Blocknet, em endereços furtivos de uso único e com valores ocultos.
+
+1. **Tenha uma carteira.** O [guia de carteira Blocknet para mineração](/pt-br/blog/blocknet-wallet-for-mining/) mostra como criar uma, fazer o backup da seed e copiar seu endereço.
+2. **Baixe o seine.** Ele é o minerador de Blocknet gratuito e de código aberto para Windows, macOS e Linux, na [seção de download](/pt-br/#download). Ele minera com a sua CPU e, no Windows e no Linux, com qualquer placa de vídeo NVIDIA ao mesmo tempo, e se ajusta sozinho enquanto roda.
+3. **Comece a minerar no bntpool.com.** Cole seu endereço ou `@name`, aceite o pool padrão, e os pagamentos chegam à sua carteira com privacidade. [Como minerar Blocknet](/pt-br/blog/how-to-mine-blocknet/) mostra cada passo.
+
+<CTA target="seine" title="Minere uma moeda de privacidade no seu computador" text="O seine minera Blocknet com a sua CPU e sua GPU NVIDIA, e o bntpool.com paga no seu endereço privado ou @name." />

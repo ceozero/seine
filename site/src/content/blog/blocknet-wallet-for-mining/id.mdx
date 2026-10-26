@@ -1,0 +1,173 @@
+---
+title: Siapkan wallet dan alamat Blocknet untuk menambang
+description: Siapkan wallet Blocknet resmi, cadangkan seed pemulihan 12 kata, salin alamat tujuan penambangan, dan lihat pembayaran bntpool.com masuk ke saldo Anda.
+tags: [Wallet, Panduan penambangan, bntpool]
+faq:
+  - q: 'Apakah saya perlu wallet Blocknet sebelum mulai menambang?'
+    a: 'Anda butuh alamat Blocknet sebagai tujuan penambangan, dan wallet resmi memberikannya. Buat wallet di wallet baris perintah atau wallet desktop, salin alamatnya, lalu tempel ke seine. Wallet itu sendiri tetap di komputer Anda. seine dan bntpool.com hanya butuh alamatnya, atau nama pendek Blocknet ID yang menunjuk ke alamat itu.'
+  - q: 'Berapa jumlah kata seed pemulihan Blocknet?'
+    a: 'Seed pemulihan Blocknet terdiri dari 12 kata. Di wallet baris perintah, perintah seed menampilkannya setelah sebuah peringatan dan password wallet Anda. Tulis kata-kata itu di kertas dan simpan secara offline. Dengan 12 kata itu, perintah import bisa membangun ulang wallet Anda di komputer mana pun, bahkan jika file wallet dan password-nya hilang.'
+  - q: 'Kapan pembayaran bntpool.com muncul di wallet saya?'
+    a: 'Blok pool membutuhkan 60 konfirmasi, sekitar lima jam dengan waktu blok Blocknet lima menit, sebelum imbalannya dibayarkan. Setelah saldo pool terkonfirmasi Anda mencapai 0,1 BNT, pool mengirimkannya ke alamat Anda. Pembayaran muncul di history sebagai transaksi biasa dan bisa dibelanjakan setelah 10 konfirmasi, sekitar 50 menit.'
+  - q: 'Bisakah saya memakai alamat yang sama di beberapa mesin penambang?'
+    a: 'Bisa. Setiap mesin yang menjalankan seine bisa menambang ke alamat atau nama pendek Blocknet ID yang sama, dan bntpool.com menjumlahkan share mereka ke dalam satu saldo. Halaman statistik pool menampilkan setiap mesin yang terhubung di bawah alamat Anda. Wallet dan seed pemulihannya tetap di komputer Anda sepanjang waktu.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Untuk menambang Blocknet Anda butuh alamat untuk menerima imbalan, dan wallet resmi memberikannya dalam beberapa menit. Panduan ini menunjukkan cara membuat wallet dengan wallet baris perintah atau wallet desktop, mencadangkan seed pemulihannya, menemukan alamat untuk ditempel ke seine, dan memeriksa saldo saat bntpool.com membayar Anda.
+
+## Wallet Blocknet mana yang sebaiknya dipakai untuk menambang?
+
+<Answer>
+Pakai salah satu dari dua wallet resmi dari Blocknet Privacy: wallet baris perintah, yang berjalan di Windows, macOS, dan Linux, atau wallet desktop untuk sistem yang sama. Keduanya menjalankan node Blocknet penuh di komputer Anda dan memberi Anda alamat penerima sebagai tujuan penambangan di bntpool.com dengan seine.
+</Answer>
+
+- **Wallet baris perintah.** Program `blocknet` memasang, menjalankan, dan memperbarui core Blocknet, yaitu proses latar belakang yang menjalankan node, wallet, dan jaringan. Anda mengelola wallet dari shell interaktif. Unduh dari [rilis baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest), yang menyediakan build untuk Windows, macOS, dan Linux.
+- **Wallet desktop.** Wallet grafis yang sudah menyertakan daemon Blocknet. Unduh dari [rilis desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest).
+
+Pilih yang Anda sukai. Langkah-langkah di bawah ini memakai wallet baris perintah, karena setiap perintahnya terdokumentasi, lalu membahas pemasangan versi desktop.
+
+## Cara membuat wallet dengan wallet baris perintah
+
+1. **Pasang dan jalankan core.** Ekstrak rilisnya dan jalankan wizard penyiapan:
+
+   ```sh
+   blocknet setup
+   ```
+
+   Wizard menanyakan apakah node Anda akan diperbarui otomatis, mengunduh core terbaru, dan menawarkan untuk menjalankannya. Di Windows programnya bernama `blocknet.exe`, jadi jalankan `blocknet.exe setup`. Untuk melewati wizard, jalankan `blocknet install latest` lalu `blocknet start`.
+
+2. **Buka shell.** Sambungkan ke core yang sedang berjalan:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Anda mendapat prompt `>`. Menutup shell dengan `quit` membiarkan core tetap berjalan, jadi Anda bisa menyambung lagi kapan saja.
+
+3. **Buat wallet.** Ketik `load`. Wallet menampilkan file wallet yang ditemukannya dan menawarkan "Create a new wallet". Pilih opsi itu, masukkan nama dan password, dan core membuat wallet baru dengan seed pemulihan yang baru:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Wallet berupa satu file `.wallet.dat`, dan password Anda mengenkripsi spend key-nya. Core mengingat lokasi wallet, jadi `blocknet start` berikutnya memuatnya untuk Anda. Blocknet juga menyalin wallet yang dimuat ke `~/.config/bnt/wallets/`, sehingga Anda punya salinan kedua di tempat yang diketahui.
+
+## Bagaimana cara mencadangkan seed pemulihan Anda?
+
+Seed pemulihan adalah cadangan yang paling penting. Seed ini terdiri dari 12 kata, dan dengan kata-kata itu Anda bisa membangun ulang wallet di komputer mana pun, bahkan jika file wallet hilang atau password terlupa. Blocknet tidak pernah menyimpan password Anda, jadi seed juga menjadi cara memulihkan wallet saat password terlupa.
+
+Tampilkan dengan perintah `seed`. Wallet mencetak peringatan, meminta Anda mengonfirmasi dan memasukkan password, lalu menampilkan kata-katanya:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+Tulis 12 kata itu di kertas dan simpan di tempat yang aman dan offline. Panduan wallet menyarankan agar tidak menyimpannya di file teks, aplikasi catatan, atau penyimpanan cloud, karena siapa pun yang memegang kata-kata itu menguasai dananya. Panduan [seed phrase](/id/blog/seed-phrase-explained/) menjelaskan bagaimana 12 kata itu menjadi kunci Anda dan cara menyimpannya dengan baik.
+
+Untuk memulihkan nanti, jalankan `import`, pilih `1) 12-word recovery seed`, ketik kata-katanya, lalu beri wallet baru nama dan password. Core kemudian memindai blockchain untuk menemukan output Anda.
+
+## Bagaimana cara menemukan alamat Blocknet Anda?
+
+<Answer>
+Di wallet baris perintah, ketik address (atau addr) di prompt shell. Wallet mencetak alamat penerima Anda, deretan 92 atau 93 karakter, diikuti petunjuk ke blocknet.id untuk nama pendek. Salin seluruh alamat dan tempel ke seine saat seine meminta alamat pembayaran.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+Inilah alamat yang Anda berikan ke seine. Saat pertama kali menjalankan [seine](/id/#download), seine meminta alamat pembayaran lalu pool; tempel alamatnya dan tekan Enter untuk menerima bntpool.com. Anda juga bisa memberikannya langsung:
+
+```sh
+./seine --address <your-address>
+```
+
+Setelah seine menambang, panel saldo pool di [dasbor](/id/blog/seine-dashboard-explained/) seine menampilkan enam karakter pertama dan terakhir dari alamat tujuan penambangan Anda, jadi Anda bisa memeriksa apakah cocok dengan wallet Anda.
+
+Jika Anda lebih suka menambang ke sesuatu yang lebih pendek, [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) seperti `@yourname` menunjuk ke alamat ini dan berfungsi di seine maupun di bntpool.com.
+
+## Menyiapkan wallet desktop
+
+Rilis terbaru wallet desktop (v0.22.0, dirilis 15 Oktober 2026) menyediakan unduhan berikut:
+
+| Sistem | File |
+|---|---|
+| Windows x86_64 | Installer `.exe` |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Setiap rilis menyertakan `SHA256SUMS.txt`, jadi Anda bisa memeriksa unduhan sebelum memasangnya:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Di Linux, pasang `.deb` atau jalankan `.AppImage` secara langsung. Di macOS, pindahkan aplikasi ke Applications dan jalankan perintah ini sekali di Terminal sebelum peluncuran pertama, sesuai petunjuk README:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Di Windows, jika Defender menampilkan prompt untuk installer, klik "Info selengkapnya" lalu "Tetap jalankan".
+
+Aplikasi ini menjalankan daemon Blocknet bawaannya di komputer Anda dan berkomunikasi dengannya melalui `127.0.0.1`, dan tidak mengirim request ke layanan luar. Buat wallet di aplikasi, catat seed pemulihannya, dan salin alamat penerima Anda ke seine. Wallet desktop juga membuka [tautan pembayaran](/id/blog/blocknet-payment-links/) `blocknet://` dan mengisi formulir pengiriman untuk Anda periksa.
+
+## Simpan kunci Anda di komputer Anda sendiri
+
+Mesin penambang hanya butuh alamat Anda. seine hanya butuh alamat atau nama pendek untuk menambang, jadi file wallet dan seed pemulihan bisa tetap di komputer yang Anda percayai. Ini paling penting untuk server sewaan, rig yang dipakai bersama, dan mesin yang bisa diakses orang lain.
+
+- **Jalankan wallet di rumah, tambang di mana saja.** Pakai alamat yang sama di setiap mesin yang menjalankan seine. bntpool.com menjumlahkan share mereka ke dalam satu saldo.
+- **Pantau kemajuan tanpa kunci.** Cari alamat Anda di [bntpool.com](https://bntpool.com) untuk melihat hashrate, share, dan saldo dari browser mana pun.
+- **Akses watch-only.** Jika Anda ingin melihat dana masuk di komputer kedua, `viewkeys` mengekspor kunci view-only. Wallet view-only menampilkan dana masuk dan tidak bisa mengirim atau menandatangani.
+- **Kunci saat meninggalkan komputer.** `lock` memblokir pembelanjaan sampai Anda menjalankan `unlock` dengan password Anda.
+
+## Bagaimana pembayaran hasil menambang muncul di wallet Anda?
+
+bntpool.com membayar imbalan setelah bloknya matang. Blok pool membutuhkan 60 konfirmasi, sekitar lima jam dengan waktu blok Blocknet lima menit. Saat saldo terkonfirmasi Anda mencapai minimum 0,1 BNT, pool mengirimkannya ke alamat Anda sebagai transaksi Blocknet biasa.
+
+Di wallet, periksa `balance` (atau `bal`):
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Pembayaran baru awalnya muncul di bawah `confirming`. Transaksi biasa bisa dibelanjakan setelah 10 konfirmasi, sekitar 50 menit, lalu pindah ke `spendable`. Perintah `history` menampilkan transaksi masuk dari yang terlama sampai terbaru, dengan blok, jumlah, dan jenis masing-masing: pembayaran pool tampil sebagai `regular`, dan blok yang Anda temukan sendiri dalam mode solo tampil sebagai `coinbase`, yang membutuhkan 60 konfirmasi sebelum bisa dibelanjakan.
+
+Wallet Anda menampilkan pembayaran setelah node-nya tersinkron dengan blockchain. `status` menampilkan `Syncing: false` jika sudah, dan `sync` memindai ulang blok yang sudah diunduh untuk mencari output Anda.
+
+Baru mengenal penambangan? [Panduan menambang Blocknet](/id/blog/how-to-mine-blocknet/) membahas cara mengunduh seine, memilih thread, dan apa yang bisa diharapkan di bntpool.com.
+
+<CTA target="pool" title="Menambang ke alamat baru Anda" text="Tempel alamat Blocknet Anda ke seine, terima bntpool.com, dan lihat pembayaran masuk ke wallet Anda setelah saldo mencapai 0,1 BNT." />

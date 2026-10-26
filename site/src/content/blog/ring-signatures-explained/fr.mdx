@@ -1,0 +1,87 @@
+---
+title: 'Les signatures de cercle expliquées : comment une crypto cache l''expéditeur'
+seoTitle: 'Signatures de cercle : comment une crypto cache l''expéditeur'
+description: 'Les signatures de cercle, de l''idée de 2001 à CLSAG et aux images de clé : comment un signataire se cache parmi des clés publiques, et le cercle de 16 de Blocknet.'
+tags: [Confidentialité, Signatures de cercle, Cryptographie, Blocknet]
+faq:
+  - q: 'Quelle est la différence entre une signature de cercle et une signature de groupe ?'
+    a: 'Une signature de groupe nécessite un gestionnaire qui constitue le groupe à l''avance et peut révéler qui a signé. Une signature de cercle n''a ni gestionnaire ni mise en place : le signataire choisit sur le moment n''importe quel ensemble de clés publiques, et personne, pas même les personnes dont les clés ont été utilisées, ne peut ensuite prouver quel membre a produit la signature.'
+  - q: 'Qu''est-ce qu''une image de clé dans une signature de cercle ?'
+    a: 'Une image de clé (key image) est une valeur calculée à partir de la clé privée de la sortie dépensée. La même sortie produit toujours la même image de clé, si bien que le réseau rejette une seconde dépense de cette sortie, sans que l''image de clé révèle quel membre du cercle est le vrai. Elle fait d''une signature de cercle une signature de cercle liable qui empêche la double dépense.'
+  - q: 'Qu''est-ce que CLSAG ?'
+    a: 'CLSAG est un schéma de signature de cercle liable décrit par Brandon Goodell, Sarang Noether et Arthur Blue en 2019. Il prouve que le signataire possède une sortie du cercle et que les montants s''équilibrent, avec une image de clé pour bloquer les doubles dépenses. Monero l''a adopté en octobre 2020, et Blocknet signe chaque entrée avec CLSAG et RingCT.'
+  - q: 'Quelle taille de cercle Blocknet utilise-t-il ?'
+    a: 'Blocknet utilise un cercle d''exactement 16 membres pour chaque entrée : la vraie sortie plus 15 leurres, chacun étant une vraie sortie déjà présente sur la chaîne. Le consensus rejette toute autre taille. Comme chaque entrée utilise la même taille, la taille du cercle ne peut jamais distinguer une transaction, et la vraie sortie occupe une position aléatoire dans le cercle.'
+  - q: 'Les signatures de cercle cachent-elles le montant d''un paiement ?'
+    a: 'Non. Une signature de cercle cache quelle sortie a payé. Les montants sont cachés par une couche distincte : les engagements de Pedersen, qui fixent un nombre sans le montrer, et les preuves d''intervalle Bulletproofs, qui prouvent que chaque montant est valide. Blocknet utilise tout cela ensemble sur chaque transaction, avec des adresses furtives à usage unique qui cachent le destinataire.'
+sourceHash: 72e21b4e9c54
+translation: draft
+---
+
+Une signature de cercle vous permet de signer au nom d'un groupe : n'importe qui peut vérifier que la signature vient de l'une des clés du groupe, mais personne ne peut dire laquelle. Cet article explique le fonctionnement des signatures de cercle, de l'article de 2001 qui les a introduites jusqu'aux images de clé et à CLSAG, et montre comment Blocknet utilise un cercle de 16 pour garder confidentiel l'expéditeur de chaque paiement.
+
+## Qu'est-ce qu'une signature de cercle ?
+
+<Answer>
+Une signature de cercle est une signature numérique produite avec une clé privée et un ensemble de clés publiques d'autres personnes. Un vérificateur peut confirmer que le détenteur de l'une de ces clés a signé, mais pas dire lequel. Le signataire choisit le groupe sur le moment, sans mise en place ni coopération des autres membres.
+</Answer>
+
+Une signature numérique ordinaire relie un message à une seule clé publique. Une signature de cercle le relie à un ensemble de clés publiques, appelé le cercle (ring). Le signataire n'a besoin que de sa propre clé privée ; les autres membres n'apportent rien d'autre que des clés publiques qu'ils ont déjà publiées. Pour un observateur extérieur, chaque membre du cercle est un signataire tout aussi plausible.
+
+## D'où viennent les signatures de cercle ?
+
+Ron Rivest, Adi Shamir et Yael Tauman ont présenté les signatures de cercle à ASIACRYPT 2001 dans un article intitulé [« How to Leak a Secret »](https://people.csail.mit.edu/rivest/pubs/RST01.pdf) (Comment divulguer un secret). Leur exemple est celui d'un membre du gouvernement qui veut divulguer une information à un journaliste en prouvant qu'elle vient du gouvernement, sans révéler quel membre parle. Il signe avec sa propre clé et les clés publiques des autres membres du gouvernement, et le journaliste peut vérifier la signature sans apprendre qui l'a écrite.
+
+Deux propriétés ont fait ressortir l'idée. Il n'y a aucun gestionnaire de groupe capable de démasquer le signataire, ce qui distingue les signatures de cercle des signatures de groupe, plus anciennes. Et le cercle est spontané : le signataire peut l'assembler à partir de n'importe quelles clés publiées au moment de signer. Les auteurs ont choisi ce nom parce que « les anneaux sont des régions géométriques à la périphérie uniforme et sans centre » : chaque membre se trouve sur le bord, et personne ne commande. L'algorithme de signature a la même forme, une chaîne de calculs qui se referme sur elle-même.
+
+## Comment fonctionne une signature de cercle ?
+
+Les schémas modernes utilisés dans les cryptomonnaies construisent cette boucle à partir de hachages et de clés sur courbe elliptique. Voici l'idée en étapes simples pour un cercle de 16 clés publiques :
+
+1. **Partir de votre propre emplacement.** Le signataire choisit un nombre secret aléatoire et le hache avec le message. Ce hachage devient le défi de l'emplacement suivant du cercle.
+2. **Simuler une réponse pour chaque autre emplacement.** Pour chacun des 15 autres membres, le signataire choisit une réponse aléatoire et la combine avec la clé publique de ce membre et le défi courant pour calculer le défi de l'emplacement suivant.
+3. **Refermer le cercle.** Après un tour complet, la chaîne revient à l'emplacement du signataire. Seul quelqu'un qui détient la clé privée de cet emplacement peut calculer l'unique réponse qui ramène la chaîne exactement à son point de départ.
+
+La signature se compose du défi de départ et des 16 réponses. Un vérificateur part de n'importe où, fait le tour du cercle en recalculant chaque défi à partir des clés publiques et des réponses, et vérifie que la boucle se referme. Chaque emplacement a le même aspect : une clé publique et une réponse d'apparence aléatoire. Rien n'indique où le signataire a commencé : le vérificateur apprend qu'une clé privée a refermé le cercle, et rien sur laquelle.
+
+## Comment les images de clé empêchent-elles la double dépense ?
+
+Une simple signature de cercle laisse une faille pour la monnaie : si chaque dépense se cache parmi d'autres sorties, le réseau ne peut pas voir que les mêmes coins ont été dépensés deux fois. Les signatures de cercle liables corrigent cela. Joseph Liu, Victor Wei et Duncan Wong ont décrit le premier schéma de ce type, LSAG, à ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Deux signatures produites avec la même clé privée peuvent être reliées entre elles, tandis que le signataire reste caché dans le cercle.
+
+La conception CryptoNote de 2013 en a fait l'image de clé. Pour une sortie de clé privée `x` et de clé publique `P`, le portefeuille calcule `I = x · Hp(P)`, où `Hp` hache la clé publique vers un point de la courbe. La signature prouve que `I` appartient au membre du cercle qui a signé, sans dire lequel. Comme l'image de clé dépend uniquement de la sortie dépensée, dépenser à nouveau cette sortie produit toujours le même `I`. Chaque nœud tient une liste des images de clé déjà vues et rejette toute transaction qui en répète une.
+
+## De MLSAG à CLSAG
+
+Les cryptomonnaies qui cachent aussi les montants ont besoin que la signature de cercle prouve un second fait : que le montant caché de l'entrée correspond à ce que la transaction dépense. L'article de Shen Noether de 2015, [« Ring Signature Confidential Transactions for Monero »](https://eprint.iacr.org/2015/1098) (RingCT), y parvenait avec MLSAG, une signature de cercle portant sur deux ensembles de clés, l'un pour la propriété et l'autre pour les engagements de montant.
+
+CLSAG, de Brandon Goodell, Sarang Noether et Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), prouve les deux mêmes faits de façon plus compacte. Monero est passé de MLSAG à CLSAG lors de sa mise à niveau d'octobre 2020. La [documentation de Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) fait état d'une vérification environ 20 % plus rapide, et d'une transaction typique à deux entrées et deux sorties qui passe d'environ 2,5 kB à 1,9 kB.
+
+## Que signifie la taille du cercle pour la confidentialité ?
+
+<Answer>
+La taille du cercle est le nombre de sorties dans chaque cercle : la vraie plus les leurres. Un cercle de 16 signifie qu'un observateur voit 16 candidats tout aussi valides pour chaque entrée. Une taille fixe compte autant qu'une grande taille, car lorsque chaque entrée utilise la même taille, la taille elle-même ne révèle rien sur l'auteur de la transaction.
+</Answer>
+
+Les leurres sont de vraies sorties de la chaîne : chacun pourrait donc réellement être le coin dépensé. Si les cercles pouvaient varier, un portefeuille qui choisirait une taille inhabituelle signalerait ses propres transactions. Monero a porté sa taille de cercle de 11 à 16 lors de sa mise à niveau d'août 2022, et Blocknet utilise 16 par consensus pour chaque entrée.
+
+## Comment Blocknet utilise les signatures de cercle
+
+Chaque entrée Blocknet est signée avec CLSAG et RingCT sur un cercle d'exactement 16 sorties. Les règles sont imposées par le consensus : aucun portefeuille ne peut s'en dispenser.
+
+- **Un cercle fixe de 16.** Le daemon rejette toute entrée dont le cercle ne compte pas exactement 16 membres. Son code fixe la taille « pour empêcher les fuites d'information dues aux tailles de cercle variables ».
+- **Uniquement de vraies sorties.** Chaque membre du cercle doit être une vraie sortie déjà présente sur la chaîne : chaque leurre est donc un coin qui pourrait réellement être dépensé.
+- **Des leurres aléatoires et une position aléatoire.** Le portefeuille mélange les sorties de la chaîne avec un générateur aléatoire cryptographiquement sûr pour choisir 15 leurres, puis place votre vraie sortie à une position aléatoire dans le cercle.
+- **Propriété et montant dans une seule preuve.** Chaque signature prouve que vous possédez un membre du cercle et que le montant caché de votre entrée correspond à l'engagement de ce membre : les montants s'équilibrent sans être montrés.
+- **Images de clé vérifiées sur la chaîne.** L'image de clé fait partie des données signées, et le réseau rejette une transaction si cette image de clé a déjà été dépensée ou apparaît deux fois dans la même transaction.
+
+Le format de transaction n'a pas de mode transparent : chaque paiement de la chaîne comporte donc des cercles comme ceux-ci. Les signatures de cercle cachent l'expéditeur ; les [adresses furtives à usage unique](/fr/blog/stealth-addresses-explained/) cachent le destinataire, et les [engagements de Pedersen avec Bulletproofs](/fr/blog/bulletproofs-explained/) cachent le montant. [Comment Blocknet garde les paiements confidentiels](/fr/blog/blocknet-privacy-features/) passe en revue chacune de ces couches et ce qu'elles signifient quand vous payez quelqu'un.
+
+## Ce qu'apporte ensuite la mise à niveau Faraday
+
+Blocknet prévoit une mise à niveau du réseau appelée Faraday, dont l'activation est prévue vers le 16 février 2027 selon [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Selon les termes du site : « Aujourd'hui, une dépense se cache parmi 16 sorties. Après Faraday, elle se cachera parmi toutes les sorties de la chaîne. » Faraday apportera aussi de nouvelles preuves de dépense, que le site décrit comme « conçues pour qu'un ordinateur quantique ne puisse pas falsifier une dépense ». La conception, les tests et la revue adverse sont en cours, et les dates sont prévisionnelles, pas définitives.
+
+## Obtenir des BNT à envoyer en toute confidentialité
+
+Un moyen simple d'obtenir des coins qui utilisent ces cercles est de les miner. Le mineur seine est gratuit, open source et se dimensionne selon votre ordinateur, et bntpool.com est son pool par défaut : vous pouvez miner en quelques minutes. Le [guide de minage](/fr/blog/how-to-mine-blocknet/) explique l'installation, et vous pouvez miner directement vers votre adresse ou vers un [nom Blocknet ID](/fr/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Minez vos premiers BNT confidentiels" text="Téléchargez seine, minez sur bntpool.com et recevez des coins que chaque dépense protège avec un cercle de 16." />

@@ -1,0 +1,94 @@
+---
+title: 'Stealth-adressen uitgelegd: hoe eenmalige adressen werken'
+description: Stealth-adressen uitgelegd in gewone woorden. Lees hoe eenmalige adressen, view keys, spend keys en het scannen door je wallet elke betaling aan jou privé houden.
+tags: [Privacy, Stealth-adressen, Wallet, Blocknet]
+faq:
+  - q: 'Is een stealth-adres hetzelfde als een eenmalig adres?'
+    a: 'Het zijn twee helften van één systeem. Het stealth-adres is het adres dat je publiceert, opgebouwd uit een publieke spend key en een publieke view key. Een eenmalig adres is de nieuwe sleutel die een verzender daaruit afleidt voor één betaling. Alleen eenmalige adressen verschijnen op de chain, en je gepubliceerde adres nooit.'
+  - q: 'Kan iemand mijn saldo zien als hij mijn stealth-adres kent?'
+    a: 'Nee. Als iemand je gepubliceerde adres kent, kan hij daarmee je betalingen niet vinden, want elke betaling komt terecht op een eenmalige sleutel die er niets mee te maken lijkt te hebben. Om ze te vinden is je privé view key nodig, dus alleen je wallet kan opsommen wat je hebt ontvangen. In Blocknet zijn ook de bedragen verborgen, dus zelfs de outputs zelf tonen geen waarde.'
+  - q: 'Wat kan iemand met mijn privé view key?'
+    a: 'Met een privé view key kan de houder de betalingen vinden die naar jou zijn gestuurd en de bedragen en memo''s ervan lezen. Hij kan niets uitgeven, want daarvoor is de privé spend key nodig. In Blocknet maakt het commando viewkeys van je view key een view-only wallet, handig om geld te volgen op een tweede computer. Deel hem alleen met mensen die je vertrouwt.'
+  - q: 'Moet ik stealth-adressen aanzetten in Blocknet?'
+    a: 'Nee. Elke Blocknet-betaling gaat automatisch naar een eenmalig stealth-adres, omdat het transactieformaat geen transparante modus heeft. Je wallet maakt de eenmalige sleutel aan als je verstuurt en vindt inkomende betalingen met je view key als hij synchroniseert. Er valt niets in te stellen, of je nu naar een adres of een @name betaalt.'
+sourceHash: df06dcbe3a7b
+translation: draft
+---
+
+Met een stealth-adres publiceer je één adres en komt toch elke betaling aan jou op een nieuwe plek op de chain terecht. Deze gids legt uit hoe dat werkt, wat je view key en spend key elk doen en hoe een wallet zijn eigen betalingen vindt, met Blocknet als uitgewerkt voorbeeld.
+
+## Wat is een stealth-adres?
+
+<Answer>
+Een stealth-adres is een publiek adres dat nooit op de blockchain verschijnt. Het bevat twee publieke sleutels, een spend key en een view key. Voor elke betaling combineert de wallet van de verzender ze met een nieuw willekeurig getal tot een eenmalig adres dat alleen de ontvanger kan herkennen en uitgeven.
+</Answer>
+
+Op een openbaar grootboek duikt een gewoon adres op in elke betaling die het ontvangt. Een standaard Bitcoin-adres werkt zo: iedereen die het kent, kan elke betaling opzoeken en het totaal optellen. Daarom geven veel Bitcoin-wallets voor elke betaling een nieuw adres uit.
+
+Een stealth-adres doet dat werk voor je. Je deelt één adres, op een website, in een profiel of als `@name`, en elke verzender leidt daaruit een ander eenmalig adres af. Tien betalingen aan jou worden tien outputs die zichtbaar niets met elkaar of met het gedeelde adres gemeen hebben. Er is geen heen-en-weer nodig: de verzender berekent het eenmalige adres in zijn eentje, uit je publieke adres en een willekeurig getal.
+
+## Waar komen stealth-adressen vandaan?
+
+Het ontwerp met eenmalige adressen dat Monero, Blocknet en andere coins gebruiken, gaat terug op de CryptoNote v2.0-whitepaper van Nicolas van Saberhagen, gedateerd 17 oktober 2013. Die noemt het idee "unlinkable payments" en beschrijft hoe een verzender een "one-time public key" genereert uit het adres van de ontvanger. De documentatie van Monero beschrijft stealth-adressen als een manier waarop verzenders "random one-time addresses for every transaction on behalf of the recipient" kunnen maken.
+
+Het idee heeft zich verspreid buiten [privacycoins](/nl/blog/what-is-a-privacy-coin/). Met [BIP 352 "Silent Payments"](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki) van Bitcoin kan een vast Bitcoin-adres betalingen ontvangen die on-chain niet aan elkaar te koppelen zijn, en [ERC-5564](https://eips.ethereum.org/EIPS/eip-5564) van Ethereum, opgesteld in 2022, standaardiseert stealth-adressen voor Ethereum-accounts. Op die chains zijn het allebei opt-in-functies. In Blocknet gebruikt elke betaling een eenmalig adres.
+
+## Hoe werken stealth-adressen?
+
+<Answer>
+De verzender kiest een willekeurig getal r, publiceert R = r·G in de transactie en combineert r met de publieke view key van de ontvanger tot een gedeeld geheim. Door dat geheim bij de publieke spend key op te tellen, ontstaat de eenmalige sleutel. De ontvanger bouwt hetzelfde geheim opnieuw op uit R en zijn privé view key, dus alleen hij vindt de betaling.
+</Answer>
+
+Je wallet heeft twee sleutelparen. Elke privésleutel is een geheim getal (s voor spend, v voor view), en elke publieke sleutel is dat getal maal een vast punt G op de kromme. Je adres bestaat gewoon uit de twee publieke sleutels, S en V. Dit is de hele uitwisseling:
+
+```
+Receiver publishes:   S = s·G   and   V = v·G
+Sender picks r:       R = r·G                 (stored in the transaction)
+One-time key:         P = H(r·V)·G + S
+Receiver checks:      H(v·R)·G + S == P       (true because r·V = v·R)
+Key to spend it:      x = H(v·R) + s          (so P = x·G)
+```
+
+De truc is een Diffie-Hellman-uitwisseling. De verzender berekent r·V en de ontvanger berekent v·R, en beide komen uit op hetzelfde punt, omdat elk r·v·G is. Niemand anders kent r of v, dus niemand anders kan het berekenen. Door dat punt te hashen (H) ontstaat een gedeeld geheim, en de eenmalige sleutel P is dat geheim, als punt, opgeteld bij je publieke spend key.
+
+Bij het scannen bereken je het geheim opnieuw uit R en je privé view key en controleer je of het P oplevert. Zo ja, dan is de output van jou. Om hem uit te geven, telt je wallet hetzelfde geheim op bij je privé spend key, wat de privésleutel x voor die ene output oplevert.
+
+Blocknet volgt dit ontwerp op de Ristretto-groep over Curve25519 en hasht met SHA-256 onder een Blocknet-specifieke domeintag. Het mengt ook de positie van elke output in de transactie mee in de hash, zodat twee outputs naar dezelfde persoon in één transactie toch ongerelateerde sleutels krijgen. Uit hetzelfde gedeelde geheim worden ook de blinding die het bedrag van de output verbergt en de sleutel die de memo versleutelt afgeleid; zo kan de ontvanger beide lezen.
+
+## Wat doen de view key en de spend key?
+
+Door de sleutels te splitsen krijg je twee niveaus van toegang:
+
+- **De privé view key vindt betalingen.** Met v en je publieke spend key kan een wallet elke output herkennen die naar jou is gestuurd, het bedrag ontsleutelen en de memo lezen.
+- **De privé spend key geeft ze uit.** Alleen s maakt van een gevonden output een privésleutel x die een uitgave kan ondertekenen.
+
+Die splitsing maakt watch-only wallets mogelijk. In de command-line-wallet van Blocknet maakt `viewkeys` een apart walletbestand van je view keys. De help van de wallet beschrijft het als een bestand dat "can monitor but cannot spend", handig wanneer "you want watch-only access on another machine". Als je het uitvoert, legt de wallet uit wat hij aanmaakt:
+
+```
+# View Keys
+  This will create a view-only wallet that can monitor incoming
+  funds but CANNOT spend. Anyone with this file can see your
+  balance and transaction history.
+```
+
+Geef een view-only wallet alleen aan iemand aan wie je je geschiedenis zou laten zien, zoals je boekhouder, of bewaar hem op een tweede computer van jezelf. Hoe dan ook kan hij geld zien binnenkomen terwijl je spend key op de machine blijft die je vertrouwt.
+
+## Hoe vindt een wallet zijn betalingen?
+
+Omdat eenmalige sleutels niets met je adres te maken lijken te hebben, staat er op de chain nergens bij welke outputs van jou zijn. Je wallet controleert het zelf. Voor elke transactie in elk nieuw blok neemt hij R, berekent hij het gedeelde geheim met je privé view key en test hij elke output tegen de formule hierboven. Dat is wat een wallet doet als hij synchroniseert.
+
+De scanner van Blocknet houdt dit snel. De dure stap, R vermenigvuldigen met je view key, gebeurt één keer per transactie, en daarna wordt elke output in die transactie tegen het resultaat gecontroleerd. Komt een output overeen, dan ontsleutelt de wallet het bedrag en controleert hij het tegen de Pedersen-commitment van de output voordat hij het bij je saldo optelt.
+
+Scannen maakt herstellen ook eenvoudig. Beide sleutelparen van Blocknet komen uit je [recovery seed](/nl/blog/seed-phrase-explained/) van 12 woorden, dus als je de seed op een nieuwe computer herstelt, worden de sleutels opnieuw opgebouwd en scant de wallet de chain opnieuw om elke output te vinden die van jou is. De [Blocknet-walletgids](/nl/blog/blocknet-wallet-for-mining/) laat zien hoe je een back-up van de seed maakt en hem herstelt.
+
+## Stealth-adressen in Blocknet
+
+In Blocknet is een stealth-adres gewoon je adres. Het is de base58-codering van je publieke spend key, je publieke view key en een checksum van 4 bytes, samen 92 of 93 tekens. Elke betaling aan jou gebruikt het, omdat het transactieformaat geen transparante modus heeft. Ook blokbeloningen gaan naar eenmalige sleutels, dus de coinbase-output van een solominer wordt met dezelfde scan gevonden.
+
+Stealth-adressen werken samen met de rest van de privacy van Blocknet: [een ring van 16](/nl/blog/ring-signatures-explained/) verbergt uit welke output een uitgave komt, [commitments](/nl/blog/bulletproofs-explained/) verbergen bedragen en Dandelion++ verbergt waar een transactie het netwerk binnenkwam. De [Blocknet-privacygids](/nl/blog/blocknet-privacy-features/) loopt door elke laag.
+
+Ze werken ook met namen. Een [korte Blocknet ID-naam](/nl/blog/blocknet-id-pay-by-name/) zoals `@yourname` verwijst openbaar naar je adres, zodat verzenders hem kunnen opzoeken op blocknet.id. De betalingen zelf gaan nog steeds naar nieuwe eenmalige sleutels, dus je naam laat niets zien van wat je hebt ontvangen.
+
+Daardoor is een korte naam een handig uitbetalingsadres voor minen. Start [seine](/nl/#download), voer bij de prompt je adres of `@yourname` in en accepteer de standaardpool, bntpool.com. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) behandelt de rest, en je wallet vindt de BNT die je verdient met dezelfde scan met de view key die hierboven is beschreven.
+
+<CTA target="seine" title="Mine BNT naar je eigen adres" text="Download seine, voer je Blocknet-adres of @name in en mine binnen een paar minuten op bntpool.com." />

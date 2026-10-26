@@ -1,0 +1,98 @@
+---
+title: Argon2id-Proof-of-Work erklärt
+description: Wie Blocknets Argon2id-Proof-of-Work pro Hash 2 GiB Speicher füllt, warum RAM und Bandbreite die Hashrate bestimmen und wie die CPU-Kernel von seine das nutzen.
+tags: [Argon2id, Proof of Work, Blocknet, Mining]
+faq:
+  - q: 'Welche Argon2id-Parameter nutzt Blocknet für den Proof of Work?'
+    a: 'Blocknet verwendet Argon2id Version 1.3 mit 2 GiB Speicher, einer Iteration, Parallelität 1 und einer 32-Byte-Ausgabe. Die 8-Byte-Nonce ist das Passwort, der Block-Header ohne Nonce das Salt. Ein Hash gewinnt einen Block, wenn er auf oder unter dem Zielwert liegt, den die Netzwerk-Difficulty festlegt.'
+  - q: 'Warum braucht jeder Blocknet-Mining-Thread 2 GB RAM?'
+    a: 'Jeder Argon2id-Hash füllt einen 2-GiB-Speicherbereich aus 1-KiB-Blöcken, und in der zweiten Hälfte dieses Durchlaufs liest jeder neue Block einen früheren, der anhand von Daten ausgewählt wird, die der Miner nicht vorhersagen kann. Ein Thread muss seinen gesamten Speicherbereich im RAM halten, daher braucht jeder Thread etwa 2 GB RAM.'
+  - q: 'Warum ist Argon2id darauf ausgelegt, ASICs zu widerstehen?'
+    a: 'Argon2id macht den Speicher zum teuren Teil jedes Hashes. Jeder Blocknet-Hash braucht 2 GiB schnellen Speicher und bewegt Gigabytes durch ihn, sodass auch ein reiner Hash-Chip große Mengen RAM pro Kern bräuchte. Der Code des Daemons beschreibt die Wahl als speicherintensiven Proof of Work, um ASICs zu widerstehen und faires Mining sicherzustellen.'
+  - q: 'Kann eine Grafikkarte Blocknets Argon2id minen?'
+    a: 'Ja. seine mint unter Windows und Linux auf jeder NVIDIA-Grafikkarte im Rechner gleichzeitig mit der CPU, und die Hashraten addieren sich. Die Kernel werden beim Start kompiliert, und der erste Start optimiert jede Karte und speichert das Ergebnis, es gibt also vor dem Start nichts zu konfigurieren.'
+sourceHash: ddc65bcd4eb2
+translation: reviewed
+---
+
+Dieser Artikel erklärt, was Argon2id ist, wie Blocknet daraus einen Proof of Work macht, warum er viel schnellen Speicher belohnt und wie der Miner seine aus jeder CPU die meisten Hashes herausholt.
+
+## Was ist Argon2id?
+
+<Answer>
+Argon2id ist eine speicherintensive (memory-hard) Hashfunktion, die in RFC 9106 für Passwort-Hashing und Proof of Work spezifiziert ist. Sie füllt einen großen Speicherbereich mit 1-KiB-Blöcken und baut jeden Block aus dem vorherigen und einem früheren Block an anderer Stelle im Speicher auf. Einen Hash zu berechnen kostet daher echten Speicher und nicht nur Prozessorzeit.
+</Answer>
+
+[RFC 9106](https://www.rfc-editor.org/rfc/rfc9106), 2021 von der Crypto Forum Research Group der IRTF veröffentlicht, beschreibt „die speicherintensive Funktion Argon2 für Passwort-Hashing und Proof-of-Work-Anwendungen“. Argon2 gibt es in drei Varianten:
+
+- **Argon2d** wählt den zu lesenden früheren Block anhand der bereits berechneten Daten. Das RFC nennt das „geeignet für Kryptowährungen und Proof-of-Work-Anwendungen“.
+- **Argon2i** wählt Blöcke in einer Reihenfolge, die nicht von den Daten abhängt, was zum Passwort-Hashing passt.
+- **Argon2id** „arbeitet in der ersten Hälfte des ersten Durchlaufs über den Speicher wie Argon2i und im Rest wie Argon2d“. Es ist die primäre Variante: Laut RFC muss jede Implementierung sie unterstützen.
+
+Unter der Haube behandelt Argon2 den Speicher als lange Folge von 1.024-Byte-Blöcken. Jeder neue Block ist die Ausgabe einer Kompressionsfunktion G, die auf zwei Eingaben angewendet wird: den Block direkt davor und einen Referenzblock von weiter vorne im Speicher. G basiert auf den Mischrunden der Hashfunktion BLAKE2b, die mit Additionen, XORs und Rotationen auf 64-Bit-Wörtern arbeiten.
+
+## Wie nutzt Blocknet Argon2id als Proof of Work?
+
+Blocknet legt jede Argon2id-Einstellung im Konsenscode fest, sodass jeder Miner und jeder Node exakt dieselbe Funktion berechnet:
+
+| Parameter | Wert bei Blocknet | Bedeutung |
+|---|---|---|
+| Variante | Argon2id, Version 1.3 | Die primäre Variante aus RFC 9106 |
+| Speicher | 2 GiB (2.097.152 KiB) | 2.097.152 Blöcke à 1 KiB pro Hash gefüllt |
+| Iterationen | 1 | Ein Durchlauf über den Speicher |
+| Parallelität | 1 | Eine Lane, ein Hash läuft also auf einem Thread |
+| Ausgabe | 32 Byte | Der Wert, der mit dem Zielwert verglichen wird |
+| Passwort | 8-Byte-Nonce, Little-Endian | Die Zahl, die ein Miner bei jedem Versuch ändert |
+| Salt | Block-Header ohne die Nonce | Bindet den Hash an ein Block-Template |
+
+Mining ist eine Suche. Ein Miner nimmt den Block-Header, den er veröffentlichen will, wählt eine Nonce und berechnet den Argon2id-Hash. Liegt das 32-Byte-Ergebnis, als Zahl gelesen, auf oder unter dem Zielwert des Netzwerks, ist der Block gültig. Wenn nicht, probiert der Miner die nächste Nonce.
+
+Der Zielwert ergibt sich direkt aus der Difficulty: Er ist (2^256 − 1) geteilt durch die Difficulty. Die Difficulty entspricht damit ungefähr der Anzahl an Hashes, die das ganze Netzwerk voraussichtlich berechnen muss, um einen Block zu finden. Blocknet strebt einen Block alle fünf Minuten an, die Netzwerk-Hashrate ist also etwa die Difficulty geteilt durch 300 Sekunden. Die Difficulty selbst folgt den jüngsten Blockzeiten über einen gewichteten gleitenden Durchschnitt über 60 Blöcke.
+
+Pools funktionieren genauso, nur mit einem leichteren Zielwert. Auf [bntpool.com](https://bntpool.com) müssen die Shares, die seine einreicht, nur eine niedrigere Difficulty pro Verbindung erfüllen, und jeder Share, der zusätzlich den Zielwert des Netzwerks erfüllt, ist ein gefundener Block.
+
+## Warum passt speicherintensiver Proof of Work zu normalen Computern?
+
+Die obigen Einstellungen stellen den Speicher in den Mittelpunkt jedes Hashes. Mit einem Durchlauf und einer Lane ist die zweite Hälfte des Durchlaufs datenabhängig: Die Position der Referenz jedes Blocks ergibt sich aus dem ersten 64-Bit-Wort des unmittelbar zuvor berechneten Blocks. Ein Miner kann nicht wissen, welchen früheren Block er braucht, bis er ihn braucht, also hält er den ganzen 2-GiB-Speicherbereich im RAM.
+
+Ein Miner könnte versuchen, weniger Blöcke zu speichern und fehlende bei Bedarf neu zu berechnen. RFC 9106 nennt das Time-Memory-Trade-offs: Sie sparen Speicher „auf Kosten von mehr Aufrufen der internen Kompressionsfunktion“. Jeder Block, der aus dem Speicherbereich wegfällt, muss mit zusätzlicher Rechenarbeit erneut bezahlt werden.
+
+Genau das macht das Design freundlich für normale Hardware. Desktop-PCs, Laptops und Server haben bereits Gigabytes an RAM und Speichercontroller, die darauf ausgelegt sind, ihn zu versorgen. Ein Chip, der nur zum Hashen gebaut ist, bräuchte neben seinen Hash-Kernen trotzdem Gigabytes an schnellem Speicher. Die erste empfohlene Einstellung in RFC 9106 ist Argon2id mit einem Durchlauf über 2 GiB Speicher, dieselbe Anzahl an Durchläufen und dieselbe Speichergröße, die Blocknet verwendet, und laut RFC „maximiert“ diese Einstellung „die Kosten für Angreifer auf spezialisierter Brute-Force-Hardware“. Blocknets Daemon-Code beschreibt die Wahl als speicherintensiven Proof of Work, „um ASICs zu widerstehen und faires Mining sicherzustellen“. Argon2id ist darauf ausgelegt, ASICs zu widerstehen, und die 2-GiB-Einstellung setzt dieses Design um, sodass Mining für die Computer offen bleibt, die man ohnehin schon besitzt. Der Artikel [Proof of Work vs. Proof of Stake](/de/blog/proof-of-work-vs-proof-of-stake/) erklärt, wie sich das von Staking unterscheidet.
+
+## Warum bestimmen RAM und Speicherbandbreite die Hashrate?
+
+<Answer>
+Jeder Mining-Thread hält seinen eigenen 2-GiB-Speicherbereich, also bestimmt dein RAM, wie viele Threads du ausführen kannst. Jeder Hash schreibt außerdem 2 GiB und liest ungefähr genauso viel von verstreuten Stellen zurück, also bestimmen Geschwindigkeit und Latenz deines Speichers, wie schnell diese Threads fertig werden. Der Speicher zählt so viel wie die Anzahl der Kerne.
+</Answer>
+
+**Der RAM bestimmt die Thread-Anzahl.** Parallelität 1 bedeutet, dass ein Hash auf einem Thread läuft, und jeder Thread braucht einen eigenen vollen 2-GiB-Speicherbereich. Ein Rechner mit 16 GB kann etwa sechs bis sieben Threads ausführen und lässt dabei Platz für das System. seine misst deinen Arbeitsspeicher, hält 5 % in Reserve und wählt die Thread-Anzahl für dich.
+
+**Bandbreite und Latenz bestimmen das Tempo jedes Threads.** Ein Hash erzeugt 2.097.152 neue Blöcke, und jeder davon liest einen 1-KiB-Referenzblock von irgendwo im Speicherbereich. Das ergibt pro Hash etwa 2 GiB geschrieben und etwa 2 GiB gelesen. Bei 10 H/s bewegt ein Rechner jede Sekunde ungefähr 40 GiB an Daten durch den Speicher. In der datenabhängigen Hälfte ist jede Leseadresse erst bekannt, wenn der vorherige Block fertig ist, daher zählt die Antwortzeit des Speichers genauso viel wie der reine Durchsatz.
+
+Deshalb heißt es auf der [Leistungsseite](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) von seine, die Hashrate hänge „genauso stark von Speicherbandbreite und Latenz ab wie von der Anzahl der Kerne“. Der [Hardware-Leitfaden für Blocknet-Mining](/de/blog/blocknet-mining-hardware-hashrate/) zeigt das beste Ergebnis jeder Hardware-Generation.
+
+Huge Pages helfen aus demselben Grund. Ein 2-GiB-Speicherbereich umfasst 524.288 gewöhnliche 4-KiB-Seiten oder 1.024 Seiten à 2 MiB. Weniger, größere Seiten bedeuten bei diesen verstreuten Lesezugriffen weniger Fehltreffer bei der Adressübersetzung, was auf dem Validierungsrechner von seine etwa 4–6 % brachte. Die [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) zeigt die Einrichtung.
+
+## Wie holen die CPU-Kernel von seine das Beste aus Argon2id heraus?
+
+Ein Kernel ist die innere Schleife, die die Blöcke berechnet. Die x86-Builds von seine enthalten Skalar-, AVX2- und AVX-512-Kernel sowie eine Streaming-Variante, die Arm-Builds NEON mit einem schnellen SHA3-Pfad. Jeder geht die speichergebundene Arbeit auf andere Weise an:
+
+- **AVX2 und AVX-512** führen die BLAKE2b-artigen Runden von G in breiten Vektorregistern auf vielen 64-Bit-Wörtern gleichzeitig aus. AVX-512 hat außerdem native Rotationsbefehle, die diese Runden ständig nutzen.
+- **Prefetching** fordert Referenzblöcke beim Speicher an, bevor sie gebraucht werden. In der ersten Hälfte des Durchlaufs sind die Adressen im Voraus bekannt, also fordert der Miner die Blöcke ein paar Schritte im Voraus an. In der zweiten Hälfte fordert er den nächsten Referenzblock an, sobald das erste Wort des aktuellen Blocks feststeht, und der Rest der Kompression läuft, während die Daten unterwegs sind.
+- **Streaming** hält die 64 jüngsten Blöcke in einem kleinen, gecachten Ringpuffer und schreibt jeden fertigen Block mit Streaming-Stores in den 2-GiB-Speicherbereich. Diese gehen direkt in den Speicher und halten den Cache frei für die Blöcke, die der Hash noch braucht. seine bezieht diesen Kernel auf AMD-EPYC-Prozessoren der Generation Zen 5 automatisch in den Vergleich ein.
+- **NEON mit SHA3** nutzt den XAR-Befehl der Arm-SHA3-Erweiterung, der XOR und Rotation in einem Schritt erledigt, zusammen mit einer breiteren Prefetch-Abdeckung.
+
+Auf der von uns getesteten Hardware hat der richtige Kernel viel ausgemacht. Das sind gepaarte Läufe auf demselben Rechner mit derselben Thread-Anzahl, von der Leistungsseite von seine:
+
+| Rechner | Kernel-Wechsel | Gewinn |
+|---|---|---|
+| AWS Graviton4 (Neoverse V2), 16 Threads | NEON zu SHA3 mit Prefetch | +56 % (13,80 auf 21,50 H/s) |
+| AWS Graviton3 (Neoverse V1), 16 Threads | NEON zu SHA3 mit Prefetch | +45 % (12,52 auf 18,17 H/s) |
+| AMD EPYC 9R45 (Zen 5), 24 Threads | AVX2 zu Streaming | +30 % (34,47 auf 44,74 H/s) |
+| Intel Xeon 8375C (Ice Lake), 1–4 Threads | AVX2 zu AVX-512 | +21–29 % |
+
+Nichts davon wählst du selbst. seine vergleicht die Kernel, die deine CPU unterstützt, an echter Mining-Arbeit, wechselt erst nach zwei bestätigten Gewinnen und speichert den Sieger für den nächsten Start. Welcher Kernel am besten ist, hängt von Thread-Anzahl, Seitengröße und CPU-Zuweisung ab. Deshalb misst seine das auf deinem Rechner, statt eine Wahl fest einzuprogrammieren.
+
+Um deinen eigenen Speicher arbeiten zu lassen, [lade seine herunter](/de/#download), starte es und füge deine Adresse ein. Die [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) zeigt dir den Rest.
+
+<CTA target="seine" title="Lass deinen Speicher arbeiten" text="Die Argon2id-Kernel von seine sind für AVX2, AVX-512 und Arm optimiert. Kostenlos herunterladen." />

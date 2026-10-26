@@ -1,0 +1,86 @@
+---
+title: 'Firme ad anello (ring signature) spiegate: come le crypto nascondono il mittente'
+description: 'Le firme ad anello spiegate, dall''idea del 2001 alle key image e a CLSAG: come chi firma si nasconde tra chiavi pubbliche e come Blocknet firma ogni input con un anello di 16.'
+tags: [Privacy, Firme ad anello, Crittografia, Blocknet]
+faq:
+  - q: 'Qual è la differenza tra una firma ad anello e una firma di gruppo?'
+    a: 'Una firma di gruppo richiede un gestore che configura il gruppo in anticipo e può rivelare chi ha firmato. Una firma ad anello non ha gestore né configurazione: chi firma sceglie sul momento un insieme qualsiasi di chiavi pubbliche, e nessuno, nemmeno le persone di cui sono state usate le chiavi, può dimostrare in seguito quale membro ha prodotto la firma.'
+  - q: 'Cos''è una key image in una firma ad anello?'
+    a: 'Una key image è un valore calcolato dalla chiave privata dell''output che viene speso. Lo stesso output produce sempre la stessa key image, quindi la rete rifiuta una seconda spesa di quell''output, eppure la key image non rivela quale membro dell''anello è quello reale. Trasforma una firma ad anello in una firma ad anello collegabile che impedisce la doppia spesa.'
+  - q: 'Cos''è CLSAG?'
+    a: 'CLSAG è uno schema di firma ad anello collegabile descritto da Brandon Goodell, Sarang Noether e Arthur Blue nel 2019. Dimostra che chi firma possiede un output dell''anello e che gli importi si bilanciano, con una key image che blocca le doppie spese. Monero lo ha adottato nell''ottobre 2020, e Blocknet firma ogni input con CLSAG e RingCT.'
+  - q: 'Che dimensione di anello usa Blocknet?'
+    a: 'Blocknet usa un anello di esattamente 16 per ogni input: l''output reale più 15 decoy, ciascuno un output reale già presente sulla blockchain. Il consenso rifiuta qualsiasi altra dimensione. Poiché ogni input usa la stessa dimensione, la dimensione dell''anello non può mai far risaltare una transazione, e l''output reale si trova in una posizione casuale dell''anello.'
+  - q: 'Le firme ad anello nascondono l''importo di un pagamento?'
+    a: 'No. Una firma ad anello nasconde quale output ha pagato. Gli importi sono nascosti da un livello separato: i commitment di Pedersen, che fissano un numero senza mostrarlo, più le range proof Bulletproofs, che dimostrano che ogni importo è valido. Blocknet li usa tutti insieme su ogni transazione, insieme agli indirizzi stealth monouso che nascondono il destinatario.'
+sourceHash: 72e21b4e9c54
+translation: reviewed
+---
+
+Una firma ad anello ti permette di firmare a nome di un gruppo in modo che chiunque possa verificare che la firma proviene da una delle chiavi del gruppo, mentre nessuno può dire da quale. Questo articolo spiega come funzionano le firme ad anello, dal paper del 2001 che le ha introdotte fino alle key image e a CLSAG, e mostra come Blocknet usa un anello di 16 per mantenere privato il mittente di ogni pagamento.
+
+## Cos'è una firma ad anello?
+
+<Answer>
+Una firma ad anello è una firma digitale creata con una chiave privata e un insieme di chiavi pubbliche di altre persone. Chi verifica può confermare che ha firmato il titolare di una di quelle chiavi, ma non può dire quale. Chi firma sceglie il gruppo sul momento, senza configurazione e senza la collaborazione degli altri membri.
+</Answer>
+
+Una normale firma digitale lega un messaggio a una chiave pubblica. Una firma ad anello lo lega a un insieme di chiavi pubbliche, chiamato anello (ring). A chi firma serve solo la propria chiave privata; gli altri membri non contribuiscono con nulla se non con chiavi pubbliche che hanno già pubblicato. Per un osservatore esterno, ogni membro dell'anello è un firmatario altrettanto plausibile.
+
+## Da dove vengono le firme ad anello?
+
+Ron Rivest, Adi Shamir e Yael Tauman hanno introdotto le firme ad anello ad ASIACRYPT 2001 in un paper intitolato ["How to Leak a Secret"](https://people.csail.mit.edu/rivest/pubs/RST01.pdf). Il loro esempio è un membro del governo che vuole passare una notizia a un giornalista in modo da dimostrare che proviene dal governo senza rivelare quale membro l'ha passata. Firma con la propria chiave più le chiavi pubbliche degli altri membri del governo, e il giornalista può verificare la firma senza scoprire chi l'ha scritta.
+
+Due proprietà hanno reso l'idea notevole. Non esiste un gestore del gruppo in grado di smascherare chi firma, e questo distingue le firme ad anello dalle più vecchie firme di gruppo. E l'anello è spontaneo: chi firma può comporlo con qualsiasi chiave pubblicata nel momento della firma. Gli autori hanno scelto il nome perché «gli anelli sono regioni geometriche con una periferia uniforme e nessun centro»: ogni membro sta sul bordo e nessuno comanda. L'algoritmo di firma ha la stessa forma, una catena di calcoli che si richiude su sé stessa.
+
+## Come funziona una firma ad anello?
+
+Gli schemi moderni usati nelle criptovalute costruiscono l'anello con hash e chiavi su curve ellittiche. Ecco l'idea in passaggi semplici per un anello di 16 chiavi pubbliche:
+
+1. **Parti dalla tua posizione.** Chi firma sceglie un numero segreto casuale e ne calcola l'hash insieme al messaggio. Quell'hash diventa la sfida per la posizione successiva dell'anello.
+2. **Simula una risposta per ogni altra posizione.** Per ciascuno degli altri 15 membri, chi firma sceglie una risposta casuale e la combina con la chiave pubblica di quel membro e con la sfida corrente per calcolare la sfida della posizione successiva.
+3. **Chiudi l'anello.** Dopo aver fatto tutto il giro, la catena torna alla posizione di chi firma. Solo chi possiede la chiave privata di quella posizione può calcolare l'unica risposta che fa arrivare la catena esattamente al punto di partenza.
+
+La firma è la sfida iniziale più le 16 risposte. Chi verifica parte da un punto qualsiasi, percorre l'anello ricalcolando ogni sfida dalle chiavi pubbliche e dalle risposte e controlla che l'anello si chiuda. Ogni posizione appare identica: una chiave pubblica e una risposta dall'aspetto casuale. Nulla segnala dove ha iniziato chi firma, quindi chi verifica scopre che una chiave privata ha chiuso l'anello, ma non quale.
+
+## Come impediscono la doppia spesa le key image?
+
+Una semplice firma ad anello ha una lacuna quando si tratta di denaro: se ogni spesa si nasconde tra altri output, la rete non può vedere che le stesse monete sono state spese due volte. Le firme ad anello collegabili risolvono il problema. Joseph Liu, Victor Wei e Duncan Wong hanno descritto il primo schema di questo tipo, LSAG, ad ACISP 2004 ([ePrint 2004/027](https://eprint.iacr.org/2004/027)). Due firme create con la stessa chiave privata possono essere collegate tra loro, mentre chi firma resta comunque nascosto nell'anello.
+
+Il design CryptoNote del 2013 ha trasformato questa idea nella key image. Per un output con chiave privata `x` e chiave pubblica `P`, il wallet calcola `I = x · Hp(P)`, dove `Hp` trasforma con un hash la chiave pubblica in un punto della curva. La firma dimostra che `I` appartiene al membro dell'anello che ha firmato, senza dire quale. Poiché la key image dipende solo dall'output che viene speso, spendere di nuovo quell'output produce sempre la stessa `I`. Ogni nodo tiene un elenco delle key image già viste e rifiuta qualsiasi transazione che ne ripeta una.
+
+## Da MLSAG a CLSAG
+
+Le criptovalute che nascondono anche gli importi hanno bisogno che la firma ad anello dimostri un secondo fatto: che l'importo nascosto dell'input corrisponde a ciò che la transazione spende. Il paper di Shen Noether del 2015 ["Ring Signature Confidential Transactions for Monero"](https://eprint.iacr.org/2015/1098) (RingCT) lo ha fatto con MLSAG, una firma ad anello su due insiemi di chiavi, uno per la proprietà e uno per i commitment degli importi.
+
+CLSAG, di Brandon Goodell, Sarang Noether e Arthur Blue ([ePrint 2019/654](https://eprint.iacr.org/2019/654)), dimostra gli stessi due fatti in modo più compatto. Monero è passato da MLSAG a CLSAG con l'aggiornamento dell'ottobre 2020. La [documentazione di Monero](https://www.getmonero.org/resources/moneropedia/clsag.html) riporta una verifica più veloce di circa il 20% e una tipica transazione a due input e due output che scende da circa 2,5 kB a 1,9 kB.
+
+## Cosa significa la dimensione dell'anello per la privacy?
+
+<Answer>
+La dimensione dell'anello è il numero di output in ogni anello: quello reale più i decoy (output esca). Un anello di 16 significa che un osservatore vede 16 candidati ugualmente validi per ogni input. Una dimensione fissa conta quanto una dimensione grande, perché quando ogni input usa la stessa dimensione, la dimensione stessa non rivela nulla su chi ha costruito la transazione.
+</Answer>
+
+I decoy sono output reali della blockchain, quindi ognuno potrebbe davvero essere la moneta che viene spesa. Se gli anelli potessero variare, un wallet che sceglie una dimensione insolita contrassegnerebbe le proprie transazioni. Monero ha portato la dimensione dell'anello da 11 a 16 con l'aggiornamento dell'agosto 2022, e Blocknet usa 16 per consenso per ogni input.
+
+## Come Blocknet usa le firme ad anello
+
+Ogni input di Blocknet è firmato con CLSAG e RingCT su un anello di esattamente 16 output. Le regole sono imposte dal consenso, quindi nessun wallet può sottrarvisi:
+
+- **Anello fisso di 16.** Il daemon rifiuta qualsiasi input il cui anello non abbia esattamente 16 membri. Il suo codice fissa la dimensione «per prevenire fughe di informazioni dovute a dimensioni dell'anello variabili».
+- **Solo output reali.** Ogni membro dell'anello deve essere un output reale già presente sulla blockchain, quindi ogni decoy è una moneta che potrebbe davvero essere spesa.
+- **Decoy casuali e posizione casuale.** Il wallet mescola gli output della blockchain con un generatore casuale crittograficamente sicuro per scegliere 15 decoy, poi colloca il tuo output reale in una posizione casuale dell'anello.
+- **Proprietà e importo in un'unica prova.** Ogni firma dimostra che possiedi un membro dell'anello e che l'importo nascosto del tuo input corrisponde al commitment di quel membro, così gli importi si bilanciano senza essere mostrati.
+- **Key image controllate sulla blockchain.** La key image fa parte dei dati firmati, e la rete rifiuta una transazione se quella key image è già stata spesa o compare due volte nella stessa transazione.
+
+Il formato delle transazioni non ha una modalità trasparente, quindi ogni pagamento sulla blockchain porta con sé anelli come questi. Le firme ad anello nascondono il mittente; gli [indirizzi stealth monouso](/it/blog/stealth-addresses-explained/) nascondono il destinatario, e i [commitment di Pedersen con Bulletproofs](/it/blog/bulletproofs-explained/) nascondono l'importo. [Come Blocknet mantiene privati i pagamenti](/it/blog/blocknet-privacy-features/) illustra ciascuno di questi livelli e cosa significano quando paghi qualcuno.
+
+## Cosa arriva con l'aggiornamento Faraday
+
+Blocknet prevede un aggiornamento della rete chiamato Faraday, con attivazione prevista intorno al 16 febbraio 2027 secondo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday). Con le parole del sito: «Oggi una spesa si nasconde tra 16 output. Dopo Faraday, si nasconderà tra tutti gli output della blockchain». Faraday porterà anche nuove prove di spesa, che il sito descrive come «costruite in modo che un computer quantistico non possa falsificare una spesa». Progettazione, test e revisione avversariale sono in corso, e le date sono previste e non definitive.
+
+## Procurati qualche BNT da inviare in modo privato
+
+Un modo semplice per ottenere monete che usano questi anelli è minarle. Il miner seine è gratuito, open source e si adatta da solo al tuo computer, e bntpool.com è la sua pool predefinita, quindi puoi iniziare a minare in pochi minuti. La [guida al mining](/it/blog/how-to-mine-blocknet/) spiega la configurazione, e puoi minare direttamente verso il tuo indirizzo o un [nome Blocknet ID](/it/blog/blocknet-id-pay-by-name/).
+
+<CTA target="seine" title="Mina i tuoi primi BNT privati" text="Scarica seine, mina su bntpool.com e ricevi monete che ogni spesa protegge con un anello di 16." />

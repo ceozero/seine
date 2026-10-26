@@ -1,0 +1,121 @@
+---
+title: Ödeme bağlantısıyla Blocknet ödemesi isteyin
+description: Tutar, memo ve $name adınızı içeren bir blocknet:// veya bntpay.com ödeme bağlantısı oluşturun; herkes cüzdanına tek satır yapıştırarak size BNT ödeyebilsin.
+tags: [Ödemeler, Ödeme bağlantıları, Cüzdan, Blocknet ID]
+faq:
+  - q: 'Bir Blocknet ödeme bağlantısında tutar gerekli mi?'
+    a: 'Evet. Her ödeme bağlantısı, amount=25 veya amount=0.5 gibi BNT cinsinden ve en fazla sekiz ondalık basamakla yazılmış bir tutar alanı taşır. Memo isteğe bağlıdır. Yapıştırılan bir bağlantıda tutar yoksa komut satırı cüzdanı payment link missing amount yanıtını verir ve hiçbir şey göndermez; böylece ödeyen kişi ne istediğinizi asla tahmin etmek zorunda kalmaz.'
+  - q: 'Ödeme bağlantısına Blocknet ID kısa adımı koyabilir miyim?'
+    a: 'Evet. Adı dolar önekiyle yazın, örneğin bntpay.com/$yourname?amount=10 veya blocknet://$yourname?amount=10. Cüzdan adı blocknet.id''de sorgular, imzalı kaydı kontrol eder ve ödeyen kişi onaylamadan önce ona doğrulanmış olarak işaretlenmiş tam adresi gösterir. Ad içeren bir bağlantı her zaman adınızın işaret ettiği adrese ödeme yapar.'
+  - q: 'blocknet:// bağlantısı ile bntpay.com bağlantısı arasındaki fark nedir?'
+    a: 'İkisi de alıcı, tutar ve memo olmak üzere aynı üç alanı taşır ve komut satırı cüzdanı ikisini de aynı şekilde okur. blocknet:// biçimi Blocknet URI şemasıdır. bntpay.com biçimi ise sohbet uygulamalarının, e-posta istemcilerinin ve sosyal profillerin tıklanabilir bağlantıya dönüştürdüğü sıradan bir web adresidir.'
+  - q: 'Ödeme bağlantısını yapıştırmak BNT''yi hemen gönderir mi?'
+    a: 'Hayır. Bağlantıyı cüzdana yapıştırmak ödemeyi hazırlar ve ardından tutarı, alıcıyı, tam adresi, ücreti ve memo''yu gösteren bir özette durur; bunu evet/hayır onay istemi izler. BNT yalnızca ödeyen kişi y yazdıktan sonra hareket eder. Başka herhangi bir yanıt ödemeyi iptal eder ve ayrılmış coinleri serbest bırakır.'
+sourceHash: 193a7a6a455c
+translation: reviewed
+---
+
+Bir Blocknet ödeme bağlantısı, ödeyen kişinin ihtiyaç duyduğu her şeyi tek bir satıra koyar: kime ödeme yapılacağı, ne kadar BNT ve fatura numarası gibi isteğe bağlı bir memo. Onu bir sohbette gönderin, bir faturaya veya profilinize koyun; ödeyen kişi onu cüzdanına yapıştırır ve onaylar. Bu rehber iki bağlantı biçimini, adresinizle veya `$name` adınızla nasıl bağlantı oluşturacağınızı ve biri onu yapıştırdığında cüzdanın tam olarak ne yaptığını gösterir.
+
+## Blocknet ödeme bağlantısı nedir?
+
+<Answer>
+Blocknet ödeme bağlantısı; bir alıcı, bir tutar ve isteğe bağlı bir memo içeren, blocknet://recipient?amount=25&memo=invoice-42 veya bntpay.com/recipient?amount=25&memo=invoice-42 biçiminde yazılmış tek bir satırdır. Alıcı bir cüzdan adresi veya bir Blocknet ID adıdır. Komut satırı cüzdanına yapıştırıldığında onaylanmaya hazır bir gönderime dönüşür.
+</Answer>
+
+Blocknet komut satırı cüzdanı iki biçimi kabul eder:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Her iki biçim de aynı alanları taşır:
+
+| Alan | Nereye yazılır | Zorunlu | İçerdiği |
+|---|---|---|---|
+| Alıcı | `blocknet://` veya `bntpay.com/` sonrasına | Evet | Cüzdan adresiniz ya da `$name` olarak kısa adınız |
+| `amount` | sorgu dizesi | Evet | İstenen BNT, en fazla sekiz ondalık basamak |
+| `memo` | sorgu dizesi | Hayır | Ödeme memo'su için metin, en fazla 124 bayt |
+
+Cüzdan, bağlantının nasıl yazıldığı konusunda esnektir. `blocknet://` ile daha kısa olan `blocknet:` biçimini tanır; web biçimi için `bntpay.com/` adresini tek başına ya da önünde `www.`, `http://` veya `https://` ile kabul eder. Önek büyük/küçük harfe duyarlı değildir ve `amount` ile `memo` sırasının önemi yoktur.
+
+`bntpay.com` biçimi normal bir web adresidir, bu yüzden çoğu sohbet uygulaması, e-posta istemcisi ve sosyal profil onu insanların dokunabileceği bir bağlantıya dönüştürür. `blocknet://` biçimi ise Blocknet URI'sidir ve bağlantının doğrudan bir cüzdana gittiği her yerde kullanışlıdır.
+
+## Ödeme bağlantısı nasıl oluşturulur?
+
+Bir bağlantıyı dört adımda elle yazabilirsiniz.
+
+1. **Alıcıyı seçin.** Adresinizi yazdırmak için komut satırı cüzdanında `address` komutunu çalıştırın ya da `$` önekiyle [Blocknet ID kısa adınızı](/tr/blog/blocknet-id-pay-by-name/) kullanın. Henüz bir cüzdanınız yoksa [Blocknet cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) nasıl cüzdan oluşturacağınızı ve adresinizi nasıl bulacağınızı gösterir.
+2. **Tutarı belirleyin.** BNT cinsinden yazın. Hem tam sayılar hem ondalıklı sayılar sekiz ondalık basamağa kadar çalışır, çünkü bir BNT 100.000.000 atomik birimdir.
+3. **İsterseniz bir memo ekleyin.** Bir sipariş numarası, fatura kimliği veya kısa bir teşekkür, ödeme geldiğinde onu eşleştirmenize yardımcı olur. 124 baytı aşmayın.
+4. **Parçaları birleştirin.** Alıcıyı önekten sonra, ardından `?amount=` ve varsa `&memo=` ekleyin.
+
+Bir ada 25 BNT'lik bir fatura, her iki biçimde:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Aynı istek tam bir adrese:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Memo'daki karakterlerin kodlanması
+
+Boşluk veya noktalama işareti içeren bir memo'da bazı karakterlerin URL kodlamasıyla yazılması gerekir, çünkü bağlantının kendisi bu karakterleri kullanır. Cüzdan, ödemeyi oluşturmadan önce bunları geri çözer.
+
+| Karakter | Şöyle yazın | Neden |
+|---|---|---|
+| boşluk | `%20` | Paylaşıldığında bağlantıyı tek parça tutar |
+| `&` | `%26` | `&` bir sonraki alanı başlatır |
+| `#` | `%23` | `#` sorgu dizesini bitirir |
+| `+` | `%2B` | Tek başına `+` boşluk olarak okunur |
+
+Örneğin `memo=Order%20%231042`, `Order #1042` olarak ulaşır. Harfler, rakamlar, kısa çizgiler, alt çizgiler ve noktalar kodlama gerektirmez; `invoice-42` gibi memo'ların olduğu gibi kullanılabilmesinin nedeni budur.
+
+## Bağlantıda adresinizi mi yoksa $name adınızı mı kullanmalısınız?
+
+İkisi de çalışır ve her biri farklı bir işe uygundur.
+
+Bir **ad**, bağlantıyı okunabilecek, sesli söylenebilecek veya bir biyografiye sığabilecek kadar kısa tutar. Bağlantılarda onu `$` önekiyle yazın: `$yourname` ve `@yourname` aynı addır ve `$`, her iki bağlantı türünün de doğrudan cüzdana ilettiği biçimdir. Ödeyen kişi ad içeren bir bağlantı yapıştırdığında cüzdan adı blocknet.id üzerinden çözümler, kayıttaki Ed25519 imzasını kontrol eder ve doğrulanmış olarak işaretlenmiş tam adresi yazdırır. Ad ödeme anında çözümlendiği için, profilinizdeki bir bahşiş bağlantısı gibi uzun ömürlü bir bağlantı, adınızı daha sonra yeni bir cüzdana yönlendirseniz de çalışmaya devam eder.
+
+Bir **tam adres** ise hedefi bağlantının içinde sabitler. Bu, bağlantının tam olarak tek bir cüzdanı göstermesini istediğiniz tek seferlik bir fatura için uygundur.
+
+Her iki durumda da zincirdeki ödeme, [tek kullanımlık bir gizli adrese](/tr/blog/blocknet-privacy-features/) yapılan sıradan bir Blocknet işlemidir ve diğer her ödemeyle aynı gizliliğe sahiptir.
+
+## Biri ödeme bağlantısını yapıştırdığında ne olur?
+
+<Answer>
+Cüzdan bağlantıdan alıcıyı, tutarı ve memo'yu okur ve bunlarla normal bir gönderim çalıştırır. Bir ad varsa onu çözümler, işlemi oluşturur, ardından tutarı, alıcıyı, tam adresi, ücreti ve memo'yu gösterir ve Confirm [y/N] diye sorar. BNT yalnızca ödeyen kişi y yazdığında hareket eder.
+</Answer>
+
+Komut satırı cüzdanındaki sıra adım adım şöyledir.
+
+1. **Ödeyen kişi bağlantıyı cüzdan istemine yapıştırır.** Cüzdan `blocknet:` veya `bntpay.com/` önekini görür ve satırı bir gönderim olarak ele alır. `invoice-42` memo'suyla `$yourname` adına 25 BNT'lik bir bağlantı, `send $yourname 25 invoice-42` yazmakla aynı isteğe dönüşür.
+2. **Ad çözümlenir.** Ad içeren bir bağlantı için cüzdan, doğrulanmış işaretiyle `Resolved $yourname -> <address>` satırını yazdırır.
+3. **Cüzdan bakiyeyi kontrol eder ve ödemeyi oluşturur.** Coinleri seçer, gizli işlemi oluşturur ve ücreti hesaplar.
+4. **Ödeyen kişi bir özet görür.** Özet; tutarı ve alıcıyı, ücreti, ad kullanıldıysa tam adresi, varsa para üstünü ve memo'yu listeler; ardından `Confirm [y/N]` gelir.
+5. **Ödeyen kişi onaylar.** `y` yazmak işlemi gönderir ve kimliğini `explorer.blocknetcrypto.com` adresindeki bir gezgin bağlantısıyla birlikte yazdırır. Başka herhangi bir yanıt `Cancelled` yazdırır ve cüzdanın ayırdığı coinleri serbest bırakır.
+
+Özet, ödeyen kişinin isteği kontrol etme fırsatıdır; bu yüzden onu görmeden cüzdanından hiçbir şey çıkmaz. Her bağlantının bir tutara ihtiyacı vardır: tutar yoksa cüzdan `payment link missing amount` yanıtını verir ve hiçbir şey oluşturmadan durur.
+
+Bağlantıya koyduğunuz memo, ödemeyle birlikte Blocknet'in [şifreli memo'su](/tr/blog/blocknet-encrypted-memos/) olarak gider. BNT geldiğinde cüzdanınızın `history` komutu onu gelen ödemenin altında listeler, böylece onu faturayla veya siparişle eşleştirebilirsiniz.
+
+### Paylaşmadan önce bağlantınızı test edin
+
+Kendi bağlantınızı cüzdanınıza yapıştırarak ödeyen kişinin tam olarak ne göreceğini görebilirsiniz. Cüzdanınızda en az istenen tutar varsa tam özeti gösterir. Alıcıyı, tutarı ve memo'yu kontrol edin, ardından `n` yanıtını verin; hiçbir şey gönderilmez.
+
+## Ödeme bağlantılarının iyi çalıştığı yerler
+
+- **Faturalar.** Fatura numarasını memo olarak içeren bir bağlantıyı faturanın altına veya e-postaya koyun. Ödeyen kişi tek bir satır yapıştırır ve memo hangi faturanın ödendiğini size söyler.
+- **Mağazalar ve sipariş sayfaları.** Her sipariş için memo'da sipariş numarası bulunan bir bağlantı oluşturun; böylece her ödeme zaten etiketlenmiş olarak gelir.
+- **Bahşişler ve bağışlar.** Önerilen bir tutarla `$yourname` adına bir bağlantı; bir profile, bir README'ye veya bir yayın arayüzüne sığar.
+- **Hesabı bölüşmek.** Bir grup sohbetine her kişinin payını ve `dinner%20friday` gibi bir notu içeren bir bağlantı bırakın.
+
+Madencilikle de BNT kazanıyorsanız, bunun için aynı adı kullanabilirsiniz. Hem seine hem bntpool.com bir Blocknet ID kısa adını ödeme adresiniz olarak kabul eder, böylece madencilik ödemeleri ve bağlantı ödemeleri tek bir cüzdana gelir. [Blocknet madenciliği rehberi](/tr/blog/how-to-mine-blocknet/) kurulumu anlatır.
+
+<CTA target="pool" title="Bağlantılarınızdaki ada madencilik yapın" text="bntpool.com, Blocknet ID kısa adınızı ödeme girişi olarak kabul eder; böylece madencilik ödemeleri, ödeme bağlantılarınızın işaret ettiği cüzdana gelir." />

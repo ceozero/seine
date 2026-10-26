@@ -1,0 +1,121 @@
+---
+title: Richiedi un pagamento Blocknet con un link
+description: Scrivi un link di pagamento blocknet:// o bntpay.com con importo, memo e il tuo $name, così chiunque può pagarti in BNT incollando una riga nel proprio wallet.
+tags: [Pagamenti, Link di pagamento, Wallet, Blocknet ID]
+faq:
+  - q: 'Un link di pagamento Blocknet deve contenere un importo?'
+    a: 'Sì. Ogni link di pagamento contiene un campo importo, espresso in BNT con un massimo di otto decimali, come amount=25 o amount=0.5. Il memo è facoltativo. Se un link incollato non ha un importo, il wallet da riga di comando risponde payment link missing amount e non invia nulla, quindi chi paga non deve mai indovinare cosa hai chiesto.'
+  - q: 'Posso mettere il mio shortname Blocknet ID in un link di pagamento?'
+    a: 'Sì. Scrivi il nome con il prefisso del dollaro, come in bntpay.com/$yourname?amount=10 o blocknet://$yourname?amount=10. Il wallet cerca il nome su blocknet.id, controlla il record firmato e mostra a chi paga l''indirizzo completo segnato come verificato prima della conferma. Un link con un nome paga sempre l''indirizzo a cui punta il tuo nome.'
+  - q: 'Qual è la differenza tra un link blocknet:// e un link bntpay.com?'
+    a: 'Contengono gli stessi tre campi, destinatario, importo e memo, e il wallet da riga di comando li legge entrambi allo stesso modo. La forma blocknet:// è lo schema URI di Blocknet. La forma bntpay.com è un normale indirizzo web, che app di chat, client email e profili social trasformano in un link cliccabile.'
+  - q: 'Incollare un link di pagamento invia subito i BNT?'
+    a: 'No. Quando incolli un link nel wallet, il wallet prepara il pagamento e poi si ferma a un riepilogo con importo, destinatario, indirizzo completo, commissione e memo, seguito da una richiesta di conferma sì o no. I BNT si muovono solo dopo che chi paga digita y. Qualsiasi altra risposta annulla il pagamento e libera le monete che aveva riservato.'
+sourceHash: 193a7a6a455c
+translation: reviewed
+---
+
+Un link di pagamento Blocknet mette in una sola riga tutto ciò che serve a chi paga: chi pagare, quanti BNT e un memo facoltativo come un numero di fattura. Invialo in una chat, mettilo in una fattura o nel tuo profilo, e chi paga lo incolla nel proprio wallet e conferma. Questa guida mostra i due formati di link, come scriverne uno con il tuo indirizzo o il tuo `$name` e cosa fa esattamente il wallet quando qualcuno lo incolla.
+
+## Cos'è un link di pagamento Blocknet?
+
+<Answer>
+Un link di pagamento Blocknet è una singola riga che contiene un destinatario, un importo e un memo facoltativo, scritta come blocknet://recipient?amount=25&memo=invoice-42 o bntpay.com/recipient?amount=25&memo=invoice-42. Il destinatario è un indirizzo wallet o un nome Blocknet ID. Incollarlo nel wallet da riga di comando lo trasforma in un invio pronto da confermare.
+</Answer>
+
+Il wallet da riga di comando di Blocknet accetta due forme:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Entrambe le forme contengono gli stessi campi:
+
+| Campo | Dove va | Obbligatorio | Cosa contiene |
+|---|---|---|---|
+| Destinatario | subito dopo `blocknet://` o `bntpay.com/` | Sì | L'indirizzo del tuo wallet, o il tuo shortname come `$name` |
+| `amount` | query string | Sì | I BNT da richiedere, con un massimo di otto decimali |
+| `memo` | query string | No | Il testo del memo del pagamento, fino a 124 byte |
+
+Il wallet è tollerante su come viene scritto il link. Riconosce `blocknet://` e la forma più corta `blocknet:`, e per la forma web accetta `bntpay.com/` da solo o preceduto da `www.`, `http://` o `https://`. Il prefisso non distingue tra maiuscole e minuscole, e l'ordine di `amount` e `memo` non conta.
+
+La forma `bntpay.com` è un normale indirizzo web, quindi la maggior parte delle app di chat, dei client email e dei profili social la trasforma in un link che si può toccare. La forma `blocknet://` è l'URI di Blocknet, comoda ovunque un link finisca direttamente in un wallet.
+
+## Come scrivi un link di pagamento?
+
+Puoi scrivere un link a mano in quattro passi.
+
+1. **Scegli il destinatario.** Esegui `address` nel wallet da riga di comando per stampare il tuo indirizzo, oppure usa il tuo [shortname Blocknet ID](/it/blog/blocknet-id-pay-by-name/) con il prefisso `$`. Se non hai ancora un wallet, la [guida al wallet Blocknet](/it/blog/blocknet-wallet-for-mining/) mostra come crearne uno e trovare il tuo indirizzo.
+2. **Imposta l'importo.** Scrivilo in BNT. Funzionano sia i numeri interi sia i decimali, fino a otto cifre decimali, perché un BNT equivale a 100.000.000 di unità atomiche.
+3. **Aggiungi un memo se vuoi.** Un numero d'ordine, un ID di fattura o un breve ringraziamento ti aiutano ad abbinare il pagamento quando arriva. Resta entro 124 byte.
+4. **Unisci le parti.** Metti il destinatario dopo il prefisso, poi `?amount=`, poi `&memo=` se ne hai uno.
+
+Una fattura da 25 BNT verso un nome, in entrambe le forme:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+La stessa richiesta verso un indirizzo completo:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Codificare i caratteri nel memo
+
+Un memo con spazi o punteggiatura richiede che alcuni caratteri siano scritti con la codifica URL, perché il link stesso li usa. Il wallet li decodifica prima di costruire il pagamento.
+
+| Carattere | Scrivilo come | Perché |
+|---|---|---|
+| spazio | `%20` | Mantiene il link in un unico pezzo quando viene condiviso |
+| `&` | `%26` | `&` inizia il campo successivo |
+| `#` | `%23` | `#` chiude la query string |
+| `+` | `%2B` | Un `+` da solo viene letto come spazio |
+
+Per esempio, `memo=Order%20%231042` arriva come `Order #1042`. Lettere, cifre, trattini, trattini bassi e punti non richiedono codifica, ed è per questo che memo come `invoice-42` si possono usare così come sono.
+
+## Un link dovrebbe usare il tuo indirizzo o il tuo $name?
+
+Funzionano entrambi, e ognuno si adatta a uno scopo diverso.
+
+Un **nome** mantiene il link abbastanza corto da leggerlo, dirlo ad alta voce o metterlo in una bio. Nei link scrivilo con il prefisso `$`: `$yourname` e `@yourname` sono lo stesso nome, e `$` è la forma che entrambi i tipi di link portano direttamente fino al wallet. Quando chi paga incolla un link con un nome, il wallet risolve il nome tramite blocknet.id, controlla la firma Ed25519 del record e stampa l'indirizzo completo segnato come verificato. Poiché il nome viene risolto al momento del pagamento, un link di lunga durata, come un link per le mance nel tuo profilo, continua a funzionare anche se in seguito fai puntare il tuo nome a un nuovo wallet.
+
+Un **indirizzo completo** fissa la destinazione nel link stesso. È adatto a una fattura singola in cui vuoi che il link indichi un wallet preciso.
+
+In entrambi i casi, il pagamento sulla chain è una normale transazione Blocknet verso un [indirizzo stealth monouso](/it/blog/blocknet-privacy-features/), con la stessa privacy di qualsiasi altro pagamento.
+
+## Cosa succede quando qualcuno incolla un link di pagamento?
+
+<Answer>
+Il wallet legge destinatario, importo e memo dal link ed esegue con essi un normale invio. Risolve il nome se presente, costruisce la transazione, poi mostra importo, destinatario, indirizzo completo, commissione e memo e chiede Confirm [y/N]. I BNT si muovono solo quando chi paga digita y.
+</Answer>
+
+Ecco la sequenza nel wallet da riga di comando, passo per passo.
+
+1. **Chi paga incolla il link al prompt del wallet.** Il wallet riconosce il prefisso `blocknet:` o `bntpay.com/` e tratta la riga come un invio. Un link verso `$yourname` per 25 BNT con il memo `invoice-42` equivale a digitare `send $yourname 25 invoice-42`.
+2. **Il nome viene risolto.** Per un link con un nome, il wallet stampa `Resolved $yourname -> <address>` con un segno di verifica.
+3. **Il wallet controlla il saldo e costruisce il pagamento.** Seleziona le monete, costruisce la transazione privata e calcola la commissione.
+4. **Chi paga vede un riepilogo.** Elenca importo e destinatario, la commissione, l'indirizzo completo se è stato usato un nome, l'eventuale resto e il memo, seguiti da `Confirm [y/N]`.
+5. **Chi paga conferma.** Digitando `y` la transazione viene inviata e il wallet ne stampa l'ID con un link all'explorer su `explorer.blocknetcrypto.com`. Qualsiasi altra risposta stampa `Cancelled` e libera le monete che il wallet aveva messo da parte.
+
+Il riepilogo è l'occasione per chi paga di controllare la richiesta, quindi nulla lascia il suo wallet finché non l'ha visto. Ogni link deve avere un importo: senza, il wallet risponde `payment link missing amount` e si ferma prima di costruire qualsiasi cosa.
+
+Il memo che metti nel link viaggia con il pagamento come [memo cifrato](/it/blog/blocknet-encrypted-memos/) di Blocknet. Quando arrivano i BNT, il comando `history` del tuo wallet lo elenca sotto il pagamento in entrata, così puoi abbinarlo alla fattura o all'ordine.
+
+### Prova il tuo link prima di condividerlo
+
+Puoi vedere esattamente ciò che vedrà chi paga incollando il tuo link nel tuo wallet. Se il tuo wallet contiene almeno l'importo richiesto, mostra il riepilogo completo. Controlla destinatario, importo e memo, poi rispondi `n` e non viene inviato nulla.
+
+## Dove i link di pagamento funzionano bene
+
+- **Fatture.** Metti in fondo alla fattura o nell'email un link con il numero di fattura come memo. Chi paga incolla una riga e il memo ti dice quale fattura è stata pagata.
+- **Negozi e pagine d'ordine.** Genera un link per ogni ordine con il numero d'ordine nel memo, così ogni pagamento arriva già etichettato.
+- **Mance e donazioni.** Un link a `$yourname` con un importo suggerito sta in un profilo, in un README o in un overlay per lo streaming.
+- **Dividere un conto.** Lascia in una chat di gruppo un link con la quota di ciascuno e una nota come `dinner%20friday`.
+
+Se guadagni BNT anche con il mining, puoi usare lo stesso nome. Sia seine sia bntpool.com accettano uno shortname Blocknet ID come indirizzo di pagamento, quindi i pagamenti del mining e quelli tramite link arrivano nello stesso wallet. La [guida al mining di Blocknet](/it/blog/how-to-mine-blocknet/) spiega la configurazione.
+
+<CTA target="pool" title="Mina verso il nome dei tuoi link" text="bntpool.com accetta il tuo shortname Blocknet ID come login per i pagamenti, così i pagamenti del mining arrivano nello stesso wallet a cui puntano i tuoi link." />

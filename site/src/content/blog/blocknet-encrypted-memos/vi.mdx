@@ -1,0 +1,143 @@
+---
+title: Memo được mã hóa trong thanh toán Blocknet
+description: Thêm memo được mã hóa vào bất kỳ khoản thanh toán Blocknet nào để ghi số hóa đơn, mã đơn hàng hay lời nhắn. Tối đa 124 byte, người gửi và người nhận đọc được, được đệm để không nổi bật.
+tags: [Memo, Quyền riêng tư, Ví, Thanh toán]
+faq:
+  - q: 'Memo Blocknet dài tối đa bao nhiêu?'
+    a: 'Một memo chứa tối đa 124 byte. Văn bản thường được lưu dưới dạng UTF-8, nên đó là 124 chữ cái, chữ số hoặc dấu câu tiếng Anh, hoặc khoảng 41 chữ Hán với ba byte mỗi chữ. Ví sẽ chặn memo dài hơn trước khi tạo giao dịch và báo cho bạn giới hạn 124 byte.'
+  - q: 'Trình khám phá khối có đọc được memo Blocknet không?'
+    a: 'Không. Trình khám phá khối hiển thị trường memo là 128 byte bản mã được đánh dấu đã mã hóa. Khóa được tạo từ bí mật mà người gửi và người nhận chia sẻ cho output đó, nên chỉ ví của họ mới mở được. Vì mọi memo đều được đệm đủ kích thước, trình khám phá khối thậm chí không biết output nào có kèm ghi chú.'
+  - q: 'Memo có làm giao dịch Blocknet lớn hơn không?'
+    a: 'Không. Mọi output vốn đã có một trường memo được mã hóa 128 byte, dù bạn viết ghi chú hay để trống. Thêm memo chỉ lấp vào khoảng trống vốn có sẵn, nên một khoản thanh toán kèm số hóa đơn có kích thước đúng bằng khoản thanh toán đó khi không kèm, và hai giao dịch trông giống hệt nhau trên chuỗi.'
+  - q: 'Có thể thêm memo khi thanh toán cho một tên Blocknet ID không?'
+    a: 'Có. Đặt tên vào chỗ của địa chỉ và memo sau số tiền, ví dụ send @rock 100 "invoice 1042". Ví phân giải tên, hiển thị địa chỉ đã xác minh, phí và memo, rồi yêu cầu bạn xác nhận. Memo được mã hóa cho ví mà tên đó trỏ tới.'
+sourceHash: 6df2e7728647
+translation: reviewed
+---
+
+Mọi khoản thanh toán Blocknet đều có thể mang theo một ghi chú ngắn được mã hóa. Bạn có thể dùng nó cho số hóa đơn, mã tham chiếu đơn hàng hoặc lời nhắn cho người bạn đang trả tiền, và chỉ bạn với người đó đọc được. Hướng dẫn này cho bạn biết cách thêm memo khi gửi BNT, ai đọc được memo, vì sao memo không bao giờ nổi bật trên chuỗi, và nơi tìm những memo bạn nhận được.
+
+## Memo Blocknet là gì?
+
+Memo Blocknet là một trường được mã hóa dài 128 byte gắn vào mọi output giao dịch. Nó chứa tối đa 124 byte văn bản hoặc dữ liệu của bạn, chẳng hạn số hóa đơn hay một ghi chú ngắn. Memo được mã hóa bằng một bí mật chỉ người gửi và người nhận chia sẻ, và được đệm để memo trống trông giống hệt memo đầy.
+
+Memo là một phần của chính định dạng giao dịch. Mọi output trên chuỗi đều có một memo, kể cả các output tiền thừa trả coin về ví của chính bạn. Điều đó mang lại ba đặc tính hữu ích:
+
+- **Riêng tư theo mặc định.** Nội dung được mã hóa cho người nhận output đó. Không ai khác thấy bạn đã viết gì.
+- **Kích thước cố định.** Trường này luôn dài 128 byte trên chuỗi, bất kể bạn đặt gì vào.
+- **Luôn có mặt.** Vì mọi output đều mang memo, một khoản thanh toán có ghi chú trông giống hệt khoản thanh toán không có.
+
+## Bạn có thể đặt gì vào memo?
+
+Bất cứ thứ gì vừa trong 124 byte. Văn bản thường được lưu dưới dạng UTF-8, nên với tiếng Anh, đó là 124 chữ cái, chữ số và dấu cách. Ký tự ngoài bảng chữ cái Latin cơ bản chiếm nhiều byte hơn: một chữ Hán chiếm ba byte, nên một memo chứa được khoảng 41 chữ.
+
+Các cách dùng phổ biến:
+
+- **Hóa đơn.** Đặt số hóa đơn vào memo, và người nhận thanh toán có thể đối chiếu với đúng hóa đơn mà không cần hỏi.
+- **Mã đơn hàng.** Một cửa hàng hoặc dịch vụ có thể yêu cầu khách hàng ghi kèm mã đơn hàng, rồi đọc nó ngay từ khoản thanh toán nhận được.
+- **Ghi chú.** “Tiền nhà tháng 11”, “Cảm ơn đã giúp đỡ” hay “Chia tiền bữa tối” đi kèm theo số coin.
+- **Dữ liệu nhị phân.** Ví cũng chấp nhận byte thô viết dưới dạng hex, cho các mã tham chiếu do phần mềm tạo ra và đọc.
+
+## Làm sao để thêm memo khi gửi BNT?
+
+<Answer>
+Trong ví dòng lệnh, gõ memo sau số tiền: send @rock 100 "invoice 1042". Ví hiển thị memo trên màn hình xác nhận bên cạnh phí, mã hóa nó cho người nhận và gửi khoản thanh toán khi bạn xác nhận. Byte thô cũng dùng được, với tiền tố hex:.
+</Answer>
+
+Lệnh `send` của ví nhận memo làm đối số cuối cùng không bắt buộc:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Memo có thể chứa dấu cách, và dấu ngoặc kép bao quanh là không bắt buộc. Ví sẽ bỏ một cặp ngoặc kép khớp nhau trước khi mã hóa văn bản. Đây là một khoản thanh toán cho một tên Blocknet ID kèm số hóa đơn:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+Bước xác nhận hiển thị memo mà người nhận sẽ đọc, nên bạn có thể kiểm tra memo trước khi bất cứ thứ gì được gửi đi. Nếu memo dài hơn 124 byte, ví sẽ dừng trước khi tạo giao dịch với thông báo `memo too long: max 124 bytes`, và bạn có thể rút ngắn rồi thử lại.
+
+Để gửi byte thô, thêm tiền tố `hex:` trước memo. Ví giải mã chuỗi hex và mã hóa các byte:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+[Liên kết thanh toán](/vi/blog/blocknet-payment-links/) cũng có thể mang memo. Khi bạn dán liên kết `blocknet://` hoặc liên kết `bntpay.com` vào ví, ví sẽ điền sẵn địa chỉ, số tiền và memo để bạn xác nhận, nên người bạn trả tiền có thể đặt sẵn mã tham chiếu hóa đơn. Bạn có thể đọc thêm về tên và liên kết trong [hướng dẫn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/).
+
+### Memo từ phần mềm của riêng bạn
+
+API của ví nhận một memo cho mỗi người nhận của một lần gửi. Trong yêu cầu tới `POST /api/wallet/send`, cung cấp cho mỗi người nhận `memo_text` cho văn bản thường hoặc `memo_hex` cho byte thô:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Số tiền ở đây tính bằng đơn vị nguyên tử, trong đó 1 BNT bằng 100.000.000 đơn vị, nên ví dụ này gửi 100 BNT và 25 BNT. Mỗi người nhận có memo riêng, chỉ được mã hóa cho ví của họ. Giới hạn tối đa 124 byte vẫn áp dụng.
+
+## Ai đọc được memo Blocknet?
+
+<Answer>
+Người gửi và người nhận. Mỗi memo được mã hóa bằng bí mật mà hai ví chia sẻ cho output đó, cũng chính là bí mật tạo ra địa chỉ ẩn dùng một lần của người nhận. Bất kỳ ai khác, kể cả người vận hành node và trình khám phá khối, chỉ thấy 128 byte dữ liệu trông ngẫu nhiên và không thể biết bên trong có ghi chú hay không.
+</Answer>
+
+Khi ví của bạn tạo một khoản thanh toán, nó kết hợp một khóa giao dịch ngẫu nhiên mới với view key công khai của người nhận để có một bí mật chung. Bí mật đó tạo ra [địa chỉ ẩn dùng một lần](/vi/blog/blocknet-privacy-features/) của người nhận, và ví cũng dùng nó để mã hóa memo. Ví băm bí mật bằng SHA3-256, cùng với vị trí của output trong giao dịch và mã định danh của mạng lưới, để tạo một mặt nạ 128 byte, rồi kết hợp mặt nạ với memo. Mỗi output có mặt nạ riêng, nên hai memo trong cùng một giao dịch được mã hóa riêng biệt.
+
+Ví của người nhận tìm ra cùng bí mật đó từ phía bên kia, bằng view key bí mật (private view key) của mình, trong khi quét từng khối. Nó giải mã memo và lưu cùng với khoản thanh toán. Ở phía bạn, ví lưu những memo bạn đã viết trong lịch sử gửi.
+
+Hai điểm nên biết:
+
+- **Ví chỉ xem cũng hiển thị memo.** View key bí mật của bạn là thứ đọc các khoản thanh toán đến, nên một ví chỉ xem được tạo từ khóa đó sẽ thấy số tiền và memo của mỗi khoản thanh toán. Chỉ chia sẻ khóa này với người bạn cho phép xem các khoản thanh toán đến của mình.
+- **Phần thưởng đào mang memo trống.** Quy tắc đồng thuận yêu cầu memo trên mọi phần thưởng khối phải trống, nên các output coinbase của chuỗi không bao giờ có thể bị dùng làm kênh nhắn tin công khai.
+
+## Vì sao mọi memo trông giống nhau trên chuỗi
+
+Một memo để lộ độ dài sẽ tiết lộ thông tin. Ghi chú 30 byte trông khác ghi chú 100 byte, và memo trống sẽ nổi bật so với cả hai. Ví Blocknet lấp khoảng hở đó bằng bố cục cố định và phần đệm ngẫu nhiên.
+
+Trước khi mã hóa, ví đóng gói memo vào một phong bì 128 byte:
+
+| Byte | Nội dung |
+|---|---|
+| 1 | Phiên bản phong bì |
+| 1 | Độ dài memo của bạn |
+| 2 | Checksum của memo |
+| 0 đến 124 | Memo của bạn |
+| Phần còn lại | Phần đệm ngẫu nhiên |
+
+Phần đệm lấy từ bộ sinh số ngẫu nhiên mật mã của hệ thống, nên khoảng trống không dùng đến là không thể đoán trước. Sau khi mã hóa, một ghi chú ngắn, một ghi chú đầy và một memo trống đều là 128 byte dữ liệu trông ngẫu nhiên. Các output tiền thừa cũng có memo trống được đệm của riêng chúng, nên ngay cả số coin bạn gửi lại cho chính mình cũng không hề nổi bật.
+
+Checksum cho phép ví của người nhận xác nhận đã giải mã memo đúng trước khi hiển thị. Các node cũng từ chối mọi khối chứa một output có trường memo toàn số 0, nên mọi output trên chuỗi đều mang một memo được lấp đầy đúng cách.
+
+## Nơi tìm những memo bạn đã nhận
+
+Ví dòng lệnh hiển thị memo ở mọi nơi nó liệt kê các khoản thanh toán:
+
+- **`history`** liệt kê các khoản thanh toán đến và đi, với một dòng `memo:` bên dưới khoản thanh toán nào có kèm memo.
+- **`outputs tx <txid>`** hiển thị mọi output mà ví của bạn sở hữu trong giao dịch đó, kèm memo. `outputs <n>` làm tương tự cho một output trong danh sách.
+- **API của ví** trả về memo của mỗi output đã nhận dưới dạng `memo_hex` từ `GET /api/wallet/history`, sẵn sàng để hệ thống đơn hàng đối chiếu với hóa đơn.
+
+Memo văn bản hiển thị trong dấu ngoặc kép. Memo không phải văn bản in được, chẳng hạn byte thô gửi bằng `hex:`, hiển thị dưới dạng hex.
+
+Nếu một khoản thanh toán cần được đối soát, người gửi có thể chứng minh nó. Lệnh `prove <txid>` của ví in ra khóa giao dịch của một khoản thanh toán bạn đã gửi. Bất kỳ ai có khóa đó, mã giao dịch và địa chỉ của người nhận đều có thể kiểm tra khoản thanh toán qua endpoint `POST /api/verify-proof`, không cần ví. Endpoint này xác nhận giao dịch và hiển thị các output mà địa chỉ đó đã nhận, số tiền và memo của chúng.
+
+## Kiếm BNT để gửi
+
+Một cách đơn giản để có BNT đầu tiên là tự đào. seine chạy trên máy tính của riêng bạn, tự tinh chỉnh trong khi đào và thanh toán qua bntpool.com thẳng về địa chỉ hoặc `@name` của bạn. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) giúp bạn chạy được nó trong vài phút.
+
+<CTA target="seine" title="Tải seine và đào BNT" text="Đào Blocknet trên máy tính của riêng bạn mà không cần thiết lập, rồi thanh toán riêng tư kèm memo từ ví của bạn." />

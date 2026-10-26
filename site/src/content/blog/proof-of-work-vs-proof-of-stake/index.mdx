@@ -1,0 +1,104 @@
+---
+title: Proof of work vs proof of stake explained
+description: Proof of work vs proof of stake, explained. How each one picks the next block, secures the chain and issues new coins, and why Blocknet uses proof of work.
+date: 2026-10-25
+tags: [Proof of work, Proof of stake, Consensus, Blocknet, Mining]
+faq:
+  - q: Is Blocknet proof of work or proof of stake?
+    a: Blocknet uses proof of work. Miners compute Argon2id hashes that each need 2 GiB of memory, a new block is found about every five minutes, and the whole block reward goes to the miner who found it. There is no staking. You can mine it with seine on an ordinary computer through the bntpool.com pool.
+  - q: When did Ethereum switch from proof of work to proof of stake?
+    a: Ethereum moved to proof of stake in an upgrade called the Merge, executed on September 15, 2022. Since then, validators who deposit 32 ETH propose and vote on blocks instead of miners. Bitcoin, Monero and Blocknet still use proof of work, where new blocks come from computing work.
+  - q: What is a 51% attack?
+    a: A 51% attack is an attempt to control which blocks a chain accepts by holding most of the resource that decides it. In proof of work that means most of the network's hashing power. In proof of stake it means most of the staked coins. Either way the attacker has to commit a majority of real resources.
+  - q: Can you mine a proof-of-stake coin?
+    a: No. A pure proof-of-stake coin has no mining. New coins are paid to validators who lock up existing coins as stake, so you need to own coins before you can earn any. To earn new coins with the computer you already have, you need a proof-of-work coin such as Blocknet.
+related: [how-crypto-mining-works, argon2id-proof-of-work-explained, cpu-mining-2026]
+---
+
+This post explains how proof of work and proof of stake decide who adds the next block to a blockchain, how each one keeps the chain secure, and how each one creates new coins. Blocknet, a proof-of-work coin you can mine on an ordinary computer, is the worked example throughout.
+
+## What is the difference between proof of work and proof of stake?
+
+<Answer>
+Proof of work and proof of stake are two ways a blockchain decides who adds the next block. In proof of work, miners spend computing power to find a valid hash. In proof of stake, validators lock up coins as a deposit and are chosen to propose and vote on blocks. Both make cheating expensive.
+</Answer>
+
+Every blockchain has to solve the same problem. Thousands of computers that don't trust each other need to agree on one history of payments, so that nobody can spend the same coin twice. Someone has to propose each new block, and everyone else needs a reason to accept it. That rule is called the consensus mechanism, and proof of work and proof of stake are the two best-known designs.
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Who makes a block | The miner who first finds a hash at or below the network's target | A validator selected from those who locked up coins |
+| What they commit | Hardware and electricity | Coins deposited as stake |
+| Which chain wins | The chain with the most accumulated work | The chain backed by the most validator votes, with finality checkpoints |
+| Where new coins go | A block reward to the miner who found the block | Rewards to validators for proposing and voting |
+| What you need to join | A computer that can hash | Coins to stake (32 ETH for an Ethereum validator) |
+| Examples | Bitcoin, Monero, Blocknet | Ethereum since 2022 |
+
+## How does proof of work choose the next block?
+
+In proof of work, miners compete to solve a puzzle that is hard to solve and easy to check. A miner takes the block it wants to publish, adds a number called a nonce, and hashes the result. If the hash, read as a number, is at or below the network's target, the block is valid. If not, the miner changes the nonce and tries again. The only way to win is to try many nonces, so a miner's chance of finding the next block matches its share of the network's hashing power.
+
+Satoshi Nakamoto's 2008 [Bitcoin paper](https://bitcoin.org/bitcoin.pdf) put it as "Proof-of-work is essentially one-CPU-one-vote." Nodes follow the chain with the greatest proof-of-work effort invested in it, and a difficulty setting moves the target up or down so blocks keep arriving at a steady pace however much hashing power joins. The guide to [how crypto mining works](/blog/how-crypto-mining-works/) walks through hashes, difficulty and pools step by step.
+
+Blocknet works the same way, with numbers set in its consensus code:
+
+- **The hash is Argon2id** with 2 GiB of memory, so every hash needs real memory as well as processor time. The [Argon2id explainer](/blog/argon2id-proof-of-work-explained/) shows how it works.
+- **The target is (2^256 − 1) divided by the difficulty**, which makes the difficulty roughly the number of hashes the network needs to find one block.
+- **A block arrives about every five minutes**, 288 blocks a day. The difficulty follows recent block times through a 60-block weighted moving average (LWMA).
+- **Nodes follow the heaviest chain.** Each node adds up the difficulty of every block on a chain and switches to a competing chain only when its total work is higher.
+
+## How does proof of stake choose the next block?
+
+Proof of stake replaces hashing with a deposit. To take part, a validator locks up coins with the protocol, and the protocol picks validators to propose and approve blocks. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), launched in 2012, was the first cryptocurrency to use it, and Ethereum switched over on September 15, 2022 in an upgrade called [the Merge](https://ethereum.org/en/roadmap/merge/).
+
+Ethereum's design shows the moving parts. From [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- A validator deposits 32 ETH into the deposit contract.
+- Time is split into 12-second slots, grouped into epochs of 32 slots.
+- In every slot, one validator is chosen at random to propose a block, and others vote on it with attestations.
+- Checkpoints become final when validators holding at least two-thirds of all staked ETH vote for them.
+- A validator that proposes two blocks for the same slot, or casts contradictory votes, is slashed: part of its stake, up to all of it, is destroyed.
+
+The stake does the job that electricity does in proof of work. Breaking the rules costs the validator coins it already owns.
+
+## How do proof of work and proof of stake stay secure?
+
+Both designs make an attack cost more than it could earn, and they put that cost in different places.
+
+**In proof of work, the cost is ongoing computing.** To rewrite a past block, an attacker has to redo the work of that block and every block after it, then overtake the honest network. Nakamoto showed that the chance of a slower attacker catching up shrinks exponentially with each new block. Taking control of the chain going forward means running more hashing power than everyone else combined, for as long as the attack lasts.
+
+**In proof of stake, the cost is capital at risk.** Ethereum's documentation says an attacker "would need 51% of the staked ETH" to control the chain, that one-third of the stake is enough to stop blocks from becoming final, and that reverting a finalized block would mean losing at least one-third of all staked ETH to slashing.
+
+Blocknet also sets two thresholds on top of its proof of work. The network treats 10 confirmations, about 50 minutes, as safe, and nodes refuse any reorganization deeper than 100 blocks, about eight hours, so a block 100 deep is final.
+
+## How do the two models issue new coins?
+
+<Answer>
+Proof-of-work coins pay new coins to the miner who finds each block, so anyone who contributes computing power can earn coins without owning any first. Proof-of-stake coins pay new coins to validators in proportion to their stake, so rewards go to people who already hold coins. Each protocol sets its own schedule.
+</Answer>
+
+In proof of work, the first transaction in each block creates new coins for the miner who found it. The Bitcoin paper describes this as "a way to initially distribute coins into circulation, since there is no central authority to issue them." Bitcoin's reward halves every 210,000 blocks, about every four years, and total supply stays just under 21 million.
+
+In Ethereum's proof of stake, rewards are added to validator balances once per epoch for attestations, block proposals and sync committee duty. The [base reward](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) shrinks as total stake grows, while total issuance rises as more validators join.
+
+Blocknet's issuance runs entirely through mining. Its genesis block holds no transactions at all, so no coins existed before mining began, and consensus has no premine, treasury or founder output. Every block pays its whole reward in one output to the miner who found it. The reward started at 723.25 BNT per block, steps down each 30-day month along an exponential curve for 48 months, and then stays at 2 BNT per block for good.
+
+## Why does Blocknet use proof of work?
+
+Blocknet chose proof of work so that anyone with a computer can earn new coins from the first block, without buying any first. Its daemon describes Argon2id as "Memory-hard PoW to resist ASICs and ensure fair mining," and runs each hash on a single thread "for fairness."
+
+The memory requirement is what keeps mining open. Each hash fills 2 GiB of memory, so each mining thread needs about 2 GB of RAM, and the computers people already own, desktops, laptops and servers, have that memory and the controllers to feed it. Blocknet is part of a family of proof-of-work coins built around general-purpose hardware: Monero, for example, has used [RandomX](https://github.com/tevador/RandomX), "optimized for general-purpose CPUs," since November 2019.
+
+Proof of work stays in Blocknet's plans. The Faraday upgrade, planned for around February 2027 according to [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), will bring "a lighter proof of work" so new nodes catch up with the chain faster.
+
+## How do you start mining a proof-of-work coin?
+
+For Blocknet, you need a wallet address and seine, the free, open-source miner:
+
+1. Get an address from the official wallet. The [wallet guide](/blog/blocknet-wallet-for-mining/) walks through it.
+2. [Download seine](/#download) for Windows, macOS or Linux and run it.
+3. Paste your address or `@name`, and accept the default pool, bntpool.com.
+
+Seine picks the thread count from your RAM, compares CPU kernels while it mines and keeps the fastest, and adds any NVIDIA graphics card on Windows and Linux alongside the processor. The [mining guide](/blog/how-to-mine-blocknet/) covers hardware and payouts in detail.
+
+<CTA target="seine" title="Mine Blocknet with seine" text="Download seine, paste your address or @name, and your computer starts mining BNT on bntpool.com in a few minutes." />

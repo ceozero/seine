@@ -1,0 +1,78 @@
+---
+title: 'Windows chặn phần mềm đào? Kiểm tra bản tải xuống'
+description: 'Kiểm tra bản seine bị Windows chặn: xác định cảnh báo, đối chiếu ZIP chính thức bằng SHA-256 và thu thập thông tin cần thiết để làm rõ kết quả phát hiện.'
+tags: ["Hướng dẫn đào", "Windows", "Tải xuống"]
+faq:
+  - q: 'Hash SHA-256 khớp có chứng minh phần mềm đào an toàn không?'
+    a: 'Hash khớp xác nhận tệp tải xuống trùng với checksum dùng để đối chiếu. Hãy lấy cả hai từ bản phát hành chính thức. Đây là kiểm tra tính toàn vẹn, không thay thế việc xem xét phát hiện của antivirus hay tự chứng minh rằng phần mềm an toàn để chạy.'
+  - q: 'Dùng tệp checksum nào cho ZIP Windows?'
+    a: 'Dùng tài nguyên SHA256SUMS.txt của cùng bản phát hành với seine-windows-x86_64.zip. Tệp đó liệt kê checksum của các gói nén. Bên trong ZIP có SHA256SUMS.txt khác mô tả các tệp đã giải nén. Đối chiếu gói nén với tài nguyên của bản phát hành và giữ đúng phiên bản.'
+  - q: 'Cần gửi gì khi báo cáo bản tải xuống bị chặn?'
+    a: 'Gửi phiên bản seine, URL chính thức, tên tệp, hash SHA-256, phiên bản Windows và tên phát hiện hoặc nội dung cảnh báo chính xác. Nêu rõ ZIP hay tệp giải nén bị ảnh hưởng. Che đường dẫn cá nhân và không đưa seed ví, khóa riêng hoặc token API vào ảnh chụp.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Nếu Windows chặn bản tải xuống seine hoặc tệp giải nén biến mất, trước tiên hãy xác định chính xác tệp và cảnh báo. Hướng dẫn này giúp kiểm tra bản phát hành chính thức, đối chiếu checksum SHA-256 và thu thập thông tin báo cáo. Ví dụ dùng seine v0.2.26, được kiểm tra ngày 25 tháng 10 năm 2026.
+
+## Cần kiểm tra gì khi Windows chặn phần mềm đào?
+
+<Answer>
+Ghi lại cảnh báo, tên tệp bị ảnh hưởng và phiên bản trước khi thay đổi bất cứ thứ gì. Mở Windows Security và xem Protection history để tìm mục phát hiện. Sau đó lấy gói nén và checksum từ bản phát hành seine chính thức. Xác nhận đúng tệp và phiên bản trước khi quyết định xử lý cảnh báo.
+</Answer>
+
+Mở rộng mục tương ứng trong [Protection history](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app) để xem chi tiết. Windows có thể yêu cầu quyền quản trị viên. Ghi rõ mục bị ảnh hưởng là ZIP đã tải, `seine.exe` hay DLL. Tệp thực thi biến mất và cảnh báo tải xuống của trình duyệt có thể xảy ra ở các giai đoạn khác nhau; lưu tên tệp cùng thông báo.
+
+## Cảnh báo SmartScreen hay phát hiện của antivirus?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) đánh giá ứng dụng tải xuống qua tín hiệu uy tín của tệp và nhà phát hành. Thông báo ứng dụng chưa được biết đến khác với phát hiện antivirus có tên cụ thể. Ghi đúng thông báo; chữ miner trong tên tệp không cho biết kiểm tra nào đã can thiệp hoặc lý do chặn.
+
+Microsoft cũng đưa phần mềm đào tiền mã hóa vào [tiêu chí ứng dụng có thể không mong muốn](https://learn.microsoft.com/en-us/defender-xdr/criteria), dành riêng cho môi trường doanh nghiệp. Trên máy do cơ quan hoặc trường quản lý, hỏi quản trị viên về chính sách áp dụng. Đây là danh mục phần mềm, không phải kết luận về bản tải cụ thể. Làm rõ cảnh báo chính xác thay vì cho rằng mọi cảnh báo phần mềm đào đều là nhận nhầm.
+
+## Lấy ZIP và checksum từ cùng bản phát hành
+
+Mở [các bản phát hành seine chính thức](https://github.com/zpalmtree/seine/releases) qua [trang tải xuống](/vi/#download). Xác nhận kho là `zpalmtree/seine`. Chọn `seine-windows-x86_64.zip` và tài nguyên riêng `SHA256SUMS.txt` từ cùng bản phát hành. Ghi lại phiên bản. Checksum của bản mới hơn hoặc cũ hơn không phải tham chiếu cho gói nén đã tải.
+
+![ZIP Windows và SHA256SUMS.txt trong tài nguyên chính thức của seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Đây là ảnh chụp thật danh sách tài nguyên v0.2.26. Tệp checksum ở cấp bản phát hành bao gồm các gói nén tải xuống. Bên trong ZIP có `SHA256SUMS.txt` khác cho các tệp giải nén. Với lần kiểm tra đầu này, dùng tài nguyên tải riêng. Đừng trộn hai danh sách dù tên giống nhau.
+
+Dùng trực tiếp gói nén chính thức. Đối chiếu checksum ZIP chính thức không xác minh tệp thực thi bị đổi tên, gói được bên thứ ba đóng lại hoặc tệp gửi qua chat. Lưu ZIP và checksum cùng một thư mục dễ tìm, rồi chạy các lệnh dưới đây từ thư mục đó.
+
+## So sánh checksum SHA-256 như thế nào?
+
+Mở PowerShell trong thư mục có hai tệp tải xuống. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) tính SHA-256 của gói nén. Phép so sánh chọn mục có tên gói Windows chính xác, yêu cầu chỉ một mục khớp và dừng bằng lỗi nếu hash khác. Nó đọc tệp mà không chạy phần mềm đào hay đổi thiết lập bảo vệ Windows.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Thông báo thành công là `PASS: ZIP matches SHA256SUMS.txt`. Nếu thiếu tệp, kiểm tra thư mục hiện tại và tên tệp. Nếu mục checksum thiếu hoặc trùng, tải lại tài nguyên gốc. Nếu không khớp, dừng lại: xác nhận phiên bản rồi tải lại gói chính thức và checksum trước khi đối chiếu lần nữa.
+
+## Ví dụ đã xác minh cho kết quả gì?
+
+Chúng tôi chạy phép so sánh trong Windows PowerShell 5.1 với ZIP Windows chính thức v0.2.26. Hash tính được khớp checksum phát hành. Ảnh dưới hiển thị đầu ra lệnh thật dưới dạng bản chép được dựng lại để đọc, không phải thông báo Windows Security. [Bản ghi văn bản](/assets/blog/seine-v0.2.26-verification.txt) lưu hash đầy đủ và danh sách tệp trong gói nén.
+
+![Kết quả checksum thực từ Windows PowerShell cho gói Windows seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+So sánh hash trả lời liệu các byte có khớp tham chiếu đã cho hay không. Nó không xác thực checksum lấy từ nguồn khác, không chứng minh không có mã độc và không giải thích một phát hiện cụ thể. Nếu cảnh báo nhắc tệp thực thi đã giải nén, ghi riêng tên và phát hiện của tệp đó; hash ZIP là định danh gói nén.
+
+## Nếu bản tải đã xác minh vẫn bị chặn thì sao?
+
+Giữ mục đó trong cách ly khi phát hiện chưa rõ đang được điều tra. Chuẩn bị phiên bản, URL, tên tệp bị ảnh hưởng, SHA-256 và cảnh báo nguyên văn. Thêm phiên bản Windows và cho biết bị chặn khi tải, giải nén hay khởi chạy. Nhờ vậy báo cáo có thể tái hiện mà không lộ cấu hình cá nhân.
+
+Dùng [trang báo lỗi seine](https://github.com/zpalmtree/seine/issues) để báo cho dự án và [cổng gửi tệp Microsoft](https://www.microsoft.com/en-us/wdsi/filesubmission) khi nghi phát hiện sai. Kiểm tra tệp đính kèm trước khi gửi. Chia sẻ tệp phát hành công khai hoặc định danh khi được yêu cầu, không gửi thư mục dữ liệu đào. Xóa đường dẫn cá nhân, thông tin ví và token xác thực khỏi ảnh.
+
+Windows có thao tác riêng cho một số mục bị phát hiện. Chỉ cân nhắc cho phép sau khi làm rõ nguồn và phát hiện, đồng thời tin tưởng đúng tệp đó; làm theo hướng dẫn của cảnh báo đã ghi. Giữ bảo vệ toàn hệ thống bật. Trên thiết bị được quản lý, quản trị viên quyết định quyền cho phép.
+
+## Tiếp tục với gói Windows đã xác minh
+
+Khi tệp được chấp thuận sử dụng, giải nén toàn bộ ZIP vào thư mục có quyền ghi và giữ DLL đi kèm bên cạnh `seine.exe`. [Hướng dẫn đào trên Windows](/vi/blog/mine-blocknet-on-windows/) trình bày lần chạy đầu và nhập địa chỉ nhận thanh toán. Với trình điều khiển, thư viện runtime hoặc chọn thiết bị, xem [hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/). Đây là các kiểm tra riêng với xác minh tải xuống.
+
+<CTA target="seine" title="Tải bản seine chính thức" text="Chọn gói Windows và kiểm tra checksum đúng bản phát hành trước khi thiết lập." />

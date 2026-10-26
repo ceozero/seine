@@ -1,0 +1,101 @@
+---
+title: Wat is Blocknet? Een privé-coin waarmee je op naam betaalt
+description: Blocknet is een cryptovaluta die elke betaling privé houdt, je laat betalen aan een @name, een versleutelde memo toevoegt en op een gewone computer te minen is.
+tags: [Blocknet, Privacy, Blocknet ID, Faraday]
+faq:
+  - q: 'Is Blocknet een privacycoin?'
+    a: 'Ja. Privacy is ingebouwd in elke Blocknet-transactie. Elke uitgave wordt ondertekend met een ring van 16 mogelijke outputs, elke betaling gaat naar een eenmalig stealth-adres en bedragen zijn verborgen achter cryptografische commitments. Er is geen transparante modus, dus je hoeft er nooit aan te denken privacy aan te zetten.'
+  - q: 'Had Blocknet een premine of een ontwikkelfonds?'
+    a: 'Nee. Het genesisblok, aangemaakt op 15 februari 2026, bevat helemaal geen transacties, dus er zijn geen coins gemaakt voordat het minen begon. Elk blok sindsdien betaalt zijn volledige beloning in één output uit aan de miner die het vond, en de consensus kent geen treasury of output voor de oprichters.'
+  - q: 'Wat is de bloktijd van Blocknet?'
+    a: 'Blocknet mikt op één blok per vijf minuten, oftewel 288 blokken per dag. Een betaling verschijnt meestal binnen enkele minuten in een blok, en het netwerk beschouwt 10 bevestigingen, ongeveer 50 minuten, als veilig. Nieuw geminede coins worden uitgeefbaar na 60 blokken, ongeveer vijf uur.'
+  - q: 'Kan ik Blocknet minen met een gewone computer?'
+    a: 'Ja. De proof of work van Blocknet, Argon2id, heeft voor elke hash ongeveer 2 GB geheugen nodig, dus de gewone CPU''s en het RAM in desktops, laptops en servers doen het minen. Download seine, plak je adres of @name, en het minet op de pool bntpool.com met je CPU en een eventuele NVIDIA-videokaart.'
+sourceHash: d34f8db6d5ae
+translation: draft
+---
+
+Deze pagina behandelt wat Blocknet anders maakt: betalingen die standaard privé zijn, betalen aan een naam in plaats van een lang adres, een versleutelde memo bij elke betaling, een fair launch en minen dat je op je eigen computer kunt doen. Hij eindigt met de Faraday-upgrade die het project heeft gepland en met hoe je begint.
+
+## Wat is Blocknet?
+
+<Answer>
+Blocknet is een cryptovaluta, met als eenheid BNT, die elke betaling standaard privé houdt. Verzenders, ontvangers en bedragen zijn bij elke transactie verborgen, je kunt iemand betalen via een korte @name, elke betaling kan een versleutelde notitie meekrijgen en nieuwe coins worden gemined op gewone computers met de Argon2id-proof-of-work.
+</Answer>
+
+Het hoofdnetwerk van Blocknet startte op 15 februari 2026 zonder premine. Er komt ongeveer elke vijf minuten een blok, en iedereen kan een node draaien, coins bewaren in de officiële [command-line-wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) of [desktopwallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) en de chain volgen in de [block explorer](https://explorer.blocknetcrypto.com). De thuisbasis van het project is [blocknetcrypto.com](https://blocknetcrypto.com).
+
+## Hoe houdt Blocknet betalingen privé?
+
+<Answer>
+Elke Blocknet-betaling combineert drie beschermingen. Een ring van 16 outputs verbergt welke coin wordt uitgegeven, een eenmalig stealth-adres verbergt wie hem ontvangt en Pedersen-commitments met Bulletproofs verbergen het bedrag. Er is geen transparante modus, dus elke transactie krijgt dezelfde privacy zonder dat je een instelling hoeft te veranderen.
+</Answer>
+
+Elk daarvan dekt één deel van een betaling af, de drie dingen die een [privacycoin](/nl/blog/what-is-a-privacy-coin/) buiten het openbare register houdt:
+
+- **De verzender.** Als je uitgeeft, ondertekent je wallet met een ring van 16 outputs: die van jou en 15 andere, genomen van de chain. Iedereen die de transactie controleert, kan bevestigen dat een van de 16 is uitgegeven, zonder te weten te komen welke. De ringgrootte ligt via de consensus vast op 16, dus de ringgrootte onderscheidt nooit de ene transactie van de andere.
+- **De ontvanger.** Je gepubliceerde adres verschijnt nooit op de chain. Elke betaling aan jou gaat naar een nieuw eenmalig stealth-adres dat alleen je wallet kan herkennen, dus twee betalingen aan dezelfde persoon kunnen niet aan elkaar worden gekoppeld door naar de chain te kijken.
+- **Het bedrag.** Bedragen worden opgeslagen als commitments. Het netwerk kan controleren dat wat een transactie ingaat gelijk is aan wat eruit komt, en een range proof laat zien dat geen enkel bedrag negatief is, allemaal zonder ook maar één getal te zien.
+
+Omdat privacy deel uitmaakt van het transactieformaat zelf, is er geen openbare modus waarin een betaling kan terugvallen. Jouw coins en die van alle anderen delen dezelfde bescherming, en dat zorgt ervoor dat de privacy voor iedereen standhoudt. Voor een nadere blik op elke laag, inclusief key images en doorgifte via Dandelion++, zie [hoe Blocknet betalingen privé houdt](/nl/blog/blocknet-privacy-features/).
+
+## Kun je iemand op naam betalen?
+
+Ja. Een Blocknet-adres is een reeks van meer dan 90 tekens, wat lastig is om voor te lezen, te typen of te controleren. [Korte Blocknet ID-namen](/nl/blog/blocknet-id-pay-by-name/) lossen dat op. Je registreert een naam zoals `@alice` op [blocknet.id](https://blocknet.id), en mensen kunnen `@alice` (of `$alice`) betalen in plaats van het volledige adres. De wallet zoekt de naam op via een ondertekende koppeling van blocknet.id en verstuurt naar het adres erachter.
+
+Namen zijn niet hoofdlettergevoelig en bestaan uit letters, cijfers, `_`, `-` en `.`, tot 64 tekens. Je naam is openbaar, en de betalingen aan die naam zijn nog steeds privé, omdat elke betaling nog steeds op een eigen stealth-adres terechtkomt. Je kunt dezelfde naam gebruiken voor minen: seine en de pool bntpool.com accepteren allebei `@name` als uitbetalingsadres.
+
+## Wat kun je in een Blocknet-memo zetten?
+
+Elke Blocknet-betaling draagt een memo van 128 bytes, zo versleuteld dat alleen de verzender en de ontvanger hem kunnen lezen. Je kunt tot 124 bytes tekst schrijven, genoeg voor een factuurnummer, een orderreferentie of een kort bedankje. In de command-line-wallet voeg je hem toe aan het eind van de verzending:
+
+```sh
+send @alice 10 invoice 1042
+```
+
+De memo wordt op elke output opgevuld tot dezelfde 128 bytes, of je nu een notitie hebt geschreven of niet. Van buitenaf ziet een betaling met een factuurnummer er precies hetzelfde uit als een zonder, dus het memoveld verraadt niets over wie het gebruikt. Voor een winkel of een freelancer betekent dit dat je elke inkomende betaling aan een order kunt koppelen zonder apart systeem en zonder dat detail openbaar te maken.
+
+## Hoe werken Blocknet-betaallinks?
+
+Een betaallink verpakt alles wat nodig is voor een betaling in één link die je kunt delen: het adres of de naam, het bedrag en een optionele memo. De wallet van Blocknet begrijpt twee vormen, een link `blocknet://` en een weblink `bntpay.com/`. Een weblink om 10 BNT te vragen voor een factuur ziet er zo uit:
+
+```text
+https://bntpay.com/$alice?amount=10&memo=invoice%201042
+```
+
+Als de betaler de link in de command-line-wallet plakt, wordt die gelezen als een verzending die klaarstaat om te bevestigen, met het adres, het bedrag en de memo al ingevuld. Je kunt één link op een factuur, een website of een social-mediaprofiel zetten en mensen je laten betalen zonder dat ze iets met de hand hoeven over te nemen.
+
+## Was de lancering van Blocknet eerlijk?
+
+Ja. Het genesisblok van Blocknet werd aangemaakt op 15 februari 2026 en bevat geen transacties: geen coinbase, geen premine en geen coins die voor iemand apart zijn gezet. De eerste coins kwamen uit blok 1, gemined zoals elk blok sindsdien.
+
+De regels houden het zo. De beloning van elk blok moet worden uitbetaald als precies één output, ter waarde van precies de blokbeloning, aan de miner die het blok vond. Er is geen treasury, oprichtersbeloning of ontwikkelfonds in de consensus, dus elke BNT die bestaat, is gemined door iemand die de proof of work draaide. Je kunt dit zelf controleren in de [explorer](https://explorer.blocknetcrypto.com), te beginnen bij het genesisblok.
+
+## Hoe worden nieuwe coins gemaakt?
+
+Ongeveer elke vijf minuten wordt er een nieuw blok gevonden, wat neerkomt op 288 blokken per dag. De blokbeloning begon op ongeveer 723 BNT en zakt elke maand van 30 dagen een stap, waardoor er in de eerste vier jaar ongeveer 100 miljoen BNT wordt uitgegeven. Daarna betaalt elk blok een permanente tail reward van 2 BNT, zodat miners betaald blijven worden om de chain te beveiligen.
+
+## Kun je Blocknet minen op een gewone computer?
+
+Ja, en zo is Blocknet ook bedoeld om gemined te worden. De proof of work, [Argon2id](/nl/blog/argon2id-proof-of-work-explained/), gebruikt voor elke hash ongeveer 2 GB geheugen. Geheugen heeft elke desktop, laptop en server al, en het ontwerp is bedoeld om gespecialiseerde mininghardware te weerstaan, dus het werk gaat naar gewone machines. Elke mining-thread heeft zijn eigen 2 GB nodig, en daarom [bepaalt het RAM van je computer](/nl/blog/blocknet-mining-hardware-hashrate/), vaker dan het aantal cores, hoeveel threads hij kan draaien.
+
+De makkelijkste manier om te minen is **seine**, de gratis opensource-miner voor Blocknet. Het draait op Windows, macOS en Linux, minet met je CPU en, op Windows en Linux, tegelijk met elke NVIDIA-videokaart, en stemt zelf het aantal threads en de CPU-kernel af terwijl het minet. Richt het op je adres of `@name`, accepteer de standaardpool, [bntpool.com](https://bntpool.com), en je bent aan het minen. [Blocknet minen](/nl/blog/how-to-mine-blocknet/) loopt door de hele installatie, en de [downloadsectie](/nl/#download) heeft seine voor elk systeem.
+
+## Wat is de Faraday-upgrade?
+
+Faraday is de volgende grote upgrade van Blocknet, gepland rond 16 februari 2027, vlak bij de eerste verjaardag van blok 1. Volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) zal hij het hele netwerk in één hard fork overzetten op nieuwe cryptografie:
+
+- **Spend proofs die een quantumcomputer niet kan vervalsen.** Uitgaven zullen worden bewezen met hash-gebaseerde bewijzen in plaats van elliptische krommen, en wallets zullen inkomende betalingen herkennen met ML-KEM.
+- **Privacy over de volledige chain.** Nu verbergt een uitgave zich tussen 16 outputs. Na Faraday zal hij zich verbergen tussen elke output op de chain.
+- **Snellere synchronisatie en snellere wallets.** Een lichtere proof of work zal nieuwe nodes de chain sneller laten inhalen, en wallets zullen hun betalingen eerder vinden.
+- **Dezelfde coin.** Er komt geen nieuwe coin en geen herlancering, en je geschiedenis blijft. Na de upgrade heb je een jaar om je coins naar het nieuwe formaat te verplaatsen, en de wallet zal scannen, de fee tonen en ze verplaatsen wanneer jij dat zegt.
+
+De site beschrijft Faraday als in ontwerp, tests en adversarial review, en de data zijn gepland, niet definitief. Als je minet, houd seine dan up-to-date: het controleert bij het starten en elke 12 uur op nieuwe releases.
+
+## Hoe begin je met Blocknet?
+
+1. **Zorg voor een wallet.** Download de [desktopwallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) of de [command-line-wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) en schrijf je herstelzin op.
+2. **Claim een naam.** Registreer een korte naam op [blocknet.id](https://blocknet.id), zodat mensen je kunnen betalen via `@name`.
+3. **Verdien je eerste coins met minen.** Download seine via de [downloadsectie](/nl/#download), geef het je adres of naam en begin met minen op bntpool.com.
+
+<CTA target="seine" title="Mine je eerste BNT" text="seine minet Blocknet op de computer die je al hebt, met je CPU en NVIDIA-GPU samen." />

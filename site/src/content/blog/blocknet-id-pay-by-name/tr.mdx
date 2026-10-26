@@ -1,0 +1,104 @@
+---
+title: Blocknet ID ile @name adına ödeme alın
+description: blocknet.id'de bir Blocknet ID kısa adı alın; 90 karakteri aşan bir adres yerine @name ile BNT alın, ödeme bağlantıları paylaşın ve bntpool.com'da madencilik yapın.
+tags: [Blocknet ID, Cüzdan, Ödemeler, bntpool]
+faq:
+  - q: 'Blocknet ID kısa adları büyük/küçük harfe duyarlı mı?'
+    a: 'Hayır. Kısa adlar büyük/küçük harfe duyarlı değildir, bu yüzden @Alice, @alice ve $ALICE aynı cüzdana ulaşır. Adlarda a''dan z''ye harfler, 0''dan 9''a rakamlar, alt çizgi, kısa çizgi ve nokta kullanılır ve adlar en fazla 64 karakter olabilir. @ ve $ öneklerinin ikisi de bir adın kabul edildiği her yerde çalışır.'
+  - q: 'Blocknet ID ücretsiz mi?'
+    a: 'Ekim 2026 itibarıyla, blocknet.id kampanyası sürdüğü sürece dokuz veya daha fazla karakterli adlar faturasız ve ödemesiz olarak ücretsizdir. Daha kısa adların, ad kısaldıkça artan tek seferlik bir fiyatı vardır; sekiz karakter için 100 BNT''den başlar. blocknet.id''deki fiyatlandırma sayfası her uzunluğun fiyatını listeler.'
+  - q: 'bntpool.com''da bir Blocknet ID kısa adına madencilik yapabilir miyim?'
+    a: 'Evet. seine ödeme adresi istediğinde @name adınızı girin ya da onu --address ile verin. seine blocknet.id''deki imzalı kaydı kontrol eder, çözümlediği tam adresi gösterir ve çalıştığı süre boyunca o adrese madencilik yapar. Kısa adlar için seine v0.2.16 veya daha yenisi gerekir ve bntpool.com da girişte kısa adları kabul eder.'
+  - q: 'Adımı yeni bir adrese yönlendirirsem havuz bakiyeme ne olur?'
+    a: 'Mevcut bakiyeniz onu kazanan adreste kalır ve bntpool.com onu her zamanki gibi oraya öder. Havuz share''leri, bakiyeleri ve ödemeleri tam adrese göre takip eder, bu yüzden ad değişikliği mevcut bir bakiyeyi asla başka yere yönlendirmez. Madenciliği bir sonraki başlatışınızda ad yeniden çözümlenir ve yeni share''ler yeni adrese gider.'
+sourceHash: ec25796b2073
+translation: reviewed
+---
+
+Bir Blocknet ID kısa adıyla insanlar size `@yourname` adına ödeme yapabilir, bir sohbet mesajına sığan bir ödeme bağlantısı paylaşabilir ve bntpool.com'da aynı ada madencilik yapabilirsiniz. Bu rehber adların nasıl çalıştığını, blocknet.id'de nasıl ad alınacağını ve onu cüzdanda ve seine'de nasıl kullanacağınızı anlatır.
+
+## Blocknet ID kısa adı nedir?
+
+<Answer>
+Blocknet ID kısa adı, @alice veya $alice gibi, Blocknet cüzdan adresinize işaret eden kısa bir addır. Onu blocknet.id'de kaydedersiniz. Cüzdanlar, seine ve bntpool.com adı sorgular, kaydın blocknet.id tarafından imzalandığını kontrol eder ve ardından adın eşlendiği tam adresi kullanır.
+</Answer>
+
+Bir adın kabul edildiği her yerde kurallar aynıdır:
+
+- **İki önek.** `@name` ve `$name` aynı addır. Hangisini isterseniz onu kullanın.
+- **Büyük/küçük harfe duyarsız.** `@Alice` ve `@alice` aynı adrese çözümlenir.
+- **Basit karakterler.** a'dan z'ye harfler, 0'dan 9'a rakamlar, alt çizgi, kısa çizgi ve nokta.
+- **En fazla 64 karakter.**
+
+blocknet.id'deki her kayıt imzalıdır. Cüzdan bir adı çözümlediğinde kaydı getirir, ardından Ed25519 imzasını blocknet.id'nin `https://blocknet.id/.well-known/blocknet-id.json` adresinde yayımladığı imzalama anahtarına göre kontrol eder. İmzalı veri adı, adresi ve son güncellenme zamanını içerir ve cüzdan adresi kullanmadan önce üçünün de eşleştiğini doğrular. Her adın blocknet.id'de adresini, imzalı veriyi ve imzayı gösteren herkese açık bir sayfası da vardır; böylece herkes bir kaydı kendisi kontrol edebilir.
+
+## Neden adrese değil de bir ada ödeme yapmalı?
+
+Bir Blocknet adresi, genel harcama anahtarınızın (spend key), genel görüntüleme anahtarınızın (view key) ve bir sağlama toplamının base58 kodlamasıdır ve 92 veya 93 karakter tutar. Bu, uygulamalar arasında kopyalamak, sesli okumak veya bir profile sığdırmak için çok uzundur. Kısa ad ise bir cümlede söyleyebileceğiniz, bir çıkartmaya basabileceğiniz veya biyografinize koyabileceğiniz bir şeydir.
+
+Ayrıca net bir onay adımı da elde edersiniz. Bir ada gönderim yaptığınızda cüzdan, siz ödemeyi onaylamadan önce çözümlediği adresi yazdırır ve onu doğrulanmış olarak işaretler. Ad yalnızca zaten paylaşacağınız adresin yerini alır. Zincirde ödeme, [tek kullanımlık bir gizli adrese](/tr/blog/blocknet-privacy-features/) yapılan normal bir Blocknet işlemidir, bu yüzden diğer her ödeme kadar gizli kalır.
+
+## Blocknet ID nasıl alınır?
+
+<Answer>
+Cüzdan adresinizi kopyalayın, blocknet.id'yi açın ve istediğiniz adı arayın. Ad müsaitse site fiyatını gösterir; adresinizi yapıştırın ve gönderin. Mevcut kampanya süresince dokuz veya daha fazla karakterli adlar ücretsizdir. Adınız kaydedildiği anda cüzdanlarda, seine'de ve bntpool.com'da çalışır.
+</Answer>
+
+1. **Adresinizi kopyalayın.** Komut satırı cüzdanında `address` komutu adresi yazdırır ve ardından "Get a short name like @name or $name at https://blocknet.id" satırını gösterir. Cüzdanı [komut satırı sürümlerinden](https://github.com/blocknetprivacy/blocknet/releases/latest) veya [masaüstü sürümlerinden](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) edinin.
+2. **Bir ad arayın.** [blocknet.id](https://blocknet.id)'ye gidin, "find a name" (ad bul) kutusuna bir ad yazın ve Search'e (Ara) basın. Siz yazarken sayfa, bir karaktere izin verilmiyorsa veya ad çok uzunsa bunu söyler.
+3. **Sonucu kontrol edin.** Müsait bir ad fiyatını gösterir. Zaten kayıtlı bir ad ise adresini, son güncellenme zamanını ve herkese açık sayfasının bağlantısını gösterir.
+4. **Kaydedin.** Cüzdan adresinizi yapıştırın ve "Claim free"ye (ücretsiz al; fiyatlı bir ad için "Register"a, yani kaydet) basın.
+
+Fiyatlandırma, ad uzunluğuna göre tek seferlik bir ücrettir. Bu yazının yazıldığı tarihte (Ekim 2026) dokuz veya daha fazla karakterli her ad, sitenin ifadesiyle "no invoice, no payment" (fatura yok, ödeme yok) olan bir kampanya kapsamında ücretsizdir. Sekiz karakterli adlar 100 BNT, daha kısa adlar ise daha fazladır; tek karakter için 6.000 BNT'ye kadar çıkar. [Fiyatlandırma sayfası](https://blocknet.id/pricing) her uzunluğu listeler.
+
+Adlarınızı daha sonra yönetmek için blocknet.id'de Blocknet adresinizle "sign in" (giriş yap) seçeneğini kullanın. Bir adı farklı bir adrese yönlendirdiğiniz yer yönetim sayfasıdır.
+
+## Bir ada nasıl BNT gönderilir?
+
+Komut satırı cüzdanında adı, adresin yazılacağı yere yazın:
+
+```
+send @rock 100 "hello"
+```
+
+Cüzdan `@rock` adını çözümler, doğrulanmış işaretiyle `Resolved @rock -> <address>` satırını yazdırır ve ardından onaylamanızı ister. Onay ekranı adı, tam adresi, ücreti ve memo'nuzu gösterir. `$rock` biçimi de aynı şekilde çalışır ve `send` tam veya kesirli tutarları kabul eder.
+
+Cüzdanın API'si de bir gönderim isteğinin her alıcısı için adları aynı şekilde çözümler; böylece cüzdan üzerine kurulan araçlar ek bir iş yapmadan isimle ödeme desteği kazanır.
+
+## Ödeme bağlantıları bir adla nasıl çalışır?
+
+Bir [ödeme bağlantısı](/tr/blog/blocknet-payment-links/) alıcıyı, tutarı ve isteğe bağlı bir memo'yu taşır. Blocknet iki biçimi destekler:
+
+```
+blocknet://<address>?amount=25&memo=invoice-42
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+```
+
+bntpay.com bağlantısı adres yerine bir adla çalışır, bu yüzden kısa kalır. Bağlantıyı açtığınızda "Pay $yourname", tutar ve memo'nun yanı sıra ödemeyi bir `blocknet://` bağlantısı olarak açan "Open in Wallet" (cüzdanda aç) düğmesini içeren bir sayfa görünür. Her iki biçimi de komut satırı cüzdanına yapıştırırsanız, onaylamanız için bir gönderim doldurulur. `amount` alanını ekleyin; memo isteğe bağlıdır ve 124 bayta kadar metin tutar.
+
+Bu, bahşişler için tek bir bağlantı paylaşmayı veya tek bir mesajla fatura göndermeyi kolaylaştırır.
+
+## @name adınıza nasıl madencilik yapılır?
+
+seine ve bntpool.com, ödeme adresiniz olarak bir kısa adı kabul eder. [seine](/tr/#download)'i ilk kez başlattığınızda adres isteminde `@yourname` girin ve varsayılan havuzu kabul edin. Komut satırında vermek için tırnak içine alın:
+
+```sh
+./seine --address '@yourname'
+```
+
+<Note>
+Kabuğun onları değiştirmeden geçirmesi için kabuk komutlarında kısa adları, özellikle `$name` biçimini, tırnak içine alın. Kısa adlar için seine v0.2.16 veya daha yenisi gerekir.
+</Note>
+
+Sonrasında şunlar olur:
+
+- **seine başlarken adı çözümler.** blocknet.id'den gelen imzalı kaydı doğrular, adresi kontrol eder, çözümlediği tam adresi günlüğe yazar ve havuz yeniden bağlantıları dahil çalıştığı süre boyunca bu adresi korur.
+- **Havuz da girişte adları kabul eder.** bntpool.com, bir madenci adla bağlandığında imzalı eşlemeyi doğrular ve işler, share'ler, bakiyeler ve ödemeler için çözümlenen tam adresi kullanır.
+- **Kendinizi adla arayabilirsiniz.** [bntpool.com](https://bntpool.com)'daki istatistik sayfası `@name` ve `$name` kabul eder, böylece adresi yapıştırmadan hashrate'inizi ve bakiyenizi takip edebilirsiniz.
+- **Yapılandırmaya kaydedilen ad bir sonraki çalıştırmada yeniden çözümlenir.** seine adı yapılandırmasında saklar, bu yüzden her yeni başlatma, adınızın o anda işaret ettiği adresi alır.
+
+Bakiyeler tam adrese ait olduğundan sonradan yapılan bir ad değişikliği mevcut bir bakiyeyi asla başka yere yönlendirmez. Zaten kazandığınız her şey onu kazanan adreste kalır ve oraya ödenir; yeni madencilik ise yeni adrese gider. Aynı ad, kendi düğümünüzle solo madencilikte de çalışır.
+
+Madenciliğe yeni mi başlıyorsunuz? [Blocknet madenciliği rehberi](/tr/blog/how-to-mine-blocknet/) seine'i indirmeyi, donanımı ve bntpool.com'daki ödemeleri adım adım anlatır.
+
+<CTA target="pool" title="@name adınıza madencilik yapın" text="bntpool.com, Blocknet ID kısa adınızı ödeme girişi olarak kabul eder. Birkaç dakika içinde madenciliğe başlayın." />

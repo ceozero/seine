@@ -1,0 +1,78 @@
+---
+title: 'Windows blockiert deinen Miner? Download prüfen'
+description: 'Prüfe einen blockierten seine-Download unter Windows: Meldung erkennen, offizielles ZIP mit SHA-256 prüfen und die nötigen Angaben zur Erkennung sammeln.'
+tags: ["Mining-Anleitung", "Windows", "Downloads"]
+faq:
+  - q: 'Beweist ein passender SHA-256-Hash, dass ein Miner sicher ist?'
+    a: 'Ein übereinstimmender Hash bestätigt, dass die heruntergeladene Datei zur verglichenen Prüfsumme passt. Hole beides aus der offiziellen Veröffentlichung. Das prüft die Dateiintegrität, ersetzt aber keine Untersuchung einer Virenschutzmeldung und beweist für sich allein nicht, dass die Software sicher ausgeführt werden kann.'
+  - q: 'Welche Prüfsummendatei brauche ich für das Windows-ZIP?'
+    a: 'Verwende das separate SHA256SUMS.txt-Asset derselben Veröffentlichung wie seine-windows-x86_64.zip. Es enthält die Prüfsummen der Archive. Im entpackten ZIP liegt eine weitere SHA256SUMS.txt für dessen Inhalt. Vergleiche das Archiv mit dem Release-Asset und halte die Versionen zusammen.'
+  - q: 'Welche Angaben gehören in einen Bericht über einen blockierten Download?'
+    a: 'Nenne seine-Version, offizielle Download-URL, Dateiname, SHA-256-Hash, Windows-Version und den genauen Erkennungsnamen oder Meldungstext. Gib an, ob das ZIP oder eine entpackte Datei betroffen war. Schwärze persönliche Pfade und halte Wallet-Seeds, private Schlüssel und API-Tokens aus Screenshots heraus.'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+Wenn Windows einen seine-Download blockiert oder eine entpackte Datei verschwindet, ermittle zuerst die genaue Datei und Meldung. Diese Anleitung zeigt, wie du die offizielle Veröffentlichung prüfst, ihre SHA-256-Prüfsumme vergleichst und hilfreiche Angaben für einen Bericht sammelst. Das Beispiel verwendet seine v0.2.26, geprüft am 25. Oktober 2026.
+
+## Was prüfst du, wenn Windows einen Miner blockiert?
+
+<Answer>
+Notiere Meldungstext, betroffenen Dateinamen und Release-Version, bevor du etwas änderst. Öffne Windows-Sicherheit und prüfe den Schutzverlauf auf einen Erkennungseintrag. Hole dann Archiv und Prüfsumme aus der offiziellen seine-Veröffentlichung. Gleiche die genaue Datei und Version ab, bevor du über den Umgang mit der Meldung entscheidest.
+</Answer>
+
+Klappe den passenden Eintrag im [Schutzverlauf](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app) auf. Windows kann Administratorrechte zum Anzeigen der Bedrohungsdetails verlangen. Notiere, ob das heruntergeladene ZIP, `seine.exe` oder eine DLL betroffen ist. Eine fehlende Programmdatei und eine Downloadwarnung im Browser können verschiedene Schritte betreffen; halte den Dateinamen zusammen mit der Meldung fest.
+
+## SmartScreen-Warnung oder Virenschutz-Erkennung?
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation) bewertet heruntergeladene Anwendungen anhand von Reputationssignalen zur Datei und zum Herausgeber. Eine Meldung über eine unbekannte App ist etwas anderes als eine benannte Virenschutz-Erkennung. Notiere den tatsächlichen Text: Das Wort Miner im Dateinamen verrät weder die beteiligte Prüfung noch den Grund der Blockierung.
+
+Microsoft führt Kryptomining-Software außerdem in seinen [Kriterien für potenziell unerwünschte Anwendungen](https://learn.microsoft.com/en-us/defender-xdr/criteria) auf, ausdrücklich für Unternehmensumgebungen. Frage bei einem verwalteten Arbeits- oder Schulcomputer den Administrator nach der geltenden Richtlinie. Das beschreibt eine Softwarekategorie, kein Urteil über deinen konkreten Download. Kläre die genaue Meldung, statt jede Miner-Warnung als Fehlalarm anzusehen.
+
+## ZIP und Prüfsumme aus derselben Veröffentlichung holen
+
+Öffne die [offiziellen seine-Releases](https://github.com/zpalmtree/seine/releases) über die [Downloadseite](/de/#download). Prüfe, dass das Repository `zpalmtree/seine` heißt. Wähle `seine-windows-x86_64.zip` und das separate Asset `SHA256SUMS.txt` aus einer Veröffentlichung. Notiere die Version. Die Prüfsumme eines neueren oder älteren Releases ist nicht die Referenz für dein heruntergeladenes Archiv.
+
+![Windows-ZIP und SHA256SUMS.txt in den offiziellen Release-Assets von seine v0.2.26](/assets/blog/seine-release-assets.png)
+
+Dies ist eine echte Aufnahme der Asset-Liste von v0.2.26. Die Prüfsummendatei des Releases gilt für die herunterladbaren Archive. Im ZIP liegt eine weitere `SHA256SUMS.txt`, die die entpackten Dateien beschreibt. Verwende für diese erste Prüfung das separat heruntergeladene Release-Asset. Verwechsle die beiden Listen trotz identischer Namen nicht.
+
+Verwende direkt das offizielle Archiv. Eine umbenannte Programmdatei, ein Paket eines Drittanbieters oder eine per Chat gesendete Datei wird durch den Vergleich der offiziellen ZIP-Prüfsumme nicht verifiziert. Speichere ZIP und Release-Prüfsumme gemeinsam in einem gut auffindbaren Ordner und führe dort die folgenden Befehle aus.
+
+## Wie vergleichst du die SHA-256-Prüfsumme?
+
+Öffne PowerShell im Ordner mit beiden Downloads. [Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) berechnet den SHA-256-Wert des Archivs. Der Vergleich wählt den Eintrag für den exakten Windows-Archivnamen, verlangt genau einen passenden Eintrag und bricht bei einem abweichenden Hash mit einem Fehler ab. Er liest Dateien, ohne den Miner zu starten oder Windows-Schutzeinstellungen zu ändern.
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+Die Erfolgsmeldung lautet `PASS: ZIP matches SHA256SUMS.txt`. Fehlt eine Datei, prüfe den aktuellen Ordner und die Namen. Bei einem fehlenden oder doppelten Prüfsummeneintrag lade das ursprüngliche Asset erneut. Bei einer Abweichung halte an: Prüfe die Release-Version und lade offizielles Archiv sowie Prüfsumme erneut herunter, bevor du den Vergleich wiederholst.
+
+## Was zeigte das geprüfte Beispiel?
+
+Wir haben diesen Vergleich in Windows PowerShell 5.1 mit dem offiziellen Windows-ZIP von v0.2.26 ausgeführt. Der berechnete Hash entsprach der Release-Prüfsumme. Das Bild zeigt die tatsächliche Befehlsausgabe als gerendertes Protokoll, nicht als Windows-Sicherheitsmeldung. Der [Textnachweis](/assets/blog/seine-v0.2.26-verification.txt) enthält den vollständigen Hash und die Dateiliste des Archivs.
+
+![Tatsächliches Windows-PowerShell-Prüfergebnis für das Windows-Archiv von seine v0.2.26](/assets/blog/seine-checksum-result.png)
+
+Ein Hashvergleich zeigt, ob diese Bytes zur vorgelegten Referenz passen. Er authentifiziert keine Prüfsumme aus einer fremden Quelle, beweist keine Schadsoftwarefreiheit und erklärt keine konkrete Erkennung. Nennt die Meldung eine entpackte Programmdatei, notiere deren Namen und Erkennung gesondert; der ZIP-Hash identifiziert das Archiv.
+
+## Was tun, wenn der geprüfte Download weiterhin blockiert wird?
+
+Lasse das betroffene Element in Quarantäne, während eine ungeklärte Erkennung untersucht wird. Sammle Release-Version, Download-URL, betroffenen Dateinamen, SHA-256-Wert und exakten Meldungstext. Ergänze die Windows-Version und ob die Blockierung beim Download, Entpacken oder Start auftrat. So wird der Bericht nachvollziehbar, ohne deine persönliche Konfiguration offenzulegen.
+
+Nutze den [seine-Issue-Tracker](https://github.com/zpalmtree/seine/issues) für einen Projektbericht und Microsofts [Dateieinreichungsportal](https://www.microsoft.com/en-us/wdsi/filesubmission) bei Verdacht auf eine falsche Erkennung. Prüfe Anhänge vor dem Senden. Teile auf Anfrage die öffentliche Release-Datei oder deren Kennungen, nicht deinen Mining-Datenordner. Entferne persönliche Pfade, Wallet-Daten und Authentifizierungstokens aus Screenshots.
+
+Windows bietet für manche Erkennungen einzelne Aktionen an. Erwäge das Zulassen erst, wenn Herkunft und Erkennung geklärt sind und du genau dieser Datei vertraust; folge den Anweisungen zur protokollierten Meldung. Lasse den systemweiten Schutz aktiv. Auf verwalteten Geräten entscheidet der Administrator, was erlaubt ist.
+
+## Mit dem geprüften Windows-Archiv fortfahren
+
+Wenn die Datei zur Nutzung freigegeben ist, entpacke das vollständige ZIP in einen beschreibbaren Ordner und lasse die mitgelieferten DLLs neben `seine.exe`. Die [Windows-Mining-Anleitung](/de/blog/mine-blocknet-on-windows/) erklärt den ersten Start und die Abfrage der Auszahlungsadresse. Für Treiber, Laufzeitbibliotheken oder Geräteauswahl gibt es die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/). Das sind eigene Prüfungen neben der Downloadverifizierung.
+
+<CTA target="seine" title="Offizielles seine-Release herunterladen" text="Wähle das Windows-Archiv und prüfe vor der Einrichtung die passende Release-Prüfsumme." />

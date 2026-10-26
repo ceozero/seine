@@ -1,0 +1,103 @@
+---
+title: Blocknet minen, zo doe je dat
+description: 'Begin binnen een paar minuten met Blocknet minen op Windows, macOS of Linux: regel een adres, download seine en mine op bntpool.com met je CPU en NVIDIA-GPU.'
+tags: [Mininghandleiding, Blocknet, Argon2id, bntpool]
+faq:
+  - q: 'Hoeveel RAM heb ik nodig om Blocknet te minen?'
+    a: 'Elke miningthread heeft ongeveer 2 GB RAM nodig, omdat elke Argon2id-hash een geheugenblok van 2 GiB doorloopt. Een computer met 16 GB kan daardoor ongeveer zes tot zeven threads draaien en houdt dan nog ruimte over voor het systeem. seine meet je geheugen en kiest automatisch een veilig aantal threads.'
+  - q: 'Wanneer komen de uitbetalingen voor Blocknet-minen op bntpool.com binnen?'
+    a: 'De pool bntpool.com betaalt uit met PPLNS over een venster van zes uur. De beloning van een blok kan pas worden uitbetaald als er 60 blokken op volgen, bij blokken van vijf minuten ongeveer vijf uur, en saldi worden verstuurd zodra ze 0,1 BNT bereiken. Reken op de eerste betaling enkele uren na je eerste geaccepteerde shares.'
+  - q: 'Kan ik Blocknet tegelijk met mijn CPU en GPU minen?'
+    a: 'Ja. Op Windows en Linux minet seine tegelijk op elke CPU-core en elke NVIDIA-videokaart in de computer, en de twee hashrates tellen op. De processor en elke kaart worden apart afgestemd terwijl het draait, zodat je het meeste uit al je hardware haalt zonder ook maar één instelling te wijzigen.'
+sourceHash: ad835df628e2
+translation: draft
+---
+
+Deze handleiding neemt je mee van het downloaden van **seine** tot je eerste geaccepteerde shares en uitbetalingen op de pool bntpool.com, op Windows, macOS of Linux. Nieuw met minen? [Hoe cryptomining werkt](/nl/blog/how-crypto-mining-works/) legt eerst blokken, moeilijkheidsgraad en pools uit.
+
+## Hoe mine je Blocknet?
+
+<Answer>
+Regel een Blocknet-adres of een korte naam van Blocknet ID, download seine voor je systeem, start het en plak je adres wanneer daarom wordt gevraagd. Accepteer de standaardpool, bntpool.com, en je bent aan het minen. seine begint meteen met hashen en blijft het aantal threads en de CPU-kernel afstemmen terwijl het draait.
+</Answer>
+
+## Wat heb je nodig voordat je begint?
+
+- **Een Blocknet-adres.** Installeer de officiële Blocknet-wallet, de [commandline-wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) of de [desktopwallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), en kopieer je adres. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) laat dat stap voor stap zien. Bewaar de wallet en de herstelzin op je eigen computer en zet ze niet op een gedeelde miningrig.
+- **Of een korte naam.** Als je een [korte naam van Blocknet ID](/nl/blog/blocknet-id-pay-by-name/) hebt via [blocknet.id](https://blocknet.id), kun je naar `@name` minen in plaats van het lange adres te plakken.
+- **Ongeveer 2 GB RAM per miningthread.** seine past zich aan je computer aan en houdt ruimte over voor het systeem, dus je hoeft dit niet vooraf uit te rekenen.
+- **Windows, macOS of Linux.** Op Windows en Linux worden NVIDIA-videokaarten automatisch gebruikt als er een recente driver is geïnstalleerd.
+
+## Stap 1: download seine
+
+Haal het archief voor je systeem op in het [downloadgedeelte](/nl/#download). Er valt niets te installeren: uitpakken en je bent klaar.
+
+| Systeem | Archief | Videokaarten |
+|---|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; de CUDA-runtime zit erbij |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, met de driver geïnstalleerd |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 of nieuwer) |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
+
+Bij elke release hoort ook een bestand `SHA256SUMS.txt`, zodat je kunt controleren of je download overeenkomt met de release.
+
+## Stap 2: start het
+
+Dubbelklik op Windows op `seine.exe`. Open op macOS of Linux een terminal in de uitgepakte map en voer uit:
+
+```sh
+./seine
+```
+
+## Stap 3: voer je adres in en begin met minen
+
+seine vraagt om je uitbetalingsadres of `@shortname` en daarna om een pool. Druk op Enter om de standaard te accepteren, `stratum+tcp://bntpool.com:3333`. Binnen enkele ogenblikken toont [het dashboard](/nl/blog/seine-dashboard-explained/) je hashrate en je eerste shares.
+
+Vanaf dan blijft seine afstemmen terwijl het minet. Het vergelijkt aantallen threads en CPU-kernels op echt miningwerk, schakelt pas over na een bevestigde winst, schaalt terug als het geheugen krap wordt en onthoudt wat werkte voor de volgende start. Het maakt daarvoor nooit opnieuw verbinding met de pool, dus het afstemmen kost je geen miningtijd.
+
+## Hoe lang duurt het tot je wordt uitbetaald?
+
+De pool bntpool.com gebruikt PPLNS: de beloning van elk blok wordt verdeeld over de shares die in de zes uur voor de vondst zijn ingediend. Een beloning kan pas worden uitgegeven als er 60 blokken op het blok volgen, wat bij de bloktijd van vijf minuten van Blocknet ongeveer vijf uur is. Zodra je bevestigde saldo 0,1 BNT bereikt, stuurt de pool het naar je adres.
+
+Je kunt je hashrate, shares en saldo volgen op [bntpool.com](https://bntpool.com) door je adres op te zoeken. De pool toont beloningen uit blokken die nog niet zijn bevestigd apart, omdat die nog kunnen veranderen.
+
+## Hoe snel minet je computer?
+
+De hashrate hangt vooral af van de geheugenbandbreedte en van het aantal threads dat je RAM toelaat. Dit zijn de beste resultaten die met seine zijn gemeten, per generatie:
+
+| Hardware | Threads | Hashrate |
+|---|---|---|
+| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| Arm-server (AWS Graviton4) | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
+| Apple M4 Max (48 GB MacBook Pro) | 16 | 30,9 H/s |
+| Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Resultaten voor elke geteste CPU staan op de [prestatiepagina](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), en de [hardwaregids voor Blocknet-minen](/nl/blog/blocknet-mining-hardware-hashrate/) legt uit hoe RAM en geheugenbandbreedte deze cijfers bepalen.
+
+## Hoe haalt seine meer uit dezelfde CPU?
+
+seine levert voor elke processorfamilie meerdere Argon2id-kernels mee en meet ze op je computer terwijl het minet. Op de hardware die wij hebben getest, maakte de juiste kernel een groot verschil:
+
+- **AWS Graviton4:** de SHA3-kernel met prefetching minet 56% sneller dan gewone NEON (van 13,80 naar 21,50 H/s).
+- **AMD EPYC 9R45 (Zen 5):** de streaming-kernel minet 30% sneller dan AVX2 (van 34,47 naar 44,74 H/s bij 24 threads).
+
+Je hoeft hier zelf niets voor te kiezen. seine wisselt pas van kernel na een bevestigde winst en onthoudt het resultaat voor de volgende start.
+
+## Hoe krijg je meer hashrate?
+
+- **Mine met CPU en GPU samen.** seine doet dit standaard op Windows en Linux, en de twee hashrates tellen op.
+- **Reserveer huge pages op Linux en WSL.** Het geheugen van elke thread op pages van 2 MiB zetten leverde op de validatiecomputer ongeveer 4–6% op, en pages van 1 GiB ongeveer 2% extra. De [huge-pagesgids](/nl/blog/huge-pages-blocknet-mining/) bevat de commando's.
+- **Laat grote servers hun threads spreiden.** Op Linux verdeelt seine threads automatisch over NUMA-nodes en cachegroepen. De [gids voor grote servers](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) behandelt de details.
+- **Mine op Apple Silicon alleen met de CPU.** Dat is de snelste keuze op Macs uit de M-serie, en precies wat seine standaard doet.
+
+## Kun je Blocknet solo minen?
+
+Ja. Als je je eigen gesynchroniseerde Blocknet-node draait, start je seine met `./seine --mode daemon` en minet het rechtstreeks tegen de node in plaats van via een pool. Elk blok dat je vindt, houd je helemaal zelf, maar uitbetalingen komen alleen binnen als je een heel blok vindt, dus de meeste mensen beginnen op een pool. De [gids voor solo minen](https://github.com/zpalmtree/seine/blob/master/docs/guides/solo-mining.md) legt de installatie uit.
+
+<Note>
+Volgens [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) plant Blocknet rond 16 februari 2027 een netwerkupgrade met de naam Faraday. Daarbij is een wijziging van de proof of work gepland, dus houd seine up-to-date: het controleert bij het opstarten en elke 12 uur op nieuwe releases.
+</Note>
+
+<CTA target="seine" title="Download seine" text="Gratis voor Windows, macOS en Linux. Start het, plak je adres en je bent aan het minen op bntpool.com." />

@@ -1,0 +1,98 @@
+---
+title: Penjelasan proof of work Argon2id
+description: Bagaimana proof of work Argon2id Blocknet mengisi memori 2 GiB per hash, mengapa RAM dan bandwidth memori menentukan hashrate Anda, dan cara kernel CPU seine memakainya.
+tags: [Argon2id, Proof of work, Blocknet, Penambangan]
+faq:
+  - q: 'Parameter Argon2id apa yang dipakai Blocknet untuk proof of work?'
+    a: 'Blocknet menjalankan Argon2id versi 1.3 dengan memori 2 GiB, satu iterasi, parallelism 1, dan output 32 byte. Nonce 8 byte menjadi password dan header blok tanpa nonce menjadi salt. Sebuah hash memenangkan blok jika hasilnya sama dengan atau di bawah target yang ditetapkan oleh tingkat kesulitan jaringan.'
+  - q: 'Mengapa setiap thread penambangan Blocknet membutuhkan 2 GB RAM?'
+    a: 'Setiap hash Argon2id mengisi arena 2 GiB yang terdiri dari blok-blok 1 KiB, dan di paruh kedua proses itu setiap blok baru membaca blok sebelumnya yang dipilih berdasarkan data yang tidak bisa ditebak penambang. Sebuah thread harus menyimpan seluruh arenanya di memori, jadi setiap thread yang Anda jalankan membutuhkan sekitar 2 GB RAM.'
+  - q: 'Mengapa Argon2id dirancang untuk menahan ASIC?'
+    a: 'Argon2id menjadikan memori sebagai bagian termahal dari setiap hash. Setiap hash Blocknet membutuhkan memori cepat 2 GiB dan memindahkan gigabyte data melaluinya, sehingga chip yang dibuat khusus untuk hashing tetap membutuhkan RAM dalam jumlah besar per core. Kode daemon menggambarkan pilihan ini sebagai proof of work memory-hard untuk menahan ASIC dan memastikan penambangan yang adil.'
+  - q: 'Bisakah kartu grafis menambang Argon2id Blocknet?'
+    a: 'Bisa. Di Windows dan Linux, seine menambang dengan setiap kartu grafis NVIDIA di komputer bersamaan dengan CPU, dan hashrate-nya dijumlahkan. Kernel dikompilasi saat program dijalankan, dan peluncuran pertama menyetel setiap kartu lalu menyimpan hasilnya, jadi tidak ada yang perlu dikonfigurasi sebelum Anda mulai.'
+sourceHash: ddc65bcd4eb2
+translation: reviewed
+---
+
+Artikel ini menjelaskan apa itu Argon2id, bagaimana Blocknet menjadikannya proof of work, mengapa algoritma ini memberi keunggulan pada memori yang besar dan cepat, dan bagaimana seine memeras hash sebanyak mungkin dari setiap CPU tempat ia berjalan.
+
+## Apa itu Argon2id?
+
+<Answer>
+Argon2id adalah fungsi hash memory-hard yang dispesifikasikan dalam RFC 9106 untuk hashing password dan proof of work. Fungsi ini mengisi area memori yang besar dengan blok-blok 1 KiB, membangun setiap blok dari blok sebelumnya dan sebuah blok terdahulu yang dipilih dari tempat lain di memori, sehingga menghitung hash membutuhkan memori sungguhan selain waktu prosesor.
+</Answer>
+
+[RFC 9106](https://www.rfc-editor.org/rfc/rfc9106), yang diterbitkan pada 2021 oleh Crypto Forum Research Group milik IRTF, menggambarkan “fungsi memory-hard Argon2 untuk hashing password dan aplikasi proof of work.” Argon2 hadir dalam tiga varian:
+
+- **Argon2d** memilih blok terdahulu yang akan dibaca berdasarkan data yang sudah dihitungnya. RFC menyebut varian ini “cocok untuk mata uang kripto dan aplikasi proof of work.”
+- **Argon2i** memilih blok dalam urutan yang tidak bergantung pada data, yang cocok untuk hashing password.
+- **Argon2id** “bekerja seperti Argon2i pada paruh pertama dari lintasan pertama atas memori dan seperti Argon2d untuk sisanya.” Ini adalah varian utama: RFC menyatakan bahwa setiap implementasi wajib mendukungnya.
+
+Di balik layar, Argon2 memperlakukan memori sebagai deretan panjang blok berukuran 1.024 byte. Setiap blok baru adalah hasil fungsi kompresi G yang diterapkan pada dua input: blok tepat sebelumnya dan sebuah blok referensi dari bagian memori yang lebih awal. G dibangun di atas putaran pencampuran fungsi hash BLAKE2b, yang bekerja pada word 64-bit dengan penjumlahan, XOR, dan rotasi.
+
+## Bagaimana Blocknet memakai Argon2id sebagai proof of work?
+
+Blocknet menetapkan setiap pengaturan Argon2id di kode konsensusnya, sehingga setiap penambang dan setiap node menghitung fungsi yang persis sama:
+
+| Parameter | Nilai di Blocknet | Artinya |
+|---|---|---|
+| Varian | Argon2id, versi 1.3 | Varian utama RFC 9106 |
+| Memori | 2 GiB (2.097.152 KiB) | 2.097.152 blok 1 KiB diisi per hash |
+| Iterasi | 1 | Satu lintasan atas memori |
+| Parallelism | 1 | Satu lane, jadi satu hash berjalan di satu thread |
+| Output | 32 byte | Nilai yang dibandingkan dengan target |
+| Password | Nonce 8 byte, little-endian | Angka yang diubah penambang pada setiap percobaan |
+| Salt | Header blok tanpa nonce | Mengikat hash ke satu template blok |
+
+Menambang adalah pencarian. Penambang mengambil header blok yang ingin dipublikasikannya, memilih nonce, lalu menghitung hash Argon2id. Jika hasil 32 byte itu, dibaca sebagai angka, sama dengan atau di bawah target jaringan, bloknya valid. Jika tidak, penambang mencoba nonce berikutnya.
+
+Target diturunkan langsung dari tingkat kesulitan: nilainya (2^256 − 1) dibagi tingkat kesulitan. Dengan begitu tingkat kesulitan kira-kira sama dengan jumlah hash yang diperkirakan harus dihitung seluruh jaringan untuk menemukan satu blok. Blocknet menargetkan satu blok setiap lima menit, jadi hashrate jaringan sekitar tingkat kesulitan dibagi 300 detik. Tingkat kesulitan sendiri mengikuti waktu blok terbaru melalui rata-rata bergerak berbobot 60 blok.
+
+Pool bekerja dengan cara yang sama tetapi dengan target yang lebih mudah. Di [bntpool.com](https://bntpool.com), seine mengirim share yang memenuhi tingkat kesulitan per koneksi yang lebih rendah, dan share mana pun yang juga memenuhi target jaringan adalah blok yang ditemukan.
+
+## Mengapa proof of work memory-hard cocok untuk komputer biasa?
+
+Pengaturan di atas menjadikan memori sebagai pusat setiap hash. Dengan satu lintasan dan satu lane, paruh kedua lintasan bergantung pada data: posisi referensi setiap blok diambil dari word 64-bit pertama blok yang dihitung tepat sebelumnya. Penambang tidak bisa tahu blok terdahulu mana yang akan dibutuhkannya sampai saat ia membutuhkannya, jadi ia menyimpan seluruh arena 2 GiB di memori.
+
+Penambang bisa saja mencoba menyimpan lebih sedikit blok dan menghitung ulang blok yang hilang saat diperlukan. RFC 9106 menyebutnya time-memory trade-off: cara ini menghemat memori “dengan biaya lebih banyak pemanggilan fungsi kompresi internal.” Setiap blok yang dibuang dari arena harus dibayar lagi dengan komputasi tambahan.
+
+Itulah yang membuat desain ini ramah bagi perangkat keras biasa. Desktop, laptop, dan server sudah dilengkapi RAM bergiga-giga byte dan pengendali memori yang dibuat untuk melayaninya. Chip yang dirancang khusus untuk hashing tetap membutuhkan memori cepat bergiga-giga byte di samping core hashing-nya. Pengaturan pertama yang direkomendasikan RFC 9106 adalah Argon2id dengan satu lintasan atas memori 2 GiB, jumlah lintasan dan ukuran memori yang sama dengan yang dipakai Blocknet, dan RFC menyatakan bahwa pengaturan itu “memaksimalkan biaya penyerang pada perangkat keras brute-force khusus.” Kode daemon Blocknet menggambarkan pilihannya sebagai proof of work memory-hard “untuk menahan ASIC dan memastikan penambangan yang adil.” Argon2id dirancang untuk menahan ASIC, dan pengaturan 2 GiB menerapkan desain itu, sehingga penambangan tetap terbuka bagi komputer yang sudah dimiliki orang. Panduan [proof of work vs proof of stake](/id/blog/proof-of-work-vs-proof-of-stake/) menjelaskan perbandingannya dengan staking.
+
+## Mengapa RAM dan bandwidth memori menentukan hashrate?
+
+<Answer>
+Setiap thread penambangan memegang arena 2 GiB miliknya sendiri, jadi RAM Anda menentukan berapa banyak thread yang bisa dijalankan. Setiap hash juga menulis 2 GiB dan membaca kembali kira-kira sebanyak itu dari tempat-tempat yang tersebar, jadi kecepatan dan latensi memori Anda menentukan seberapa cepat thread-thread itu selesai. Memori sama pentingnya dengan jumlah core.
+</Answer>
+
+**RAM menentukan jumlah thread.** Parallelism 1 berarti satu hash berjalan di satu thread, dan setiap thread membutuhkan arena 2 GiB penuh miliknya sendiri. Komputer dengan 16 GB bisa menjalankan sekitar enam sampai tujuh thread setelah menyisakan ruang untuk sistem. seine mengukur memori Anda, menyisihkan 5% sebagai cadangan, dan memilihkan jumlah thread untuk Anda.
+
+**Bandwidth dan latensi menentukan kecepatan setiap thread.** Satu hash membuat 2.097.152 blok baru, dan setiap blok membaca blok referensi 1 KiB dari suatu tempat di arena. Hasilnya sekitar 2 GiB ditulis dan sekitar 2 GiB dibaca untuk setiap hash. Pada 10 H/s, sebuah komputer memindahkan sekitar 40 GiB data melalui memori setiap detik. Di paruh yang bergantung pada data, setiap alamat baca baru diketahui setelah blok sebelumnya selesai, jadi waktu yang dibutuhkan memori untuk menjawab sama pentingnya dengan throughput mentah.
+
+Itulah sebabnya [halaman performa](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) seine menyebut bahwa hashrate “bergantung pada bandwidth dan latensi memori sama besarnya dengan jumlah core.” [Panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/) menampilkan hasil terbaik untuk setiap generasi perangkat keras.
+
+Huge pages membantu karena alasan yang sama. Arena 2 GiB mencakup 524.288 halaman biasa berukuran 4 KiB, atau 1.024 halaman berukuran 2 MiB. Halaman yang lebih sedikit dan lebih besar berarti lebih sedikit miss penerjemahan alamat pada pembacaan yang tersebar itu, yang menambah sekitar 4–6% di mesin validasi seine. [Panduan huge pages](/id/blog/huge-pages-blocknet-mining/) berisi cara menyiapkannya.
+
+## Bagaimana kernel CPU seine memaksimalkan Argon2id?
+
+Kernel adalah loop inti yang menghitung blok-blok tersebut. Build x86 seine membawa kernel skalar, AVX2, dan AVX-512 ditambah varian streaming, dan build Arm-nya membawa NEON dengan jalur cepat SHA3. Masing-masing menangani pekerjaan yang dibatasi memori ini dengan cara berbeda:
+
+- **AVX2 dan AVX-512** menjalankan putaran G bergaya BLAKE2b pada banyak word 64-bit sekaligus di register vektor yang lebar. AVX-512 juga punya instruksi rotate bawaan, yang terus-menerus dipakai oleh putaran tersebut.
+- **Prefetching** meminta blok referensi dari memori sebelum dibutuhkan. Di paruh pertama lintasan alamatnya sudah diketahui lebih dulu, jadi seine meminta blok beberapa langkah di depan. Di paruh kedua, seine meminta blok referensi berikutnya begitu word pertama blok saat ini sudah final, dan sisa kompresi berjalan sambil data tiba.
+- **Streaming** menyimpan 64 blok terbaru dalam ring kecil di cache dan menulis setiap blok yang selesai ke arena 2 GiB dengan streaming store, yang langsung menuju memori dan membiarkan cache tetap bebas untuk blok yang masih dibutuhkan hash. seine membandingkannya secara otomatis di prosesor AMD EPYC Zen 5.
+- **NEON dengan SHA3** memakai instruksi XAR dari ekstensi SHA3 Arm, yang melakukan XOR dan rotate dalam satu langkah, bersama jangkauan prefetch yang lebih lebar.
+
+Di perangkat keras yang kami uji, kernel yang tepat membuat perbedaan besar. Berikut pengujian berpasangan di mesin yang sama dengan jumlah thread yang sama, dari halaman performa seine:
+
+| Mesin | Perubahan kernel | Peningkatan |
+|---|---|---|
+| AWS Graviton4 (Neoverse V2), 16 thread | NEON ke SHA3 dengan prefetch | +56% (13,80 menjadi 21,50 H/s) |
+| AWS Graviton3 (Neoverse V1), 16 thread | NEON ke SHA3 dengan prefetch | +45% (12,52 menjadi 18,17 H/s) |
+| AMD EPYC 9R45 (Zen 5), 24 thread | AVX2 ke streaming | +30% (34,47 menjadi 44,74 H/s) |
+| Intel Xeon 8375C (Ice Lake), 1–4 thread | AVX2 ke AVX-512 | +21–29% |
+
+Anda tidak perlu memilih semua ini sendiri. seine membandingkan kernel yang didukung CPU Anda pada pekerjaan penambangan sungguhan, hanya beralih setelah dua peningkatan terkonfirmasi, dan menyimpan pemenangnya untuk dipakai lagi saat dijalankan berikutnya. Kernel terbaik bergantung pada jumlah thread, ukuran halaman, dan penempatan CPU, itulah sebabnya seine mengukur di komputer Anda alih-alih menetapkan satu pilihan di dalam kode.
+
+Untuk memanfaatkan memori Anda sendiri, [unduh seine](/id/#download), jalankan, lalu tempel alamat Anda. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) menjelaskan sisanya.
+
+<CTA target="seine" title="Manfaatkan memori Anda" text="Kernel Argon2id seine disetel untuk AVX2, AVX-512, dan Arm. Unduh gratis." />

@@ -1,0 +1,134 @@
+---
+title: Najlepszy sprzęt do kopania Blocknet
+description: "Porównaj sprzęt do kopania Blocknet na podstawie pomiarów: EPYC 9355P osiąga 68,3 H/s. Sprawdź RAM, wątki, ustawienia stron i dane benchmarku."
+tags: [Sprzęt, Hashrate, Poradnik kopania, Argon2id, NVIDIA]
+faq:
+  - q: 'Czy komputer do gier może kopać Blocknet?'
+    a: 'Tak. W systemach Windows i Linux seine kopie jednocześnie na procesorze i na każdej karcie graficznej NVIDIA w komputerze, a hashrate się sumuje. Dopasowuje liczbę wątków do Twojego RAM, więc komputer do gier z 32 GB uruchamia do około 14 wątków, a procesor i każdą kartę dostraja automatycznie podczas kopania.'
+  - q: 'Ile wątków kopiących Blocknet uruchomi 32 GB RAM?'
+    a: 'Około 14. Każdy wątek potrzebuje do każdego hasha bloku pamięci 2 GiB, więc 32 GB teoretycznie mieści 16 takich bloków. seine zostawia 5% RAM w rezerwie i miejsce dla systemu operacyjnego, co daje na komputerze z 32 GB około 14 wątków. Oblicza to za Ciebie przy starcie.'
+  - q: 'Których kart graficznych używa seine do kopania Blocknet?'
+    a: 'W wersjach dla systemów Windows i Linux seine kopie na kartach graficznych NVIDIA, używając każdej wykrytej karty razem z procesorem. W systemie Windows środowisko uruchomieniowe CUDA jest dołączone, więc potrzebujesz tylko sterownika NVIDIA. W systemie Linux zainstaluj sterownik i biblioteki NVRTC. Przy pierwszym uruchomieniu seine dostraja każdą kartę i zapamiętuje wynik.'
+  - q: 'Dlaczego przepustowość pamięci ma znaczenie przy kopaniu Blocknet?'
+    a: 'Każdy hash Blocknet zapisuje pełny blok pamięci 2 GiB i odczytuje dane z całego tego obszaru, znacznie więcej, niż mieści jakakolwiek pamięć podręczna procesora. Hashrate zależy więc od tego, jak szybko system pamięci przesyła dane. Najszybciej kopią komputery z większą przepustowością pamięci i wystarczającą ilością RAM na wiele wątków.'
+sourceHash: 53fb803e5db6
+translation: draft
+---
+
+Ten poradnik pokazuje, które komputery kopią Blocknet najszybciej z seine, ile wątków pozwala uruchomić Twój RAM i jakiego hashrate się spodziewać, abyś mógł wybrać sprzęt albo ocenić komputer, który już masz.
+
+[Oszacuj swoje nagrody BNT](https://bntpool.com/blog/pl/estimate-blocknet-mining-rewards/#mining-calculator)
+
+## Jaki jest najlepszy sprzęt do kopania Blocknet?
+
+<Answer>
+Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9355P osiągający 68,3 H/s: 64 wątki kopania, 192 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie. Kopanie Blocknet korzysta z przepustowości pamięci i wystarczającej ilości RAM na 2 GiB na wątek. Karty NVIDIA mogą dodawać swoją moc obliczeniową do CPU.
+</Answer>
+
+Proof of work Blocknet to Argon2id z blokiem pamięci 2 GiB na każdy hash. To sprawia, że jest [wymagający dużo pamięci](/pl/blog/argon2id-proof-of-work-explained/): hashrate zależy w takim samym stopniu od przepustowości i opóźnień pamięci, jak od liczby rdzeni, a także od tego, ile takich bloków 2 GiB mieści się naraz w RAM. Mocny system pamięci to cecha wspólna najlepszych komputerów z poniższej tabeli.
+
+## Nowy pomiar na serwerze fizycznym: EPYC 9355P
+
+25 października 2026 r. EPYC 9355P z 32 rdzeniami i 64 wątkami oraz 192 GiB pamięci w dwunastu kanałach DDR5-4800 osiągnął **68,256 H/s**, po zaokrągleniu **68,3 H/s**. Ta stała konfiguracja ręczna korzystała z 64 wątków kopania, kernela streaming, stron huge pages o rozmiarze 1 GiB i limitu mocy pakietu procesora 280 W. Wynik to łączna liczba ukończonych hashy podzielona przez całkowity czas czterech nowych uruchomień po 120 sekund, z uwzględnieniem rozruchu i zamykania.
+
+[Eksperyment z rozmiarem stron](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) dokumentuje dokładną rewizję kodu źródłowego, SHA-256 pliku wykonywalnego, kontrole alokacji stron i metodę pomiaru. [Rekordy w formacie do odczytu maszynowego](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) zachowują konfigurację oraz surowe liczniki i mianowniki. Jest to cały procesor w jednym gnieździe skonfigurowany ręcznie; poniższe pomiary chmurowe i Mac opisują własne maszyny i ustawienia.
+
+## Jak szybka była RTX 5090 w naszym teście?
+
+Testy przeprowadziliśmy 25 października 2026 roku z użyciem Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, 125,4 GiB dostępnej pamięci RAM, seine v0.2.26 i sterownika NVIDIA `610.88`. Wykonaliśmy trzy naprzemienne pary testów z `--bench-kind backend`. Każde uruchomienie obejmowało jedną rozgrzewkę trwającą 20 sekund i trzy mierzone rundy po 20 sekund, z 20 sekundami przerwy między uruchomieniami. Ustawienia kernela, limitu rejestrów, lanes i wątków były automatyczne.
+
+| Tryb | Średnie H/s |
+|---|---|
+| Tylko RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Tabela przedstawia średnią z trzech uruchomień każdego trybu na tym komputerze, z pozostawionymi otwartymi aplikacjami. Oba tryby używały GPU `0` i tej samej pamięci podręcznej automatycznego dostrajania NVIDIA. Są to wyniki lokalnego benchmarku; zaakceptowane udziały potwierdzają zaliczenie pracy przez pulę. [Notatki z pomiarów](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) zawierają ustawienia i wyniki poszczególnych testów.
+
+## Porównanie pomiarów serwerów chmurowych i Maca
+
+Wyniki serwerów w chmurze i Maca dotyczą maszyn i ustawień opisanych poniżej. Pamięć do kopania to miejsce na bloki wątków: liczba wątków × 2 GiB.
+
+| Sprzęt | Dokładny układ | Wątki | Hashrate | Pamięć do kopania |
+|---|---|---|---|---|
+| AMD EPYC · Zen 5 | serwer EPYC 9R45 | 32 | 49,4 H/s | 64 GiB |
+| Serwer Arm | AWS Graviton4 | 32 | 39,3 H/s | 64 GiB |
+| AMD EPYC · Zen 4 | serwer EPYC 9R14 | 32 | 38,2 H/s | 64 GiB |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s | 32 GiB |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s | 64 GiB |
+
+Wiersze serwerowe zmierzono na maszynach w chmurze AWS z huge pages 2 MiB, a wiersz M4 Max na MacBooku Pro z 48 GB. Każda wartość to liczba ukończonych hashy podzielona przez czas, uśredniona z powtarzanych pomiarów wykonanych między lipcem a październikiem 2026 roku. Wynik Zen 5 to średnia z czterech pomiarów z seine v0.2.22 na AWS m8a.8xlarge, 32-rdzeniowej maszynie z EPYC 9R45 i 128 GiB RAM.
+
+Wyniki dla każdego testowanego procesora, z dowodami dla każdego wiersza, znajdziesz na [stronie wydajności](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md).
+
+## Dlaczego przepustowość pamięci wyznacza Twój hashrate
+
+Każdy hash Argon2id raz zapełnia cały swój blok 2 GiB, a w trakcie odczytuje wcześniejsze jego części. Pamięć podręczną L3 procesora mierzy się w megabajtach: w serwerze Zen 5 każda grupa ośmiu rdzeni dzieli 32 MiB, więc pojedynczy hash przerabia 64 razy więcej pamięci, niż mieści ta pamięć podręczna. Większość pracy to ruch w pamięci.
+
+Widać to w liczbach. Przy 49,4 H/s serwer Zen 5 zapisuje co sekundę około 99 GiB nowych bloków pamięci (49,4 × 2 GiB). Hashrate rośnie wraz z liczbą wątków, aż system pamięci jest w pełni zajęty: na tej maszynie 16 wątków dawało 37,8 H/s, a 32 wątki 49,4 H/s. seine mierzy tę krzywą na Twoim komputerze i wybiera najlepszą liczbę wątków.
+
+Przy wyborze sprzętu wynikają z tego trzy rzeczy:
+
+- **Przepustowość pamięci liczy się tak samo jak rdzenie.** Porównując komputery, przykładaj do systemu pamięci taką samą wagę jak do liczby rdzeni.
+- **RAM wyznacza górny limit wątków.** Każdy wątek potrzebuje własnego bloku 2 GiB, więc RAM często ogranicza liczbę wątków wcześniej niż rdzenie.
+- **Jądro obliczeniowe ma znaczenie na tym samym układzie.** seine ma kilka jąder Argon2id dla każdej rodziny procesorów. Na EPYC 9R45 jądro strumieniowe kopie o 30% szybciej niż AVX2 (z 34,47 do 44,74 H/s przy 24 wątkach). Na AWS Graviton4 jądro SHA3 z prefetchingiem kopie o 56% szybciej niż zwykły NEON (z 13,80 do 21,50 H/s). seine wybiera szybsze podczas kopania.
+
+## Ile RAM potrzebujesz na każdy wątek kopiący?
+
+<Answer>
+Każdy wątek kopiący potrzebuje około 2 GB RAM, bo każdy hash zapełnia własny blok pamięci 2 GiB. Podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą, a potem odejmij trochę na system operacyjny. seine liczy to za Ciebie i zostawia 5% RAM w rezerwie.
+</Answer>
+
+Oto obliczenia dla popularnych rozmiarów. „Teoretycznie” oznacza RAM ÷ 2 GiB. Ostatnia kolumna odejmuje 5% rezerwy seine i około 2–3 GB na system operacyjny, więc traktuj ją jako przybliżenie. O laptopach i starszych komputerach z 4–12 GB przeczytasz w poradniku o [kopaniu na starym komputerze lub laptopie](/pl/blog/mine-crypto-on-old-pc-or-laptop/).
+
+| RAM | Bloki pamięci teoretycznie | Wątki, które seine może uruchomić, w przybliżeniu |
+|---|---|---|
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+| 64 GB | 32 | 29 |
+| 128 GB | 64 | 59 |
+
+seine ogranicza też liczbę wątków do liczby rdzeni logicznych procesora, więc rzeczywistym limitem jest to, co skończy się pierwsze. Weźmy 16-rdzeniowy procesor desktopowy z 32 wątkami sprzętowymi. Z 32 GB RAM uruchamia około 14 wątków kopiących, a z 64 GB około 29. Aby uruchomić 32 wątki, potrzebujesz 64 GiB na same bloki pamięci plus zapas, dlatego 32-wątkowy wynik Zen 5 pochodzi z maszyny ze 128 GiB.
+
+Jeśli kupujesz RAM do kopania, dopasuj go do liczby wątków, którą chcesz uruchomić: około 2 GB na wątek plus kilka gigabajtów dla systemu.
+
+## Czy można kopać Blocknet jednocześnie na CPU i GPU NVIDIA?
+
+Tak. W systemach Windows i Linux seine kopie jednocześnie na każdym rdzeniu CPU i na każdej wykrytej karcie graficznej NVIDIA, a hashrate się sumuje. Nie potrzebujesz do tego żadnej flagi; to ustawienie domyślne.
+
+- **Windows:** pobrane archiwum zawiera biblioteki środowiska uruchomieniowego CUDA, więc potrzebujesz tylko aktualnego sterownika NVIDIA.
+- **Linux:** zainstaluj sterownik NVIDIA i biblioteki NVRTC z repozytoriów swojej dystrybucji albo od NVIDIA.
+- **Pierwsze uruchomienie:** seine dostraja ustawienia swoich jąder dla każdej karty i zapamiętuje wynik, więc kolejne starty trwają sekundy.
+
+Na [Macach z Apple Silicon](/pl/blog/mine-blocknet-on-mac/) seine domyślnie kopie na CPU, co w pomiarach na M4 Max jest najszybszą konfiguracją. [Poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/) opisuje koparki z wieloma GPU i wymagania.
+
+## Co seine dostraja automatycznie?
+
+Do codziennego kopania uruchom seine, wklej adres lub `@name` i zaakceptuj domyślną pulę bntpool.com. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) prowadzi przez te kroki. Ręczny wynik EPYC powyżej ma własne ustawienia; automatyczne kopanie wykonuje następujące czynności:
+
+- **Dobiera liczbę wątków** do Twojego RAM i rdzeni, a potem porównuje różne liczby wątków na prawdziwej pracy kopania i zostawia najlepszą.
+- **Wybiera jądro obliczeniowe CPU**, na przykład AVX2, AVX-512, jądro strumieniowe na EPYC Zen 5 albo SHA3 na Arm, i przełącza się dopiero po dwóch potwierdzonych zyskach.
+- **Rozmieszcza wątki na dużych serwerach.** W systemie Linux rozkłada wątki między węzły NUMA i grupy pamięci podręcznej L3, co na wynajętym EPYC 8434P przy 24 wątkach dało 16,7%. Szczegóły znajdziesz w [poradniku o kopaniu na serwerach](/pl/blog/mine-blocknet-on-servers/).
+- **Chroni Twoją pamięć.** Zostawia 5% rezerwy, wstrzymuje wątki, gdy zaczyna brakować RAM, i przywraca je, gdy pamięć się zwolni.
+- **Zapamiętuje, co zadziałało**, więc kolejny start zaczyna się od dostrojonych ustawień.
+
+Nic z tego nie wymaga ponownego łączenia z pulą, więc dostrajanie nie kosztuje Cię czasu kopania. [Poradnik o automatycznym dostrajaniu](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) wyjaśnia każdy krok.
+
+Jeden opcjonalny dodatek warto włączyć w systemie Linux i WSL: zarezerwowanie huge pages dało na maszynie testowej około 4–6% ze stronami 2 MiB i kolejne 2% ze stronami 1 GiB. [Poradnik o huge pages](/pl/blog/huge-pages-blocknet-mining/) zawiera polecenia, a [poradnik o dużych serwerach](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md) opisuje maszyny EPYC i Xeon.
+
+## Jak sprawdzić swój własny hashrate?
+
+Najszybciej jest [pobrać seine](/pl/#download) i zacząć kopać: panel pokazuje Twój hashrate po chwili, a na [bntpool.com](https://bntpool.com) możesz wyszukać swój adres, aby zobaczyć, co rejestruje pula. Zanim odczytasz wynik, daj mechanizmowi dostrajania trochę czasu na ustabilizowanie się.
+
+Aby zmierzyć procesor bez łączenia z pulą, uruchom test wydajności offline w seine:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Podaje on liczbę ukończonych hashy na sekundę, tę samą miarę, której używa powyższa tabela, więc możesz porównać swój komputer z [opublikowanymi wynikami](/pl/#performance).
+
+<Note>
+Te wyniki dotyczą obecnego proof of work Argon2id w Blocknet. Według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) Blocknet planuje około 2027-02-16 aktualizację sieci o nazwie Faraday, która wprowadzi lżejszy proof of work. Aktualizuj seine: sprawdza nowe wydania przy starcie i co 12 godzin.
+</Note>
+
+<CTA target="seine" title="Sprawdź, na co stać Twój komputer" text="seine dostraja się do Twojego sprzętu podczas kopania. Pobierz go i obserwuj swój hashrate." />

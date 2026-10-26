@@ -1,0 +1,143 @@
+---
+title: Memo terenkripsi pada pembayaran Blocknet
+description: Tambahkan memo terenkripsi ke pembayaran Blocknet mana pun untuk invoice, nomor pesanan, atau catatan. Hingga 124 byte, terbaca oleh pengirim dan penerima, diberi padding agar tidak menonjol.
+tags: [Memo, Privasi, Wallet, Pembayaran]
+faq:
+  - q: 'Seberapa panjang memo Blocknet?'
+    a: 'Sebuah memo menampung hingga 124 byte. Teks biasa disimpan sebagai UTF-8, jadi itu setara 124 huruf, angka, atau tanda baca dalam bahasa Inggris, atau sekitar 41 karakter Tionghoa yang masing-masing tiga byte. Wallet menolak memo yang lebih panjang sebelum menyusun transaksi dan memberi tahu batas maksimal 124 byte.'
+  - q: 'Bisakah block explorer membaca memo Blocknet?'
+    a: 'Tidak. Explorer menampilkan kolom memo sebagai 128 byte ciphertext yang ditandai terenkripsi. Kuncinya berasal dari rahasia yang dibagi oleh pengirim dan penerima untuk output tersebut, jadi hanya wallet mereka yang bisa membukanya. Karena setiap memo diberi padding hingga ukuran penuh, explorer bahkan tidak bisa mengetahui output mana yang membawa catatan.'
+  - q: 'Apakah memo membuat transaksi Blocknet lebih besar?'
+    a: 'Tidak. Setiap output sudah membawa kolom memo terenkripsi 128 byte, baik Anda menulis catatan maupun membiarkannya kosong. Menambahkan memo hanya mengisi ruang yang memang sudah ada, jadi pembayaran dengan nomor invoice berukuran persis sama dengan pembayaran yang sama tanpa nomor itu, dan keduanya terlihat identik di blockchain.'
+  - q: 'Bisakah saya menambahkan memo saat membayar ke nama Blocknet ID?'
+    a: 'Bisa. Tulis nama di tempat alamat dan memo setelah jumlahnya, misalnya send @rock 100 "invoice 1042". Wallet mengubah nama itu menjadi alamat, menampilkan alamat yang terverifikasi, biaya, dan memo, lalu meminta Anda mengonfirmasi. Memo dienkripsi untuk wallet yang ditunjuk oleh nama itu.'
+sourceHash: 6df2e7728647
+translation: reviewed
+---
+
+Setiap pembayaran Blocknet bisa membawa catatan singkat yang terenkripsi. Anda bisa memakainya untuk nomor invoice, referensi pesanan, atau pesan untuk orang yang Anda bayar, dan hanya Anda berdua yang bisa membacanya. Panduan ini menunjukkan cara menambahkan memo saat mengirim BNT, siapa yang bisa membacanya, mengapa memo tidak pernah menonjol di blockchain, dan di mana menemukan memo yang Anda terima.
+
+## Apa itu memo Blocknet?
+
+Memo Blocknet adalah kolom terenkripsi 128 byte yang terlampir pada setiap output transaksi. Kolom ini menampung hingga 124 byte teks atau data Anda sendiri, seperti nomor invoice atau catatan singkat. Memo dienkripsi dengan rahasia yang hanya dibagi oleh pengirim dan penerima, dan diberi padding sehingga memo kosong terlihat sama seperti memo yang penuh.
+
+Memo adalah bagian dari format transaksi itu sendiri. Setiap output di blockchain memilikinya, termasuk output kembalian yang mengembalikan koin ke wallet Anda sendiri. Hal ini memberi tiga sifat yang berguna:
+
+- **Privat secara default.** Isinya dienkripsi untuk penerima output tersebut. Tidak ada orang lain yang melihat apa yang Anda tulis.
+- **Ukuran tetap.** Kolom ini selalu berukuran 128 byte di blockchain, apa pun isinya.
+- **Selalu ada.** Karena setiap output membawa memo, pembayaran dengan catatan terlihat persis sama seperti pembayaran tanpa catatan.
+
+## Apa yang bisa Anda masukkan ke memo?
+
+Apa saja yang muat dalam 124 byte. Teks biasa disimpan sebagai UTF-8, jadi dalam bahasa Inggris itu setara 124 huruf, angka, dan spasi. Karakter di luar alfabet Latin memakai lebih banyak byte: satu karakter Tionghoa memakai tiga, jadi sebuah memo memuat sekitar 41 karakter.
+
+Penggunaan umum:
+
+- **Invoice.** Masukkan nomor invoice ke memo, dan orang yang menerima pembayaran bisa mencocokkannya dengan tagihan yang benar tanpa perlu bertanya.
+- **Nomor pesanan.** Toko atau layanan bisa meminta pelanggan menyertakan referensi pesanan, lalu membacanya langsung dari pembayaran yang masuk.
+- **Catatan.** "Sewa bulan November", "Terima kasih atas bantuannya", atau "Patungan makan malam" ikut terkirim bersama koinnya.
+- **Data biner.** Wallet juga menerima byte mentah yang ditulis sebagai hex, untuk kode referensi yang dibuat dan dibaca oleh perangkat lunak.
+
+## Bagaimana cara menambahkan memo saat mengirim BNT?
+
+<Answer>
+Di wallet baris perintah, ketik memo setelah jumlahnya: send @rock 100 "invoice 1042". Wallet menampilkan memo di layar konfirmasi di samping biaya, mengenkripsinya untuk penerima, dan mengirim pembayaran setelah Anda mengonfirmasi. Byte mentah juga bisa, dengan awalan hex:.
+</Answer>
+
+Perintah `send` di wallet menerima memo sebagai argumen terakhir yang opsional:
+
+```
+send <address> <amount> [memo|hex:<memo_hex>]
+```
+
+Memo boleh berisi spasi, dan tanda kutip di sekelilingnya opsional. Wallet menghapus sepasang tanda kutip yang cocok sebelum mengenkripsi teksnya. Berikut contoh pembayaran ke nama Blocknet ID dengan nomor invoice:
+
+```
+> send @rock 100 "invoice 1042"
+  Resolved @rock -> <address> ✓ verified
+
+# Send
+  Building transaction...
+
+  Send 100 BNT to @rock?
+  Fee:     <fee>
+  Address: <address>
+  Memo:    "invoice 1042"
+  Confirm [y/N]: y
+```
+
+Langkah konfirmasi menampilkan memo yang akan dibaca penerima, sehingga Anda bisa memeriksa memo sebelum apa pun dikirim. Jika memo lebih panjang dari 124 byte, wallet berhenti sebelum menyusun transaksi dengan pesan `memo too long: max 124 bytes`, dan Anda bisa memendekkannya lalu mencoba lagi.
+
+Untuk mengirim byte mentah, beri awalan `hex:` pada memo. Wallet men-decode hex tersebut dan mengenkripsi byte-nya:
+
+```
+send @rock 100 hex:494e562d31303432
+```
+
+[Tautan pembayaran](/id/blog/blocknet-payment-links/) juga bisa membawa memo. Saat Anda menempelkan tautan `blocknet://` atau tautan `bntpay.com` ke wallet, wallet mengisi alamat, jumlah, dan memo untuk Anda konfirmasi, sehingga orang yang Anda bayar bisa menetapkan referensi invoice sejak awal. Anda bisa membaca lebih lanjut tentang nama dan tautan di [panduan Blocknet ID](/id/blog/blocknet-id-pay-by-name/).
+
+### Memo dari perangkat lunak Anda sendiri
+
+API wallet menerima memo untuk setiap penerima dalam sebuah pengiriman. Dalam request ke `POST /api/wallet/send`, beri setiap penerima `memo_text` untuk teks biasa atau `memo_hex` untuk byte mentah:
+
+```json
+{
+  "recipients": [
+    { "address": "@rock", "amount": 10000000000, "memo_text": "invoice 1042" },
+    { "address": "$shop", "amount": 2500000000, "memo_hex": "4f524445522d3737" }
+  ]
+}
+```
+
+Jumlah di sini dalam satuan atomik, di mana 1 BNT sama dengan 100.000.000 satuan, jadi contoh ini mengirim 100 BNT dan 25 BNT. Setiap penerima mendapat memonya sendiri, yang dienkripsi hanya untuk wallet mereka. Batas maksimal 124 byte yang sama berlaku.
+
+## Siapa yang bisa membaca memo Blocknet?
+
+<Answer>
+Pengirim dan penerima. Setiap memo dienkripsi dengan rahasia yang dibagi kedua wallet untuk output tersebut, rahasia yang sama yang membuat stealth address sekali pakai milik penerima. Orang lain, termasuk operator node dan block explorer, hanya melihat 128 byte data yang tampak acak dan tidak bisa mengetahui apakah ada catatan di dalamnya.
+</Answer>
+
+Saat wallet Anda menyusun pembayaran, wallet menggabungkan kunci transaksi acak yang baru dengan view key publik milik penerima untuk mendapatkan rahasia bersama. Rahasia itulah yang membentuk [stealth address sekali pakai](/id/blog/blocknet-privacy-features/) milik penerima, dan wallet juga memakainya untuk mengenkripsi memo. Wallet melakukan hash pada rahasia itu dengan SHA3-256, bersama posisi output di dalam transaksi dan identitas jaringan, untuk membuat mask 128 byte, lalu menggabungkan mask itu dengan memo. Setiap output mendapat mask-nya sendiri, jadi dua memo dalam transaksi yang sama dienkripsi secara terpisah.
+
+Wallet penerima menemukan rahasia yang sama dari sisi lain, dengan view key privatnya, saat memindai setiap blok. Wallet itu mendekripsi memo dan menyimpannya bersama pembayaran. Di sisi Anda, wallet menyimpan memo yang Anda tulis di riwayat pengiriman.
+
+Dua hal yang perlu diketahui:
+
+- **Wallet view-only juga menampilkan memo.** View key privat Anda adalah yang membaca pembayaran masuk, jadi wallet view-only yang dibuat darinya melihat jumlah dan memo setiap pembayaran. Bagikan kunci itu hanya kepada orang yang Anda izinkan melihat pembayaran masuk Anda.
+- **Imbalan penambangan membawa memo kosong.** Aturan konsensus mewajibkan memo pada setiap imbalan blok dibiarkan kosong, sehingga output coinbase di blockchain tidak pernah bisa dipakai sebagai saluran pesan publik.
+
+## Mengapa setiap memo terlihat sama di blockchain
+
+Memo yang menunjukkan panjangnya akan membocorkan sesuatu. Catatan 30 byte terlihat berbeda dari catatan 100 byte, dan memo kosong akan menonjol dari keduanya. Wallet Blocknet menutup celah itu dengan tata letak tetap dan padding acak.
+
+Sebelum mengenkripsi, wallet mengemas memo ke dalam amplop 128 byte:
+
+| Byte | Isi |
+|---|---|
+| 1 | Versi amplop |
+| 1 | Panjang memo Anda |
+| 2 | Checksum memo |
+| 0 sampai 124 | Memo Anda |
+| Sisanya | Padding acak |
+
+Padding berasal dari pembangkit bilangan acak kriptografis milik sistem, jadi ruang yang tidak terpakai tidak bisa ditebak. Setelah dienkripsi, catatan pendek, catatan penuh, dan memo kosong semuanya menjadi 128 byte data yang tampak acak. Output kembalian mendapat memo kosong berpadding miliknya sendiri, jadi koin yang Anda kirim kembali ke diri sendiri pun ikut menyatu.
+
+Checksum memungkinkan wallet penerima memastikan bahwa ia mendekripsi memo dengan benar sebelum menampilkannya. Node juga menolak blok mana pun yang berisi output dengan kolom memo yang seluruhnya nol, jadi setiap output di blockchain membawa memo yang terisi dengan benar.
+
+## Di mana menemukan memo yang Anda terima
+
+Wallet baris perintah menampilkan memo di mana pun ia menampilkan daftar pembayaran:
+
+- **`history`** menampilkan pembayaran masuk dan keluar, dengan baris `memo:` di bawah setiap pembayaran yang membawanya.
+- **`outputs tx <txid>`** menampilkan setiap output milik wallet Anda dalam transaksi itu, termasuk memonya. `outputs <n>` melakukan hal yang sama untuk satu output dari daftar.
+- **API wallet** mengembalikan memo setiap output yang diterima sebagai `memo_hex` dari `GET /api/wallet/history`, siap dicocokkan dengan invoice oleh sistem pesanan.
+
+Memo teks ditampilkan dalam tanda kutip. Memo yang bukan teks yang bisa dicetak, seperti byte mentah yang dikirim dengan `hex:`, ditampilkan sebagai hex.
+
+Jika suatu saat sebuah pembayaran perlu dipastikan, pengirim bisa membuktikannya. Perintah `prove <txid>` di wallet mencetak kunci transaksi untuk pembayaran yang Anda kirim. Siapa pun yang memegang kunci itu, ID transaksi, dan alamat penerima bisa memeriksa pembayaran melalui endpoint `POST /api/verify-proof`, yang tidak membutuhkan wallet. Endpoint itu mengonfirmasi transaksi dan menampilkan output yang diterima alamat tersebut, jumlahnya, dan memonya.
+
+## Dapatkan BNT yang akan Anda kirim
+
+Cara mudah mendapatkan BNT pertama Anda adalah dengan menambangnya. seine berjalan di komputer Anda sendiri, menyetel dirinya sendiri sambil menambang, dan membayarkan hasilnya melalui bntpool.com langsung ke alamat atau `@name` Anda. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membantu Anda menjalankannya dalam beberapa menit.
+
+<CTA target="seine" title="Unduh seine dan tambang BNT" text="Tambang Blocknet di komputer Anda sendiri tanpa pengaturan apa pun, lalu bayar dengan pembayaran privat bermemo dari wallet Anda." />

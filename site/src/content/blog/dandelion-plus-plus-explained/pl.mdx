@@ -1,0 +1,91 @@
+---
+title: 'Dandelion++: przekazywanie transakcji w fazach stem i fluff'
+description: Dandelion++ prostymi słowami, od faz stem i fluff po konstrukcję z artykułu z 2018 roku, oraz jak Blocknet używa go, by ukryć, który węzeł wysłał transakcję.
+tags: [Prywatność, Dandelion++, Sieć, Blocknet]
+faq:
+  - q: 'Czy Dandelion++ ukrywa mój adres IP?'
+    a: 'Ukrywa, który węzeł zapoczątkował transakcję, przed obserwatorami rozmieszczonymi w sieci. Transakcja rozchodzi się szeroko dopiero po przejściu w fazę fluff, kilka przeskoków od Ciebie. Twój pierwszy sąsiad w fazie stem widzi, że transakcja przyszła z Twojego węzła, ale wiadomości stem wyglądają tak samo, niezależnie od tego, czy węzeł utworzył transakcję, czy tylko ją przekazuje, więc nie potrafi tego rozróżnić.'
+  - q: 'Czym różni się Dandelion od Dandelion++?'
+    a: 'Dandelion (2017) wprowadził fazy stem i fluff na pojedynczej linii przekaźników. Dandelion++ (2018) zachowuje obie fazy i uodparnia je na szpiegów łamiących zasady. Używa grafu, w którym każdy węzeł wybiera dwa przekaźniki, wysyła własne transakcje jedną stałą krawędzią, wybiera nowe przekaźniki w każdej epoce i dodaje zegar awaryjny.'
+  - q: 'Które kryptowaluty używają Dandelion++?'
+    a: 'Monero dodało Dandelion++ w wersji 0.16, wydanej w maju 2020 roku, a Blocknet przekazuje z jego użyciem każdą transakcję. Ta sama grupa badawcza zaproponowała wcześniej Dandelion dla Bitcoina jako BIP 156. Każda kryptowaluta oparta na sieci peer-to-peer może go wdrożyć, bo zmienia on tylko sposób, w jaki węzły przekazują sobie nowe transakcje.'
+  - q: 'Jakich ustawień Dandelion++ używa Blocknet?'
+    a: 'Węzły Blocknet kontynuują fazę stem z prawdopodobieństwem 0,9 na każdym przeskoku, więc transakcja przechodzi w fazę fluff z prawdopodobieństwem 10% na każdym przekaźniku. Trasy stem zmieniają się co 10 minut. Jeśli Twoja własna transakcja nie wróci do Twojego węzła w fazie fluff w ciągu 45 sekund, węzeł sam ją rozgłosi, więc zawsze dotrze do sieci.'
+sourceHash: 036cbd9214b7
+translation: draft
+---
+
+Dandelion++ to sposób przekazywania nowych transakcji w sieci peer-to-peer, dzięki któremu osoby obserwujące sieć nie mogą łatwo ustalić, który komputer je wysłał. Ten poradnik wyjaśnia, jaki problem rozwiązuje, jak działają jego fazy stem i fluff, co artykuł z 2018 roku dodał do pierwotnej konstrukcji i jak Blocknet używa go przy każdej płatności.
+
+## Czym jest Dandelion++?
+
+<Answer>
+Dandelion++ to protokół przekazywania transakcji, który ukrywa, który węzeł utworzył transakcję. Nowa transakcja najpierw wędruje wzdłuż „łodygi” (stem), przekazywana od jednego węzła do dokładnie jednego kolejnego przez kilka przeskoków. Potem „rozkwita” (fluff) i rozchodzi się po całej sieci, wyglądając tak, jakby zaczynała się w węźle daleko od prawdziwego nadawcy.
+</Answer>
+
+Nazwa (ang. dandelion, czyli mniszek) pochodzi od kształtu ścieżki: cienka łodyga, a potem puch nasion rozwiewany we wszystkie strony. Dandelion++ opublikowali w 2018 roku Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller i Pramod Viswanath w [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (preprint na [arXiv](https://arxiv.org/abs/1805.11060)), a zaprezentowali na konferencji ACM SIGMETRICS 2018. Ulepsza on propozycję tej samej grupy z 2017 roku, Dandelion.
+
+## Dlaczego rozgłaszanie transakcji zdradza, skąd pochodzi?
+
+Wiadomość z transakcją nie zawiera Twojego adresu IP. Zdradza go sposób, w jaki się rozchodzi. W typowej sieci kryptowaluty węzeł, który tworzy transakcję, wysyła ją do wszystkich swoich sąsiadów, oni wysyłają ją do swoich i transakcja rozchodzi się od źródła falami, jak kręgi na wodzie.
+
+Badacze pokazali, że te fale da się zmierzyć. W 2014 roku Biryukov, Khovratovich i Pustogarov, a niezależnie od nich Koshy, Koshy i McDaniel, uruchomili „superwęzeł”, który łączył się z niemal każdym osiągalnym węzłem Bitcoina i zapisywał, kiedy każda transakcja dotarła od każdego sąsiada. Węzeł, który pierwszy dostarczył transakcję, często był tym, który ją utworzył. Artykuł o Dandelion++ nazywa to estymatorem pierwszego szpiega: zgadnij, że źródłem transakcji jest pierwszy uczciwy węzeł, który ją dostarczył. To proste i dobrze działa przeciwko zalewowemu rozgłaszaniu.
+
+Dodawanie losowych opóźnień, zanim każdy węzeł przekaże transakcję dalej, co Bitcoin Core robi za pomocą schematu zwanego dyfuzją, sprawia, że czasy są bardziej zaszumione. Badania nad Dandelion poszły inną drogą i zmieniły sam kształt ścieżki.
+
+## Jak działają fazy stem i fluff?
+
+<Answer>
+W fazie stem każdy węzeł przekazuje transakcję dokładnie jednemu sąsiadowi. Na każdym przeskoku węzeł rzuca obciążoną monetą: zwykle kontynuuje łodygę, czasem przełącza się na fluff. W fazie fluff transakcja jest rozgłaszana do wszystkich sąsiadów jak zwykle, więc obserwatorzy widzą, że rozchodzi się od węzła, w którym rozkwitła.
+</Answer>
+
+Krok po kroku:
+
+1. **Twój węzeł zaczyna łodygę.** Wysyła nową transakcję tylko do jednego sąsiada.
+2. **Każdy przekaźnik decyduje.** Sąsiad albo przekazuje ją jeszcze jednemu sąsiadowi (stem), albo ją rozgłasza (fluff).
+3. **Fluff rozsyła ją wszędzie.** Od węzła, w którym rozkwitła, transakcja zalewa sieć w zwykły sposób i dociera do minerów.
+
+Szpieg obserwujący wiele węzłów widzi teraz, że fala zaczyna się w węźle, w którym transakcja rozkwitła, a ten może być wiele przeskoków od Ciebie. Długość łodygi jest losowa, więc szpieg nie może po prostu cofnąć się o stałą liczbę przeskoków. Artykuł podaje oczekiwaną długość łodygi jako 1/q, gdzie q to szansa na rozkwit na każdym przeskoku. Przy q = 0,1 łodyga ma średnio około dziesięciu przeskoków.
+
+## Co Dandelion++ zmienił w stosunku do Dandelion?
+
+Konstrukcja Dandelion z 2017 roku wysyłała łodygi wzdłuż pojedynczej linii przekaźników i dowodziła mocnych wyników przy trzech założeniach: każdy węzeł przestrzega zasad, każdy węzeł wysyła jedną transakcję i każdy węzeł używa Dandelion. Artykuł z 2018 roku pokazał, jak szpiedzy łamiący te założenia mogliby dowiedzieć się więcej, a następnie zmienił konstrukcję tak, by gwarancje utrzymywały się także wobec nich. Działa ona w epokach, przy czym każdy węzeł przechodzi do nowej epoki „rzędu co 10 minut”, a w każdej epoce używa czterech mechanizmów:
+
+| Mechanizm | Co robi |
+|---|---|
+| Graf przekaźników w przybliżeniu 4-regularny | Każdy węzeł wybiera do dwóch swoich połączeń wychodzących jako przekaźniki, co daje sieć przeplatających się ścieżek zamiast jednej linii. |
+| Jedna krawędź dla własnych transakcji | Węzeł wysyła każdą utworzoną przez siebie transakcję tą samą krawędzią wychodzącą, więc wysłanie kilku transakcji nie zdradza więcej. |
+| Pseudolosowe przekazywanie | W każdej epoce węzeł jest albo przekaźnikiem, albo dyfuzorem dla wszystkich transakcji, które otrzymuje w fazie stem, i przypisuje każdej krawędzi przychodzącej krawędź wychodzącą. |
+| Zegary awaryjne | Węzeł, który wysłał lub przekazał transakcję w fazie stem, czeka losowy czas, aż zobaczy jej rozkwit, a jeśli do niego nie dojdzie, sam ją rozgłasza. |
+
+Przy wyborze q symulacje z artykułu wykazały, że utrzymanie q na poziomie 0,2 lub niższym ogranicza to, co szpieg może zyskać, manipulując grafem przekaźników. Autorzy uruchomili swoją implementację w działającej sieci Bitcoina i wybrali q = 0,1 lub q = 0,2, aby utrzymać propagację w granicach docelowych 4,5 sekundy.
+
+Dandelion został zaproponowany dla Bitcoina jako [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). Monero dodało Dandelion++ w [wersji 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), wydanej w maju 2020 roku.
+
+## Jak Blocknet używa Dandelion++?
+
+Każdy węzeł Blocknet przekazuje transakcje za pomocą Dandelion++ i nie trzeba niczego włączać. Gdy wysyłasz BNT, Twój węzeł najpierw sprawdza transakcję i dodaje ją do własnej puli pamięci (mempool), a potem przekazuje ją routerowi Dandelion++. Oto ustawienia w demonie:
+
+| Ustawienie | Wartość | Co oznacza |
+|---|---|---|
+| Prawdopodobieństwo stem | 0,9 | Każdy przekaźnik kontynuuje łodygę w 90% przypadków, a w 10% przechodzi w fluff (q = 0,1), czyli to samo q, które testowano w artykule. |
+| Epoka | 10 minut | Trasy stem są przetasowywane co 10 minut. |
+| Zegar embarga | 45 sekund | Jeśli do tego czasu Twoja transakcja nie wróci do Twojego węzła w fazie fluff, węzeł sam ją rozgłasza. |
+
+Jak wędruje płatność Blocknet:
+
+- **Twój węzeł wybiera jednego sąsiada stem na epokę.** Wysyła każdą utworzoną przez siebie transakcję do tego samego sąsiada aż do kolejnej 10-minutowej epoki, co odpowiada regule z artykułu dla własnych transakcji węzła.
+- **Każdy przekaźnik dokonuje nowego wyboru.** Węzeł, który otrzymuje transakcję w fazie stem, z prawdopodobieństwem 10% przełącza ją w fluff. W przeciwnym razie przekazuje ją losowo wybranemu sąsiadowi innemu niż ten, od którego ją dostał. Przy q = 0,1 łodyga ma średnio około dziesięciu przeskoków.
+- **Wiadomości stem wyglądają tak samo z każdego węzła.** Węzeł używa tej samej wiadomości, by zacząć łodygę, co by ją przekazać, więc sąsiad, który ją otrzymuje, nie wie, czy utworzyłeś transakcję, czy ją przekazujesz.
+- **Transakcja zawsze dociera.** Jeśli przeskoku w fazie stem nie da się dostarczyć, węzeł od razu przełącza transakcję w fluff, a 45-sekundowe embargo obejmuje wszystko, co utknie.
+- **Przekaźniki sprawdzają, co przenoszą.** Węzeł potwierdza, że ładunek stem jest poprawnie zbudowaną transakcją, zanim go przekaże, i karze sąsiada, który wysyła śmieci.
+
+## Jak Dandelion++ łączy się z pozostałą prywatnością Blocknet?
+
+Dandelion++ działa w warstwie sieciowej: chroni powiązanie między transakcją a komputerem, który ją wysłał. Prywatność w łańcuchu, która czyni Blocknet [kryptowalutą prywatności](/pl/blog/what-is-a-privacy-coin/), chroni treść transakcji: pierścień CLSAG złożony z 16 członków na każdym wejściu ukrywa nadawcę, jednorazowe adresy stealth ukrywają odbiorcę, a zobowiązania Pedersena z dowodami zakresu Bulletproofs ukrywają kwoty. Te zabezpieczenia są obowiązkowe, więc każda transakcja wygląda podobnie, zanim Dandelion++ w ogóle ją przeniesie.
+
+Obie warstwy uzupełniają się nawzajem. Podpisy pierścieniowe ukrywają, które wyjście zapłaciło, a Dandelion++ ukrywa, który węzeł rozgłosił płatność. Artykuł [Jak Blocknet chroni prywatność płatności](/pl/blog/blocknet-privacy-features/) omawia każdą warstwę w łańcuchu, a [Czym jest Blocknet?](/pl/blog/what-is-blocknet/) daje przegląd, w tym płacenie po nazwie z Blocknet ID.
+
+Aby zdobyć własne BNT do wysyłania, możesz je wykopać w domu. Skorzystaj z [poradnika kopania Blocknet](/pl/blog/how-to-mine-blocknet/), aby pobrać seine, skierować go na bntpool.com i odbierać wypłaty na adres swojego portfela lub `@name`.
+
+<CTA target="seine" title="Wykop swoje pierwsze BNT z seine" text="seine dostraja się do Twojego komputera i kopie BNT na Twój adres lub @name na bntpool.com, gotowe na Twoją pierwszą prywatną płatność." />

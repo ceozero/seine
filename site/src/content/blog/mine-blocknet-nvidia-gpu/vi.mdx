@@ -1,0 +1,112 @@
+---
+title: 'Cách đào Blocknet bằng GPU NVIDIA'
+description: 'Đào Blocknet bằng GPU NVIDIA với seine. Thiết lập Windows hoặc Linux, dùng cả CPU và GPU, kiểm tra tốc độ băm và xử lý các sự cố khi khởi động phần mềm.'
+tags: ['Hướng dẫn đào coin', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'seine có thể dùng CPU và GPU NVIDIA cùng lúc không?'
+    a: 'Có. seine tự động chọn CPU và các GPU NVIDIA được phát hiện khi bạn không đặt tùy chọn backend. Bảng Devices hiển thị riêng từng backend. Để chọn một card cụ thể mà vẫn đào bằng CPU, hãy chọn cả cpu và nvidia, rồi chỉ định chỉ số thiết bị NVIDIA.'
+  - q: 'Có cần CUDA Toolkit trên Windows không?'
+    a: 'Gói nén chính thức cho Windows chứa các thư viện thời gian chạy NVRTC mà seine dùng để biên dịch kernel GPU. Cài trình điều khiển đồ họa NVIDIA tương thích và giữ các DLL đã giải nén cạnh seine.exe. Bản phát hành Windows đóng gói này không yêu cầu cài riêng CUDA Toolkit.'
+  - q: 'Làm sao để đào bằng GPU NVIDIA mà không dùng CPU?'
+    a: 'Khởi chạy seine với tùy chọn backend đặt thành nvidia. Phần mềm tạo một backend NVIDIA cho mỗi card được phát hiện. Thêm tùy chọn nvidia-devices để chọn các chỉ số thiết bị cụ thể. Kiểm tra bảng Devices sau khi khởi động để xác nhận các GPU mong muốn có mặt và đang tính hash.'
+  - q: 'Xem share từ GPU của tôi có được chấp nhận ở đâu?'
+    a: 'Bảng điều khiển đào coin hiển thị các share đã gửi, bị từ chối và được chấp nhận; nhật ký xác định backend của từng sự kiện share. Kiểm tra tốc độ băm cục bộ trên dòng thiết bị NVIDIA, rồi tìm thông báo share được chấp nhận từ backend đó. Dùng hướng dẫn theo dõi trên pool để kiểm tra công việc đã được ghi nhận.'
+---
+
+seine đào Blocknet trên GPU NVIDIA cùng với CPU của bạn. Hướng dẫn này trình bày cách thiết lập Windows và Linux, chọn card, kiểm tra share được chấp nhận và kết quả so sánh đo trên RTX 5090. Các lệnh áp dụng cho seine v0.2.26 và mạng Argon2id hiện tại tính đến tháng 10 năm 2026.
+
+## Bắt đầu đào Blocknet bằng GPU NVIDIA như thế nào?
+
+<Answer>
+Tải gói nén seine cho Windows x86_64 hoặc Linux x86_64, chuẩn bị trình điều khiển NVIDIA và thư viện thời gian chạy cho nền tảng của bạn, rồi khởi chạy phần mềm đào. Nhập địa chỉ nhận thanh toán và chấp nhận pool mặc định. seine tự động chọn CPU và các card NVIDIA được phát hiện, sau đó chuẩn bị và tinh chỉnh từng backend GPU.
+</Answer>
+
+Chọn gói nén trong [mục tải xuống](/vi/#download): `seine-windows-x86_64.zip` cho Windows hoặc `seine-linux-x86_64.tar.gz` cho Linux x86_64. [Hướng dẫn đào coin chung](/vi/blog/how-to-mine-blocknet/) trình bày cách lấy địa chỉ nhận thanh toán và kết nối lần đầu.
+
+Bắt đầu với thiết lập mặc định. Không đặt kernel, giới hạn thanh ghi, số lane GPU và số luồng CPU để seine tự chọn cấu hình. Bảng Devices cho biết backend nào đang đóng góp sau khi quá trình khởi tạo hoàn tất.
+
+## Thiết lập môi trường NVIDIA trên Windows hoặc Linux
+
+| Nền tảng | Cần chuẩn bị | Lệnh khởi chạy |
+|---|---|---|
+| Windows x86_64 | Trình điều khiển đồ họa NVIDIA; các DLL thời gian chạy đi kèm đặt cạnh tệp thực thi | `.\seine.exe` |
+| Linux x86_64 | Trình điều khiển NVIDIA và thư viện thời gian chạy NVRTC tương thích | `./seine` |
+
+Trên Windows, giải nén toàn bộ ZIP vào một thư mục có quyền ghi. Giữ `nvrtc64_120_0.dll` và `nvrtc-builtins64_128.dll` cạnh `seine.exe`. Bản phát hành đóng gói dùng các thư viện đi kèm này; không cần cài riêng CUDA Toolkit.
+
+![Gói nén Windows trong bảng tải xuống chính thức của seine](/assets/blog/windows-download.png)
+
+Cài trình điều khiển cho card và hệ điều hành của bạn từ [trang trình điều khiển NVIDIA](https://www.nvidia.com/en-us/drivers/). [Hướng dẫn thiết lập Windows](/vi/blog/mine-blocknet-on-windows/) trình bày các bước tải xuống, kiểm tra tổng kiểm và giải nén.
+
+Trên Linux, cài trình điều khiển NVIDIA và các gói NVRTC tương thích với bản phân phối của bạn. NVRTC biên dịch kernel CUDA của seine khi chương trình chạy. [Tài liệu NVRTC](https://docs.nvidia.com/cuda/nvrtc/) của NVIDIA mô tả trình biên dịch và thư viện builtins tương ứng; [yêu cầu NVIDIA của seine](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) ghi rõ môi trường thời gian chạy mà phần mềm đào cần.
+
+Khởi chạy tệp thực thi từ thư mục chứa nó. Dùng lại cùng thư mục làm việc để giữ thiết lập đã lưu trong `seine-data`. Ở lần chạy đầu tiên, nhập địa chỉ nhận của bạn và chấp nhận `stratum+tcp://bntpool.com:3333` làm pool.
+
+## Có thể chọn một card NVIDIA mà vẫn đào bằng CPU không?
+
+Chọn cả hai backend và chỉ số thiết bị. Trong PowerShell, lệnh này giữ hoạt động đào bằng CPU và chọn thiết bị NVIDIA `0`:
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Dùng các tùy chọn tương tự với tệp thực thi Linux:
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+Các lệnh này dùng địa chỉ và pool đã lưu hoặc yêu cầu nhập khi khởi động. Để chỉ định rõ kết nối, thêm địa chỉ nhận công khai của bạn bằng `--address` và URL pool bằng `--pool-url`.
+
+Chỉ số xác định một GPU được môi trường NVIDIA liệt kê. Xác nhận danh sách thiết bị sau khi khởi động. `--nvidia-devices 0,1` chọn hai card đó; nếu bỏ qua tùy chọn chọn thiết bị, mọi thiết bị NVIDIA được phát hiện đều được sử dụng.
+
+Để chỉ đào bằng GPU, chọn `nvidia`:
+
+```bash
+./seine --backend nvidia
+```
+
+Trong PowerShell, dùng `.\seine.exe --backend nvidia`. Thêm `cpu` vào danh sách backend khi muốn dùng cả hai loại phần cứng. Khởi động lại seine bằng lệnh mong muốn khi thay đổi lựa chọn này.
+
+## Làm sao xác nhận GPU đang đào?
+
+<Answer>
+Tìm các dòng backend NVIDIA trong bảng Devices và kiểm tra tốc độ băm hiện tại cùng tốc độ trung bình. Trong lúc khởi tạo, một dòng có thể hiển thị tiến độ khởi động khi các kernel CUDA đang được chuẩn bị. Khi bắt đầu tính hash, kiểm tra sự kiện share từ backend đó trong nhật ký và share được chấp nhận trong bảng Mining.
+</Answer>
+
+Các backend NVIDIA xuất hiện dưới dạng `nvidia#1`, `nvidia#2`, v.v.; CPU có dòng riêng. Tổng tốc độ băm bao gồm mọi backend đang hoạt động. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích các bảng còn lại và nhãn trong nhật ký.
+
+![Một phiên seine thực tế với RTX 5090, tốc độ băm từng thiết bị và share được chấp nhận](/assets/blog/nvidia-rtx5090-session.png)
+
+Ảnh chụp này cho thấy một phiên đào thực tế trên pool bằng RTX 5090. Các bài đo hiệu năng theo thời gian bên dưới được chạy riêng. Tốc độ băm của thiết bị đo hoạt động cục bộ; một share được chấp nhận xác nhận pool đã ghi nhận công việc gửi lên. Theo dõi công việc đã được ghi nhận bằng [hướng dẫn theo dõi máy đào](https://bntpool.com/blog/track-your-miner-on-bntpool/).
+
+Lần khởi chạy đầu tiên chuẩn bị và tinh chỉnh kernel GPU. seine lưu kết quả tự động tinh chỉnh NVIDIA trong `seine-data/seine.nvidia-autotune.json`. Dùng lại thư mục dữ liệu này để những lần chạy sau tải được kết quả tương thích đã lưu, hoặc chỉ định rõ một thư mục bằng `--data-dir`.
+
+## RTX 5090 nhanh đến mức nào trong thử nghiệm của chúng tôi?
+
+Chúng tôi thử nghiệm vào ngày 25 tháng 10 năm 2026 với Windows 11, NVIDIA GeForce RTX 5090, AMD Ryzen 9 9950X3D, 125,4 GiB RAM khả dụng, seine v0.2.26 và trình điều khiển NVIDIA `610.88`. Chúng tôi chạy ba cặp thử nghiệm xen kẽ với `--bench-kind backend`. Mỗi lần chạy có một vòng làm nóng 20 giây và ba vòng đo 20 giây, nghỉ 20 giây giữa các lần chạy. Thiết lập kernel, giới hạn thanh ghi, lane và luồng đều tự động.
+
+| Chế độ | H/s trung bình |
+|---|---|
+| Chỉ RTX 5090 | 7,3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12,9 |
+
+Bảng lấy trung bình ba lần chạy mỗi chế độ trên máy tính này, với các ứng dụng đang có vẫn mở. Cả hai chế độ dùng GPU `0` và cùng bộ nhớ đệm tự động tinh chỉnh NVIDIA. Đây là tốc độ băm đo cục bộ; share được chấp nhận xác nhận pool đã ghi nhận công việc. [Ghi chú đo lường](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md) ghi lại thiết lập và kết quả từng lần chạy.
+
+## Cần kiểm tra gì nếu không có dòng NVIDIA?
+
+Trước tiên, kiểm tra tệp thực thi đã giải nén và các thư viện thời gian chạy. Trên Windows, giữ các DLL NVRTC đi kèm cạnh `seine.exe`. Trên Linux, cài trình điều khiển và thư viện NVRTC trong môi trường nơi bạn khởi chạy phần mềm đào.
+
+Sau đó kiểm tra lệnh. `--backend cpu` chỉ chọn CPU. Dùng lệnh mặc định hoặc `--backend cpu,nvidia` để chọn cả hai. Nếu đặt `--nvidia-devices`, hãy xác minh các chỉ số đó tồn tại trên máy.
+
+Đọc nhật ký khởi động của backend đó: nhật ký phân biệt quá trình chuẩn bị đang diễn ra với lỗi khởi tạo. Sửa vấn đề môi trường chạy hoặc lựa chọn được báo cáo rồi khởi động lại. [Hướng dẫn NVIDIA](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) cũng trình bày các yêu cầu để biên dịch từ mã nguồn.
+
+Với khối lượng công việc Argon2id hiện tại, mỗi lane GPU hoạt động cần một vùng nhớ 2 GiB cộng với bộ nhớ bổ sung cho môi trường chạy. seine xác định quy mô công việc GPU dựa trên bộ nhớ thiết bị còn trống và các kiểm tra cấp phát. Không đặt số lane thủ công; riêng dung lượng VRAM được quảng cáo không quyết định có bao nhiêu lane khả dụng trong một phiên dùng máy tính.
+
+Nếu thiết bị đang tính hash nhưng pool hiển thị bằng không, hãy làm theo [danh sách kiểm tra tốc độ băm trên pool](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate) để kiểm tra địa chỉ, kết nối và share được chấp nhận.
+
+[Windows chặn phần mềm đào? Kiểm tra bản tải xuống](/vi/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="Tải seine để đào bằng NVIDIA" text="Chọn gói nén Windows hoặc Linux x86_64 và bắt đầu với lựa chọn CPU cùng GPU NVIDIA tự động." />

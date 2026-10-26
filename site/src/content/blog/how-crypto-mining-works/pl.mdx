@@ -1,0 +1,117 @@
+---
+title: Jak działa kopanie kryptowalut
+description: 'Kopanie kryptowalut prostymi słowami: bloki, hashe, trudność, nagrody za blok i pule wydobywcze, na przykładzie pięciominutowych bloków Blocknet.'
+tags: [Kopanie, Proof of work, Blocknet, bntpool]
+faq:
+  - q: 'Co właściwie oblicza koparka kryptowalut?'
+    a: 'Miner raz za razem haszuje nagłówek bloku, za każdym razem zmieniając liczbę zwaną nonce, aż wynik będzie równy celowi sieci lub od niego mniejszy. W Blocknet każda próba to jeden hash Argon2id na 2 GiB pamięci. Nikt nie może przewidzieć, który nonce wygra, więc jedynym sposobem na znalezienie bloku jest ciągłe próbowanie.'
+  - q: 'Ile trwa wykopanie jednego bloku?'
+    a: 'Każda sieć ustala własny cel. Bitcoin zakłada jeden blok co dziesięć minut, a Blocknet jeden co pięć minut, czyli 288 bloków dziennie. Trudność dostosowuje się, by utrzymać to tempo, gdy minerzy dołączają lub odchodzą, więc czas bloku pozostaje bliski docelowemu niezależnie od łącznego hashrate.'
+  - q: 'Czym jest udział (share) w puli wydobywczej?'
+    a: 'Udział to hash, który spełnia łatwiejszy cel ustalony przez pulę dla Twojego połączenia. Udziały dowodzą, ile pracy wniosłeś, bez czekania na pełny blok. Na bntpool.com pula dostosowuje trudność udziałów dla każdego połączenia tak, by celować w około dziesięć udziałów co pięć minut, a nagrody za bloki są dzielone według udziałów.'
+  - q: 'Czy mogę kopać kryptowaluty na zwykłym komputerze?'
+    a: 'Tak, w przypadku kryptowalut, których proof of work zaprojektowano dla zwykłego sprzętu. Blocknet używa wymagającego dużo pamięci Argon2id, więc może go kopać komputer stacjonarny, laptop, Mac lub serwer z wystarczającą ilością RAM. Każdy wątek kopiący potrzebuje około 2 GB pamięci, a seine sam oblicza właściwą liczbę wątków dla Twojego komputera.'
+sourceHash: d05a84885aae
+translation: draft
+---
+
+Ten poradnik wyjaśnia, co robią koparki kryptowalut i dlaczego: jak transakcje stają się blokami, czym są hash i nonce, jak trudność utrzymuje bloki w harmonogramie, skąd bierze się nagroda i dlaczego większość osób kopie w puli. Przykładem jest tu przez cały czas Blocknet, więc każda liczba jest prawdziwa i możesz ją sprawdzić.
+
+## Czym jest kopanie kryptowalut?
+
+<Answer>
+Kopanie kryptowalut to sposób, w jaki blockchain oparty na proof of work dodaje nowe bloki. Minerzy pakują oczekujące transakcje w blok, a potem ścigają się, by znaleźć hash tego bloku spełniający cel trudności. Pierwszy miner, który go znajdzie, rozgłasza blok, każdy węzeł go sprawdza, a zwycięzca odbiera nowo utworzoną nagrodę za blok.
+</Answer>
+
+Kopanie wykonuje naraz dwa zadania. Porządkuje transakcje, aby wszyscy zgadzali się co do tego, która płatność była pierwsza, i emituje nowe monety według stałego harmonogramu, aby nie trzeba było nikomu ufać przy ich tworzeniu. Bitcoin wprowadził tę ideę w 2008 roku i dziś używa jej wiele kryptowalut, w tym Blocknet. Niektóre łańcuchy, takie jak Ethereum od 2022 roku, używają zamiast tego proof of stake; [proof of work a proof of stake](/pl/blog/proof-of-work-vs-proof-of-stake/) porównuje oba podejścia.
+
+## Co trafia do bloku?
+
+Blok to pakiet transakcji plus krótki nagłówek, który go opisuje. Nagłówek bloku Blocknet ma siedem pól:
+
+| Pole | Co zawiera |
+|---|---|
+| Wersja | Wersję protokołu |
+| Wysokość | Pozycję bloku w łańcuchu |
+| Poprzedni hash | Identyfikator poprzedniego bloku |
+| Korzeń Merkle | Odcisk wszystkich transakcji w bloku |
+| Znacznik czasu | Kiedy blok został utworzony |
+| Trudność | Jak trudno znaleźć ten blok |
+| Nonce | Liczbę, którą miner zmienia przy każdej próbie |
+
+To pole poprzedniego hasha tworzy łańcuch. Każdy blok wskazuje na poprzedni, więc zmiana dowolnej starej transakcji zmieniłaby odcisk tego bloku i zerwała każde kolejne ogniwo. Pierwszą transakcją w każdym bloku jest coinbase, czyli transakcja wypłacająca nagrodę minerowi, który znalazł blok.
+
+## Jak miner znajduje blok?
+
+<Answer>
+Miner haszuje nagłówek bloku, sprawdza, czy wynik jest równy celowi sieci lub od niego mniejszy, a jeśli nie jest, zmienia nonce i próbuje ponownie. Dobra funkcja skrótu sprawia, że wynik jest nieprzewidywalny, więc jedynym sposobem na wygraną jest wykonanie wielu prób. Twój hashrate to liczba prób, które wykonujesz na sekundę.
+</Answer>
+
+Funkcja skrótu zamienia dowolne dane wejściowe w liczbę o stałej długości, która wygląda na losową. Zmień jeden bit danych wejściowych, a wynik zmieni się całkowicie. Potraktuj ten wynik jako ogromną liczbę: jeśli jest równy celowi lub od niego mniejszy, blok jest ważny. Niższy cel oznacza mniej wygrywających hashy, a więc średnio więcej prób.
+
+W Blocknet każda próba to jeden hash Argon2id. Hasłem jest 8-bajtowy nonce, a solą reszta nagłówka, i każdy hash przerabia 2 GiB pamięci, zanim zwróci 32-bajtowy wynik. Gdy miner znajdzie hash równy celowi lub mniejszy, wysyła blok do sieci. Każdy węzeł powtarza ten jeden hash, aby go potwierdzić, co zajmuje ułamek pracy włożonej w jego znalezienie.
+
+[Artykuł o Argon2id](/pl/blog/argon2id-proof-of-work-explained/) omawia każdy krok tego hasha i wyjaśnia, dlaczego potrzebuje on tak dużo pamięci.
+
+## Czym jest trudność kopania?
+
+Trudność to liczba, która wyznacza cel. W Blocknet cel to (2^256 − 1) podzielone przez trudność, co oznacza, że trudność to w przybliżeniu liczba hashy, których cała sieć potrzebuje średnio, by znaleźć jeden blok.
+
+Daje to szybki sposób na odczytanie stanu sieci. Blocknet zakłada jeden blok co 300 sekund, więc hashrate sieci wynosi około trudność ÷ 300. Na przykład trudność 6 000 000 oznaczałaby, że sieć wykonuje około 20 000 hashy na sekundę.
+
+Sieć dostosowuje trudność, aby utrzymać bloki w harmonogramie, gdy minerzy przychodzą i odchodzą:
+
+- **Bitcoin** zakłada dziesięciominutowe bloki i przelicza trudność raz na 2016 bloków, czyli mniej więcej co dwa tygodnie.
+- **Blocknet** zakłada pięciominutowe bloki i przelicza trudność po każdym bloku za pomocą LWMA, liniowo ważonej średniej kroczącej. Bierze pod uwagę ostatnie 60 bloków i nadaje największą wagę najnowszym, więc szybko podąża za zmianami hashrate: całe okno obejmuje około pięciu godzin bloków.
+
+LWMA ogranicza też, jak bardzo jeden nietypowy blok może wpłynąć na wynik: czas rozwiązania każdego bloku liczy się jako co najmniej 1 sekunda i co najwyżej 1800 sekund, czyli sześciokrotność celu. Jeśli bloki przychodzą częściej niż co pięć minut, trudność rośnie; jeśli rzadziej, spada.
+
+## Jak minerzy otrzymują zapłatę?
+
+Każdy blok tworzy nowe monety w swojej transakcji coinbase. W Blocknet coinbase ma dokładnie jedno wyjście, warte dokładnie tyle, ile nagroda za blok, wypłacane na adres wybrany przez minera. Blok genezy nie zawierał żadnych transakcji, więc każda moneta w obiegu została wykopana.
+
+Nagroda podlega opublikowanemu harmonogramowi. W Blocknet zaczynała się od 723,25 BNT za blok i łagodnie maleje, obniżając się raz na każdy 30-dniowy miesiąc liczący 8640 bloków. Emisja osiąga około 100 milionów BNT po czterech latach, a od tej pory każdy blok wypłaca stałą nagrodę ogonową (tail reward) w wysokości 2 BNT, więc minerzy zawsze mają o co kopać.
+
+Wykopane monety czekają 60 bloków, czyli około pięciu godzin, zanim będzie można je wydać. Ta przerwa pozwala, aby każde krótkie rozwidlenie łańcucha się ustabilizowało, zanim nowa nagroda zostanie wydana.
+
+## Dlaczego większość minerów dołącza do puli?
+
+Pula łączy hashrate wielu minerów, dzięki czemu grupa często znajduje bloki, a potem dzieli każdą nagrodę według pracy wniesionej przez każdego uczestnika. Kopiąc solo, mały miner może czekać dni lub tygodnie na cały blok; w puli ten sam hashrate zarabia stały strumień mniejszych wypłat.
+
+Widać to w rachunkach. Blocknet wytwarza 288 bloków dziennie, więc Twoja oczekiwana liczba bloków solo dziennie to 288 × (Twój hashrate ÷ hashrate sieci). Jeśli Twój komputer to jedna tysięczna sieci, znajdujesz średnio około 0,29 bloku dziennie, jeden blok co trzy i pół dnia, choć rzeczywiste odstępy różnią się między blokami.
+
+Pula mierzy Twoją pracę za pomocą **udziałów** (shares). Udział to hash, który spełnia łatwiejszy cel ustalony przez pulę dla Twojego połączenia. Każdy udział liczy się do Twojej części nagrody, a udział, który spełnia też pełny cel sieci, jest prawdziwym blokiem, który pula wysyła do blockchainu. Na bntpool.com:
+
+- **Trudność udziałów dostosowuje się do każdego połączenia**, celując w około dziesięć udziałów co pięć minut, więc zarówno szybkie, jak i wolniejsze komputery regularnie zgłaszają pracę.
+- **Nagrody są dzielone w systemie PPLNS** z sześciogodzinnym oknem: nagroda za każdy blok trafia do udziałów wysłanych w ciągu sześciu godzin przed jego znalezieniem.
+- **Wypłaty zaczynają się od 0,1 BNT**, gdy nad blokiem jest już 60 kolejnych bloków.
+
+Jeśli prowadzisz własny węzeł, możesz też kopać solo i zatrzymywać każdy znaleziony blok. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) opisuje obie opcje.
+
+## Co decyduje o tym, jak szybko kopiesz?
+
+Funkcja skrótu decyduje, który sprzęt radzi sobie dobrze. SHA-256 Bitcoina prawie nie potrzebuje pamięci, więc dziś większość kopania Bitcoina wykonują specjalizowane układy zwane ASIC. Blocknet wybrał Argon2id, funkcję wymagającą dużo pamięci, zaprojektowaną tak, by opierać się układom ASIC: każdy hash zapełnia 2 GiB RAM, więc o Twojej szybkości decydują rozmiar i przepustowość pamięci.
+
+Zmienia to rachunek dla zwykłego komputera:
+
+- **RAM wyznacza liczbę wątków.** Każdy wątek kopiący potrzebuje własnej areny 2 GiB, więc komputer z 16 GB uruchamia około sześciu lub siedmiu wątków, zostawiając miejsce dla systemu.
+- **Przepustowość pamięci wyznacza łączną szybkość.** Każdy hash zapisuje około 2 GiB i odczytuje około 2 GiB, więc komputer, który szybciej przesyła dane w pamięci, kończy więcej hashy na sekundę.
+- **Kopać mogą zarówno CPU, jak i GPU.** W systemach Windows i Linux seine kopie jednocześnie na CPU i na każdej karcie NVIDIA, a hashrate się sumuje.
+
+Najlepszy wynik zmierzony przez seine to 49,4 H/s na serwerze AMD EPYC Zen 5 (EPYC 9R45, 32 wątki), a MacBook Pro z Apple M4 Max osiąga 30,9 H/s. [Poradnik o sprzęcie](/pl/blog/blocknet-mining-hardware-hashrate/) zawiera wyniki dla każdej testowanej generacji, a poradnik o [kopaniu na CPU w 2026 roku](/pl/blog/cpu-mining-2026/) wyjaśnia, dlaczego kryptowaluty wymagające dużo pamięci pasują do zwykłych procesorów.
+
+## Kto pilnuje uczciwości łańcucha?
+
+Każdy węzeł sprawdza każdy blok: czy hash spełnia cel, czy transakcje są ważne i czy nagroda jest dokładnie właściwa. Blok, który nie przejdzie któregokolwiek sprawdzenia, zostaje odrzucony, bez względu na to, ile pracy w niego włożono.
+
+Gdy dwóch minerów znajdzie blok niemal w tej samej chwili, łańcuch na krótko się rozwidla. Węzły Blocknet podążają za łańcuchem z największą łączną pracą, czyli sumą trudności wszystkich bloków, więc rozwidlenie rozstrzyga się, gdy tylko następny blok pojawi się po jednej ze stron. Dlatego portfele liczą potwierdzenia: w Blocknet 10 potwierdzeń (około 50 minut) uznaje się za bezpieczne, a żaden węzeł nie przeprowadzi reorganizacji głębszej niż 100 bloków.
+
+## Wypróbuj na własnym komputerze
+
+Kopanie Blocknet to trzy kroki: zdobądź adres, pobierz [seine](/pl/#download), uruchom go i zaakceptuj domyślną pulę, bntpool.com. seine dobiera liczbę wątków, jądro obliczeniowe CPU i układ pamięci podczas kopania, więc swoje pierwsze udziały zobaczysz w ciągu kilku minut.
+
+<Note>
+Według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) Blocknet planuje około 2027-02-16 aktualizację sieci o nazwie Faraday, która ma wprowadzić lżejszy proof of work. Powyższe szczegóły proof of work opisują sieć przed Faraday. seine sprawdza nowe wydania przy starcie i co 12 godzin.
+</Note>
+
+<CTA target="seine" title="Zacznij kopać Blocknet" text="Pobierz seine dla systemu Windows, macOS lub Linux, wklej swój adres i w kilka minut zacznij wysyłać udziały do bntpool.com." />

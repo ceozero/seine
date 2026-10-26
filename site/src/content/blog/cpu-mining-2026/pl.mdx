@@ -1,0 +1,112 @@
+---
+title: 'Kopanie na CPU w 2026 roku: co kopać procesorem'
+description: Kopanie na CPU w 2026 roku. Zobacz, dlaczego kryptowaluty wymagające dużo pamięci, takie jak Blocknet, sprzyjają zwykłym komputerom i jak zacząć kopać z seine.
+tags: [Kopanie na CPU, Argon2id, Poradnik kopania, Sprzęt]
+faq:
+  - q: 'Jakie kryptowaluty można kopać na CPU w 2026 roku?'
+    a: 'Szukaj kryptowalut, których proof of work zaprojektowano dla procesorów ogólnego przeznaczenia. Monero używa RandomX, który jego autorzy opisują jako zoptymalizowany pod CPU ogólnego przeznaczenia, a Blocknet używa Argon2id z 2 GiB pamięci na hash. Oba pozwalają zwykłym komputerom stacjonarnym, laptopom i serwerom pozostać w grze, bo każdy hash zależy od pamięci, a nie tylko od samej arytmetyki.'
+  - q: 'Ile RAM potrzeba do kopania Blocknet na CPU?'
+    a: 'Każdy wątek kopiący potrzebuje około 2 GB RAM, bo każdy hash Argon2id zapełnia własny blok pamięci 2 GiB. Podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą, i zostaw trochę dla systemu. Na komputerze z 32 GB seine uruchamia około 14 wątków i oblicza to za Ciebie przy starcie.'
+  - q: 'Dlaczego algorytmy wymagające dużo pamięci sprzyjają zwykłym komputerom?'
+    a: 'Hash wymagający dużo pamięci potrzebuje przy każdej próbie gigabajtów szybkiej pamięci, więc układ zbudowany wyłącznie do haszowania nadal potrzebowałby dużo RAM obok każdego rdzenia. Komputery stacjonarne, laptopy i serwery mają już mnóstwo RAM i szybkie kontrolery pamięci, dzięki czemu sprzęt, który ludzie już mają, jest bliski temu, czego potrzebuje algorytm.'
+  - q: 'Czy można kopać jednocześnie na CPU i karcie graficznej?'
+    a: 'Tak, kopiąc Blocknet z seine w systemie Windows lub Linux. seine kopie jednocześnie na procesorze i na każdej wykrytej karcie graficznej NVIDIA, a hashrate się sumuje. Procesor dostraja podczas kopania, a każdą kartę przy pierwszym uruchomieniu, więc przed startem nie trzeba niczego konfigurować.'
+sourceHash: 67d582c389a6
+translation: draft
+---
+
+Ten poradnik wyjaśnia, jak wygląda kopanie na CPU w 2026 roku, dlaczego kryptowaluty z proof of work wymagającym dużo pamięci pozwalają zwykłym komputerom pozostać konkurencyjnymi, na co zwrócić uwagę, wybierając kryptowalutę do kopania procesorem, i jak w kilka minut zacząć kopać Blocknet z seine.
+
+## Czy w 2026 roku nadal można kopać kryptowaluty na CPU?
+
+<Answer>
+Tak, w przypadku kryptowalut, których proof of work zaprojektowano dla procesorów ogólnego przeznaczenia. Bitcoin jest kopany specjalizowanymi układami ASIC, a Ethereum zakończyło kopanie w 2022 roku, ale algorytmy wymagające dużo pamięci, takie jak RandomX w Monero i Argon2id w Blocknet, pozwalają CPU dalej efektywnie pracować, bo każdy hash potrzebuje gigabajtów szybkiej pamięci, a nie tylko arytmetyki.
+</Answer>
+
+Kopanie zaczęło się na CPU. Whitepaper Bitcoina opisuje proof of work jako „w istocie jeden CPU, jeden głos”. Gdy Bitcoin rósł, górnicy przeszli na karty graficzne, potem na układy FPGA, a potem na ASIC: układy, które nie robią nic poza obliczaniem hasha SHA-256 Bitcoina. Układy ASIC przeznaczone dla Bitcoina są dziś głównym sposobem jego kopania.
+
+Ethereum zakończyło przejście z proof of work na proof of stake podczas Merge 15 września 2022 roku. Od tamtej pory Ethereum nie wytwarza bloków przez kopanie. Poradnik [proof of work a proof of stake](/pl/blog/proof-of-work-vs-proof-of-stake/) wyjaśnia, czym różnią się te dwie konstrukcje.
+
+Kopanie na CPU w 2026 roku sprowadza się więc do jednego wyboru: wybierz kryptowalutę, której algorytm zbudowano dla procesorów i pamięci, które zwykłe komputery już mają.
+
+## Dlaczego kryptowaluty wymagające dużo pamięci sprzyjają zwykłym komputerom?
+
+<Answer>
+Proof of work wymagający dużo pamięci sprawia, że każdy hash zapełnia i odczytuje z powrotem duży blok pamięci. Układ zbudowany wyłącznie do haszowania nadal potrzebowałby gigabajtów szybkiego RAM obok każdego rdzenia, a komputery stacjonarne, laptopy i serwery mają już tę pamięć oraz kontrolery, które ją zasilają.
+</Answer>
+
+SHA-256 Bitcoina prawie nie potrzebuje pamięci. Każdy hash to krótka seria obliczeń, więc specjalizowany układ może zmieścić obok siebie wiele małych obwodów haszujących. Procesor ogólnego przeznaczenia ma też pamięci podręczne, przewidywanie skoków i dekodowanie instrukcji, z których SHA-256 w ogóle nie korzysta.
+
+Algorytm wymagający dużo pamięci zmienia miejsce, w którym odbywa się praca. Proof of work Blocknet to [Argon2id](/pl/blog/argon2id-proof-of-work-explained/) z 2 GiB pamięci, jednym przejściem i jednym torem. Każdy hash zapisuje około 2 GiB pamięci i odczytuje z powrotem około 2 GiB. W drugiej połowie przejścia każdy nowy blok odczytuje wcześniejszy, wybrany na podstawie danych, których miner nie może przewidzieć z wyprzedzeniem. Hash jest gotowy dopiero wtedy, gdy zbudowany zostanie cały blok 2 GiB, więc szybkość zależy od tego, jak szybko system pamięci przesyła dane, i od tego, ile bloków 2 GiB mieści się naraz w RAM.
+
+W tym zwykłe komputery już są dobre. Kod demona Blocknet wprost mówi o celu: „PoW wymagający dużo pamięci, aby opierać się układom ASIC i zapewnić uczciwe kopanie”, w którym rozmiar 2 GB sprawia, że „specjalizowany sprzęt jest niepraktyczny”. Argon2id jest zaprojektowany tak, by opierać się układom ASIC, a ustawienie 2 GiB wykorzystuje tę konstrukcję na rzecz komputerów, które ludzie już mają.
+
+## Co kopać na CPU?
+
+Zamiast gonić za listami, sprawdź kryptowalutę pod kątem kilku pytań:
+
+- **Czy algorytm zaprojektowano dla CPU?** RandomX w Monero to „algorytm proof of work (PoW) zoptymalizowany pod procesory ogólnego przeznaczenia”, a Monero aktywowało go 30 listopada 2019 roku. Argon2id w Blocknet używa 2 GiB pamięci na hash, co sprawia, że decydującymi zasobami są RAM i przepustowość pamięci.
+- **Czy start był uczciwy?** W Blocknet blok genezy nie zawiera transakcji, a nagroda za każdy blok to pojedyncze wyjście wypłacane minerowi, który go znalazł. W konsensusie nie ma premine, skarbca ani funduszu deweloperskiego, więc każda moneta w obiegu została wykopana.
+- **Czy jest miner, który zna Twój procesor?** Dobry miner ma osobne ścieżki kodu dla każdej rodziny CPU i wybiera najszybszą dla Twojego komputera.
+- **Czy jest pula z regularnymi wypłatami?** Kopanie w puli łączy wielu małych minerów, dzięki czemu nagrody przychodzą regularnie, a nie blok po bloku. Poradnik [jak działa kopanie kryptowalut](/pl/blog/how-crypto-mining-works/) wyjaśnia pule i udziały.
+
+Blocknet spełnia wszystkie cztery warunki. To kryptowaluta prywatności z [prywatnością domyślnie](/pl/blog/blocknet-privacy-features/), pięciominutowymi blokami i płaceniem po nazwie, wystartowała w lutym 2026 roku. Jej miner, seine, jest darmowy i open source, a domyślna pula, bntpool.com, wypłaca w systemie PPLNS z sześciogodzinnym oknem. [Przegląd Blocknet](/pl/blog/what-is-blocknet/) opisuje samą kryptowalutę.
+
+## Co sprawia, że CPU szybko kopie algorytmy wymagające dużo pamięci?
+
+O tym, ile hashy na sekundę (H/s) procesor wytwarza w Blocknet, decydują trzy rzeczy.
+
+**Ilość RAM.** Każdy wątek kopiący potrzebuje do każdego hasha własnego bloku 2 GiB, więc podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą. Komputer z 32 GB teoretycznie mieści 16 bloków. seine zostawia 5% RAM w rezerwie i miejsce dla systemu operacyjnego, co daje na tej maszynie około 14 wątków. RAM często ogranicza liczbę wątków wcześniej niż liczba rdzeni. Poradnik o [kopaniu na starym komputerze lub laptopie](/pl/blog/mine-crypto-on-old-pc-or-laptop/) omawia komputery z 4–16 GB.
+
+**Przepustowość pamięci.** Każdy hash przesyła przez system pamięci gigabajty danych. Przy 49,4 H/s najszybsza maszyna zmierzona z seine zapisuje co sekundę około 99 GiB nowych bloków pamięci (49,4 × 2 GiB). Procesory z większą liczbą kanałów pamięci i szybszą pamięcią wychodzą na prowadzenie.
+
+**Właściwe jądro obliczeniowe.** seine ma kilka jąder Argon2id: AVX2, AVX-512 i jądro strumieniowe na x86 oraz NEON ze ścieżką przyspieszoną SHA3 na Arm. Na tym samym układzie jądro robi dużą różnicę. Na AWS Graviton4 jądro SHA3 z prefetchingiem kopie o 56% szybciej niż zwykły NEON (z 13,80 do 21,50 H/s), a na AMD EPYC 9R45 jądro strumieniowe kopie o 30% szybciej niż AVX2 (z 34,47 do 44,74 H/s przy 24 wątkach). seine porównuje jądra podczas kopania i zostawia szybsze.
+
+To najlepsze wyniki zmierzone z seine dla każdej generacji sprzętu:
+
+| Sprzęt | Dokładny układ | Wątki | Hashrate |
+|---|---|---|---|
+| AMD EPYC · Zen 5 | serwer EPYC 9R45 | 32 | 49,4 H/s |
+| Serwer Arm | AWS Graviton4 | 32 | 39,3 H/s |
+| AMD EPYC · Zen 4 | serwer EPYC 9R14 | 32 | 38,2 H/s |
+| Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s |
+| Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
+
+Wiersz Apple M4 Max to laptop, co pokazuje, jak dobrze mocny system pamięci pasuje do Argon2id. Wiersze serwerowe zmierzono na maszynach AWS z huge pages 2 MiB. [Poradnik o sprzęcie do kopania Blocknet](/pl/blog/blocknet-mining-hardware-hashrate/) szczegółowo omawia porady zakupowe i dobór RAM, a [poradnik dla Maca](/pl/blog/mine-blocknet-on-mac/) opisuje Apple Silicon.
+
+## Jak zacząć kopać Blocknet na CPU?
+
+seine nie wymaga konfiguracji. Sam dopasowuje się do Twojego komputera i od razu zaczyna haszować:
+
+1. **Zdobądź adres.** Zainstaluj oficjalny portfel Blocknet i skopiuj swój adres albo zarejestruj [krótką nazwę Blocknet ID](/pl/blog/blocknet-id-pay-by-name/) i kop na `@name`. [Poradnik o portfelu](/pl/blog/blocknet-wallet-for-mining/) przeprowadzi Cię przez to.
+2. **Pobierz seine** dla systemu Windows, macOS lub Linux z [sekcji pobierania](/pl/#download) i rozpakuj go.
+3. **Uruchom go** i wklej swój adres, gdy zostaniesz o niego poproszony:
+
+```sh
+./seine
+```
+
+4. **Zaakceptuj domyślną pulę**, `stratum+tcp://bntpool.com:3333`, i już kopiesz.
+
+Podczas kopania seine porównuje różne liczby wątków i jądra obliczeniowe CPU na prawdziwej pracy kopania, wycofuje się, gdy zaczyna brakować pamięci, i zapamiętuje, co zadziałało, na kolejny start. W systemach Windows i Linux kopie też jednocześnie na każdej karcie graficznej NVIDIA w komputerze, a hashrate się sumuje. [Poradnik kopania krok po kroku](/pl/blog/how-to-mine-blocknet/) opisuje wypłaty, a w systemie Linux [poradnik o huge pages](/pl/blog/huge-pages-blocknet-mining/) dodaje około 4–6% ze stronami 2 MiB i kolejne 2% ze stronami 1 GiB.
+
+## Ile wykopie Twój CPU?
+
+Najpierw zmierz swój hashrate. Test wydajności offline w seine nie wymaga puli ani węzła:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+Potem wykonaj obliczenia na aktualnych liczbach. Blocknet zakłada jeden blok co pięć minut, czyli 288 bloków dziennie. Twoja oczekiwana część to:
+
+- **Bloki dziennie** = 288 × (Twój H/s ÷ H/s sieci)
+- **BNT dziennie** = bloki dziennie × aktualna nagroda za blok
+
+Hashrate sieci i nagroda za blok zmieniają się z czasem, więc przed obliczeniami odczytaj aktualne wartości z [bntpool.com](https://bntpool.com). W puli otrzymujesz regularne wypłaty PPLNS, gdy Twoje saldo osiągnie 0,1 BNT, zamiast czekać, aż sam znajdziesz cały blok. Wartość tych BNT zależy potem od ceny monety i kosztu Twojej energii elektrycznej.
+
+<Note>
+Wszystko powyżej dotyczy obecnego proof of work Argon2id w Blocknet. Według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) Blocknet planuje około 2027-02-16 aktualizację sieci o nazwie Faraday, która wprowadzi „lżejszy proof of work”. seine sprawdza nowe wydania przy starcie i co 12 godzin.
+</Note>
+
+<CTA target="seine" title="Zacznij kopać na CPU z seine" text="seine dopasowuje liczbę wątków do Twojego RAM i wybiera najszybsze jądro dla Twojego procesora, kopiąc na bntpool.com." />

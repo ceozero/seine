@@ -1,0 +1,91 @@
+---
+title: 'Dandelion++ expliqué : le relais stem et fluff des transactions'
+description: 'Dandelion++ expliqué simplement : le relais stem et fluff, la conception de l''article de 2018 et la façon dont Blocknet masque quel nœud a envoyé une transaction.'
+tags: [Confidentialité, Dandelion++, Réseau, Blocknet]
+faq:
+  - q: 'Dandelion++ masque-t-il mon adresse IP ?'
+    a: 'Il masque quel nœud a lancé une transaction aux yeux des observateurs répartis sur le réseau. La transaction ne se diffuse largement qu''après son éclosion, à plusieurs sauts de vous. Votre premier pair de la tige voit la transaction arriver de votre nœud, mais les messages de tige sont identiques, qu''un nœud ait créé la transaction ou qu''il la relaie : il ne peut donc pas savoir lequel des deux.'
+  - q: 'Quelle est la différence entre Dandelion et Dandelion++ ?'
+    a: 'Dandelion (2017) a introduit les phases de tige et d''éclosion sur une seule ligne de relais. Dandelion++ (2018) conserve les deux phases et les renforce contre les espions qui enfreignent les règles. Il utilise un graphe dans lequel chaque nœud choisit deux relais, envoie ses propres transactions le long d''une arête fixe, choisit de nouveaux relais à chaque époque et ajoute un minuteur de secours.'
+  - q: 'Quelles cryptomonnaies utilisent Dandelion++ ?'
+    a: 'Monero a ajouté Dandelion++ dans sa version 0.16, publiée en mai 2020, et Blocknet relaie chaque transaction avec. Dandelion avait d''abord été proposé pour le Bitcoin sous le nom de BIP 156 par le même groupe de recherche. N''importe quel coin reposant sur un réseau pair à pair peut l''adopter, car il ne change que la façon dont les nœuds se transmettent les nouvelles transactions.'
+  - q: 'Quels paramètres Dandelion++ Blocknet utilise-t-il ?'
+    a: 'Les nœuds Blocknet prolongent la tige avec une probabilité de 0,9 à chaque saut, si bien qu''une transaction éclot avec une probabilité de 10 % à chaque relais. Les routes de la tige changent toutes les 10 minutes. Si votre propre transaction n''est pas revenue à votre nœud en phase d''éclosion dans les 45 secondes, votre nœud la diffuse lui-même : elle atteint donc toujours le réseau.'
+sourceHash: 036cbd9214b7
+translation: draft
+---
+
+Dandelion++ est une façon de relayer les nouvelles transactions sur un réseau pair à pair pour que les personnes qui observent le réseau ne puissent pas facilement déterminer quel ordinateur les a envoyées. Ce guide explique le problème qu'il résout, le fonctionnement de ses phases de tige (stem) et d'éclosion (fluff), ce que l'article de 2018 a ajouté à la conception d'origine, et comment Blocknet l'utilise pour chaque paiement.
+
+## Qu'est-ce que Dandelion++ ?
+
+<Answer>
+Dandelion++ est un protocole de relais des transactions qui masque quel nœud a créé une transaction. Une nouvelle transaction voyage d'abord le long d'une « tige » (stem), transmise d'un nœud à un seul nœud suivant pendant plusieurs sauts. Puis elle « éclot » (fluff) et se diffuse à tout le réseau, en semblant partir d'un nœud éloigné du véritable expéditeur.
+</Answer>
+
+Le nom (« pissenlit » en anglais) vient de la forme du trajet : une fine tige, puis un nuage de graines qui s'envolent dans toutes les directions. Dandelion++ a été publié en 2018 par Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller et Pramod Viswanath dans les [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (prépublication sur [arXiv](https://arxiv.org/abs/1805.11060)), et présenté à ACM SIGMETRICS 2018. Il améliore la proposition faite en 2017 par le même groupe, Dandelion.
+
+## Pourquoi diffuser une transaction révèle-t-il son origine ?
+
+Un message de transaction ne contient pas votre adresse IP. C'est sa façon de se propager qui la trahit. Sur un réseau de cryptomonnaie classique, un nœud qui crée une transaction l'envoie à tous ses pairs, qui l'envoient aux leurs, et elle se propage depuis la source en cercles concentriques.
+
+Des chercheurs ont montré que cette propagation se mesure. En 2014, Biryukov, Khovratovich et Pustogarov, et séparément Koshy, Koshy et McDaniel, ont fait tourner un « supernœud » connecté à presque tous les nœuds Bitcoin joignables, qui enregistrait le moment où chaque transaction arrivait de chaque pair. Le nœud qui livrait une transaction en premier était souvent celui qui l'avait créée. L'article sur Dandelion++ appelle cela l'estimateur du premier espion : supposer que le premier nœud honnête à livrer une transaction en est la source. Il est simple et fonctionne bien contre la diffusion par inondation.
+
+Ajouter des délais aléatoires avant que chaque nœud ne transmette une transaction, ce que fait Bitcoin Core avec un mécanisme appelé diffusion, brouille davantage les temps de propagation. Les travaux sur Dandelion ont pris une autre voie et ont changé la forme même du trajet.
+
+## Comment fonctionnent les phases de tige et d'éclosion ?
+
+<Answer>
+Pendant la phase de tige, chaque nœud transmet la transaction à exactement un pair. À chaque saut, le nœud tire à pile ou face avec une pièce pondérée : le plus souvent il prolonge la tige, parfois il passe à l'éclosion. Pendant la phase d'éclosion, la transaction est diffusée à tous les pairs comme d'habitude, si bien que les observateurs la voient se propager depuis le nœud où elle a éclos.
+</Answer>
+
+Étape par étape :
+
+1. **Votre nœud lance une tige.** Il envoie la nouvelle transaction à un seul pair.
+2. **Chaque relais décide.** Le pair la transmet soit à un seul autre pair (tige), soit à tous (éclosion).
+3. **L'éclosion la diffuse partout.** Depuis le nœud où elle éclot, la transaction inonde le réseau de la manière habituelle et atteint les mineurs.
+
+Un espion qui observe de nombreux nœuds voit désormais la propagation commencer au nœud d'éclosion, qui peut se trouver à de nombreux sauts de vous. La longueur de la tige est aléatoire : l'espion ne peut pas simplement remonter un nombre fixe de sauts. L'article donne une longueur de tige attendue de 1/q, où q est la probabilité d'éclore à chaque saut. Avec q = 0,1, une tige compte en moyenne une dizaine de sauts.
+
+## Qu'est-ce que Dandelion++ a changé par rapport à Dandelion ?
+
+La conception Dandelion de 2017 faisait passer les tiges le long d'une seule ligne de relais et prouvait des résultats solides sous trois hypothèses : chaque nœud respecte les règles, chaque nœud envoie une seule transaction, et chaque nœud fait tourner Dandelion. L'article de 2018 a montré comment des espions qui enfreignent ces hypothèses pouvaient en apprendre davantage, puis a modifié la conception pour que les garanties tiennent face à eux. Le protocole fonctionne par époques, chaque nœud passant à une nouvelle époque à une fréquence « de l'ordre de 10 minutes », et au sein de chaque époque il utilise quatre mécanismes :
+
+| Mécanisme | Ce qu'il fait |
+|---|---|
+| Un graphe de relais approximativement 4-régulier | Chaque nœud choisit jusqu'à deux de ses connexions sortantes comme relais, ce qui donne un réseau de chemins entrelacés au lieu d'une seule ligne. |
+| Une seule arête pour vos propres transactions | Un nœud envoie chaque transaction qu'il crée le long de la même arête sortante, si bien qu'envoyer plusieurs transactions n'en révèle pas davantage. |
+| Relais pseudo-aléatoire | À chaque époque, un nœud est soit un relais, soit un diffuseur pour toutes les transactions qu'il reçoit en phase de tige, et associe chaque arête entrante à une arête sortante. |
+| Minuteurs de secours | Un nœud qui a envoyé ou relayé une transaction en tige attend un délai aléatoire pour la voir éclore, et la diffuse lui-même si ce n'est pas le cas. |
+
+Pour choisir q, les simulations de l'article ont montré que garder q à 0,2 ou moins limite ce qu'un espion peut gagner en manipulant le graphe de relais. Les auteurs ont fait tourner leur implémentation sur le réseau Bitcoin réel et ont choisi q = 0,1 ou q = 0,2 pour maintenir la propagation dans leur objectif de 4,5 secondes.
+
+Dandelion a été proposé pour le Bitcoin sous le nom de [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). Monero a ajouté Dandelion++ dans sa [version 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), publiée en mai 2020.
+
+## Comment Blocknet utilise-t-il Dandelion++ ?
+
+Chaque nœud Blocknet relaie les transactions avec Dandelion++, et il n'y a rien à activer. Quand vous envoyez des BNT, votre nœud vérifie d'abord la transaction et l'ajoute à son propre pool mémoire (mempool), puis la confie au routeur Dandelion++. Voici les paramètres du daemon :
+
+| Paramètre | Valeur | Signification |
+|---|---|---|
+| Probabilité de tige | 0,9 | Chaque relais prolonge la tige 90 % du temps et éclot 10 % du temps (q = 0,1), le même q que celui testé dans l'article. |
+| Époque | 10 minutes | Les routes de la tige sont redistribuées toutes les 10 minutes. |
+| Minuteur d'embargo | 45 secondes | Si votre transaction n'est pas revenue à votre nœud en phase d'éclosion dans ce délai, votre nœud la diffuse lui-même. |
+
+Le trajet d'un paiement Blocknet :
+
+- **Votre nœud choisit un pair de tige pour l'époque.** Il envoie chaque transaction qu'il crée à ce même pair jusqu'à l'époque de 10 minutes suivante, ce qui correspond à la règle de l'article pour les transactions propres d'un nœud.
+- **Chaque relais fait un nouveau choix.** Un nœud qui reçoit une transaction en tige la fait éclore avec une probabilité de 10 %. Sinon, il la transmet à un pair choisi au hasard, autre que celui dont elle provient. Avec q = 0,1, une tige compte en moyenne une dizaine de sauts.
+- **Les messages de tige sont identiques quel que soit le nœud.** Un nœud utilise le même message pour lancer une tige que pour en relayer une, si bien que le pair qui la reçoit ne peut pas savoir si vous avez créé la transaction ou si vous la relayez.
+- **La transaction arrive toujours.** Si un saut de tige ne peut pas être livré, le nœud fait éclore la transaction immédiatement, et l'embargo de 45 secondes couvre tout ce qui resterait bloqué.
+- **Les relais vérifient ce qu'ils transportent.** Un nœud confirme qu'une charge de tige est une transaction bien formée avant de la relayer, et pénalise un pair qui envoie des données invalides.
+
+## Comment Dandelion++ s'articule-t-il avec les autres protections de Blocknet ?
+
+Dandelion++ agit au niveau de la couche réseau : il protège le lien entre une transaction et l'ordinateur qui l'a envoyée. La confidentialité sur la chaîne qui fait de Blocknet une [cryptomonnaie de confidentialité](/fr/blog/what-is-a-privacy-coin/) protège ce que dit la transaction : un cercle CLSAG de 16 sur chaque entrée masque l'expéditeur, les adresses furtives à usage unique masquent le destinataire, et les engagements de Pedersen avec preuves d'intervalle Bulletproofs masquent les montants. Ces protections sont obligatoires : toutes les transactions se ressemblent donc avant même que Dandelion++ ne les transporte.
+
+Les deux couches se complètent. Les signatures de cercle masquent quelle sortie a payé, et Dandelion++ masque quel nœud a diffusé le paiement. [Comment Blocknet garde les paiements confidentiels](/fr/blog/blocknet-privacy-features/) passe en revue chaque couche sur la chaîne, et [Qu'est-ce que Blocknet ?](/fr/blog/what-is-blocknet/) en donne une vue d'ensemble, y compris le paiement par nom avec Blocknet ID.
+
+Pour obtenir vos propres BNT à envoyer, vous pouvez les miner chez vous. Suivez le [guide pour miner Blocknet](/fr/blog/how-to-mine-blocknet/) pour télécharger seine, le diriger vers bntpool.com et recevoir vos paiements sur l'adresse de votre portefeuille ou votre `@name`.
+
+<CTA target="seine" title="Minez vos premiers BNT avec seine" text="seine s'optimise tout seul pour votre ordinateur et mine des BNT vers votre adresse ou votre @name sur bntpool.com, prêts pour votre premier paiement confidentiel." />

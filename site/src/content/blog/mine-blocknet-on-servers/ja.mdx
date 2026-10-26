@@ -1,0 +1,146 @@
+---
+title: サーバーとリグで Blocknet をマイニング
+description: EPYC サーバーやリグで seine を使い Blocknet をマイニング。NUMA・L3 への自動配置、ヘッドレス実行、制御 API、Prometheus メトリクスを解説。
+tags: [マイニングガイド, サーバー, Linux, seine]
+faq:
+  - q: 'seine は NUMA サーバーに対応していますか？'
+    a: 'はい。Linux では、seine のデフォルトの自動アフィニティがマイニングスレッドを NUMA ノードと L3 キャッシュグループに分散させ、SMT の兄弟スレッドより先に物理コアごとに 1 スレッドを割り当てます。各スレッドは 2 GiB のアリーナを確保する前に自身を固定するので、メモリはスレッドの近くに配置されます。2 ノードの EPYC マシンでは、8 スレッドでハッシュレートが 73% 向上しました。'
+  - q: 'seine はターミナルなしで、バックグラウンドサービスとして動かせますか？'
+    a: 'はい。初回の実行時に --address と --pool-url を渡すと、seine は何も尋ねずに起動し、両方をデータディレクトリの seine.config.json に保存します。ターミナルが接続されていないときは、シンプルなログ行の出力に切り替わります。そのため systemd など、自動で再起動してくれるサービスマネージャーの下で簡単に動かせます。'
+  - q: 'seine は Prometheus メトリクスを出力しますか？'
+    a: 'はい。seine を --api-server または --service で起動すると、ローカルの制御 API の /metrics で Prometheus メトリクスを提供します。制御 API はデフォルトで 127.0.0.1 のポート 9977 で待ち受けます。メトリクスには、マイナーが動作中かどうか、ライフサイクルの状態、送信・受理・ステールになったソリューションの数、バックエンドの隔離状況が含まれます。スクレイプ時には API のベアラートークンを送ります。'
+  - q: 'seine の制御 API がトークンを求めるのはなぜですか？'
+    a: 'seine v0.2.23 以降、ヘルスチェックを除くすべての制御 API エンドポイントでベアラートークンが必要になりました。これにより、閲覧した Web サイトが受け取りアドレスや設定を変更できないようにしています。seine は起動のたびにデータディレクトリの control-api.cookie に新しいトークンを書き込みます。--api-token で固定のトークンを設定することもできます。'
+sourceHash: 186b1dc3c49e
+translation: reviewed
+---
+
+このガイドでは、大型マシンやラックに並んだマイニングリグで seine を動かす方法を説明します。多コアサーバーでのスレッドの配置方法、サービスマネージャーの下でのヘッドレス実行、そしてローカルの制御 API、ライブイベントストリーム、Prometheus メトリクスを使ってすべてのリグを起動・停止・監視する方法を紹介します。
+
+## seine は大型サーバーをどのように使いますか？
+
+<Answer>
+Linux では、seine はマイニングスレッドを NUMA ノード間に、さらに各ノード内の L3 キャッシュグループ間に分散させ、SMT の兄弟スレッドを使う前に物理コアごとに 1 スレッドを割り当てます。各スレッドは 2 GiB のアリーナを確保する前に自身をコアに固定するので、メモリはスレッドの近くに配置されます。これがデフォルトなので、設定は何も必要ありません。
+</Answer>
+
+Blocknet の Argon2id プルーフ・オブ・ワークは、ほとんどがメモリのトラフィックです。各スレッドはハッシュごとに専用の 2 GiB アリーナを埋めて読み返すので、ハッシュレートは、スレッドが同時にいくつのメモリコントローラとキャッシュグループを稼働させられるかで決まります。その理由は [Argon2id の解説記事](/ja/blog/argon2id-proof-of-work-explained/)で詳しく説明しています。
+
+スレッドが OS の CPU の順番にそのまま従うと、リストの先頭のコアから埋まっていきます。それらはすべて同じノードの、同じ少数のキャッシュグループにあります。2 ノードの EPYC マシンでは、OS の順番に従った 8 スレッドはすべてノード 0 に配置され、合計 16 GiB のアリーナのほぼすべてがそのノードのメモリに置かれました。seine の自動配置では各ノードに 4 スレッドずつ、アリーナも約 8 GiB ずつ配置され、両方のノードのメモリが同時に使われました。L3 グループが 8 つあるシングルノードの EPYC 8434P では、OS の順番に従った 24 スレッドが 4 つのグループに 6 スレッドずつ詰め込まれました。seine は 8 つのグループすべてを 3 スレッドずつ使いました。
+
+配置は、プロセスに与えた制限に従います。プロセスの CPU マスクとメモリマスクを尊重するので、`taskset`、cgroups、コンテナの中でも動作し、許可したコアだけを使います。ネイティブの Windows でも、同じ `auto` 設定で SMT の兄弟スレッドより先に物理コアを埋めます。
+
+## NUMA を考慮した配置でどれくらい速くなりますか？
+
+seine の開発者は 2026 年 10 月 24 日に、同じバイナリを 2 通りの設定で交互に実行するペア測定を行いました。比べたのは、seine の自動配置と、単純な OS の順番での固定（`--cpu-affinity os`）です。
+
+| マシン | スレッド数 | メモリページ | 自動配置による向上 |
+|---|---|---|---|
+| 2 ノードの AMD EPYC · Zen 3（EPYC 7R13、AWS c6a.8xlarge） | 8 | 通常 | **+73%** |
+| 2 ノードの AMD EPYC · Zen 3（EPYC 7R13、AWS c6a.8xlarge） | 8 | 2 MiB ヒュージページ | **+108%** |
+| AMD EPYC サーバー（EPYC 8434P、48 コア、L3 グループ 8 つ） | 24 | 通常 | **+16.7%** |
+
+すべてのペアで自動配置が上回りました。測定方法と生データの全容は、seine の[大型サーバーガイド](https://github.com/zpalmtree/seine/blob/master/docs/guides/large-servers.md)と [CPU 最適化ログ](https://github.com/zpalmtree/seine/blob/master/CPU_OPTIMIZATION_LOG.md)にあります。
+
+この効果は、seine がマシンのコア数より少ないスレッドで動くときに現れます。スレッド数がコア数ではなく RAM で決まる場合は、常にそうなります。各スレッドに約 2 GB 必要なので、48 コアのサーバーを埋めるにはアリーナだけで約 96 GB が必要です。配置機能は、用意できるスレッドがすべての NUMA ノードとキャッシュグループに分散されるようにします。
+
+2 行目が示すように、配置とヒュージページの効果は積み重なります。ヒュージページを確保する場合は、スレッドを置くすべてのノードで確保してください。合計が十分でも、ローカルのページが使えるとは限らないからです。ページの設定は[ヒュージページガイド](/ja/blog/huge-pages-blocknet-mining/)で説明しています。Linux では、各ノードの 2 MiB プールは `/sys/devices/system/node/node<N>/hugepages/hugepages-2048kB/nr_hugepages` で設定します。
+
+お使いのマシンで効果を確かめるには、同じスレッド数と同じページ設定で `auto` と `os` を比べます。`--cpu-affinity off` にすると、配置は完全にスケジューラに任されます。
+
+### 共有サーバーでのメモリの余裕
+
+スレッド数の自動決定では、GPU 用の確保分に加えて、RAM 全体の 5% を空けておきます。これは `--cpu-memory-reserve-percent` で変更できます。ほかのサービスがメモリを使い始めると、seine の自動スレッドはアリーナを解放し、メモリが空けば戻ってくるので、マイニングはマシンのほかの用途に合わせて動きます。チューニング結果はマシンごとにキャッシュされ、VM のサイズを変更したときなど、許可された CPU セットや NUMA と L3 の構成が変わるとキャッシュはリセットされます。
+
+## seine をヘッドレスで動かすには？
+
+<Answer>
+受け取りアドレスとプールをコマンドラインで渡します。たとえば、アドレスまたは `@name` を指定した `--address` と、`--pool-url stratum+tcp://bntpool.com:3333` です。すると seine は何も尋ねずに起動し、設定をデータディレクトリに保存し、ターミナルが接続されていないときはシンプルなログ行を出力するので、サービスマネージャーで動かせます。
+</Answer>
+
+デスクトップでは、seine は初回の実行時にアドレスとプールを尋ねます。ターミナルが接続されていないサーバーでは、最初から両方を渡します。
+
+```sh
+./seine --address '@yourname' \
+  --pool-url stratum+tcp://bntpool.com:3333 \
+  --pool-worker rack1-node04 \
+  --data-dir /var/lib/seine
+```
+
+リグ名（ここでは `rack1-node04`）は、このマシンがプール上で表示される名前です。seine はアドレス、プール、リグ名をデータディレクトリ（デフォルトは `./seine-data`）の `seine.config.json` に保存するので、同じデータディレクトリを使う次回以降の起動ではほかのフラグは不要です。デフォルトの `--ui auto` では、ターミナルでは[ダッシュボード](/ja/blog/seine-dashboard-explained/)を表示し、それ以外ではシンプルなログ行を出力します。`--ui plain` を指定すると常にシンプルな出力になります。シェルのコマンドでは `@name` と `$name` を引用符で囲んでください。
+
+Linux では、systemd のユニットで起動時に seine を開始し、終了した場合は再起動させられます。
+
+```ini
+[Unit]
+Description=seine Blocknet miner
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/opt/seine/seine --data-dir /var/lib/seine --address @yourname --pool-url stratum+tcp://bntpool.com:3333 --ui plain
+DynamicUser=yes
+StateDirectory=seine
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+seine は起動時にショートネームを解決するので、このユニットはネットワークの準備を待ちます。各リグはマイニングしながら自動でチューニングし、その選択を自分のデータディレクトリに保存して次回の起動に使います。
+
+## API で seine を制御するには？
+
+seine には、ライブイベントストリームと Prometheus メトリクスを備えたローカルの REST API があり、ダッシュボードやフリート管理ツール向けに作られています。起動方法は 2 つあります。
+
+```sh
+# API only: seine waits for a start request
+./seine --service --api-bind 127.0.0.1:9977
+
+# Mine right away and serve the API
+./seine --api-server --api-bind 127.0.0.1:9977
+```
+
+`--service` モードは API を起動し、コントローラが `POST /v1/miner/start` を送るまでマイナーを待機させます。このリクエストには、その実行で使うアドレス、プール、スレッド数などの設定を含められます。各マシンがいつ、どの設定でマイニングするかはコントローラが決めます。
+
+### API トークン
+
+seine v0.2.23 以降、`GET /v1/health` を除くすべてのエンドポイントで `Authorization: Bearer <token>` が必要です。seine は起動のたびにランダムな新しいトークンをデータディレクトリの `control-api.cookie` に書き込み（Unix では所有者だけが読み取れます）、終了時に削除します。安定した値が必要なフリート管理ツールでは、`--api-token` で値を設定するか、`--api-cookie` でファイルの場所を変更します。また API はデフォルトで CORS ヘッダーを送らず、ループバックにバインドしている場合は `Host` がローカルでないリクエストを拒否します。これにより、閲覧した Web サイトが受け取りアドレスや設定を変更できないようにしています。
+
+API はデフォルトで `127.0.0.1:9977` にバインドします。ほかのインターフェースにバインドするには `--api-allow-unsafe-bind` が必要なので、自分で選ばない限り API はそのマシンの中にとどまります。
+
+```sh
+export SEINE_API_TOKEN="$(cat seine-data/control-api.cookie)"
+
+curl -s -X POST http://127.0.0.1:9977/v1/miner/start \
+  -H "Authorization: Bearer $SEINE_API_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"mode":"pool","mining_address":"@yourname","pool_url":"stratum+tcp://bntpool.com:3333","pool_worker":"rack1-node04"}'
+
+curl -N -H "Authorization: Bearer $SEINE_API_TOKEN" http://127.0.0.1:9977/v1/events/stream
+```
+
+### ライブイベント
+
+`GET /v1/events/stream` は Server-Sent Events のストリームです。状態の変化、バックエンドのフェーズ、自動チューニングの進行状況と結果、見つかったソリューション、送信結果を発生と同時に通知するので、ダッシュボードにすべてのリグをリアルタイムで表示できます。再接続後は、`GET /v1/runtime/state` で現在の状態をすべて取得できます。
+
+### Prometheus メトリクス
+
+`GET /metrics` は Prometheus メトリクスを提供します。`seine_miner_running`、`seine_miner_lifecycle_info`、`seine_miner_submitted_blocks_total`、`seine_miner_accepted_blocks_total`、`seine_miner_stale_submits_total` などが含まれます。cookie は起動のたびに変わり、seine のユーザーしか読み取れないので、Prometheus には固定のトークンを渡します。`--api-token` を指定して seine を起動し、同じ値を Prometheus が読み取れるファイルに保存します。同じマシン上のスクレイプジョブは次のようになります。
+
+```yaml
+scrape_configs:
+  - job_name: seine
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/seine-token
+    static_configs:
+      - targets: ['127.0.0.1:9977']
+```
+
+すべてのエンドポイント、リクエストのスキーマ、イベントの一覧は、seine の[制御 API ドキュメント](https://github.com/zpalmtree/seine/blob/master/docs/API.md)にあります。
+
+## リグ用のマシンを選ぶ
+
+配置機能、ヘッドレス実行、API は、タワー型 PC 1 台でもサーバーのラックでも同じように動作します。どのプロセッサが最も速くマイニングできるか、1 スレッドあたりどれくらいの RAM を積むべきかは、[Blocknet マイニングハードウェアガイド](/ja/blog/blocknet-mining-hardware-hashrate/)を参照してください。seine を初めて使う方は、[Blocknet のマイニング方法](/ja/blog/how-to-mine-blocknet/)から始めてください。
+
+<CTA target="seine" title="サーバー用に seine をダウンロード" text="seine はスレッドを NUMA ノードとキャッシュグループに自動で配置し、ヘッドレスで動作し、すべてのリグにライブイベントと Prometheus メトリクス付きの制御 API を提供します。" />

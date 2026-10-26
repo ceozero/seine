@@ -1,0 +1,216 @@
+---
+import { Picture } from 'astro:assets';
+import dashboard from '../../assets/dashboard.webp';
+import heroSquare from '../../assets/hero-square.webp';
+import benchmarks from '../../data/benchmarks.json';
+import { LOCALES, localizePath, localeDef, localeFromParam, localeStaticPaths } from '../../i18n/locales';
+import { useTranslations, type UiKey } from '../../i18n/ui';
+import { getPosts } from '../../lib/blog';
+import Base from '../../layouts/Base.astro';
+import { DEFAULT_IMAGE, ORGANIZATION, REPO, SITE_URL } from '../../lib/site';
+
+export const getStaticPaths = localeStaticPaths;
+
+const locale = localeFromParam(Astro.params.lang);
+const t = useTranslations(locale);
+const posts = await getPosts(locale);
+const guides = (slugs: string[]) => slugs.map((slug) => {
+    const post = posts.find((p) => p.slug === slug);
+    if (!post) throw new Error(`Missing homepage guide: ${slug} (${locale})`);
+    return post;
+});
+const downloadGuides = guides(['mine-blocknet-on-mac', 'mine-blocknet-nvidia-gpu', 'antivirus-flags-crypto-miner']);
+const setupGuides = guides(['how-to-mine-blocknet', 'blocknet-wallet-for-mining']);
+const performanceGuides = guides(['blocknet-mining-hardware-hashrate', 'huge-pages-blocknet-mining']);
+const RELEASE = `${REPO}/releases/latest/download/`;
+
+const downloads: { os: string; name: UiKey; asset: string; detect: UiKey }[] = [
+    { os: 'windows', name: 'dlWindows', asset: 'seine-windows-x86_64.zip', detect: 'detectWindows' },
+    { os: 'mac-arm', name: 'dlMacArm', asset: 'seine-macos-aarch64.tar.gz', detect: 'detectMacArm' },
+    { os: 'linux', name: 'dlLinux', asset: 'seine-linux-x86_64.tar.gz', detect: 'detectLinux' },
+    { os: 'linux-arm', name: 'dlLinuxArm', asset: 'seine-linux-aarch64.tar.gz', detect: 'detectLinuxArm' },
+    { os: 'mac-intel', name: 'dlMacIntel', asset: 'seine-macos-x86_64.tar.gz', detect: 'detectMacIntel' },
+];
+
+// Best measured hashrate per generation lives in src/data/benchmarks.json (one place to update).
+const bars = benchmarks.best.map((b) => ({ name: 'labelKey' in b ? t(b.labelKey as UiKey) : b.label, chip: b.chip, threads: b.threads, hps: b.hps }));
+const top = Math.max(...bars.map((b) => b.hps));
+// Hashrates in the locale's number format (49,4 in German, 49.4 in English).
+const hps = new Intl.NumberFormat(localeDef(locale).htmlLang, { minimumFractionDigits: 1, maximumFractionDigits: 2 }).format;
+const specs = bars.slice(0, 4).map((b) => ({ hps: b.hps, label: b.name.replace(' · ', ' ') }));
+
+const feats: [UiKey, UiKey][] = [
+    ['feat1', 'feat1Text'], ['feat2', 'feat2Text'], ['feat3', 'feat3Text'],
+    ['feat4', 'feat4Text'], ['feat5', 'feat5Text'], ['feat6', 'feat6Text'],
+];
+
+const schema = [{
+    '@context': 'https://schema.org',
+    '@graph': [
+        ORGANIZATION,
+        { '@type': 'WebSite', '@id': `${SITE_URL}/#site`, name: 'seine', url: `${SITE_URL}/`,
+          inLanguage: LOCALES.map((l) => l.htmlLang), publisher: { '@id': `${SITE_URL}/#org` } },
+        { '@type': 'SoftwareApplication', name: 'seine', applicationCategory: 'UtilitiesApplication',
+          operatingSystem: 'Windows, macOS, Linux', description: t('homeDescription'),
+          url: SITE_URL + Astro.url.pathname, downloadUrl: `${REPO}/releases/latest`, image: DEFAULT_IMAGE,
+          license: 'https://opensource.org/licenses/BSD-3-Clause', inLanguage: localeDef(locale).htmlLang,
+          publisher: { '@id': `${SITE_URL}/#org` }, offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' } },
+    ],
+}];
+
+const scriptVars = {
+    labels: Object.fromEntries(downloads.map((d) => [d.os, t(d.detect)])),
+    metaJs: t('heroMetaJs'),
+    releaseJs: t('dlReleaseLineJs'),
+    copied: t('copied'),
+    copy: t('copy'),
+    htmlLang: localeDef(locale).htmlLang,
+};
+---
+<Base locale={locale} path="/" title={t('homeTitle')} description={t('homeDescription')} imageAlt={t('homeImageAlt')} schema={schema}>
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <h1>{t('heroTitle')}</h1>
+        <p class="lead">{t('heroLead')}</p>
+        <div class="btns">
+          <a class="btn primary" id="primary-dl" href="#download"><span id="primary-label">{t('heroDownload')}</span></a>
+          <a class="btn secondary" href="#download">{t('heroOther')}</a>
+        </div>
+        <div class="meta" id="primary-meta">{t('heroMeta')}</div>
+      </div>
+      <div class="art">
+        <Picture src={heroSquare} formats={['avif']} fallbackFormat="webp" widths={[480, 720, 960, 1200]}
+                 sizes="(max-width: 880px) calc(100vw - 48px), 540px" alt={t('heroArtAlt')}
+                 loading="eager" fetchpriority="high" />
+      </div>
+    </div>
+  </div>
+  <div class="specs" aria-label={t('heroStats')}>
+    <div class="wrap">
+      {specs.map((s) => <div><b>{hps(s.hps)}</b><span>H/s · {s.label}</span></div>)}
+    </div>
+  </div>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="sec-head"><h2>{t('dlTitle')}</h2></div>
+      <table class="downloads">
+        {downloads.map((d) => (
+          <tr data-os={d.os}>
+            <td class="os" data-match={t('dlMatch')}>{t(d.name)}</td>
+            <td class="size" data-asset={d.asset}>{d.asset.endsWith('.zip') ? '.zip' : '.tar.gz'}</td>
+            <td class="get"><a href={RELEASE + d.asset}>{t('dlGet')}</a></td>
+          </tr>
+        ))}
+      </table>
+      <div class="dl-foot">
+        <span id="release-line" set:html={t('dlReleaseLineHtml')} />
+        <a href={localizePath('/blog/mine-blocknet-on-windows/', locale)}>{t('dlWindowsGuide')}</a>
+        <a href={`https://bntpool.com/blog/${locale === 'en' ? '' : locale.toLowerCase() + '/'}track-your-miner-on-bntpool/#zero-hashrate`}>{t('poolHelp')}</a>
+        <a href={`${REPO}/blob/master/docs/BUILDING.md`}>{t('dlBuild')}</a>
+      </div>
+      <div class="dl-foot">
+        {downloadGuides.map((post) => <a href={post.path}>{post.title}</a>)}
+          <a href={localizePath('/blog/', locale) + '#troubleshooting'}>{t('topicTroubleshooting')}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="start">
+    <div class="wrap start">
+      <div>
+        <h2>{t('startTitle')}</h2>
+        <ol class="steps">
+          <li><div><b>{t('step1')}</b><span>{t('step1Text')}</span></div></li>
+          <li><div><b>{t('step2')}</b><span set:html={t('step2TextHtml')} /><br><span class="cmd"><code>./seine</code><button type="button" data-copy="./seine">{t('copy')}</button></span></div></li>
+          <li><div><b>{t('step3')}</b><span set:html={t('step3TextHtml')} /></div></li>
+        </ol>
+        <div class="dl-foot">
+          {setupGuides.map((post) => <a href={post.path}>{post.title}</a>)}
+          <a href={localizePath('/blog/', locale) + '#getting-started'}>{t('topicGettingStarted')}</a>
+        </div>
+      </div>
+      <div class="shot">
+        <Picture src={dashboard} formats={['avif']} fallbackFormat="webp" widths={[700, 1050, 1400]}
+                 sizes="(max-width: 880px) calc(100vw - 48px), 620px" alt={t('dashboardAlt')} loading="lazy" />
+      </div>
+    </div>
+  </section>
+
+  <section id="performance">
+    <div class="wrap">
+      <div class="sec-head"><h2>{t('perfTitle')}</h2><p>{t('perfSub')}</p></div>
+      <div class="bars">
+        {bars.map((b) => (
+          <div class="bar">
+            <div class="who"><b>{b.name}</b><span>{b.chip} · {t('perfThreads', { n: b.threads })}</span></div>
+            <div class="track"><i style={`width:${((100 * b.hps) / top).toFixed(1)}%`}></i></div>
+            <div class="v">{hps(b.hps)}<small>H/s</small></div>
+          </div>
+        ))}
+      </div>
+      <div class="dl-foot">
+        {performanceGuides.map((post) => <a href={post.path}>{post.title}</a>)}
+          <a href={localizePath('/blog/', locale) + '#hardware'}>{t('topicHardware')}</a>
+      </div>
+      <div class="perf-foot">
+        <a href={`${REPO}/blob/master/docs/PERFORMANCE.md`}>{t('perfAll')}</a> ·
+        <a href={`${REPO}/blob/master/docs/guides/linux-hugepages.md`}>{t('perfHugePages')}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="why">
+    <div class="wrap">
+      <div class="sec-head"><h2>{t('whyTitle')}</h2></div>
+      <div class="feats">
+        {feats.map(([h, p]) => <div class="feat"><h3>{t(h)}</h3><p>{t(p)}</p></div>)}
+      </div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <h2>{t('closingTitle')}</h2>
+      <a class="btn primary" href="#download">{t('heroDownload')}</a>
+    </div>
+  </section>
+</main>
+
+<script slot="scripts" is:inline define:vars={scriptVars}>
+  // Links work without JS; this marks the visitor's OS and fills in the version and sizes.
+  function detect() {
+    var ua = navigator.userAgent || "", plat = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    if (/Win/i.test(plat) || /Windows/i.test(ua)) return "windows";
+    if (/iPhone|iPad|Android/i.test(ua)) return null;
+    if (/Mac/i.test(plat) || /Mac OS X/i.test(ua)) return "mac-arm";
+    if (/Linux/i.test(plat) || /Linux/i.test(ua)) return /aarch64|arm64/i.test(plat + ua) ? "linux-arm" : "linux";
+    return null;
+  }
+  var os = detect(), row = os && document.querySelector('tr[data-os="' + os + '"]');
+  if (row) {
+    row.classList.add("match");
+    document.getElementById("primary-dl").href = row.querySelector(".get a").href;
+    document.getElementById("primary-label").textContent = labels[os];
+  }
+  function mb(n) { return (n / 1048576).toLocaleString(htmlLang, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " MB"; }
+  fetch("https://api.github.com/repos/zpalmtree/seine/releases/latest").then(function (r) { return r.ok ? r.json() : Promise.reject(); }).then(function (rel) {
+    var sizes = {}; (rel.assets || []).forEach(function (a) { sizes[a.name] = a.size; });
+    document.querySelectorAll(".size[data-asset]").forEach(function (el) { var s = sizes[el.dataset.asset]; if (s) el.textContent = mb(s); });
+    var tag = rel.tag_name;
+    if (row) { var s = sizes[row.querySelector(".size").dataset.asset]; if (s) tag += " · " + mb(s); }
+    document.getElementById("primary-meta").textContent = metaJs.replace("{tag}", tag);
+    var link = document.createElement("a"); link.href = rel.html_url; link.textContent = rel.tag_name;
+    var date = new Date(rel.published_at).toLocaleDateString(htmlLang, { calendar: "gregory", year: "numeric", month: "short", day: "numeric" });
+    var parts = releaseJs.replace("{date}", date).split("{tag}");
+    var line = document.getElementById("release-line");
+    line.textContent = parts[0]; line.appendChild(link); line.appendChild(document.createTextNode(parts[1] || ""));
+  }).catch(function () {});
+  document.querySelectorAll("[data-copy]").forEach(function (b) { b.addEventListener("click", function () {
+    if (!navigator.clipboard) return;
+    navigator.clipboard.writeText(b.dataset.copy).then(function () { b.textContent = copied; setTimeout(function () { b.textContent = copy; }, 1400); }).catch(function () {});
+  }); });
+</script>
+</Base>

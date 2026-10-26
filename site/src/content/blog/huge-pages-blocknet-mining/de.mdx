@@ -1,0 +1,159 @@
+---
+title: Huge Pages für schnelleres Blocknet-Mining
+description: 'Huge Pages unter Linux und WSL, Large Pages unter Windows: So bildet seine jeden 2-GiB-Argon2id-Speicherbereich mit weniger TLB-Misses ab und mint schneller.'
+tags: [Mining-Anleitung, Huge Pages, Linux, Windows, Leistung]
+faq:
+  - q: 'Brauche ich Huge Pages, um Blocknet mit seine zu minen?'
+    a: 'Nein. seine mint mit normalem Speicher, sobald du es startest, und fordert unter Linux von sich aus Transparent Huge Pages an. Reservierte Huge Pages sind ein optionales Extra für die letzten Prozent: etwa 4 bis 6 % mit 2-MiB-Pages auf dem Validierungsrechner und rund 2 % mehr mit 1-GiB-Pages.'
+  - q: 'Wie viele Huge Pages braucht jeder seine-Thread?'
+    a: 'Jeder Thread braucht 1.024 Pages zu 2 MiB, die den 2-GiB-Argon2id-Speicherbereich des Threads genau aufnehmen, oder zwei 1-GiB-Pages. Für 2-MiB-Pages multiplizierst du die Thread-Anzahl mit 1.024, rechnest 5 % Reserve dazu und rundest auf. Acht Threads brauchen 8.602 Pages, was etwa 16,8 GiB RAM reserviert.'
+  - q: 'Nutzt seine 1-GiB-Huge-Pages automatisch?'
+    a: 'Der Standardmodus von seine nutzt den reservierten 2-MiB-Pool und danach Transparent Huge Pages. Für 1-GiB-Pages reservierst du zwei pro Thread, am besten beim Booten mit hugepagesz=1G hugepages=N, und startest seine mit --cpu-page-mode large-1g. Dieser Modus funktioniert unter x86_64-Linux und WSL und bringt etwa 2 % zusätzlich zu 2-MiB-Pages.'
+  - q: 'Wie aktiviere ich Large Pages für seine unter Windows?'
+    a: 'Gib deinem Windows-Konto in secpol.msc unter Lokale Richtlinien und Zuweisen von Benutzerrechten das Recht Sperren von Seiten im Speicher (Lock pages in memory), dann melde dich ab und wieder an. seine aktiviert das Recht beim Start für sich selbst und legt den 2-GiB-Speicherbereich jedes Threads mit Large Pages an. Bei Home-Editionen vergibst du das Recht mit einem Tool wie ntrights.'
+sourceHash: ef216c34d813
+translation: reviewed
+---
+
+Mit reservierten Huge Pages kann seine den Speicher jedes Mining-Threads mit wenigen großen Pages statt mit Hunderttausenden kleinen abdecken. Diese Anleitung erklärt, warum das den Argon2id-Proof-of-Work von Blocknet beschleunigt, wie viele Pages du reservieren solltest und welche Befehle du unter Linux, WSL2 und Windows genau brauchst.
+
+## Warum beschleunigen Huge Pages das Blocknet-Mining?
+
+<Answer>
+Jeder seine-Thread hasht in einem 2-GiB-Argon2id-Speicherbereich und liest Blöcke von unvorhersehbaren Stellen darin. Mit normalen 4-KiB-Pages verteilt sich dieser Bereich auf 524.288 Pages, also weit mehr Adressübersetzungen, als der TLB der CPU zwischenspeichern kann. Huge Pages decken ihn mit 1.024 oder nur 2 Pages ab, sodass weniger Lesezugriffe auf das Durchlaufen der Seitentabellen warten müssen.
+</Answer>
+
+Jeder Speicherzugriff beginnt mit einer virtuellen Adresse, die die CPU in eine physische übersetzen muss. Die letzten Übersetzungen liegen im Translation Lookaside Buffer (TLB), den die [Dokumentation des Linux-Kernels](https://docs.kernel.org/admin-guide/mm/hugetlbpage.html) als „Cache für Übersetzungen von virtuellen in physische Adressen“ und als „sehr knappe Ressource im Prozessor“ beschreibt. Steht eine Adresse nicht im TLB, durchläuft die CPU erst die Seitentabellen im Speicher, bevor sie überhaupt mit dem Laden der Daten beginnen kann.
+
+Der Proof of Work von Blocknet macht dieses Durchlaufen häufig. Jeder Hash füllt einen 2-GiB-Speicherbereich mit 1-KiB-Blöcken, und in der zweiten Hälfte des Durchgangs liest jeder neue Block einen früheren Block, dessen Position von Daten abhängt, die einen Moment zuvor berechnet wurden. Wie die [Argon2id-Erklärung](/de/blog/argon2id-proof-of-work-explained/) zeigt, kommen so pro Hash etwa 2 GiB verstreute Lesezugriffe zusammen. Die Page-Größe entscheidet, wie viele Übersetzungen diese Zugriffe brauchen:
+
+| Page-Größe | Pages pro 2-GiB-Speicherbereich |
+|---|---|
+| 4 KiB (normal) | 524.288 |
+| 2 MiB | 1.024 |
+| 1 GiB | 2 |
+
+Mit Huge Pages deckt ein TLB-Eintrag 512- oder 262.144-mal so viel Speicher ab. Dadurch bleibt ein viel größerer Teil des Speicherbereichs in Reichweite des TLB, und jeder Thread verbringt mehr Zeit mit Hashen.
+
+## Wie viel schneller ist Mining mit Huge Pages?
+
+Die [Huge-Pages-Anleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/linux-hugepages.md) von seine nennt sie die wichtigste einzelne Stellschraube für CPU-Mining unter Linux. Auf dem Validierungsrechner brachten reservierte 2-MiB-Pages etwa **4–6 %**, und 1-GiB-Pages legten noch einmal rund **2 %** drauf. Die Anleitung hält außerdem fest, dass bei vielen laufenden Threads die Abdeckung mit Huge Pages meist mehr ausmacht als die Optimierung auf einen bestimmten Befehlssatz.
+
+Die Server-Ergebnisse im [Leistungsdiagramm](/de/#performance) von seine wurden mit explizit reservierten 2-MiB-Huge-Pages gemessen. Die 49,4 H/s eines AMD EPYC Zen 5 (EPYC 9R45) mit 32 Threads, gemessen im Oktober 2026, liefen mit 34.407 reservierten Pages, derselben Zahl wie in der Zeile für 32 Threads in der Tabelle unten. Der [Leitfaden zur Mining-Hardware](/de/blog/blocknet-mining-hardware-hashrate/) enthält alle Ergebnisse nach Generation.
+
+Auch ohne Reservierung fordert seine unter Linux beim Kernel Transparent Huge Pages an. Ein reservierter Pool geht weiter, weil die Pages vorab zurückgelegt werden, sodass jeder Thread sie bekommt, egal wie fragmentiert der Speicher inzwischen ist.
+
+## Wie viele Huge Pages braucht seine?
+
+<Answer>
+Jeder seine-Thread braucht 1.024 Huge Pages zu 2 MiB für den eigenen 2-GiB-Speicherbereich oder zwei 1-GiB-Pages. Für 2-MiB-Pages reservierst du Threads × 1.024 × 1,05 und rundest auf, was 5 % Reserve lässt. Acht Threads brauchen 8.602 Pages, etwa 16,8 GiB. Reicht die Reservierung nicht, gibt seine beim Start die genaue Zahl aus.
+</Answer>
+
+Die Thread-Anzahl ist der Wert **Threads** im Dashboard von seine. seine wählt ihn anhand deines RAMs und deiner Kernanzahl, also starte seine einmal ohne Huge Pages und notiere ihn dir. Ist die Reservierung zu klein, gibt das Startprotokoll von seine eine Zeile `hugepages |` mit den benötigten Pages und dem `sysctl`-Befehl zum Reservieren aus.
+
+| Threads | 2-MiB-Pages (mit 5 % Reserve) | Reservierter Speicher | 1-GiB-Pages |
+|---|---|---|---|
+| 4 | 4.301 | 8,4 GiB | 8 |
+| 8 | 8.602 | 16,8 GiB | 16 |
+| 16 | 17.204 | 33,6 GiB | 32 |
+| 24 | 25.805 | 50,4 GiB | 48 |
+| 32 | 34.407 | 67,2 GiB | 64 |
+
+Reservierte Pages sind für Programme zurückgelegt, die Huge Pages anfordern, also richte die Reservierung nach der Thread-Anzahl aus, mit der du tatsächlich minst. seine zählt den reservierten Pool beim Festlegen der Threads als verfügbaren Speicher, sodass deine Thread-Anzahl durch die Reservierung gleich bleibt.
+
+## Wie richtest du 2-MiB-Huge-Pages unter Linux ein?
+
+Reserviere die Pages für deine Thread-Anzahl. Dieses Beispiel gilt für 4 Threads:
+
+```bash
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Prüfe, ob der Kernel alle bereitstellen konnte:
+
+```bash
+grep -E 'HugePages_Total|HugePages_Free|Hugepagesize' /proc/meminfo
+```
+
+Ist `HugePages_Total` niedriger als angefordert, ist der Speicher fragmentiert. Leere die Caches, komprimiere den Speicher und versuche es erneut:
+
+```bash
+echo 3 | sudo tee /proc/sys/vm/drop_caches
+echo 1 | sudo tee /proc/sys/vm/compact_memory
+sudo sysctl -w vm.nr_hugepages=4301
+```
+
+Mache die Reservierung dauerhaft:
+
+```bash
+echo 'vm.nr_hugepages=4301' | sudo tee /etc/sysctl.d/99-seine-hugepages.conf
+sudo sysctl --system
+```
+
+Bei großen Reservierungen ist die dauerhafte Einstellung plus Neustart der zuverlässigste Weg, weil der Kernel die Pages früh beim Booten reserviert, bevor der Speicher fragmentiert. Starte seine danach wie gewohnt. Der Standardmodus `auto` bildet den Speicherbereich jedes Threads ohne zusätzliche Flags aus dem reservierten Pool ab.
+
+## Wie fügst du 1-GiB-Pages hinzu?
+
+1-GiB-Pages brauchen etwas mehr Einrichtung und bringen etwa 2 % zusätzlich zu 2-MiB-Pages. Jeder 2-GiB-Speicherbereich braucht genau zwei davon, eine Reserve musst du also nicht berechnen. Sie funktionieren unter x86_64-Linux und WSL.
+
+Reserviere sie beim Booten mit Kernel-Parametern, denn so bekommst du Pages dieser Größe am zuverlässigsten. Für 9 Threads:
+
+```text
+hugepagesz=1G hugepages=18
+```
+
+Auf einem frisch gebooteten Rechner kannst du auch eine Reservierung zur Laufzeit versuchen und dann die Zahl der freien Pages prüfen:
+
+```bash
+echo 18 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
+cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages
+```
+
+Die Zeilen `HugePages_*` in `/proc/meminfo` gelten nur für die Standardgröße von 2 MiB, also liest du den 1-GiB-Pool aus `/sys`. Starte seine dann im 1-GiB-Modus:
+
+```bash
+./seine --cpu-page-mode large-1g
+```
+
+In diesem Modus bildet jeder Thread seinen Speicherbereich aus dem 1-GiB-Pool ab, sodass du weißt, dass der ganze Lauf 1-GiB-Pages genutzt hat.
+
+## Wie reservierst du Huge Pages unter WSL2?
+
+WSL2 läuft mit einem echten Linux-Kernel, also funktionieren die Linux-Befehle oben auch darin. Für 1-GiB-Pages übergibst du die Boot-Parameter auf der Windows-Seite über `%UserProfile%\.wslconfig`. Die VM braucht außerdem genug Speicher für die Reservierung plus die Dienste von Windows und WSL. Der validierte 64-GiB-Rechner von seine nutzte diese Einstellungen:
+
+```ini
+[wsl2]
+memory=48GB
+processors=32
+swap=8GB
+kernelCommandLine = hugepagesz=1G hugepages=18
+```
+
+Speichere die Datei, führe unter Windows `wsl --shutdown` aus und öffne deine Distribution erneut. Prüfe, ob die Zahl der freien Pages für alle Threads reicht, bevor du mit dem Mining beginnst.
+
+## Wie aktivierst du Large Pages unter Windows?
+
+Natives Mining unter Windows ist auf derselben Hardware meist schneller als unter WSL, und seine nutzt dort die Large Pages von Windows. Dafür braucht es ein einziges Recht, **Sperren von Seiten im Speicher** (Lock pages in memory):
+
+1. Öffne `secpol.msc` und dann *Lokale Richtlinien* → *Zuweisen von Benutzerrechten*.
+2. Füge deinen Benutzer zu **Sperren von Seiten im Speicher** hinzu.
+3. Melde dich ab und wieder an, da das Recht für neue Sitzungen gilt.
+
+`secpol.msc` ist in Windows Pro, Enterprise und Education enthalten. Bei Home-Editionen vergibst du dasselbe Recht mit einem Tool wie `ntrights`.
+
+Mehr Einrichtung ist nicht nötig. Beim Start aktiviert seine das Recht für sich selbst und legt den 2-GiB-Speicherbereich jedes Threads mit `VirtualAlloc` und `MEM_LARGE_PAGES` an, der Methode, die [Microsoft](https://learn.microsoft.com/en-us/windows/win32/memory/large-page-support) für Large-Page-Speicher dokumentiert. Stehen keine Large Pages zur Verfügung, mint seine mit normalen Pages und protokolliert den Grund samt genauer Lösung. seine ändert nie selbst Kontorechte und meldet dich nie ab.
+
+## Welchen Page-Modus solltest du verwenden?
+
+Der Standard passt für fast alle. Die anderen Modi sind für 1-GiB-Pages und für Messungen gedacht:
+
+| Modus | Was er macht |
+|---|---|
+| `--cpu-page-mode auto` (Standard) | Nutzt reservierte Huge Pages oder Large Pages unter Windows, dann Transparent Huge Pages, dann normale Pages |
+| `--cpu-page-mode large` | Verlangt reservierte Huge Pages oder Large Pages unter Windows für jeden Thread und bricht beim Start ab, wenn sie fehlen |
+| `--cpu-page-mode large-1g` | Verlangt 1-GiB-Pages für jeden Thread (x86_64-Linux und WSL) |
+| `--cpu-page-mode regular` | Nur normale Pages, für einen Vorher-nachher-Benchmark |
+
+Um den Gewinn auf deinem eigenen Rechner zu messen, mine eine Weile mit `--cpu-page-mode regular`, dann mit `auto` oder `large-1g`, und vergleiche die Hashrate im Dashboard. Auf Servern mit mehreren NUMA-Nodes müssen die reservierten Pages außerdem auf den Nodes liegen, auf denen deine Threads laufen; die [Anleitung zum Mining auf Servern](/de/blog/mine-blocknet-on-servers/) erklärt das.
+
+<CTA target="seine" title="seine herunterladen und Pages reservieren" text="seine bildet den 2-GiB-Speicherbereich jedes Threads auf Huge Pages ab, sobald du sie reservierst, ganz ohne zusätzliche Flags." />

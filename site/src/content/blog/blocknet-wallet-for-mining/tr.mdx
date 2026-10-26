@@ -1,0 +1,173 @@
+---
+title: Madencilik için Blocknet cüzdanı ve adresi edinin
+description: Resmi Blocknet cüzdanını kurun, 12 kelimelik kurtarma ifadenizi yedekleyin, madencilik adresinizi kopyalayın ve bntpool.com ödemelerinin bakiyenize geldiğini görün.
+tags: [Cüzdan, Madencilik rehberi, bntpool]
+faq:
+  - q: 'Madenciliğe başlamadan önce bir Blocknet cüzdanına ihtiyacım var mı?'
+    a: 'Madencilik yapacağınız bir Blocknet adresine ihtiyacınız var ve resmi cüzdan size bunu verir. Komut satırı veya masaüstü cüzdanında bir cüzdan oluşturun, adresi kopyalayın ve seine''e yapıştırın. Cüzdanın kendisi kendi bilgisayarınızda kalır. seine ve bntpool.com yalnızca adrese ya da ona işaret eden bir Blocknet ID kısa adına ihtiyaç duyar.'
+  - q: 'Blocknet kurtarma ifadesi kaç kelimedir?'
+    a: 'Blocknet kurtarma ifadesi 12 kelimedir. Komut satırı cüzdanında seed komutu, bir uyarı ve cüzdan parolanızdan sonra onu gösterir. Kelimeleri kağıda yazın ve çevrimdışı saklayın. Bu 12 kelimeyle import komutu, cüzdan dosyası ve parola kaybolsa bile cüzdanınızı herhangi bir makinede yeniden oluşturabilir.'
+  - q: 'bntpool.com ödemeleri cüzdanımda ne zaman görünür?'
+    a: 'Bir havuz bloğunun ödülleri ödenmeden önce blok 60 onay almalıdır; bu, Blocknet''in beş dakikalık blok süresiyle yaklaşık beş saattir. Onaylanmış havuz bakiyeniz 0,1 BNT''ye ulaştığında havuz onu adresinize gönderir. Ödeme history içinde normal bir işlem olarak görünür ve 10 onaydan, yani yaklaşık 50 dakikadan sonra harcanabilir hale gelir.'
+  - q: 'Aynı adresi birden fazla madencilik makinesinde kullanabilir miyim?'
+    a: 'Evet. seine çalıştıran her makine aynı adrese veya Blocknet ID kısa adına madencilik yapabilir ve bntpool.com onların share''lerini tek bir bakiyede toplar. Havuzun istatistik sayfası bağlı her makineyi adresinizin altında listeler. Cüzdan ve kurtarma ifadesi bu süre boyunca kendi bilgisayarınızda kalır.'
+sourceHash: 4954bfd74d20
+translation: reviewed
+---
+
+Blocknet madenciliği yapmak için ödüllerinizin gideceği bir adrese ihtiyacınız var; resmi cüzdan bunu size birkaç dakikada verir. Bu rehber, komut satırı veya masaüstü cüzdanıyla nasıl cüzdan oluşturacağınızı, kurtarma ifadesini nasıl yedekleyeceğinizi, seine'e yapıştıracağınız adresi nasıl bulacağınızı ve bntpool.com size ödeme yaptığında bakiyenizi nasıl kontrol edeceğinizi gösterir.
+
+## Madencilik için hangi Blocknet cüzdanını kullanmalısınız?
+
+<Answer>
+Blocknet Privacy'nin iki resmi cüzdanından birini kullanın: Windows, macOS ve Linux'ta çalışan komut satırı cüzdanı ya da aynı sistemler için masaüstü cüzdanı. Her ikisi de bilgisayarınızda tam bir Blocknet düğümü çalıştırır ve size seine ile bntpool.com'da madencilik yapacağınız bir alma adresi verir.
+</Answer>
+
+- **Komut satırı cüzdanı.** `blocknet` programı, düğümü, cüzdanı ve ağı çalıştıran arka plan süreci olan bir Blocknet core'u kurar, başlatır ve günceller. Cüzdanınızı etkileşimli bir kabuktan yönetirsiniz. Onu Windows, macOS ve Linux sürümlerinin bulunduğu [komut satırı sürümlerinden](https://github.com/blocknetprivacy/blocknet/releases/latest) indirin.
+- **Masaüstü cüzdanı.** Blocknet daemon'unu içinde barındıran grafik arayüzlü bir cüzdan. Onu [masaüstü sürümlerinden](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) indirin.
+
+Hangisini tercih ederseniz onu seçin. Aşağıdaki adımlarda, her komutu belgelendiği için önce komut satırı cüzdanı anlatılıyor, ardından masaüstü kurulumuna geçiliyor.
+
+## Komut satırı cüzdanıyla cüzdan nasıl oluşturulur
+
+1. **Bir core kurun ve başlatın.** Sürüm arşivini açın ve kurulum sihirbazını çalıştırın:
+
+   ```sh
+   blocknet setup
+   ```
+
+   Sihirbaz düğümünüzün otomatik olarak güncel tutulup tutulmayacağını sorar, en son core'u indirir ve başlatmayı önerir. Windows'ta program `blocknet.exe` olduğundan `blocknet.exe setup` komutunu çalıştırın. Sihirbazı atlamak için `blocknet install latest` ve ardından `blocknet start` çalıştırın.
+
+2. **Kabuğu açın.** Çalışan core'a bağlanın:
+
+   ```sh
+   blocknet attach mainnet
+   ```
+
+   Bir `>` istemi görürsünüz. Kabuğu `quit` ile kapatmak core'u çalışır halde bırakır, böylece istediğiniz zaman yeniden bağlanabilirsiniz.
+
+3. **Cüzdanı oluşturun.** `load` yazın. Cüzdan bulduğu cüzdan dosyalarını listeler ve "Create a new wallet" seçeneğini sunar. Bu seçeneği seçin, bir ad ve parola girin; core yeni bir kurtarma ifadesiyle yeni bir cüzdan oluşturur:
+
+   ```
+   > load
+     ...
+     4) Create a new wallet
+
+     Choose: 4
+     Wallet name (without extension):
+   > mining
+     Password: ********
+
+     Wallet created
+     Address:  9PNo...
+     Filename: mining.wallet.dat
+   ```
+
+Cüzdan tek bir `.wallet.dat` dosyasıdır ve parolanız harcama anahtarını şifreler. Core cüzdanın yolunu hatırlar, bu yüzden bir sonraki `blocknet start` onu sizin için yükler. Blocknet ayrıca yüklenen bir cüzdanı `~/.config/bnt/wallets/` konumuna kopyalar; bu da size bilinen bir yerde ikinci bir kopya verir.
+
+## Kurtarma ifadenizi nasıl yedeklersiniz?
+
+En önemli yedek kurtarma ifadenizdir. 12 kelimeden oluşur ve onlarla, cüzdan dosyasını kaybetseniz ya da parolayı unutsanız bile cüzdanı herhangi bir bilgisayarda yeniden oluşturabilirsiniz. Blocknet parolanızı hiçbir zaman saklamaz, bu yüzden parolanızı unuttuğunuzda cüzdanınıza yeniden erişmenin yolu da seed'dir.
+
+Onu `seed` komutuyla görüntüleyin. Cüzdan bir uyarı yazdırır, onaylamanızı ve parolanızı ister, ardından kelimeleri gösterir:
+
+```
+> seed
+
+# Seed
+  WARNING: Your recovery seed controls all funds.
+  Anyone with this seed can steal your coins.
+  Never share it. Never enter it online.
+
+  Show recovery seed? [y/N]: y
+  Password: ********
+```
+
+12 kelimeyi kağıda yazın ve güvenli, çevrimdışı bir yerde saklayın. Cüzdan rehberi, kelimelere sahip olan herkes fonları kontrol ettiği için onları bir metin dosyasına, bir not uygulamasına veya bulut depolamaya kaydetmemenizi söyler. [Seed ifadeleri](/tr/blog/seed-phrase-explained/) rehberi, 12 kelimenin nasıl anahtarlarınıza dönüştüğünü ve onları nasıl iyi saklayacağınızı açıklar.
+
+Daha sonra geri yüklemek için `import` çalıştırın, `1) 12-word recovery seed` seçeneğini seçin, kelimeleri yazın ve yeni cüzdana bir ad ve parola verin. Core ardından çıktılarınız için zinciri tarar.
+
+## Blocknet adresinizi nasıl bulursunuz?
+
+<Answer>
+Komut satırı cüzdanında kabuk istemine address (veya addr) yazın. Cüzdan, 92 veya 93 karakterlik bir dize olan alma adresinizi yazdırır ve ardından kısa bir ad için blocknet.id'ye yönlendirir. Adresin tamamını kopyalayın ve seine bir ödeme adresi istediğinde ona yapıştırın.
+</Answer>
+
+```
+> addr
+
+# Address
+
+  9PNoFCqUa7K8e5JfV2Hs3TBt7kMzRGkPxJ4xVmn5cFb...
+
+  Get a short name like @name or $name at https://blocknet.id
+```
+
+seine'e vereceğiniz adres budur. [seine](/tr/#download)'i ilk kez başlattığınızda önce ödeme adresinizi, ardından bir havuz sorar; adresi yapıştırın ve bntpool.com'u kabul etmek için Enter'a basın. Adresi doğrudan da verebilirsiniz:
+
+```sh
+./seine --address <your-address>
+```
+
+seine madencilik yapmaya başladığında, [panelindeki](/tr/blog/seine-dashboard-explained/) havuz bakiyesi bölümü madencilik yaptığınız adresin ilk ve son altı karakterini gösterir; böylece cüzdanınızla eşleşip eşleşmediğini kontrol edebilirsiniz.
+
+Daha kısa bir şeye madencilik yapmayı tercih ederseniz, `@yourname` gibi bir [Blocknet ID kısa adı](/tr/blog/blocknet-id-pay-by-name/) bu adrese işaret eder ve seine'de ve bntpool.com'da çalışır.
+
+## Masaüstü cüzdanının kurulumu
+
+Masaüstü cüzdanının en son sürümü (v0.22.0, 15 Ekim 2026'da yayımlandı) şu indirmelere sahiptir:
+
+| Sistem | Dosya |
+|---|---|
+| Windows x86_64 | `.exe` yükleyici |
+| macOS Apple Silicon | `.dmg` |
+| macOS Intel | `.app.zip` |
+| Linux x86_64 | `.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+
+Her sürüm bir `SHA256SUMS.txt` dosyası içerir, böylece indirdiğiniz dosyayı kurmadan önce kontrol edebilirsiniz:
+
+```sh
+sha256sum -c SHA256SUMS.txt
+```
+
+Linux'ta `.deb` paketini kurun ya da `.AppImage` dosyasını doğrudan çalıştırın. macOS'ta uygulamayı Applications klasörüne taşıyın ve README'nin talimatına göre ilk açılıştan önce Terminal'de şunu bir kez çalıştırın:
+
+```sh
+xattr -cr /Applications/blocknet.app
+```
+
+Windows'ta Defender yükleyici için bir uyarı gösterirse "More info"ya (Ek bilgi), ardından "Run anyway"e (Yine de çalıştır) tıklayın.
+
+Uygulama, içinde gelen Blocknet daemon'unu bilgisayarınızda çalıştırır ve onunla `127.0.0.1` üzerinden konuşur; dış hizmetlere hiçbir istek göndermez. Cüzdanınızı uygulamada oluşturun, kurtarma ifadesini not edin ve alma adresinizi seine'e kopyalayın. Masaüstü cüzdanı ayrıca `blocknet://` [ödeme bağlantılarını](/tr/blog/blocknet-payment-links/) açar ve incelemeniz için gönderim formunu doldurur.
+
+## Anahtarlarınızı kendi bilgisayarınızda tutun
+
+Bir madencilik makinesinin yalnızca adresinize ihtiyacı vardır. seine madencilik için yalnızca bir adrese veya kısa ada ihtiyaç duyar, bu yüzden cüzdan dosyası ve kurtarma ifadesi güvendiğiniz bilgisayarda kalabilir. Bu en çok kiralık sunucular, ortak kullanılan rig'ler ve başkalarının erişebildiği makineler için önemlidir.
+
+- **Cüzdanı evde çalıştırın, her yerde madencilik yapın.** seine çalıştıran her makineye aynı adresi verin. bntpool.com onların share'lerini tek bir bakiyede toplar.
+- **İlerlemeyi anahtarlar olmadan izleyin.** Hashrate'inizi, share'lerinizi ve bakiyenizi herhangi bir tarayıcıdan görmek için [bntpool.com](https://bntpool.com)'da adresinizi arayın.
+- **Yalnızca görüntüleme erişimi.** Gelen fonları ikinci bir bilgisayarda görmek isterseniz, `viewkeys` yalnızca görüntüleme anahtarlarını dışa aktarır. Yalnızca görüntüleme amaçlı bir cüzdan gelen fonları gösterir, gönderim yapamaz ve imza atamaz.
+- **Bilgisayarın başından ayrılırken kilitleyin.** `lock`, parolanızla `unlock` yapana kadar harcamayı engeller.
+
+## Madencilik ödemeleri cüzdanınızda nasıl görünür?
+
+bntpool.com, ödülleri blokları olgunlaştığında öder. Bir havuz bloğu 60 onaya ihtiyaç duyar; bu, Blocknet'in beş dakikalık blok süresiyle yaklaşık beş saattir. Onaylanmış bakiyeniz 0,1 BNT'lik alt sınıra ulaştığında havuz onu normal bir Blocknet işlemi olarak adresinize gönderir.
+
+Cüzdanda `balance` (veya `bal`) ile kontrol edin:
+
+```
+> bal
+
+# Balance
+  spendable:  12.5 BNT
+  confirming: 1 BNT
+  total:      13.5 BNT
+```
+
+Yeni bir ödeme önce `confirming` altında görünür. Normal işlemler 10 onaydan, yani yaklaşık 50 dakikadan sonra harcanabilir hale gelir ve `spendable` altına geçer. `history` komutu gelen işlemleri en eskiden en yeniye, her birinin bloğu, tutarı ve türüyle listeler: havuz ödemeleri `regular` olarak, solo modda kendi bulduğunuz bloklar ise `coinbase` olarak görünür; bunların harcanabilmesi için 60 onay gerekir.
+
+Cüzdanınız bir ödemeyi, düğümü zinciri yakalayıp senkronize olduğunda listeler. Senkronizasyon tamamlandığında `status` komutu `Syncing: false` gösterir; `sync` ise çıktılarınız için indirilen blokları yeniden tarar.
+
+Madenciliğe yeni mi başlıyorsunuz? [Blocknet madenciliği rehberi](/tr/blog/how-to-mine-blocknet/) seine'i indirmeyi, iş parçacığı seçmeyi ve bntpool.com'da neler bekleyeceğinizi anlatır.
+
+<CTA target="pool" title="Yeni adresinize madencilik yapın" text="Blocknet adresinizi seine'e yapıştırın, bntpool.com'u kabul edin ve bakiyeniz 0,1 BNT'ye ulaştığında ödemelerin cüzdanınıza geldiğini izleyin." />

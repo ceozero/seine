@@ -1,0 +1,118 @@
+---
+title: Jak kopać kryptowaluty na starym komputerze lub laptopie
+description: Kop kryptowaluty na starym komputerze lub laptopie. Dowiedz się, dlaczego najważniejsze są RAM, chłodzenie i zasilanie, ile wątków zmieści Twoja pamięć i jak bezpiecznie zacząć.
+tags: [Poradnik kopania, Laptop, Kopanie na CPU, Sprzęt]
+faq:
+  - q: 'Czy laptop z 8 GB RAM może kopać kryptowaluty?'
+    a: 'Tak, jeśli to kryptowaluta wymagająca dużo pamięci, taka jak Blocknet. Każdy wątek kopiący Blocknet potrzebuje około 2 GB wolnej pamięci RAM, więc laptop z 8 GB zwykle uruchamia około dwóch wątków, gdy system operacyjny weźmie swoją część. seine mierzy wolną pamięć przy starcie i sam wybiera bezpieczną liczbę wątków.'
+  - q: 'Czy kopanie kryptowalut na starym laptopie jest bezpieczne?'
+    a: 'Tak, przy dobrym przepływie powietrza. Kopanie obciąża procesor podobnie jak długi eksport wideo albo gra, a procesory same zwalniają, gdy za bardzo się nagrzeją. Dbaj o czyste otwory wentylacyjne, stawiaj laptopa na twardej powierzchni i używaj profilu efficiency w seine, jeśli chcesz mniej ciepła i hałasu.'
+  - q: 'Czy seine działa na procesorach bez AVX2?'
+    a: 'Tak. Wersje seine dla x86 zawierają przenośne jądro obliczeniowe, które działa na każdym 64-bitowym procesorze x86, obok jąder AVX2 i AVX-512 dla układów, które je obsługują. seine sprawdza, jakie zestawy instrukcji obsługuje Twój procesor, i wybiera pasujące jądro, a na układach z AVX2 i AVX-512 porównuje jądra podczas kopania.'
+  - q: 'Ile prądu zużywa kopanie na starym komputerze?'
+    a: 'To zależy od maszyny. Zmierz to watomierzem podłączonym do gniazdka, gdy działa seine, a potem pomnóż liczbę watów przez 24 i podziel przez 1000, aby otrzymać kilowatogodziny na dobę. Pomnóż wynik przez stawkę za prąd, aby poznać dzienny koszt, i porównaj go z oczekiwaną liczbą monet na dobę.'
+sourceHash: 6643bf6169d4
+translation: draft
+---
+
+Ten poradnik pokazuje, jak zaprząc stary komputer stacjonarny lub laptopa do kopania kryptowalut: co decyduje o tym, czy maszyna może kopać, ile wątków kopiących zmieści jej pamięć, jak utrzymać niską temperaturę i jak bezpiecznie zacząć z seine na bntpool.com.
+
+## Czy można kopać kryptowaluty na starym komputerze lub laptopie?
+
+<Answer>
+Tak, jeśli wybierzesz kryptowalutę, której dowód pracy pasuje do zwykłych komputerów. Kryptowaluty wymagające dużo pamięci, takie jak Blocknet, kopie się zwykłymi procesorami i pamięcią RAM, więc stary komputer stacjonarny lub laptop może dołączyć do puli i dostawać część każdego bloku. RAM decyduje o tym, ile wątków uruchomisz, a chłodzenie sprawia, że działają bez przerwy.
+</Answer>
+
+Kryptowaluty różnią się tym, co nagradza ich dowód pracy. SHA-256 Bitcoina kopią niemal wyłącznie układy ASIC, czyli chipy zbudowane do tego jednego hasha, więc komputer ogólnego przeznaczenia niewiele tam wnosi. Konstrukcje wymagające dużo pamięci działają odwrotnie. RandomX Monero powstał z myślą o zwykłych procesorach, a Blocknet używa Argon2id z blokiem pamięci 2 GiB dla każdego hasha, czyli podejścia zaprojektowanego tak, by opierać się układom ASIC. W kryptowalucie takiej jak Blocknet kopią części, które ma każdy komputer: procesor i RAM. Poradnik o [kopaniu na CPU w 2026 roku](/pl/blog/cpu-mining-2026/) omawia, na co zwrócić uwagę, wybierając kryptowalutę do kopania procesorem.
+
+[Artykuł o Argon2id](/pl/blog/argon2id-proof-of-work-explained/) wyjaśnia, jak ten dowód pracy wypełnia i odczytuje swoją pamięć i dlaczego tempo wyznacza przepustowość pamięci.
+
+## Co liczy się najbardziej w starszym sprzęcie?
+
+O tym, jak dobrze starsza maszyna kopie kryptowalutę wymagającą dużo pamięci, decydują cztery rzeczy:
+
+- **RAM.** Każdy wątek kopiący Blocknet trzyma podczas liczenia hashy własny blok pamięci 2 GiB, więc to wolna pamięć RAM wyznacza, ile wątków się zmieści.
+- **Przepustowość pamięci.** Każdy hash zapisuje 2 GiB i odczytuje dane z całego tego obszaru, więc większość pracy wykonuje podsystem pamięci. Pamięć w trybie dwukanałowym (dwie jednakowe kości) pomaga starszemu komputerowi stacjonarnemu.
+- **Chłodzenie.** Kopanie obciąża procesor godzinami. Chłodny procesor utrzymuje taktowanie, a gorący sam zwalnia, żeby się chronić.
+- **Zasilanie.** Kopanie stale pobiera prąd, więc watomierz i stawka za prąd powiedzą Ci, ile kosztuje praca maszyny.
+
+Liczba rdzeni ma mniejsze znaczenie, niż można by się spodziewać. Czterordzeniowy komputer stacjonarny z 16 GB RAM uruchomi więcej wątków niż ośmiordzeniowy laptop z 8 GB, bo wcześniej kończy się pamięć RAM.
+
+## Ile pamięci RAM potrzebuje każdy wątek kopiący?
+
+<Answer>
+Każdy wątek kopiący Blocknet potrzebuje około 2 GB wolnej pamięci RAM, bo każdy hash wypełnia własny blok pamięci 2 GiB. Aby oszacować liczbę wątków, podziel wolną pamięć przez dwa. seine robi to przy starcie, zostawia 5% RAM w rezerwie i ogranicza liczbę wątków do liczby logicznych rdzeni procesora.
+</Answer>
+
+Automatyczny dobór w seine bierze pamięć RAM wolną w chwili startu, odejmuje 5% rezerwy, dzieli przez 2 GiB i używa tej liczby albo liczby logicznych rdzeni procesora, w zależności od tego, która jest mniejsza. Oto obliczenia dla typowych rozmiarów przy założeniu, że system operacyjny i kilka aplikacji w tle zajmują około 2–3 GB:
+
+| RAM | Bloki pamięci w teorii | Wątki, które seine może uruchomić, w przybliżeniu |
+|---|---|---|
+| 4 GB | 2 | 1, jeśli system zostawi 2 GB wolne |
+| 8 GB | 4 | 2 |
+| 12 GB | 6 | 4 |
+| 16 GB | 8 | 6 |
+| 32 GB | 16 | 14 |
+
+Zamknij przeglądarkę i inne duże aplikacje przed uruchomieniem seine, a przy doborze zobaczy on więcej wolnej pamięci. Jeśli otworzysz aplikacje w trakcie kopania, seine co sekundę sprawdza wolną pamięć RAM, pozwala wątkom dokończyć bieżący hash i się wstrzymać, a potem przywraca je, gdy pamięć się zwolni. Możesz dalej korzystać z komputera.
+
+Dołożenie pamięci RAM to najbardziej bezpośrednie ulepszenie starego komputera stacjonarnego: każde dodatkowe 2 GB wolnej pamięci to miejsce na jeszcze jeden wątek, aż do liczby rdzeni. [Poradnik o sprzęcie](/pl/blog/blocknet-mining-hardware-hashrate/) zawiera zmierzone wartości hashrate i dobór dla większych maszyn.
+
+## Czy stary procesor nadal się sprawdzi?
+
+Tak. Wersje seine dla x86 zawierają przenośne jądro obliczeniowe, które działa na każdym 64-bitowym procesorze x86, oraz jądra AVX2 i AVX-512. AVX2 pojawiło się w procesorach Intel Haswell w 2013 roku i AMD Excavator w 2015 roku, a jądro AVX2 w seine zmierzono na serwerowych układach Haswell i Broadwell. Procesory bez AVX2 korzystają z jądra przenośnego. Wersje dla Arm mają NEON z szybką ścieżką SHA3. seine sprawdza, co obsługuje Twój procesor, i porównuje jądra podczas kopania, przełączając się dopiero po potwierdzonym zysku.
+
+Są wersje dla większości maszyn, które można znaleźć w szafie:
+
+| System | Archiwum |
+|---|---|
+| Windows (x86_64) | `seine-windows-x86_64.zip` |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` |
+| Linux (ARM64) | `seine-linux-aarch64.tar.gz` (glibc 2.39 lub nowszy) |
+| macOS (Intel) | `seine-macos-x86_64.tar.gz` |
+| macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` |
+
+Jeśli komputer ma kartę graficzną NVIDIA, wersje dla systemów Windows i Linux również ją wypróbowują i kopią na niej równolegle z procesorem. Jeśli karta nie wystartuje, seine dalej kopie na procesorze. Na MacBooku z Apple Silicon seine domyślnie kopie na procesorze; [poradnik dla Maca](/pl/blog/mine-blocknet-on-mac/) opisuje dobór liczby wątków według pamięci Maca.
+
+## Jak utrzymać chłodny laptop podczas kopania?
+
+Kilka nawyków pozwala laptopowi pracować z pełną szybkością:
+
+- **Zapewnij mu powietrze.** Postaw go na biurku lub podstawce pod laptopa i nie zasłaniaj otworów wentylacyjnych. Wydmuchanie kurzu z wentylatora i radiatora starej maszyny może przywrócić utraconą szybkość.
+- **Trzymaj go podłączonego do zasilania.** Kopanie na baterii szybko ją rozładowuje, a wiele laptopów działa na baterii wolniej.
+- **Nie pozwól mu usnąć.** Kopanie zatrzymuje się, gdy komputer śpi, więc ustaw plan zasilania tak, by po podłączeniu do prądu nie usypiał.
+- **Uruchom mniej wątków, aby mniej się grzał.** Uruchom seine z profilem efficiency:
+
+```sh
+./seine --cpu-profile efficiency
+```
+
+Profil domyślny ustala się na najmniejszej liczbie wątków, która osiąga 99% najlepszego zmierzonego hashrate. Profil efficiency zostawia najmniejszą liczbę wątków, która osiąga 75% tego najlepszego hashrate, więc maszyna pracuje chłodniej i ciszej. Możesz też ustawić stałą liczbę przez `--threads 2` albo nacisnąć `-` i `+` w panelu, aby odjąć lub dodać wątek w trakcie pracy.
+
+## Jak bezpiecznie zacząć kopać?
+
+1. **Zdobądź adres portfela.** Zainstaluj oficjalny portfel Blocknet na swoim głównym komputerze i skopiuj adres. [Poradnik o portfelu](/pl/blog/blocknet-wallet-for-mining/) przeprowadzi Cię przez to krok po kroku. Miner potrzebuje tylko Twojego adresu, więc nie trzymaj portfela i jego frazy odzyskiwania na zapasowej maszynie do kopania.
+2. **Pobierz seine z oficjalnego wydania.** Pobierz go z [sekcji pobierania](/pl/#download). Każde wydanie publikuje plik `SHA256SUMS.txt`, dzięki któremu sprawdzisz, czy archiwum się zgadza.
+3. **Uruchom go.** W systemie Windows kliknij dwukrotnie `seine.exe`. W systemie macOS lub Linux uruchom `./seine` w rozpakowanym folderze.
+4. **Wpisz swój adres i zaakceptuj domyślną pulę.** Wklej swój adres lub `@name`, a potem naciśnij Enter, aby wybrać `stratum+tcp://bntpool.com:3333`.
+5. **Obserwuj panel.** Twój hashrate i pierwsze udziały pojawią się po chwili, a seine dalej stroi wątki i jądra obliczeniowe podczas kopania.
+
+[Poradnik kopania krok po kroku](/pl/blog/how-to-mine-blocknet/) opisuje te same kroki, a wypłaty bardziej szczegółowo. Aby zmierzyć maszynę bez łączenia się najpierw z pulą, uruchom test offline:
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3
+```
+
+## Dlaczego warto kopać małą maszyną w puli?
+
+Pula płaci Ci za Twój udział w pracy nad każdym znalezionym przez nią blokiem, więc mała maszyna dostaje wypłatę z każdego bloku puli, zamiast czekać, aż sama znajdzie cały blok. Poradnik o tym, [jak działa kopanie kryptowalut](/pl/blog/how-crypto-mining-works/), dokładniej wyjaśnia pule i udziały. Na bntpool.com nagrody są dzielone między udziały wysłane w ciągu sześciu godzin przed każdym blokiem, a saldo jest wypłacane, gdy osiągnie 0,1 BNT. Swój hashrate i saldo możesz śledzić, wyszukując swój adres lub `@name` na [bntpool.com](https://bntpool.com).
+
+Aby oszacować swój wynik, użyj hashrate sieci pokazanego w panelu bntpool.com. Przy blokach co pięć minut Blocknet znajduje 288 bloków dziennie, więc Twoja oczekiwana część nowych monet sieci to 288 × (Twoje H/s ÷ H/s sieci) × nagroda za blok na dobę, a nagroda ta co miesiąc się obniża.
+
+Następnie oblicz, ile kosztuje praca maszyny. Zmierz ją watomierzem podłączonym do gniazdka, gdy seine kopie. Maszyna pobierająca 65 W przez całą dobę zużywa 65 × 24 = 1560 Wh, czyli 1,56 kWh dziennie; pomnóż to przez stawkę za prąd. Porównanie tych dwóch liczb daje pełny obraz dla Twojej maszyny.
+
+<Note>
+Te liczby dotyczą obecnego dowodu pracy Argon2id w Blocknecie. Według [blocknetcrypto.com](https://blocknetcrypto.com/#faraday) Blocknet planuje około 2027-02-16 aktualizację sieci o nazwie Faraday, która przyniesie lżejszy dowód pracy. Dbaj o aktualność seine: sprawdza on dostępność nowych wydań przy starcie i co 12 godzin.
+</Note>
+
+<CTA target="seine" title="Zaprzęgnij stary komputer do pracy" text="seine dobiera liczbę wątków do Twojej pamięci RAM i stroi się sam podczas kopania. Pobierz go, wklej swój adres i zacznij kopać na bntpool.com." />

@@ -69,6 +69,17 @@ impl HashrateTracker {
         }
     }
 
+    /// Keep lifetime averages, but do not carry the old worker count's rolling
+    /// current-rate window into the replacement workers. Exclude restart downtime.
+    pub(super) fn pause_for_restart(&mut self) {
+        self.set_paused(true);
+        if let Some(mut latest) = self.samples.pop_back() {
+            self.samples.clear();
+            latest.time = Instant::now();
+            self.samples.push_back(latest);
+        }
+    }
+
     /// Record a sample. Call once per second from the TUI update loop.
     ///
     /// - `total_hashes`: cumulative session-wide hash count (from Stats).
@@ -145,6 +156,7 @@ impl HashrateTracker {
     }
 
     /// Compute hashrates: current uses a rolling window, average uses active (unpaused) time.
+    #[cfg(test)]
     pub fn rates(&self) -> HashrateRates {
         self.rates_with_current_windows(&BTreeMap::new())
     }
@@ -337,6 +349,43 @@ mod tests {
         let rates = tracker.rates();
         assert_eq!(rates.current_total, 0.0);
         assert_eq!(rates.average_total, 0.0);
+    }
+
+    #[test]
+    fn worker_restart_keeps_averages_and_device_totals_without_reusing_current_window() {
+        let mut tracker = HashrateTracker::new();
+        let now = Instant::now();
+        let first_round = now - Duration::from_secs(10);
+        tracker.record(100, first_round, &BTreeMap::from([(1, 100)]));
+        let clock = SessionClockStart {
+            time: first_round,
+            paused_baseline: Duration::ZERO,
+        };
+        tracker.session_start = Some(clock);
+        tracker.device_session_start.insert(1, clock);
+
+        tracker.pause_for_restart();
+        assert_eq!(tracker.rates().current_total, 0.0);
+        assert!((tracker.rates().average_total - 10.0).abs() < 0.1);
+
+        // Simulate five seconds spent replacing workers without sleeping.
+        tracker.session_start.as_mut().unwrap().time -= Duration::from_secs(5);
+        tracker.device_session_start.get_mut(&1).unwrap().time -= Duration::from_secs(5);
+        *tracker.paused_since.as_mut().unwrap() -= Duration::from_secs(5);
+        tracker.set_paused(false);
+        tracker.record(150, Instant::now(), &BTreeMap::from([(1, 50)]));
+        let rates = tracker.rates();
+        assert_eq!(rates.current_total, 0.0);
+        assert!((rates.average_total - 15.0).abs() < 0.1);
+        assert!((rates.average_per_device[&1] - 15.0).abs() < 0.1);
+        assert_eq!(tracker.completed_rounds_device_hashes[&1], 100);
+
+        tracker.pause_for_restart();
+        tracker.set_paused(false);
+        tracker.record(200, Instant::now(), &BTreeMap::from([(1, 50)]));
+        assert_eq!(tracker.completed_rounds_device_hashes[&1], 150);
+        assert!((tracker.rates().average_total - 20.0).abs() < 0.1);
+        assert!((tracker.rates().average_per_device[&1] - 20.0).abs() < 0.1);
     }
 
     #[test]

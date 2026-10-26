@@ -1,0 +1,97 @@
+---
+title: 'Bulletproofs: jak weryfikuje się ukryte kwoty'
+description: 'Bulletproofs prostymi słowami: jak zobowiązania Pedersena ukrywają kwoty transakcji i jak dowody zakresu pozwalają każdemu węzłowi sprawdzić rachunki.'
+tags: [Bulletproofs, Prywatność, Kryptografia, Blocknet]
+faq:
+  - q: 'Czy Bulletproofs wymagają zaufanej konfiguracji początkowej (trusted setup)?'
+    a: 'Nie. Bulletproofs opierają się wyłącznie na założeniu o trudności logarytmu dyskretnego, tym samym, na którym bazują podpisy na krzywych eliptycznych, i używają publicznych parametrów, które każdy może wyprowadzić. Nie ma ceremonii konfiguracji ani sekretu, który ktoś musiałby potem zniszczyć, a kryptowaluty prywatności, w tym Monero i Blocknet, używają ich do dowodów zakresu.'
+  - q: 'Jak duży jest dowód zakresu Bulletproofs?'
+    a: 'Pojedynczy 64-bitowy Bulletproof zawiera 2 × log2(64) + 9 = 21 elementów. W grupie Ristretto każdy element zajmuje 32 bajty, więc każdy dowód ma 672 bajty i dokładnie tyle eksplorator Blocknet pokazuje dla każdego wyjścia. Rozmiar rośnie z logarytmem zakresu, więc podwojenie liczby bitów dodaje tylko dwa elementy.'
+  - q: 'Kto widzi kwotę transakcji Blocknet?'
+    a: 'Tylko nadawca i odbiorca. Łańcuch przechowuje dla każdego wyjścia zobowiązanie Pedersena i dowód zakresu, a także kwotę zaszyfrowaną sekretem, który dzielą oba portfele. Portfel odbiorcy odszyfrowuje ją prywatnym kluczem podglądu. Opłata sieciowa to jedyna publiczna liczba, dzięki czemu węzły mogą uwzględnić ją w sprawdzaniu bilansu.'
+  - q: 'Skąd węzły wiedzą, że nie powstały nowe monety, skoro kwoty są ukryte?'
+    a: 'Każdy węzeł sprawdza dla każdej transakcji dwie rzeczy. Zobowiązania Pedersena muszą się sumować, czyli wejścia muszą być równe wyjściom plus opłata, a każde wyjście musi mieć ważny dowód zakresu pokazujący, że jego kwota leży między 0 a 2^64. Razem wykluczają one ukrytą inflację bez ujawniania choćby jednej kwoty.'
+sourceHash: e02793933862
+translation: draft
+---
+
+Bulletproofs to krótkie dowody zakresu z wiedzą zerową, które pozwalają kryptowalucie ukryć kwotę każdej transakcji, a jednocześnie każdemu węzłowi sprawdzić, że nie powstały nowe monety. Ten poradnik wyjaśnia zobowiązania Pedersena, dlaczego ukryte kwoty potrzebują dowodów zakresu, jak Bulletproofs utrzymują te dowody w małym rozmiarze i jak Blocknet używa ich w każdym wyjściu.
+
+## Czym są Bulletproofs?
+
+<Answer>
+Bulletproofs to krótkie dowody z wiedzą zerową, opublikowane w 2018 roku przez Bünza, Bootle'a, Boneha, Poelstrę, Wuille'a i Maxwella. W kryptowalutach dowodzą, że ukryta kwota mieści się w prawidłowym zakresie, na przykład od 0 do 2^64, bez jej ujawniania. Nie wymagają zaufanej konfiguracji początkowej, a ich rozmiar rośnie tylko z logarytmem zakresu.
+</Answer>
+
+Artykuł [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) ukazał się na IEEE Symposium on Security and Privacy w 2018 roku. Jego autorzy zaprojektowali je dla poufnych transakcji, w których kwoty w blockchainie są zastąpione zobowiązaniami. Aby zrozumieć, po co w ogóle potrzebny jest taki dowód, zacznijmy od zobowiązania.
+
+## Czym jest zobowiązanie Pedersena?
+
+Zobowiązanie (commitment) to kryptograficzny odpowiednik zaklejonej koperty. Wkładasz do niej liczbę, pokazujesz kopertę wszystkim i możesz później udowodnić, co było w środku. Nikt nie odczyta liczby z koperty, a Ty nie możesz potem podmienić jej na inną.
+
+Zobowiązanie Pedersena, opisane przez Torbena Pedersena w 1991 roku, robi to za pomocą punktów na krzywej eliptycznej. Aby zobowiązać się do kwoty `v`, portfel wybiera losowy sekret `r`, nazywany czynnikiem zaślepiającym (blinding factor), i oblicza:
+
+```
+C = v·G + r·H
+```
+
+`G` i `H` to dwa stałe, publiczne punkty na krzywej, wybrane tak, aby nikt nie wiedział, jak zapisać jeden z nich jako wielokrotność drugiego. Wynik `C` to pojedynczy 32-bajtowy punkt. Ma dwie właściwości:
+
+- **Ukrywanie.** Ponieważ `r` jest losowe, `C` wygląda jak losowy punkt. Ta sama kwota, do której zobowiązano się dwa razy, daje dwa niepowiązane zobowiązania, a samo zobowiązanie nie mówi obserwatorowi nic o `v`.
+- **Wiązanie.** Gdy `C` zostanie opublikowane, portfel nie może otworzyć go jako innej kwoty. Wymagałoby to rozwiązania problemu logarytmu dyskretnego na krzywej.
+
+## Jak węzły mogą sprawdzić transakcję, której nie potrafią odczytać?
+
+<Answer>
+Zobowiązania Pedersena można dodawać. Suma dwóch zobowiązań jest zobowiązaniem do sumy ich kwot, przy czym czynniki zaślepiające również się sumują. Węzeł dodaje zobowiązania wejść transakcji oraz zobowiązania jej wyjść plus opłatę i sprawdza, czy obie sumy się zgadzają, więc potwierdza bilans, nie widząc żadnej kwoty.
+</Answer>
+
+Dodanie dwóch zobowiązań daje `(v1 + v2)·G + (r1 + r2)·H`, co samo w sobie jest zobowiązaniem do `v1 + v2`. Nadawca dobiera czynniki zaślepiające tak, aby łączne zaślepienie wejść było równe łącznemu zaślepieniu wyjść. Jeśli kwoty też się bilansują, różnica między sumą wejść a sumą wyjść wynosi dokładnie zero i każdy węzeł może to sprawdzić.
+
+Opłata sieciowa to jedyna publiczna liczba w transakcji. Węzły zamieniają ją w zobowiązanie z czynnikiem zaślepiającym równym zero i dodają je po stronie wyjść, więc sprawdzenie brzmi: wejścia = wyjścia + opłata.
+
+## Dlaczego ukryte kwoty potrzebują dowodów zakresu?
+
+Arytmetyka zobowiązań działa modulo bardzo duża liczba, rząd grupy krzywej, wynoszący około 2^252. W tej arytmetyce kwota „ujemna” jest po prostu ogromną liczbą dodatnią. Ktoś mógłby wydać wejście warte 10 monet i utworzyć dwa wyjścia, jedno warte 11, a drugie warte „minus 1”. Zobowiązania bilansowałyby się idealnie, a 1 moneta pojawiłaby się z niczego, ukryta przed każdym obserwatorem.
+
+Dowód zakresu (range proof) zamyka tę lukę. Dowodzi, że kwota wewnątrz zobowiązania leży między 0 a 2^64, nie mówiąc, jaka jest. Gdy każde wyjście jest w ten sposób ograniczone, kilka wyjść nigdy nie zsumuje się do liczby na tyle dużej, by „przekręcić” rząd grupy, więc zbilansowane zobowiązania oznaczają zbilansowane kwoty.
+
+Wcześniejsze konstrukcje poufnych transakcji używały dowodów zakresu, których rozmiar rósł liniowo z liczbą bitów. Bulletproofs rosną tylko z logarytmem, co zmniejsza 64-bitowy dowód do kilkuset bajtów.
+
+## Jak działają Bulletproofs?
+
+Bulletproof dowodzi zakresu w trzech krokach.
+
+1. **Rozbicie kwoty na bity.** 64-bitowa kwota staje się wektorem 64 bitów. Dowodzący zobowiązuje się do tego wektora i pokazuje dwa fakty na jego temat: każdy element to 0 lub 1, a bity, ważone potęgami dwójki, sumują się do kwoty objętej zobowiązaniem.
+2. **Zamiana tych faktów w jeden iloczyn skalarny.** Za pomocą losowych wyzwań dowodzący składa wszystkie te warunki w jedno twierdzenie o iloczynie skalarnym dwóch wektorów. Ponieważ wyzwania są losowe, fałszywe twierdzenie przechodzi tylko z pomijalnie małym prawdopodobieństwem.
+3. **Dowód iloczynu skalarnego przez połowienie.** W każdej rundzie dowodzący wysyła dwa punkty krzywej, `L` i `R`, a oba wektory są składane do połowy długości. Po log2(64) = 6 rundach zostaje jedna para liczb.
+
+To właśnie połowienie odpowiada za rozmiar. Streszczenie artykułu podaje rozmiar dowodu zakresu jako `2·log2(n) + 9` elementów grupy i ciała dla zakresu `n`-bitowego. Dla 64 bitów to 12 punktów z sześciu rund plus 9 kolejnych, łącznie 21 elementów, czyli 672 bajty, gdy każdy element ma 32 bajty.
+
+Dowód jest nieinteraktywny. Zamiast weryfikatora wysyłającego wyzwania na żywo obie strony wyprowadzają je, haszując zapis dowodu, co jest standardową techniką znaną jako heurystyka Fiata-Shamira. Bulletproofs nie wymagają też zaufanej konfiguracji początkowej: generatory są publiczne i wyprowadzane jawnie, a bezpieczeństwo opiera się wyłącznie na założeniu o trudności logarytmu dyskretnego. Kilka dowodów można agregować, dodając tylko logarytmiczną liczbę elementów, a weryfikację można wykonywać wsadowo.
+
+## Kto używa Bulletproofs?
+
+Monero włączyło Bulletproofs w aktualizacji sieci z 18 października 2018 roku (wydanie v0.13.0), aby zmniejszyć rozmiar transakcji. [Biblioteka bulletproofs w języku Rust](https://github.com/dalek-cryptography/bulletproofs) z projektu dalek-cryptography implementuje je na grupie Ristretto krzywej Curve25519, a biblioteka kryptograficzna Blocknet jest na niej zbudowana.
+
+## Jak Blocknet ukrywa każdą kwotę?
+
+W Blocknet każde wyjście każdej transakcji zawiera zobowiązanie Pedersena zamiast kwoty i każde wyjście ma własny 64-bitowy Bulletproof. Prywatność jest częścią formatu transakcji bez trybu jawnego, więc nie da się wysłać płatności z widoczną kwotą.
+
+Oto co sprawdza węzeł, zanim zaakceptuje transakcję:
+
+- **Każdy dowód zakresu.** Bulletproof każdego wyjścia musi przejść weryfikację względem jego zobowiązania, dowodząc, że kwota leży między 0 a 2^64. Dowody używają zapisu oznaczonego etykietą „Blocknet Range Proof”, która wiąże każdy dowód z Blocknet.
+- **Bilans.** Każde wejście zawiera zobowiązanie pseudowyjścia (pseudo-output), a podpis pierścieniowy dowodzi, że dotyczy ono tej samej kwoty co prawdziwa wydawana moneta, nie ujawniając, który to członek pierścienia. Węzeł sprawdza następnie, czy pseudowyjścia sumują się do wyjść plus opłata.
+- **Nowe monety.** Nagroda za blok wynika z publicznego harmonogramu, więc dla wykopanego wyjścia węzeł odtwarza zobowiązanie, którego oczekuje dla danej wysokości, i sprawdza, czy się zgadza.
+
+Możesz to zobaczyć w [eksploratorze Blocknet](https://explorer.blocknetcrypto.com). Strona transakcji podaje jej kwoty jako „hidden · Pedersen commitments”, a każde wyjście pokazuje swoje zobowiązanie, zaszyfrowane memo i dowód zakresu o rozmiarze „672 bytes · Bulletproof”, czyli dokładnie tyle, ile przewiduje powyższy rachunek.
+
+Odbiorca nadal widzi prawdziwą wartość. Każde wyjście zawiera kwotę zaszyfrowaną sekretem, który dzielą portfele nadawcy i odbiorcy, a portfel odbiorcy odszyfrowuje ją prywatnym kluczem podglądu. Kwotę widzą dwie osoby biorące udział w płatności i nikt więcej.
+
+Ukryte kwoty działają razem z pozostałymi warstwami Blocknet: [podpisy pierścieniowe](/pl/blog/ring-signatures-explained/) obejmujące 16 wyjść ukrywają nadawcę, [jednorazowe adresy stealth](/pl/blog/stealth-addresses-explained/) ukrywają odbiorcę, a [Dandelion++](/pl/blog/dandelion-plus-plus-explained/) ukrywa, gdzie transakcja weszła do sieci. [Poradnik o funkcjach prywatności Blocknet](/pl/blog/blocknet-privacy-features/) omawia każdą z nich.
+
+## Zdobądź własne prywatne BNT
+
+Prostym sposobem na zdobycie monet z ukrytymi kwotami jest ich wykopanie. Blocknet używa wymagającego dużo pamięci [proof of work Argon2id](/pl/blog/argon2id-proof-of-work-explained/), który można kopać na zwykłym komputerze, a seine kopie go na Twoim CPU, razem z ewentualnymi GPU NVIDIA, i sam się dostraja bez żadnej konfiguracji. Każda wypłata, którą wysyła Ci bntpool.com, przychodzi jako prywatne wyjście ze zobowiązaniem i Bulletproofem. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) przeprowadzi Cię od pobrania do zaakceptowanych udziałów w kilka minut.
+
+<CTA target="seine" title="Kop prywatne BNT z seine" text="Pobierz seine, wklej swój adres lub @name i zacznij zarabiać Blocknet z każdą kwotą ukrytą w łańcuchu." />

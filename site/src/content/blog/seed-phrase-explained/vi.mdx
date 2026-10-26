@@ -1,0 +1,103 @@
+---
+title: Seed phrase là gì và cách giữ an toàn cho nó
+description: Seed phrase là danh sách các từ có thể khôi phục ví tiền mã hóa của bạn. Tìm hiểu cách nó hoạt động, cách lưu trữ ngoại tuyến và vì sao không bao giờ được chia sẻ nó.
+tags: [Ví, Seed phrase, Bảo mật]
+faq:
+  - q: 'Seed phrase khác khóa riêng như thế nào?'
+    a: 'Khóa riêng trực tiếp kiểm soát tiền, còn seed phrase là bản sao lưu con người đọc được mà ví chuyển thành các khóa riêng của nó. Trong ví Blocknet, 12 từ tạo ra cả spend key lẫn view key, nên chỉ riêng cụm từ này là đủ để khôi phục ví cùng mọi chức năng của nó.'
+  - q: 'Có khôi phục được ví nếu mất seed phrase không?'
+    a: 'Bạn vẫn có thể tiếp tục dùng ví miễn là còn tệp ví và mật khẩu của nó. Seed phrase là bản sao lưu cho trường hợp mất tệp hoặc mất mật khẩu. Khi ví vẫn còn mở được, hãy hiển thị lại cụm từ bằng lệnh seed hoặc View Recovery Seed rồi chép nó ra giấy.'
+  - q: 'Lưu seed phrase trong trình quản lý mật khẩu có an toàn không?'
+    a: 'Hướng dẫn ví Blocknet yêu cầu bạn giữ seed ngoại tuyến trên giấy và không lưu nó trong tệp văn bản, ứng dụng ghi chú hay bộ nhớ đám mây, vì bất kỳ ai đọc được 12 từ đều kiểm soát số tiền. Các bản chép giấy cất ở hai nơi an toàn riêng biệt cho bạn một bản sao lưu không bao giờ chạm đến internet.'
+  - q: 'Seed phrase có dùng được trong mọi ứng dụng ví không?'
+    a: 'Danh sách từ là một tiêu chuẩn chung, nhưng mỗi đồng coin chuyển các từ thành khóa theo cách riêng. Hãy khôi phục seed Blocknet trong ví dòng lệnh hoặc ví máy tính chính thức của Blocknet. Cả hai đều nhận 12 từ và khôi phục cùng địa chỉ và số dư sau khi ví quét chuỗi.'
+sourceHash: 8cef30920a89
+translation: draft
+---
+
+Seed phrase là danh sách ngắn các từ có thể khôi phục ví tiền mã hóa của bạn trên bất kỳ máy tính nào. Bài hướng dẫn này giải thích những từ đó là gì, ví chuyển chúng thành khóa như thế nào, cách lưu trữ chúng để không bao giờ mất quyền truy cập, và vì sao không ai khác được phép nhìn thấy chúng. Các ví dụ dùng ví Blocknet và cụm từ khôi phục 12 từ của nó.
+
+## Seed phrase là gì?
+
+<Answer>
+Seed phrase, còn gọi là cụm từ khôi phục hay mnemonic, là danh sách các từ thông thường, thường gồm 12 hoặc 24 từ, mã hóa bí mật mà các khóa trong ví của bạn được tạo ra từ đó. Nhập các từ vào một ví tương thích, nó sẽ khôi phục đúng các khóa, địa chỉ và số dư đó, kể cả khi máy tính và tệp ví của bạn không còn.
+</Answer>
+
+Mọi ví tiền mã hóa đều được xây dựng trên các khóa bí mật. Một khóa là một số ngẫu nhiên rất dài, khó chép tay và dễ chép sai. Seed phrase viết cùng bí mật đó bằng các từ trong một danh sách cố định, nên bạn có thể chép nó ra giấy, đọc lại và nhập vào nhiều năm sau.
+
+Ví Blocknet gọi cụm từ của nó là **recovery seed** (cụm từ khôi phục). Nó dài 12 từ, và ví tạo ra nó khi bạn tạo ví mới. Giữ nó an toàn thì bạn luôn có thể lấy lại ví của mình.
+
+## Seed phrase hoạt động như thế nào?
+
+Nhiều ví tuân theo BIP39, một tiêu chuẩn được viết cho Bitcoin năm 2013 bởi Marek Palatinus, Pavol Rusnak, Aaron Voisine và Sean Bowe. Nó hoạt động qua ba bước.
+
+1. **Các bit ngẫu nhiên.** Ví lấy từ 128 đến 256 bit ngẫu nhiên. Cụm 12 từ chứa 128 bit và cụm 24 từ chứa 256 bit.
+2. **Một checksum, rồi đến các từ.** Ví băm các bit đó bằng SHA-256 và thêm vài bit đầu của kết quả băm làm checksum (4 bit với 12 từ). Sau đó nó chia kết quả thành các đoạn 11 bit. Mỗi đoạn là một số từ 0 đến 2.047, dùng để chọn một từ trong danh sách 2.048 từ.
+3. **Một seed cho các khóa.** Để dùng cụm từ, ví cho nó chạy qua PBKDF2 với HMAC-SHA512 trong 2.048 vòng và nhận được một seed 64 byte. Các khóa được tạo ra từ seed đó.
+
+Checksum là lý do ví có thể báo cho bạn biết một cụm từ bị sai. Chỉ 1 trong 16 tổ hợp 12 từ ngẫu nhiên có checksum hợp lệ, nên hầu hết lỗi chính tả và từ bị đảo chỗ đều bị phát hiện trước khi có chuyện gì xảy ra. Danh sách tiếng Anh cũng được xây dựng sao cho bốn chữ cái đầu của mỗi từ là duy nhất, giúp ích khi chữ viết tay của bạn khó đọc.
+
+### 12 từ có ý nghĩa gì trong Blocknet
+
+Ví Blocknet dùng danh sách BIP39 tiếng Anh tiêu chuẩn và 128 bit ngẫu nhiên, nên mọi cụm từ khôi phục đều gồm 12 từ. Nó chuyển các từ đó thành seed 64 byte bằng bước PBKDF2 của BIP39 và không có passphrase bổ sung. 32 byte đầu trở thành **spend key** của bạn và 32 byte cuối trở thành **view key**. Địa chỉ của bạn được tạo từ nửa công khai của hai khóa này, nên cùng 12 từ luôn dẫn về cùng một địa chỉ. Hướng dẫn về [địa chỉ ẩn](/vi/blog/stealth-addresses-explained/) giải thích cách spend key và view key phối hợp để nhận thanh toán một cách riêng tư.
+
+128 bit lớn đến mức nào? Có 2^128 seed khả dĩ, khoảng 3,4 × 10^38. Không ai tìm ra ví của bạn bằng cách đoán từ. Cách thực tế duy nhất để vào ví là nhìn thấy cụm từ của bạn, đó là lý do phần còn lại của hướng dẫn này nói về cách lưu trữ nó cho tốt.
+
+## Seed phrase, mật khẩu và tệp ví khác nhau thế nào?
+
+Mọi người thường nhầm lẫn ba thứ bảo vệ một chiếc ví. Dưới đây là vai trò của từng thứ trong ví Blocknet.
+
+| | Nó là gì | Nó cho bạn điều gì |
+|---|---|---|
+| Cụm từ khôi phục | 12 từ bạn chép ra giấy | Toàn quyền kiểm soát ví trên bất kỳ máy tính nào |
+| Mật khẩu ví | Mật khẩu bạn tự chọn | Mở tệp ví trên máy tính này |
+| Tệp ví | Một tệp `.wallet.dat` | Các khóa và lịch sử của bạn, được mã hóa bằng mật khẩu |
+
+Mật khẩu mã hóa tệp ví (ví tạo khóa mã hóa bằng Argon2id và mã hóa bằng AES-GCM), và Blocknet không bao giờ lưu nó ở đâu cả. Mật khẩu không tham gia vào việc tạo khóa. Khi khôi phục từ 12 từ, bạn chọn mật khẩu mới cho tệp ví mới. Điều đó khiến seed trở thành bản sao lưu quan trọng nhất: nó vẫn dùng được ngay cả khi bạn mất tệp và quên mật khẩu.
+
+## Nên lưu trữ seed phrase như thế nào?
+
+<Answer>
+Chép các từ ra giấy theo đúng thứ tự, đối chiếu từng từ với màn hình, và cất tờ giấy ở nơi an toàn, ngoại tuyến. Làm thêm một bản thứ hai và cất ở một nơi khác. Đừng để cụm từ xuất hiện trong ảnh chụp, tệp văn bản, ứng dụng ghi chú, email hay bộ nhớ đám mây, vì bất kỳ ai đọc được nó đều kiểm soát số tiền.
+</Answer>
+
+Những thói quen sau giữ cho seed phrase vừa an toàn vừa dùng được:
+
+- **Ưu tiên giấy.** Hướng dẫn ví Blocknet yêu cầu chép seed ra giấy và cất ở nơi an toàn. Đánh số các từ từ 1 đến 12, vì thứ tự rất quan trọng.
+- **Kiểm tra một lần.** So từng từ với màn hình trước khi đóng nó. Chính tả rất quan trọng, và bốn chữ cái đầu của mỗi từ là đủ để phân biệt nó.
+- **Hai bản, hai nơi.** Một bản ở nhà và một bản ở một nơi khác bạn tin tưởng giúp bạn phòng hỏa hoạn, lũ lụt hay một ngăn kéo bị thất lạc. Một số người còn đóng các từ lên một tấm kim loại vì cùng lý do.
+- **Giữ ngoại tuyến.** Ảnh chụp màn hình, ảnh điện thoại, ứng dụng ghi chú và thư mục đám mây đều đồng bộ hoặc sao lưu đến những nơi bạn không kiểm soát. Hướng dẫn ví liệt kê tệp văn bản, ứng dụng ghi chú và bộ nhớ đám mây là những nơi seed không bao giờ được xuất hiện.
+- **Giữ riêng tư.** Cất nó ở nơi khách, đồng nghiệp và tiệm sửa máy sẽ không bắt gặp.
+
+## Vì sao không bao giờ được chia sẻ seed phrase?
+
+12 từ chính là chiếc ví của bạn. Ai có chúng đều có thể khôi phục ví trên máy tính của họ và gửi đi mọi thứ trong đó, và một giao dịch không thể đảo ngược khi đã lên chuỗi. Ví Blocknet in cảnh báo này mỗi lần bạn yêu cầu xem seed:
+
+```
+WARNING: Your recovery seed controls all funds.
+Anyone with this seed can steal your coins.
+Never share it. Never enter it online.
+```
+
+Hãy coi mọi yêu cầu đòi seed của bạn là lừa đảo, dù nó trông chính thức đến đâu. Nhà phát triển ví, sàn giao dịch, pool và nhân viên hỗ trợ không bao giờ cần nó. Một trang web hay ứng dụng yêu cầu bạn "xác minh" hoặc "đồng bộ" ví bằng cách nhập các từ là đang tìm cách lấy coin của bạn.
+
+Bạn không bao giờ phải chia sẻ seed để làm được việc:
+
+- **Để nhận thanh toán**, hãy chia sẻ địa chỉ của bạn, hoặc một [tên ngắn Blocknet ID](/vi/blog/blocknet-id-pay-by-name/) như `@yourname` trỏ về địa chỉ đó.
+- **Để cho người khác xem tiền nhận vào**, lệnh `viewkeys` xuất các khóa chỉ xem. Ví chỉ xem hiển thị các khoản thanh toán nhận vào và không thể gửi tiền. [Hướng dẫn quyền riêng tư](/vi/blog/blocknet-privacy-features/) giải thích view key tiết lộ những gì.
+- **Để đào coin**, seine và bntpool.com chỉ cần địa chỉ hoặc tên ngắn của bạn. Ví và seed của nó có thể nằm yên trên chiếc máy tính duy nhất bạn tin tưởng, trong khi mọi máy đào đều trả về cùng một địa chỉ.
+
+## Cách xem và khôi phục cụm từ khôi phục Blocknet
+
+Trong ví dòng lệnh, gõ `seed` tại dấu nhắc lệnh. Ví hiển thị cảnh báo ở trên, yêu cầu bạn xác nhận, hỏi mật khẩu rồi in 12 từ theo các dòng có đánh số. Trong ví máy tính, mở phần cài đặt và chọn "View Recovery Seed", tùy chọn này cũng hỏi mật khẩu trước.
+
+Để khôi phục, hãy dùng một trong hai ví:
+
+- **Dòng lệnh:** chạy `import`, chọn `1) 12-word recovery seed`, nhập 12 từ, rồi đặt tên và mật khẩu cho ví mới.
+- **Máy tính:** chọn "Restore from Seed" và nhập cụm 12 từ của bạn.
+
+Ví kiểm tra các từ và checksum, khôi phục các khóa và quét chuỗi để tìm output của bạn, nên số dư và lịch sử sẽ trở lại với cùng một địa chỉ. [Hướng dẫn ví Blocknet](/vi/blog/blocknet-wallet-for-mining/) trình bày từng bước tạo ví, sao lưu seed và tìm địa chỉ của bạn.
+
+Khi seed đã nằm an toàn trên giấy, bạn đã sẵn sàng dùng địa chỉ đó. [Hướng dẫn đào Blocknet](/vi/blog/how-to-mine-blocknet/) chỉ cách trỏ [seine](/vi/#download) về địa chỉ này và bắt đầu đào trên bntpool.com.
+
+<CTA target="pool" title="Đào về chiếc ví đã được sao lưu an toàn" text="Dán địa chỉ Blocknet hoặc @name của bạn vào seine, chấp nhận bntpool.com và giữ cụm từ khôi phục trên giấy ở nhà." />

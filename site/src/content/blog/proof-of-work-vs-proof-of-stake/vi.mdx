@@ -1,0 +1,104 @@
+---
+title: Giải thích Proof of Work và Proof of Stake
+description: 'Proof of Work và Proof of Stake khác nhau thế nào: cách mỗi cơ chế chọn khối tiếp theo, bảo vệ chuỗi, phát hành coin mới, và vì sao Blocknet dùng Proof of Work.'
+tags: [Proof of Work, Proof of Stake, Đồng thuận, Blocknet, Đào coin]
+faq:
+  - q: 'Blocknet dùng Proof of Work hay Proof of Stake?'
+    a: 'Blocknet dùng Proof of Work. Thợ đào tính các hàm băm Argon2id, mỗi lần băm cần 2 GiB bộ nhớ, khoảng năm phút lại có một khối mới, và toàn bộ phần thưởng khối thuộc về thợ đào tìm ra nó. Không có staking. Bạn có thể đào Blocknet bằng seine trên một máy tính thông thường qua pool bntpool.com.'
+  - q: 'Ethereum chuyển từ Proof of Work sang Proof of Stake khi nào?'
+    a: 'Ethereum chuyển sang Proof of Stake trong bản nâng cấp có tên the Merge, thực hiện ngày 15 tháng 9 năm 2022. Từ đó, các validator nạp 32 ETH sẽ đề xuất và bỏ phiếu cho khối thay cho thợ đào. Bitcoin, Monero và Blocknet vẫn dùng Proof of Work, nơi khối mới đến từ công việc tính toán.'
+  - q: 'Tấn công 51% là gì?'
+    a: 'Tấn công 51% là nỗ lực kiểm soát những khối mà một chuỗi chấp nhận bằng cách nắm phần lớn tài nguyên quyết định điều đó. Trong Proof of Work, đó là phần lớn sức mạnh băm của mạng. Trong Proof of Stake, đó là phần lớn số coin đang stake. Dù theo cách nào, kẻ tấn công cũng phải bỏ ra phần lớn tài nguyên thật.'
+  - q: 'Có thể đào một đồng coin Proof of Stake không?'
+    a: 'Không. Một đồng coin Proof of Stake thuần túy không có hoạt động đào. Coin mới được trả cho các validator khóa coin hiện có làm tiền stake, nên bạn cần sở hữu coin trước khi có thể kiếm thêm. Để kiếm coin mới bằng chiếc máy tính bạn đang có, bạn cần một đồng coin Proof of Work như Blocknet.'
+sourceHash: 8fc2705e78fd
+translation: draft
+---
+
+Bài viết này giải thích cách Proof of Work và Proof of Stake quyết định ai được thêm khối tiếp theo vào blockchain, cách mỗi cơ chế giữ chuỗi an toàn, và cách mỗi cơ chế tạo ra coin mới. Blocknet, một đồng coin Proof of Work bạn có thể đào trên máy tính thông thường, là ví dụ minh họa xuyên suốt.
+
+## Proof of Work và Proof of Stake khác nhau thế nào?
+
+<Answer>
+Proof of Work và Proof of Stake là hai cách để một blockchain quyết định ai thêm khối tiếp theo. Trong Proof of Work, thợ đào bỏ ra sức mạnh tính toán để tìm một hàm băm hợp lệ. Trong Proof of Stake, validator khóa coin làm tiền ký quỹ và được chọn để đề xuất và bỏ phiếu cho khối. Cả hai đều khiến việc gian lận trở nên tốn kém.
+</Answer>
+
+Mọi blockchain đều phải giải cùng một bài toán. Hàng nghìn máy tính không tin nhau cần thống nhất về một lịch sử thanh toán duy nhất, để không ai có thể tiêu cùng một đồng coin hai lần. Phải có ai đó đề xuất mỗi khối mới, và mọi người khác cần một lý do để chấp nhận nó. Quy tắc đó gọi là cơ chế đồng thuận, và Proof of Work cùng Proof of Stake là hai thiết kế nổi tiếng nhất.
+
+| | Proof of Work | Proof of Stake |
+|---|---|---|
+| Ai tạo khối | Thợ đào đầu tiên tìm được hàm băm bằng hoặc dưới mục tiêu của mạng | Một validator được chọn từ những người đã khóa coin |
+| Họ bỏ ra gì | Phần cứng và điện năng | Coin nạp vào làm tiền stake |
+| Chuỗi nào thắng | Chuỗi có tổng công việc tích lũy lớn nhất | Chuỗi được nhiều phiếu validator ủng hộ nhất, có các checkpoint chốt hạ |
+| Coin mới đi đâu | Phần thưởng khối cho thợ đào tìm ra khối | Phần thưởng cho validator vì đề xuất và bỏ phiếu |
+| Cần gì để tham gia | Một máy tính có thể băm | Coin để stake (32 ETH cho một validator Ethereum) |
+| Ví dụ | Bitcoin, Monero, Blocknet | Ethereum từ năm 2022 |
+
+## Proof of Work chọn khối tiếp theo như thế nào?
+
+Trong Proof of Work, thợ đào cạnh tranh để giải một câu đố khó giải nhưng dễ kiểm tra. Thợ đào lấy khối muốn công bố, thêm một con số gọi là nonce, rồi băm kết quả. Nếu hàm băm, đọc như một con số, bằng hoặc dưới mục tiêu của mạng, khối đó hợp lệ. Nếu không, thợ đào đổi nonce và thử lại. Cách duy nhất để thắng là thử thật nhiều nonce, nên cơ hội tìm ra khối tiếp theo của một thợ đào tương ứng với tỷ lệ sức mạnh băm của họ trong mạng.
+
+[Bài báo Bitcoin](https://bitcoin.org/bitcoin.pdf) năm 2008 của Satoshi Nakamoto viết: "Proof-of-work về bản chất là mỗi CPU một phiếu bầu." Các node đi theo chuỗi có nhiều công sức Proof of Work được đầu tư nhất, và một thông số độ khó điều chỉnh mục tiêu lên hoặc xuống để các khối tiếp tục đến đều đặn dù có bao nhiêu sức mạnh băm tham gia. Hướng dẫn [đào coin hoạt động như thế nào](/vi/blog/how-crypto-mining-works/) trình bày từng bước về hàm băm, độ khó và pool.
+
+Blocknet hoạt động theo cùng cách, với các con số được đặt trong mã đồng thuận:
+
+- **Hàm băm là Argon2id** với 2 GiB bộ nhớ, nên mỗi lần băm cần bộ nhớ thật cùng với thời gian xử lý. [Bài giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) cho thấy cách nó hoạt động.
+- **Mục tiêu là (2^256 − 1) chia cho độ khó**, nên độ khó gần bằng số lần băm mà mạng cần để tìm một khối.
+- **Khoảng năm phút có một khối**, 288 khối mỗi ngày. Độ khó bám theo thời gian khối gần đây thông qua trung bình động có trọng số 60 khối (LWMA).
+- **Các node đi theo chuỗi nặng nhất.** Mỗi node cộng độ khó của mọi khối trên một chuỗi và chỉ chuyển sang chuỗi cạnh tranh khi tổng công việc của chuỗi đó cao hơn.
+
+## Proof of Stake chọn khối tiếp theo như thế nào?
+
+Proof of Stake thay việc băm bằng tiền ký quỹ. Để tham gia, validator khóa coin với giao thức, và giao thức chọn validator để đề xuất và phê duyệt khối. [Peercoin](https://en.wikipedia.org/wiki/Peercoin), ra mắt năm 2012, là đồng tiền mã hóa đầu tiên dùng cơ chế này, và Ethereum đã chuyển sang ngày 15 tháng 9 năm 2022 trong bản nâng cấp có tên [the Merge](https://ethereum.org/en/roadmap/merge/).
+
+Thiết kế của Ethereum cho thấy các thành phần vận hành. Theo [ethereum.org](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/):
+
+- Validator nạp 32 ETH vào hợp đồng ký quỹ.
+- Thời gian được chia thành các slot 12 giây, gộp thành các epoch gồm 32 slot.
+- Trong mỗi slot, một validator được chọn ngẫu nhiên để đề xuất khối, và những validator khác bỏ phiếu cho nó bằng attestation.
+- Các checkpoint được chốt hạ khi những validator nắm ít nhất hai phần ba tổng số ETH đang stake bỏ phiếu cho chúng.
+- Validator đề xuất hai khối cho cùng một slot, hoặc bỏ những phiếu mâu thuẫn, sẽ bị slashing: một phần tiền stake, có thể đến toàn bộ, bị hủy.
+
+Tiền stake làm nhiệm vụ mà điện năng làm trong Proof of Work. Vi phạm quy tắc khiến validator mất số coin họ đang sở hữu.
+
+## Proof of Work và Proof of Stake giữ an toàn như thế nào?
+
+Cả hai thiết kế đều khiến chi phí tấn công cao hơn số tiền có thể thu được, và chúng đặt chi phí đó ở những chỗ khác nhau.
+
+**Trong Proof of Work, chi phí là việc tính toán liên tục.** Để viết lại một khối trong quá khứ, kẻ tấn công phải làm lại công việc của khối đó và mọi khối sau nó, rồi vượt qua mạng trung thực. Nakamoto đã chỉ ra rằng xác suất một kẻ tấn công chậm hơn đuổi kịp sẽ giảm theo cấp số mũ với mỗi khối mới. Muốn kiểm soát chuỗi từ đây trở đi nghĩa là phải chạy nhiều sức mạnh băm hơn tất cả những người khác cộng lại, trong suốt thời gian tấn công.
+
+**Trong Proof of Stake, chi phí là vốn bị đặt vào rủi ro.** Tài liệu của Ethereum cho biết kẻ tấn công "sẽ cần 51% số ETH đang stake" để kiểm soát chuỗi, rằng một phần ba số tiền stake là đủ để ngăn các khối được chốt hạ, và rằng đảo ngược một khối đã chốt hạ đồng nghĩa với mất ít nhất một phần ba tổng số ETH đang stake do slashing.
+
+Blocknet còn đặt thêm hai ngưỡng bên trên Proof of Work. Mạng coi 10 xác nhận, khoảng 50 phút, là an toàn, và các node từ chối mọi lần tổ chức lại chuỗi sâu hơn 100 khối, khoảng tám giờ, nên một khối ở độ sâu 100 là đã chốt hạ.
+
+## Hai mô hình phát hành coin mới như thế nào?
+
+<Answer>
+Các đồng coin Proof of Work trả coin mới cho thợ đào tìm ra mỗi khối, nên bất kỳ ai đóng góp sức mạnh tính toán đều có thể kiếm coin mà không cần sở hữu coin trước. Các đồng coin Proof of Stake trả coin mới cho validator theo tỷ lệ tiền stake, nên phần thưởng đến với những người đã nắm giữ coin. Mỗi giao thức đặt lịch phát hành riêng.
+</Answer>
+
+Trong Proof of Work, giao dịch đầu tiên trong mỗi khối tạo ra coin mới cho thợ đào tìm ra khối đó. Bài báo Bitcoin mô tả đây là "một cách để phân phối coin vào lưu thông ban đầu, vì không có cơ quan trung ương nào phát hành chúng." Phần thưởng của Bitcoin giảm một nửa sau mỗi 210.000 khối, khoảng bốn năm một lần, và tổng cung luôn ở mức dưới 21 triệu một chút.
+
+Trong Proof of Stake của Ethereum, phần thưởng được cộng vào số dư validator mỗi epoch một lần cho attestation, đề xuất khối và nhiệm vụ trong sync committee. [Phần thưởng cơ bản](https://ethereum.org/en/developers/docs/consensus-mechanisms/pos/rewards-and-penalties/) giảm khi tổng tiền stake tăng, trong khi tổng lượng phát hành tăng khi có thêm validator tham gia.
+
+Việc phát hành của Blocknet diễn ra hoàn toàn qua đào coin. Khối genesis không chứa giao dịch nào, nên không có coin nào tồn tại trước khi việc đào bắt đầu, và đồng thuận không có premine, quỹ dự trữ hay output dành cho nhà sáng lập. Mỗi khối trả toàn bộ phần thưởng trong một output cho thợ đào tìm ra nó. Phần thưởng bắt đầu ở 723,25 BNT mỗi khối, giảm dần mỗi tháng 30 ngày theo một đường cong hàm mũ trong 48 tháng, rồi giữ cố định ở 2 BNT mỗi khối mãi mãi.
+
+## Vì sao Blocknet dùng Proof of Work?
+
+Blocknet chọn Proof of Work để bất kỳ ai có máy tính cũng có thể kiếm coin mới ngay từ khối đầu tiên, mà không cần mua trước. Daemon của Blocknet mô tả Argon2id là "PoW memory-hard để chống ASIC và đảm bảo việc đào công bằng", và chạy mỗi lần băm trên một luồng duy nhất "vì sự công bằng".
+
+Yêu cầu bộ nhớ chính là thứ giữ cho việc đào luôn mở. Mỗi lần băm lấp đầy 2 GiB bộ nhớ, nên mỗi luồng đào cần khoảng 2 GB RAM, và những chiếc máy tính mọi người đang có, máy để bàn, laptop và máy chủ, đều có lượng bộ nhớ đó cùng bộ điều khiển để cung cấp dữ liệu cho nó. Blocknet thuộc một họ các đồng coin Proof of Work được xây dựng quanh phần cứng đa dụng: chẳng hạn Monero đã dùng [RandomX](https://github.com/tevador/RandomX), "được tối ưu cho CPU đa dụng", từ tháng 11 năm 2019.
+
+Proof of Work vẫn nằm trong kế hoạch của Blocknet. Theo [blocknetcrypto.com](https://blocknetcrypto.com/#faraday), bản nâng cấp Faraday, dự kiến vào khoảng tháng 2 năm 2027, sẽ mang đến "một Proof of Work nhẹ hơn" để các node mới bắt kịp chuỗi nhanh hơn.
+
+## Làm sao bắt đầu đào một đồng coin Proof of Work?
+
+Với Blocknet, bạn cần một địa chỉ ví và seine, trình đào miễn phí, mã nguồn mở:
+
+1. Lấy địa chỉ từ ví chính thức. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) trình bày từng bước.
+2. [Tải seine](/vi/#download) cho Windows, macOS hoặc Linux và chạy nó.
+3. Dán địa chỉ hoặc `@name` của bạn, và chấp nhận pool mặc định, bntpool.com.
+
+seine chọn số luồng theo RAM của bạn, so sánh các kernel CPU trong lúc đào và giữ kernel nhanh nhất, đồng thời thêm card đồ họa NVIDIA trên Windows và Linux để đào cùng bộ xử lý. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) trình bày chi tiết về phần cứng và thanh toán.
+
+<CTA target="seine" title="Đào Blocknet bằng seine" text="Tải seine, dán địa chỉ hoặc @name của bạn, và máy tính sẽ bắt đầu đào BNT trên bntpool.com chỉ sau vài phút." />

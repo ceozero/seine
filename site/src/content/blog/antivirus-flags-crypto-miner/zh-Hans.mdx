@@ -1,0 +1,78 @@
+---
+title: 'Windows 拦截矿工程序？验证下载文件'
+description: '检查被 Windows 拦截的 seine 下载：识别警告，核对官方 ZIP 的 SHA-256 校验和，并收集排查检测结果所需的版本、文件和提示信息。'
+tags: ["挖矿指南", "Windows", "下载"]
+faq:
+  - q: 'SHA-256 一致能证明矿工程序安全吗？'
+    a: '哈希一致表示下载文件与所比较的校验和相符。请从官方发布页面获取两者。这是在检查文件完整性，不能代替对杀毒软件检测结果的调查，也不能单独证明运行该程序是安全的。'
+  - q: 'Windows ZIP 应使用哪个校验和文件？'
+    a: '使用与 seine-windows-x86_64.zip 同一版本发布附件中的 SHA256SUMS.txt。它列出压缩包的校验和。ZIP 内还有另一个 SHA256SUMS.txt，描述解压后的文件。请将压缩包与发布附件进行比较，并确保版本一致。'
+  - q: '报告下载被拦截时需要提供什么？'
+    a: '提供 seine 版本、官方下载 URL、文件名、SHA-256、Windows 版本，以及准确的检测名称或警告原文。说明受影响的是 ZIP 还是解压后的文件。遮盖个人路径，不要在截图中包含钱包助记词、私钥或 API 令牌。'
+sourceHash: 7d8873a9e169
+translation: draft
+---
+
+如果 Windows 拦截了 seine 下载，或解压后的文件消失，请先确定具体文件和警告。本指南介绍如何检查官方发布、比较 SHA-256 校验和，以及收集报告所需的信息。示例使用 seine v0.2.26，于 2026 年 10 月 25 日完成验证。
+
+## Windows 拦截矿工程序时应检查什么？
+
+<Answer>
+更改任何设置之前，记录警告原文、受影响的文件名和发布版本。打开 Windows 安全中心，在保护历史记录中查找检测条目。然后从 seine 官方发布页面获取压缩包与校验和。在决定如何处理警告之前，先核对准确的文件和版本。
+</Answer>
+
+展开[保护历史记录](https://support.microsoft.com/en-us/windows/security/windows-security/protection-history-in-the-windows-security-app)中的相关条目查看详情。Windows 可能要求管理员权限才能显示威胁细节。记录目标是下载的 ZIP、`seine.exe` 还是某个 DLL。可执行文件消失和浏览器下载警告可能发生在不同阶段，因此应将文件名与消息一起保存。
+
+## 是 SmartScreen 警告还是杀毒软件检测？
+
+[SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)根据文件和发布者的信誉信号评估下载的应用。未知应用提示与具有具体名称的杀毒检测不同。记录实际消息；文件名中出现 miner，并不能说明是哪项检查介入，也不能解释拦截原因。
+
+Microsoft 还在[潜在不受欢迎应用的判定标准](https://learn.microsoft.com/en-us/defender-xdr/criteria)中列出加密货币挖矿软件，这一项专门针对企业环境。在由工作单位或学校管理的电脑上，请向管理员确认适用策略。这是软件类别说明，不是针对某个下载文件的结论。应查清具体警告，而不是认定所有矿工程序警告都是误报。
+
+## 从同一发布版本获取 ZIP 和校验和
+
+通过[下载页面](/zh-hans/#download)打开[seine 官方发布页面](https://github.com/zpalmtree/seine/releases)。确认仓库为 `zpalmtree/seine`。选择同一版本的 `seine-windows-x86_64.zip` 和单独的 `SHA256SUMS.txt` 附件，记录版本号。较新或较旧版本的校验和都不是当前压缩包的正确参照。
+
+![seine v0.2.26 官方发布附件中的 Windows ZIP 和 SHA256SUMS.txt](/assets/blog/seine-release-assets.png)
+
+这是 v0.2.26 附件列表的真实截图。发布页面的校验和文件用于可下载的压缩包。ZIP 内还有另一个 `SHA256SUMS.txt`，用于解压后的文件。第一次检查应使用单独下载的发布附件。即使名称相同，也不要混淆这两份清单。
+
+直接使用官方压缩包。比较官方 ZIP 的校验和，不能验证被重命名的可执行文件、第三方重新打包的文件或聊天中收到的文件。将 ZIP 和发布校验和保存在同一个容易找到的文件夹中，并在该文件夹内运行下面的命令。
+
+## 如何比较 SHA-256 校验和？
+
+在存放两个下载文件的文件夹中打开 PowerShell。[Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash)会计算压缩包的 SHA-256。以下比较选择与 Windows 压缩包名称完全相符的条目，要求只有一个匹配项，并在哈希不一致时以错误停止。它只读取文件，不运行矿工程序，也不更改 Windows 保护设置。
+
+```powershell
+$archive = '.\seine-windows-x86_64.zip'
+$actual = (Get-FileHash $archive -Algorithm SHA256).Hash
+$entries = @(Get-Content .\SHA256SUMS.txt | Where-Object { $_ -match '^([0-9a-fA-F]{64})\s+\*?seine-windows-x86_64\.zip$' })
+if ($entries.Count -ne 1) { throw 'Expected exactly one Windows ZIP checksum entry.' }
+$expected = ($entries[0] -split '\s+')[0]
+if ($actual -ne $expected) { throw 'Checksum mismatch. Do not run this download.' }
+'PASS: ZIP matches SHA256SUMS.txt'
+```
+
+成功消息为 `PASS: ZIP matches SHA256SUMS.txt`。若找不到文件，请检查当前文件夹和文件名。如果校验和条目缺失或重复，请重新获取原始发布附件。若哈希不一致，请停止：确认发布版本，重新下载官方压缩包与校验和，然后再次比较。
+
+## 已验证的示例显示了什么？
+
+我们在 Windows PowerShell 5.1 中比较了官方 v0.2.26 Windows ZIP。计算出的哈希与发布校验和一致。下图显示真实命令输出，是排版后的输出记录，不是 Windows 安全中心通知。[文本记录](/assets/blog/seine-v0.2.26-verification.txt)保留了完整哈希和压缩包文件列表。
+
+![Windows PowerShell 对 seine v0.2.26 Windows 压缩包的真实校验结果](/assets/blog/seine-checksum-result.png)
+
+哈希比较回答的是这些字节是否与给定参照一致。它不能认证来自其他来源的校验和，不能证明没有恶意软件，也不能解释某次具体检测。如果警告指向解压后的可执行文件，请单独记录其名称和检测结果；ZIP 的哈希标识的是压缩包。
+
+## 已验证的下载仍被拦截怎么办？
+
+在调查未解决的检测时，将相关项目保持隔离。准备发布版本、下载 URL、受影响文件名、SHA-256 和警告原文。补充 Windows 版本，并说明拦截发生在下载、解压还是启动阶段。这些信息能让报告可复现，同时避免暴露个人配置。
+
+通过 [seine 问题跟踪器](https://github.com/zpalmtree/seine/issues)向项目报告；怀疑检测错误时，可使用 [Microsoft 文件提交门户](https://www.microsoft.com/en-us/wdsi/filesubmission)。发送前检查附件。按要求提供公开发布文件或其标识信息，不要发送挖矿数据文件夹。移除截图中的个人路径、钱包信息和认证令牌。
+
+Windows 为部分检测提供针对单个项目的操作。只有在来源与检测已查清、并且信任那个具体文件后，才考虑允许它；遵循所记录警告的说明。保持系统整体保护开启。在受管理设备上，由管理员决定允许什么。
+
+## 使用已验证的 Windows 压缩包继续设置
+
+文件获准使用后，将整个 ZIP 解压到可写文件夹，保留随附 DLL，并将其放在 `seine.exe` 旁边。[Windows 挖矿教程](/zh-hans/blog/mine-blocknet-on-windows/)介绍首次启动和收款地址输入。驱动、运行库或设备选择问题请参阅 [NVIDIA 设置指南](/zh-hans/blog/mine-blocknet-nvidia-gpu/)。这些检查与下载验证是不同的步骤。
+
+<CTA target="seine" title="获取 seine 官方版本" text="选择 Windows 压缩包，并在设置前验证同一发布版本的校验和。" />

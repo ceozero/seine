@@ -1,0 +1,93 @@
+---
+title: Come minare Blocknet su Windows
+description: 'Mina Blocknet su Windows con seine. Scegli lo ZIP, verifica il download, inserisci il tuo indirizzo e controlla le share accettate usando CPU e NVIDIA insieme.'
+tags: [Guida al mining, Windows, NVIDIA]
+faq:
+  - q: 'Serve il CUDA Toolkit per minare Blocknet su Windows?'
+    a: 'No. Lo ZIP della versione Windows include le librerie runtime NVIDIA necessarie a seine. Installa un driver NVIDIA aggiornato e mantieni insieme i file estratti. seine rileva le schede NVIDIA supportate insieme alla CPU e le ottimizza automaticamente. Il mining su CPU funziona anche sui computer senza una scheda NVIDIA.'
+  - q: 'Dove salva seine le mie impostazioni di mining su Windows?'
+    a: 'Per impostazione predefinita, seine salva l’indirizzo di pagamento, il pool e il nome del rig in seine-data/seine.config.json, all’interno della cartella da cui lo avvii. Eseguilo dalla stessa cartella estratta per riutilizzare queste impostazioni. L’opzione data-dir permette di scegliere un’altra directory quando necessario.'
+  - q: 'Servono le pagine grandi di Windows prima di iniziare a minare?'
+    a: 'No. seine prova automaticamente a usare le pagine grandi e utilizza pagine normali quando non sono disponibili. Puoi iniziare a minare con le impostazioni predefinite. Per la configurazione facoltativa delle pagine grandi, assegna al tuo account di mining il diritto Blocco di pagine in memoria, poi disconnettiti e accedi di nuovo prima di riavviare seine.'
+sourceHash: 3eebcb8784e8
+translation: draft
+---
+
+Questa guida ti accompagna dal download dello ZIP per Windows fino alle share accettate su bntpool.com. Controllerai l’archivio, estrarrai i file, inserirai il tuo indirizzo di pagamento e verificherai che la CPU e le eventuali schede NVIDIA supportate stiano minando. I comandi seguenti usano PowerShell e Windows nativo.
+
+## Come si inizia a minare Blocknet su Windows?
+
+<Answer>
+Scarica `seine-windows-x86_64.zip`, estrai l’intero archivio e apri `seine.exe`. Inserisci il tuo indirizzo Blocknet o il tuo `@name` registrato, poi accetta `stratum+tcp://bntpool.com:3333` come pool. seine seleziona i backend CPU e NVIDIA disponibili, adatta il numero di thread alla memoria e avvia l’ottimizzazione mentre mina.
+</Answer>
+
+Tieni pronto il tuo indirizzo pubblico di pagamento prima di aprire il miner. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) spiega come ottenerne uno. Inserisci soltanto l’indirizzo di ricezione: il miner non richiede la frase di recupero né le chiavi di spesa del wallet. Funziona anche un [Blocknet ID](/it/blog/blocknet-id-pay-by-name/) registrato, quindi puoi usare `@name` al posto dell’indirizzo lungo.
+
+Ogni thread di mining CPU utilizza un blocco di memoria da 2 GiB. seine controlla la RAM disponibile e il numero di core, mantiene un margine di memoria libera e sceglie per te il numero iniziale di thread. Puoi iniziare con le impostazioni predefinite su un desktop o un portatile; non occorre calcolare il numero di thread o scegliere prima un kernel CPU.
+
+## Passaggio 1: scarica e controlla l’archivio per Windows
+
+Apri la [sezione download](/it/#download) e scegli Windows x86_64. L’archivio si chiama `seine-windows-x86_64.zip`. Scarica `SHA256SUMS.txt` dalla stessa [versione](https://github.com/zpalmtree/seine/releases/latest) se vuoi verificare lo ZIP prima di estrarlo. L’archivio e il file delle somme di controllo devono provenire dalla stessa versione.
+
+![ZIP per Windows nella tabella ufficiale dei download di seine](/assets/blog/windows-download.png)
+
+In PowerShell, passa alla cartella Downloads e calcola l’hash SHA-256 dell’archivio:
+
+```powershell
+cd "$HOME\Downloads"
+Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
+```
+
+Confronta l’hash visualizzato con la voce relativa a quello specifico ZIP in `SHA256SUMS.txt`. Maiuscole e minuscole non contano; tutte le cifre esadecimali devono corrispondere. [Microsoft documenta Get-FileHash](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) se vuoi controllare un file salvato in un’altra cartella. Una somma di controllo conferma che l’archivio corrisponde alla versione pubblicata; scarica entrambi i file dalla pagina ufficiale della versione.
+
+## Passaggio 2: estrai lo ZIP completo
+
+In Esplora file, fai clic con il pulsante destro sullo ZIP scaricato e scegli **Estrai tutto**. Seleziona una cartella in cui puoi scrivere, poi apri la cartella estratta. Mantieni insieme `seine.exe` e le DLL che lo accompagnano: l’archivio Windows include le librerie runtime NVIDIA utilizzate dal miner.
+
+Fai doppio clic su `seine.exe` dalla cartella estratta. Se preferisci un terminale, apri PowerShell in quella cartella ed esegui:
+
+```powershell
+.\seine.exe
+```
+
+Il prefisso `./` o `.\` indica alla shell di eseguire il programma nella directory corrente. L’esecuzione da una cartella estratta fornisce inoltre a seine una posizione stabile in cui salvare le impostazioni. Usa la stessa cartella agli avvii successivi, così potrà trovare l’indirizzo e il pool che hai inserito.
+
+## Passaggio 3: inserisci indirizzo e pool
+
+Alla prima richiesta, incolla il tuo indirizzo di ricezione Blocknet o il tuo `@name` registrato e conferma. Accetta l’URL predefinito del pool, `stratum+tcp://bntpool.com:3333`. Se richiesto, assegna al rig un nome riconoscibile nel pool, in modo da distinguere questo PC Windows da un’altra macchina che mina verso lo stesso indirizzo.
+
+La [guida alla configurazione](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) descrive queste richieste e le impostazioni salvate. Per impostazione predefinita si trovano in `seine-data/seine.config.json`, relativamente alla cartella da cui avvii il programma. Agli avvii successivi, seine le riutilizza. I nomi brevi vengono risolti di nuovo all’inizio di ogni esecuzione.
+
+Puoi anche specificare un nome breve registrato direttamente in PowerShell:
+
+```powershell
+.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
+```
+
+Sostituisci `@name` con il tuo nome breve registrato. Lascia non impostati i flag dei thread e del kernel CPU per permettere a seine di sceglierli automaticamente. Per la configurazione generale sui diversi sistemi operativi, consulta [come minare Blocknet](/it/blog/how-to-mine-blocknet/).
+
+## Come capisci se il mining funziona?
+
+<Answer>
+Controlla che la dashboard di seine mostri un hashrate e share accettate, poi cerca lo stesso indirizzo di pagamento nella pagina My Stats di bntpool.com. La dashboard descrive il lavoro attuale del miner; il pool registra le share inviate e le ricompense. Lascia stabilizzare l’ottimizzazione automatica prima di confrontare le velocità o modificare le impostazioni.
+</Answer>
+
+La [guida alla dashboard](/it/blog/seine-dashboard-explained/) spiega l’hashrate, lo stato del mining e i pannelli del pool. Un hashrate attivo indica attività di hashing locale; una share accettata conferma che il lavoro è arrivato al pool. Apri [My Stats](https://bntpool.com/stats) e inserisci lo stesso indirizzo o nome breve per seguire le share e il saldo di questo rig.
+
+Distingui le share accettate dai pagamenti quando controlli una nuova configurazione. Le share contribuiscono alle ricompense del pool; un pagamento segue le regole di conferma e di saldo del pool. La [guida a PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) spiega questa sequenza. Puoi verificare subito la connessione senza aspettare il primo pagamento.
+
+## Mining con CPU e NVIDIA sullo stesso PC
+
+seine utilizza insieme la CPU e le schede NVIDIA supportate per impostazione predefinita. Installa un driver NVIDIA aggiornato; lo ZIP Windows contiene già le librerie runtime, quindi non serve installare separatamente il CUDA Toolkit. Lascia le DLL estratte accanto all’eseguibile quando sposti la cartella del miner.
+
+Al primo avvio, seine ottimizza ogni GPU e ne ricorda le impostazioni. Anche l’ottimizzazione della CPU avviene durante il mining. La [guida all’hardware](/it/blog/blocknet-mining-hardware-hashrate/) spiega il dimensionamento della memoria e i risultati misurati, mentre la [guida NVIDIA](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md) tratta l’uso di più schede. Per arrestarlo correttamente, premi `q` nella dashboard o `Ctrl+C` nel terminale.
+
+## Facoltativo: attiva le pagine grandi di Windows
+
+L’avvio normale tenta già di usare le pagine grandi e ripiega sulle pagine normali. Per predisporre le pagine grandi su Windows Pro, Enterprise o Education, apri `secpol.msc`, vai a **Criteri locali → Assegnazione diritti utente → Blocco di pagine in memoria** e aggiungi l’account che esegue seine. Disconnettiti e accedi di nuovo, così la nuova sessione riceverà il diritto.
+
+La [guida alle pagine grandi](/it/blog/huge-pages-blocknet-mining/) descrive nel dettaglio questa configurazione facoltativa. Dopo il nuovo accesso, avvia seine normalmente e controlla nel log di avvio la modalità delle pagine selezionata. Mantieni la modalità automatica predefinita mentre realizzi la tua prima configurazione funzionante, poi confronta le misurazioni sullo stesso PC se modifichi le impostazioni delle pagine.
+
+[Windows blocca il miner? Verifica il download](/it/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="Scarica seine per Windows" text="Estrai lo ZIP, inserisci il tuo indirizzo di pagamento e inizia a minare su bntpool.com con ottimizzazione automatica di CPU e NVIDIA." />

@@ -1,0 +1,96 @@
+--- a/lifecycle.py
++++ b/lifecycle.py
+@@ -9,6 +9,10 @@
+ MemoryMax remains 16 GiB. Only uniquely named task-owned systemd units change.
+ """
+ import argparse
++import os
++import signal
++import sys
++from contextlib import contextmanager
+ import datetime
+ import json
+ import hashlib
+@@ -148,6 +152,26 @@
+           "complete", "completed_hashes_delta=" + str(final_hashes - initial_hashes), flush=True)
+ 
+ 
++@contextmanager
++def reclaim_stress(unit):
++    group = Path('/sys/fs/cgroup') / state(unit)['cgroup'].lstrip('/')
++    with (OUT / 'reclaim-load.log').open('w') as log:
++        child = subprocess.Popen([sys.executable, '-B', str(ROOT / 'reclaim_load.py'),
++            '--cgroup', str(group), '--bytes', str(2 * 1024**3), '--seconds', '20'],
++            stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
++        try:
++            yield
++        finally:
++            if child.poll() is None:
++                os.killpg(child.pid, signal.SIGINT)
++                try:
++                    child.wait(timeout=3)
++                except subprocess.TimeoutExpired:
++                    os.killpg(child.pid, signal.SIGKILL)
++                    child.wait(timeout=3)
++            save('reclaim-load-exit.json', {'pid': child.pid, 'exit_code': child.returncode})
++
++
+ def main():
+     p = argparse.ArgumentParser(description=__doc__)
+     p.add_argument("--binary", type=Path, required=True)
+@@ -166,9 +190,9 @@
+     worker.start()
+     units = []
+     try:
+-        unit = "seine-overnight-lifecycle-first.service"
++        unit = "seine-overnight-supplement-lifecycle-first.service"
+         units.append(unit)
+-        start(unit, a.binary.resolve(), cache, server.server_address[1], a.cpus, "12G", page=a.page, runtime=a.initial_seconds + 310)
++        start(unit, a.binary.resolve(), cache, server.server_address[1], a.cpus, "12G", page=a.page, runtime=a.initial_seconds + 370)
+         records = []
+         observe(unit, "initial-stable", a.initial_seconds, records)
+         if a.expect_kernel:
+@@ -180,12 +204,13 @@
+         set_high(unit, "3G")
+         observe(unit, "one-arena-budget", 30, records)
+         set_high(unit, "1G")
+-        observe(unit, "no-arena-budget", 30, records)
++        with reclaim_stress(unit):
++            observe(unit, "no-arena-budget", 30, records)
+         set_high(unit, "12G")
+-        observe(unit, "memory-recovery", 60, records)
++        observe(unit, "memory-recovery", 90, records)
+         # A separate task-owned unit contends for the same physical CPUs without
+         # changing miner configuration, affinity, or memory accounting.
+-        load = "seine-overnight-cpu-load.service"
++        load = "seine-overnight-supplement-cpu-load.service"
+         units.append(load)
+         code = "import multiprocessing,time; end=time.monotonic()+45\ndef busy():\n while time.monotonic()<end: pass\nps=[multiprocessing.Process(target=busy) for _ in range(4)]\n[p.start() for p in ps]\n[p.join() for p in ps]"
+         command(["sudo", "systemd-run", "--quiet", "--unit=" + load, "--uid=root",
+@@ -196,6 +221,8 @@
+         stop(unit)
+         high_events = [int(re.search(r"^high (\d+)$", sample["memory.events"], re.MULTILINE).group(1)) for sample in records]
+         assert max(high_events) > min(high_events), "memory.high did not produce actual reclaim pressure"
++        memory_psi = [int(re.search(r"^some .*total=(\d+)", sample["memory.pressure"], re.MULTILINE).group(1)) for sample in records]
++        assert max(memory_psi) > min(memory_psi), "memory load did not produce measured reclaim stalls"
+         contention = [sample for sample in records if sample["phase"] == "cpu-contention"]
+         cpu_pressure = [int(re.search(r"^some .*total=(\d+)", sample["cpu.pressure"], re.MULTILINE).group(1)) for sample in contention]
+         assert max(cpu_pressure) > min(cpu_pressure), "CPU load did not produce scheduling pressure"
+@@ -208,7 +235,7 @@
+         assert "quarantined" not in text.lower(), "backend quarantine"
+         assert "cpu-autotune |" in text and "H/s" in text, "no productive automatic mining"
+         # A true new process reuses the previous cache under a temporary budget.
+-        unit = "seine-overnight-lifecycle-restart.service"
++        unit = "seine-overnight-supplement-lifecycle-restart.service"
+         units.append(unit)
+         start(unit, a.binary.resolve(), cache, server.server_address[1], a.cpus, "3G", page=a.page)
+         records = []
+@@ -226,7 +253,7 @@
+         text = (OUT / (unit + ".log")).read_text()
+         assert "cached starting point" in text, "restart did not reuse cache"
+         assert "quarantined" not in text.lower()
+-        unit = "seine-overnight-lifecycle-optout.service"
++        unit = "seine-overnight-supplement-lifecycle-optout.service"
+         units.append(unit)
+         start(unit, a.binary.resolve(), cache, server.server_address[1], a.cpus, "12G", fixed=True, page=a.page)
+         observe(unit, "explicit-optout", 35, [])

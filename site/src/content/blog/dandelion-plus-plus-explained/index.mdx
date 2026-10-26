@@ -1,0 +1,91 @@
+---
+title: "Dandelion++ explained: stem and fluff transaction relay"
+description: Dandelion++ explained in plain words, from stem and fluff relay to the 2018 paper's design, and how Blocknet uses it to hide which node sent a transaction.
+date: 2026-10-25
+tags: [Privacy, Dandelion++, Networking, Blocknet]
+faq:
+  - q: Does Dandelion++ hide my IP address?
+    a: It hides which node started a transaction from observers spread across the network. The transaction spreads widely only after it fluffs, several hops from you. Your first stem peer sees the transaction arrive from your node, but stem messages look the same whether a node created a transaction or is passing one along, so it can't tell which.
+  - q: What is the difference between Dandelion and Dandelion++?
+    a: Dandelion (2017) introduced the stem and fluff phases over a single line of relays. Dandelion++ (2018) keeps the two phases and hardens them against spies that break the rules. It uses a graph where each node picks two relays, sends its own transactions along one fixed edge, picks fresh relays every epoch, and adds a fail-safe timer.
+  - q: Which cryptocurrencies use Dandelion++?
+    a: Monero added Dandelion++ in version 0.16, released in May 2020, and Blocknet relays every transaction with it. Dandelion was first proposed for Bitcoin as BIP 156 by the same research group. Any coin built on a peer-to-peer network can adopt it, because it changes only how nodes pass new transactions to each other.
+  - q: What Dandelion++ settings does Blocknet use?
+    a: Blocknet nodes continue the stem with probability 0.9 at each hop, so a transaction fluffs with 10% probability at every relay. Stem routes change every 10 minutes. If your own transaction hasn't come back to your node in the fluff phase within 45 seconds, your node broadcasts it itself, so it always reaches the network.
+related: [what-is-a-privacy-coin, blocknet-privacy-features, ring-signatures-explained]
+---
+
+Dandelion++ is a way of relaying new transactions across a peer-to-peer network so that people watching the network can't easily work out which computer sent them. This guide explains the problem it solves, how its stem and fluff phases work, what the 2018 paper added to the original design, and how Blocknet uses it on every payment.
+
+## What is Dandelion++?
+
+<Answer>
+Dandelion++ is a transaction relay protocol that hides which node created a transaction. A new transaction first travels along a "stem", passed from one node to a single next node for several hops. Then it "fluffs" and spreads to the whole network, appearing to start from a node far from the real sender.
+</Answer>
+
+The name comes from the shape of the path: a thin stem, then a puff of seeds blowing everywhere. Dandelion++ was published in 2018 by Giulia Fanti, Shaileshh Bojja Venkatakrishnan, Surya Bakshi, Bradley Denby, Shruti Bhargava, Andrew Miller and Pramod Viswanath in [Proceedings of the ACM on Measurement and Analysis of Computing Systems](https://doi.org/10.1145/3224424) (preprint on [arXiv](https://arxiv.org/abs/1805.11060)), and presented at ACM SIGMETRICS 2018. It improves on the same group's 2017 proposal, Dandelion.
+
+## Why does broadcasting a transaction reveal where it came from?
+
+A transaction message doesn't contain your IP address. The way it spreads does. In a typical cryptocurrency network, a node that creates a transaction sends it to all of its peers, they send it to theirs, and it ripples outward from the source in rings.
+
+Researchers showed this ripple can be measured. In 2014, Biryukov, Khovratovich and Pustogarov, and separately Koshy, Koshy and McDaniel, ran a "supernode" that connected to nearly every reachable Bitcoin node and logged when each transaction arrived from each peer. The node that delivered a transaction first was often the one that created it. The Dandelion++ paper calls this the first-spy estimator: guess that the first honest node to deliver a transaction is its source. It is simple and works well against flooding.
+
+Adding random delays before each node passes a transaction on, which Bitcoin Core does with a scheme called diffusion, makes the timing noisier. The Dandelion research took a different route and changed the shape of the path itself.
+
+## How do the stem and fluff phases work?
+
+<Answer>
+In the stem phase, each node passes the transaction to exactly one peer. At every hop the node flips a weighted coin: usually it continues the stem, sometimes it switches to fluff. In the fluff phase the transaction is broadcast to all peers as normal, so observers see it spread from the fluffing node.
+</Answer>
+
+Step by step:
+
+1. **Your node starts a stem.** It sends the new transaction to one peer only.
+2. **Each relay decides.** The peer either forwards it to one more peer (stem) or broadcasts it (fluff).
+3. **The fluff spreads it everywhere.** From the fluffing node, the transaction floods the network in the usual way and reaches miners.
+
+A spy watching many nodes now sees the ripple start at the fluffing node, which may be many hops from you. The stem length is random, so the spy can't simply count back a fixed number of hops. The paper gives the expected stem length as 1/q, where q is the chance of fluffing at each hop. With q = 0.1, a stem averages about ten hops.
+
+## What did Dandelion++ change from Dandelion?
+
+The 2017 Dandelion design sent stems along a single line of relays and proved strong results under three assumptions: every node follows the rules, each node sends one transaction, and every node runs Dandelion. The 2018 paper showed how spies that break those assumptions could learn more, then changed the design so the guarantees hold against them. It proceeds in epochs, each node moving to a new epoch "on the order of 10 minutes", and within each epoch it uses four mechanisms:
+
+| Mechanism | What it does |
+|---|---|
+| An approximately 4-regular relay graph | Each node picks up to two of its outbound connections as relays, giving a web of intertwined paths in place of one line. |
+| One edge for your own transactions | A node sends every transaction it creates along the same outbound edge, so sending several transactions doesn't reveal more. |
+| Pseudorandom relaying | Each epoch, a node is either a relay or a diffuser for all transactions it receives in the stem, and maps each incoming edge to an outgoing one. |
+| Fail-safe timers | A node that sent or relayed a stem transaction waits a random time to see it fluff, and broadcasts it itself if it doesn't. |
+
+To pick q, the paper's simulations found that keeping q at 0.2 or below limits what a spy can gain by manipulating the relay graph. The authors ran their implementation on Bitcoin's live network and chose q = 0.1 or q = 0.2 to keep propagation within their 4.5-second target.
+
+Dandelion was proposed for Bitcoin as [BIP 156](https://github.com/bitcoin/bips/blob/master/bip-0156.mediawiki). Monero added Dandelion++ in [version 0.16](https://www.getmonero.org/2020/05/23/monero-0.16-released.html), released in May 2020.
+
+## How does Blocknet use Dandelion++?
+
+Every Blocknet node relays transactions with Dandelion++, and there is nothing to switch on. When you send BNT, your node first checks the transaction and adds it to its own memory pool, then hands it to the Dandelion++ router. Here are the settings in the daemon:
+
+| Setting | Value | What it means |
+|---|---|---|
+| Stem probability | 0.9 | Each relay continues the stem 90% of the time and fluffs 10% of the time (q = 0.1), the same q the paper tested. |
+| Epoch | 10 minutes | Stem routes are reshuffled every 10 minutes. |
+| Embargo timer | 45 seconds | If your transaction hasn't come back to your node in the fluff phase by then, your node broadcasts it itself. |
+
+How a Blocknet payment travels:
+
+- **Your node picks one stem peer for the epoch.** It sends every transaction it creates to that same peer until the next 10-minute epoch, which matches the paper's rule for a node's own transactions.
+- **Each relay makes a fresh choice.** A node that receives a stem transaction fluffs it with 10% probability. Otherwise it forwards it to a randomly chosen peer other than the one it came from. With q = 0.1, a stem averages about ten hops.
+- **Stem messages look the same from every node.** A node uses the same message to start a stem as to pass one along, so the peer receiving it can't tell whether you created the transaction or are relaying it.
+- **The transaction always arrives.** If a stem hop can't be delivered, the node fluffs the transaction straight away, and the 45-second embargo covers anything that stalls.
+- **Relays check what they carry.** A node confirms that a stem payload is a well-formed transaction before relaying it, and penalizes a peer that sends junk.
+
+## How does Dandelion++ fit with Blocknet's other privacy?
+
+Dandelion++ works at the network layer: it protects the link between a transaction and the computer that sent it. The on-chain privacy that makes Blocknet a [privacy coin](/blog/what-is-a-privacy-coin/) protects what the transaction says: a CLSAG ring of 16 on each input hides the sender, one-time stealth addresses hide the receiver, and Pedersen commitments with Bulletproofs range proofs hide the amounts. These protections are mandatory, so every transaction looks alike before Dandelion++ even carries it.
+
+The two layers cover each other. Ring signatures hide which output paid, and Dandelion++ hides which node broadcast the payment. [How Blocknet keeps payments private](/blog/blocknet-privacy-features/) walks through each on-chain layer, and [What is Blocknet?](/blog/what-is-blocknet/) gives the overview, including payment by name with Blocknet ID.
+
+To get BNT of your own to send, you can mine it at home. Follow the [guide to mining Blocknet](/blog/how-to-mine-blocknet/) to download seine, point it at bntpool.com and have payouts land at your wallet address or `@name`.
+
+<CTA target="seine" title="Mine your first BNT with seine" text="seine tunes itself to your computer and mines BNT to your address or @name on bntpool.com, ready for your first private payment." />

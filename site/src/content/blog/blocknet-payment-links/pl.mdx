@@ -1,0 +1,121 @@
+---
+title: Poproś o płatność Blocknet za pomocą linku
+description: Utwórz link płatności blocknet:// lub bntpay.com z kwotą, memo i Twoim $name, aby każdy mógł zapłacić Ci w BNT, wklejając jeden wiersz do swojego portfela.
+tags: [Płatności, Linki płatności, Portfel, Blocknet ID]
+faq:
+  - q: 'Czy link płatności Blocknet musi zawierać kwotę?'
+    a: 'Tak. Każdy link płatności zawiera pole amount, zapisane w BNT z maksymalnie ośmioma miejscami po przecinku, na przykład amount=25 albo amount=0.5. Memo jest opcjonalne. Jeśli wklejony link nie ma kwoty, portfel wiersza poleceń odpowiada payment link missing amount i niczego nie wysyła, więc płacący nigdy nie musi zgadywać, o co prosisz.'
+  - q: 'Czy mogę umieścić w linku płatności swoją krótką nazwę Blocknet ID?'
+    a: 'Tak. Zapisz nazwę z prefiksem dolara, na przykład bntpay.com/$yourname?amount=10 albo blocknet://$yourname?amount=10. Portfel wyszukuje nazwę na blocknet.id, sprawdza podpisany rekord i pokazuje płacącemu pełny adres oznaczony jako zweryfikowany, zanim ten potwierdzi płatność. Link z nazwą zawsze płaci na adres, na który wskazuje Twoja nazwa.'
+  - q: 'Czym różni się link blocknet:// od linku bntpay.com?'
+    a: 'Oba zawierają te same trzy pola, odbiorcę, kwotę i memo, a portfel wiersza poleceń odczytuje je w ten sam sposób. Forma blocknet:// to schemat URI Blocknet. Forma bntpay.com to zwykły adres internetowy, który komunikatory, programy pocztowe i profile w mediach społecznościowych zamieniają w klikalny link.'
+  - q: 'Czy wklejenie linku płatności od razu wysyła BNT?'
+    a: 'Nie. Wklejenie linku do portfela przygotowuje płatność, a potem zatrzymuje się na podsumowaniu z kwotą, odbiorcą, pełnym adresem, opłatą i memo, po którym pojawia się pytanie o potwierdzenie tak lub nie. BNT zostają wysłane dopiero, gdy płacący wpisze y. Każda inna odpowiedź anuluje płatność i zwalnia zarezerwowane przez nią monety.'
+sourceHash: 193a7a6a455c
+translation: draft
+---
+
+Link płatności Blocknet zawiera w jednym wierszu wszystko, czego potrzebuje płacący: komu zapłacić, ile BNT i opcjonalne memo, na przykład numer faktury. Wyślij go na czacie, umieść na fakturze albo w swoim profilu, a płacący wklei go do swojego portfela i potwierdzi. Ten poradnik pokazuje dwa formaty linków, jak utworzyć link ze swoim adresem lub swoim `$name` i co dokładnie robi portfel, gdy ktoś go wklei.
+
+## Czym jest link płatności Blocknet?
+
+<Answer>
+Link płatności Blocknet to pojedynczy wiersz zawierający odbiorcę, kwotę i opcjonalne memo, zapisany jako blocknet://recipient?amount=25&memo=invoice-42 albo bntpay.com/recipient?amount=25&memo=invoice-42. Odbiorcą jest adres portfela lub nazwa Blocknet ID. Po wklejeniu do portfela wiersza poleceń link zamienia się w gotową do potwierdzenia wysyłkę.
+</Answer>
+
+Portfel wiersza poleceń Blocknet przyjmuje dwie formy:
+
+```
+blocknet://<address-or-$name>?amount=<BNT>&memo=<text>
+bntpay.com/<address-or-$name>?amount=<BNT>&memo=<text>
+```
+
+Obie formy zawierają te same pola:
+
+| Pole | Gdzie się znajduje | Wymagane | Co zawiera |
+|---|---|---|---|
+| Odbiorca | zaraz po `blocknet://` lub `bntpay.com/` | Tak | Adres Twojego portfela albo Twoja krótka nazwa jako `$name` |
+| `amount` | ciąg zapytania | Tak | Kwota BNT, o którą prosisz, do ośmiu miejsc po przecinku |
+| `memo` | ciąg zapytania | Nie | Tekst memo płatności, do 124 bajtów |
+
+Portfel jest wyrozumiały co do sposobu zapisania linku. Rozpoznaje `blocknet://` i krótsze `blocknet:`, a w formie internetowej przyjmuje samo `bntpay.com/` albo z `www.`, `http://` lub `https://` na początku. Wielkość liter w prefiksie nie ma znaczenia, a kolejność `amount` i `memo` też jest dowolna.
+
+Forma `bntpay.com` to zwykły adres internetowy, więc większość komunikatorów, programów pocztowych i profili społecznościowych zamienia ją w link, który można kliknąć. Forma `blocknet://` to URI Blocknet, przydatne wszędzie tam, gdzie link trafia prosto do portfela.
+
+## Jak utworzyć link płatności?
+
+Link możesz napisać ręcznie w czterech krokach.
+
+1. **Wybierz odbiorcę.** Uruchom `address` w portfelu wiersza poleceń, aby wyświetlić swój adres, albo użyj swojej [krótkiej nazwy Blocknet ID](/pl/blog/blocknet-id-pay-by-name/) z prefiksem `$`. Jeśli nie masz jeszcze portfela, [poradnik o portfelu Blocknet](/pl/blog/blocknet-wallet-for-mining/) pokazuje, jak go utworzyć i znaleźć swój adres.
+2. **Ustaw kwotę.** Zapisz ją w BNT. Działają zarówno liczby całkowite, jak i ułamki, do ośmiu miejsc po przecinku, bo jeden BNT to 100 000 000 jednostek atomowych.
+3. **Dodaj memo, jeśli chcesz.** Numer zamówienia, identyfikator faktury albo krótkie podziękowanie pomogą Ci dopasować płatność, gdy dotrze. Zmieść się w 124 bajtach.
+4. **Połącz części.** Wpisz odbiorcę po prefiksie, potem `?amount=`, a potem `&memo=`, jeśli masz memo.
+
+Faktura na 25 BNT na nazwę w obu formach:
+
+```
+https://bntpay.com/$yourname?amount=25&memo=invoice-42
+blocknet://$yourname?amount=25&memo=invoice-42
+```
+
+Ta sama prośba na pełny adres:
+
+```
+bntpay.com/<address>?amount=25&memo=invoice-42
+```
+
+### Kodowanie znaków w memo
+
+Memo ze spacjami lub znakami interpunkcyjnymi wymaga zapisania kilku znaków w kodowaniu URL, bo sam link ich używa. Portfel dekoduje je z powrotem, zanim zbuduje płatność.
+
+| Znak | Zapisz jako | Dlaczego |
+|---|---|---|
+| spacja | `%20` | Link pozostaje w całości, gdy jest udostępniany |
+| `&` | `%26` | `&` rozpoczyna kolejne pole |
+| `#` | `%23` | `#` kończy ciąg zapytania |
+| `+` | `%2B` | Samo `+` jest odczytywane jako spacja |
+
+Na przykład `memo=Order%20%231042` dociera jako `Order #1042`. Litery, cyfry, myślniki, podkreślniki i kropki nie wymagają kodowania, dlatego memo takie jak `invoice-42` można używać bez zmian.
+
+## Adres czy $name w linku?
+
+Oba działają, a każde sprawdza się w czymś innym.
+
+**Nazwa** sprawia, że link jest na tyle krótki, by dało się go przeczytać, powiedzieć na głos albo zmieścić w opisie profilu. W linkach zapisuj ją z prefiksem `$`: `$yourname` i `@yourname` to ta sama nazwa, a `$` to forma, którą oba typy linków przekazują prosto do portfela. Gdy płacący wkleja link z nazwą, portfel rozwiązuje nazwę przez blocknet.id, sprawdza podpis Ed25519 rekordu i wyświetla pełny adres oznaczony jako zweryfikowany. Ponieważ nazwa jest rozwiązywana w chwili płatności, długo używany link, na przykład link na napiwki w Twoim profilu, działa dalej, nawet jeśli później skierujesz nazwę na nowy portfel.
+
+**Pełny adres** ustala miejsce docelowe w samym linku. Pasuje to do jednorazowej faktury, w której link ma wskazywać jeden konkretny portfel.
+
+Tak czy inaczej, płatność w łańcuchu jest zwykłą transakcją Blocknet na [jednorazowy adres stealth](/pl/blog/blocknet-privacy-features/), z taką samą prywatnością jak każda inna płatność.
+
+## Co się dzieje, gdy ktoś wklei link płatności?
+
+<Answer>
+Portfel odczytuje z linku odbiorcę, kwotę i memo i wykonuje z nimi zwykłą wysyłkę. Rozwiązuje nazwę, jeśli jest, buduje transakcję, a potem pokazuje kwotę, odbiorcę, pełny adres, opłatę i memo i pyta Confirm [y/N]. BNT zostają wysłane dopiero, gdy płacący wpisze y.
+</Answer>
+
+Oto kolejne kroki w portfelu wiersza poleceń.
+
+1. **Płacący wkleja link w wierszu poleceń portfela.** Portfel widzi prefiks `blocknet:` lub `bntpay.com/` i traktuje wiersz jako wysyłkę. Link do `$yourname` na 25 BNT z memo `invoice-42` staje się tym samym żądaniem co wpisanie `send $yourname 25 invoice-42`.
+2. **Nazwa zostaje rozwiązana.** W przypadku linku z nazwą portfel wyświetla `Resolved $yourname -> <address>` ze znacznikiem weryfikacji.
+3. **Portfel sprawdza saldo i buduje płatność.** Wybiera monety, buduje prywatną transakcję i oblicza opłatę.
+4. **Płacący widzi podsumowanie.** Zawiera ono kwotę i odbiorcę, opłatę, pełny adres, gdy użyto nazwy, ewentualną resztę i memo, a po nim `Confirm [y/N]`.
+5. **Płacący potwierdza.** Wpisanie `y` wysyła transakcję i wyświetla jej identyfikator z linkiem do eksploratora na `explorer.blocknetcrypto.com`. Każda inna odpowiedź wyświetla `Cancelled` i zwalnia monety, które portfel odłożył.
+
+Podsumowanie daje płacącemu szansę sprawdzenia prośby, więc nic nie opuszcza jego portfela, dopóki jej nie zobaczy. Każdy link potrzebuje kwoty: bez niej portfel odpowiada `payment link missing amount` i zatrzymuje się, zanim cokolwiek zbuduje.
+
+Memo umieszczone w linku trafia razem z płatnością jako [zaszyfrowane memo](/pl/blog/blocknet-encrypted-memos/) Blocknet. Gdy BNT dotrą, polecenie `history` w Twoim portfelu wyświetli je przy przychodzącej płatności, więc dopasujesz ją do faktury lub zamówienia.
+
+### Przetestuj link, zanim go udostępnisz
+
+Możesz zobaczyć dokładnie to, co zobaczy płacący, wklejając własny link do swojego portfela. Jeśli w portfelu masz co najmniej żądaną kwotę, zobaczysz pełne podsumowanie. Sprawdź odbiorcę, kwotę i memo, a potem odpowiedz `n` i nic nie zostanie wysłane.
+
+## Gdzie linki płatności sprawdzają się najlepiej
+
+- **Faktury.** Umieść link z numerem faktury w memo na dole faktury albo w e-mailu. Płacący wkleja jeden wiersz, a memo mówi Ci, która faktura została opłacona.
+- **Sklepy i strony zamówień.** Generuj link dla każdego zamówienia z numerem zamówienia w memo, aby każda płatność docierała już opisana.
+- **Napiwki i darowizny.** Link do `$yourname` z sugerowaną kwotą zmieści się w profilu, pliku README albo nakładce na stream.
+- **Dzielenie rachunku.** Wrzuć na czat grupowy link z częścią przypadającą na każdą osobę i notatką w rodzaju `dinner%20friday`.
+
+Jeśli zarabiasz BNT także na kopaniu, możesz do tego użyć tej samej nazwy. Zarówno seine, jak i bntpool.com akceptują krótką nazwę Blocknet ID jako adres wypłat, więc wypłaty z kopania i płatności z linków trafiają do jednego portfela. [Poradnik kopania Blocknet](/pl/blog/how-to-mine-blocknet/) opisuje konfigurację.
+
+<CTA target="pool" title="Kop na nazwę z Twoich linków" text="bntpool.com przyjmuje Twoją krótką nazwę Blocknet ID jako login do wypłat, więc wypłaty z kopania trafiają do tego samego portfela, na który wskazują Twoje linki płatności." />

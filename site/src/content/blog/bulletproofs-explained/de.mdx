@@ -1,0 +1,97 @@
+---
+title: 'Bulletproofs erklärt: So werden verborgene Beträge geprüft'
+description: 'Bulletproofs einfach erklärt: wie Pedersen-Commitments Transaktionsbeträge verbergen und wie Range Proofs jedem Node erlauben, die Rechnung zu prüfen.'
+tags: [Bulletproofs, Privatsphäre, Kryptografie, Blocknet]
+faq:
+  - q: 'Brauchen Bulletproofs ein Trusted Setup?'
+    a: 'Nein. Bulletproofs beruhen nur auf der Annahme des diskreten Logarithmus, derselben Annahme, auf der Signaturen mit elliptischen Kurven beruhen, und nutzen öffentliche Parameter, die jeder ableiten kann. Es gibt keine Setup-Zeremonie und kein Geheimnis, das jemand danach vernichten muss, und Privacy Coins wie Monero und Blocknet nutzen sie für ihre Range Proofs.'
+  - q: 'Wie groß ist ein Bulletproofs-Range-Proof?'
+    a: 'Ein einzelner 64-Bit-Bulletproof besteht aus 2 × log2(64) + 9 = 21 Elementen. In der Ristretto-Gruppe belegt jedes Element 32 Byte, jeder Beweis ist also 672 Byte groß, und der Blocknet-Explorer zeigt genau das für jeden Output an. Die Größe wächst mit dem Logarithmus des Bereichs, eine doppelte Bitlänge fügt also nur zwei Elemente hinzu.'
+  - q: 'Wer kann den Betrag einer Blocknet-Transaktion sehen?'
+    a: 'Nur Sender und Empfänger. Die Chain speichert für jeden Output ein Pedersen-Commitment und einen Range Proof sowie den Betrag, verschlüsselt mit dem Geheimnis, das die beiden Wallets teilen. Die Wallet des Empfängers entschlüsselt ihn mit dem privaten View Key. Die Netzwerkgebühr ist die einzige öffentliche Zahl, damit Nodes sie in die Bilanzprüfung einrechnen können.'
+  - q: 'Woher wissen Nodes, dass keine Coins erschaffen wurden, wenn die Beträge verborgen sind?'
+    a: 'Jeder Node prüft bei jeder Transaktion zwei Dinge. Die Pedersen-Commitments müssen aufgehen, die Inputs also den Outputs plus Gebühr entsprechen, und jeder Output muss einen gültigen Range Proof tragen, der zeigt, dass sein Betrag zwischen 0 und 2^64 liegt. Zusammen schließt das verdeckte Inflation aus, ohne einen einzigen Betrag offenzulegen.'
+sourceHash: e02793933862
+translation: reviewed
+---
+
+Bulletproofs sind die kurzen Zero-Knowledge-Range-Proofs, mit denen eine Kryptowährung jeden Transaktionsbetrag verbergen kann, während jeder Node trotzdem prüft, dass keine Coins erschaffen wurden. Diese Anleitung erklärt Pedersen-Commitments, warum verborgene Beträge Range Proofs brauchen, wie Bulletproofs diese Beweise klein halten und wie Blocknet sie an jedem Output einsetzt.
+
+## Was sind Bulletproofs?
+
+<Answer>
+Bulletproofs sind kurze Zero-Knowledge-Beweise, 2018 von Bünz, Bootle, Boneh, Poelstra, Wuille und Maxwell veröffentlicht. In Kryptowährungen beweisen sie, dass ein verborgener Betrag in einem gültigen Bereich liegt, etwa von 0 bis 2^64, ohne ihn offenzulegen. Sie brauchen kein Trusted Setup, und ihre Größe wächst nur mit dem Logarithmus des Bereichs.
+</Answer>
+
+Das Paper [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) erschien 2018 auf dem IEEE Symposium on Security and Privacy. Die Autoren haben Bulletproofs für vertrauliche Transaktionen entworfen, bei denen Beträge auf einer Blockchain durch Commitments ersetzt werden. Um zu verstehen, warum ein solcher Beweis überhaupt nötig ist, fang beim Commitment an.
+
+## Was ist ein Pedersen-Commitment?
+
+Ein Commitment ist die kryptografische Version eines versiegelten Umschlags. Du legst eine Zahl hinein, zeigst allen den Umschlag und kannst später beweisen, was darin war. Niemand kann die Zahl aus dem Umschlag lesen, und du kannst sie hinterher nicht gegen eine andere austauschen.
+
+Ein Pedersen-Commitment, 1991 von Torben Pedersen beschrieben, macht das mit Punkten auf einer elliptischen Kurve. Um sich auf einen Betrag `v` festzulegen, wählt eine Wallet ein zufälliges Geheimnis `r`, den sogenannten Blinding Factor, und berechnet:
+
+```
+C = v·G + r·H
+```
+
+`G` und `H` sind zwei feste öffentliche Punkte auf der Kurve, so gewählt, dass niemand weiß, wie man den einen als Vielfaches des anderen schreibt. Das Ergebnis `C` ist ein einzelner 32-Byte-Punkt. Er hat zwei Eigenschaften:
+
+- **Verbergend (Hiding).** Weil `r` zufällig ist, sieht `C` wie ein zufälliger Punkt aus. Derselbe Betrag zweimal festgelegt ergibt zwei unzusammenhängende Commitments, und das Commitment allein verrät einem Beobachter nichts über `v`.
+- **Bindend (Binding).** Sobald `C` veröffentlicht ist, kann die Wallet es nicht zu einem anderen Betrag öffnen. Dazu müsste sie das Problem des diskreten Logarithmus auf der Kurve lösen.
+
+## Wie können Nodes eine Transaktion prüfen, die sie nicht lesen können?
+
+<Answer>
+Pedersen-Commitments lassen sich addieren. Die Summe zweier Commitments ist ein Commitment auf die Summe ihrer Beträge, wobei auch die Blinding Factors addiert werden. Ein Node addiert die Input-Commitments einer Transaktion sowie ihre Output-Commitments plus Gebühr und prüft, ob beide Summen übereinstimmen. So bestätigt er die Bilanz, ohne einen Betrag zu sehen.
+</Answer>
+
+Die Addition zweier Commitments ergibt `(v1 + v2)·G + (r1 + r2)·H`, was selbst ein Commitment auf `v1 + v2` ist. Der Sender wählt die Blinding Factors so, dass ihre Summe auf der Input-Seite der Summe auf der Output-Seite entspricht. Wenn auch die Beträge aufgehen, ist die Differenz zwischen Input-Summe und Output-Summe genau null, und jeder Node kann das prüfen.
+
+Die Netzwerkgebühr ist die einzige öffentliche Zahl in einer Transaktion. Nodes machen daraus ein Commitment mit dem Blinding Factor null und addieren es auf der Output-Seite, die Prüfung lautet also: Inputs = Outputs + Gebühr.
+
+## Warum brauchen verborgene Beträge Range Proofs?
+
+Die Commitment-Arithmetik rechnet modulo einer sehr großen Zahl, der Ordnung der Kurvengruppe, die etwa 2^252 beträgt. In dieser Arithmetik ist ein „negativer“ Betrag einfach ein riesiger positiver. Jemand könnte einen Input im Wert von 10 Coins ausgeben und zwei Outputs erzeugen, einen im Wert von 11 und einen im Wert von „minus 1“. Die Commitments würden perfekt aufgehen, und 1 Coin entstünde aus dem Nichts, verborgen vor jedem Beobachter.
+
+Ein Range Proof (Bereichsbeweis) schließt diese Lücke. Er beweist, dass der Betrag in einem Commitment zwischen 0 und 2^64 liegt, ohne zu sagen, wie hoch er ist. Wenn jeder Output so begrenzt ist, können ein paar Outputs nie zu einer Zahl aufaddiert werden, die groß genug ist, um über die Gruppenordnung hinauszulaufen. Ausgeglichene Commitments bedeuten also ausgeglichene Beträge.
+
+Frühere Designs für vertrauliche Transaktionen nutzten Range Proofs, die linear mit der Anzahl der Bits wuchsen. Bulletproofs wachsen nur mit dem Logarithmus, was einen 64-Bit-Beweis auf einige hundert Byte bringt.
+
+## Wie funktionieren Bulletproofs?
+
+Ein Bulletproof beweist einen Bereich in drei Schritten.
+
+1. **Den Betrag in Bits zerlegen.** Ein 64-Bit-Betrag wird zu einem Vektor aus 64 Bits. Der Beweisende legt sich auf diesen Vektor fest und zeigt zwei Tatsachen darüber: Jeder Eintrag ist 0 oder 1, und die Bits, gewichtet mit Zweierpotenzen, ergeben zusammen den festgelegten Betrag.
+2. **Diese Tatsachen in ein einziges Skalarprodukt verwandeln.** Mit zufälligen Challenges fasst der Beweisende all diese Bedingungen zu einer einzigen Aussage über das Skalarprodukt zweier Vektoren zusammen. Weil die Challenges zufällig sind, besteht eine falsche Aussage nur mit vernachlässigbarer Wahrscheinlichkeit.
+3. **Das Skalarprodukt durch Halbieren beweisen.** In jeder Runde sendet der Beweisende zwei Kurvenpunkte, `L` und `R`, und beide Vektoren werden auf die halbe Länge gefaltet. Nach log2(64) = 6 Runden bleibt ein einzelnes Zahlenpaar übrig.
+
+Aus diesem Halbieren ergibt sich die Größe. Laut Abstract des Papers umfasst ein Range Proof für einen `n`-Bit-Bereich `2·log2(n) + 9` Gruppen- und Körperelemente. Für 64 Bit sind das 12 Punkte aus den sechs Runden plus 9 weitere, insgesamt 21 Elemente, oder 672 Byte, wenn jedes Element 32 Byte groß ist.
+
+Der Beweis ist nicht interaktiv. Statt eines Prüfers, der live Challenges sendet, leiten beide Seiten sie durch Hashen des Beweis-Transkripts ab, eine Standardtechnik namens Fiat-Shamir-Heuristik. Bulletproofs brauchen außerdem kein Trusted Setup: Die Generatoren sind öffentlich und offen abgeleitet, und die Sicherheit beruht nur auf der Annahme des diskreten Logarithmus. Mehrere Beweise lassen sich zusammenfassen, wobei nur eine logarithmische Anzahl an Elementen hinzukommt, und die Prüfung lässt sich im Batch durchführen.
+
+## Wer nutzt Bulletproofs?
+
+Monero hat Bulletproofs mit seinem Netzwerk-Upgrade am 18. Oktober 2018 (Release v0.13.0) aktiviert, um die Transaktionsgrößen zu verringern. Die [Rust-Bibliothek bulletproofs](https://github.com/dalek-cryptography/bulletproofs) des Projekts dalek-cryptography implementiert sie über der Ristretto-Gruppe von Curve25519, und die Kryptografie-Bibliothek von Blocknet baut darauf auf.
+
+## Wie verbirgt Blocknet jeden Betrag?
+
+Bei Blocknet enthält jeder Output jeder Transaktion statt eines Betrags ein Pedersen-Commitment, und jeder Output trägt einen eigenen 64-Bit-Bulletproof. Privatsphäre ist Teil des Transaktionsformats, ohne transparenten Modus, es gibt also keinen Weg, eine Zahlung mit sichtbarem Betrag zu senden.
+
+Das prüft ein Node, bevor er eine Transaktion akzeptiert:
+
+- **Jeden Range Proof.** Der Bulletproof jedes Outputs muss gegen dessen Commitment verifiziert werden und so beweisen, dass der Betrag zwischen 0 und 2^64 liegt. Die Beweise nutzen ein Transkript mit dem Label „Blocknet Range Proof“, das jeden Beweis an Blocknet bindet.
+- **Die Bilanz.** Jeder Input trägt ein Pseudo-Output-Commitment, und die Ringsignatur beweist, dass es auf denselben Betrag lautet wie der echte ausgegebene Coin, ohne zu verraten, welches Ringmitglied das ist. Der Node prüft dann, dass die Pseudo-Outputs zusammen den Outputs plus Gebühr entsprechen.
+- **Neue Coins.** Die Belohnung eines Blocks folgt einem öffentlichen Zeitplan, daher berechnet der Node für den geminten Output das Commitment nach, das er für diese Höhe erwartet, und prüft, ob es übereinstimmt.
+
+Das kannst du im [Blocknet-Explorer](https://explorer.blocknetcrypto.com) sehen. Eine Transaktionsseite führt ihre Beträge als „hidden · Pedersen commitments“, und jeder Output zeigt sein Commitment, ein verschlüsseltes Memo und einen Range Proof von „672 bytes · Bulletproof“, genau die Größe, die die Rechnung oben vorhersagt.
+
+Der Empfänger sieht trotzdem die echte Zahl. Jeder Output trägt den Betrag, verschlüsselt mit dem Geheimnis, das die Wallets von Sender und Empfänger teilen, und die Wallet des Empfängers entschlüsselt ihn mit dem privaten View Key. Der Betrag ist für die beiden Beteiligten an der Zahlung sichtbar und für niemanden sonst.
+
+Verborgene Beträge arbeiten mit den anderen Schichten von Blocknet zusammen: [Ringsignaturen](/de/blog/ring-signatures-explained/) über 16 Outputs verbergen den Sender, [Einmal-Stealth-Adressen](/de/blog/stealth-addresses-explained/) den Empfänger, und [Dandelion++](/de/blog/dandelion-plus-plus-explained/) verbirgt, wo eine Transaktion ins Netzwerk gelangt ist. Der [Leitfaden zu den Privatsphäre-Funktionen von Blocknet](/de/blog/blocknet-privacy-features/) geht jede davon durch.
+
+## Hol dir eigene private BNT
+
+Ein einfacher Weg zu Coins mit verborgenen Beträgen ist, sie zu minen. Blocknet nutzt einen speicherintensiven [Argon2id-Proof-of-Work](/de/blog/argon2id-proof-of-work-explained/), den du auf einem normalen Computer minen kannst, und seine mint ihn auf deiner CPU, zusammen mit allen NVIDIA-GPUs, und optimiert sich ohne Einrichtung selbst. Jede Auszahlung, die dir bntpool.com schickt, kommt als privater Output mit Commitment und Bulletproof an. Mit der [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) kommst du in wenigen Minuten vom Download zu akzeptierten Shares.
+
+<CTA target="seine" title="Private BNT mit seine minen" text="Lade seine herunter, füge deine Adresse oder deinen @name ein und verdiene Blocknet, wobei jeder Betrag on-chain verborgen bleibt." />

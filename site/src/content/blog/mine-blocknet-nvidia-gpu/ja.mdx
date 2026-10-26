@@ -1,0 +1,112 @@
+---
+title: 'NVIDIA GPUでBlocknetをマイニングする方法'
+description: 'seineでNVIDIA GPUを使ってBlocknetをマイニング。Windows・Linuxの設定、CPUとの併用、ハッシュレートの確認、起動時の問題への対処を解説します。'
+tags: ['マイニングガイド', 'NVIDIA', 'GPU']
+sourceHash: 6a693c616f37
+translation: draft
+faq:
+  - q: 'seineはCPUとNVIDIA GPUを同時に使えますか？'
+    a: 'はい。backendオプションを指定しなければ、seineはCPUと検出されたNVIDIA GPUを自動的に選択します。Devicesパネルでは各バックエンドを個別に確認できます。CPUでのマイニングを続けながら特定のカードを選ぶには、cpuとnvidiaの両方を選択し、NVIDIAデバイスのインデックスを指定します。'
+  - q: 'WindowsでCUDA Toolkitは必要ですか？'
+    a: 'Windowsの公式アーカイブには、seineがGPUカーネルのコンパイルに使うNVRTCランタイムライブラリが含まれています。対応するNVIDIAディスプレイドライバーをインストールし、展開したDLLをseine.exeと同じフォルダーに置いてください。この配布済みWindows版では、CUDA Toolkitを別途インストールする必要はありません。'
+  - q: 'CPUを使わずにNVIDIA GPUだけでマイニングするには？'
+    a: 'backendオプションをnvidiaに設定してseineを起動します。検出されたカードごとにNVIDIAバックエンドが作成されます。特定のデバイスインデックスを選ぶには、nvidia-devicesオプションを追加します。起動後にDevicesパネルを確認し、目的のGPUが表示され、ハッシュを計算していることを確かめてください。'
+  - q: 'GPUのシェアが受理されたかは、どこで確認できますか？'
+    a: 'マイニングのダッシュボードに、送信済み・拒否・受理済みのシェアが表示されます。ログには、シェアのイベントを発生させたバックエンドも表示されます。NVIDIAデバイスの行でローカルのハッシュレートを確認し、そのバックエンドのシェア受理メッセージを探してください。プールに計上された作業は、プールの追跡ガイドに沿って確認できます。'
+---
+
+seineはCPUとともにNVIDIA GPUでもBlocknetをマイニングします。このガイドでは、WindowsとLinuxの設定、カードの選択、受理されたシェアの確認、RTX 5090での実測比較を解説します。コマンドはseine v0.2.26と、2026年10月時点のArgon2idネットワークに基づいています。
+
+## NVIDIA GPUでBlocknetのマイニングを始めるには？
+
+<Answer>
+Windows x86_64またはLinux x86_64向けのseineアーカイブをダウンロードし、使用する環境に合わせてNVIDIAドライバーとランタイムライブラリを準備して、マイナーを実行します。支払い先アドレスを入力し、既定のプールを選んでください。seineはCPUと検出されたNVIDIAカードを自動的に選択し、各GPUバックエンドの準備と調整を行います。
+</Answer>
+
+[ダウンロード欄](/ja/#download)で、Windowsなら`seine-windows-x86_64.zip`、Linux x86_64なら`seine-linux-x86_64.tar.gz`を選んでください。支払い先アドレスの取得と初回接続については、[基本のマイニングガイド](/ja/blog/how-to-mine-blocknet/)で解説しています。
+
+まずは既定の設定を使いましょう。カーネル、レジスタ上限、GPUレーン数、CPUスレッド数は指定せず、seineに構成を選ばせます。初期化が終わると、Devicesパネルでどのバックエンドが動作しているか確認できます。
+
+## WindowsまたはLinuxでNVIDIAランタイムを準備する
+
+| プラットフォーム | 準備するもの | 起動コマンド |
+|---|---|---|
+| Windows x86_64 | NVIDIAディスプレイドライバー、実行ファイルと同じフォルダーに置く同梱ランタイムDLL | `.\seine.exe` |
+| Linux x86_64 | NVIDIAドライバーと対応するNVRTCランタイムライブラリ | `./seine` |
+
+Windowsでは、書き込み可能なフォルダーにZIP全体を展開します。`nvrtc64_120_0.dll`と`nvrtc-builtins64_128.dll`は、`seine.exe`と同じフォルダーに置いてください。配布済みのリリースはこれらの同梱ライブラリを使用するため、CUDA Toolkitを別途インストールする必要はありません。
+
+![seine公式ダウンロード表に表示されたWindowsアーカイブ](/assets/blog/windows-download.png)
+
+[NVIDIAのドライバーページ](https://www.nvidia.com/en-us/drivers/)から、カードとOSに合ったドライバーをインストールしてください。[Windows設定ガイド](/ja/blog/mine-blocknet-on-windows/)では、ダウンロード、チェックサムの確認、展開の手順を説明しています。
+
+Linuxでは、ディストリビューションに合ったNVIDIAドライバーと対応するNVRTCパッケージをインストールします。NVRTCは、実行時にseineのCUDAカーネルをコンパイルします。NVIDIAの[NVRTCドキュメント](https://docs.nvidia.com/cuda/nvrtc/)にはコンパイラーと対応するbuiltinsライブラリの説明があり、[seineのNVIDIA要件](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)にはマイナーに必要なランタイム環境が記載されています。
+
+実行ファイルがあるフォルダーから起動してください。同じ作業ディレクトリを使い続けると、`seine-data`に保存した設定を維持できます。初回起動時には受取アドレスを入力し、プールに`stratum+tcp://bntpool.com:3333`を選びます。
+
+## NVIDIAカードを1枚選び、CPUのマイニングも続けられますか？
+
+両方のバックエンドとデバイスインデックスを指定します。PowerShellでは、次のコマンドでCPUのマイニングを続けながらNVIDIAデバイス`0`を選択できます。
+
+```powershell
+.\seine.exe --backend cpu,nvidia --nvidia-devices 0
+```
+
+Linuxの実行ファイルでも同じオプションを使います。
+
+```bash
+./seine --backend cpu,nvidia --nvidia-devices 0
+```
+
+これらのコマンドは保存済みのアドレスとプールを使用し、未設定なら起動時に入力を求めます。接続先を明示するには、`--address`で公開の受取アドレスを、`--pool-url`でプールのURLを指定してください。
+
+インデックスは、NVIDIAランタイムが列挙するGPUを識別します。起動後にデバイス一覧を確認してください。`--nvidia-devices 0,1`はその2枚のカードを選択します。この選択オプションを省略すると、検出されたすべてのNVIDIAデバイスを使用します。
+
+GPUのみでマイニングするには、`nvidia`を選びます。
+
+```bash
+./seine --backend nvidia
+```
+
+PowerShellでは`.\seine.exe --backend nvidia`を使います。両方のハードウェアを使用する場合は、バックエンド一覧に`cpu`も含めてください。選択を変更するときは、目的のコマンドでseineを再起動します。
+
+## GPUがマイニングしていることを確認するには？
+
+<Answer>
+DevicesパネルでNVIDIAバックエンドの行を探し、現在と平均のハッシュレートを確認します。初期化中はCUDAカーネルの準備に合わせて起動の進捗が表示される場合があります。ハッシュ計算が始まったら、ログでそのバックエンドのシェアイベントを、Miningパネルで受理されたシェアを確認してください。
+</Answer>
+
+NVIDIAバックエンドは`nvidia#1`、`nvidia#2`などと表示され、CPUには独立した行があります。全体のハッシュレートには、稼働中のすべてのバックエンドが含まれます。[ダッシュボードガイド](/ja/blog/seine-dashboard-explained/)では、その他のパネルとログのラベルについて説明しています。
+
+![RTX 5090を使用した実際のseineセッション。デバイスのハッシュレートと受理済みシェアを表示](/assets/blog/nvidia-rtx5090-session.png)
+
+この画像は、RTX 5090で実際にプールへ接続しているセッションです。以下の時間を定めたベンチマークは別途実行しました。デバイスのハッシュレートはローカルの動作を測る指標であり、受理されたシェアは送信した作業がプールに計上されたことを示します。計上された作業は、[マイナー追跡ガイド](https://bntpool.com/blog/track-your-miner-on-bntpool/)に沿って確認できます。
+
+初回起動時にはGPUカーネルの準備と調整が行われます。seineはNVIDIAの自動調整結果を`seine-data/seine.nvidia-autotune.json`に保存します。このデータディレクトリを再利用すると、次回以降の起動で互換性のある保存結果を読み込めます。`--data-dir`でディレクトリを明示的に指定することもできます。
+
+## テストでのRTX 5090の速度は？
+
+2026年10月25日に、Windows 11、NVIDIA GeForce RTX 5090、AMD Ryzen 9 9950X3D、利用可能なRAM 125.4 GiB、seine v0.2.26、NVIDIAドライバー`610.88`を使用してテストしました。`--bench-kind backend`を使い、両モードを交互に実行する比較を3組行いました。各実行には20秒のウォームアップ1回と20秒の測定ラウンド3回を含め、実行の間に20秒の間隔を置きました。カーネル、レジスタ上限、レーン数、スレッド数は自動設定でした。
+
+| モード | 平均 H/s |
+|---|---|
+| RTX 5090のみ | 7.3 |
+| RTX 5090 + Ryzen 9 9950X3D | 12.9 |
+
+表は、このデスクトップPCで既存のアプリを開いたまま各モードを3回実行した平均値です。両モードでGPU `0`と同じNVIDIA自動調整キャッシュを使用しました。これらはローカルベンチマークの速度であり、プールへの計上は受理されたシェアで確認します。[測定メモ](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md)には設定と個別の結果を記録しています。
+
+## NVIDIAの行が表示されないときは何を確認しますか？
+
+まず、展開した実行ファイルとランタイムライブラリを確認します。Windowsでは同梱のNVRTC DLLを`seine.exe`と同じフォルダーに置きます。Linuxでは、マイナーを起動する環境にドライバーとNVRTCライブラリをインストールしてください。
+
+次にコマンドを確認します。`--backend cpu`はCPUのみを選択します。両方を使うには、既定のコマンドか`--backend cpu,nvidia`を使用します。`--nvidia-devices`を指定した場合は、そのインデックスが使用中のマシンに存在することを確認してください。
+
+該当するバックエンドの起動ログを読んでください。準備の途中なのか、初期化エラーが起きたのかを区別できます。報告されたランタイムやデバイス選択の問題を修正し、再起動します。[NVIDIAガイド](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)には、ソースからビルドする場合の要件も記載されています。
+
+現在のArgon2idの処理では、稼働するGPUレーンごとに2 GiBのメモリ領域とランタイムの追加メモリが必要です。seineは、利用可能なデバイスメモリとメモリ割り当ての確認結果に基づいてGPUの作業量を決めます。レーン数は手動で上書きせずに使用してください。公称VRAM容量だけでは、デスクトップを使用している間に利用できるレーン数は決まりません。
+
+デバイスがハッシュを計算しているのにプールがゼロと表示する場合は、[プールのハッシュレート確認リスト](https://bntpool.com/blog/track-your-miner-on-bntpool/#zero-hashrate)に沿って、アドレス、接続、受理されたシェアを確認してください。
+
+[Windowsがマイナーをブロックしたら](/ja/blog/antivirus-flags-crypto-miner/)
+
+<CTA target="seine" title="NVIDIAでのマイニングにseineをダウンロード" text="WindowsまたはLinux x86_64のアーカイブを選び、CPUとNVIDIA GPUの自動選択で始めましょう。" />
