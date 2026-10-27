@@ -1,0 +1,68 @@
+---
+title: 'Giải thích phí giao dịch Blocknet'
+description: 'Hiểu phí Blocknet, chọn đầu vào và tiền thừa. Xem trước phí trong ví trước khi xác nhận, đồng thời phân biệt phí mạng với phí đào coin.'
+tags: ['Blocknet', 'Ví', 'Thanh toán']
+faq:
+  - q: 'Phí giao dịch Blocknet có là phần trăm số tiền gửi không?'
+    a: 'Ví được kiểm tra tính phí từ ước lượng thận trọng về kích thước giao dịch và phí tối thiểu. Đầu vào, đầu ra ảnh hưởng đến ước lượng. Số tiền có thể ảnh hưởng đầu vào được chọn, nhưng phép tính không phải tỷ lệ cố định của số BNT gửi.'
+  - q: 'Có thể xem phí mà không phát giao dịch không?'
+    a: 'Ví dòng lệnh được tài liệu mô tả yêu cầu bản xem trước và hiển thị phí trước khi hỏi xác nhận. Kiểm tra nơi nhận, số tiền và tiền thừa tại đó. Nếu chỉ muốn xem, hãy hủy tại lời nhắc. Các ứng dụng khác có thể trình bày màn hình kiểm tra khác.'
+  - q: 'Tiền thừa của giao dịch có là phí bổ sung không?'
+    a: 'Tiền thừa là phần còn lại của đầu vào đã chọn sau khi tính số tiền người nhận và phí mạng. Nó quay về ví dưới dạng đầu ra. Tách tiền thừa khỏi phí và phân biệt tổng số dư với tiền hiện có thể chi tiêu.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Kiểm tra thanh toán Blocknet sẽ dùng gì trước khi xác nhận. Hướng dẫn giải thích cách ví được kiểm tra ước lượng phí mạng, vì sao chọn đầu vào quan trọng và quan hệ giữa số tiền nhận, phí, tiền thừa. Đồng thời chỉ nơi ví dòng lệnh có tài liệu hiển thị bản xem trước để kiểm tra mà không phát giao dịch.
+
+## Phí giao dịch Blocknet được tính thế nào?
+
+<Answer>
+Ví được kiểm tra chọn phí từ ước lượng thận trọng về kích thước giao dịch và mức tối thiểu đã cấu hình. Đầu vào được chọn và đầu ra được tạo ảnh hưởng ước lượng. Phí tách khỏi số tiền nhận; phần giá trị đầu vào không dùng trở thành tiền thừa. Xem bản xem trước hiện tại cho chính thanh toán đó trước khi xác nhận.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Đầu vào ví được chọn chia thành số tiền người nhận, phí mạng và tiền thừa quay về ví." width="1200" height="675" loading="lazy" />
+
+## Hiểu cách tính và đơn vị của ví
+
+Trong [mã daemon được kiểm tra](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), luồng gửi chuẩn dùng mức tối thiểu 1.000 đơn vị nguyên tử và giá 10 đơn vị nguyên tử cho mỗi byte ước tính. Một BNT gồm 100.000.000 đơn vị nguyên tử, nên tương ứng 0,00001 BNT và 0,0000001 BNT mỗi byte ước tính. Đây là thiết lập triển khai được kiểm tra ngày 26 tháng 10 năm 2026, không phải báo phí cho mọi phiên bản ví.
+
+Phép tính lấy giá trị lớn hơn giữa mức tối thiểu và kích thước ước tính nhân đơn giá. Với giả định minh họa rõ ràng là 5.000 byte: 5.000 × 10 = 50.000 đơn vị nguyên tử, tức 0,0005 BNT. Mức này cao hơn tối thiểu đã nêu. Đây là số học với kích thước giả định, không phải giao dịch đã đo hay cam kết phí lần chuyển tới.
+
+## Vì sao hai thanh toán có phí khác nhau?
+
+Ví chi tiêu đầu ra có sẵn làm đầu vào giao dịch và tạo đầu ra cho người nhận cùng tiền thừa khi cần. [Bộ dựng giao dịch](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) ước tính kích thước từ số đầu vào, số đầu ra và kích thước vòng, gồm phần dự phòng thận trọng cho bằng chứng. Kích thước không đơn giản là số ký tự địa chỉ, ghi chú hay biểu mẫu thanh toán.
+
+Thanh toán ghép từ nhiều đầu ra nhỏ có sẵn có thể cần số đầu vào khác với thanh toán từ một đầu ra lớn. Ví cũng tính phí khi chọn đủ giá trị có thể chi tiêu, nên việc chọn và ước lượng tác động qua lại. Cùng số tiền nhận không nhất thiết có cùng phí trong hai trạng thái ví. Xem [chữ ký vòng](/vi/blog/ring-signatures-explained/) và [bằng chứng phạm vi](/vi/blog/bulletproofs-explained/) về cấu trúc riêng tư liên quan.
+
+## Tách số tiền nhận, phí và tiền thừa
+
+Với lệnh gửi thông thường có số tiền cố định, đầu vào được chọn trả số tiền nhận cộng phí, phần còn lại quay về dạng tiền thừa. Ví dụ: đầu vào tổng 10 BNT, người nhận 3 BNT và phí giả định 0,0005 BNT để lại 6,9995 BNT tiền thừa. Người nhận nhận đúng 3 BNT; tiền thừa không phải khoản phí khác.
+
+Ví dụ mô tả đầu vào được chọn, chưa chắc toàn bộ số dư ví. Các đầu ra khác có thể không bị dùng. Gửi tất cả có mục tiêu khác: triển khai được kiểm tra trừ phí khỏi tổng giá trị có thể chi tiêu đã chọn để xác định số đến người nhận. Đọc số hiển thị cho thao tác đó, đừng mặc định toàn bộ tổng số dư có thể gửi nguyên vẹn.
+
+## Kiểm tra phí trước khi gửi thế nào?
+
+Trong [ứng dụng CLI được mô tả](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), luồng gửi yêu cầu bản xem trước mô phỏng, rồi hiện số tiền, nơi nhận, phí và tiền thừa nếu có trước `Confirm [y/N]:`. Dùng thông tin nhận và số tiền dự định của bạn trong luồng ví bình thường, dừng ở bước kiểm tra. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) nói về chuẩn bị ví và tìm địa chỉ.
+
+Đọc nơi nhận và số tiền trước, rồi phí và tiền thừa. Nếu chỉ muốn xem phép tính, nhấn Enter hoặc trả lời không ở câu xác nhận; ứng dụng hủy thay vì gửi yêu cầu chuyển tiền. Hướng dẫn không yêu cầu thanh toán thử. Ví đồ họa có thể dùng nhãn khác, nên kiểm tra màn hình của nó thay vì cho rằng giống bố cục CLI.
+
+## Cần kiểm tra gì nếu bản xem trước đổi?
+
+Bản xem trước CLI và lệnh gửi cuối cùng là hai yêu cầu riêng. Lệnh gửi thực dựng từ trạng thái ví lúc đó, nên bản xem trước không giữ cố định phí đã báo vĩnh viễn. Đổi số tiền, người nhận, đầu ra đã chọn hay tiền có thể chi tiêu có thể đổi kết quả. Tránh chi tiêu đồng thời khi kiểm tra và lấy bản xem trước mới sau khi sửa thanh toán.
+
+Kiểm tra tiền có thể chi tiêu thay vì tổng số dư nếu ví không đủ số tiền cộng phí. Tiền đang chờ xác nhận là loại riêng. Ghi phiên bản ví và thông báo chính xác nếu không tạo được bản xem trước. Khi nhận tiền đào, [hướng dẫn tiền về ví](https://bntpool.com/blog/vi/pool-payout-missing-from-wallet/) theo dõi giao dịch và quét ví; đó khác với tính giá một thanh toán gửi đi mới.
+
+## Phân biệt phí mạng và phí đào
+
+Phí trong bài thuộc giao dịch ví. Phí pool liên quan việc hạch toán thưởng pool, còn phí nhà phát triển miner liên quan chính sách công việc của phần mềm đào. Chúng có cơ sở và giai đoạn khác nhau. [Hướng dẫn phí đào](https://bntpool.com/blog/vi/mining-pool-fees-vs-miner-fees/) giải thích phía đào coin; không áp tỷ lệ phần trăm ở đó vào kích thước giao dịch ví ước tính.
+
+Tương tự, mức trả tối thiểu của pool là ngưỡng số dư, không phải phí báo cho lần gửi ví thông thường. Giữ mỗi con số cùng nhãn và nguồn khi lên kế hoạch chuyển. Bản xem trước ví là nơi phù hợp để kiểm tra thanh toán đang chuẩn bị; công cụ tính đào hay màn hình số dư pool không thay thế được.
+
+## Giữ hồ sơ thanh toán rõ ràng
+
+Trước khi xác nhận thanh toán dự định, xem cùng lúc nơi nhận, số tiền, ghi chú nếu dùng, phí và tiền thừa. [Liên kết thanh toán](/vi/blog/blocknet-payment-links/) có thể điền thông tin, nhưng bạn vẫn kiểm tra trong ví. Khi ghi quy trình, lưu phiên bản ví đã đưa ước lượng để người đọc sau phân biệt ví dụ có ngày với giao diện hiện tại.
+
+Sau khi chủ ý xác nhận gửi, giữ mã giao dịch cùng hồ sơ riêng và theo dõi trạng thái qua ví. Không bao giờ chia sẻ từ khôi phục hay khóa riêng để giải thích phí. Với câu hỏi hỗ trợ, phiên bản, loại thao tác và số tiền hiển thị thường hữu ích hơn sao chép dữ liệu ví riêng tư. Kiểm tra lại bản xem trước cho mỗi thanh toán mới.
+
+<CTA target="seine" title="Khám phá Blocknet với seine" text="Tìm hiểu cách đào Blocknet hoạt động và kết nối bộ máy của bạn vào mạng với seine." />

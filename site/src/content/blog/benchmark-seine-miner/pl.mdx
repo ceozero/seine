@@ -1,0 +1,70 @@
+---
+title: 'Jak wykonać benchmark minera Blocknet'
+description: 'Testuj seine powtarzalnymi pomiarami CPU, rozgrzewką i raportami JSON. Porównuj czasy przy zgodnych ustawieniach pamięci, obciążenia i automatycznego strojenia.'
+tags: ['Poradnik kopania', 'Benchmarki', 'seine']
+faq:
+  - q: 'Czy benchmark seine wysyła udziały do puli?'
+    a: 'Nie. --bench uruchamia lokalny test zamiast kopania i nie wymaga puli ani daemona. Raport mierzy wybrane lokalne obciążenie. Potem uruchom normalną sesję, by osobno sprawdzić połączenie i zaakceptowane udziały.'
+  - q: 'Od którego trybu zacząć?'
+    a: 'Zacznij od backend, aby praktycznie przetestować wybrane backendy. Zachowaj tryb, wersję i ustawienia. Kernel, kernel-effective i end-to-end mierzą różne zakresy; zapisuj tryb i informacje o czasie razem z każdym hashrate.'
+  - q: 'Jak porównać dwa przebiegi?'
+    a: 'Użyj tej samej maszyny, wersji, backendów, pamięci, obciążenia tła i zasad cache. Zmieniaj jeden parametr, powtarzaj obie konfiguracje naprzemiennie i zachowuj raporty. Rozgrzewka i powtórzenia pomagają, ale krótki test nie dowodzi małej różnicy.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Zmierz komputer wbudowanym benchmarkiem seine i zachowaj porównywalny zapis. Poradnik używa publicznej v0.2.36 i przykładu CPU, bez nowych deklarowanych wyników sprzętu. Instalację opisuje [poradnik kopania](/pl/blog/how-to-mine-blocknet/), a istniejące pomiary i warunki [poradnik sprzętowy](/pl/blog/blocknet-mining-hardware-hashrate/).
+
+## Jak wykonać benchmark seine?
+
+<Answer>
+Uruchom seine z `--bench`, wybierz backend i tryb, dodaj rozgrzewkę i zapisz JSON. Powtórz obciążenie w porównywalnych warunkach przed zmianą jednego ustawienia. Test działa lokalnie bez puli i daemona; udziały sprawdź po powrocie do normalnego kopania.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Po rozgrzewce następują trzy mierzone rundy i zapis raportu; druga konfiguracja powtarza sekwencję." width="1200" height="675" loading="lazy" />
+
+## Przygotuj stały punkt wyjścia
+
+Zapisz wersję, system, dokładny procesor, dostępną RAM i polecenie; dla NVIDIA także model i sterownik. Utrzymuj podobne tło. Gra, kompilacja lub drugi miner tylko podczas jednej próby zmieniają warunki.
+
+Określ pytanie: bazowy CPU, liczba wątków czy strony pamięci. Utrzymaj rozmieszczenie CPU, zasilanie i pamięć, poza badaną zmienną. Poradniki [RAM](/pl/blog/how-much-ram-to-mine-blocknet/) i [huge pages](/pl/blog/huge-pages-blocknet-mining/) opisują pojemność i przygotowanie. Zapisz faktyczny tryb stron obok żądanego.
+
+## Uruchom test CPU i zapisz raport
+
+W rozpakowanym katalogu pierwsze polecenie służy Linux/macOS, drugie PowerShell Windows. Oba wybierają CPU, `backend`, jedną rozgrzewkę i trzy mierzone rundy, żądając po 20 sekund. Plik jest względny wobec katalogu roboczego. Dla kolejnych prób zmieniaj nazwę.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Wątki i kernel pozostają automatyczne. Przygotowanie i strojenie mogą potrwać przed rundami, a rozpoczęta praca zakończyć się po żądanym czasie. Poczekaj na zapis `cpu-baseline.json`. Rozgrzewka nie wchodzi do podsumowania pomiarów. Całość może przekroczyć cztery interwały; 20 sekund nie oznacza czasu całego polecenia.
+
+## Co czytać w raporcie?
+
+Sprawdź tryb, rzeczywiste ustawienia i rundy przed podsumowaniem. JSON zawiera `avg_hps`, `median_hps`, `min_hps`, `max_hps` i `runs`, konfigurację oraz środowisko. Zachowaj oryginał, nie tylko maksimum. [Opis flag](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) dokumentuje zapis i porównanie z bazą.
+
+Hashrate to ukończona praca na sekundę. Porównuj ten sam sposób liczenia i definicję czasu. Sprawdź rzeczywistą długość i rozrzut; pojedynczy szczyt nie podsumowuje testu. Przy dużej zmienności ustabilizuj warunki lub wydłuż rundy. Udostępniając wynik, opisz konfigurację.
+
+## Porównuj zmianę w powtarzanych parach
+
+Nazwij bazę A, zmianę B. Wykonaj A, potem B, powtórz i zmieniaj kolejność startu między parami. Zachowaj długość i rozgrzewkę. Zapisuj np. `cpu-a-1.json` i `cpu-b-1.json`, by rozpoznać wpływ kolejności lub środowiska obok badanej zmiany.
+
+Stosuj tę samą politykę cache: pierwszy start z nowymi danymi i restart z zapisanymi wyborami odpowiadają na różne pytania. Zachowaj codzienny katalog i oddziel testowe dla świeżych stanów. [Poradnik automatycznego strojenia](/pl/blog/seine-automatic-cpu-tuning/) opisuje ponowne użycie. `--threads` zmienia strojenie; udokumentuj to względem próby automatycznej.
+
+## Dlaczego tryby muszą być zgodne?
+
+`backend` testuje backendy kopania, `kernel` skupia się na obliczaniu hashy. `kernel-effective` uwzględnia cykl życia i ścieżkę celu/oceny backendu. To inne zakresy nawet na tej samej maszynie. Oznaczaj tryb przy wyniku; te same jednostki nie oznaczają równoważnych pomiarów.
+
+`end-to-end` obejmuje więcej cyklu kopania. Zachowaj też zgodną wersję i znaczenie czasów. [Dokumentacja laboratorium](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) opisuje pary, zapis środowiska i zgodność. Stosuj te narzędzia przy małych różnicach i zachowuj wszystkie przebiegi.
+
+## Wróć do kopania i sprawdź pracę
+
+Po teście uruchom zwykłe polecenie z właściwym adresem i katalogiem. Sprawdź urządzenia i zaakceptowane udziały w [panelu](/pl/blog/seine-dashboard-explained/). Benchmark mierzy lokalną wydajność; udziały potwierdzają połączenie i dostarczanie pracy. Dokumentuj obie kontrole dla codziennej konfiguracji.
+
+Pula szacuje hashrate z udziałów napływających w czasie, inaczej niż krótki test lokalny. Śledź naliczenia przez [poradnik puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/). Zachowaj wersję, polecenie, maszynę, pamięć/strony, cache, tło i wszystkie JSON, by odtworzyć i zrozumieć porównanie.
+
+<CTA target="seine" title="Testuj z seine" text="Pobierz seine, zapisz powtarzalną bazę, a następnie śledź normalne kopanie w panelu." />

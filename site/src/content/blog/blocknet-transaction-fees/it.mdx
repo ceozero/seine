@@ -1,0 +1,68 @@
+---
+title: 'Le commissioni delle transazioni Blocknet'
+description: 'Scopri le commissioni Blocknet, la scelta degli input e il resto. Controlla l’anteprima del wallet e distingui le commissioni di rete da quelle di mining.'
+tags: ['Blocknet', 'Wallet', 'Pagamenti']
+faq:
+  - q: 'La commissione Blocknet è una percentuale dell’importo inviato?'
+    a: 'L’implementazione esaminata calcola la commissione da una stima prudente della dimensione della transazione e da un minimo. Input e output influenzano la stima. L’importo può influire sugli input scelti, ma il calcolo non è una percentuale fissa dei BNT inviati.'
+  - q: 'Posso controllare la commissione senza trasmettere un pagamento?'
+    a: 'Il wallet a riga di comando documentato richiede un’anteprima e mostra la commissione prima della conferma. Controlla destinazione, importo e resto. Se volevi solo esaminare il pagamento, annulla alla richiesta. Altri client possono presentare la verifica diversamente.'
+  - q: 'Il resto della transazione è un costo aggiuntivo?'
+    a: 'Il resto è quanto rimane degli input selezionati dopo aver coperto importo al destinatario e commissione di rete. Ritorna al wallet come output. Distinguilo dalla commissione e separa il saldo totale dai fondi attualmente spendibili.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Controlla cosa utilizzerà il tuo pagamento Blocknet prima di confermarlo. Questa guida spiega come il wallet esaminato stima la commissione di rete, perché la scelta degli input conta e come si collegano importo al destinatario, commissione e resto. Mostra inoltre dove il client a riga di comando documentato presenta l’anteprima, per esaminare un pagamento senza trasmetterlo.
+
+## Come si calcolano le commissioni Blocknet?
+
+<Answer>
+Il wallet esaminato determina la commissione da una stima prudente della dimensione della transazione e da un minimo configurato. Input scelti e output creati influenzano la stima. La commissione è separata dall’importo al destinatario, mentre il valore inutilizzato degli input diventa resto. Controlla l’anteprima corrente del tuo specifico pagamento prima di confermarlo.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Gli input selezionati si dividono in importo al destinatario, commissione di rete e resto che ritorna al wallet." width="1200" height="675" loading="lazy" />
+
+## Comprendi calcolo e unità
+
+Nel [codice del daemon esaminato](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), l’invio standard usa un minimo di 1.000 unità atomiche e una tariffa di 10 unità atomiche per byte stimato. Un BNT contiene 100.000.000 unità atomiche: i valori equivalgono a 0,00001 BNT e 0,0000001 BNT per byte stimato. Sono impostazioni dell’implementazione verificate il 26 ottobre 2026, non un preventivo per ogni versione del wallet.
+
+Il calcolo prende il maggiore tra il minimo e la dimensione stimata moltiplicata per la tariffa. Con una dimensione ipotetica, esplicitamente illustrativa, di 5.000 byte: 5.000 × 10 = 50.000 unità atomiche, ovvero 0,0005 BNT. Questo supera il minimo indicato. È aritmetica su una dimensione presunta, non una transazione misurata né una promessa per il prossimo trasferimento.
+
+## Perché due pagamenti possono avere commissioni diverse?
+
+Un wallet spende output esistenti come input della transazione e crea output per destinatari e, quando serve, resto. Il [costruttore di transazioni](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) stima la dimensione usando numero di input, numero di output e dimensione dell’anello, con margini prudenti per le prove. Non è semplicemente il numero di caratteri dell’indirizzo, del memo o del modulo di pagamento.
+
+Un pagamento formato da vari piccoli output disponibili può richiedere un numero di input diverso da uno finanziato con un output maggiore. Il wallet considera anche la commissione quando sceglie valore spendibile sufficiente: selezione e stima interagiscono. Lo stesso importo al destinatario non implica quindi la stessa commissione in due stati del wallet. Per le strutture di riservatezza coinvolte, leggi [firme ad anello](/it/blog/ring-signatures-explained/) e [prove di intervallo](/it/blog/bulletproofs-explained/).
+
+## Separa importo, commissione e resto
+
+In un normale invio a importo fisso, gli input selezionati coprono importo al destinatario più commissione; la parte restante torna come resto. Esempio: input per 10 BNT, destinatario di 3 BNT e commissione ipotetica di 0,0005 BNT lasciano 6,9995 BNT di resto. Il destinatario riceve i 3 BNT indicati; il resto non è un altro addebito.
+
+L’esempio descrive gli input selezionati, non necessariamente l’intero saldo. Altri output possono restare intatti. Inviare tutto ha un obiettivo diverso: l’implementazione esaminata sottrae la commissione dal totale spendibile selezionato per determinare quanto riceve il destinatario. Leggi l’importo di quella specifica operazione invece di presumere che tutto il saldo totale sia inviabile senza detrazioni.
+
+## Come controlli la commissione prima dell’invio?
+
+Nel [client CLI documentato](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), il flusso richiede un’anteprima simulata e mostra importo, destinazione, commissione ed eventuale resto prima di `Confirm [y/N]:`. Usa i tuoi dati di ricezione e l’importo desiderato nel normale flusso del wallet e fermati alla verifica. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) ne spiega la preparazione e come trovare un indirizzo.
+
+Leggi prima destinazione e importo, poi commissione e resto. Se volevi solo verificare il calcolo, premi Invio o rispondi no alla conferma: il client annulla anziché inviare la richiesta di pagamento. Questa guida non chiede pagamenti di prova. Un wallet grafico può usare etichette diverse: controlla la sua schermata senza presumere che riprenda la disposizione della CLI.
+
+## Cosa controllare se l’anteprima cambia?
+
+Anteprima CLI e invio finale sono richieste separate. L’invio effettivo usa lo stato del wallet disponibile in quel momento: l’anteprima non riserva permanentemente la commissione indicata. Cambiare importo, destinatari, output scelti o fondi spendibili può cambiare il risultato. Evita spese contemporanee durante la verifica e richiedi una nuova anteprima dopo aver modificato il pagamento.
+
+Quando non puoi coprire importo più commissione, controlla i fondi spendibili invece del saldo totale. I fondi ancora in conferma sono una categoria distinta. Conserva versione del wallet e messaggio esatto se l’anteprima non può essere prodotta. Per ricevere pagamenti di mining, la [guida all’accredito nel wallet](https://bntpool.com/blog/it/pool-payout-missing-from-wallet/) segue transazione e scansione: è un compito diverso dal calcolo di un nuovo pagamento in uscita.
+
+## Distingui commissioni di rete e di mining
+
+La commissione di questo articolo riguarda una transazione del wallet. Quella del pool riguarda la contabilità delle ricompense, mentre quella dello sviluppatore del miner riguarda la politica di lavoro del software. Hanno basi e fasi diverse. La [guida alle commissioni di mining](https://bntpool.com/blog/it/mining-pool-fees-vs-miner-fees/) spiega quel lato; non applicarne le percentuali alla dimensione stimata di una transazione.
+
+Anche il pagamento minimo di un pool è una soglia di saldo, non la commissione di un normale invio. Conserva ogni numero con etichetta e fonte quando pianifichi un trasferimento. L’anteprima del wallet è il luogo pertinente per verificare il pagamento in preparazione; un calcolatore di mining o il saldo del pool non la sostituisce.
+
+## Conserva una registrazione chiara
+
+Prima di confermare un pagamento voluto, controlla insieme destinazione, importo, memo se presente, commissione e resto. Un [link di pagamento](/it/blog/blocknet-payment-links/) può compilare i dati, ma vanno comunque verificati nel wallet. Quando documenti una procedura, annota la versione che ha fornito la stima, così chi legge in futuro distingue l’esempio datato dalla propria interfaccia attuale.
+
+Dopo un invio confermato intenzionalmente, conserva l’identificativo della transazione nei tuoi registri e segui lo stato dal wallet. Non condividere mai parole di recupero o chiavi private per spiegare una commissione. Per l’assistenza, versione, tipo di operazione e importi visualizzati sono in genere più utili di dati privati copiati dal wallet. Ricontrolla l’anteprima per ogni nuovo pagamento.
+
+<CTA target="seine" title="Esplora Blocknet con seine" text="Scopri come funziona il mining di Blocknet e collega la tua installazione alla rete con seine." />

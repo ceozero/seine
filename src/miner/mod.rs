@@ -1,5 +1,6 @@
 mod adaptive_cpu;
 mod adaptive_kernel;
+mod adaptive_telemetry;
 mod auth;
 mod backend_control;
 mod backend_executor;
@@ -522,7 +523,7 @@ fn run_with_thread_control_inner(
 
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::InitializingBackends);
     let backend_executor = backend_executor::BackendExecutor::new();
-    if let Some(recorder) = telemetry {
+    if let Some(recorder) = telemetry.clone() {
         backend_executor.set_hardware_telemetry(recorder);
     }
     let daemon_client = if let Some(token) = cfg.token.clone() {
@@ -571,6 +572,18 @@ fn run_with_thread_control_inner(
                             tuning,
                         )
                     } else {
+                        // Fixed counts run no kernel trials; start from the cohort default.
+                        let kernel = adaptive_kernel::static_kernel_for(threads);
+                        if let Some(kernel) = kernel {
+                            info(
+                                "CPU",
+                                format!(
+                                    "{threads} fixed workers: using the {kernel} kernel \
+                                     validated for this CPU family"
+                                ),
+                            );
+                        }
+                        let tuning = CpuBackendTuning { kernel, ..tuning };
                         CpuBackend::with_tuning(threads, affinity, tuning)
                     });
                     cpu_memory_backends.push(Arc::clone(&backend));
@@ -947,19 +960,23 @@ fn run_with_thread_control_inner(
         None
     };
 
-    let mut adaptive_controller =
-        match adaptive_cpu::Controller::start(cfg.clone(), adaptive_backends, tui_state.clone()) {
-            Ok(controller) => controller,
-            Err(err) => {
-                stop_backend_slots(
-                    &mut backends,
-                    &backend_executor,
-                    cfg.backend_control_timeout,
-                    "BACKEND",
-                );
-                return Err(err.context("starting CPU autotune controller"));
-            }
-        };
+    let mut adaptive_controller = match adaptive_cpu::Controller::start(
+        cfg.clone(),
+        adaptive_backends,
+        tui_state.clone(),
+        telemetry,
+    ) {
+        Ok(controller) => controller,
+        Err(err) => {
+            stop_backend_slots(
+                &mut backends,
+                &backend_executor,
+                cfg.backend_control_timeout,
+                "BACKEND",
+            );
+            return Err(err.context("starting CPU autotune controller"));
+        }
+    };
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::Mining);
     let result = match cfg.mode {
         MiningMode::Daemon => {
@@ -1799,7 +1816,8 @@ fn bench_cpu_autotune_candidate(
             hash_flush_interval: cfg.cpu_hash_flush_interval,
             event_dispatch_capacity: cfg.cpu_event_dispatch_capacity,
             page_mode: cfg.cpu_page_mode,
-            kernel: None,
+            // Size workers for the kernel that will mine, not the plain fallback.
+            kernel: cfg.bench_cpu_kernel.or_else(adaptive_kernel::cohort_kernel),
         },
     );
 
@@ -2269,7 +2287,11 @@ fn build_backend_instances(cfg: &Config) -> Vec<(BackendSpec, Arc<dyn PowBackend
                         hash_flush_interval: cfg.cpu_hash_flush_interval,
                         event_dispatch_capacity: cfg.cpu_event_dispatch_capacity,
                         page_mode: cfg.cpu_page_mode,
-                        kernel: cfg.bench_cpu_kernel,
+                        kernel: cfg.bench_cpu_kernel.or_else(|| {
+                            adaptive_kernel::static_kernel_for(
+                                backend_spec.cpu_threads.unwrap_or(cfg.threads),
+                            )
+                        }),
                     },
                 )) as Arc<dyn PowBackend>,
                 BackendKind::Nvidia => Arc::new(NvidiaBackend::new(

@@ -1,0 +1,68 @@
+---
+title: 'Entenda as taxas de transação do Blocknet'
+description: 'Entenda as taxas do Blocknet, a seleção de entradas e o troco. Confira a prévia da carteira antes de confirmar e separe taxas de rede das de mineração.'
+tags: ['Blocknet', 'Carteira', 'Pagamentos']
+faq:
+  - q: 'A taxa de transação é uma porcentagem do valor enviado?'
+    a: 'A implementação examinada calcula a taxa com uma estimativa conservadora do tamanho da transação e uma taxa mínima. Entradas e saídas afetam essa estimativa. O valor pode influenciar quais entradas são escolhidas, mas o cálculo não é uma porcentagem fixa dos BNT enviados.'
+  - q: 'Posso conferir a taxa sem transmitir um pagamento?'
+    a: 'A carteira de linha de comando documentada solicita uma prévia e mostra a taxa antes da confirmação. Confira destino, valor e troco. Se queria apenas examinar o pagamento, cancele na pergunta de confirmação. Outros clientes podem apresentar essa revisão de outra forma.'
+  - q: 'O troco da transação é uma cobrança adicional?'
+    a: 'Troco é o restante das entradas selecionadas após considerar o valor do destinatário e a taxa de rede. Ele volta à carteira como uma saída. Separe troco de taxa e diferencie o saldo total dos fundos atualmente disponíveis para gastar.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Confira o que seu pagamento Blocknet usará antes de confirmá-lo. Este guia explica como a carteira examinada estima a taxa de rede, por que a seleção de entradas importa e como valor do destinatário, taxa e troco se relacionam. Também mostra onde o cliente de linha de comando documentado apresenta a prévia para você examinar um pagamento sem transmiti-lo.
+
+## Como são calculadas as taxas de transação?
+
+<Answer>
+A carteira examinada determina a taxa por uma estimativa conservadora do tamanho da transação e um mínimo configurado. Entradas selecionadas e saídas criadas influenciam a estimativa. A taxa é separada do valor do destinatário, e o valor não utilizado das entradas vira troco. Confira a prévia atual da carteira para aquele pagamento antes de confirmar.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="As entradas selecionadas se dividem entre valor do destinatário, taxa de rede e troco que retorna à carteira." width="1200" height="675" loading="lazy" />
+
+## Entenda o cálculo e suas unidades
+
+No [código do daemon examinado](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), o envio padrão usa mínimo de 1.000 unidades atômicas e taxa de 10 unidades atômicas por byte estimado. Um BNT contém 100.000.000 unidades atômicas; esses valores correspondem a 0,00001 BNT e 0,0000001 BNT por byte estimado. São configurações de implementação verificadas em 26 de outubro de 2026, não uma cotação para todas as versões de carteira.
+
+O cálculo escolhe o maior entre o mínimo e o tamanho estimado multiplicado pela taxa por byte. Para um tamanho suposto, explicitamente ilustrativo, de 5.000 bytes: 5.000 × 10 = 50.000 unidades atômicas, ou 0,0005 BNT. Isso supera o mínimo indicado. É aritmética com tamanho presumido, não uma transação medida nem promessa de taxa para sua próxima transferência.
+
+## Por que dois pagamentos podem ter taxas diferentes?
+
+Uma carteira gasta saídas existentes como entradas da transação e cria saídas para destinatários e, quando necessário, troco. O [construtor de transações](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) estima o tamanho pela quantidade de entradas, saídas e tamanho do anel, incluindo margens conservadoras para provas. O tamanho estimado não é simplesmente a quantidade de caracteres no endereço, memo ou formulário de pagamento.
+
+Um pagamento composto por várias saídas pequenas disponíveis pode exigir um número de entradas diferente de outro financiado por uma saída maior. A carteira também considera a taxa ao escolher valor gastável suficiente, então seleção e estimativa interagem. Por isso, o mesmo valor ao destinatário não implica a mesma taxa em dois estados da carteira. Sobre as estruturas de privacidade envolvidas, veja [assinaturas em anel](/pt-br/blog/ring-signatures-explained/) e [provas de intervalo](/pt-br/blog/bulletproofs-explained/).
+
+## Separe valor, taxa e troco
+
+Em um envio comum de valor fixo, as entradas selecionadas cobrem o valor do destinatário mais a taxa, e o restante retorna como troco. Exemplo: entradas de 10 BNT, envio de 3 BNT e taxa suposta de 0,0005 BNT deixam 6,9995 BNT de troco. O destinatário recebe os 3 BNT especificados; troco não é outra cobrança.
+
+O exemplo descreve as entradas selecionadas, não necessariamente todo o saldo da carteira. Outras saídas podem ficar intactas. Enviar tudo tem outro objetivo: a implementação examinada desconta a taxa do total gastável selecionado para determinar o valor recebido. Leia o valor exibido nessa operação, em vez de supor que todo o saldo total pode ser enviado sem desconto.
+
+## Como conferir a taxa antes de enviar?
+
+No [cliente CLI documentado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), o fluxo solicita uma prévia de simulação e mostra valor, destino, taxa e eventual troco antes de `Confirm [y/N]:`. Use os dados de recebimento e o valor pretendido no fluxo normal da carteira e pare nessa revisão. O [guia da carteira](/pt-br/blog/blocknet-wallet-for-mining/) explica como prepará-la e encontrar um endereço.
+
+Leia destino e valor primeiro, depois taxa e troco. Se só queria conferir o cálculo, pressione Enter ou responda não na confirmação: o cliente cancela em vez de emitir a solicitação de envio. Este guia não pede um pagamento de teste. Uma carteira gráfica pode usar outros rótulos; examine sua tela sem presumir que segue a disposição da CLI.
+
+## O que verificar se a prévia mudar?
+
+A prévia da CLI e o envio final são solicitações separadas. O envio real usa o estado disponível da carteira naquele momento; a prévia não reserva permanentemente a taxa exibida. Mudar valor, destinatários, saídas selecionadas ou fundos gastáveis pode alterar o resultado. Evite gastos simultâneos durante a revisão e obtenha nova prévia depois de mudar o pagamento.
+
+Confira fundos gastáveis, não o saldo total, quando a carteira não cobre valor mais taxa. Fundos ainda em confirmação são outra categoria. Registre versão da carteira e mensagem exata se a prévia não puder ser produzida. Para receber pagamentos de mineração, o [guia de recebimento na carteira](https://bntpool.com/blog/pt-br/pool-payout-missing-from-wallet/) acompanha a transação e a varredura; é uma tarefa diferente de calcular um novo envio.
+
+## Diferencie taxas de rede e de mineração
+
+A taxa deste artigo pertence a uma transação de carteira. Taxa de pool envolve a contabilização das recompensas, enquanto taxa do desenvolvedor do minerador envolve a política de trabalho do programa. Elas têm bases e etapas diferentes. O [guia de taxas de mineração](https://bntpool.com/blog/pt-br/mining-pool-fees-vs-miner-fees/) explica esse lado; não aplique seus percentuais à estimativa de tamanho de uma transação.
+
+Da mesma forma, o pagamento mínimo de um pool é um limite de saldo, não a taxa cotada para um envio comum. Guarde cada número com seu rótulo e fonte ao planejar uma transferência. A prévia da carteira é o lugar adequado para examinar o pagamento de saída em preparação; calculadora de mineração ou saldo do pool não a substituem.
+
+## Mantenha um registro claro do pagamento
+
+Antes de confirmar um pagamento pretendido, revise juntos destino, valor, memo se usado, taxa e troco. Um [link de pagamento](/pt-br/blog/blocknet-payment-links/) pode preencher detalhes, mas você ainda os confere na carteira. Ao documentar um procedimento, registre a versão que forneceu a estimativa, para que leitores futuros distingam o exemplo datado da interface atual.
+
+Depois de confirmar intencionalmente um envio, guarde o identificador da transação no seu registro e acompanhe o status pela carteira. Nunca compartilhe palavras de recuperação ou chaves privadas para explicar uma taxa. Em suporte, versão, tipo de operação e valores exibidos geralmente são um começo mais útil que copiar dados privados da carteira. Confira a prévia de cada novo pagamento.
+
+<CTA target="seine" title="Explore o Blocknet com seine" text="Aprenda como funciona a mineração de Blocknet e conecte sua própria instalação à rede com seine." />

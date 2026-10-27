@@ -1,0 +1,70 @@
+---
+title: 'Cách đo hiệu năng máy đào Blocknet'
+description: 'Đo seine bằng các lượt thử lặp lại, khởi động làm nóng và báo cáo JSON. Giữ nhất quán thời gian, bộ nhớ, tải nền và chính sách tinh chỉnh khi so sánh.'
+tags: ['Hướng dẫn đào', 'Đo hiệu năng', 'seine']
+faq:
+  - q: 'Phép đo seine có gửi share đến pool không?'
+    a: 'Không. --bench chạy phép đo cục bộ thay cho đào trực tiếp, không cần pool hay daemon. Báo cáo đo khối lượng công việc đã chọn. Sau đó chạy phiên đào bình thường để kiểm tra kết nối và share được chấp nhận.'
+  - q: 'Nên bắt đầu với chế độ nào?'
+    a: 'Bắt đầu bằng backend để thử các backend đã chọn. Giữ nguyên chế độ, phiên bản và thiết lập. Kernel, kernel-effective và end-to-end đo phạm vi khác nhau; lưu thông tin chế độ và thời gian cùng hashrate.'
+  - q: 'Làm sao so sánh hai lần chạy?'
+    a: 'Dùng cùng máy, phiên bản, backend, bộ nhớ, tải nền và chính sách bộ nhớ đệm. Chỉ đổi một thiết lập, luân phiên lặp lại hai cấu hình và giữ mọi báo cáo. Một lượt ngắn chưa chứng minh được chênh lệch nhỏ.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Đo máy của bạn bằng công cụ tích hợp trong seine và lưu kết quả để so sánh. Hướng dẫn dùng bản công khai v0.2.36 với ví dụ chỉ CPU, không công bố kết quả phần cứng mới. Cài theo [hướng dẫn thiết lập](/vi/blog/how-to-mine-blocknet/); xem số đo đã có và điều kiện trong [hướng dẫn phần cứng](/vi/blog/blocknet-mining-hardware-hashrate/).
+
+## Đo hiệu năng seine như thế nào?
+
+<Answer>
+Chạy `--bench`, chọn backend và chế độ, thêm lượt làm nóng rồi lưu JSON. Lặp cùng công việc trong điều kiện tương đương trước khi đổi một thiết lập. Phép đo không cần pool hay daemon; kiểm tra share riêng khi trở lại đào bình thường.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Một lượt làm nóng đi trước ba lượt đo được lưu vào báo cáo; cấu hình thứ hai lặp cùng trình tự." width="1200" height="675" loading="lazy" />
+
+## Chuẩn bị điểm xuất phát nhất quán
+
+Ghi phiên bản, hệ điều hành, mẫu CPU chính xác, RAM dùng được và lệnh. Nếu dùng NVIDIA, ghi cả GPU và trình điều khiển. Giữ tải nền tương tự; trò chơi, biên dịch hoặc máy đào khác chỉ chạy trong một phép thử sẽ làm đổi điều kiện.
+
+Chọn câu hỏi: mức nền CPU, số luồng hay cách cấp trang nhớ. Giữ bố trí CPU, nguồn điện và bộ nhớ cố định trừ biến đang thử. Hướng dẫn [RAM](/vi/blog/how-much-ram-to-mine-blocknet/) và [huge pages](/vi/blog/huge-pages-blocknet-mining/) giải thích chuẩn bị. Ghi chế độ trang thực tế lẫn chế độ yêu cầu.
+
+## Chạy phép đo CPU và lưu báo cáo
+
+Trong thư mục đã giải nén, lệnh đầu dành cho Linux/macOS, lệnh sau cho PowerShell Windows. Cả hai chọn CPU, `backend`, một lượt làm nóng và ba lượt đo, yêu cầu 20 giây mỗi lượt. Tệp nằm theo thư mục làm việc; dùng tên mới cho mỗi lần chạy.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Luồng CPU và kernel vẫn được chọn tự động. Chuẩn bị, tinh chỉnh có thể mất thêm thời gian, và công việc đã bắt đầu có thể kết thúc sau khoảng yêu cầu. Chờ ghi xong `cpu-baseline.json`. Lượt làm nóng không vào tổng hợp. Tổng thời gian có thể vượt bốn khoảng; 20 giây không phải thời gian cả lệnh.
+
+## Đọc gì trong báo cáo?
+
+Đọc chế độ, thiết lập thực tế và từng lượt trước tốc độ tổng hợp. JSON có `avg_hps`, `median_hps`, `min_hps`, `max_hps`, `runs`, cấu hình và môi trường. Giữ tệp gốc thay vì chỉ chép số lớn nhất. [Tài liệu cờ](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) mô tả xuất báo cáo và so sánh mức nền.
+
+Hashrate là công việc hoàn tất mỗi giây. Giữ cùng cách đếm công việc và định nghĩa thời gian. Xem thời lượng thực tế và độ phân tán giữa các lượt; một đỉnh cao không đại diện toàn phép đo. Nếu dao động lớn, ổn định điều kiện hoặc kéo dài lượt. Ghi cấu hình khi chia sẻ kết quả.
+
+## So sánh một thay đổi bằng các cặp lặp lại
+
+Gọi cấu hình gốc là A, cấu hình đổi là B. Chạy A rồi B, lặp cặp và luân phiên bên chạy trước. Giữ thời lượng và chính sách làm nóng. Lưu riêng như `cpu-a-1.json`, `cpu-b-1.json` để thấy ảnh hưởng của thứ tự hoặc môi trường.
+
+Áp dụng cùng chính sách đệm: khởi chạy với dữ liệu tinh chỉnh mới và khởi động lại với lựa chọn đã lưu trả lời hai câu hỏi khác nhau. Giữ thư mục hằng ngày, dùng thư mục thử riêng cho trạng thái mới. [Hướng dẫn tự tinh chỉnh](/vi/blog/seine-automatic-cpu-tuning/) giải thích tái sử dụng. `--threads` thay đổi hành vi tinh chỉnh; ghi rõ khi so với tự động.
+
+## Tại sao chế độ đo phải giống nhau?
+
+`backend` thử backend đào, còn `kernel` tập trung tính hash. `kernel-effective` tính thời gian vòng đời và đường xử lý mục tiêu/đánh giá của backend. Phạm vi khác nhau ngay trên cùng máy. Gắn nhãn chế độ cho tốc độ; cùng đơn vị chưa có nghĩa phép đo tương đương.
+
+`end-to-end` bao gồm nhiều phần hơn của vòng đời đào. Giữ cả phiên bản và ý nghĩa thời gian nhất quán. [Tài liệu phòng đo](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) giải thích cặp chạy, ghi môi trường và kiểm tra tương thích. Dùng chúng khi chênh lệch nhỏ quan trọng, và giữ mọi lượt.
+
+## Trở lại đào và kiểm tra công việc hữu ích
+
+Sau phép đo, chạy lệnh đào thường với đúng địa chỉ và thư mục dữ liệu. Kiểm tra thiết bị và share được chấp nhận trong [bảng điều khiển](/vi/blog/seine-dashboard-explained/). Phép đo kiểm tra hiệu năng cục bộ; share kiểm tra kết nối và giao công việc. Lưu cả hai cho thiết lập hằng ngày.
+
+Pool ước tính hashrate từ share đến theo thời gian, khác với phép đo cục bộ ngắn. Theo dõi ghi nhận bằng [hướng dẫn pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/). Lưu phiên bản, lệnh, máy, bộ nhớ/trang, đệm, tải nền và mọi JSON để tái hiện và hiểu so sánh.
+
+<CTA target="seine" title="Đo hiệu năng với seine" text="Tải seine, lưu mức nền có thể lặp lại rồi theo dõi phiên đào bình thường trong bảng điều khiển." />

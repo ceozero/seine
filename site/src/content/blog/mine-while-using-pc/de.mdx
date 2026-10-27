@@ -1,0 +1,62 @@
+---
+title: 'Blocknet minen und dabei den PC benutzen?'
+description: 'Mine Blocknet neben deiner PC-Arbeit: Wähle CPU oder GPU, lasse RAM für Apps frei, passe seine-Threads an und prüfe einen passenden Start für den Alltag.'
+tags: ['Mining-Anleitung', 'Desktop', 'seine']
+faq:
+  - q: 'Kann ich spielen, während seine mint?'
+    a: 'Wähle die Mining-Backends passend zu den Geräten, die das Spiel benötigt. CPU-Mining lässt das NVIDIA-Backend ungenutzt; CPU und RAM teilst du weiterhin mit dem Spiel. Für eine anspruchsvolle Sitzung kannst du den Miner normal beenden und danach den gespeicherten Startbefehl erneut ausführen.'
+  - q: 'Begrenzt das Effizienzprofil die CPU-Auslastung prozentual?'
+    a: 'Das Profil bevorzugt beim Tuning weniger Threads, die einen bestimmten Anteil der gemessenen Spitzenhashrate halten. Es ist weder eine prozentuale CPU-Grenze des Betriebssystems noch ein gemessenes Leistungsziel in Watt. Prüfe Reaktionsfähigkeit und Speicherbedarf mit deinen üblichen Anwendungen.'
+  - q: 'Bleibt eine Threadänderung im Dashboard nach einem Neustart erhalten?'
+    a: 'Dashboard-Änderungen gelten für den aktuellen Lauf und deaktivieren darin das CPU-Autotuning. Sie werden nicht als neuer Startwert gespeichert. Trage eine feste Threadzahl in deinen normalen Startbefehl oder die Verknüpfung ein und überprüfe den nächsten Start.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Richte seine passend zu deinen Anwendungen ein. Diese Anleitung für seine v0.2.38 behandelt Gerätewahl, freien Speicher, weniger CPU-Threads und einen wiederholbaren Start. Beginne mit einem funktionierenden Mining-Setup und behalte Adresse, Pool und Arbeitsverzeichnis bei.
+
+## Kannst du den Computer während des Minings benutzen?
+
+<Answer>
+Ja. Wähle Backends und CPU-Threads passend zur Desktop-Arbeit und prüfe die Reaktion mit geöffneten Alltagsanwendungen. Beobachte freien Speicher, Geräteaktivität und akzeptierte Shares gemeinsam. Für anspruchsvolle Spiele oder Rendering beendest du den Miner normal und startest den gespeicherten Aufruf nach Abschluss erneut.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Desktop-Anwendung und Mining teilen einen Computer, mit getrennten Einstellungen für CPU- und GPU-Arbeit." width="1200" height="675" loading="lazy" />
+
+## Beginne mit der Aufgabe, die flüssig bleiben soll
+
+Öffne deine üblichen Anwendungen und probiere eine typische Aktion: Browser-Tabs wechseln, ein Dokument bearbeiten oder ein Projekt durchsuchen. Vergleiche die Reaktion ohne Mining und mit laufendem Miner. Halte Aufgabe und Anwendungszustand vergleichbar, damit das Ergebnis eine konkrete Frage beantwortet.
+
+Beobachte dabei CPU, RAM und GPU. Der Windows-[Task-Manager](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) zeigt Ressourcen je Anwendung; andere Systeme haben eigene Werkzeuge. Eine einzelne Auslastungszahl beweist keinen ausreichenden Spielraum für weitere Aufgaben. Die [CPU-Anleitung](/de/blog/miner-cpu-usage/) erläutert Anzeigen und Geräteaktivität des Miners.
+
+## Welches Gerät soll minen?
+
+Entscheide nach der Vordergrundanwendung. Automatisch verwendet seine CPU und erkannte unterstützte NVIDIA-Geräte. `--backend cpu` im vorhandenen Aufruf wählt ausschließlich CPU-Mining; das NVIDIA-Mining-Backend bleibt ungenutzt. CPU und Arbeitsspeicher werden weiterhin mit dem Desktop geteilt. Kontrolliere beim Start die Gerätezeilen.
+
+Eine unterstützte NVIDIA-Konfiguration kann mit `--backend nvidia` das CPU-Mining abschalten. Grafikanwendungen auf derselben Karte teilen GPU-Speicher und Rechenzeit; dadurch wird nicht die gesamte CPU für andere Programme reserviert. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) erklärt Laufzeitvoraussetzungen und Gerätewahl. Bewahre den ursprünglichen Befehl zum Vergleichen auf.
+
+## Automatischen Bereich oder feste Threadzahl wählen
+
+Für automatisches CPU-Tuning bietet sich `--cpu-profile efficiency` an. Das Profil bevorzugt kleinere Threadzahlen nahe seinem Hashrateziel; es misst weder Watt noch garantiert es Desktop-Reaktionszeiten. `--cpu-autotune-max-threads 2` zeigt beispielhaft eine Suchobergrenze. Wähle einen passenden Wert und lies vor kombinierten Overrides die [Autotuning-Anleitung](/de/blog/seine-automatic-cpu-tuning/).
+
+Für einen festen Vergleich wählt `--threads 2` zwei Threads je CPU-Backend und deaktiviert normalerweise Autotuning. Das ist ein Testwert, keine allgemeine Empfehlung. Im Dashboard entfernt `-` einen Thread je CPU-Backend. Diese manuelle Änderung startet Mining-Backends neu und verbindet den Pool erneut, während Sitzungsstatistiken erhalten bleiben. Warte auf den Abschluss.
+
+## Speicher für den übrigen Desktop freihalten
+
+Jeder aktive CPU-Thread nutzt eine 2-GiB-Argon2id-Arena zuzüglich Prozessaufwand. Zwei Arenen belegen 4 GiB, bevor Betriebssystem und Anwendungen berücksichtigt werden. Plane mit dem verfügbaren Speicher bei geöffneten Alltagsprogrammen. Tabs, Editoren und Grafikprojekte ändern ihren Bedarf; die installierte RAM-Menge allein reicht als Grundlage nicht.
+
+Automatische Dimensionierung lässt eine konfigurierte Reserve frei, eine explizite Threadzahl setzt diese jedoch außer Kraft. Prüfe deshalb bei festen Werten selbst den Speicher; sie garantieren keinen Platz für jede spätere Anwendung. Die [RAM-Anleitung](/de/blog/how-much-ram-to-mine-blocknet/) erklärt die Regeln. Braucht deine Arbeit mehr Raum, reduziere Threads und wiederhole dieselbe Desktop-Aktion.
+
+## Wann solltest du Mining für eine andere Aufgabe beenden?
+
+Für ein wichtiges Gespräch, ein anspruchsvolles Spiel oder Rendering kannst du mit `q` im Dashboard oder `Ctrl+C` im Terminal beenden. Prüfe, dass der Miner geschlossen ist, bevor du die Aufgabe allein bewertest. Starte anschließend den gespeicherten Befehl. Dafür musst du weder Kontoeinstellungen ändern noch Konfigurationen löschen oder Schutzfunktionen verändern.
+
+Behalte normale Kühlung und Stromversorgung bei und beobachte die Temperatur- und Energieanzeigen des Computers. Hier wird keine bestimmte Temperatur oder Lüftereinstellung vorgeschrieben. Im Ruhezustand läuft Mining nicht wie bei einem wachen Rechner weiter. Bei unerwartetem Beenden oder Schlafmodus hilft die [Stopp-Anleitung](/de/blog/miner-keeps-stopping/), das Ereignis vor weiteren Änderungen einzuordnen.
+
+## Einen Start für deinen Alltag speichern
+
+Wenn der Desktop gut reagiert, notiere vollständigen Befehl, Arbeitsverzeichnis und Backends. Dashboard-Threadänderungen gelten nur für die Sitzung; wiederholbare Werte gehören in die Startargumente. Die [Konfigurationsanleitung](/de/blog/configure-seine-miner/) trennt gespeicherte Verbindungsfelder von anderen Optionen. Benenne getrennte Verknüpfungen für Desktop-Arbeit und unbeaufsichtigte Sitzungen eindeutig.
+
+Kontrolliere beim nächsten Start Geräte, aktive Threads, freien Speicher und neue akzeptierte Shares. Wiederhole deine ursprüngliche Desktop-Aktion. Die [Pool-Tracking-Anleitung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) hilft, gutgeschriebene Arbeit zu prüfen. Ein brauchbares Alltagssetup ist reproduzierbar, während deine normalen Anwendungen ihre Aufgaben erledigen.
+
+<CTA target="seine" title="Wähle seine passend zu deinem Desktop" text="Notiere deinen Start, wähle die gemeinsam genutzten Geräte und prüfe akzeptierte Arbeit sowie die Reaktion im Alltag." />

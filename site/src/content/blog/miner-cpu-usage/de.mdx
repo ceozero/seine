@@ -1,0 +1,62 @@
+---
+title: 'Warum dein Miner nicht 100% CPU nutzt'
+description: 'Verstehe die CPU-Auslastung beim Blocknet-Mining mit seine. Prüfe aktive Threads, RAM, Backend und akzeptierte Arbeit, bevor du Einstellungen veränderst.'
+tags: ['Mining-Anleitung', 'CPU-Auslastung', 'seine']
+faq:
+  - q: 'Muss ein Blocknet-Miner immer 100% CPU nutzen?'
+    a: 'Nein. Die Gesamtauslastung beschreibt die für das Betriebssystem verfügbaren Prozessoren, seine misst fertige Hashes. Die sinnvolle Threadzahl hängt von Speicher und gemessenem Durchsatz ab. Prüfe Threads, Hashrate und akzeptierte Arbeit gemeinsam, bevor du eine niedrigere Prozentzahl ändern möchtest.'
+  - q: 'Warum wählt seine weniger Threads als möglich?'
+    a: 'Jeder aktive CPU-Mining-Thread benötigt eine 2-GiB-Arena; alle teilen die Speicherbandbreite. Die Automatik berücksichtigt RAM und Durchsatz, statt jedem logischen Prozessor einen Mining-Thread zuzuweisen. Explizite Grenzen, Backend und Ausführungsumgebung beeinflussen die Zahl ebenfalls.'
+  - q: 'Was prüfen, wenn Auslastung und Hashrate fallen?'
+    a: 'Prüfe CPU-Backend, aktive Threads, Tuning- und Speichermeldungen sowie einen aktuellen Job. Vergleiche dasselbe Gerät im selben Zeitraum und untersuche Hintergrundlast und Ausführungsgrenzen. Bei Verbindung oder null Pool-Hashrate hilft die Tracking-Anleitung statt sofort mehr Threads einzustellen.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Nutze die CPU-Auslastung, um deinen Rechner beim Blocknet-Mining mit seine zu verstehen. Diese Anleitung verbindet Prozentanzeige, aktive Threads, lokale H/s und akzeptierte Shares in v0.2.36. Prüfe diese Punkte vor Änderungen. Für die Installation beginne mit der [Mining-Anleitung](/de/blog/how-to-mine-blocknet/).
+
+## Bedeutet weniger CPU-Auslastung weniger nutzbare Arbeit?
+
+<Answer>
+Der Prozentwert allein zeigt nicht, wie viel Mining-Arbeit fertig wird. Prüfe CPU-Backend, aktive Threads, lokale Hashrate und eingehende Jobs. seine kann weniger Threads als logische Prozessoren wählen. Vergleiche abgeschlossene Arbeit unter gleichen Bedingungen, bevor du die Anzahl änderst.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Ein Aktivitätsraster und ein Arbeitszähler sind getrennte Beobachtungen, verbunden durch Prüfungen von Threads, Speicher und Jobs." width="1200" height="675" loading="lazy" />
+
+## Zuerst den Umfang der Anzeige verstehen
+
+Unterscheide unter Windows den seine-Prozess von der Rechnergesamtlast. Suche ihn im Task-Manager und öffne Leistung und CPU. Die Graphen logischer Prozessoren zeigen die Verteilung; die Gesamtanzeige fasst den Rechner zusammen. [Microsofts Anleitung](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) beschreibt diese Ansichten. Notiere die verwendete Ansicht.
+
+Unter Linux kann der Prozesswert in `top` anders skaliert sein als die Systemübersicht. Im Irix-Modus kann ein Mehrthreadprozess über 100% liegen; Solaris teilt durch die Prozessorzahl. Die Threadansicht verändert die Zeilen. Lies das [top-Handbuch](https://man7.org/linux/man-pages/man1/top.1.html), bevor du Werkzeuge oder Modi vergleichst. Ein Skalenwechsel misst keine Geschwindigkeitsänderung.
+
+## Prüfen, welches Gerät arbeitet
+
+Notiere H/s und aktive Threads der CPU-Zeile im [seine-Dashboard](/de/blog/seine-dashboard-explained/). CPU+GPU enthält weitere Arbeit; vergleiche dasselbe Gerät. Wählt dein Startbefehl nur NVIDIA, ist geringe CPU-Mining-Last erwartbar. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) erklärt diese Einrichtung.
+
+Unterscheide aktive Mining-Threads von der Threadzahl des Betriebssystemprozesses. seine hat zusätzlich Netzwerk-, Steuerungs- und Berichtsaufgaben. Deshalb kann der Prozess mehr Threads als die CPU-Zeile zeigen. Entscheidend ist, wie viele Hashing-Threads arbeiten und Ergebnisse liefern, nicht ob jeder Prozess-Thread beschäftigt bleibt.
+
+## Warum begrenzt RAM die aktive Threadzahl?
+
+Jeder aktive CPU-Thread nutzt eine 2-GiB-Arena für Argon2id. Neben der Prozessorzahl zählt verfügbarer Speicher; automatische Größenwahl lässt Platz fürs System. Lies tatsächliche Threads und Speichermeldungen statt aus installiertem RAM eine garantierte Kapazität abzuleiten. Die [RAM-Anleitung](/de/blog/how-much-ram-to-mine-blocknet/) erklärt Budget, Reserve und Zuweisung.
+
+Kapazität sagt, wie viele Arenen passen; Bandbreite beeinflusst den Datentransport gleichzeitiger Threads. Ein Thread kann beim Warten auf Speicher weiterhin als beschäftigt gelten. Niedrige Auslastung beweist daher keinen Bandbreitenengpass; eine volle Anzeige beweist auch nicht die besten H/s. Die [Argon2id-Anleitung](/de/blog/argon2id-proof-of-work-explained/) erklärt den Speicherentwurf.
+
+## Automatik und ausdrückliche Einstellungen lesen
+
+Bei aktivem CPU-Autotuning vergleicht seine Threads und Kernel anhand gemessener Arbeit. Weniger Threads können ein gültiges Suchergebnis sein; Speicheränderungen beeinflussen die aktive Zahl. Lass den Versuch abschließen und lies Meldungen vor der Bewertung einer Probe. Die [Tuning-Anleitung](/de/blog/seine-automatic-cpu-tuning/) erklärt Entscheidungen und Cache.
+
+Prüfe den tatsächlichen Startbefehl. `--threads`, ein Tuning-Maximum oder CPU-Profil können Suche und Auswahl ändern; Affinität beeinflusst Platzierung. Container, virtuelle Maschinen und OS-Grenzen können weniger Kapazität als der Host bereitstellen. Halte die Konfiguration fest und identifiziere den wirksamen Parameter vor einer Erhöhung.
+
+## Was tun, wenn Auslastung und H/s sinken?
+
+Prüfe zuerst, ob das CPU-Backend aktiv ist und Arbeit hat. Suche im Dashboard-Log nach aktuellem Job, Verbindung, Speicheranpassungen und Backendfehlern. Vorbereitung oder ein Tuningversuch liefern Kontext, den das OS-Meter nicht zeigt. Läuft die GPU weiter, betrachte die Gerätezustände getrennt.
+
+Vergleiche dann einen stabilen Zeitraum mit gleicher Version, gleichem Backend und Einstellungen. Notiere Anwendungen, RAM, Energieeinstellungen und Zeit. Nutze für lokale Vergleiche die [Benchmark-Anleitung](/de/blog/benchmark-seine-miner/) und behalte alle Berichte. Trenne Messverfahren und Pool-Sitzung; ein kurzer Spitzenwert ist kein Hardwareergebnis.
+
+## Abgeschlossene und akzeptierte Arbeit prüfen
+
+Kontrolliere im normalen Mining fortschreitende CPU-Hashes und Antworten auf akzeptierte Shares. Shares kommen in Abständen; ein ruhiger Moment ist kein fester Countdown. Die Pool-Hashrate schätzt Einsendungen über Zeit. Die [Tracking-Anleitung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) erklärt diese Sicht und Verbindungsprüfungen.
+
+Bewahre Version, Befehl, Backend, CPU-Threads, lokale H/s, OS-Werkzeug und Ansicht, Speicherzustand und Pool-Zeitfenster auf. Wenn Arbeit fortschreitet, liefert die Gesamtanzeige Kontext. Steht eine Stufe, folge ihrer Anleitung. So beantwortet jede Änderung eine konkrete Frage mit vergleichbarem Ergebnis.
+
+<CTA target="seine" title="CPU-Mining mit seine verfolgen" text="Lade seine herunter und prüfe Threads, Hashrate und akzeptierte Arbeit gemeinsam im Dashboard." />

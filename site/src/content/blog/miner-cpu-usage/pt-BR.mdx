@@ -1,0 +1,62 @@
+---
+title: 'Por que seu minerador não usa 100% da CPU'
+description: 'Entenda o uso da CPU ao minerar Blocknet com seine. Confira threads ativas, memória, backend e trabalho aceito antes de alterar suas configurações de mineração.'
+tags: ['Guia de mineração', 'Uso da CPU', 'seine']
+faq:
+  - q: 'O minerador deve usar sempre 100% da CPU?'
+    a: 'Não. A porcentagem geral descreve os processadores disponíveis ao sistema; seine mede hashes concluídos. A quantidade útil de threads depende da memória e do desempenho medido. Confira threads, hashrate e trabalho aceito antes de tentar aumentar uma porcentagem menor.'
+  - q: 'Por que seine escolhe menos threads?'
+    a: 'Cada thread CPU ativa precisa de uma arena de 2 GiB, e todas compartilham largura de banda. A seleção automática considera memória e desempenho, sem exigir uma thread por processador lógico. Limites explícitos, backend e ambiente também influenciam.'
+  - q: 'O que conferir se uso e hashrate caírem?'
+    a: 'Confira backend CPU, threads ativas, mensagens de ajuste e memória e um trabalho atual. Compare o mesmo dispositivo e intervalo, depois carga de fundo e limites. Para conexão ou hashrate zero no pool, siga o guia de acompanhamento em vez de aumentar threads imediatamente.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Use a utilização da CPU para entender a máquina enquanto seine minera Blocknet. Este guia relaciona porcentagem, threads ativas, H/s locais e shares aceitas na v0.2.36, com verificações antes dos ajustes. Para instalar, comece pelo [guia de mineração](/pt-br/blog/how-to-mine-blocknet/).
+
+## Menor uso da CPU significa menos trabalho útil?
+
+<Answer>
+A porcentagem sozinha não mede o trabalho concluído. Confira backend CPU, threads, hashrate local e trabalhos recebidos. seine pode escolher menos threads que processadores lógicos. Compare trabalho concluído em condições constantes antes de alterar a quantidade.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Uma grade de atividade e um contador de trabalho são observações distintas, ligadas por verificações de threads, memória e trabalhos." width="1200" height="675" loading="lazy" />
+
+## Entenda primeiro o alcance da porcentagem
+
+No Windows, diferencie o processo seine do total da máquina. Encontre-o no Gerenciador de Tarefas e veja Desempenho e CPU. Os gráficos de processadores lógicos mostram a distribuição; o total reúne a máquina. O [guia da Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) explica as visualizações. Registre qual usou.
+
+No Linux, a porcentagem do processo em `top` pode ter escala diferente do resumo. No modo Irix, processos com várias threads podem passar de 100%; Solaris divide pelo número de processadores. A visualização de threads muda as linhas. Leia o [manual do top](https://man7.org/linux/man-pages/man1/top.1.html) antes de comparar ferramentas ou modos. Mudar a escala não mede mudança de velocidade.
+
+## Confira qual dispositivo trabalha
+
+Leia H/s e threads ativas na linha CPU do [painel de seine](/pt-br/blog/seine-dashboard-explained/). A taxa CPU+GPU inclui outros trabalhos; compare o mesmo dispositivo. Se o comando escolhe apenas NVIDIA, pouca carga CPU de mineração é esperada. O [guia NVIDIA](/pt-br/blog/mine-blocknet-nvidia-gpu/) explica essa configuração.
+
+Diferencie threads de mineração do total de threads do processo. seine também executa rede, controle e relatórios, então o processo pode ter mais threads que a linha CPU. Verifique quantas calculam hashes e concluem trabalho, não se todas ficam ocupadas.
+
+## Por que a memória pode definir o número de threads?
+
+Cada thread CPU ativa usa uma arena de 2 GiB para Argon2id. A memória disponível importa junto com a CPU, e o dimensionamento automático reserva espaço ao sistema. Leia a quantidade real e mensagens; RAM instalada não garante capacidade. O [guia de RAM](/pt-br/blog/how-much-ram-to-mine-blocknet/) detalha orçamento, reserva e alocação.
+
+Capacidade indica quantas arenas cabem; largura de banda afeta a movimentação simultânea de dados. Uma thread pode continuar contada como ocupada enquanto espera memória. Uso baixo não prova gargalo de banda, e encher o medidor não prova os melhores H/s. O [guia Argon2id](/pt-br/blog/argon2id-proof-of-work-explained/) explica o projeto.
+
+## Leia mudanças automáticas e opções explícitas
+
+O ajuste automático compara threads e kernels pelo trabalho medido. Uma quantidade menor pode ser um resultado válido, e mudanças na memória podem alterá-la. Deixe o teste terminar e leia suas mensagens antes de avaliar uma amostra. O [guia de ajuste](/pt-br/blog/seine-automatic-cpu-tuning/) explica decisões e cache.
+
+Examine o comando real. `--threads`, limite de ajuste ou perfil CPU podem mudar busca e seleção; afinidade muda posicionamento. Contêineres, máquinas virtuais e limites do sistema podem expor menos capacidade que o host. Preserve a configuração e identifique o ajuste antes de aumentar.
+
+## E se uso e H/s caírem juntos?
+
+Primeiro veja se o backend CPU está ativo e tem trabalho. Procure trabalho atual, conexão, mudanças de memória e erros no log. Preparação ou um teste de ajuste dão contexto ausente no medidor do sistema. Se a GPU continua, examine os estados separadamente.
+
+Compare um intervalo estável com mesma versão, backend e opções. Anote aplicativos, memória, energia e horário. Para comparação local repetível, siga o [guia de benchmark](/pt-br/blog/benchmark-seine-miner/) e guarde todos os relatórios. Separe medição da sessão do pool; um pico ou porcentagem isolada não é resultado de hardware.
+
+## Termine com trabalho concluído e aceito
+
+Na mineração normal, confira avanço dos hashes CPU e respostas de shares aceitas. Shares chegam em intervalos; um instante quieto não é contagem regressiva fixa. O pool estima hashrate por envios ao longo do tempo. O [guia de acompanhamento](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) explica essa visão e conexão.
+
+Guarde versão, comando, backend, threads CPU, H/s locais, ferramenta e visualização do sistema, memória e janela do pool. Se o trabalho progride, o medidor geral oferece contexto. Se uma etapa para, siga seu guia. Cada alteração passa a responder uma pergunta concreta com resultado comparável.
+
+<CTA target="seine" title="Acompanhe a mineração CPU com seine" text="Baixe seine e confira threads ativas, hashrate e trabalho aceito juntos no painel." />

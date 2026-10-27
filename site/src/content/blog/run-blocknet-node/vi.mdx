@@ -1,0 +1,106 @@
+---
+title: 'Cách chạy node Blocknet'
+description: 'Chạy node Blocknet bằng ứng dụng chính thức: cài core, kiểm tra peer và đồng bộ, hiểu cập nhật tự động và xác minh node hoạt động trên mạng chính.'
+tags: ['Blocknet', 'Node', 'Hướng dẫn cài đặt']
+faq:
+  - q: 'Có cần đào coin để chạy node Blocknet không?'
+    a: 'Chạy node và bắt đầu đào là hai thao tác riêng. Core quản lý dữ liệu chuỗi và kết nối mạng; đào cần bật riêng. Bạn có thể xem trạng thái và peer mà không chạy tải đào. Đào pool bằng seine cũng có luồng kết nối riêng và không cần node của bạn.'
+  - q: 'Đóng shell Blocknet có dừng node không?'
+    a: 'Phiên attach tương tác kết nối với core chạy nền. Thoát shell vẫn để core chạy. Dùng lệnh dừng rõ ràng khi muốn dừng node được quản lý, rồi kiểm tra trạng thái. Đóng shell và dừng tiến trình bên dưới là hai hành động khác nhau.'
+  - q: 'Làm sao biết node Blocknet đang đồng bộ?'
+    a: 'Đọc cùng lúc chiều cao chuỗi, số peer và trạng thái đồng bộ, rồi quan sát tiến độ. So sánh với nguồn mới của cùng mạng. Quét ví là việc riêng: node đã theo kịp không chứng minh ví vừa nạp đã tìm hết đầu ra của nó.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Chạy node Blocknet của bạn và kiểm tra rằng nó đã kết nối, đang theo chuỗi. Hướng dẫn dùng ứng dụng dòng lệnh chính thức để quản lý core mainnet, xem peer, đồng bộ và cập nhật. Các lệnh được kiểm tra với client v1.2.0 ngày 26 tháng 10 năm 2026. Giữ [tài liệu lệnh chính thức](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) của bản đã cài ở bên cạnh.
+
+## Cần gì để chạy node Blocknet?
+
+<Answer>
+Dùng client chính thức cho hệ điều hành, máy có chỗ lưu dữ liệu chuỗi và internet. Client cài và quản lý core chạy nền. Sau khi chạy, xem peer và tiến độ. Tạo ví và đào là các việc riêng có thể thêm khi node hoạt động.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Terminal cục bộ nối với core Blocknet chạy nền, lưu chuỗi và trao đổi khối với các peer mạng." width="1200" height="675" loading="lazy" />
+
+## Chọn client chính thức và mạng
+
+Tải gói đúng hệ điều hành và bộ xử lý từ [các bản phát hành chính thức](https://github.com/blocknetprivacy/blocknet/releases/latest). Giải nén rồi mở terminal truy cập được tệp chạy. Ví dụ dùng `blocknet`; trên Windows dùng `blocknet.exe`. Nếu không nằm trong đường dẫn tìm lệnh, nhập đường dẫn thật như `./blocknet` trên Linux hoặc macOS.
+
+Dùng mainnet cho mạng Blocknet thông thường. Testnet là môi trường riêng với dữ liệu và cấu hình riêng. Ghi mạng đã chọn để không so chiều cao testnet với explorer mainnet. Bài này quản lý node; [hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) phụ trách tạo, khôi phục và địa chỉ nhận.
+
+## Cài và khởi động core chạy nền
+
+Lần đầu, chạy trình thiết lập trong terminal tương tác:
+
+```sh
+blocknet setup
+```
+
+Đọc từng câu hỏi. Bản được kiểm tra lưu cấu hình, lên lịch cập nhật tự động, đề nghị tải core khi cần và khởi động. Nó cũng cung cấp cài đặt mạng và API cục bộ. Giữ liên kết cục bộ cho node quản lý trên máy này.
+
+Cách cài thủ công được tài liệu mô tả:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` chọn bản core ổn định. Mainnet phải được bật trong cấu hình. Client chạy core nền và đợi API. Hãy để khởi động hoàn tất; mở cơ sở dữ liệu và theo kịp toàn bộ chuỗi là hai mốc khác nhau.
+
+## Kiểm tra peer và tiến độ đồng bộ thế nào?
+
+Kết nối core mainnet đang chạy:
+
+```sh
+blocknet attach mainnet
+```
+
+Tại dấu nhắc tương tác, nhập riêng từng lệnh:
+
+```text
+status
+peers
+```
+
+[Tài liệu shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) giải thích các trường. Ghi chiều cao, hash khối cuối, số peer và trạng thái đồng bộ. Danh sách peer giúp xác nhận kết nối mạng.
+
+Quan sát chiều cao theo thời gian, so với nguồn mainnet mới như [explorer chính thức](https://explorer.blocknetcrypto.com/). Chiều cao có thể dừng giữa các khối; lần quan sát có thể khác thời điểm. Dùng các trường cùng nhau thay vì kết luận từ một số. Khi đang bắt kịp, duy trì kết nối và lưu trữ.
+
+## Phân biệt đồng bộ chuỗi và quét ví
+
+Đồng bộ chuỗi theo các khối mạng. Quét ví tìm đầu ra thuộc ví đã nạp trong lịch sử đó. Ví khôi phục có thể vẫn quét sau khi node đã theo kịp. Thông tin ví trong shell vì thế là quan sát riêng với chiều cao node. Để theo một khoản trả đào cụ thể, xem [hướng dẫn nhận tiền](https://bntpool.com/blog/vi/pool-payout-missing-from-wallet/).
+
+Client hiện tại cũng hỗ trợ checkpoint để đồng bộ lần đầu nhanh hơn. Xem [hướng dẫn checkpoint](https://bntpool.com/blog/vi/blocknet-checkpoints-fast-sync/) về nguồn và phạm vi xác minh; các cách đồng bộ nhanh không giống nhau. Đừng thường xuyên xóa cơ sở dữ liệu chỉ vì chỉ báo đứng yên. Trước hết dùng trạng thái và log để phân biệt tải, xác minh và quét.
+
+## Xem đâu khi khởi động cần xử lý?
+
+Bên ngoài attach, theo dõi log core được quản lý:
+
+```sh
+blocknet logs mainnet
+```
+
+Đọc thông báo khởi động và kết nối mới nhất. Ctrl-C dừng theo dõi log. Để kiểm tra cấu hình, đường dẫn, phiên bản và kết nối:
+
+```sh
+blocknet doctor
+```
+
+Lệnh doctor được mô tả báo kết quả mà không đổi thiết lập. Lưu thông báo chính xác trước khi chọn cách sửa.
+
+Kiểm tra đúng core và mạng, tệp chương trình đã cài và địa chỉ API cục bộ khớp. Tra [hướng dẫn xử lý chính thức](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) cho tình trạng được báo. Giữ kín thông tin xác thực API và dữ liệu ví khi chia sẻ chẩn đoán. Phiên bản, hệ điều hành và lỗi liên quan thường hữu ích hơn cả thư mục cấu hình.
+
+## Hiểu cập nhật và dừng có chủ đích
+
+Trong client được kiểm tra, bộ lập lịch và một số lệnh quản lý tìm cập nhật. Lệnh ngoài `blocknet status` có thể kích hoạt kiểm tra; nó khác `status` trong attach. Cập nhật có thể khởi động lại core theo `latest`, còn bản ghim được giữ nguyên. Đọc [tài liệu cập nhật](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) nếu node có dịch vụ phụ thuộc.
+
+Lên lịch bảo trì theo các ứng dụng dùng API node. Nhập `quit` để thoát attach; core vẫn chạy. Để chủ động dừng core mainnet đó, chạy `blocknet stop mainnet` trong terminal hệ thống. Sau cập nhật hay khởi động lại, xác nhận phiên bản đang chạy, kết nối và tiến độ. Giữ bản sao ví độc lập với tệp core.
+
+## Dùng node cho công việc dự định
+
+Node đã nối mạng phục vụ ví và truy vấn chuỗi cục bộ mà không bật đào. Với bntpool.com, theo [hướng dẫn pool](https://bntpool.com/blog/vi/mine-blocknet-on-bntpool/) và kết nối pool thông thường của seine. Chạy node riêng là lựa chọn tách biệt. Đào trực tiếp cần đọc chế độ daemon và kiểm tra API trước khi kết nối.
+
+Giữ ghi chép ngắn: mạng, phiên bản client/core, nơi lưu dữ liệu, chính sách cập nhật và các kiểm tra tiến độ tốt. Điều này cũng giúp chuẩn bị [Faraday](/vi/blog/blocknet-faraday-upgrade/), với hướng dẫn kích hoạt tương lai từ bản phát hành chính thức. Kiểm tra lại trạng thái sau thay đổi dự định để ghi đúng node đang chạy, không chỉ phần mềm đã tải.
+
+<CTA target="seine" title="Đào Blocknet bằng seine" text="Dùng các hướng dẫn để kết nối cấu hình sau khi chọn đào pool hoặc đào trực tiếp." />

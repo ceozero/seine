@@ -1,0 +1,72 @@
+---
+title: 'Cách cập nhật phần mềm đào Blocknet'
+description: 'Cập nhật seine để đào Blocknet, giữ cấu hình, xác minh tệp tải chính thức và kiểm tra phiên bản, kết nối pool cùng các share được chấp nhận sau khi khởi động lại.'
+tags: ['Hướng dẫn đào', 'seine', 'Cập nhật']
+faq:
+  - q: 'seine có tự cài bản cập nhật không?'
+    a: 'Bộ kiểm tra thông báo bản mới trong bảng điều khiển và nhật ký. Bạn chọn lúc cài. Tải và xác minh gói chính thức, dừng phần mềm, thay tệp ứng dụng rồi chạy lại với cùng thư mục dữ liệu và tùy chọn khởi động.'
+  - q: 'Tệp nào giữ cấu hình của tôi?'
+    a: 'Mặc định là seine-data/seine.config.json, tính từ thư mục khởi chạy. data-dir đổi vị trí này. Giữ cả thư mục dữ liệu và tập lệnh hoặc cấu hình dịch vụ: tùy chọn backend và luồng riêng biệt với thông tin kết nối đã lưu.'
+  - q: 'Vì sao cập nhật xong lại hỏi địa chỉ?'
+    a: 'Kiểm tra thư mục làm việc và data-dir. Chạy từ thư mục mới có thể khiến seine tìm cấu hình ở nơi khác. Dừng phiên đó, tìm dữ liệu gốc rồi chạy lại với đường dẫn đúng. Kiểm tra địa chỉ và pool trước khi tiếp tục.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Cập nhật seine nhưng giữ kết nối pool và tùy chọn đang hoạt động. Hướng dẫn dựa trên bản công khai v0.2.36, gồm chuẩn bị, thay tệp và kiểm tra. Nếu cài lần đầu, xem hướng dẫn [Windows](/vi/blog/mine-blocknet-on-windows/), [Linux](/vi/blog/mine-blocknet-on-linux/) hoặc [Mac](/vi/blog/mine-blocknet-on-mac/).
+
+## Cập nhật seine như thế nào?
+
+<Answer>
+Tải và xác minh gói chính thức cho hệ điều hành, dừng phần mềm, giữ thư mục dữ liệu và thay tệp ứng dụng. Chạy lại với cùng thư mục làm việc và tham số. Kiểm tra phiên bản, địa chỉ nhận tiền, kết nối pool và share được chấp nhận trước khi cập nhật máy khác.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="Thay gói ứng dụng, giữ thư mục cấu hình rồi kiểm tra kết nối." width="1200" height="675" loading="lazy" />
+
+## Kiểm tra phiên bản hiện tại ra sao?
+
+Chạy lệnh phiên bản với đúng tệp thực thi đang dùng. Bản cũ ở thư mục khác có thể khác bản do lối tắt hoặc dịch vụ chạy. Ghi lại đường dẫn, thư mục làm việc và tham số để lặp lại quy trình. Trên Windows, mở PowerShell tại thư mục phần mềm hiện tại:
+
+```powershell
+.\seine.exe --version
+```
+
+Trên Linux hoặc macOS, mở terminal tại thư mục đó:
+
+```sh
+./seine --version
+```
+
+So sánh với [các bản phát hành chính thức](https://github.com/zpalmtree/seine/releases). seine kiểm tra khi khởi động và mỗi 12 giờ, thông báo trong bảng điều khiển và nhật ký. Thông báo cung cấp liên kết tải; bạn chọn thời điểm cài. Đọc ghi chú về nền tảng, thư viện thực thi và tùy chọn khởi động.
+
+## Cần giữ những cấu hình nào?
+
+Mặc định seine đọc `./seine-data/seine.config.json`. `./` là thư mục làm việc; chuyển chương trình rồi chạy từ nơi khác có thể đổi chỗ tìm cấu hình. Nếu dùng `--data-dir`, giữ nguyên thư mục đó. Đường dẫn tuyệt đối làm rõ vị trí khi lối tắt, tập lệnh hoặc dịch vụ chọn thư mục làm việc.
+
+Cấu hình lưu chế độ đào, địa chỉ nhận tiền, URL pool và tên máy. Giữ toàn bộ thư mục dữ liệu, gồm cả tệp tinh chỉnh. Lưu thêm lệnh, tập lệnh hoặc định nghĩa dịch vụ: `--backend` và `--threads` tách biệt với trường kết nối đã lưu. Giữ cả hai giúp duy trì thiết lập sau khi chạy lại.
+
+## Tải và xác minh bản thay thế
+
+Từ [trang tải](/vi/#download) hoặc bản phát hành chính thức, chọn gói đúng hệ điều hành và kiến trúc CPU. Tải riêng `SHA256SUMS.txt` của cùng phiên bản. So sánh checksum trước khi giải nén vào thư mục khác. [Hướng dẫn xác minh](/vi/blog/antivirus-flags-crypto-miner/) giải thích quy trình Windows và cảnh báo khi tải.
+
+Giữ mọi tệp trong gói cùng nhau. Gói Windows kèm thư viện NVIDIA cạnh `seine.exe`; chỉ chép tệp thực thi có thể trộn phiên bản. [Hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/) trình bày môi trường thực thi. [Tài liệu v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) mô tả cấu hình lưu và hành vi khởi động dùng ở đây.
+
+## Dừng, sao lưu và thay tệp
+
+Thoát bằng `q` hoặc `Ctrl+C` rồi đợi tiến trình kết thúc. Với dịch vụ, dùng trình quản lý và tính đến tự khởi động lại trước khi thay tệp. Khi đã dừng, sao lưu cục bộ ứng dụng và dữ liệu. Để bản sao tách khỏi thư mục mới giải nén để nhận biết hai phiên bản.
+
+Đặt tệp mới vào chỗ cài đặt, giữ dữ liệu gốc. Nếu mỗi phiên bản có thư mục riêng, cập nhật đường dẫn chương trình trong lối tắt hoặc dịch vụ và giữ rõ thư mục làm việc cùng đường dẫn dữ liệu. Chạy một phiên với tùy chọn cũ. Với nhiều máy, kiểm tra xong một máy rồi mới tiếp tục.
+
+## Làm sao xác nhận cập nhật thành công?
+
+Kiểm tra lại phiên bản tệp đã cài so với bản tải. Khởi chạy, kiểm tra nơi nhận tiền, pool, tên máy và backend CPU/GPU mong muốn. Dữ liệu tinh chỉnh tương thích có thể được dùng lại; chờ tinh chỉnh ban đầu xong trước khi đánh giá hashrate. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích các phần.
+
+Tìm share được chấp nhận rồi mở [My Stats](https://bntpool.com/stats) cho cùng địa chỉ. Ước tính của pool cần share và thời gian để ổn định; chênh lệch hashrate tức thời chưa đủ kết luận lỗi cập nhật. Tiến trình mới cũng mở phiên cục bộ mới. So sánh địa chỉ, máy và hoạt động trước các bộ đếm ngắn hạn.
+
+## Nếu câu hỏi thiết lập xuất hiện lại?
+
+Trước tiên kiểm tra thư mục làm việc và `--data-dir`. Thư mục mới thường chưa có cấu hình ở đường dẫn tương đối mặc định. Dừng phiên đó và trỏ về dữ liệu gốc. Nếu lỗi nêu tệp cấu hình, giữ tệp và thông báo chính xác để tìm nguyên nhân. Không đưa cụm khôi phục, khóa riêng hoặc token API điều khiển vào ảnh hay báo cáo công khai.
+
+Nếu không khởi động được, ghi phiên bản, hệ điều hành, đường dẫn và lỗi chính xác rồi xem hướng dẫn nền tảng. Bản sao giữ ứng dụng cũ cùng cấu hình. Trước khi khôi phục, xem yêu cầu tương thích trong ghi chú bản mới. Chạy lại với cấu hình đã biết và kiểm tra share; thay phần mềm đào không đòi tạo ví mới.
+
+<CTA target="seine" title="Tải bản seine hiện tại" text="Chọn gói cho nền tảng và giữ cấu hình trong quá trình cập nhật." />

@@ -1,0 +1,62 @@
+---
+title: 'Warum stoppt mein Blocknet-Miner immer wieder?'
+description: 'Finde die Ursache für Miner-Stopps: letzte Meldung, Speicher, GPU-Start und Ruhezustand prüfen und anschließend den stabilen Start von seine bestätigen.'
+tags: ['Fehlerbehebung', 'Mining-Anleitung', 'seine']
+faq:
+  - q: 'Ist ein getrennter Miner immer abgestürzt?'
+    a: 'Bei einer unterbrochenen Pool-Verbindung kann der Prozess während der Wiederverbindung weiterlaufen. Prüfe, ob er noch vorhanden ist, lies seine letzten Meldungen und suche danach nach neuen akzeptierten Shares. Eine geschlossene Anwendung oder ein Absturzbericht des Betriebssystems erfordert eine andere Untersuchung.'
+  - q: 'Soll ich beim Stopp die Konfiguration löschen?'
+    a: 'Behalte die Konfiguration und notiere ihren Speicherort. Eine Parse-Meldung nennt die zu prüfende Datei oder den Wert. Sichere die Datei, korrigiere den gemeldeten Fehler und bewahre Adresse und Startparameter. Alles zu löschen erschwert den Vergleich mit dem letzten funktionierenden Lauf.'
+  - q: 'Welche Angaben helfen bei wiederholten Stopps?'
+    a: 'Notiere seine-Version, Betriebssystem, CPU, GPU, verfügbaren Speicher, vollständige Startargumente, Arbeitsverzeichnis und Zeitpunkt. Füge letzte Logmeldungen und relevante Systemereignisse hinzu. Entferne Zugangsdaten und persönliche Informationen vor dem Teilen. Wiederherstellungsphrasen und private Schlüssel gehören niemals in einen solchen Bericht.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Finde heraus, an welcher Stelle dein Blocknet-Miner stoppt, damit er zuverlässig läuft. Diese Anleitung bezieht sich auf seine v0.2.37 und beginnt mit Belegen von deinem eigenen Rechner. Halte den letzten funktionierenden Befehl und die Konfiguration bereit. Ändere jeweils nur eine relevante Einstellung, damit das nächste Ergebnis aussagekräftig bleibt.
+
+## Was prüfst du, wenn der Miner stoppt?
+
+<Answer>
+Prüfe, ob der Prozess beendet wurde, der Rechner schläft oder die Pool-Verbindung wiederhergestellt wird. Sichere letzte Meldung und Zeitpunkt vor dem Neustart. Ordne die Belege Startkonfiguration, Speicherzuweisung, GPU-Initialisierung oder einem Systemereignis zu und bestätige die Korrektur anschließend mit neuen akzeptierten Shares.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Ein Miner-Protokoll führt zu getrennten Prüfungen von Anwendung, Speicher und Stromzustand, danach zu einem bestätigten Neustart." width="1200" height="675" loading="lazy" />
+
+## Halte die letzte Meldung sichtbar
+
+Öffne ein Terminal im üblichen Startverzeichnis und führe dort deinen vorhandenen Befehl aus. Ergänze `--ui plain` für Textlogs statt Dashboard; die übrigen Argumente bleiben erhalten. Das startet Mining mit deiner Konfiguration. Kopiere die letzten Meldungen einschließlich des ersten Fehlers vor wiederholten Verbindungs- oder Abschaltmeldungen.
+
+Notiere Programmversion, Arbeitsverzeichnis und gewähltes Datenverzeichnis zusammen. Diese Version gibt einen behandelten fatalen Fehler vor dem Beenden mit `fatal:` aus. Eine Beendigung durch das Betriebssystem kann andere Spuren hinterlassen. Läuft der Prozess noch, nutze die [Pool-Verbindungsprüfung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/): Ein fehlender Share oder eine vorübergehende Trennung beweist keinen Absturz.
+
+## Stoppt er vor dem Mining-Start?
+
+Lies die beim Start genannte Datei, Option oder Bibliothek. Ein Konfigurations-Parsefehler verweist auf eine konkrete Datei; sichere sie vor der Syntaxkorrektur. Prüfe das Arbeitsverzeichnis von Verknüpfung oder Dienst. Die [Konfigurationsanleitung](/de/blog/configure-seine-miner/) erklärt, warum dieselbe Programmdatei aus verschiedenen Ordnern unterschiedliche Einstellungen lesen kann.
+
+Startet die Programmdatei nicht, prüfe Archiv, Betriebssystem und Architektur und verwende die offizielle Veröffentlichung. Bei einer Sicherheitswarnung hilft die [Download-Prüfung](/de/blog/antivirus-flags-crypto-miner/). Lass den Schutz aktiv, während du Datei und Meldung zuordnest. Begann das Problem nach einem Update, vergleiche Pfad und Argumente mit der [Update-Anleitung](/de/blog/update-seine-miner/).
+
+## Nennt die Meldung Speicher oder Pages?
+
+Stimme die angeforderte CPU-Threadzahl auf verfügbaren Speicher ab, einschließlich anderer Anwendungen und Containerlimits. Ein Zuweisungsfehler zeigt ein Ressourcenproblem zur Untersuchung, beweist aber keinen RAM-Defekt. Schließe unnötige Aufgaben oder reduziere eine manuell erzwungene Threadzahl und versuche es einmal erneut. Notiere, welche Änderung wirkte und ob Mining begann.
+
+Ein ausdrücklich vorgeschriebener Seitenmodus benötigt die entsprechende Betriebssystemreservierung. Fehlgeschlagene Pflicht-Huge-Pages und gewöhnlicher Speichermangel sind verschiedene Prüfungen. Nutze die [RAM-Anleitung](/de/blog/how-much-ram-to-mine-blocknet/) für Kapazität und die [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) für die Einrichtung. Ändere nicht mehrere Tuning-Flags gleichzeitig: Eine einfache bekannte Konfiguration macht das nächste Protokoll verständlicher.
+
+## Prüfe die GPU-Phase getrennt
+
+Nennt der Start eine CUDA-Bibliothek, ein Gerät oder GPU-Speicher, notiere exakte Meldung und installierte Treiberversion. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) behandelt Versionsanforderungen, Laufzeitbibliotheken und Gerätewahl. Vergleiche sie mit deinem System, bevor du Kernel- oder Tuning-Optionen änderst. Ein erfolgreich heruntergeladenes Archiv bestätigt noch keine einsatzbereite Laufzeitumgebung.
+
+seine kann einen Backend-Fehler isolieren, während andere aktive Backends weiterarbeiten. Prüfe Meldungen und verbleibende Aktivität, bevor du einen vollständigen Anwendungsstopp annimmst. Sichere Belege vor dem Neustart, da eine neue Sitzung die vorige Abfolge verdecken kann. Testest du bewusst eine einfachere Backend-Auswahl, behalte den ursprünglichen Befehl und vergleiche Start, laufende Arbeit und akzeptierte Einreichungen.
+
+## War der Rechner im Ruhezustand oder wurde er neu gestartet?
+
+Vergleiche den Zeitpunkt mit Standby, Ruhezustand, Neustarts und Aufgabenverlauf. Bildschirmabschaltung und Rechner-Standby sind getrennte Einstellungen. Prüfe unter Windows die [Energie- und Standby-Einstellungen](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11) sowie einen möglichen Zusammenhang mit Deckelschließen oder Stromquellenwechsel. Wähle Einstellungen passend zu Nutzung und Kühlung des Rechners.
+
+Bei unerwartetem Prozessende prüfe Anwendungs- und Systemprotokolle zur gleichen Zeit. Die Windows-[Ereignisanzeige](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) kann einen Anwendungsfehler seiner Programmdatei zuordnen. Ein kompletter Rechnerneustart braucht zusätzlich Systembelege. Prüfe bei einem Dienst dessen Exitstatus und Log, bevor wiederholte automatische Neustarts die ursprüngliche Ursache verdecken.
+
+## Bestätige die Korrektur und bewahre einen hilfreichen Bericht
+
+Starte nach der gezielten Korrektur über deine normale Verknüpfung, das Terminal oder den Dienst. Bestätige Zieladresse, aktive Backends und neue akzeptierte Shares. Beobachte die zuvor relevante Situation, etwa normale Desktop-Nutzung oder den nächsten geplanten Start, ohne gefährliche Hardwarezustände nachzustellen. Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) unterscheidet aktuelle Arbeit von gesammelten Sitzungswerten.
+
+Wiederholt sich der Stopp, sammle Version, System, Hardware, verfügbaren Speicher, exakte Startoptionen, Zeitpunkt und letzte Meldungen. Beschreibe die Änderung und ob der gesamte Prozess oder ein Backend stoppte. Entferne Zugangsdaten und persönliche Daten; teile niemals Seed oder private Schlüssel. Bewahre die funktionierende Konfiguration und leite die Ursache nicht allein aus der Hashrate ab.
+
+<CTA target="seine" title="Aktuelle seine-Version herunterladen" text="Bewahre eine geprüfte Version und deinen Startbefehl auf und bestätige akzeptierte Arbeit nach jeder gezielten Korrektur." />

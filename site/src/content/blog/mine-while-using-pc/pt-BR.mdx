@@ -1,0 +1,62 @@
+---
+title: 'Dá para minerar Blocknet enquanto usa o PC?'
+description: 'Minere Blocknet enquanto usa o PC: escolha CPU ou GPU, deixe memória para os aplicativos, ajuste as threads do seine e verifique uma configuração diária.'
+tags: ['Guia de mineração', 'Desktop', 'seine']
+faq:
+  - q: 'Posso jogar enquanto o seine minera?'
+    a: 'Escolha os backends conforme os dispositivos que o jogo precisa. Minerar apenas com CPU deixa o backend NVIDIA sem uso, mas CPU e RAM continuam compartilhadas com o jogo. Para uma sessão exigente, feche o minerador normalmente e execute novamente o comando salvo depois.'
+  - q: 'O perfil de eficiência limita o uso da CPU a uma porcentagem?'
+    a: 'O perfil orienta o ajuste para menos threads que mantenham uma fração do hashrate máximo medido. Não é um limite percentual imposto ao sistema nem uma meta de potência medida. Verifique a resposta do desktop e o uso de memória com seus aplicativos habituais abertos.'
+  - q: 'Uma mudança de threads no painel permanece após reiniciar?'
+    a: 'A mudança vale para a sessão atual e desativa seu ajuste automático de CPU. Ela não é salva como padrão de inicialização. Para repetir uma quantidade fixa, inclua a opção de threads no comando ou atalho habitual e confira a próxima execução.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Configure o seine para a mineração conviver com seus aplicativos. Este guia do seine v0.2.38 aborda dispositivos, memória disponível, menos threads de CPU e uma inicialização reproduzível. Parta de uma configuração que já funciona e mantenha endereço, pool e diretório de trabalho.
+
+## Você pode usar o computador enquanto minera?
+
+<Answer>
+Sim. Escolha backends e threads de CPU conforme seu trabalho e confira a resposta com os aplicativos habituais abertos. Observe memória disponível, atividade dos dispositivos e shares aceitas em conjunto. Para um jogo ou renderização exigente, feche o minerador normalmente e retome o comando salvo ao terminar.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Um aplicativo e um processo de mineração compartilham o computador, com controles separados para CPU e GPU." width="1200" height="675" loading="lazy" />
+
+## Comece pela tarefa que precisa continuar ágil
+
+Abra seus aplicativos habituais e experimente uma ação representativa: trocar abas, editar um documento ou navegar por um projeto. Observe como ela responde sem mineração e repita com o minerador ligado. Mantenha tarefa e estado dos aplicativos semelhantes para obter uma comparação útil.
+
+Observe também CPU, memória e GPU. O [Gerenciador de Tarefas](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) do Windows mostra recursos por aplicativo; outros sistemas têm seus monitores. Uma porcentagem isolada não confirma espaço para outra tarefa. O [guia de uso da CPU](/pt-br/blog/miner-cpu-usage/) explica os indicadores e a atividade dos dispositivos do minerador.
+
+## Qual dispositivo deve minerar?
+
+Escolha conforme o aplicativo em primeiro plano. Na seleção automática, o seine usa CPU e dispositivos NVIDIA compatíveis detectados. Acrescentar `--backend cpu` ao comando existente seleciona apenas CPU, deixando o backend NVIDIA sem uso. RAM e tempo de CPU continuam compartilhados com o desktop. Confira as linhas dos dispositivos ao iniciar.
+
+Uma instalação NVIDIA compatível pode usar `--backend nvidia` para desativar a mineração CPU. Aplicativos gráficos na mesma placa passam a compartilhar memória e processamento da GPU; isso não reserva toda a CPU para outros programas. Consulte requisitos e escolha de placa no [guia NVIDIA](/pt-br/blog/mine-blocknet-nvidia-gpu/) e guarde o comando original para comparação.
+
+## Escolha uma faixa automática ou uma quantidade fixa
+
+Para ajuste automático de CPU, considere `--cpu-profile efficiency`. O perfil favorece menos threads perto de sua meta de hashrate; não mede watts nem impõe uma meta de resposta do desktop. `--cpu-autotune-max-threads 2` ilustra um teto de busca. Escolha um valor adequado e leia o [guia de ajuste](/pt-br/blog/seine-automatic-cpu-tuning/) antes de combinar opções.
+
+Para uma comparação fixa, `--threads 2` seleciona duas threads por backend CPU e normalmente desativa o ajuste automático. É um valor de teste, não uma recomendação universal. No painel, `-` remove uma thread por backend CPU; a mudança reinicia os backends e reconecta o pool preservando estatísticas. Espere sua conclusão antes de avaliar.
+
+## Deixe memória para o restante do desktop
+
+Cada thread CPU ativa usa uma arena Argon2id de 2 GiB, além da sobrecarga do processo. Duas arenas somam 4 GiB antes do sistema e dos aplicativos. Planeje com a memória disponível durante seu trabalho habitual. Abas, editores e projetos gráficos mudam de necessidade ao longo do dia; RAM instalada sozinha não basta.
+
+O dimensionamento automático deixa uma reserva configurada, mas uma quantidade explícita de threads a substitui. Com valor fixo, confira a memória por conta própria: não há garantia de espaço para todo aplicativo futuro. Veja as regras no [guia de RAM](/pt-br/blog/how-much-ram-to-mine-blocknet/). Reduza threads quando seu trabalho exigir mais espaço e repita a mesma ação.
+
+## Quando parar a mineração para outra tarefa?
+
+Para uma chamada importante, jogo exigente ou renderização, saia com `q` no painel ou `Ctrl+C` no terminal. Confirme que o minerador encerrou antes de avaliar a tarefa sozinha e depois retome o comando salvo. Essa comparação não exige alterar conta, apagar configurações ou modificar a proteção do sistema.
+
+Mantenha refrigeração e alimentação normais e acompanhe os indicadores térmicos e de energia do computador. Não se prescreve aqui uma temperatura ou regulagem de ventoinha. Um computador suspenso não continua minerando como quando está ativo. Se houver saída ou suspensão inesperada, use o [guia de interrupções](/pt-br/blog/miner-keeps-stopping/) antes de mudar outras opções.
+
+## Salve uma inicialização adequada à sua rotina
+
+Quando o desktop responder bem, registre comando completo, diretório e backends. Mudanças de threads no painel valem apenas na sessão; use argumentos de inicialização para repeti-las. O [guia de configuração](/pt-br/blog/configure-seine-miner/) distingue campos de conexão salvos das outras opções. Dê nomes claros a atalhos separados para uso diário e sessões sem supervisão.
+
+Confira a próxima execução: dispositivos, threads ativas, memória disponível e novas shares aceitas. Repita a ação inicial do desktop. O [guia de acompanhamento do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) ajuda a confirmar trabalho creditado. Uma configuração diária útil pode ser reproduzida enquanto seus aplicativos continuam cumprindo suas funções.
+
+<CTA target="seine" title="Escolha uma configuração do seine para seu desktop" text="Guarde o comando, escolha os dispositivos compartilhados e verifique trabalho aceito junto com a resposta no dia a dia." />

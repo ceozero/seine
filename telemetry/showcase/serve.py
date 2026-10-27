@@ -42,7 +42,7 @@ class Handler(BaseHTTPRequestHandler):
                     'states': list(fixtures), 'state': state, 'webhook_payload': fixtures[state]}
             self.respond(200, json.dumps(body, indent=2).encode(), 'application/json')
         elif self.path == '/fixture.json':
-            self.respond(200, (ROOT.parent / 'diagnostics-fixture.json').read_bytes(), 'application/json')
+            self.respond(200, (ROOT.parent / 'tuning-fixture.json').read_bytes(), 'application/json')
         elif self.path == '/revision':
             revision = subprocess.check_output(['git', 'describe', '--always', '--dirty'], cwd=ROOT).decode().strip()
             self.respond(200, revision.encode(), 'text/plain')

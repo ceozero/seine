@@ -1,6 +1,9 @@
 //! Optional, best-effort hardware reporting. No wallet/config/log serialization.
 use anyhow::{bail, Context, Result};
 use crossbeam_channel::{bounded, Sender};
+use seine_telemetry::tuning::{
+    RecordedTrial, TrialOutcome, TuningReport, MAX_TRIALS, MAX_TUNING_BYTES,
+};
 use seine_telemetry::{
     BackendSample, BackendSettings, Hardware, Report, Resources, SCHEMA_VERSION,
 };
@@ -10,7 +13,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -161,7 +164,46 @@ fn still_enabled(options: &Options) -> bool {
 }
 
 #[derive(Clone)]
-pub(crate) struct Recorder(Arc<Mutex<BTreeMap<u64, Accumulated>>>, Arc<AtomicBool>);
+pub(crate) struct Recorder(
+    Arc<Mutex<BTreeMap<u64, Accumulated>>>,
+    Arc<AtomicBool>,
+    Arc<TrialRecorder>,
+);
+
+struct TrialRecorder {
+    active: AtomicBool,
+    run_id: String,
+    started: Instant,
+    queue: Mutex<(u64, Vec<RecordedTrial>)>,
+    dropped: AtomicU64,
+}
+
+impl TrialRecorder {
+    fn new(run_id: String) -> Self {
+        Self {
+            active: AtomicBool::new(true),
+            run_id,
+            started: Instant::now(),
+            queue: Mutex::new((0, Vec::new())),
+            dropped: AtomicU64::new(0),
+        }
+    }
+}
+
+struct TrialWorkerLifetime(Arc<TrialRecorder>);
+
+impl Drop for TrialWorkerLifetime {
+    fn drop(&mut self) {
+        self.0.active.store(false, Ordering::Release);
+        self.0
+            .queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .1
+            .clear();
+        self.0.dropped.store(0, Ordering::Relaxed);
+    }
+}
 
 struct Accumulated {
     settings: BackendSettings,
@@ -172,6 +214,72 @@ struct Accumulated {
 }
 
 impl Recorder {
+    pub(crate) fn trials_enabled(&self) -> bool {
+        self.2.active.load(Ordering::Acquire)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_disable_trials(&self) {
+        self.2.active.store(false, Ordering::Release);
+    }
+
+    /// Common run-relative clock for the staged runtime tuning hooks.
+    #[allow(dead_code)]
+    pub(crate) fn trial_elapsed_ms(&self) -> u64 {
+        self.2.started.elapsed().as_millis().min(u64::MAX as u128) as u64
+    }
+
+    /// Emit once per completed/aborted trial. Never blocks or serializes on the
+    /// mining thread; FIFO overflow loses telemetry, never productive mining.
+    #[allow(dead_code)]
+    pub(crate) fn record_trial(&self, outcome: TrialOutcome) {
+        if !self.trials_enabled() {
+            return;
+        }
+        if !outcome.validate() {
+            self.2.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        let Ok(mut queue) = self.2.queue.try_lock() else {
+            self.2.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        };
+        if !self.trials_enabled() {
+            return;
+        }
+        if queue.1.len() == MAX_TRIALS || queue.0 == i64::MAX as u64 {
+            self.2.dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+        queue.0 += 1;
+        let trial_id = queue.0;
+        queue.1.push(RecordedTrial { trial_id, outcome });
+    }
+
+    fn drain_tuning(&self) -> Option<TuningReport> {
+        let mut queue = self.2.queue.lock().unwrap_or_else(|e| e.into_inner());
+        let mut report = TuningReport {
+            run_id: self.2.run_id.clone(),
+            trials: std::mem::take(&mut queue.1),
+            dropped_trials: self.2.dropped.swap(0, Ordering::Relaxed),
+        };
+        drop(queue);
+        // Only the reporting thread performs serialization/budget work. Keep
+        // oldest records regardless of outcome, without cherry-picking wins.
+        while serde_json::to_vec(&report).is_ok_and(|b| b.len() > MAX_TUNING_BYTES)
+            && !report.trials.is_empty()
+        {
+            report.trials.pop();
+            report.dropped_trials += 1;
+        }
+        (!report.trials.is_empty() || report.dropped_trials > 0).then_some(report)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_tuning_report(&self) -> Option<TuningReport> {
+        self.drain_tuning()
+    }
+
     pub(crate) fn record(&self, instance: u64, settings: BackendSettings, hashes: u64) {
         // The miner never waits for a report to finish; contention loses telemetry only.
         let Ok(mut samples) = self.0.try_lock() else {
@@ -205,6 +313,9 @@ impl Recorder {
         Self(
             Arc::new(Mutex::new(BTreeMap::new())),
             Arc::new(AtomicBool::new(false)),
+            Arc::new(TrialRecorder::new(
+                "11111111111111111111111111111111".into(),
+            )),
         )
     }
 
@@ -341,6 +452,7 @@ fn start_with_context(
     let recorder = Recorder(
         Arc::new(Mutex::new(BTreeMap::new())),
         Arc::new(AtomicBool::new(false)),
+        Arc::new(TrialRecorder::new(random_id()?)),
     );
     let samples = recorder.clone();
     let options = options.clone();
@@ -348,6 +460,7 @@ fn start_with_context(
     let thread = thread::Builder::new()
         .name("hardware-telemetry".into())
         .spawn(move || {
+            let _trial_lifetime = TrialWorkerLifetime(Arc::clone(&samples.2));
             let Ok(client) = http_client() else {
                 return;
             };
@@ -405,11 +518,13 @@ fn start_with_context(
                         }
                     }
                 }
+                let tuning = samples.drain_tuning();
                 let diagnostic_snapshot = diagnostics.snapshot(final_report);
                 let has_diagnostics = !diagnostic_snapshot.events.is_empty()
                     || diagnostic_snapshot.previous_run_unclean
                     || diagnostic_snapshot.dropped_events > 0;
-                if final_report && !has_diagnostics {
+                let has_evidence = has_diagnostics || tuning.is_some();
+                if final_report && !has_evidence {
                     if let Some(store) = &store {
                         store.finish();
                     }
@@ -443,6 +558,7 @@ fn start_with_context(
                     window_secs,
                     backends,
                     diagnostics: Some(diagnostic_snapshot),
+                    tuning,
                 };
                 since = Instant::now();
                 // Keep uploads within the collector limit even on unusually large rigs.
@@ -455,12 +571,20 @@ fn start_with_context(
                         d.dropped_backend_samples = d.dropped_backend_samples.saturating_add(1);
                     }
                 }
-                if has_diagnostics {
+                while serde_json::to_vec(&report)
+                    .is_ok_and(|b| b.len() > seine_telemetry::MAX_BODY_BYTES)
+                    && report.tuning.as_ref().is_some_and(|t| !t.trials.is_empty())
+                {
+                    let tuning = report.tuning.as_mut().unwrap();
+                    tuning.trials.pop();
+                    tuning.dropped_trials += 1;
+                }
+                if has_evidence {
                     if let Some(store) = &store {
                         store.save(&report);
                     }
                 }
-                if send_report(&client, &options, &report, store.as_ref()) && has_diagnostics {
+                if send_report(&client, &options, &report, store.as_ref()) && has_evidence {
                     if let Some(store) = &store {
                         store.clear_pending();
                     }
@@ -492,7 +616,113 @@ fn start_with_context(
 #[cfg(test)]
 mod tests {
     use super::*;
-    static WORKER_TEST: Mutex<()> = Mutex::new(());
+    use crate::diagnostics::TEST_LOCK as WORKER_TEST;
+
+    fn trial_fixture() -> TrialOutcome {
+        let report: Report =
+            serde_json::from_str(include_str!("../telemetry/tuning-fixture.json")).unwrap();
+        report.tuning.unwrap().trials.remove(0).outcome
+    }
+
+    #[test]
+    fn trial_queue_is_bounded_fifo_nonblocking_and_monotonic_across_drains() {
+        let recorder = Recorder::test_recorder();
+        let mut outcome = trial_fixture();
+        outcome.samples.clear();
+        outcome.decision = seine_telemetry::tuning::TrialDecision::Aborted;
+        outcome.reason = seine_telemetry::tuning::TrialReason::ExecutionFailure;
+        for _ in 0..MAX_TRIALS + 1 {
+            recorder.record_trial(outcome.clone());
+        }
+        let first = recorder.drain_tuning().unwrap();
+        assert_eq!(first.trials.len(), MAX_TRIALS);
+        assert_eq!(first.dropped_trials, 1);
+        assert_eq!(first.trials[0].trial_id, 1);
+        assert!(first.validate());
+        assert!(recorder.drain_tuning().is_none());
+        let lock = recorder.2.queue.lock().unwrap();
+        recorder.record_trial(outcome.clone()); // Would deadlock if it used lock().
+        drop(lock);
+        recorder.record_trial(outcome);
+        let second = recorder.drain_tuning().unwrap();
+        assert_eq!(second.run_id, first.run_id);
+        assert_eq!(second.trials[0].trial_id, MAX_TRIALS as u64 + 1);
+        assert_eq!(second.dropped_trials, 1);
+    }
+
+    #[test]
+    fn worker_exit_disables_trial_collection_and_discards_queued_evidence() {
+        let recorder = Recorder::test_recorder();
+        let lifetime = TrialWorkerLifetime(Arc::clone(&recorder.2));
+        recorder.record_trial(trial_fixture());
+        drop(lifetime);
+        assert!(!recorder.trials_enabled());
+        assert!(recorder.drain_tuning().is_none());
+        recorder.record_trial(trial_fixture());
+        assert!(recorder.drain_tuning().is_none());
+    }
+
+    #[test]
+    fn trial_payload_budget_preserves_earliest_outcomes_and_reports_omissions() {
+        let recorder = Recorder::test_recorder();
+        let outcome = trial_fixture();
+        for _ in 0..MAX_TRIALS {
+            recorder.record_trial(outcome.clone());
+        }
+        let report = recorder.drain_tuning().unwrap();
+        assert!(serde_json::to_vec(&report).unwrap().len() <= MAX_TUNING_BYTES);
+        assert_eq!(
+            report.trials.len() as u64 + report.dropped_trials,
+            MAX_TRIALS as u64
+        );
+        assert_eq!(report.trials[0].trial_id, 1);
+        let mut invalid = outcome;
+        invalid.samples[0].elapsed_ms = 0;
+        recorder.record_trial(invalid);
+        let dropped = recorder.drain_tuning().unwrap();
+        assert!(dropped.trials.is_empty());
+        assert_eq!(dropped.dropped_trials, 1);
+    }
+
+    #[test]
+    fn trial_only_final_report_is_spooled_and_opt_out_clears_it() {
+        let _lock = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let server = httpmock::MockServer::start();
+        let failed = server.mock(|when, then| {
+            when.method(httpmock::Method::POST)
+                .path("/report")
+                .body_contains("\"tuning\"");
+            then.status(503);
+        });
+        let options = resolve(&dir.0, Some(true), Some(&server.url("/report")))
+            .unwrap()
+            .unwrap();
+        let (recorder, worker) =
+            start_with_context(&options, crate::diagnostics::test_context()).unwrap();
+        let mut outcome = trial_fixture();
+        outcome.started_ms = 0;
+        outcome.finished_ms = recorder.trial_elapsed_ms();
+        outcome.samples.clear();
+        outcome.cost.switching_ms = None;
+        outcome.cost.idle_ms = None;
+        outcome.decision = seine_telemetry::tuning::TrialDecision::Aborted;
+        outcome.reason = seine_telemetry::tuning::TrialReason::UserInterrupted;
+        recorder.record_trial(outcome);
+        let run_id = recorder.2.run_id.clone();
+        drop(worker);
+        failed.assert_hits(1);
+        let saved: Report = serde_json::from_slice(
+            &fs::read(dir.0.join("seine.diagnostics.pending.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(saved.validate());
+        let tuning = saved.tuning.unwrap();
+        assert_eq!(tuning.run_id, run_id);
+        assert_eq!(tuning.trials[0].trial_id, 1);
+        resolve(&dir.0, Some(false), None).unwrap();
+        assert!(!dir.0.join("seine.diagnostics.pending.json").exists());
+    }
 
     #[test]
     fn early_failure_is_reported_and_failed_delivery_is_retained_without_restart_storms() {
@@ -642,10 +872,7 @@ mod tests {
 
     #[test]
     fn changing_settings_marks_sample_unsuitable_for_performance_comparison() {
-        let r = Recorder(
-            Arc::new(Mutex::new(BTreeMap::new())),
-            Arc::new(AtomicBool::new(false)),
-        );
+        let r = Recorder::test_recorder();
         let fixture: Report =
             serde_json::from_str(include_str!("../telemetry/fixture.json")).unwrap();
         let mut settings = fixture.backends[0].settings.clone();

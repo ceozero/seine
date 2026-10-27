@@ -1,0 +1,68 @@
+---
+title: 'Mengapa hashrate penambang saya menurun?'
+description: 'Periksa penurunan hashrate Blocknet: bandingkan bacaan yang sama, cek perangkat, tuning, memori, clock dan share, lalu verifikasi satu perubahan.'
+tags: ['Pemecahan masalah', 'Hashrate', 'seine']
+faq:
+  - q: 'Mengapa hashrate pool lebih rendah daripada penambang?'
+    a: 'Penambang menghitung hash lokal, sedangkan pool memperkirakan pekerjaan dari share dalam jendelanya sendiri. Bandingkan rig yang sama selama interval representatif dan periksa share diterima terbaru serta pesan koneksi. Selisih singkat saja tidak menunjukkan perlambatan perangkat keras.'
+  - q: 'Apakah thread CPU yang lebih sedikit menandakan masalah?'
+    a: 'Tidak dengan sendirinya. Tuning otomatis membandingkan jumlah thread dan jalur kode, sedangkan memori tersedia dapat membatasi jumlah aktif. Periksa pesan tuning, memori dan hashrate per perangkat bersama-sama. Catat perubahan sebelum memutuskan perlu tidaknya tindakan.'
+  - q: 'Haruskah saya mengubah beberapa pengaturan untuk memulihkan hashrate?'
+    a: 'Mulai dari kondisi dasar yang sebanding dan ubah satu kondisi relevan setiap kali. Catat versi, perangkat, beban dan interval. Setelahnya periksa pekerjaan berkelanjutan dan share diterima baru; satu bacaan sesaat yang lebih tinggi belum membuktikan perbaikan.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Tentukan bacaan mana yang berubah sebelum menyetel penambang yang masih berjalan. Panduan ini membedakan jendela pengukuran dari perubahan perangkat, beban atau sumber daya, lalu memeriksa kemungkinan penyebab lewat perbandingan yang dapat diulang. Simpan konfigurasi peluncuran yang berfungsi agar setiap pengamatan memiliki titik awal yang diketahui.
+
+## Mengapa hashrate dapat turun selama sesi?
+
+<Answer>
+Hashrate dapat berubah mengikuti perangkat aktif, jumlah thread CPU, memori tersedia, pekerjaan lain atau clock perangkat keras. Perbedaan jendela rata-rata juga bisa terlihat sebagai penurunan. Mulailah dari perangkat dan interval yang sama, periksa pekerjaan terbaru dan log, lalu ubah satu kondisi dan amati hasilnya.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Dua kurva hashrate mengarah ke pemeriksaan perangkat, memori dan clock, diikuti perbandingan sebelum dan sesudah dalam kondisi setara." width="1200" height="675" loading="lazy" />
+
+## Identifikasi bacaan yang menurun terlebih dahulu
+
+Catat tempat perubahan terlihat: hashrate lokal saat ini, rata-rata sesi, baris perangkat atau perkiraan pool. Itu pengamatan berbeda. Nilai saat ini dan rata-rata seine memakai rentang waktu berbeda; perangkat juga dapat melaporkan pekerjaan secara berkelompok. [Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan kolomnya. Bandingkan suatu kolom dengan nilai sebelumnya sebelum menyamakan label berbeda.
+
+Simpan satuan dan interval di samping setiap angka. Konversikan H/s dan kH/s sebelum membandingkan. Catat apakah penambang baru dimulai, backend diulang atau pekerjaan dilanjutkan. Sesi baru memiliki riwayat berbeda dari rata-rata lama; puncak awal bukan patokan baik untuk sepanjang malam.
+
+## Apakah perubahan terjadi secara lokal, di pool atau pada satu perangkat?
+
+Periksa baris tiap perangkat dan pesan share diterima terbaru. Jika satu perangkat menyumbang lebih sedikit sementara yang lain stabil, periksa perangkat itu dahulu. Jika pekerjaan lokal sebanding tetapi perkiraan pool berubah, telusuri share dan koneksi. [Penjelasan hashrate](https://bntpool.com/blog/id/what-is-hashrate/) membahas mengapa estimasi berbasis share berbeda dari perhitungan lokal.
+
+Pastikan alamat penerima dan nama rig pada statistik pool. Beberapa komputer dalam satu alamat dapat membuat total akun tidak cocok dibandingkan dengan satu komputer. Gunakan [panduan pelacakan](https://bntpool.com/blog/id/track-your-miner-on-bntpool/). Jika proses sudah keluar atau backend melaporkan gangguan, buka [panduan penambang berhenti](/id/blog/miner-keeps-stopping/); artikel ini mengasumsikan sesi masih dapat diperiksa.
+
+## Pahami tuning dan perubahan thread dalam konteksnya
+
+seine membandingkan jumlah thread CPU dan kernel saat menambang serta dapat memakai kembali hasil tersimpan yang kompatibel. Perbandingan itu dapat mengubah konfigurasi aktif. Baca pesan tuning di sekitar waktunya dan catat jumlah aktif sebelum mendiagnosis. [Panduan tuning otomatis](/id/blog/seine-automatic-cpu-tuning/) menjelaskan pencarian dan pengaturannya; perubahan jumlah saja tidak membuktikan kemunduran.
+
+Periksa apakah peluncuran memilih backend dan pengaturan yang sama seperti sebelumnya. Pintasan lain, direktori kerja atau konfigurasi tersimpan dapat mengubah perbandingan sebelum perangkat keras dipertimbangkan. Simpan perintah yang berfungsi dan gunakan [panduan konfigurasi](/id/blog/configure-seine-miner/) untuk memastikan nilai efektif. Jangan menghapus cache tuning hanya karena satu bacaan berubah.
+
+## Periksa pekerjaan lain dan memori tersedia
+
+Gunakan tampilan proses dan memori sistem operasi untuk melihat perubahan yang bersamaan. Gim, video, kompilasi atau tugas komputasi lain bisa berbagi CPU, GPU atau memori. Jika memungkinkan, bandingkan ketika tugas opsional itu dijeda atau selesai. Samakan beban desktop; jika tidak, bacaan berikutnya menjawab pertanyaan berbeda.
+
+Pengelolaan CPU otomatis seine mempertimbangkan memori tersedia dan dapat mengurangi thread ketika sumber daya menyempit. Beberapa sistem juga menyediakan sinyal tekanan. Baca log dan memori bersama-sama alih-alih langsung memaksakan jumlah lama. [Panduan RAM](/id/blog/how-much-ram-to-mine-blocknet/) membahas alokasi. Jika kinerja kembali setelah tugas lain selesai, catat hubungan tersebut sebelum mengubah pengaturan permanen.
+
+## Bisakah suhu atau daya menjelaskan perubahan?
+
+Suhu dan clock membantu menjelaskan perubahan lokal berkelanjutan jika beban serta perangkat tetap sebanding. Intel menjelaskan [pembatasan termal](https://www.intel.com/content/www/us/en/support/articles/000088048.html) sebagai penurunan clock CPU untuk perlindungan. Gunakan petunjuk produsen untuk model prosesor atau komputer yang tepat; tidak ada satu ambang suhu yang mendiagnosis semua komputer penambangan.
+
+Untuk NVIDIA, [dokumentasi pemantauan](https://docs.nvidia.com/deploy/nvidia-smi/index.html) membedakan alasan pembatasan clock, termasuk suhu dan daya, serta menandai data yang tidak tersedia. Catat bacaan yang didukung bersama hashrate. Catat pula perpindahan baterai/adaptor atau mode daya. Ikuti petunjuk pendinginan produsen dan biarkan perlindungan aktif; prosedur ini tidak memerlukan perubahan tegangan atau batas clock.
+
+## Buat perbandingan yang dapat menjawab pertanyaan
+
+Pilih satu kondisi yang dicurigai, misalnya aplikasi lain, lalu bandingkan interval yang setara sebelum dan sesudah perubahannya. Catat versi, backend, kebijakan thread, sumber daya listrik dan aktivitas depan. Pisahkan fase awal serta tuning. Ulangi jika fluktuasi normal mengaburkan hasil, tanpa menetapkan penyebab dari satu titik.
+
+Untuk eksperimen terencana, gunakan [panduan benchmark](/id/blog/benchmark-seine-miner/) dengan beban sebanding. Pisahkan benchmark dari sampel imbalan pool yang dipengaruhi kedatangan blok dan variasi share. Pemakaian listrik lebih rendah juga menjawab pertanyaan lain: [panduan listrik](/id/blog/mining-electricity-use/) memasangkan energi dan pekerjaan selesai agar perangkat menganggur tidak dianggap perbaikan berguna.
+
+## Verifikasi hasil dan simpan bukti yang berguna
+
+Setelah perubahan terarah, pastikan perangkat yang dimaksud menghitung, jumlah thread dipahami dan share baru diterima. Bandingkan kolom yang sama pada interval representatif. Simpan juga hasil tanpa perbedaan berarti agar tidak mengulangi penyesuaian sia-sia. Kembalikan perubahan tak terkait daripada menumpuk pengaturan tanpa penjelasan.
+
+Jika pola berlanjut, kumpulkan versi, sistem, perangkat keras, opsi peluncuran, waktu log terkait dan bacaan berpasangan. Jelaskan apa yang tetap, yang berubah dan apakah satu perangkat atau seluruh penambang terdampak. Hapus kredensial dan informasi pribadi sebelum berbagi. Linimasa ringkas lebih membantu dukungan daripada tangkapan layar satu angka rendah.
+
+<CTA target="seine" title="Pertahankan pengaturan seine yang dapat diulang" text="Gunakan dasbor, pengamatan setara dan share baru untuk memahami perubahan hashrate sebelum mengubah konfigurasi." />

@@ -207,7 +207,7 @@ def main():
     if data.get("servers"):
         hbar_chart(data["servers"], "Servers",
                    "Best measured hashrate per CPU generation on AWS, seine v0.2.22+",
-                   "AWS guests, 2 MiB huge pages, best kernel and thread count. Method: docs/PERFORMANCE.md",
+                   "AWS guests; Genoa/Turin use THP, others 2 MiB huge pages. Method: docs/PERFORMANCE.md",
                    args.out / "servers.svg", fonts)
     if data.get("bare_metal"):
         hbar_chart(data["bare_metal"], "AMD EPYC bare metal",

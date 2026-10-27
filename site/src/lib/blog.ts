@@ -14,7 +14,7 @@ export type Post = {
     tags: string[];
     faq: { q: string; a: string }[];
     related: string[];
-    customImage: boolean;
+    thumbnail: string;
     image: string;
     path: string;
     url: string;
@@ -65,7 +65,7 @@ export async function getPosts(locale: Locale): Promise<Post[]> {
             tags: entry.data.tags,
             faq: entry.data.faq,
             related: source.data.related,
-            customImage: Boolean(image),
+            thumbnail: image ?? `/blog/og/${cardLocale(locale)}/${slug}-card.jpg`,
             image: image ? new URL(image, SITE_URL).href : `${SITE_URL}/blog/og/${cardLocale(locale)}/${slug}.jpg`,
             path,
             url: SITE_URL + path,

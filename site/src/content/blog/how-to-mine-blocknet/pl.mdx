@@ -9,7 +9,7 @@ faq:
     a: 'Pula bntpool.com wypłaca w systemie PPLNS z sześciogodzinnym oknem. Nagrodę za blok można wypłacić dopiero, gdy nad blokiem jest już 60 kolejnych bloków, czyli po około pięciu godzinach przy pięciominutowych blokach, a salda są wysyłane, gdy osiągną 0,1 BNT. Pierwszej wypłaty spodziewaj się kilka godzin po pierwszych zaakceptowanych udziałach.'
   - q: 'Czy mogę kopać Blocknet jednocześnie na CPU i GPU?'
     a: 'Tak. W systemach Windows i Linux seine kopie jednocześnie na każdym rdzeniu CPU i na każdej karcie graficznej NVIDIA w komputerze, a oba hashrate się sumują. Procesor i każdą kartę dostraja osobno podczas pracy, więc wyciskasz maksimum z całego sprzętu bez zmieniania żadnego ustawienia.'
-sourceHash: ad835df628e2
+sourceHash: 'c15449bd790a'
 translation: draft
 ---
 
@@ -26,7 +26,7 @@ Zdobądź adres Blocknet albo krótką nazwę Blocknet ID, pobierz seine dla swo
 - **Adresu Blocknet.** Zainstaluj oficjalny portfel Blocknet, [portfel wiersza poleceń](https://github.com/blocknetprivacy/blocknet/releases/latest) albo [portfel desktopowy](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), i skopiuj swój adres. [Poradnik o portfelu](/pl/blog/blocknet-wallet-for-mining/) przeprowadzi Cię przez to krok po kroku. Trzymaj portfel i jego frazę odzyskiwania na własnym komputerze; nie umieszczaj ich na współdzielonej koparce.
 - **Albo krótkiej nazwy.** Jeśli masz [krótką nazwę Blocknet ID](/pl/blog/blocknet-id-pay-by-name/) z [blocknet.id](https://blocknet.id), możesz kopać na `@name` zamiast wklejać długi adres.
 - **Około 2 GB RAM na każdy wątek kopiący.** seine sam dopasowuje się do Twojego komputera i zostawia zapas dla systemu, więc nie musisz tego wcześniej liczyć.
-- **Systemu Windows, macOS lub Linux.** W systemach Windows i Linux karty graficzne NVIDIA są używane automatycznie, gdy zainstalowany jest aktualny sterownik.
+- **Systemu Windows, macOS lub Linux.** NVIDIA — Windows: Sterownik graficzny NVIDIA; dołączone biblioteki DLL obok pliku wykonywalnego; Linux: Sterownik NVIDIA i zgodne biblioteki wykonawcze NVRTC.
 
 ## Krok 1: pobierz seine
 
@@ -35,7 +35,7 @@ Pobierz archiwum dla swojego systemu z [sekcji pobierania](/pl/#download). Nie t
 | System | Archiwum | Karty graficzne |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; środowisko uruchomieniowe CUDA jest dołączone |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, z zainstalowanym sterownikiem |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | Sterownik NVIDIA i zgodne biblioteki wykonawcze NVRTC; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 lub nowszy) |
 | macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ Hashrate zależy głównie od przepustowości pamięci i liczby wątków, na kt�
 
 | Sprzęt | Wątki | Hashrate |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68,3 H/s |
 | Serwer Arm (AWS Graviton4) | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
 | Apple M4 Max (MacBook Pro 48 GB) | 16 | 30,9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9355P osiągający 68,3 H/s: 64 wątki kopania, 192 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie.
 
 Wyniki dla każdego testowanego CPU są na [stronie wydajności](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), a [poradnik o sprzęcie do kopania Blocknet](/pl/blog/blocknet-mining-hardware-hashrate/) wyjaśnia, jak RAM i przepustowość pamięci wpływają na te liczby.
 

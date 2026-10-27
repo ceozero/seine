@@ -1,0 +1,90 @@
+---
+title: '挖 Blocknet 需要多少 RAM？'
+description: '计算 Blocknet 挖矿内存：每个 CPU 线程需要 2 GiB，为系统和应用预留空间，使用 seine 自动调整，并排查内存分配失败和大页配置问题。'
+tags: ['挖矿指南', 'RAM', 'CPU']
+faq:
+  - q: '一个 Blocknet 挖矿线程使用多少 RAM？'
+    a: '每个 CPU 线程需要一个 2 GiB 的 Argon2id 工作区。这是挖矿工作内存，不是整台电脑的总需求。还要为操作系统、应用和矿工程序本身留出 RAM。应按可用内存规划线程，而不是直接把已安装 RAM 除以二。'
+  - q: '8 GB RAM 能挖 Blocknet 吗？'
+    a: '只要可用内存足以容纳至少一个 2 GiB 工作区，以及系统和矿工程序，就可以进行 CPU 挖矿。8 GB 的标称容量本身不能决定线程数。先使用自动设置，再查看实际可用内存和选中的线程数。'
+  - q: '大页会减少每线程所需 RAM 吗？'
+    a: '大页改变操作系统映射内存的方式，不会缩小每个 CPU 线程所需的 2 GiB 工作区。先确定内存预算，再按照单独的大页指南，在支持的系统上显式配置大页。'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+为电脑的可用内存选择合适的 CPU 线程数。本指南介绍 2 GiB 工作区、seine v0.2.26 的自动设置，以及手动配置无法分配内存时的检查步骤。芯片比较和实测算力请看[硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)。这里的示例是内存计算，不是性能测量。
+
+## 每个挖矿线程需要多少 RAM？
+
+<Answer>
+每个 CPU 线程需要一个 2 GiB 的 Argon2id 工作区。还要为系统、应用和矿工程序留出空间。先使用 seine 的自动设置，它会考虑可用内存和 CPU 资源。手动指定的线程数必须能放进启动时真正可用的内存。
+</Answer>
+
+GiB 是二进制单位：2 GiB 等于 2,147,483,648 字节。工作区会在各次哈希之间复用；每完成一次哈希并不会永久消耗额外的 2 GiB。更多并行线程需要更多工作区。[Argon2id 说明](/zh-hans/blog/argon2id-proof-of-work-explained/)解释了算法为何需要这些工作内存。
+
+<img src="/assets/blog/ram-budget.svg" alt="四个各为 2 GiB 的挖矿工作区，旁边是为系统和应用预留的额外内存" width="1200" height="675" loading="lazy" />
+
+## 如何计算线程预算？
+
+将计划使用的 CPU 线程数乘以 2 GiB。表格不包含系统和其他内存开销。用它计算工作区，再依据可用内存和实测吞吐量选择实际线程数。
+
+| CPU 线程数 | 仅工作区内存 |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+四个线程的工作区需要 8 GiB，因此还需要超过 8 GiB 的可用内存来容纳进程的其他部分和系统。如果在 16 GiB 电脑上主动留出 4 GiB，剩余 12 GiB 按计算可放六个工作区。这是预算示例，不保证六线程的算力最高。
+
+打开日常应用后，通过 Windows 任务管理器、macOS 活动监视器或 Linux 内存工具查看可用内存。虚拟机或容器的额度可能小于宿主机。应使用该有效上限；宿主机标称 RAM 不会自动全部提供给受限环境。
+
+## seine 如何自动选择线程？
+
+第一次仅用 CPU 运行时，不指定线程数。在 Linux 或 macOS 解压目录执行下面的命令。Windows 则在 PowerShell 中给可执行文件使用相同参数。[入门指南](/zh-hans/blog/how-to-mine-blocknet/)介绍下载和填写收款地址。
+
+```sh
+./seine --backend cpu
+```
+
+v0.2.26 的自动选型和调整会考虑已占用内存，并默认保留有效总 RAM 的 5%。CPU 资源也限制线程数。要缩小调整范围，可指定上限：
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+四只是上限示例，不是通用设置。调整器可能选择更少线程。启动后在[仪表盘](/zh-hans/blog/seine-dashboard-explained/)查看选中的数量和平均算力。自动调整测量实际配置，应等它稳定后再判断，不要仅凭短时波动。
+
+## 何时固定线程数？
+
+需要明确的内存预算或可重复配置时，可固定数量。示例选择两个 CPU 线程：工作区需要 4 GiB，另外还需要其他内存。
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+显式使用 `--threads` 会关闭通常的自动线程选择，除非同时显式启用调整。它覆盖自动预留策略，因此需要自行留出余量。内存检查仍会运行。能放进已安装 RAM 的线程数，在其他应用启动后可能超过可用内存。
+
+每次只改一个设置。在相近负载下记录线程数、可用 RAM 和平均算力。要恢复自动选择，请删除固定线程参数及已保存的覆盖设置。[v0.2.26 配置参考](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md)说明命令行和保存设置的应用方式。
+
+## 内存分配失败后应检查什么？
+
+先区分消息是在说有效内存上限、当前可用内存，还是显式大页分配。它们对应不同检查。关闭不需要的应用，减少线程，再为日常桌面使用留出空间后重启。
+
+对容器或虚拟机，同时检查分配额度和宿主机内存。1 GiB 的额度无法容纳一个 2 GiB 工作区。增大交换文件不会改变工作区需求；应规划足够的、进程可用的物理内存。
+
+如果选择了 `--cpu-page-mode large` 或 `--cpu-page-mode large-1g`，确认所需的预留页面池可用。这些显式模式要求对应的内存页面支持。按照[大页指南](/zh-hans/blog/huge-pages-blocknet-mining/)配置，或先恢复自动页面选择来建立可工作的基线。页面设置与线程数应分开调整。
+
+## GPU 显存计入 CPU 预算吗？
+
+独立 NVIDIA 显卡的 GPU 工作区位于 VRAM 中。CPU 线程仍分配系统 RAM。CPU 与 GPU 同时挖矿时分别规划两种资源；闲置显存不是 CPU 工作区的额外 RAM。[NVIDIA 指南](/zh-hans/blog/mine-blocknet-nvidia-gpu/)介绍配置和 GPU 通道选择。
+
+Apple Silicon 的 CPU 与 GPU 共享统一内存。规划其他任务时，不要把同一容量计算两遍。支持的 CPU 设置见[Mac 指南](/zh-hans/blog/mine-blocknet-on-mac/)。容量决定能放下什么，实测吞吐量决定哪种配置更适合你的电脑。
+
+## 让矿工持续运行前应确认什么？
+
+确认线程符合预算、应用仍能响应，并且收到矿池接受的份额。增加分配本身不能证明性能更好。保留适合负载的配置，再用[矿池跟踪指南](https://bntpool.com/blog/zh-hans/track-your-miner-on-bntpool/)确认收款地址有近期工作记录。
+
+<CTA target="seine" title="下载 seine" text="先使用 CPU 自动设置，再选择适合电脑的内存预算。" />

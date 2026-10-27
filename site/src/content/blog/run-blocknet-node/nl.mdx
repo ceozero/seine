@@ -1,0 +1,106 @@
+---
+title: 'Een Blocknet-node draaien'
+description: 'Draai een Blocknet-node met de officiële client: installeer de core, controleer peers en synchronisatie, begrijp updates en verifieer een werkende mainnet-opzet.'
+tags: ['Blocknet', 'Node', 'Installatie']
+faq:
+  - q: 'Moet ik minen om een Blocknet-node te draaien?'
+    a: 'Een node draaien en mining starten zijn aparte handelingen. De core beheert ketengegevens en netwerkverbindingen; mining wordt apart aangezet. Je kunt status en peers bekijken zonder mining te starten. Poolmining met seine heeft ook een eigen verbindingsprocedure en vereist geen eigen node.'
+  - q: 'Stopt de node als ik de Blocknet-shell sluit?'
+    a: 'Een interactieve attach-sessie verbindt met een core op de achtergrond. De shell verlaten laat die core draaien. Gebruik het expliciete stopcommando als je een beheerde node wilt stoppen en controleer daarna de toestand. Een shell sluiten en het onderliggende proces stoppen zijn verschillende acties.'
+  - q: 'Hoe zie ik of mijn Blocknet-node synchroniseert?'
+    a: 'Lees blokhoogte, aantal peers en synchronisatiestatus samen en volg de voortgang. Vergelijk met een recente referentie van hetzelfde netwerk. Walletscanning is apart: een bijgewerkte node bewijst niet dat een net geladen wallet al zijn outputs heeft gevonden.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Draai je eigen Blocknet-node en controleer of hij verbonden is en de keten volgt. Deze gids gebruikt de officiële opdrachtregelclient om een mainnet-core te beheren en peers, synchronisatie en updates te bekijken. De commando’s zijn op 26 oktober 2026 gecontroleerd met client v1.2.0. Houd de [officiële referentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) van je versie bij de hand.
+
+## Wat heb je nodig voor een Blocknet-node?
+
+<Answer>
+Gebruik de officiële client voor je besturingssysteem, een computer met ruimte voor ketengegevens en internet. De client installeert en beheert de core op de achtergrond. Controleer daarna peers en voortgang. Een wallet maken en minen zijn aparte taken die je kunt toevoegen zodra de node werkt.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Een lokale terminal verbindt met een Blocknet-core op de achtergrond die ketengegevens opslaat en blokken uitwisselt met peers." width="1200" height="675" loading="lazy" />
+
+## Kies de officiële client en het netwerk
+
+Download het archief voor je systeem en processor uit de [officiële releases](https://github.com/blocknetprivacy/blocknet/releases/latest). Pak het uit en open een terminal waarin het uitvoerbare bestand bereikbaar is. Voorbeelden gebruiken `blocknet`; op Windows gebruik je `blocknet.exe`. Staat het niet in het zoekpad, geef dan het echte pad op, bijvoorbeeld `./blocknet` op Linux of macOS.
+
+Gebruik mainnet voor het gewone Blocknet-netwerk. Testnet is een aparte omgeving met eigen instellingen en gegevens. Noteer je netwerk zodat je geen testnet-hoogte met een mainnet-explorer vergelijkt. Deze gids beheert de node; de [walletgids](/nl/blog/blocknet-wallet-for-mining/) behandelt aanmaken, herstellen en een ontvangstadres kiezen.
+
+## Installeer en start de core op de achtergrond
+
+Start bij de eerste inrichting de wizard in een interactieve terminal:
+
+```sh
+blocknet setup
+```
+
+Lees elke vraag. De onderzochte wizard bewaart instellingen, plant automatische updates en biedt zo nodig een core-download en start aan. Ook netwerk en lokale API zijn instelbaar. Behoud de lokale binding voor een node die je op deze computer beheert.
+
+De gedocumenteerde handmatige installatie is:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` kiest de stabiele core-release. Mainnet moet in de configuratie zijn ingeschakeld. De client start de core op de achtergrond en wacht op de API. Laat het opstarten afronden: database-opstart en volledig bijgehaalde keten zijn verschillende mijlpalen.
+
+## Hoe controleer je peers en synchronisatie?
+
+Verbind met de draaiende mainnet-core:
+
+```sh
+blocknet attach mainnet
+```
+
+Voer bij de interactieve prompt afzonderlijk in:
+
+```text
+status
+peers
+```
+
+De [shellreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) beschrijft de velden. Noteer hoogte, laatste blokhash, aantal peers en synchronisatiestatus. De peerlijst helpt netwerkverbindingen te bevestigen.
+
+Volg de hoogte over tijd en vergelijk met een recente mainnet-referentie zoals de [officiële explorer](https://explorer.blocknetcrypto.com/). Tussen blokken kan de hoogte stilstaan en waarnemingen kunnen op verschillende momenten zijn gedaan. Beoordeel de velden samen in plaats van één getal. Houd verbinding en opslag beschikbaar tijdens het inhalen.
+
+## Onderscheid ketensynchronisatie en walletscanning
+
+Ketensynchronisatie volgt de netwerkblokken. Walletscanning zoekt in die geschiedenis naar outputs van de geladen wallet. Een herstelde wallet kan nog scannen nadat de node is bijgewerkt. Walletinformatie in de shell is daarom een aparte waarneming naast nodehoogte. Gebruik de [uitbetalingsgids](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) voor een specifieke miningbetaling.
+
+De huidige client ondersteunt checkpoints voor snellere eerste synchronisatie. De [checkpointgids](https://bntpool.com/blog/nl/blocknet-checkpoints-fast-sync/) behandelt bron en verificatiebereik; niet elke snelle synchronisatiemethode is hetzelfde. Verwijder de ketendatabase niet standaard bij een stille voortgangsindicator. Onderscheid eerst downloaden, verifiëren en walletscanning met status en logs.
+
+## Waar kijk je als opstarten aandacht vraagt?
+
+Volg buiten attach het log van de beheerde core:
+
+```sh
+blocknet logs mainnet
+```
+
+Lees recente opstart- en verbindingsmeldingen. Ctrl-C stopt het volgen. Controleer instellingen, paden, geïnstalleerde versies en verbindingen met:
+
+```sh
+blocknet doctor
+```
+
+Het gedocumenteerde doctor-commando meldt bevindingen zonder instellingen te wijzigen. Bewaar de exacte melding voordat je een oplossing kiest.
+
+Controleer de verwachte core en het netwerk, het geïnstalleerde gekozen programma en het lokale API-adres. Raadpleeg de [officiële probleemhulp](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) voor de melding. Houd API-inloggegevens en walletmateriaal privé bij gedeelde diagnostiek. Versie, besturingssysteem en relevante fout helpen meestal meer dan een hele configuratiemap.
+
+## Begrijp updates en bewust stoppen
+
+In de onderzochte client zoeken de planner en bepaalde beheercommando’s naar updates. Het buitenste `blocknet status` kan een controle starten; dat verschilt van `status` binnen attach. Updates kunnen beheerde cores die `latest` volgen herstarten; vastgezette versies blijven ongemoeid. Lees de [updatereferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) bij een node met afhankelijke diensten.
+
+Plan onderhoud rond alles wat de API gebruikt. Met `quit` verlaat je attach; de core blijft draaien. Stop die mainnet-core bewust met `blocknet stop mainnet` in de systeemterminal. Controleer na update of herstart de draaiende versie, verbinding en voortgang. Bewaar de walletback-up onafhankelijk van de core-bestanden.
+
+## Gebruik de node voor de bedoelde taak
+
+Een verbonden node kan wallet en lokale ketenquery’s bedienen zonder mining aan te zetten. Volg voor bntpool.com de [poolgids](https://bntpool.com/blog/nl/mine-blocknet-on-bntpool/) en seines normale poolverbinding. Een eigen node draaien is een aparte keuze. Lees voor direct mining de daemonmodus-instructies en controleer de API voordat je verbindt.
+
+Bewaar een kort overzicht: netwerk, client- en core-versies, gegevenslocatie, updatebeleid en geslaagde voortgangscontroles. Dat helpt ook bij [Faraday](/nl/blog/blocknet-faraday-upgrade/), waarvan toekomstige activeringsinstructies uit de officiële release moeten komen. Controleer na geplande wijzigingen opnieuw zodat het overzicht de actieve node beschrijft, niet alleen gedownloade software.
+
+<CTA target="seine" title="Mine Blocknet met seine" text="Gebruik de mininggidsen om je gekozen opzet te verbinden nadat je poolmining of direct mining hebt gekozen." />

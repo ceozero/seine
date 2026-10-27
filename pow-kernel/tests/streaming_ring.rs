@@ -10,7 +10,7 @@ fn streaming_boundaries_dirty_reuse_and_guards_match_reference() {
     for kib in [
         8, 12, 16, 17, 20, 28, 32, 33, 36, 60, 64, 65, 68, 124, 128, 132, 252, 256, 260, 4096,
     ] {
-        let hasher = FixedArgon2id::with_kernel(kib, CpuKernel::Avx512256Stream).unwrap();
+        let mut hasher = FixedArgon2id::with_kernel(kib, CpuKernel::Avx512256Stream).unwrap();
         let mut actual = [0u8; 32];
         let nonces = [0u64, 17, u64::MAX];
         let references: Vec<[u8; 32]> = nonces
@@ -32,7 +32,18 @@ fn streaming_boundaries_dirty_reuse_and_guards_match_reference() {
         arena[0].as_mut().fill(0xa5a5_a5a5_a5a5_a5a5);
         arena[count + 1].as_mut().fill(0x5a5a_5a5a_5a5a_5a5a);
         for (nonce, reference) in nonces.into_iter().zip(references) {
-            for reuse in 0..2 {
+            for (reuse, kernel) in [
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Avx512256StreamR8D2,
+                CpuKernel::Avx512256StreamR8D2,
+                CpuKernel::Avx512256StreamR64D3,
+                CpuKernel::Avx512256StreamR64D3,
+                CpuKernel::Avx512256Stream,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                hasher.set_kernel(kernel).unwrap();
                 hasher
                     .hash_password_into_with_memory(
                         &nonce.to_le_bytes(),
@@ -43,7 +54,7 @@ fn streaming_boundaries_dirty_reuse_and_guards_match_reference() {
                     .unwrap();
                 assert_eq!(
                     actual, reference,
-                    "memory={kib} nonce={nonce} reuse={reuse}"
+                    "kernel={kernel} memory={kib} nonce={nonce} reuse={reuse}"
                 );
                 assert!(arena[0]
                     .as_ref()

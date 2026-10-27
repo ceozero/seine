@@ -27,7 +27,7 @@ display driver plus the NVRTC runtime libraries.
   `seine.exe`. No CUDA Toolkit installation or `PATH` change is needed.
 - **Linux:** install the CUDA driver and NVRTC libraries from your distribution or
   NVIDIA.
-- **Source builds on Windows:** the build uses cudarc's CUDA 12.8 loader, so a
+- **Source builds on Windows:** the build uses cudarc's CUDA 12.x loader, so a
   machine with only CUDA 13.x DLL names (for example `nvrtc64_130_0.dll`) is not
   discovered. Install the CUDA 12.8 NVRTC redistributable or add its `bin`
   directory to `PATH`.

@@ -1,0 +1,72 @@
+---
+title: 'Jak zaktualizować miner Blocknet'
+description: 'Zaktualizuj seine do kopania Blocknet, zachowaj ustawienia, zweryfikuj oficjalny plik i sprawdź wersję, połączenie z pulą oraz zaakceptowane udziały.'
+tags: ['Poradnik kopania', 'seine', 'Aktualizacje']
+faq:
+  - q: 'Czy seine sam instaluje aktualizacje?'
+    a: 'Kontrola wersji informuje o nowym wydaniu w panelu i logu. Sam wybierasz termin instalacji. Pobierz i sprawdź oficjalne archiwum, zatrzymaj miner, zastąp pliki aplikacji i uruchom ponownie z tym samym katalogiem danych oraz opcjami.'
+  - q: 'Które pliki przechowują ustawienia?'
+    a: 'Domyślnie konfiguracja to seine-data/seine.config.json względem katalogu uruchomienia. data-dir zmienia tę lokalizację. Zachowaj katalog danych i skrypt lub definicję usługi: parametry backendu i wątków są oddzielne od zapisanych danych połączenia.'
+  - q: 'Dlaczego po aktualizacji znów pojawia się pytanie o adres?'
+    a: 'Sprawdź katalog roboczy i data-dir. Start z nowego folderu może skierować seine do innej konfiguracji. Zatrzymaj tę instancję, znajdź pierwotne dane i uruchom z właściwą ścieżką. Przed wznowieniem sprawdź adres i pulę.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Zaktualizuj seine, zachowując działające połączenie z pulą i opcje startowe. Poradnik opiera się na publicznym wydaniu v0.2.36 i obejmuje przygotowanie, wymianę oraz kontrolę. Pierwszą instalację opisują poradniki [Windows](/pl/blog/mine-blocknet-on-windows/), [Linux](/pl/blog/mine-blocknet-on-linux/) i [Mac](/pl/blog/mine-blocknet-on-mac/).
+
+## Jak zaktualizować seine?
+
+<Answer>
+Pobierz i zweryfikuj oficjalne archiwum swojego systemu, zatrzymaj miner, zachowaj katalog danych i zastąp pliki aplikacji. Uruchom z tym samym katalogiem roboczym i argumentami. Sprawdź wersję, adres wypłat, pulę i zaakceptowane udziały przed aktualizacją kolejnego komputera.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="Wymiana aplikacji z zachowaniem folderu konfiguracji, następnie kontrola połączenia." width="1200" height="675" loading="lazy" />
+
+## Jak sprawdzić obecną wersję?
+
+Wykonaj polecenie wersji dla faktycznie używanego programu. Stara kopia może różnić się od tej uruchamianej skrótem lub usługą. Zapisz ścieżkę programu, katalog roboczy i argumenty razem, aby móc powtórzyć aktualizację. W Windows otwórz PowerShell w aktualnym folderze minera:
+
+```powershell
+.\seine.exe --version
+```
+
+W Linux lub macOS otwórz terminal w tym folderze:
+
+```sh
+./seine --version
+```
+
+Porównaj wynik z [oficjalnymi wydaniami](https://github.com/zpalmtree/seine/releases). seine sprawdza nową wersję przy starcie i co 12 godzin, pokazując informację w panelu i logu. Komunikat daje link do pobrania; termin instalacji wybierasz sam. Przeczytaj uwagi o platformie, bibliotekach wykonawczych i opcjach startu.
+
+## Jakie ustawienia zachować?
+
+Domyślnie seine czyta `./seine-data/seine.config.json`. `./` oznacza katalog roboczy: przeniesienie programu i start z innego miejsca mogą zmienić poszukiwaną lokalizację. Zachowaj ten sam `--data-dir`, jeśli go używasz. Ścieżka bezwzględna wskazuje miejsce jednoznacznie, gdy katalog roboczy wybiera skrót, skrypt lub usługa.
+
+Konfiguracja zapisuje tryb kopania, adres wypłat, URL puli i nazwę maszyny. Zachowaj cały katalog danych, także pliki strojenia. Zapisz również polecenie, skrypt lub definicję usługi: `--backend` i `--threads` są oddzielne od pól połączenia. Oba elementy zachowują zamierzoną konfigurację po restarcie.
+
+## Pobierz i zweryfikuj nowe pliki
+
+Na [stronie pobierania](/pl/#download) lub oficjalnym wydaniu wybierz archiwum systemu i architektury CPU. Pobierz też osobny `SHA256SUMS.txt` z tego samego wydania. Porównaj sumę przed rozpakowaniem do osobnego folderu. [Poradnik weryfikacji](/pl/blog/antivirus-flags-crypto-miner/) opisuje procedurę Windows i ostrzeżenia pobierania.
+
+Trzymaj razem wszystkie pliki archiwum. Pakiet Windows zawiera biblioteki NVIDIA obok `seine.exe`; skopiowanie samego programu może pomieszać wersje. [Poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/) opisuje środowisko wykonawcze. [Dokumentacja v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) potwierdza zapisywane ustawienia i opisany start.
+
+## Zatrzymaj, zabezpiecz i zastąp
+
+Zakończ przez `q` lub `Ctrl+C` i poczekaj na zamknięcie. Usługę zatrzymaj jej menedżerem, uwzględniając automatyczne wznowienia przed wymianą plików. Przy zatrzymanym minerze zrób lokalną kopię aplikacji i danych. Oddziel ją od nowego archiwum, aby rozpoznawać wersje.
+
+Umieść nowe pliki w katalogu instalacji, zachowując pierwotne dane. Przy folderach zależnych od wersji zmień ścieżkę programu w skrócie lub usłudze i jawnie zachowaj katalog roboczy oraz dane. Uruchom jedną instancję z tymi samymi opcjami. Przy wielu komputerach najpierw sprawdź w pełni jeden.
+
+## Jak potwierdzić poprawną aktualizację?
+
+Ponownie sprawdź wersję zainstalowanego programu względem pobranego wydania. Uruchom i sprawdź adres wypłat, pulę, nazwę maszyny oraz zamierzone backendy CPU lub GPU. Zgodne wyniki strojenia mogą zostać użyte ponownie; zaczekaj na zakończenie strojenia przed oceną hashrate. [Poradnik panelu](/pl/blog/seine-dashboard-explained/) opisuje widoki.
+
+Sprawdź zaakceptowane udziały i [My Stats](https://bntpool.com/stats) dla tego samego adresu. Estymacje puli potrzebują udziałów i czasu; natychmiastowa różnica hashrate sama nie wskazuje problemu aktualizacji. Nowy proces rozpoczyna nową sesję lokalną. Porównuj adres, maszynę i aktywność przed krótkoterminowymi licznikami obu sesji.
+
+## Co zrobić, gdy wracają pytania początkowe?
+
+Najpierw sprawdź katalog roboczy i `--data-dir`. Nowy folder często nie ma konfiguracji w domyślnej ścieżce względnej. Zatrzymaj instancję i wskaż pierwotne dane. Jeśli błąd wymienia plik konfiguracji, zachowaj go i dokładny komunikat. Nie publikuj fraz odzyskiwania, kluczy prywatnych ani tokenów API sterowania na zrzutach i w zgłoszeniach.
+
+Przy błędzie startu zapisz wersję, system, ścieżkę i dokładny komunikat, potem użyj poradnika platformy. Kopia przechowuje poprzednią aplikację wraz z ustawieniami. Przed przywróceniem sprawdź wymagania zgodności w nowych uwagach do wydania. Wznów ze znaną konfiguracją i sprawdź udziały; wymiana minera nie wymaga nowego portfela.
+
+<CTA target="seine" title="Pobierz aktualne wydanie seine" text="Wybierz archiwum platformy i zachowaj konfigurację podczas aktualizacji." />

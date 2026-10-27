@@ -3,6 +3,9 @@
 use super::*;
 use crate::backend::cpu::CpuAdaptiveSnapshot;
 use blocknet_pow_kernel::CpuKernel;
+use seine_telemetry::tuning::{
+    TrialArm, TrialDecision, TrialPolicy, TrialQuantization, TrialReason,
+};
 
 const RECHECK_SECS: u64 = 30 * 60;
 const RETRY_SECS: u64 = 5 * 60;
@@ -62,49 +65,282 @@ fn candidates_for(
     .into_iter()
     .filter(|k| supported.contains(k))
     .collect();
-    // Genoa 9R14 VM: +2.85% cold / +7.99% cached productive mining;
-    // Turin and Ryzen also have repeated wins. See genoa-streaming-20261025.
-    // Identity limits automatic experiments; the independent ISA/OS support
-    // check remains mandatory. Turin needs a measured win per worker
-    // count/backing; validated Ryzen also starts on it (`startup_kernel_for`).
-    if identity.vendor.as_deref() == Some("AuthenticAMD")
-        && matches!(
-            (identity.family, identity.model),
-            (Some(0x19), Some(0x11)) | (Some(0x1a), Some(0x02 | 0x44))
-        )
-        && supported.contains(&CpuKernel::Avx512256Stream)
-    {
-        if identity.model == Some(0x02) {
+    // Streaming wins at high worker counts on every measured Zen 4/Zen 5 host:
+    // Genoa 9R14 +2.85% cold / +7.99% cached productive mining, Turin 9R45
+    // +19.9-29.8%, Ryzen 9950X3D +38-46%. Gate by microarchitecture rather than
+    // exact model so other Zen 4/5 parts (Raphael, Turin Dense, masked cloud
+    // CPUIDs) are eligible. The independent ISA/OS support check remains
+    // mandatory, and repeated-win trials can still replace it.
+    if let Some(stream) = cohort_stream_kernel(identity, supported) {
+        if stream == CpuKernel::Avx512256Stream && identity.model == Some(0x02) {
             // Turin: test the measured high-concurrency challenger before AVX2.
             // Ordering changes discovery cost, never the repeated-win gate.
             let before_avx2 = paths
                 .iter()
                 .position(|k| *k == CpuKernel::Avx2)
                 .unwrap_or(paths.len());
-            paths.insert(before_avx2, CpuKernel::Avx512256Stream);
+            paths.insert(before_avx2, stream);
         } else {
-            paths.push(CpuKernel::Avx512256Stream);
+            paths.push(stream);
         }
     }
     paths
 }
 
-// Validated desktop Zen 5 (Ryzen 9950X3D, family 1Ah, model 44h): native
-// fixed-kernel runs measured streaming 38-46% faster than every uniform kernel
-// at 8 and 16 workers, but live A/B/A trials on a busy desktop rarely clear the
-// baseline-drift gate. Start such contexts on streaming. The other candidates
-// still get the usual two comparisons against it. Lower counts are unmeasured.
+/// The streaming kernel for an AMD microarchitecture cohort, if validated.
+/// Zen 4 (family 19h with AVX-512) and Zen 5 (family 1Ah) use the AVX-512 path.
+/// Zen 3 (family 19h without AVX-512) and Zen 2 (family 17h, model 30h and up)
+/// use the AVX2 path: native EPYC 7443P +48% and EPYC 7R32 +67% over AVX2.
+/// Zen 1/Zen+ (17h below 30h) is unmeasured, and so is the AVX2 path outside
+/// Linux. Callers always intersect with runtime-detected kernels, so ISA
+/// support is never assumed.
+const AVX2_STREAM_OS: bool = cfg!(any(target_os = "linux", test));
+
+fn cohort_stream_kernel(
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> Option<CpuKernel> {
+    if identity.vendor.as_deref() != Some("AuthenticAMD") {
+        return None;
+    }
+    match identity.family {
+        Some(0x19 | 0x1a) if supported.contains(&CpuKernel::Avx512256Stream) => {
+            Some(CpuKernel::Avx512256Stream)
+        }
+        Some(0x19) if AVX2_STREAM_OS && supported.contains(&CpuKernel::Avx2Stream) => {
+            Some(CpuKernel::Avx2Stream)
+        }
+        Some(0x17)
+            if AVX2_STREAM_OS
+                && identity.model.is_some_and(|m| m >= 0x30)
+                && supported.contains(&CpuKernel::Avx2Stream) =>
+        {
+            Some(CpuKernel::Avx2Stream)
+        }
+        _ => None,
+    }
+}
+
+// Native fixed-kernel runs measured streaming 38-46% faster than every uniform
+// kernel on Ryzen 9950X3D at 8 and 16 workers, and live A/B/A trials on a busy
+// desktop rarely clear the baseline-drift gate. Genoa and Turin show the same
+// direction at full counts. Start Zen 4/5 contexts on streaming; the other
+// candidates still get the usual two comparisons against it. Lower counts are
+// unmeasured.
 const STARTUP_STREAM_MIN_WORKERS: usize = 8;
 
 fn startup_kernel_for(
     identity: &crate::runtime_identity::CpuIdentity,
     candidates: &[CpuKernel],
 ) -> Option<CpuKernel> {
-    (identity.vendor.as_deref() == Some("AuthenticAMD")
-        && identity.family == Some(0x1a)
-        && identity.model == Some(0x44)
-        && candidates.contains(&CpuKernel::Avx512256Stream))
-    .then_some(CpuKernel::Avx512256Stream)
+    cohort_stream_kernel(identity, candidates)
+}
+
+/// The cohort kernel regardless of worker count, for the worker-count search:
+/// every candidate count must be measured with the kernel that will mine.
+pub(super) fn cohort_kernel() -> Option<CpuKernel> {
+    let identity = crate::runtime_identity::cpu_identity();
+    cohort_stream_kernel(&identity, &candidates_for(&identity, &supported_kernels()))
+}
+
+/// Kernel for fixed worker counts (explicit `--threads`), which run no trials.
+/// Uses the same cohort default the adaptive path starts from.
+pub(super) fn static_kernel_for(workers: usize) -> Option<CpuKernel> {
+    static_kernel_for_identity(
+        &crate::runtime_identity::cpu_identity(),
+        &supported_kernels(),
+        workers,
+    )
+}
+
+fn static_kernel_for_identity(
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+    workers: usize,
+) -> Option<CpuKernel> {
+    (workers >= STARTUP_STREAM_MIN_WORKERS)
+        .then(|| startup_kernel_for(identity, &candidates_for(identity, supported)))
+        .flatten()
+}
+
+// Host eligibility must not depend on the initial worker count: a cached count
+// can differ on the next launch without changing the kernel policy. The actual
+// startup action remains restricted to the measured 32-worker/full-THP context
+// below. Normal repeated comparisons can still replace the starting kernel.
+fn genoa_stream_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    candidates: &[CpuKernel],
+) -> bool {
+    host.os == "linux"
+        && candidates.contains(&CpuKernel::Avx512256Stream)
+        && super::adaptive_cpu::full_count_cold_start(
+            cfg,
+            host,
+            identity,
+            32,
+            cfg.cpu_auto_threads_cap,
+        )
+}
+
+// Native comparison validates the existing streaming path on this exact host.
+// Actual full THP backing is checked separately before applying the startup hint.
+fn sapphire_stream_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> bool {
+    supported.contains(&CpuKernel::Avx512256Stream)
+        && super::adaptive_cpu::sapphire_full_count_cold_start(
+            cfg,
+            host,
+            identity,
+            32,
+            cfg.cpu_auto_threads_cap,
+        )
+}
+
+// Native Turin cold-start comparison validates this exact startup context.
+// Actual full THP backing is checked separately before applying the startup hint.
+fn turin_stream_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> bool {
+    supported.contains(&CpuKernel::Avx512256Stream)
+        && super::adaptive_cpu::turin_full_count_cold_start(
+            cfg,
+            host,
+            identity,
+            32,
+            cfg.cpu_auto_threads_cap,
+        )
+}
+
+fn turin_demand_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> bool {
+    supported.contains(&CpuKernel::Avx512256StreamR64D3)
+        && turin_stream_startup(cfg, host, identity, supported)
+}
+
+fn turin_prefetch_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> bool {
+    supported.contains(&CpuKernel::Avx512256StreamR64D4)
+        && turin_demand_startup(cfg, host, identity, supported)
+}
+
+// Native exact-host confirmation: depth six adds 0.19% over depth four.
+fn turin_depth6_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    supported: &[CpuKernel],
+) -> bool {
+    supported.contains(&CpuKernel::Avx512256StreamR64D6)
+        && turin_prefetch_startup(cfg, host, identity, supported)
+}
+
+fn genoa_stream_context(context: &Context) -> bool {
+    context.members.len() == 1
+        && context.workers == [32]
+        && context.backing == [[0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]]
+}
+
+// Validated startup policy from native Windows cold captures and a paired
+// startup screen. Discovering 32 workers took almost the entire 900-second
+// window. Start there while retaining exact backing, ISA, resource and
+// repeated-comparison gates. See CPU_OPTIMIZATION_LOG.md for measurement scope.
+fn windows_genoa_stream_startup(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    candidates: &[CpuKernel],
+) -> bool {
+    host.os == "windows"
+        && candidates.contains(&CpuKernel::Avx512256Stream)
+        && super::adaptive_cpu::full_count_cold_start(
+            cfg,
+            host,
+            identity,
+            32,
+            cfg.cpu_auto_threads_cap,
+        )
+}
+
+fn windows_genoa_stream_context(context: &Context) -> bool {
+    context.members.len() == 1
+        && context.workers == [32]
+        && context.backing == [[0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0]]
+}
+
+// Native paired runs support shorter samples only for these 9R14 contexts.
+// Require enough completed hashes for each ten-second sample, retaining the
+// A/B/A drift gate and two-cycle promotion rule.
+fn genoa_short_trials_for(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    candidates: &[CpuKernel],
+) -> bool {
+    host.os == "linux"
+        && cfg.cpu_autotune_secs == 6
+        && candidates.contains(&CpuKernel::Avx512256Stream)
+        && super::adaptive_cpu::full_count_cold_start(
+            cfg,
+            host,
+            identity,
+            cfg.cpu_auto_threads_cap,
+            cfg.cpu_auto_threads_cap,
+        )
+}
+
+fn genoa_short_context(context: &Context) -> bool {
+    let [workers] = context.workers.as_slice() else {
+        return false;
+    };
+    context.members == [0]
+        && (30..=32).contains(workers)
+        && context.backing == [[0, 0, *workers as u64 * CPU_LANE_MEMORY_BYTES, 0, 0]]
+}
+
+// Native 9R14 cold pair gained 4.96% by prioritizing streaming on the first
+// sweep only. A saved winner makes subsequent periodic sweeps exhaustive again.
+fn genoa_frontier_context(context: &Context) -> bool {
+    genoa_short_context(context) && matches!(context.workers.as_slice(), [31 | 32])
+}
+
+// Native Windows 9R14 cold pair gained 5.38% by prioritizing streaming at
+// 31/32 workers with ordinary pages. Subsequent periodic sweeps remain
+// exhaustive once this context has a saved winner.
+fn windows_genoa_frontier_for(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    candidates: &[CpuKernel],
+) -> bool {
+    cfg.cpu_autotune_secs == 6
+        && candidates.contains(&CpuKernel::Avx512256StreamR8D2)
+        && windows_genoa_stream_startup(cfg, host, identity, candidates)
+}
+
+fn windows_genoa_frontier_context(context: &Context) -> bool {
+    let [workers] = context.workers.as_slice() else {
+        return false;
+    };
+    context.members == [0]
+        && matches!(*workers, 31 | 32)
+        && context.backing == [[0, 0, 0, *workers as u64 * CPU_LANE_MEMORY_BYTES, 0]]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -168,6 +404,9 @@ impl Cache {
     fn winner(&self, context: &Context, now: u64, paths: &[CpuKernel]) -> Option<CpuKernel> {
         self.winners.iter().rev().find_map(|winner| {
             let kernel = winner.kernel.parse::<CpuKernel>().ok()?;
+            let base = winner.base.parse::<CpuKernel>().ok()?;
+            let candidate = winner.candidate.parse::<CpuKernel>().ok()?;
+            let compare = |a, b, c| comparison_for(base, candidate, a, b, c);
             (winner.context == *context
                 && winner.timestamp <= now
                 && now - winner.timestamp < CPU_AUTOTUNE_RECORD_MAX_AGE_SECS
@@ -175,18 +414,20 @@ impl Cache {
                 && winner.samples.iter().all(|s| s.secs > 0 && s.hashes > 0)
                 && if winner.kernel == winner.base {
                     match winner.samples.as_slice() {
-                        [a, b, c] => comparison(*a, *b, *c) == Comparison::NoConfirmedGain,
+                        [a, b, c] => compare(*a, *b, *c) == Comparison::NoConfirmedGain,
                         [a, b, c, d, e, f] => {
-                            improves(*a, *b, *c)
-                                && comparison(*d, *e, *f) == Comparison::NoConfirmedGain
+                            compare(*a, *b, *c) == Comparison::Gain
+                                && compare(*d, *e, *f) == Comparison::NoConfirmedGain
                         }
                         _ => false,
                     }
                 } else {
                     winner.kernel == winner.candidate
                         && winner.samples.len() == 6
-                        && improves(winner.samples[0], winner.samples[1], winner.samples[2])
-                        && improves(winner.samples[3], winner.samples[4], winner.samples[5])
+                        && compare(winner.samples[0], winner.samples[1], winner.samples[2])
+                            == Comparison::Gain
+                        && compare(winner.samples[3], winner.samples[4], winner.samples[5])
+                            == Comparison::Gain
                 })
             .then_some(kernel)
         })
@@ -227,25 +468,82 @@ fn rates(samples: &[Sample], base: CpuKernel, candidate: CpuKernel) -> String {
         .join(" / ")
 }
 
+#[cfg(test)]
 fn improves(before: Sample, candidate: Sample, after: Sample) -> bool {
     comparison(before, candidate, after) == Comparison::Gain
 }
 
+fn turin_small_gain_pair(base: CpuKernel, candidate: CpuKernel) -> bool {
+    let measured_path = |kernel| {
+        matches!(
+            kernel,
+            CpuKernel::Avx512256Stream
+                | CpuKernel::Avx512256StreamR64D3
+                | CpuKernel::Avx512256StreamR64D4
+                | CpuKernel::Avx512256StreamR64D6
+        )
+    };
+    base != candidate && measured_path(base) && measured_path(candidate)
+}
+
+fn turin_pair_resolution(base: CpuKernel, candidate: CpuKernel) -> (u64, u64) {
+    if [base, candidate].contains(&CpuKernel::Avx512256StreamR64D6) {
+        // Resolve the measured 0.19% gain above three-window hash quantization.
+        (45, 2048)
+    } else {
+        (30, 1024)
+    }
+}
+
+fn comparison_for(
+    base: CpuKernel,
+    path: CpuKernel,
+    before: Sample,
+    candidate: Sample,
+    after: Sample,
+) -> Comparison {
+    if turin_small_gain_pair(base, path) {
+        // Native fence/prefetch gains are below the generic 2% switching margin.
+        // Require longer, well-resolved samples and tighter baseline stability;
+        // both fresh A/B/A cycles still have to win before promotion/caching.
+        let (seconds, hashes) = turin_pair_resolution(base, path);
+        if [before, candidate, after]
+            .iter()
+            .any(|s| s.secs < seconds || s.hashes < hashes)
+        {
+            return Comparison::Inconclusive;
+        }
+        comparison_with_limits(before, candidate, after, 0.0, 0.01)
+    } else {
+        comparison(before, candidate, after)
+    }
+}
+
 fn comparison(before: Sample, candidate: Sample, after: Sample) -> Comparison {
+    comparison_with_limits(before, candidate, after, 0.02, MAX_DRIFT)
+}
+
+fn comparison_with_limits(
+    before: Sample,
+    candidate: Sample,
+    after: Sample,
+    margin: f64,
+    max_drift: f64,
+) -> Comparison {
     if [before, candidate, after]
         .iter()
         .any(|s| s.secs == 0 || s.hashes == 0)
     {
         return Comparison::Inconclusive;
     }
-    if (after.hps() / before.hps() - 1.0).abs() > MAX_DRIFT {
+    if (after.hps() / before.hps() - 1.0).abs() > max_drift {
         return Comparison::Inconclusive;
     }
     let baseline =
         (before.hashes as f64 + after.hashes as f64) / (before.secs as f64 + after.secs as f64);
     let quantization =
         1.0 / before.secs as f64 + 1.0 / candidate.secs as f64 + 1.0 / after.secs as f64;
-    if candidate.hps() > baseline * 1.02 + quantization {
+    if candidate.hps() > baseline * (1.0 + margin) + quantization {
         Comparison::Gain
     } else {
         Comparison::NoConfirmedGain
@@ -282,7 +580,10 @@ pub(super) struct Action {
 }
 
 pub(super) struct Tuner {
+    pub(super) monitor: Option<super::adaptive_telemetry::Monitor>,
     cache: Cache,
+    // An exact prior policy may seed mining, but cannot certify a new candidate.
+    startup_cache: Option<Cache>,
     path: std::path::PathBuf,
     trial: Option<Trial>,
     checked: Option<Context>,
@@ -290,6 +591,8 @@ pub(super) struct Tuner {
     retries: Vec<(Context, u64)>,
     window_secs: u64,
     short_trials: bool,
+    genoa_short_trials: bool,
+    genoa_startup_frontier: bool,
     candidates: Vec<CpuKernel>,
     // Remaining challengers for this count/backing. Cache only a complete sweep.
     pending: Vec<CpuKernel>,
@@ -298,6 +601,10 @@ pub(super) struct Tuner {
     settle_started: u64,
     // Identity-validated starting path for uncached contexts, if any.
     startup: Option<CpuKernel>,
+    genoa_startup: bool,
+    windows_genoa_startup: bool,
+    sapphire_startup: bool,
+    turin_startup: bool,
 }
 
 impl Tuner {
@@ -317,10 +624,59 @@ impl Tuner {
     ) -> Self {
         // Native hardware tests must exercise the shipping identity and ISA
         // gates. Only synthetic fixtures opt into an identity-neutral tuner.
-        let candidates = candidates_for(identity, &supported_kernels());
-        let startup = startup_kernel_for(identity, &candidates);
+        let supported = supported_kernels();
+        let mut candidates = candidates_for(identity, &supported);
+        let sapphire_startup = sapphire_stream_startup(cfg, &host, identity, &supported);
+        if sapphire_startup {
+            candidates.push(CpuKernel::Avx512256Stream);
+        }
+        let turin_startup = turin_stream_startup(cfg, &host, identity, &supported);
+        // Native 32-core Linux 9R45: demand fences retain the proven R64/D3
+        // lookahead. Actual startup still requires full THP backing.
+        let turin_demand = turin_demand_startup(cfg, &host, identity, &supported);
+        if turin_demand {
+            candidates.insert(0, CpuKernel::Avx512256StreamR64D3);
+        }
+        // Native exact-host confirmation: depth four adds 0.35% over depth three.
+        // Keep the previous path available; actual startup still requires THP.
+        let turin_prefetch = turin_prefetch_startup(cfg, &host, identity, &supported);
+        if turin_prefetch {
+            candidates.insert(0, CpuKernel::Avx512256StreamR64D4);
+        }
+        let turin_depth6 = turin_depth6_startup(cfg, &host, identity, &supported);
+        if turin_depth6 {
+            candidates.insert(0, CpuKernel::Avx512256StreamR64D6);
+        }
+        let genoa_startup = genoa_stream_startup(cfg, &host, identity, &candidates);
+        let windows_genoa_startup = windows_genoa_stream_startup(cfg, &host, identity, &candidates);
+        // Native ring/depth screen: retain the old streaming path as a challenger.
+        // Only this measured host gets the new automatic candidate; the startup
+        // action still checks exact worker count and platform-specific backing.
+        let ring_startup = (genoa_startup || windows_genoa_startup)
+            && supported.contains(&CpuKernel::Avx512256StreamR8D2);
+        if ring_startup {
+            candidates.insert(0, CpuKernel::Avx512256StreamR8D2);
+        }
+        let startup = if ring_startup {
+            Some(CpuKernel::Avx512256StreamR8D2)
+        } else if turin_depth6 {
+            Some(CpuKernel::Avx512256StreamR64D6)
+        } else if turin_prefetch {
+            Some(CpuKernel::Avx512256StreamR64D4)
+        } else if turin_demand {
+            Some(CpuKernel::Avx512256StreamR64D3)
+        } else if genoa_startup || windows_genoa_startup || sapphire_startup || turin_startup {
+            Some(CpuKernel::Avx512256Stream)
+        } else {
+            startup_kernel_for(identity, &candidates)
+        };
         let short_trials = short_trials_for(identity, &candidates, cfg.cpu_autotune_secs);
-        let mut configuration = format!(
+        let genoa_short_trials = genoa_short_trials_for(cfg, &host, identity, &candidates);
+        let genoa_startup_frontier = (genoa_short_trials
+            && candidates.contains(&CpuKernel::Avx512256StreamR8D2))
+            || windows_genoa_frontier_for(cfg, &host, identity, &candidates);
+        let configuration_for = |paths: &[CpuKernel], use_genoa_short: bool, frontier: bool| {
+            let mut configuration = format!(
             "profile={:?};pages={:?};affinity={:?};cpu={:?};batch={};control={};flush={:?};kernels={:?}",
             cfg.cpu_profile,
             cfg.cpu_page_mode,
@@ -333,18 +689,126 @@ impl Tuner {
             cfg.cpu_hash_batch_size,
             cfg.cpu_control_check_interval_hashes,
             cfg.cpu_hash_flush_interval,
-            candidates,
+            paths,
         );
-        if short_trials {
-            configuration.push_str(";sample_policy=turin-10s-256-v1");
-        }
+            if short_trials {
+                configuration.push_str(";sample_policy=turin-10s-256-v1");
+            }
+            if use_genoa_short {
+                configuration.push_str(";sample_policy=genoa-thp-30-32-10s-256-v1");
+            }
+            if frontier {
+                configuration.push_str(if windows_genoa_startup {
+                    ";frontier_policy=genoa-windows-regular31-32-stream-first-v1"
+                } else {
+                    ";frontier_policy=genoa-thp31-32-stream-first-v1"
+                });
+            }
+            if turin_startup {
+                configuration.push_str(";startup=turin9r45-32-thp-v1");
+            }
+            if sapphire_startup {
+                configuration.push_str(";startup=sapphire8488c-32-thp-v1");
+            }
+            if genoa_startup {
+                configuration.push_str(";startup=genoa-32-thp-v1");
+            }
+            if windows_genoa_startup {
+                configuration.push_str(";startup=genoa-windows-32-regular-v1");
+            }
+            configuration
+        };
+        let configuration =
+            configuration_for(&candidates, genoa_short_trials, genoa_startup_frontier);
+        let prior_startup_configuration =
+            turin_startup.then(|| configuration.replace(";startup=turin9r45-32-thp-v1", ""));
+        let prior_configuration = (ring_startup || turin_demand).then(|| {
+            let prior_paths: Vec<_> = candidates
+                .iter()
+                .copied()
+                .filter(|k| {
+                    !matches!(
+                        k,
+                        CpuKernel::Avx512256StreamR8D2
+                            | CpuKernel::Avx512256StreamR64D3
+                            | CpuKernel::Avx512256StreamR64D4
+                            | CpuKernel::Avx512256StreamR64D6
+                    )
+                })
+                .collect();
+            configuration_for(&prior_paths, false, false)
+        });
+        let prior_depth6_configuration = turin_depth6.then(|| {
+            let paths: Vec<_> = candidates
+                .iter()
+                .copied()
+                .filter(|k| *k != CpuKernel::Avx512256StreamR64D6)
+                .collect();
+            configuration_for(&paths, genoa_short_trials, genoa_startup_frontier)
+        });
+        let prior_prefetch_configuration = turin_prefetch.then(|| {
+            let paths: Vec<_> = candidates
+                .iter()
+                .copied()
+                .filter(|k| {
+                    !matches!(
+                        k,
+                        CpuKernel::Avx512256StreamR64D4 | CpuKernel::Avx512256StreamR64D6
+                    )
+                })
+                .collect();
+            configuration_for(&paths, genoa_short_trials, genoa_startup_frontier)
+        });
+        let prior_sample_configuration =
+            genoa_short_trials.then(|| configuration_for(&candidates, false, false));
+        let prior_frontier_configuration = genoa_startup_frontier
+            .then(|| configuration_for(&candidates, genoa_short_trials, false));
         let mut name = cfg.cpu_autotune_config_path.as_os_str().to_owned();
         name.push(".kernels.json");
         let path = std::path::PathBuf::from(name);
+        let mut startup_cache = None;
         let cache = fs::read(&path)
             .ok()
             .and_then(|raw| serde_json::from_slice::<Cache>(&raw).ok())
-            .filter(|record| record.compatible(&host, &configuration))
+            .and_then(|mut record| {
+                if record.compatible(&host, &configuration) {
+                    Some(record)
+                } else if prior_startup_configuration
+                    .as_ref()
+                    .is_some_and(|prior| record.compatible(&host, prior))
+                    || prior_sample_configuration
+                        .as_ref()
+                        .is_some_and(|prior| record.compatible(&host, prior))
+                    || prior_frontier_configuration
+                        .as_ref()
+                        .is_some_and(|prior| record.compatible(&host, prior))
+                {
+                    // A shorter future sample policy does not invalidate an
+                    // already confirmed winner for this identical candidate set.
+                    // Context, age and comparison proof are checked on lookup.
+                    record.configuration = configuration.clone();
+                    Some(record)
+                } else {
+                    if prior_depth6_configuration
+                        .as_ref()
+                        .is_some_and(|prior| record.compatible(&host, prior))
+                        || prior_prefetch_configuration
+                            .as_ref()
+                            .is_some_and(|prior| record.compatible(&host, prior))
+                        || prior_configuration.as_ref().is_some_and(|prior| {
+                            record.compatible(&host, prior)
+                                || (turin_demand
+                                    && record.compatible(
+                                        &host,
+                                        &prior.replace(";startup=turin9r45-32-thp-v1", ""),
+                                    ))
+                        })
+                    {
+                        startup_cache = Some(record);
+                    }
+                    None
+                }
+            })
             .unwrap_or(Cache {
                 schema: CACHE_SCHEMA,
                 host,
@@ -353,18 +817,26 @@ impl Tuner {
             });
         Self {
             cache,
+            startup_cache,
             path,
             trial: None,
             checked: None,
             next_check: 0,
             retries: Vec::new(),
+            monitor: None,
             window_secs: cfg.cpu_autotune_secs.saturating_mul(5).clamp(30, 60),
             short_trials,
+            genoa_short_trials,
+            genoa_startup_frontier,
             candidates,
             pending: Vec::new(),
             settling: None,
             settle_started: 0,
             startup,
+            genoa_startup,
+            windows_genoa_startup,
+            sapphire_startup,
+            turin_startup,
         }
     }
 
@@ -422,7 +894,14 @@ impl Tuner {
     pub(super) fn joint_budget_secs(&self) -> u64 {
         // Two A/B/A cycles per challenger, one retry cooldown and switch slack.
         // Outer count windows are budgeted separately by the count policy.
+        // A D6 incumbent can require longer samples against every challenger.
+        let minimum_window = if self.candidates.contains(&CpuKernel::Avx512256StreamR64D6) {
+            45
+        } else {
+            30
+        };
         self.window_secs
+            .max(minimum_window)
             .saturating_mul(6)
             .saturating_mul(self.candidates.len().saturating_sub(1) as u64)
             .saturating_add(RETRY_SECS)
@@ -463,6 +942,23 @@ impl Tuner {
             && self.context_retry_pending(now, &Context::from_snapshots(snapshots))
     }
 
+    pub(super) fn retry_at_for_threads(
+        &self,
+        now: u64,
+        snapshots: &[CpuAdaptiveSnapshot],
+        threads: usize,
+    ) -> Option<u64> {
+        // Admission only: no prospective page backing is assumed. The existing
+        // retry key intentionally uses stable membership and worker counts.
+        let mut context = Context::from_snapshots(snapshots);
+        context.workers.fill(threads);
+        self.retries
+            .iter()
+            .filter(|(old, until)| now < *until && old.same_workers(&context))
+            .map(|(_, until)| *until)
+            .max()
+    }
+
     fn context_retry_pending(&self, now: u64, context: &Context) -> bool {
         self.retries
             .iter()
@@ -470,6 +966,13 @@ impl Tuner {
     }
 
     pub(super) fn abort(&mut self, now: u64) -> Action {
+        self.abort_reason(now, TrialReason::ContextChanged)
+    }
+
+    fn abort_reason(&mut self, now: u64, reason: TrialReason) -> Action {
+        if let Some(monitor) = &mut self.monitor {
+            monitor.abort(now, reason);
+        }
         let trial = self.trial.take();
         let context = trial
             .as_ref()
@@ -525,7 +1028,7 @@ impl Tuner {
                 };
             }
             if now.saturating_sub(self.settle_started) >= MAX_TRIAL_SECS {
-                return self.abort(now);
+                return self.abort_reason(now, TrialReason::TimeBudget);
             }
             return Action {
                 hold_counts: true,
@@ -533,8 +1036,11 @@ impl Tuner {
             };
         }
         if let Some(trial) = &self.trial {
-            if context != trial.context || now.saturating_sub(trial.started) >= MAX_TRIAL_SECS {
+            if context != trial.context {
                 return self.abort(now);
+            }
+            if now.saturating_sub(trial.started) >= MAX_TRIAL_SECS {
+                return self.abort_reason(now, TrialReason::TimeBudget);
             }
         }
         if self.trial.is_none() {
@@ -562,12 +1068,46 @@ impl Tuner {
                         message: Some(format!("restoring confirmed {kernel} path for this worker count and memory backing")),
                     };
                 }
+                // Adding a candidate does not invalidate the previously verified
+                // winner as a starting point. Only the new path needs a comparison;
+                // retain all host, settings, context, age and sample-proof checks.
+                let prior_paths: Vec<_> = self
+                    .candidates
+                    .iter()
+                    .copied()
+                    .filter(|k| Some(*k) != self.startup)
+                    .collect();
+                if let Some(kernel) = self
+                    .startup_cache
+                    .as_ref()
+                    .and_then(|prior| prior.winner(&context, unix_secs(), &prior_paths))
+                {
+                    self.checked = Some(context);
+                    self.next_check = now;
+                    self.pending = self.startup.into_iter().collect();
+                    let switching = !snapshots.iter().all(|s| s.kernel == kernel);
+                    if switching {
+                        self.settling = Some(kernel);
+                        self.settle_started = now;
+                    }
+                    return Action {
+                        hold_counts: true, kernel: switching.then_some(kernel),
+                        reset_scores: switching, interrupted: false,
+                        message: Some(format!("starting from saved {kernel} path; comparing the newly available kernel while mining")),
+                    };
+                }
                 if let Some(kernel) = self.startup.filter(|k| {
                     self.candidates.contains(k)
-                        && context
-                            .workers
-                            .iter()
-                            .all(|&w| w >= STARTUP_STREAM_MIN_WORKERS)
+                        && if self.genoa_startup || self.sapphire_startup || self.turin_startup {
+                            genoa_stream_context(&context)
+                        } else if self.windows_genoa_startup {
+                            windows_genoa_stream_context(&context)
+                        } else {
+                            context
+                                .workers
+                                .iter()
+                                .all(|&w| w >= STARTUP_STREAM_MIN_WORKERS)
+                        }
                         && !snapshots.iter().all(|s| s.kernel == *k)
                 }) {
                     // Compare the remaining paths against it promptly; only a
@@ -577,8 +1117,15 @@ impl Tuner {
                     self.settling = Some(kernel);
                     self.settle_started = now;
                     return Action {
-                        hold_counts: true, kernel: Some(kernel), reset_scores: true, interrupted: false,
-                        message: Some(format!("starting {kernel} path validated for this CPU; comparing other paths against it")),
+                        hold_counts: true,
+                        kernel: Some(kernel),
+                        reset_scores: true,
+                        interrupted: false,
+                        message: Some(if self.genoa_startup || self.windows_genoa_startup {
+                            format!("starting validated {kernel} path for matched EPYC context; comparing other paths against it")
+                        } else {
+                            format!("starting {kernel} path validated for this CPU; comparing other paths against it")
+                        }),
                     };
                 }
             }
@@ -587,17 +1134,57 @@ impl Tuner {
                 return Action::default();
             }
             if self.pending.is_empty() {
+                let frontier = self.genoa_startup_frontier
+                    && if self.windows_genoa_startup {
+                        windows_genoa_frontier_context(&context)
+                    } else {
+                        genoa_frontier_context(&context)
+                    }
+                    && !self.cache.winners.iter().any(|w| w.context == context);
                 self.pending = self
                     .candidates
                     .iter()
                     .copied()
                     .filter(|&k| k != base)
+                    .filter(|&k| {
+                        !frontier
+                            || matches!(
+                                k,
+                                CpuKernel::Avx512256Stream | CpuKernel::Avx512256StreamR8D2
+                            )
+                    })
                     .collect();
             }
             if self.pending.is_empty() {
                 return Action::default();
             }
             let candidate = self.pending.remove(0);
+            if let Some(monitor) = &mut self.monitor {
+                let fence = turin_small_gain_pair(base, candidate);
+                let (seconds, hashes) = turin_pair_resolution(base, candidate);
+                let short = !fence
+                    && (self.short_trials
+                        || (self.genoa_short_trials && genoa_short_context(&context)));
+                monitor.begin(
+                    now,
+                    base,
+                    candidate,
+                    TrialPolicy {
+                        revision: 1,
+                        minimum_sample_ms: if fence {
+                            self.window_secs.max(seconds)
+                        } else {
+                            self.window_secs
+                        } * 1000,
+                        minimum_hashes: if fence { hashes } else { 32 },
+                        short_sample_ms: short.then_some(10_000),
+                        short_minimum_hashes: short.then_some(256),
+                        maximum_baseline_drift_bps: if fence { 100 } else { 500 },
+                        required_gain_bps: if fence { 0 } else { 200 },
+                        quantization: TrialQuantization::ThreeWindowHash,
+                    },
+                );
+            }
             self.checked = Some(context.clone());
             self.trial = Some(Trial {
                 context,
@@ -619,7 +1206,7 @@ impl Tuner {
         if !ready {
             let idle = trial.idle_since.get_or_insert(now);
             if now.saturating_sub(*idle) >= 3 {
-                return self.abort(now);
+                return self.abort_reason(now, TrialReason::MiningIdle);
             }
             return Action {
                 hold_counts: true,
@@ -632,6 +1219,9 @@ impl Tuner {
             .all(|s| s.kernel == requested && s.kernel_ready)
         {
             trial.window = None;
+            if let Some(monitor) = &mut self.monitor {
+                monitor.discard_window();
+            }
             return Action {
                 hold_counts: true,
                 ..Action::default()
@@ -640,6 +1230,9 @@ impl Tuner {
         let generations: Vec<_> = snapshots.iter().map(|s| s.kernel_generation).collect();
         let Some((start, first, observed_generations)) = &trial.window else {
             trial.window = Some((now, hashes, generations));
+            if let Some(monitor) = &mut self.monitor {
+                monitor.window(now);
+            }
             return Action {
                 hold_counts: true,
                 ..Action::default()
@@ -652,22 +1245,58 @@ impl Tuner {
             hashes: hashes - *first,
             secs: now.saturating_sub(*start),
         };
-        if !sample_ready(sample, self.window_secs, self.short_trials) {
+        let short =
+            self.short_trials || (self.genoa_short_trials && genoa_short_context(&trial.context));
+        let fence_pair = turin_small_gain_pair(trial.base, trial.candidate);
+        let (pair_seconds, pair_hashes) = turin_pair_resolution(trial.base, trial.candidate);
+        if !sample_ready(sample, self.window_secs, short && !fence_pair)
+            || (fence_pair && (sample.secs < pair_seconds || sample.hashes < pair_hashes))
+        {
             return Action {
                 hold_counts: true,
                 ..Action::default()
             };
         }
         trial.window = None;
+        if let Some(monitor) = &mut self.monitor {
+            monitor.sample(sample.hashes, sample.secs);
+        }
         trial.samples.push(sample);
         if trial.samples.len() == 3
-            && !improves(trial.samples[0], trial.samples[1], trial.samples[2])
+            && comparison_for(
+                trial.base,
+                trial.candidate,
+                trial.samples[0],
+                trial.samples[1],
+                trial.samples[2],
+            ) != Comparison::Gain
         {
             // Reject an inconclusive/noisy candidate without spending a second cycle.
             let trial = self.trial.take().unwrap();
-            let stable = comparison(trial.samples[0], trial.samples[1], trial.samples[2])
-                == Comparison::NoConfirmedGain;
+            let stable = comparison_for(
+                trial.base,
+                trial.candidate,
+                trial.samples[0],
+                trial.samples[1],
+                trial.samples[2],
+            ) == Comparison::NoConfirmedGain;
             let measured = rates(&trial.samples, trial.base, trial.candidate);
+            if let Some(monitor) = &mut self.monitor {
+                monitor.finish(
+                    now,
+                    if stable {
+                        TrialDecision::NoConfirmedGain
+                    } else {
+                        TrialDecision::Inconclusive
+                    },
+                    if stable {
+                        TrialReason::Completed
+                    } else {
+                        TrialReason::BaselineDrift
+                    },
+                    TrialArm::Baseline,
+                );
+            }
             if stable {
                 let base = trial.base;
                 self.finish_comparison(trial, base, now);
@@ -689,10 +1318,38 @@ impl Tuner {
         }
         if trial.samples.len() == 6 {
             let trial = self.trial.take().unwrap();
-            let outcome = comparison(trial.samples[3], trial.samples[4], trial.samples[5]);
+            let outcome = comparison_for(
+                trial.base,
+                trial.candidate,
+                trial.samples[3],
+                trial.samples[4],
+                trial.samples[5],
+            );
             let measured = rates(&trial.samples, trial.base, trial.candidate);
             let promoted = outcome == Comparison::Gain;
             let conclusive = outcome != Comparison::Inconclusive;
+            if let Some(monitor) = &mut self.monitor {
+                monitor.finish(
+                    now,
+                    if promoted {
+                        TrialDecision::Gain
+                    } else if conclusive {
+                        TrialDecision::NoConfirmedGain
+                    } else {
+                        TrialDecision::Inconclusive
+                    },
+                    if conclusive {
+                        TrialReason::Completed
+                    } else {
+                        TrialReason::BaselineDrift
+                    },
+                    if promoted {
+                        TrialArm::Candidate
+                    } else {
+                        TrialArm::Baseline
+                    },
+                );
+            }
             let kernel = if promoted {
                 trial.candidate
             } else {
@@ -864,6 +1521,295 @@ mod tests {
         t
     }
 
+    fn monitored_tick(t: &mut Tuner, now: u64, s: CpuAdaptiveSnapshot) -> Action {
+        if let Some(monitor) = &mut t.monitor {
+            monitor.observe(
+                now,
+                &[s],
+                crate::config::CpuAutotuneResources {
+                    parallelism: 4,
+                    total_bytes: Some(8 * CPU_LANE_MEMORY_BYTES),
+                    available_bytes: Some(6 * CPU_LANE_MEMORY_BYTES),
+                },
+            );
+        }
+        t.tick(now, &[s], true, true)
+    }
+
+    #[test]
+    fn telemetry_preserves_decisions_and_emits_gain_only_after_switch_acknowledgement() {
+        let mut decisions = Vec::new();
+        for enabled in [false, true] {
+            let recorder = crate::hardware_telemetry::Recorder::test_recorder();
+            let mut t = tuner();
+            t.candidates = vec![CpuKernel::Avx512, CpuKernel::Avx2];
+            t.short_trials = true;
+            if enabled {
+                t.monitor = Some(
+                    super::super::adaptive_telemetry::Monitor::test_without_placement(
+                        recorder.clone(),
+                        &super::super::tests::test_config(),
+                    ),
+                );
+            }
+            let mut s = snapshot();
+            s.kernel = CpuKernel::Avx512;
+            let mut now = 0;
+            let mut actions = Vec::new();
+            monitored_tick(&mut t, now, s);
+            for rate in [100, 120, 100, 100, 120, 100] {
+                now += 1;
+                s.kernel_ready = false;
+                monitored_tick(&mut t, now, s);
+                s.kernel_ready = true;
+                monitored_tick(&mut t, now, s);
+                now += 10;
+                s.hashes += rate * 10;
+                let action = monitored_tick(&mut t, now, s);
+                actions.push((
+                    action.kernel,
+                    action.hold_counts,
+                    action.interrupted,
+                    action.reset_scores,
+                ));
+                if let Some(kernel) = action.kernel {
+                    s.kernel = kernel;
+                    s.kernel_generation += 1;
+                }
+                assert!(recorder.test_tuning_report().is_none());
+            }
+            s.kernel_ready = false;
+            monitored_tick(&mut t, now + 1, s);
+            assert!(recorder.test_tuning_report().is_none());
+            s.kernel_ready = true;
+            monitored_tick(&mut t, now + 2, s);
+            if enabled {
+                let report = recorder.test_tuning_report().unwrap();
+                assert_eq!(report.dropped_trials, 0);
+                assert_eq!(report.trials.len(), 1);
+                let outcome = &report.trials[0].outcome;
+                assert!(outcome.validate());
+                assert_eq!(outcome.decision, TrialDecision::Gain);
+                assert_eq!(outcome.applied, Some(TrialArm::Candidate));
+                assert_eq!(outcome.context_after.members, outcome.candidate);
+                assert_eq!(outcome.samples.len(), 6);
+                assert!(outcome
+                    .samples
+                    .iter()
+                    .all(|s| !s.changed && s.elapsed_ms == 10_000));
+                assert_eq!(outcome.policy.short_sample_ms, Some(10_000));
+                assert_eq!(outcome.policy.short_minimum_hashes, Some(256));
+                assert_eq!(outcome.policy.minimum_sample_ms, 30_000);
+                assert_eq!(outcome.policy.minimum_hashes, 32);
+                assert_eq!(outcome.cost.idle_ms, None);
+                assert!(recorder.test_tuning_report().is_none());
+            } else {
+                assert!(recorder.test_tuning_report().is_none());
+            }
+            decisions.push(actions);
+            let _ = fs::remove_file(&t.path);
+        }
+        assert_eq!(decisions[0], decisions[1]);
+    }
+
+    #[test]
+    fn telemetry_does_not_report_unacknowledged_promotion_as_applied() {
+        for reason in [
+            TrialReason::ExecutionFailure,
+            TrialReason::TimeBudget,
+            TrialReason::UserInterrupted,
+        ] {
+            let recorder = crate::hardware_telemetry::Recorder::test_recorder();
+            let mut t = tuner();
+            t.candidates = vec![CpuKernel::Avx512, CpuKernel::Avx2];
+            t.monitor = Some(
+                super::super::adaptive_telemetry::Monitor::test_without_placement(
+                    recorder.clone(),
+                    &super::super::tests::test_config(),
+                ),
+            );
+            let mut s = snapshot();
+            s.kernel = CpuKernel::Avx512;
+            let mut now = 0;
+            monitored_tick(&mut t, now, s);
+            for rate in [100, 120, 100, 100, 120, 100] {
+                now += 1;
+                monitored_tick(&mut t, now, s);
+                now += 30;
+                s.hashes += rate * 30;
+                let action = monitored_tick(&mut t, now, s);
+                if let Some(kernel) = action.kernel {
+                    s.kernel = kernel;
+                    s.kernel_generation += 1;
+                }
+            }
+            assert!(recorder.test_tuning_report().is_none());
+            // The final request has not reached the workers. The last observed
+            // configuration is still the final baseline measurement.
+            t.monitor.as_mut().unwrap().abort(now, reason);
+            let report = recorder.test_tuning_report().unwrap();
+            assert_eq!(report.dropped_trials, 0);
+            let outcome = &report.trials[0].outcome;
+            assert!(outcome.validate());
+            assert_eq!(outcome.samples.len(), 6);
+            assert_eq!(outcome.decision, TrialDecision::Aborted);
+            assert_eq!(outcome.reason, reason);
+            assert_eq!(outcome.applied, Some(TrialArm::Baseline));
+            t.monitor.as_mut().unwrap().abort(now + 1, reason);
+            assert!(recorder.test_tuning_report().is_none());
+            let _ = fs::remove_file(&t.path);
+        }
+    }
+
+    #[test]
+    fn telemetry_failure_observes_partially_switched_cpu_backends() {
+        let recorder = crate::hardware_telemetry::Recorder::test_recorder();
+        let mut cfg = super::super::tests::test_config();
+        cfg.backend_specs.push(cfg.backend_specs[0].clone());
+        let mut monitor = super::super::adaptive_telemetry::Monitor::test_without_placement(
+            recorder.clone(),
+            &cfg,
+        );
+        let mut snapshots = [snapshot(), snapshot()];
+        for s in &mut snapshots {
+            s.kernel = CpuKernel::Avx512;
+        }
+        let resources = crate::config::CpuAutotuneResources {
+            parallelism: 4,
+            total_bytes: Some(8 * CPU_LANE_MEMORY_BYTES),
+            available_bytes: Some(6 * CPU_LANE_MEMORY_BYTES),
+        };
+        monitor.observe(0, &snapshots, resources);
+        monitor.begin(
+            0,
+            CpuKernel::Avx512,
+            CpuKernel::Avx2,
+            TrialPolicy {
+                revision: 1,
+                minimum_hashes: 32,
+                minimum_sample_ms: 30_000,
+                short_sample_ms: None,
+                short_minimum_hashes: None,
+                quantization: TrialQuantization::ThreeWindowHash,
+                maximum_baseline_drift_bps: 500,
+                required_gain_bps: 200,
+            },
+        );
+        snapshots[0].kernel = CpuKernel::Avx2;
+        snapshots[0].kernel_ready = false;
+        monitor.abort_observed(1, &snapshots, resources, TrialReason::ExecutionFailure);
+        let report = recorder.test_tuning_report().unwrap();
+        assert_eq!(report.dropped_trials, 0);
+        let outcome = &report.trials[0].outcome;
+        assert!(outcome.validate());
+        assert_eq!(outcome.applied, None);
+        assert_eq!(outcome.reason, TrialReason::ExecutionFailure);
+        assert_eq!(
+            outcome.context_after.members[0].kernel,
+            CpuKernel::Avx2.to_string()
+        );
+        assert_eq!(
+            outcome.context_after.members[1].kernel,
+            CpuKernel::Avx512.to_string()
+        );
+    }
+
+    #[test]
+    fn telemetry_keeps_negative_and_drifted_comparisons() {
+        for (rates, decision, reason) in [
+            (
+                [100, 90, 100],
+                TrialDecision::NoConfirmedGain,
+                TrialReason::Completed,
+            ),
+            (
+                [100, 110, 120],
+                TrialDecision::Inconclusive,
+                TrialReason::BaselineDrift,
+            ),
+        ] {
+            let recorder = crate::hardware_telemetry::Recorder::test_recorder();
+            let mut t = tuner();
+            t.candidates = vec![CpuKernel::Avx512, CpuKernel::Avx2];
+            t.monitor = Some(
+                super::super::adaptive_telemetry::Monitor::test_without_placement(
+                    recorder.clone(),
+                    &super::super::tests::test_config(),
+                ),
+            );
+            let mut s = snapshot();
+            s.kernel = CpuKernel::Avx512;
+            let mut now = 0;
+            monitored_tick(&mut t, now, s);
+            for rate in rates {
+                now += 1;
+                monitored_tick(&mut t, now, s);
+                now += 30;
+                s.hashes += rate * 30;
+                let action = monitored_tick(&mut t, now, s);
+                if let Some(kernel) = action.kernel {
+                    s.kernel = kernel;
+                    s.kernel_generation += 1;
+                }
+            }
+            let report = recorder.test_tuning_report().unwrap();
+            assert_eq!(report.dropped_trials, 0);
+            let result = &report.trials[0].outcome;
+            assert!(result.validate());
+            assert_eq!(result.decision, decision);
+            assert_eq!(result.reason, reason);
+            assert_eq!(result.applied, Some(TrialArm::Baseline));
+            assert_eq!(
+                result.samples.iter().map(|s| s.hashes).collect::<Vec<_>>(),
+                rates.map(|r| r * 30)
+            );
+            let _ = fs::remove_file(&t.path);
+        }
+    }
+
+    #[test]
+    fn telemetry_preserves_partial_sample_when_last_backend_disappears() {
+        let recorder = crate::hardware_telemetry::Recorder::test_recorder();
+        let mut t = tuner();
+        t.candidates = vec![CpuKernel::Avx512, CpuKernel::Avx2];
+        t.monitor = Some(
+            super::super::adaptive_telemetry::Monitor::test_without_placement(
+                recorder.clone(),
+                &super::super::tests::test_config(),
+            ),
+        );
+        let mut s = snapshot();
+        s.kernel = CpuKernel::Avx512;
+        monitored_tick(&mut t, 0, s);
+        monitored_tick(&mut t, 1, s);
+        s.hashes = 77;
+        monitored_tick(&mut t, 4, s);
+        s.running = false;
+        monitored_tick(&mut t, 5, s);
+        t.monitor
+            .as_mut()
+            .unwrap()
+            .abort(5, TrialReason::ExecutionFailure);
+        let report = recorder.test_tuning_report().unwrap();
+        assert_eq!(report.dropped_trials, 0);
+        let result = &report.trials[0].outcome;
+        assert!(result.validate());
+        assert_eq!(result.decision, TrialDecision::Aborted);
+        assert_eq!(result.reason, TrialReason::ExecutionFailure);
+        assert_eq!(result.applied, None);
+        assert!(result.context_after.members.is_empty());
+        assert_eq!(result.samples.len(), 1);
+        assert_eq!(result.samples[0].hashes, 77);
+        assert_eq!(result.samples[0].elapsed_ms, 3000);
+        assert!(result.samples[0].changed);
+        t.monitor
+            .as_mut()
+            .unwrap()
+            .abort(6, TrialReason::UserInterrupted);
+        assert!(recorder.test_tuning_report().is_none());
+        let _ = fs::remove_file(&t.path);
+    }
+
     #[test]
     fn native_constructor_uses_runtime_identity_in_hardware_tests() {
         let cfg = super::super::tests::test_config();
@@ -893,7 +1839,7 @@ mod tests {
             ..CpuIdentity::default()
         };
         for (identity, eligible, starts_streaming) in [
-            (turin.clone(), true, false),
+            (turin.clone(), true, true),
             (
                 CpuIdentity {
                     model: Some(0x44),
@@ -909,7 +1855,7 @@ mod tests {
                     ..turin.clone()
                 },
                 true,
-                false,
+                true,
             ),
             (
                 CpuIdentity {
@@ -971,6 +1917,256 @@ mod tests {
                 secs: 30
             }
         ));
+    }
+
+    #[test]
+    fn demand_fence_small_gain_requires_resolved_stable_samples() {
+        let base = CpuKernel::Avx512256Stream;
+        let candidate = CpuKernel::Avx512256StreamR64D3;
+        let a = Sample {
+            hashes: 1500,
+            secs: 30,
+        };
+        let b = Sample {
+            hashes: 1515,
+            secs: 30,
+        };
+        assert_eq!(comparison(a, b, a), Comparison::NoConfirmedGain);
+        assert_eq!(comparison_for(base, candidate, a, b, a), Comparison::Gain);
+        assert_eq!(
+            comparison_for(base, candidate, a, Sample { hashes: 1501, ..a }, a),
+            Comparison::NoConfirmedGain
+        );
+        assert_eq!(
+            comparison_for(base, candidate, a, b, Sample { hashes: 1530, ..a }),
+            Comparison::Inconclusive
+        );
+        assert_eq!(
+            comparison_for(
+                base,
+                candidate,
+                Sample {
+                    hashes: 500,
+                    secs: 10
+                },
+                b,
+                a
+            ),
+            Comparison::Inconclusive
+        );
+    }
+
+    #[test]
+    fn demand_fence_one_percent_promotes_after_two_cycles_and_survives_cache() {
+        if candidates().len() < 2 {
+            return;
+        }
+        let mut t = tuner();
+        let mut s = snapshot();
+        s.kernel = CpuKernel::Avx512256Stream;
+        t.candidates = vec![s.kernel, CpuKernel::Avx512256StreamR64D3];
+        t.short_trials = true;
+        let challenger = CpuKernel::Avx512256StreamR64D3;
+        let mut now = 0;
+        assert!(t.tick(now, &[s], true, true).hold_counts);
+        for (index, rate) in [100, 101, 100, 100, 101, 100].into_iter().enumerate() {
+            now += 1;
+            s.kernel_ready = false;
+            assert!(t.tick(now, &[s], true, true).hold_counts);
+            assert!(t.trial.as_ref().unwrap().window.is_none());
+            s.kernel_ready = true;
+            t.tick(now, &[s], true, true);
+            now += 30;
+            s.hashes += rate * 30;
+            let action = t.tick(now, &[s], true, true);
+            if let Some(kernel) = action.kernel {
+                s.kernel = kernel;
+                s.kernel_generation += 1;
+            }
+            if index < 5 {
+                assert!(t.cache.winners.is_empty());
+            }
+        }
+        assert_eq!(s.kernel, challenger);
+        assert_eq!(t.cache.winners.len(), 1);
+        let context = Context::from_snapshots(&[s]);
+        assert_eq!(
+            t.cache.winner(&context, unix_secs(), &t.candidates),
+            Some(challenger)
+        );
+        assert!(!t.tick(now + 1, &[s], true, true).hold_counts);
+        assert!(!t.tick(now + 2, &[s], true, true).hold_counts);
+        let _ = fs::remove_file(&t.path);
+    }
+
+    #[test]
+    fn prefetch_small_gain_promotes_after_two_cycles_and_survives_cache() {
+        if candidates().len() < 2 {
+            return;
+        }
+        let mut t = tuner();
+        let mut s = snapshot();
+        s.kernel = CpuKernel::Avx512256StreamR64D3;
+        t.candidates = vec![s.kernel, CpuKernel::Avx512256StreamR64D4];
+        t.short_trials = true;
+        let challenger = CpuKernel::Avx512256StreamR64D4;
+        let mut now = 0;
+        assert!(t.tick(now, &[s], true, true).hold_counts);
+        for (index, rate) in [1500, 1505, 1500, 1500, 1505, 1500].into_iter().enumerate() {
+            now += 1;
+            s.kernel_ready = false;
+            assert!(t.tick(now, &[s], true, true).hold_counts);
+            assert!(t.trial.as_ref().unwrap().window.is_none());
+            s.kernel_ready = true;
+            t.tick(now, &[s], true, true);
+            now += 30;
+            s.hashes += rate;
+            let action = t.tick(now, &[s], true, true);
+            if let Some(kernel) = action.kernel {
+                s.kernel = kernel;
+                s.kernel_generation += 1;
+            }
+            if index < 5 {
+                assert!(t.cache.winners.is_empty());
+            }
+        }
+        assert_eq!(s.kernel, challenger);
+        assert_eq!(t.cache.winners.len(), 1);
+        let context = Context::from_snapshots(&[s]);
+        assert_eq!(
+            t.cache.winner(&context, unix_secs(), &t.candidates),
+            Some(challenger)
+        );
+        assert!(!t.tick(now + 1, &[s], true, true).hold_counts);
+        assert!(!t.tick(now + 2, &[s], true, true).hold_counts);
+        let _ = fs::remove_file(&t.path);
+    }
+
+    #[test]
+    fn depth6_small_gain_rejects_unresolved_samples_and_baseline_drift() {
+        let a = CpuKernel::Avx512256StreamR64D4;
+        let b = CpuKernel::Avx512256StreamR64D6;
+        let before = Sample {
+            hashes: 2250,
+            secs: 45,
+        };
+        let candidate = Sample {
+            hashes: 2254,
+            secs: 45,
+        };
+        assert_eq!(
+            comparison_for(a, b, before, candidate, before),
+            Comparison::Gain
+        );
+        assert_eq!(
+            comparison_for(
+                a,
+                b,
+                before,
+                Sample {
+                    hashes: 2253,
+                    secs: 45
+                },
+                before
+            ),
+            Comparison::NoConfirmedGain
+        );
+        assert_eq!(
+            comparison_for(
+                a,
+                b,
+                before,
+                candidate,
+                Sample {
+                    hashes: 2275,
+                    secs: 45
+                }
+            ),
+            Comparison::Inconclusive
+        );
+        for unresolved in [
+            Sample {
+                hashes: 2250,
+                secs: 44,
+            },
+            Sample {
+                hashes: 2047,
+                secs: 45,
+            },
+        ] {
+            assert_eq!(
+                comparison_for(a, b, unresolved, candidate, before),
+                Comparison::Inconclusive
+            );
+        }
+        assert_eq!(
+            turin_pair_resolution(a, CpuKernel::Avx512256StreamR64D3),
+            (30, 1024)
+        );
+    }
+
+    #[test]
+    fn depth6_small_gain_promotes_after_two_cycles_and_survives_cache() {
+        if candidates().len() < 2 {
+            return;
+        }
+        let mut t = tuner();
+        let mut s = snapshot();
+        s.kernel = CpuKernel::Avx512256StreamR64D4;
+        t.candidates = vec![s.kernel, CpuKernel::Avx512256StreamR64D6];
+        t.short_trials = true;
+        let challenger = CpuKernel::Avx512256StreamR64D6;
+        let mut now = 0;
+        assert!(t.tick(now, &[s], true, true).hold_counts);
+        for (index, rate) in [2250, 2254, 2250, 2250, 2254, 2250].into_iter().enumerate() {
+            now += 1;
+            s.kernel_ready = false;
+            assert!(t.tick(now, &[s], true, true).hold_counts);
+            assert!(t.trial.as_ref().unwrap().window.is_none());
+            s.kernel_ready = true;
+            t.tick(now, &[s], true, true);
+            now += 45;
+            s.hashes += rate;
+            let action = t.tick(now, &[s], true, true);
+            if let Some(kernel) = action.kernel {
+                s.kernel = kernel;
+                s.kernel_generation += 1;
+            }
+            if index < 5 {
+                assert!(t.cache.winners.is_empty());
+            }
+        }
+        assert_eq!(s.kernel, challenger);
+        assert_eq!(t.cache.winners.len(), 1);
+        let context = Context::from_snapshots(&[s]);
+        assert_eq!(
+            t.cache.winner(&context, unix_secs(), &t.candidates),
+            Some(challenger)
+        );
+        assert!(!t.tick(now + 1, &[s], true, true).hold_counts);
+        assert!(!t.tick(now + 2, &[s], true, true).hold_counts);
+        let _ = fs::remove_file(&t.path);
+    }
+
+    #[test]
+    fn joint_budget_covers_depth6_sweep_and_a_retry() {
+        let mut t = tuner();
+        t.window_secs = 30;
+        t.candidates = vec![
+            CpuKernel::Avx512256StreamR64D6,
+            CpuKernel::Avx512256StreamR64D4,
+            CpuKernel::Avx512256StreamR64D3,
+            CpuKernel::Avx512256Stream,
+            CpuKernel::Avx512,
+            CpuKernel::Avx2,
+        ];
+        // Three small-gain opponents need 45s windows; generic opponents
+        // still take 30s. Do not abort the count trial before these can finish.
+        let sweep = 3 * 6 * 45 + 2 * 6 * 30;
+        assert!(t.joint_budget_secs() >= sweep + RETRY_SECS + 120);
+        t.window_secs = 60;
+        assert!(t.joint_budget_secs() >= 5 * 6 * 60 + RETRY_SECS + 120);
+        let _ = fs::remove_file(&t.path);
     }
 
     #[test]
@@ -1212,34 +2408,116 @@ mod tests {
         };
         assert_eq!(candidates_for(&genoa, &supported), supported);
         assert_eq!(candidates_for(&genoa, &supported[..2]), supported[..2]);
-        assert_eq!(startup_kernel_for(&genoa, &supported), None);
+        assert_eq!(
+            startup_kernel_for(&genoa, &supported),
+            Some(CpuKernel::Avx512256Stream)
+        );
+        // Zen 4/5 parts beyond the measured models share the cohort policy:
+        // Raphael (19h/61h), other Genoa models, Turin Dense, masked cloud CPUIDs.
+        for model in [0x61, 0x10, 0x12] {
+            let zen4 = CpuIdentity {
+                family: Some(25),
+                model: Some(model),
+                ..turin.clone()
+            };
+            assert_eq!(candidates_for(&zen4, &supported), supported);
+        }
+        for model in [0x70, 0x11, 0x00] {
+            let zen5 = CpuIdentity {
+                model: Some(model),
+                ..turin.clone()
+            };
+            assert_eq!(candidates_for(&zen5, &supported), supported);
+        }
         for identity in [
             CpuIdentity {
                 vendor: Some("GenuineIntel".into()),
                 ..turin.clone()
             },
             CpuIdentity {
-                family: Some(25),
-                model: Some(0x10),
-                ..turin.clone()
-            },
-            CpuIdentity {
-                family: Some(25),
-                model: Some(0x12),
-                ..turin.clone()
-            },
-            CpuIdentity {
-                model: Some(0x70),
+                family: Some(0x17),
+                model: Some(0x31),
                 ..turin.clone()
             },
             CpuIdentity::default(),
         ] {
             assert_eq!(candidates_for(&identity, &supported), supported[..2]);
+            assert_eq!(startup_kernel_for(&identity, &supported[..2]), None);
         }
         assert_eq!(
             candidates_for(&turin, &[CpuKernel::Avx2]),
             [CpuKernel::Avx2]
         );
+    }
+
+    #[test]
+    fn fixed_counts_use_the_cohort_default_kernel() {
+        use crate::runtime_identity::CpuIdentity;
+        let all = [
+            CpuKernel::Avx512,
+            CpuKernel::Avx2,
+            CpuKernel::Avx512256Stream,
+        ];
+        let masked_zen5 = CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0),
+            stepping: None,
+        };
+        let raphael = CpuIdentity {
+            family: Some(0x19),
+            model: Some(0x61),
+            ..masked_zen5.clone()
+        };
+        for identity in [&masked_zen5, &raphael] {
+            assert_eq!(
+                static_kernel_for_identity(identity, &all, 192),
+                Some(CpuKernel::Avx512256Stream)
+            );
+            assert_eq!(
+                static_kernel_for_identity(identity, &all, 8),
+                Some(CpuKernel::Avx512256Stream)
+            );
+            assert_eq!(static_kernel_for_identity(identity, &all, 7), None);
+        }
+        // Zen 3 shares family 19h but has no AVX-512, so no streaming path.
+        let milan = CpuIdentity {
+            model: Some(0x01),
+            ..raphael.clone()
+        };
+        assert_eq!(static_kernel_for_identity(&milan, &all[..2], 48), None);
+        // Zen 3 uses the AVX2 streaming path once it is runtime-supported.
+        let avx2_only = [CpuKernel::Avx2, CpuKernel::Avx2Stream];
+        assert_eq!(
+            static_kernel_for_identity(&milan, &avx2_only, 12),
+            Some(CpuKernel::Avx2Stream)
+        );
+        assert_eq!(
+            candidates_for(&milan, &avx2_only),
+            [CpuKernel::Avx2, CpuKernel::Avx2Stream]
+        );
+        // Zen 2 (family 17h, model 30h and up) shares the AVX2 streaming path.
+        let rome = CpuIdentity {
+            family: Some(0x17),
+            model: Some(0x31),
+            ..raphael.clone()
+        };
+        assert_eq!(
+            static_kernel_for_identity(&rome, &avx2_only, 32),
+            Some(CpuKernel::Avx2Stream)
+        );
+        // Zen 1/Zen+ (17h below 30h) is not yet validated natively.
+        let naples = CpuIdentity {
+            model: Some(0x01),
+            ..rome.clone()
+        };
+        assert_eq!(static_kernel_for_identity(&naples, &avx2_only, 32), None);
+        assert_eq!(candidates_for(&naples, &avx2_only), [CpuKernel::Avx2]);
+        let intel = CpuIdentity {
+            vendor: Some("GenuineIntel".into()),
+            ..masked_zen5.clone()
+        };
+        assert_eq!(static_kernel_for_identity(&intel, &all, 64), None);
     }
 
     fn three_path_tuner() -> Tuner {
@@ -1329,7 +2607,1219 @@ mod tests {
     }
 
     #[test]
-    fn streaming_startup_requires_validated_ryzen_identity_and_candidate() {
+    fn genoa_ring_startup_is_host_scoped_and_requires_measured_backing() {
+        if !CpuKernel::Avx512256StreamR8D2.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-genoa-ring-policy-{}.json",
+            std::process::id()
+        ));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let mut exact = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&exact.path);
+        assert!(exact.candidates.contains(&CpuKernel::Avx512256Stream));
+        assert!(exact.candidates.contains(&CpuKernel::Avx512256StreamR8D2));
+        assert_eq!(exact.startup, Some(CpuKernel::Avx512256StreamR8D2));
+        let mut state = snapshot();
+        state.threads = 32;
+        state.kernel = CpuKernel::Avx512;
+        state.backing_bytes = [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0];
+        assert_eq!(
+            exact.tick(1, &[state], true, true).kernel,
+            Some(CpuKernel::Avx512256StreamR8D2)
+        );
+        for (os, environment, brand) in [
+            ("linux", "wsl2", "AMD EPYC 9R14"),
+            ("linux", "native", "AMD EPYC 9355P"),
+        ] {
+            let mut other = host.clone();
+            other.os = os.into();
+            other.runtime_environment = environment.into();
+            other.cpu_brand = Some(brand.into());
+            let tuner = Tuner::for_identity(&cfg, other, &identity);
+            assert!(!tuner.candidates.contains(&CpuKernel::Avx512256StreamR8D2));
+            assert_ne!(tuner.startup, Some(CpuKernel::Avx512256StreamR8D2));
+        }
+        let mut fallback = Tuner::for_identity(&cfg, host, &identity);
+        state.backing_bytes = [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0];
+        assert_ne!(
+            fallback.tick(1, &[state], true, true).kernel,
+            Some(CpuKernel::Avx512256StreamR8D2)
+        );
+        let _ = fs::remove_file(&exact.path);
+    }
+
+    #[test]
+    fn windows_ring_candidate_starts_only_on_regular_backing() {
+        if !CpuKernel::Avx512256StreamR8D2.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path =
+            std::env::temp_dir().join(format!("seine-win-ring-{}.json", std::process::id()));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "windows".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        for regular in [true, false] {
+            let mut tuner = Tuner::for_identity(&cfg, host.clone(), &identity);
+            let _ = fs::remove_file(&tuner.path);
+            assert!(tuner.candidates.contains(&CpuKernel::Avx512256StreamR8D2));
+            let mut state = snapshot();
+            state.threads = 32;
+            state.kernel = CpuKernel::Avx512;
+            state.backing_bytes = [0; 5];
+            state.backing_bytes[if regular { 3 } else { 2 }] = 32 * CPU_LANE_MEMORY_BYTES;
+            let action = tuner.tick(1, &[state], true, true);
+            assert_eq!(
+                action.kernel,
+                regular.then_some(CpuKernel::Avx512256StreamR8D2)
+            );
+        }
+        cfg.cpu_page_mode = crate::config::CpuPageMode::Large;
+        assert!(!Tuner::for_identity(&cfg, host, &identity)
+            .candidates
+            .contains(&CpuKernel::Avx512256StreamR8D2));
+    }
+
+    #[test]
+    fn ring_candidate_expansion_restores_prior_winner_before_new_trial() {
+        if !CpuKernel::Avx512256StreamR8D2.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 31;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-ring-upgrade-seed-{}.json",
+            std::process::id()
+        ));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let fresh = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&fresh.path);
+        let context = Context {
+            members: vec![0],
+            workers: vec![31],
+            backing: vec![[0, 0, 31 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+        };
+        let mut prior = Cache {
+            schema: CACHE_SCHEMA,
+            host: host.clone(),
+            configuration: fresh
+                .cache
+                .configuration
+                .replace("kernels=[Avx512256StreamR8D2, ", "kernels=[")
+                .replace(";sample_policy=genoa-thp-30-32-10s-256-v1", "")
+                .replace(";frontier_policy=genoa-thp31-32-stream-first-v1", ""),
+            winners: vec![Winner {
+                context: context.clone(),
+                kernel: "avx512-256-stream".into(),
+                timestamp: unix_secs(),
+                base: "avx512-256-stream".into(),
+                candidate: "avx2".into(),
+                samples: vec![sample(100); 3],
+            }],
+        };
+        assert_ne!(prior.configuration, fresh.cache.configuration);
+        fs::write(&fresh.path, serde_json::to_vec(&prior).unwrap()).unwrap();
+        let mut upgraded = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let mut state = snapshot();
+        state.threads = 31;
+        state.backing_bytes = context.backing[0];
+        state.kernel = CpuKernel::Avx512;
+        let first = upgraded.tick(1, &[state], true, true);
+        assert_eq!(first.kernel, Some(CpuKernel::Avx512256Stream));
+        assert!(first.hold_counts && upgraded.cache.winners.is_empty());
+        state.kernel = CpuKernel::Avx512256Stream;
+        state.kernel_generation += 1;
+        upgraded.tick(2, &[state], true, true);
+        upgraded.tick(3, &[state], true, true);
+        assert_eq!(
+            upgraded.trial.as_ref().unwrap().candidate,
+            CpuKernel::Avx512256StreamR8D2
+        );
+        assert!(
+            upgraded.pending.is_empty(),
+            "do not repeat already confirmed old alternatives"
+        );
+        // A different setting or expired evidence cannot become an upgrade seed.
+        for stale in [false, true] {
+            prior.configuration = if stale {
+                fresh
+                    .cache
+                    .configuration
+                    .replace("kernels=[Avx512256StreamR8D2, ", "kernels=[")
+                    .replace(";sample_policy=genoa-thp-30-32-10s-256-v1", "")
+                    .replace(";frontier_policy=genoa-thp31-32-stream-first-v1", "")
+            } else {
+                "other-settings".into()
+            };
+            prior.winners[0].timestamp = if stale { 0 } else { unix_secs() };
+            fs::write(&fresh.path, serde_json::to_vec(&prior).unwrap()).unwrap();
+            let mut rejected = Tuner::for_identity(&cfg, host.clone(), &identity);
+            state.kernel = CpuKernel::Avx512;
+            assert_ne!(
+                rejected.tick(1, &[state], true, true).kernel,
+                Some(CpuKernel::Avx512256Stream)
+            );
+        }
+        let _ = fs::remove_file(&fresh.path);
+    }
+
+    #[test]
+    fn genoa_kernel_cache_survives_a_different_confirmed_starting_count() {
+        if !CpuKernel::Avx512256Stream.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-genoa-cache-seed-{}.json",
+            std::process::id()
+        ));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let mut first = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&first.path);
+        let context = Context {
+            members: vec![0],
+            workers: vec![31],
+            backing: vec![[0, 0, 31 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+        };
+        first.cache.winners = vec![Winner {
+            context: context.clone(),
+            kernel: "avx512-256-stream".into(),
+            timestamp: unix_secs(),
+            base: "avx512-256-stream".into(),
+            candidate: "avx2".into(),
+            samples: vec![sample(100); 3],
+        }];
+        let current_configuration = first.cache.configuration.clone();
+        // Both an already-shortened policy and the preceding longer-window
+        // policy must retain the known winner when a restart uses 31 workers.
+        for prior_policy in 0..3 {
+            first.cache.configuration = if prior_policy == 2 {
+                current_configuration
+                    .replace(";sample_policy=genoa-thp-30-32-10s-256-v1", "")
+                    .replace(";frontier_policy=genoa-thp31-32-stream-first-v1", "")
+            } else if prior_policy == 1 {
+                current_configuration.replace(";frontier_policy=genoa-thp31-32-stream-first-v1", "")
+            } else {
+                current_configuration.clone()
+            };
+            fs::write(&first.path, serde_json::to_vec(&first.cache).unwrap()).unwrap();
+            cfg.threads = 31;
+            let mut restored = Tuner::for_identity(&cfg, host.clone(), &identity);
+            assert_eq!(restored.cache.configuration, current_configuration);
+            let mut state = snapshot();
+            state.threads = 31;
+            state.backing_bytes = context.backing[0];
+            state.kernel = CpuKernel::Avx512;
+            let action = restored.tick(1, &[state], true, true);
+            assert_eq!(action.kernel, Some(CpuKernel::Avx512256Stream));
+            assert!(action.hold_counts);
+            assert!(
+                restored.pending.is_empty(),
+                "confirmed paths need no repeat sweep"
+            );
+        }
+        let _ = fs::remove_file(&first.path);
+
+        // No cached winner means a 31-worker context still needs ordinary
+        // comparisons: the measured automatic streaming start remains 32 only.
+        let mut fresh = Tuner::for_identity(&cfg, host, &identity);
+        let mut s = snapshot();
+        s.threads = 31;
+        s.backing_bytes = context.backing[0];
+        s.kernel = CpuKernel::Avx512;
+        let action = fresh.tick(1, &[s], true, true);
+        assert_eq!(action.kernel, None);
+        assert!(action.hold_counts);
+        assert!(!genoa_stream_context(&context));
+    }
+
+    #[test]
+    fn genoa_frontier_is_initial_and_keeps_periodic_full_search() {
+        for (workers, huge, enabled, expected) in [
+            (32, true, true, CpuKernel::Avx512256Stream),
+            (31, true, true, CpuKernel::Avx512256Stream),
+            (30, true, true, CpuKernel::Avx512),
+            (32, false, true, CpuKernel::Avx512),
+            (32, true, false, CpuKernel::Avx512),
+        ] {
+            let mut t = tuner();
+            t.genoa_startup_frontier = enabled;
+            t.candidates = vec![
+                CpuKernel::Avx512,
+                CpuKernel::Avx2,
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Avx512256StreamR8D2,
+            ];
+            let mut state = snapshot();
+            state.threads = workers;
+            state.kernel = CpuKernel::Avx512256StreamR8D2;
+            state.backing_bytes = [0; 5];
+            state.backing_bytes[if huge { 2 } else { 3 }] = workers as u64 * CPU_LANE_MEMORY_BYTES;
+            let context = Context::from_snapshots(&[state]);
+            t.tick(1, &[state], true, true);
+            assert_eq!(t.trial.as_ref().unwrap().candidate, expected);
+            if expected == CpuKernel::Avx512256Stream {
+                assert!(t.pending.is_empty());
+                let trial = t.trial.take().unwrap();
+                t.cache.winners.push(Winner {
+                    context: context.clone(),
+                    kernel: "avx512-256-stream-r8d2".into(),
+                    timestamp: unix_secs(),
+                    base: "avx512-256-stream-r8d2".into(),
+                    candidate: "avx512-256-stream".into(),
+                    samples: vec![sample(100); 3],
+                });
+                t.checked = Some(trial.context);
+                t.next_check = 0;
+                t.tick(RECHECK_SECS + 2, &[state], true, true);
+                assert_eq!(t.trial.as_ref().unwrap().candidate, CpuKernel::Avx512);
+                assert!(t.pending.contains(&CpuKernel::Avx2));
+            }
+            let _ = fs::remove_file(&t.path);
+        }
+    }
+
+    #[test]
+    fn windows_frontier_keeps_backing_count_and_periodic_search_boundaries() {
+        for (workers, regular, enabled, expected) in [
+            (32, true, true, CpuKernel::Avx512256Stream),
+            (31, true, true, CpuKernel::Avx512256Stream),
+            (30, true, true, CpuKernel::Avx512),
+            (32, false, true, CpuKernel::Avx512),
+            (32, true, false, CpuKernel::Avx512),
+        ] {
+            let mut t = tuner();
+            t.windows_genoa_startup = true;
+            t.genoa_startup_frontier = enabled;
+            t.candidates = vec![
+                CpuKernel::Avx512,
+                CpuKernel::Avx2,
+                CpuKernel::Avx512256Stream,
+                CpuKernel::Avx512256StreamR8D2,
+            ];
+            let mut state = snapshot();
+            state.threads = workers;
+            state.kernel = CpuKernel::Avx512256StreamR8D2;
+            state.backing_bytes = [0; 5];
+            state.backing_bytes[if regular { 3 } else { 2 }] =
+                workers as u64 * CPU_LANE_MEMORY_BYTES;
+            let context = Context::from_snapshots(&[state]);
+            t.tick(1, &[state], true, true);
+            assert_eq!(t.trial.as_ref().unwrap().candidate, expected);
+            if expected == CpuKernel::Avx512256Stream {
+                assert!(t.pending.is_empty());
+                let trial = t.trial.take().unwrap();
+                t.cache.winners.push(Winner {
+                    context: context.clone(),
+                    kernel: "avx512-256-stream-r8d2".into(),
+                    timestamp: unix_secs(),
+                    base: "avx512-256-stream-r8d2".into(),
+                    candidate: "avx512-256-stream".into(),
+                    samples: vec![sample(100); 3],
+                });
+                t.checked = Some(trial.context);
+                t.next_check = 0;
+                t.tick(RECHECK_SECS + 2, &[state], true, true);
+                assert_eq!(t.trial.as_ref().unwrap().candidate, CpuKernel::Avx512);
+                assert!(t.pending.contains(&CpuKernel::Avx2));
+            }
+            let _ = fs::remove_file(&t.path);
+        }
+        let mut context = Context {
+            members: vec![0],
+            workers: vec![32],
+            backing: vec![[0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0]],
+        };
+        context.backing[0][0] = CPU_LANE_MEMORY_BYTES;
+        context.backing[0][3] -= CPU_LANE_MEMORY_BYTES;
+        assert!(!windows_genoa_frontier_context(&context));
+        context.backing[0] = [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0];
+        context.members[0] = 1;
+        assert!(!windows_genoa_frontier_context(&context));
+    }
+
+    #[test]
+    fn windows_frontier_policy_and_previous_confirmed_cache_are_scoped() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_autotune_secs = 6;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-windows-frontier-cache-{}.json",
+            std::process::id()
+        ));
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "windows".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let mut identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let paths = [CpuKernel::Avx512256Stream, CpuKernel::Avx512256StreamR8D2];
+        assert!(windows_genoa_frontier_for(&cfg, &host, &identity, &paths));
+        assert!(!windows_genoa_frontier_for(
+            &cfg,
+            &host,
+            &identity,
+            &paths[..1]
+        ));
+        assert!(!windows_genoa_frontier_for(
+            &cfg,
+            &host,
+            &identity,
+            &paths[1..]
+        ));
+        identity.model = Some(0x02);
+        assert!(!windows_genoa_frontier_for(&cfg, &host, &identity, &paths));
+        identity.model = Some(0x11);
+        host.runtime_environment = "wsl2".into();
+        assert!(!windows_genoa_frontier_for(&cfg, &host, &identity, &paths));
+        host.runtime_environment = "native".into();
+        cfg.cpu_autotune_secs = 12;
+        assert!(!windows_genoa_frontier_for(&cfg, &host, &identity, &paths));
+        cfg.cpu_autotune_secs = 6;
+        if !CpuKernel::Avx512256StreamR8D2.is_supported() {
+            return;
+        }
+        let initial = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&initial.path);
+        assert!(initial.genoa_startup_frontier);
+        let context = Context {
+            members: vec![0],
+            workers: vec![31],
+            backing: vec![[0, 0, 0, 31 * CPU_LANE_MEMORY_BYTES, 0]],
+        };
+        let mut old = Cache {
+            schema: CACHE_SCHEMA,
+            host: host.clone(),
+            configuration: initial.cache.configuration.replace(
+                ";frontier_policy=genoa-windows-regular31-32-stream-first-v1",
+                "",
+            ),
+            winners: vec![Winner {
+                context: context.clone(),
+                kernel: "avx512-256-stream-r8d2".into(),
+                timestamp: unix_secs(),
+                base: "avx512-256-stream-r8d2".into(),
+                candidate: "avx2".into(),
+                samples: vec![sample(100); 3],
+            }],
+        };
+        for valid in [true, false] {
+            if !valid {
+                old.winners[0].timestamp = 0;
+            }
+            fs::write(&initial.path, serde_json::to_vec(&old).unwrap()).unwrap();
+            let restored = Tuner::for_identity(&cfg, host.clone(), &identity);
+            assert_eq!(
+                restored
+                    .cache
+                    .winner(&context, unix_secs(), &restored.candidates),
+                valid.then_some(CpuKernel::Avx512256StreamR8D2)
+            );
+        }
+        let _ = fs::remove_file(&initial.path);
+    }
+
+    #[test]
+    fn genoa_short_policy_requires_measured_host_default_window_and_supported_path() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_autotune_secs = 6;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            stepping: Some(1),
+        };
+        let paths = [CpuKernel::Avx512, CpuKernel::Avx512256Stream];
+        // A cached starting count need not be 32; context eligibility is checked
+        // again for each actual trial, independently of startup count.
+        cfg.threads = 31;
+        assert!(genoa_short_trials_for(&cfg, &host, &identity, &paths));
+        assert!(!genoa_short_trials_for(&cfg, &host, &identity, &paths[..1]));
+        cfg.cpu_autotune_secs = 12;
+        assert!(!genoa_short_trials_for(&cfg, &host, &identity, &paths));
+        cfg.cpu_autotune_secs = 6;
+        host.runtime_environment = "wsl2".into();
+        assert!(!genoa_short_trials_for(&cfg, &host, &identity, &paths));
+        host.runtime_environment = "native".into();
+        host.os = "windows".into();
+        assert!(!genoa_short_trials_for(&cfg, &host, &identity, &paths));
+        host.os = "linux".into();
+        cfg.cpu_profile = CpuPerformanceProfile::Efficiency;
+        assert!(!genoa_short_trials_for(&cfg, &host, &identity, &paths));
+    }
+
+    #[test]
+    fn genoa_short_context_rejects_unmeasured_counts_backing_and_members() {
+        for workers in [1, 16, 29, 30, 31, 32, 33] {
+            let context = Context {
+                members: vec![0],
+                workers: vec![workers],
+                backing: vec![[0, 0, workers as u64 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+            };
+            assert_eq!(genoa_short_context(&context), (30..=32).contains(&workers));
+            let mut mixed = context.clone();
+            mixed.backing[0][2] -= CPU_LANE_MEMORY_BYTES;
+            mixed.backing[0][3] = CPU_LANE_MEMORY_BYTES;
+            assert!(!genoa_short_context(&mixed));
+            let mut different_member = context.clone();
+            different_member.members[0] = 1;
+            assert!(!genoa_short_context(&different_member));
+            let mut multiple = context.clone();
+            multiple.members.push(1);
+            multiple.workers.push(workers);
+            multiple.backing.push(context.backing[0]);
+            assert!(!genoa_short_context(&multiple));
+        }
+    }
+
+    #[test]
+    fn genoa_short_trial_requires_two_wins_and_keeps_full_windows_on_fallback_pages() {
+        for huge in [true, false] {
+            let mut t = tuner();
+            t.genoa_short_trials = true;
+            t.candidates = vec![CpuKernel::Avx512, CpuKernel::Avx2];
+            let mut s = snapshot();
+            s.threads = 31;
+            s.backing_bytes = [0; 5];
+            s.backing_bytes[if huge { 2 } else { 3 }] = 31 * CPU_LANE_MEMORY_BYTES;
+            s.kernel = CpuKernel::Avx512;
+            let mut now = 0;
+            assert!(t.tick(now, &[s], true, true).hold_counts);
+            for (index, rate) in [40, 50, 40, 40, 50, 40].into_iter().enumerate() {
+                now += 1;
+                s.kernel_ready = false;
+                t.tick(now, &[s], true, true);
+                assert!(t.trial.as_ref().unwrap().window.is_none());
+                s.kernel_ready = true;
+                t.tick(now, &[s], true, true);
+                let seconds = if huge { 10 } else { 30 };
+                now += seconds;
+                s.hashes += rate * seconds;
+                let action = t.tick(now, &[s], true, true);
+                if let Some(kernel) = action.kernel {
+                    s.kernel = kernel;
+                    s.kernel_generation += 1;
+                }
+                if index < 5 {
+                    assert!(t.cache.winners.is_empty());
+                }
+            }
+            assert_eq!(s.kernel, CpuKernel::Avx2);
+            assert_eq!(t.cache.winners.len(), 1);
+            assert!(t.cache.winners[0]
+                .samples
+                .iter()
+                .all(|sample| sample.secs == if huge { 10 } else { 30 }));
+            let _ = fs::remove_file(&t.path);
+        }
+    }
+
+    #[test]
+    fn experimental_genoa_startup_requires_full_count_host_and_supported_path() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            stepping: Some(1),
+        };
+        let paths = [CpuKernel::Avx512, CpuKernel::Avx512256Stream];
+        assert!(genoa_stream_startup(&cfg, &host, &identity, &paths));
+        assert!(!genoa_stream_startup(&cfg, &host, &identity, &paths[..1]));
+        cfg.threads = 24;
+        assert!(genoa_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 24;
+        assert!(!genoa_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.cpu_auto_threads_cap = 32;
+        host.runtime_environment = "wsl2".into();
+        assert!(!genoa_stream_startup(&cfg, &host, &identity, &paths));
+    }
+
+    #[test]
+    fn experimental_sapphire_startup_requires_full_count_host_and_supported_path() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("Intel(R) Xeon(R) Platinum 8488C".into()),
+            logical_cores: 32,
+            physical_cores: Some(16),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("GenuineIntel".into()),
+            family: Some(6),
+            model: Some(0x8f),
+            stepping: Some(1),
+        };
+        let paths = [CpuKernel::Avx512, CpuKernel::Avx512256Stream];
+        assert!(sapphire_stream_startup(&cfg, &host, &identity, &paths));
+        assert!(!sapphire_stream_startup(
+            &cfg,
+            &host,
+            &identity,
+            &paths[..1]
+        ));
+        cfg.threads = 24;
+        assert!(sapphire_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 24;
+        assert!(!sapphire_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.cpu_auto_threads_cap = 32;
+        host.runtime_environment = "wsl2".into();
+        assert!(!sapphire_stream_startup(&cfg, &host, &identity, &paths));
+    }
+
+    #[test]
+    fn sapphire_startup_requires_actual_full_thp_context() {
+        for backing in [
+            [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0],
+            [0, 0, 31 * CPU_LANE_MEMORY_BYTES, CPU_LANE_MEMORY_BYTES, 0],
+            [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0],
+        ] {
+            let mut t = three_path_tuner();
+            t.sapphire_startup = true;
+            t.startup = Some(CpuKernel::Avx512256Stream);
+            let mut s = snapshot();
+            s.threads = 32;
+            s.backing_bytes = backing;
+            s.kernel = CpuKernel::Avx512;
+            let action = t.tick(1, &[s], true, true);
+            assert_eq!(
+                action.kernel,
+                (backing[2] == 32 * CPU_LANE_MEMORY_BYTES).then_some(CpuKernel::Avx512256Stream)
+            );
+            assert!(
+                t.cache.winners.is_empty(),
+                "a startup hint is not a confirmed winner"
+            );
+        }
+    }
+
+    #[test]
+    fn turin_startup_policy_preserves_confirmed_cache() {
+        if !CpuKernel::Avx512256Stream.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-turin-startup-cache-{}.json",
+            std::process::id()
+        ));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R45".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0x02),
+            ..Default::default()
+        };
+        let fresh = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&fresh.path);
+        let context = Context {
+            members: vec![0],
+            workers: vec![32],
+            backing: vec![[0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+        };
+        let old = Cache {
+            schema: CACHE_SCHEMA,
+            host: host.clone(),
+            configuration: fresh
+                .cache
+                .configuration
+                .replace(";startup=turin9r45-32-thp-v1", ""),
+            winners: vec![Winner {
+                context: context.clone(),
+                kernel: "avx512".into(),
+                timestamp: unix_secs(),
+                base: "avx512".into(),
+                candidate: "avx2".into(),
+                samples: vec![sample(100); 3],
+            }],
+        };
+        assert_ne!(old.configuration, fresh.cache.configuration);
+        fs::write(&fresh.path, serde_json::to_vec(&old).unwrap()).unwrap();
+        let mut upgraded = Tuner::for_identity(&cfg, host, &identity);
+        assert_eq!(upgraded.cache.configuration, fresh.cache.configuration);
+        assert_eq!(upgraded.cache.winners.len(), 1);
+        let mut state = snapshot();
+        state.threads = 32;
+        state.backing_bytes = context.backing[0];
+        state.kernel = CpuKernel::Avx2;
+        assert_eq!(
+            upgraded.tick(1, &[state], true, true).kernel,
+            Some(CpuKernel::Avx512)
+        );
+        let _ = fs::remove_file(&fresh.path);
+    }
+
+    #[test]
+    fn turin_demand_preserves_prior_winner_and_compares_new_path() {
+        if !CpuKernel::Avx512256Stream.is_supported() {
+            return;
+        }
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
+            "seine-turin-demand-cache-{}.json",
+            std::process::id()
+        ));
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R45".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0x02),
+            ..Default::default()
+        };
+        let fresh = Tuner::for_identity(&cfg, host.clone(), &identity);
+        let _ = fs::remove_file(&fresh.path);
+        let context = Context {
+            members: vec![0],
+            workers: vec![32],
+            backing: vec![[0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+        };
+        for prior_kernel in [
+            CpuKernel::Avx512,
+            CpuKernel::Avx512256StreamR64D3,
+            CpuKernel::Avx512256StreamR64D4,
+        ] {
+            let prior_demand = prior_kernel != CpuKernel::Avx512;
+            let mut configuration = fresh
+                .cache
+                .configuration
+                .replace("Avx512256StreamR64D6, ", "");
+            if prior_kernel != CpuKernel::Avx512256StreamR64D4 {
+                configuration = configuration.replace("Avx512256StreamR64D4, ", "");
+            }
+            if !prior_demand {
+                configuration = configuration.replace("Avx512256StreamR64D3, ", "");
+            }
+            let old = Cache {
+                schema: CACHE_SCHEMA,
+                host: host.clone(),
+                configuration,
+                winners: vec![Winner {
+                    context: context.clone(),
+                    kernel: prior_kernel.as_str().into(),
+                    timestamp: unix_secs(),
+                    base: prior_kernel.as_str().into(),
+                    candidate: if prior_demand {
+                        "avx512-256-stream"
+                    } else {
+                        "avx2"
+                    }
+                    .into(),
+                    samples: vec![
+                        Sample {
+                            hashes: 1500,
+                            secs: 30
+                        };
+                        3
+                    ],
+                }],
+            };
+            assert_ne!(old.configuration, fresh.cache.configuration);
+            fs::write(&fresh.path, serde_json::to_vec(&old).unwrap()).unwrap();
+            let mut upgraded = Tuner::for_identity(&cfg, host.clone(), &identity);
+            assert_eq!(upgraded.cache.configuration, fresh.cache.configuration);
+            assert!(upgraded.cache.winners.is_empty());
+            assert_eq!(upgraded.startup_cache.as_ref().unwrap().winners.len(), 1);
+            let mut state = snapshot();
+            state.threads = 32;
+            state.backing_bytes = context.backing[0];
+            state.kernel = CpuKernel::Avx2;
+            assert_eq!(
+                upgraded.tick(1, &[state], true, true).kernel,
+                Some(prior_kernel)
+            );
+            assert_eq!(upgraded.pending, [CpuKernel::Avx512256StreamR64D6]);
+        }
+        let _ = fs::remove_file(&fresh.path);
+    }
+
+    #[test]
+    fn experimental_turin_startup_requires_full_count_host_and_supported_path() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R45".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0x02),
+            stepping: Some(1),
+        };
+        let paths = [CpuKernel::Avx512, CpuKernel::Avx512256Stream];
+        assert!(turin_stream_startup(&cfg, &host, &identity, &paths));
+        assert!(!turin_stream_startup(&cfg, &host, &identity, &paths[..1]));
+        let demand_paths = [CpuKernel::Avx512256Stream, CpuKernel::Avx512256StreamR64D3];
+        let prefetch_paths = [
+            CpuKernel::Avx512256Stream,
+            CpuKernel::Avx512256StreamR64D3,
+            CpuKernel::Avx512256StreamR64D4,
+        ];
+        let mut depth6_paths = prefetch_paths.to_vec();
+        depth6_paths.push(CpuKernel::Avx512256StreamR64D6);
+        assert!(turin_depth6_startup(&cfg, &host, &identity, &depth6_paths));
+        assert!(!turin_depth6_startup(
+            &cfg,
+            &host,
+            &identity,
+            &prefetch_paths
+        ));
+        let mut neighbor = identity.clone();
+        neighbor.model = Some(0x11);
+        assert!(!turin_depth6_startup(&cfg, &host, &neighbor, &depth6_paths));
+        let mut other_os = host.clone();
+        other_os.os = "windows".into();
+        assert!(!turin_depth6_startup(
+            &cfg,
+            &other_os,
+            &identity,
+            &depth6_paths
+        ));
+        assert!(turin_prefetch_startup(
+            &cfg,
+            &host,
+            &identity,
+            &prefetch_paths
+        ));
+        assert!(!turin_prefetch_startup(
+            &cfg,
+            &host,
+            &identity,
+            &demand_paths
+        ));
+        let mut unsupported_host = host.clone();
+        unsupported_host.os = "windows".into();
+        assert!(!turin_prefetch_startup(
+            &cfg,
+            &unsupported_host,
+            &identity,
+            &prefetch_paths
+        ));
+        unsupported_host.os = "linux".into();
+        unsupported_host.total_memory_bytes = 64 * 1024_u64.pow(3);
+        assert!(!turin_prefetch_startup(
+            &cfg,
+            &unsupported_host,
+            &identity,
+            &prefetch_paths
+        ));
+        assert!(turin_demand_startup(&cfg, &host, &identity, &demand_paths));
+        assert!(!turin_demand_startup(
+            &cfg,
+            &host,
+            &identity,
+            &demand_paths[..1]
+        ));
+        let mut neighbor = identity.clone();
+        neighbor.model = Some(0x11);
+        assert!(!turin_demand_startup(&cfg, &host, &neighbor, &demand_paths));
+        let mut windows = host.clone();
+        windows.os = "windows".into();
+        assert!(!turin_demand_startup(
+            &cfg,
+            &windows,
+            &identity,
+            &demand_paths
+        ));
+        if CpuKernel::Avx512256StreamR64D3.is_supported() {
+            let tuner = Tuner::for_identity(&cfg, host.clone(), &identity);
+            assert!(tuner.candidates.contains(&CpuKernel::Avx512256StreamR64D3));
+            assert!(tuner.candidates.contains(&CpuKernel::Avx512256StreamR64D4));
+            assert_eq!(tuner.startup, Some(CpuKernel::Avx512256StreamR64D6));
+            let other = Tuner::for_identity(&cfg, host.clone(), &neighbor);
+            assert!(!other.candidates.contains(&CpuKernel::Avx512256StreamR64D3));
+        }
+
+        cfg.threads = 24;
+        assert!(turin_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.threads = 32;
+        cfg.cpu_auto_threads_cap = 24;
+        assert!(!turin_stream_startup(&cfg, &host, &identity, &paths));
+        cfg.cpu_auto_threads_cap = 32;
+        host.runtime_environment = "wsl2".into();
+        assert!(!turin_stream_startup(&cfg, &host, &identity, &paths));
+    }
+
+    #[test]
+    fn turin_startup_requires_actual_full_thp_context() {
+        for backing in [
+            [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0],
+            [0, 0, 31 * CPU_LANE_MEMORY_BYTES, CPU_LANE_MEMORY_BYTES, 0],
+            [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0],
+        ] {
+            let mut t = three_path_tuner();
+            t.turin_startup = true;
+            t.candidates.push(CpuKernel::Avx512256StreamR64D3);
+            t.startup = Some(CpuKernel::Avx512256StreamR64D3);
+            let mut s = snapshot();
+            s.threads = 32;
+            s.backing_bytes = backing;
+            s.kernel = CpuKernel::Avx512;
+            let action = t.tick(1, &[s], true, true);
+            assert_eq!(
+                action.kernel,
+                (backing[2] == 32 * CPU_LANE_MEMORY_BYTES)
+                    .then_some(CpuKernel::Avx512256StreamR64D3)
+            );
+            assert!(
+                t.cache.winners.is_empty(),
+                "a startup hint is not a confirmed winner"
+            );
+        }
+    }
+
+    #[test]
+    fn turin_prefetch_startup_requires_actual_full_thp_context() {
+        for backing in [
+            [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0],
+            [0, 0, 31 * CPU_LANE_MEMORY_BYTES, CPU_LANE_MEMORY_BYTES, 0],
+            [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0],
+        ] {
+            let mut t = three_path_tuner();
+            t.turin_startup = true;
+            t.candidates.push(CpuKernel::Avx512256StreamR64D4);
+            t.startup = Some(CpuKernel::Avx512256StreamR64D4);
+            let mut s = snapshot();
+            s.threads = 32;
+            s.backing_bytes = backing;
+            s.kernel = CpuKernel::Avx512;
+            let action = t.tick(1, &[s], true, true);
+            assert_eq!(
+                action.kernel,
+                (backing[2] == 32 * CPU_LANE_MEMORY_BYTES)
+                    .then_some(CpuKernel::Avx512256StreamR64D4)
+            );
+            assert!(
+                t.cache.winners.is_empty(),
+                "a startup hint is not a confirmed winner"
+            );
+        }
+    }
+
+    #[test]
+    fn turin_depth6_startup_requires_actual_full_thp_context() {
+        for backing in [
+            [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0],
+            [0, 0, 31 * CPU_LANE_MEMORY_BYTES, CPU_LANE_MEMORY_BYTES, 0],
+            [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0],
+        ] {
+            let mut t = three_path_tuner();
+            t.turin_startup = true;
+            t.candidates.push(CpuKernel::Avx512256StreamR64D6);
+            t.startup = Some(CpuKernel::Avx512256StreamR64D6);
+            let mut s = snapshot();
+            s.threads = 32;
+            s.backing_bytes = backing;
+            s.kernel = CpuKernel::Avx512;
+            let action = t.tick(1, &[s], true, true);
+            assert_eq!(
+                action.kernel,
+                (backing[2] == 32 * CPU_LANE_MEMORY_BYTES)
+                    .then_some(CpuKernel::Avx512256StreamR64D6)
+            );
+            assert!(
+                t.cache.winners.is_empty(),
+                "a startup hint is not a confirmed winner"
+            );
+        }
+    }
+
+    #[test]
+    fn experimental_genoa_context_requires_one_full_thp_32_worker_backend() {
+        let context = Context {
+            members: vec![0],
+            workers: vec![32],
+            backing: vec![[0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]],
+        };
+        assert!(genoa_stream_context(&context));
+        let mut changed = context.clone();
+        changed.workers[0] = 24;
+        assert!(!genoa_stream_context(&changed));
+        changed = context.clone();
+        changed.backing[0] = [0, 0, 31 * CPU_LANE_MEMORY_BYTES, CPU_LANE_MEMORY_BYTES, 0];
+        assert!(!genoa_stream_context(&changed));
+        changed.backing[0] = [32 * CPU_LANE_MEMORY_BYTES, 0, 0, 0, 0];
+        assert!(!genoa_stream_context(&changed));
+        changed = context.clone();
+        changed.members.push(1);
+        changed.workers.push(32);
+        changed.backing.push(context.backing[0]);
+        assert!(!genoa_stream_context(&changed));
+    }
+
+    #[test]
+    fn windows_genoa_startup_keeps_host_backing_and_cache_boundaries() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_auto_threads_cap = 32;
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let mut host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "windows".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let paths = [CpuKernel::Avx512, CpuKernel::Avx512256Stream];
+        assert!(windows_genoa_stream_startup(&cfg, &host, &identity, &paths));
+        assert!(!genoa_stream_startup(&cfg, &host, &identity, &paths));
+        assert!(!windows_genoa_stream_startup(
+            &cfg,
+            &host,
+            &identity,
+            &paths[..1]
+        ));
+        host.os = "linux".into();
+        assert!(!windows_genoa_stream_startup(
+            &cfg, &host, &identity, &paths
+        ));
+        host.os = "windows".into();
+        cfg.cpu_profile = CpuPerformanceProfile::Efficiency;
+        assert!(!windows_genoa_stream_startup(
+            &cfg, &host, &identity, &paths
+        ));
+        cfg.cpu_profile = CpuPerformanceProfile::Throughput;
+
+        let context = Context {
+            members: vec![0],
+            workers: vec![32],
+            backing: vec![[0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0]],
+        };
+        assert!(windows_genoa_stream_context(&context));
+        for backing in [
+            [32 * CPU_LANE_MEMORY_BYTES, 0, 0, 0, 0],
+            [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0],
+            [CPU_LANE_MEMORY_BYTES, 0, 0, 31 * CPU_LANE_MEMORY_BYTES, 0],
+        ] {
+            let mut other = context.clone();
+            other.backing[0] = backing;
+            assert!(!windows_genoa_stream_context(&other));
+        }
+        let mut other = context.clone();
+        other.workers[0] = 31;
+        assert!(!windows_genoa_stream_context(&other));
+        other = context.clone();
+        other.members.push(1);
+        assert!(!windows_genoa_stream_context(&other));
+
+        if !CpuKernel::Avx512256Stream.is_supported() {
+            return;
+        }
+        cfg.threads = 32;
+        let mut t = Tuner::for_identity(&cfg, host.clone(), &identity);
+        cfg.threads = 31;
+        let restarted = Tuner::for_identity(&cfg, host, &identity);
+        assert_eq!(t.cache.configuration, restarted.cache.configuration);
+        assert!(t.windows_genoa_startup && !t.genoa_startup);
+        t.cache.winners = vec![Winner {
+            context: context.clone(),
+            kernel: "avx512".into(),
+            timestamp: unix_secs(),
+            base: "avx512-256-stream".into(),
+            candidate: "avx512".into(),
+            samples: [100, 130, 100, 100, 130, 100].map(sample).to_vec(),
+        }];
+        let mut s = snapshot();
+        s.threads = 32;
+        s.backing_bytes = context.backing[0];
+        s.kernel = CpuKernel::Avx512;
+        let action = t.tick(1, &[s], true, true);
+        assert_eq!(
+            action.kernel, None,
+            "confirmed winner precedes startup hint"
+        );
+        assert!(!action.hold_counts);
+    }
+
+    #[test]
+    fn experimental_genoa_startup_can_lose_and_cache_a_different_kernel() {
+        for windows in [false, true] {
+            let mut t = three_path_tuner();
+            t.genoa_startup = !windows;
+            t.windows_genoa_startup = windows;
+            t.startup = Some(CpuKernel::Avx512256Stream);
+            let mut s = snapshot();
+            s.threads = 32;
+            s.backing_bytes = if windows {
+                [0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0]
+            } else {
+                [0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]
+            };
+            s.kernel = CpuKernel::Avx512;
+            let action = t.tick(1, &[s], true, true);
+            assert_eq!(action.kernel, Some(CpuKernel::Avx512256Stream));
+            assert!(t.cache.winners.is_empty());
+            s.kernel = CpuKernel::Avx512256Stream;
+            s.kernel_generation += 1;
+            let mut now = 2;
+            run_comparison(&mut t, &mut s, &mut now, &[100, 130, 100, 100, 130, 100]);
+            assert_eq!(s.kernel, CpuKernel::Avx512);
+            run_comparison(&mut t, &mut s, &mut now, &[130, 120, 130]);
+            assert_eq!(t.cache.winners.len(), 1);
+            assert_eq!(t.cache.winners[0].kernel, "avx512");
+            let _ = fs::remove_file(&t.path);
+        }
+    }
+
+    #[test]
+    fn streaming_startup_requires_zen4_or_zen5_identity_and_candidate() {
         use crate::runtime_identity::CpuIdentity;
         let ryzen = CpuIdentity {
             vendor: Some("AuthenticAMD".into()),
@@ -1342,18 +3832,26 @@ mod tests {
             CpuKernel::Avx2,
             CpuKernel::Avx512256Stream,
         ];
-        assert_eq!(
-            startup_kernel_for(&ryzen, &all),
-            Some(CpuKernel::Avx512256Stream)
-        );
-        assert_eq!(startup_kernel_for(&ryzen, &all[..2]), None);
-        for other in [
+        for zen in [
+            ryzen.clone(),
             CpuIdentity {
                 model: Some(0x02),
                 ..ryzen.clone()
             },
             CpuIdentity {
                 family: Some(0x19),
+                ..ryzen.clone()
+            },
+        ] {
+            assert_eq!(
+                startup_kernel_for(&zen, &all),
+                Some(CpuKernel::Avx512256Stream)
+            );
+            assert_eq!(startup_kernel_for(&zen, &all[..2]), None);
+        }
+        for other in [
+            CpuIdentity {
+                family: Some(0x17),
                 ..ryzen.clone()
             },
             CpuIdentity {

@@ -45,13 +45,14 @@ def main():
         ('data_quality', REMOTE_SQL, Path(__file__).with_name('data_quality.sql').read_text()),
         ('telemetry', REMOTE_SQL, Path(__file__).with_suffix('.sql').read_text()),
         ('diagnostics', REMOTE_SQL, Path(__file__).with_name('diagnostics.sql').read_text()),
+        ('tuning', REMOTE_SQL, Path(__file__).with_name('tuning_report.sql').read_text()),
     ):
         try:
             result = remote(args.host, command, data)
             if result.returncode:
                 briefing[key] = {'status': 'error', 'detail': (result.stderr or result.stdout).strip()[:1000]}
                 failed = True
-            elif key in ('telemetry', 'data_quality', 'diagnostics'):
+            elif key in ('telemetry', 'data_quality', 'diagnostics', 'tuning'):
                 briefing[key] = json.loads(result.stdout)
             else:
                 briefing[key] = {'status': 'ok', 'detail': result.stdout.strip()}
@@ -84,6 +85,11 @@ def main():
         'phase of the previous run, not a crash cause; checkpoints can lag or be absent. '
         'Hashing in a restart report establishes work after restart, not recovery from every issue. '
         'Several events can describe one failure.'
+        ' Unclean versions identify the interrupted release using its checkpoint version or an '
+        'unambiguous observed build mapping; unknown stays unknown. reporting_versions identify '
+        'the restarting clients. Previous-run event clusters are checkpoint context, may duplicate '
+        'earlier uploads, and do not establish a termination cause. Hardware in those clusters is '
+        'observed after restart. Dependency source IDs come from a fixed allowlist.'
     )
     if diagnostics.get('status') == 'attention':
         failed = True
@@ -96,6 +102,29 @@ def main():
         briefing['diagnostic_assessment'] = 'No diagnostic coverage yet; missing failure reports do not establish healthy miners.'
     elif diagnostics.get('status') == 'ok':
         briefing['diagnostic_assessment'] = 'Review issue clusters, including single-installation failures. No fleet threshold is exceeded.'
+    tuning = briefing.get('tuning', {})
+    if tuning.get('status') == 'error':
+        briefing['tuning_assessment'] = 'Paired-trial query failed; do not interpret missing hints as no gain.'
+    elif tuning.get('ranked_hints'):
+        supported = sum(h.get('confidence') == 'observational_support' for h in tuning['ranked_hints'])
+        briefing['tuning_assessment'] = (
+            f'{supported} ranked CPU-kernel cohorts have observational support; other hints have mixed or limited evidence. '
+            'All require matching native validation before shipping; confidence labels are not probabilities or '
+            'independent-host proof. No automatic defaults or remote overrides.'
+        )
+    elif tuning.get('unique_trials', 0):
+        briefing['tuning_assessment'] = (
+            'Paired trials are arriving, but no hints meet coverage. '
+            f"{tuning.get('coverage_only_trials', 0)} trials are coverage-only; "
+            f"{tuning.get('missing_context_trials', 0)} lack required initial context. "
+            'Worker-count/joint policy analysis remains staged. Unknown context and costs are not zero; '
+            'no-confirmed-gain is not a regression.'
+        )
+    else:
+        briefing['tuning_assessment'] = (
+            'No paired trials in this window; verify producer release adoption and collector compatibility. '
+            'Missing trials do not establish no gain.'
+        )
     print(json.dumps(briefing, indent=2))
     return int(failed)
 

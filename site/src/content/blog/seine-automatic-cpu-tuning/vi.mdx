@@ -1,0 +1,62 @@
+---
+title: 'Cách seine tự động tinh chỉnh đào bằng CPU'
+description: 'Tìm hiểu cách seine chỉnh luồng CPU khi đào Blocknet, so sánh cấu hình, dùng lại kết quả đã lưu và thích ứng với RAM khả dụng trong khi vẫn tiếp tục đào.'
+tags: ['Hướng dẫn đào', 'Tinh chỉnh CPU', 'seine']
+faq:
+  - q: 'seine có đào khi đang chỉnh luồng CPU không?'
+    a: 'Có. Trong v0.2.36, đào CPU thông thường bắt đầu từ cấu hình đã lưu tương thích hoặc ước tính theo phần cứng. Bộ tinh chỉnh so sánh số luồng bằng công việc đào thực. Benchmark ngoại tuyến dùng quy trình riêng, nên trình tự khởi động của nó không mô tả phiên đào thông thường.'
+  - q: 'Vì sao số luồng CPU thay đổi?'
+    a: 'Tinh chỉnh tự động thử các số luồng lân cận và phản ứng với bộ nhớ khả dụng. Thay đổi có thể là thử nghiệm hiệu năng hoặc phản ứng với áp lực RAM. Đọc nhật ký cùng số luồng và chờ so sánh hoàn tất trước khi đánh giá một số đo hashrate ngắn.'
+  - q: 'seine lưu kết quả tinh chỉnh CPU ở đâu?'
+    a: 'Mặc định, kết quả luồng nằm trong seine.cpu-autotune.json ở thư mục dữ liệu. Lựa chọn kernel dùng tệp đi kèm kết thúc bằng .kernels.json. Kết quả tương thích hỗ trợ các lần khởi động sau. Giữ nguyên thư mục dữ liệu và để phần mềm kiểm tra cấu hình còn phù hợp với môi trường hiện tại hay không.'
+sourceHash: '41f9cc188856'
+translation: draft
+---
+
+Hiểu việc seine làm khi số luồng CPU thay đổi trong lúc đào. Hướng dẫn theo bản công khai v0.2.36, giải thích tinh chỉnh khi làm việc, lựa chọn đã lưu và điều chỉnh bộ nhớ. Để cài đặt, xem [hướng dẫn đào](/vi/blog/how-to-mine-blocknet/); để đọc các bảng, xem [hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/).
+
+## Tinh chỉnh CPU tự động hoạt động thế nào?
+
+<Answer>
+Khi bật tinh chỉnh CPU, seine bắt đầu đào từ số luồng đã lưu tương thích hoặc ước tính phần cứng, rồi so sánh cấu hình bằng công việc thực. Nó đo cấu hình gốc, thử ứng viên và đo lại cấu hình gốc. RAM khả dụng và giới hạn cấu hình khoanh vùng tìm kiếm thiết lập phù hợp.
+</Answer>
+
+<img src="/assets/blog/cpu-autotuning.svg" alt="So sánh gốc–ứng viên–gốc lặp lại dẫn tới thiết lập được lưu, đồng thời kiểm tra bộ nhớ khả dụng xuyên suốt." width="1200" height="675" loading="lazy" />
+
+## Bắt đầu đào trước khi tìm kiếm xong
+
+Không đặt `--threads` để dùng tinh chỉnh tự động. Trong đào thông thường, seine chọn số luồng ban đầu trong ngân sách tài nguyên và làm việc mà không quét số luồng ngoại tuyến trước. Bộ nhớ đệm tương thích có thể cung cấp điểm xuất phát. Máy mới bắt đầu từ ước tính được cải thiện bằng các so sánh tiếp theo.
+
+Mỗi thử nghiệm đo số hash hoàn thành theo thời gian trôi qua. Vùng nhớ mới hoàn thành một hash đầu trước cửa sổ đo. Trình tự gốc–ứng viên–gốc giúp tách ảnh hưởng cấu hình khỏi điều kiện thay đổi. Độ lệch gốc lớn, giới hạn bộ nhớ đổi hoặc mất công việc kéo dài có thể hủy so sánh. Một đỉnh ngắn trên bảng chỉ là một quan sát trong quyết định dài hơn.
+
+## Vì sao thêm luồng có thể không còn giúp ích?
+
+Mỗi luồng CPU hoạt động dùng vùng nhớ lớn và chia sẻ băng thông bộ nhớ. Thêm luồng tạo nhiều việc đồng thời, nhưng kết quả phụ thuộc cả hệ thống. Bộ tinh chỉnh so sánh tổng H/s CPU thay vì mặc định số luồng lớn nhất sẽ nhanh nhất. [Hướng dẫn RAM](/vi/blog/how-much-ram-to-mine-blocknet/) giải thích ngân sách bộ nhớ.
+
+Hồ sơ mặc định là `balanced`. Hồ sơ điều khiển chính sách tinh chỉnh và mặc định lúc chạy; `efficiency` là lựa chọn rõ ràng có thể ưu tiên ít luồng hơn. Giữ cùng hồ sơ khi đánh giá phiên. Số luồng, vị trí CPU và loại trang nhớ tương tác với nhau: kết quả máy hoặc cấu hình khác là tham khảo, không phải thiết lập để tự động sao chép.
+
+## Điều gì xảy ra khi chương trình khác cần RAM?
+
+Ngân sách tự động thay đổi theo tài nguyên. Khi có áp lực bộ nhớ, luồng CPU có thể hoàn thành hash hiện tại, tạm dừng và giải phóng vùng nhớ. Khi khoảng trống ổn định trở lại, phần mềm kích hoạt các vị trí khả dụng và tiếp tục khám phá. Máy chạy ứng dụng khác vì thế có thể điều chỉnh số hoạt động trong cùng phiên.
+
+Giảm tạm thời không nhất thiết xóa số luồng cao hơn đã học. Bộ nhớ đệm và số hoạt động phục vụ mục đích khác nhau. Trên Linux, vùng HugeTLB tường minh được giải phóng trở về quỹ huge page đã dành trước; seine không đổi kích thước quỹ hệ điều hành đó. Xem [hướng dẫn huge page](/vi/blog/huge-pages-blocknet-mining/) để đổi dự trữ và phân biệt với RAM trống thông thường.
+
+## seine có tinh chỉnh kernel CPU không?
+
+CPU phù hợp có thể so sánh đường mã băm ngoài số luồng. Kernel ở đây là cách phần mềm thực hiện phép tính hash. Phần mềm kiểm tra tập lệnh được hỗ trợ và so sánh đường phù hợp qua mẫu đào lặp lại. Thử kernel và số luồng luân phiên, trong khi quản lý bộ nhớ vẫn hoạt động. [Hướng dẫn kỹ thuật](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/autotuning.md) mô tả ứng viên của bản này.
+
+Thay đổi CPU tự động giữ kết nối pool và không khởi động lại backend GPU. Kernel chuyển giữa các hash hoàn chỉnh, giữ vùng nhớ đã cấp. Nhấn tay `+` hoặc `-` khác: khởi động lại backend, kết nối lại pool và tắt điều chỉnh CPU tự động cho lần chạy đó. Nhật ký cho biết loại thay đổi đã xảy ra.
+
+## Kết quả đã lưu được dùng lại thế nào?
+
+Tệp luồng mặc định là `seine.cpu-autotune.json` dưới `--data-dir`; tệp kernel là `seine.cpu-autotune.json.kernels.json`. Chúng lưu lựa chọn đã học riêng với cấu hình kết nối pool. Giữ cùng thư mục qua các lần chạy. [Hướng dẫn cập nhật](/vi/blog/update-seine-miner/) giải thích cách bảo toàn nó khi thay ứng dụng.
+
+Dùng lại phụ thuộc tương thích phần cứng, bản dựng, vị trí và trang nhớ. Giới hạn hiện tại vẫn ràng buộc số hoạt động lúc đầu. Sau thay đổi lớn, không dùng được cache là điều có thể xảy ra; hãy để thu thập số đo mới. Tránh sao chép cache máy khác hoặc sửa số đo bằng tay. Đọc thông báo khởi động và tinh chỉnh trước khi coi lần tìm kiếm mới là lỗi.
+
+## Khi nào nên đặt số luồng cố định?
+
+Dùng số cố định khi chủ động cần cấu hình lặp lại được. Ví dụ `--threads 4` yêu cầu bốn luồng và thường tắt tinh chỉnh luồng cùng kernel. `--cpu-autotune-threads` bật tinh chỉnh dù đã chỉ định số; `--disable-cpu-autotune-threads` tắt điều chỉnh tự động. [Tài liệu cờ](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) mô tả giới hạn và tương tác.
+
+Đào hằng ngày nên bắt đầu từ mặc định và cho so sánh đủ thời gian. Xem cùng hàng CPU, thông báo tinh chỉnh và share được chấp nhận. So sánh tải và bộ nhớ tương tự. Hashrate pool được ước tính từ share nhận được: dùng số đo CPU cục bộ để hiểu thử nghiệm và [thống kê pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) để theo dõi công việc được ghi nhận.
+
+<CTA target="seine" title="Đào với tinh chỉnh CPU tự động" text="Tải seine, giữ thiết lập mặc định và theo dõi quyết định trên bảng điều khiển." />

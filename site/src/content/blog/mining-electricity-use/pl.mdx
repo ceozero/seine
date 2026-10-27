@@ -1,0 +1,62 @@
+---
+title: 'Ile prądu zużywa kopanie Blocknet?'
+description: 'Oszacuj zużycie prądu przy kopaniu Blocknet: waty i kWh, pomiar całego PC, porównanie z kopaniem i bez niego oraz dzienny koszt energii.'
+tags: ['Poradnik kopania', 'Energia', 'seine']
+faq:
+  - q: 'Czy moc pakietu CPU pokazuje cały koszt prądu?'
+    a: 'Nie. Opisuje domenę procesora, która może obejmować inne aplikacje, i nie ustala poboru komputera z gniazdka. Mierz zakres sprzętu objęty budżetem i zapisz, czy uwzględniasz monitor lub inne urządzenia.'
+  - q: 'Czy profil efficiency narzuca limit watów?'
+    a: 'Nie. Profil efficiency w seine wpływa na wybór wątków względem celu hashrate. Nie mierzy taryfy ani nie ogranicza mocy całego PC. Porównuj energię w dopasowanych, reprezentatywnych sesjach, zanim zadeklarujesz oszczędność.'
+  - q: 'Jak obliczyć dzienny koszt energii kopania?'
+    a: 'Pomnóż średnią moc w watach przez godziny działania, podziel przez 1000, aby uzyskać kWh, i pomnóż przez właściwą cenę za kWh. Gdy zmieniają się taryfy lub tryby pracy, policz każdy okres osobno i zsumuj.'
+sourceHash: '3bb739241657'
+translation: draft
+---
+
+Zbuduj budżet energii dla własnego kopania Blocknet z mocy, czasu i taryfy. Sam model CPU, hashrate lub etykieta zasilacza nie wystarcza. Poradnik rozdziela pomiary i pokazuje przykładowe obliczenie; nie podaje nowych pomiarów sprzętu ani uniwersalnego poboru mocy kopania.
+
+## Co określa zużycie prądu podczas kopania?
+
+<Answer>
+Energia zależy od średniej mocy uwzględnionych urządzeń i czasu działania. Zmierz reprezentatywną sesję, przelicz waty i godziny na kWh, następnie zastosuj taryfę. Oddziel cały PC od czujników CPU lub GPU oraz pełny koszt od dodatkowego zużycia komputera, który i tak byłby włączony.
+</Answer>
+
+<img src="/assets/blog/mining-electricity-use.svg" alt="Komputer łączy się przez licznik energii z zegarem i arkuszem kosztów: moc, czas i koszt to oddzielne dane." width="1200" height="675" loading="lazy" />
+
+## Zacznij od watów, godzin i kilowatogodzin
+
+Waty określają moc, a kWh energię zużytą w czasie. Przy stabilnej średniej mocy: waty × godziny ÷ 1000 = kWh. Virginia Cooperative Extension wyjaśnia takie [obliczenie energii](https://ext.vt.edu/content/pubs_ext_vt_edu/en/2901/2901-9014/2901-9014.html). Przy zmianach poboru skumulowane kWh za cały okres mówią więcej niż chwilowy odczyt watów.
+
+Zapisz urządzenia, początek i koniec oraz obecność uruchamiania, strojenia lub innych zadań. Szacunek dzienny powinien obejmować rzeczywiste tryby pracy. Rozdziel uśpienie, kopanie i zwykły pulpit, jeśli ich moc się różni. [Poradnik pracy na PC](/pl/blog/mine-while-using-pc/) pomaga określić powtarzalne codzienne obciążenie.
+
+## Wybierz pomiar obejmujący twój sprzęt
+
+Odpowiedni licznik wtyczkowy może mierzyć zasilanie komputera w udokumentowanych granicach napięcia i obciążenia. Stosuj instrukcję producenta. Zapisz, czy pomiar obejmuje ekran, stację dokującą lub peryferia. Moc znamionowa zasilacza nie jest bieżącym poborem PC; deklaracja zmierzonego kosztu wymaga zmierzonej energii.
+
+Narzędzia CPU i GPU obejmują konkretne elementy lub domeny. [Dokumentacja powercap](https://cdn.kernel.org/doc/html/latest/power/powercap/powercap.html) Linuksa rozróżnia strefy pakietu CPU i podstrefy; sumowanie nakładających się domen może podwójnie liczyć energię. Dane pakietu nie określają całego PC ani osobno niemierzonej pamięci. Zachowaj nazwę i zakres czujnika; brak odczytu nie oznacza zera.
+
+## Jak obliczyć dzienny koszt energii?
+
+Wyłącznie przykładowe założenia: cały zestaw pobiera średnio 150 W przez 8 godzin, a cena wynosi 0,20 jednostki waluty/kWh. Energia: 150 × 8 ÷ 1000 = 1,2 kWh. Koszt energii: 1,2 × 0,20 = 0,24 jednostki za sesję. To wymyślone liczby, nie pomiary seine ani aktualna taryfa.
+
+Trzydzieści takich sesji zużyłoby 36 kWh za 7,20 jednostki przy tej samej cenie. Zastąp każde założenie własnymi obserwacjami. Przy taryfach czasowych podziel pracę przy każdej zmianie stawki i zsumuj koszty. Wskaż pominięte pozycje rachunku; koszt samej energii nie jest pełnym rachunkiem domowym.
+
+## Oddziel zużycie całkowite i dodatkowe
+
+Jeżeli komputer działa tylko do kopania, cały jego pobór należy do budżetu sesji. Jeśli i tak pracowałby nad innym zadaniem, można też oszacować przyrost przez porównywalne pomiary bez kopania i z nim. Zachowaj podobne zadanie, stan ekranu, peryferia i czas.
+
+Przykład: ten sam zestaw pobiera 60 W bez kopania i 150 W z kopaniem. Różnica 90 W przez 8 godzin daje 0,72 kWh, czyli 0,144 jednostki przy przykładowej cenie. Całkowita energia sesji nadal wynosi 1,2 kWh. Mniejsza liczba opisuje przyrost i wymaga reprezentatywnego poziomu odniesienia.
+
+## Porównuj energię razem z wykonaną pracą
+
+`--cpu-profile efficiency` kieruje strojenie CPU ku mniejszej liczbie wątków blisko celu hashrate. Nazwa nie gwarantuje zmierzonych watów ani limitu mocy całego komputera. Przeczytaj [poradnik automatycznego strojenia](/pl/blog/seine-automatic-cpu-tuning/) i porównuj ten sam sprzęt, obciążenie oraz zakres pomiaru, zanim przypiszesz profilowi różnicę energii.
+
+Mniej watów samo w sobie nie dowodzi mniejszej energii na jednostkę pracy. Porównuj średni hashrate i energię w dopasowanych okresach, sprawdzając zaakceptowane udziały, by nie pomylić bezczynności lub rozłączenia z poprawą. Oddziel [pomiary wydajności](/pl/blog/benchmark-seine-miner/) od prognoz nagród; krótkie próbki nagród zawierają też zmienność udziałów i czasu bloków.
+
+## Prowadź przydatny rejestr energii
+
+Zapisuj datę, wersję minera, urządzenia, wątki, zakres miernika lub czujnika, czas, energię i taryfę. Oznacz wartości jako zmierzone, obliczone lub założone. Powtarzaj po zmianie obciążenia lub sprzętu. Dzięki temu specyfikacja CPU czy stary wynik nie staną się pozornym pomiarem obecnego zestawu.
+
+Połącz budżet z osobnym [kalkulatorem nagród](https://bntpool.com/blog/pl/estimate-blocknet-mining-rewards/), zachowując jego założenia hashrate i opłat. [Poradnik kopania w wybranych godzinach](https://bntpool.com/blog/pl/mine-blocknet-part-time/) wyjaśnia udziały i salda między sesjami. Dopasuj harmonogram do użycia i taryfy; przykład kosztu ani szacunek nagród nie obiecuje zwrotu.
+
+<CTA target="seine" title="Przygotuj powtarzalną konfigurację seine" text="Zapisz ustawienia, zmierz faktycznie używany sprzęt i zachowaj założenia energetyczne obok wyników." />

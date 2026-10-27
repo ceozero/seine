@@ -1,0 +1,76 @@
+---
+title: 'Configurare seine: impostazioni e opzioni di avvio'
+description: 'Trova la configurazione di seine, salva pool e indirizzo, comprendi la priorità degli argomenti e verifica le impostazioni del miner Blocknet dopo il riavvio.'
+tags: ['Guida al mining', 'Configurazione', 'seine']
+faq:
+  - q: 'Dove salva la configurazione seine?'
+    a: 'Per impostazione predefinita legge seine-data/seine.config.json rispetto alla directory di lavoro all’avvio. data-dir sceglie un’altra directory di base. Terminale, collegamento e attività pianificata possono usare directory diverse: annota il percorso completo insieme al comando di avvio.'
+  - q: 'Un argomento modifica il file salvato?'
+    a: 'Con una configurazione esistente, gli argomenti espliciti di connessione prevalgono per quella esecuzione senza sostituire indirizzo, URL del pool o nome della macchina salvati. Mantieni l’argomento nel comando abituale oppure arresta il miner e modifica il campo. Verifica poi un avvio normale.'
+  - q: 'Posso mettere tutte le opzioni nel JSON?'
+    a: 'Il file usa un piccolo schema per la connessione. Le opzioni hardware e operative, come backend e thread, appartengono agli argomenti di avvio. Campi JSON con nomi simili non impostano tali opzioni. Salva anche il comando di avvio insieme alla cartella dati.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Avvia il miner Blocknet con impostazioni prevedibili. Questa guida per seine v0.2.37 spiega posizione dei dati, priorità degli argomenti e modifiche persistenti. Parti da un’installazione funzionante; la [guida all’aggiornamento](/it/blog/update-seine-miner/) riguarda la sostituzione dell’applicazione.
+
+## Come sceglie le impostazioni seine?
+
+<Answer>
+seine combina la connessione salvata con gli argomenti di avvio. Gli argomenti espliciti prevalgono sui valori corrispondenti del file. La directory dati determina quale file viene letto. Le opzioni hardware e operative restano argomenti: conserva sia la configurazione sia il comando abituale.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Un file salvato e un comando alimentano il miner, seguito da una verifica dopo il riavvio." width="1200" height="675" loading="lazy" />
+
+## Trova il file usato dal tuo avvio abituale
+
+Il percorso predefinito è `./seine-data/seine.config.json`, relativo alla directory di lavoro del processo, che può differire dalla cartella dell’eseguibile. Controlla terminale, collegamento o servizio prima di modificare. Due modalità di avvio possono usare lo stesso programma con dati diversi.
+
+`--data-dir` seleziona la directory base; il nome resta `seine.config.json`. Usa un percorso assoluto stabile se avvii da più posizioni. Annota eseguibile, directory di lavoro, dati e argomenti completi. La [guida all’avvio Windows](/it/blog/start-miner-automatically-windows/) mostra questi percorsi nell’Utilità di pianificazione, anche con spazi.
+
+## Quali impostazioni appartengono al file?
+
+L’esempio mostra i campi principali. Sostituisci `@yourname` con il tuo Blocknet ID registrato o indirizzo completo. È un riferimento del formato, non un comando. In un’installazione esistente modifica i campi necessari invece di sostituire tutto il file.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` e `pool_worker` scelgono modalità, destinazione, pool e nome macchina. Conserva `schema_version` e l’eventuale `dev_fee_pool_worker`: quest’ultimo è un identificatore generato separato; per la tua macchina usa `pool_worker`. Non inserire frasi di recupero o chiavi private.
+
+## Come rendere permanente una modifica?
+
+Arresta il miner e copia il file. Usa un editor di testo e JSON valido con stringhe fra virgolette doppie; conserva il nome senza estensioni aggiuntive. Modifica solo il campo necessario nella directory effettivamente usata. Controlla le virgole, evita commenti e virgole finali e usa la validazione JSON dell’editor se disponibile. La copia permette confronti esatti.
+
+Controlla eventuali argomenti contrari nel comando. Un vecchio `--address` prevale sull’indirizzo appena salvato: aggiornalo o rimuovilo per usare il file. Riavvia dal collegamento, script o attività abituale e verifica i valori effettivi.
+
+## Usa consapevolmente le opzioni temporanee
+
+Con una configurazione esistente, la seguente opzione del pool sceglie il nome macchina per questa esecuzione. Al prossimo avvio senza argomento torna il nome salvato. È utile per modifiche controllate; per mantenerla sempre, inseriscila nell’avvio abituale.
+
+```text
+--pool-worker desktop-02
+```
+
+Al primo avvio senza file, seine lo crea dai dati iniziali di connessione. È diverso dal sovrascrivere temporaneamente una configurazione esistente. Ricordalo copiando un comando su un altro computer, che potrebbe creare il suo primo file. La [documentazione](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) descrive domande iniziali e opzioni supportate.
+
+## Conserva le opzioni hardware nel comando
+
+`--backend` e `--threads` sono argomenti di avvio. Lo schema di connessione non elenca tutte le opzioni. Aggiungere un campo JSON simile non imposta quella funzione. Mantieni le scelte hardware nello script, collegamento o servizio che avvia il miner.
+
+I controlli dei thread nel pannello modificano la sessione, senza salvare un nuovo valore predefinito. L’autotuning ha cache proprie: preservale separatamente dalle modifiche alla connessione e lascia che ogni macchina si adatti al suo hardware. La [guida all’autotuning](/it/blog/seine-automatic-cpu-tuning/) spiega cache e scelte esplicite dei thread.
+
+## Perché le impostazioni sembrano azzerate?
+
+Confronta percorso dati e argomenti con l’ultima esecuzione corretta. Nuova cartella di estrazione, terminale diverso o vecchi argomenti pianificati possono spiegare il cambiamento. In caso di errore di parsing, leggi file e messaggio. Ripristina la copia o correggi il JSON, poi avvia una volta dal punto previsto.
+
+Verifica destinazione, pool, nome e share accettate. Ripeti un avvio normale per controllare la persistenza; un’esecuzione con argomenti prova solo quel comando. Usa la [guida al pannello](/it/blog/seine-dashboard-explained/) e, per cambiare destinazione dei futuri accrediti, la [guida all’indirizzo](https://bntpool.com/blog/it/change-mining-wallet-address/). Conserva insieme avvio funzionante e backup.
+
+<CTA target="seine" title="Scarica la versione attuale di seine" text="Usa una directory stabile e conserva il comando verificato insieme alla connessione salvata." />

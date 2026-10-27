@@ -1,0 +1,106 @@
+---
+title: '如何运行 Blocknet 节点'
+description: '使用官方客户端运行 Blocknet 节点：安装 core、查看对等节点和同步进度、理解自动更新，并验证可正常工作的主网环境。'
+tags: ['Blocknet', '节点', '设置指南']
+faq:
+  - q: '运行 Blocknet 节点必须挖矿吗？'
+    a: '运行节点与启动挖矿是两项操作。core 维护链数据和网络连接，挖矿需单独启用。你可以不启动挖矿负载就查看状态和对等节点。seine 矿池挖矿也有独立连接流程，不要求自己的节点。'
+  - q: '关闭 Blocknet shell 会停止节点吗？'
+    a: '交互式 attach 会话连接到后台 core。退出 shell 后 core 继续运行。若要停止受管理节点，请用客户端明确的停止命令，再检查状态。关闭 shell 和停止底层进程是不同操作。'
+  - q: '如何判断节点是否正在同步？'
+    a: '结合链高度、对等节点数与同步状态，再观察随时间的进展。与同一网络的近期参考值比较。钱包扫描是独立活动，因此节点已最新并不能单独证明刚加载的钱包已找到全部输出。'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+运行自己的 Blocknet 节点，并学习检查它是否联网、跟随链进度。本指南使用官方命令行客户端管理 mainnet core，再查看对等节点、同步与更新。命令于2026年10月26日按客户端 v1.2.0 核对。请随时参照所安装版本的[官方命令参考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md)。
+
+## 运行 Blocknet 节点需要什么？
+
+<Answer>
+使用适合操作系统的官方 Blocknet 客户端、一台有链数据存储空间的电脑，以及互联网连接。客户端安装并管理后台 core。运行后检查对等节点和链进度。钱包创建与挖矿是独立任务，可在节点正常工作后添加。
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="本地终端连接后台 Blocknet core，core 存储链数据并与网络对等节点交换区块。" width="1200" height="675" loading="lazy" />
+
+## 选择官方客户端和网络
+
+从[官方客户端发布页](https://github.com/blocknetprivacy/blocknet/releases/latest)下载匹配操作系统与处理器的压缩包。解压后，在可以调用可执行文件的位置打开终端。下例使用名称 `blocknet`；Windows 使用 `blocknet.exe`。若不在命令搜索路径中，请通过实际文件路径调用，例如 Linux 或 macOS 上的 `./blocknet`。
+
+普通 Blocknet 网络使用 mainnet。testnet 是配置与数据都独立的环境。记下选定网络，避免把 testnet 高度与 mainnet 浏览器比较。本指南聚焦节点管理；创建、恢复钱包和选择收款地址请看[钱包指南](/zh-hans/blog/blocknet-wallet-for-mining/)。
+
+## 安装并启动后台 core
+
+首次设置时，在交互式终端运行向导：
+
+```sh
+blocknet setup
+```
+
+阅读每个提示。已检查的向导会保存配置、安排自动升级，并在需要时提出下载 core 和启动它的选项。它也提供网络和本地 API 设置。在这台电脑管理的节点请保留本地绑定。
+
+文档中的手动安装路径是：
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` 选择稳定 core 版本。启动 mainnet 需先在配置中启用它。客户端在后台运行 core 并等待其 API。请让启动工作完成；初始数据库启动与链完全追上是不同阶段。
+
+## 如何检查对等节点和同步进度？
+
+连接正在运行的 mainnet core：
+
+```sh
+blocknet attach mainnet
+```
+
+在交互提示符分别输入以下检查命令：
+
+```text
+status
+peers
+```
+
+[shell 参考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md)描述节点字段。记录高度、最佳区块哈希、对等节点数与同步状态。对等节点列表有助于确认节点具备网络连接。
+
+随时间观察高度，与[官方浏览器](https://explorer.blocknetcrypto.com/)等近期 mainnet 参考比较。区块之间高度可以暂时不变，不同观察也可能发生在不同时刻。请结合字段判断，不要用一个数字宣布成功。若节点正在追赶，保持网络连接和存储可用。
+
+## 区分链同步与钱包扫描
+
+链同步追踪网络区块。钱包扫描在历史中寻找属于已加载钱包的输出。恢复的钱包可能在节点追上后仍扫描。因此，shell 中可用的钱包信息与节点高度是不同观察。追踪特定挖矿支付时，请使用[支付到钱包指南](https://bntpool.com/blog/zh-hans/pool-payout-missing-from-wallet/)。
+
+当前客户端也支持检查点，以加速初始同步。请按[检查点指南](https://bntpool.com/blog/zh-hans/blocknet-checkpoints-fast-sync/)了解来源与验证范围，不要认为所有快速同步方法相同。不要因进度显示安静，就把删除链数据库当作常规处理。先用状态和日志区分正在下载、验证工作与钱包扫描。
+
+## 启动需要排查时看哪里？
+
+在 attach shell 外追踪受管理 core 的日志：
+
+```sh
+blocknet logs mainnet
+```
+
+阅读最新启动与连接消息。按 Ctrl-C 停止跟踪日志。检查配置、路径、安装版本和连接时使用：
+
+```sh
+blocknet doctor
+```
+
+文档所述 doctor 命令报告发现，不修改设置。选择解决方法前保存准确消息。
+
+确认预期 core 和网络已配置、所选二进制已安装、本地 API 地址一致。按报告情况查阅[官方故障排查指南](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md)。分享诊断时保护 API 凭据和钱包资料。版本、操作系统及相关错误通常比整个配置目录更适合作为起点。
+
+## 理解更新和有意停止
+
+已检查客户端通过调度器及部分生命周期命令运行自动升级检查。外部 `blocknet status` 可能触发更新检查，与 attach 内的 `status` 不同。可用更新可能重启跟随 `latest` 的受管理 core，而固定版本保持不变。有依赖服务的节点使用客户端前，请阅读[升级参考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md)。
+
+围绕使用节点 API 的服务安排维护。退出 attach 输入 `quit`，core 仍继续运行。若要有意停止该受管理 mainnet core，请在操作系统终端运行 `blocknet stop mainnet`。计划更新或重启后，确认运行版本、连接和链进度。钱包备份应独立于安装的 core 二进制保存。
+
+## 将节点用于预定任务
+
+联网节点可在不启用挖矿的情况下支持钱包和本地链查询。若通过 bntpool.com 挖矿，请遵循[矿池设置指南](https://bntpool.com/blog/zh-hans/mine-blocknet-on-bntpool/)，使用 seine 正常矿池连接。自建节点是另一个选择。直接挖矿请读矿工的 daemon 模式说明，连接前验证 API 配置。
+
+保留简短运维记录：网络、客户端与 core 版本、数据位置、更新策略，以及证明正常进展的检查结果。准备[Faraday](/zh-hans/blog/blocknet-faraday-upgrade/)时也有帮助，其未来激活说明应来自官方发布。计划改动后重新检查状态，让记录描述运行中的节点，而不只是下载的软件。
+
+<CTA target="seine" title="使用 seine 挖 Blocknet" text="选择矿池或直接挖矿后，使用挖矿指南连接自己偏好的设备。" />

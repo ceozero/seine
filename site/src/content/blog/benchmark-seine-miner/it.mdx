@@ -1,0 +1,70 @@
+---
+title: 'Come eseguire un benchmark del miner Blocknet'
+description: 'Misura seine con prove CPU ripetibili, riscaldamento e report JSON. Confronta tempi coerenti mantenendo costanti memoria, carico e politica di ottimizzazione.'
+tags: ['Guida al mining', 'Benchmark', 'seine']
+faq:
+  - q: 'Il benchmark invia share al pool?'
+    a: 'No. --bench esegue una prova locale al posto del mining e non richiede pool o daemon. Il report misura il carico selezionato. Avvia poi una sessione normale per verificare separatamente connessione e share accettate.'
+  - q: 'Quale modalità usare all''inizio?'
+    a: 'Inizia con backend per provare i backend selezionati. Mantieni modalità, versione e impostazioni uguali. Kernel, kernel-effective ed end-to-end misurano ambiti diversi: conserva modalità e informazioni temporali insieme a ogni hashrate.'
+  - q: 'Come rendere confrontabili due prove?'
+    a: 'Usa stessa macchina, versione, backend, memoria, carico e politica di cache. Cambia un parametro, ripeti le configurazioni alternando l''ordine e conserva tutti i report. Riscaldamento e ripetizioni aiutano, ma una prova breve non dimostra una piccola differenza.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Misura il tuo computer con il benchmark integrato di seine e conserva risultati confrontabili. La guida usa v0.2.36 e un esempio CPU, senza nuovi risultati hardware dichiarati. Installa tramite la [guida al mining](/it/blog/how-to-mine-blocknet/); misure esistenti e condizioni sono nella [guida hardware](/it/blog/blocknet-mining-hardware-hashrate/).
+
+## Come eseguire un benchmark di seine?
+
+<Answer>
+Avvia seine con `--bench`, scegli backend e modalità, aggiungi riscaldamento e salva un JSON. Ripeti lo stesso carico in condizioni comparabili prima di cambiare un'impostazione. La prova è locale, senza pool o daemon; verifica le share tornando al mining normale.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Al riscaldamento seguono tre misure salvate in un report; la seconda configurazione ripete la sequenza." width="1200" height="675" loading="lazy" />
+
+## Prepara condizioni iniziali costanti
+
+Annota versione, sistema, processore esatto, RAM utilizzabile e comando; per NVIDIA anche modello e driver. Mantieni simile il carico in background. Gioco, compilazione o altro miner durante una sola prova cambiano le condizioni.
+
+Definisci se cerchi una base CPU, un confronto di thread o di pagine. Mantieni costanti collocazione CPU, alimentazione e memoria salvo la variabile studiata. Le guide [RAM](/it/blog/how-much-ram-to-mine-blocknet/) e [huge pages](/it/blog/huge-pages-blocknet-mining/) spiegano capacità e preparazione. Registra la modalità di pagine ottenuta oltre a quella richiesta.
+
+## Esegui la prova CPU e salva il report
+
+Dalla cartella estratta, il primo comando è per Linux/macOS, il secondo per PowerShell Windows. Entrambi selezionano CPU, `backend`, un riscaldamento e tre misure, richiedendo 20 secondi ciascuna. Il file è relativo alla cartella corrente; cambia nome per ogni nuova prova.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Thread e kernel restano automatici. Preparazione e regolazione possono precedere le misure; il lavoro in corso può finire oltre l'intervallo richiesto. Attendi la scrittura di `cpu-baseline.json`. Il riscaldamento è escluso dal riepilogo misurato. La durata totale può superare i quattro intervalli: 20 secondi non indica l'intero comando.
+
+## Cosa leggere nel report?
+
+Controlla modalità, impostazioni effettive e singole misure prima del riepilogo. Il JSON include `avg_hps`, `median_hps`, `min_hps`, `max_hps` e `runs`, configurazione e ambiente. Conserva l'originale, non solo il massimo. La [guida ai flag](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) documenta output e confronti.
+
+L'hashrate misura lavoro completato al secondo. Mantieni uguali conteggio e definizione del tempo. Esamina durata reale e dispersione: un picco non riassume la prova. Se varia molto, stabilizza le condizioni o allunga le misure. Descrivi la configurazione quando condividi risultati.
+
+## Confronta una modifica con coppie ripetute
+
+Chiama A la base e B la modifica. Esegui A poi B, ripeti e alterna quale parte per prima tra coppie. Mantieni durata e riscaldamento. Salva `cpu-a-1.json` e `cpu-b-1.json`: aiuta a distinguere gli effetti dell'ordine e dell'ambiente dal parametro studiato.
+
+Applica la stessa politica di cache: primo avvio con dati nuovi e riavvio con scelte salvate rispondono a domande diverse. Preserva la cartella quotidiana e separa quelle di prova per stati nuovi. La [guida automatica](/it/blog/seine-automatic-cpu-tuning/) spiega il riuso. `--threads` cambia il comportamento di regolazione: documentalo rispetto a una prova automatica.
+
+## Perché le modalità devono coincidere?
+
+`backend` esercita i backend; `kernel` si concentra sul calcolo hash. `kernel-effective` include ciclo di vita e percorso obiettivo/valutazione del backend. Sono ambiti diversi anche sullo stesso computer. Indica la modalità accanto alla velocità; unità uguali non rendono equivalenti le misure.
+
+`end-to-end` include più parti del ciclo di mining. Mantieni anche versione e significato dei tempi coerenti. La [documentazione del laboratorio](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) spiega prove appaiate, ambiente e compatibilità. Usala per decisioni su piccoli scarti e conserva tutte le esecuzioni.
+
+## Torna al mining e verifica il lavoro
+
+Dopo la prova, avvia il comando normale con indirizzo e directory previsti. Controlla dispositivi e share accettate nel [pannello](/it/blog/seine-dashboard-explained/). Il benchmark misura prestazioni locali; le share verificano connessione e consegna del lavoro. Documenta entrambi per la configurazione quotidiana.
+
+Il pool stima l'hashrate dalle share ricevute nel tempo: è diverso da una breve prova locale. Segui gli accrediti con la [guida del pool](https://bntpool.com/blog/it/track-your-miner-on-bntpool/). Conserva versione, comando, macchina, memoria/pagine, cache, carico e tutti i JSON per riprodurre e interpretare il confronto.
+
+<CTA target="seine" title="Misura con seine" text="Scarica seine, salva una base ripetibile e segui poi il mining normale nel pannello." />

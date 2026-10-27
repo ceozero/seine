@@ -1,0 +1,62 @@
+---
+title: 'Cara seine menyetel penambangan CPU otomatis'
+description: 'Pelajari cara seine menyetel thread CPU saat menambang Blocknet, membandingkan pengaturan, memakai hasil tersimpan, dan menyesuaikan RAM sambil terus bekerja.'
+tags: ['Panduan penambangan', 'Penyetelan CPU', 'seine']
+faq:
+  - q: 'Apakah seine menambang sambil menyetel thread CPU?'
+    a: 'Ya. Pada v0.2.36, penambangan CPU biasa dimulai dari pengaturan tersimpan yang kompatibel atau perkiraan berdasarkan perangkat keras. Penyetel membandingkan jumlah thread dengan pekerjaan penambangan nyata. Benchmark offline memakai proses terpisah, sehingga urutan awalnya tidak menggambarkan sesi penambangan biasa.'
+  - q: 'Mengapa jumlah thread CPU berubah?'
+    a: 'Penyetelan otomatis mencoba jumlah thread yang berdekatan dan merespons memori tersedia. Perubahan bisa berupa percobaan kinerja atau respons terhadap tekanan RAM. Baca log bersama jumlah thread. Tunggu perbandingan selesai sebelum menilai hasil dari pembacaan hashrate singkat.'
+  - q: 'Di mana seine menyimpan hasil penyetelan CPU?'
+    a: 'Secara default, hasil thread disimpan di seine.cpu-autotune.json dalam direktori data. Pilihan kernel memakai berkas pendamping berakhiran .kernels.json. Hasil yang kompatibel membantu sesi berikutnya dimulai. Pertahankan direktori data yang sama dan biarkan penambang memeriksa kecocokan pengaturan dengan lingkungan saat ini.'
+sourceHash: '41f9cc188856'
+translation: draft
+---
+
+Pahami tindakan seine saat jumlah thread CPU berubah ketika menambang. Panduan ini mengikuti rilis publik v0.2.36 dan menjelaskan penyetelan produktif, pilihan tersimpan, serta penyesuaian memori. Untuk instalasi, buka [panduan penambangan](/id/blog/how-to-mine-blocknet/); untuk setiap panel, baca [tur dasbor](/id/blog/seine-dashboard-explained/).
+
+## Bagaimana penyetelan CPU otomatis bekerja?
+
+<Answer>
+Saat penyetelan CPU aktif, seine mulai menambang dengan jumlah tersimpan yang kompatibel atau perkiraan perangkat keras, lalu membandingkan pengaturan lewat pekerjaan nyata. Penambang mengukur acuan, mencoba kandidat, lalu mengukur acuan lagi. RAM tersedia dan batas konfigurasi membatasi pencarian pengaturan yang sesuai untuk mesin.
+</Answer>
+
+<img src="/assets/blog/cpu-autotuning.svg" alt="Perbandingan acuan–kandidat–acuan berulang menghasilkan pengaturan tersimpan, sementara ketersediaan memori diperiksa sepanjang proses." width="1200" height="675" loading="lazy" />
+
+## Penambangan dimulai sebelum pencarian selesai
+
+Biarkan `--threads` tidak diisi untuk penyetelan otomatis. Dalam penambangan biasa, seine memilih jumlah awal sesuai anggaran sumber daya lalu mulai bekerja tanpa pemindaian jumlah thread secara offline. Cache yang kompatibel dapat memberi titik awal. Mesin baru dimulai dari perkiraan penambang yang diperbaiki oleh perbandingan berikutnya.
+
+Setiap percobaan mengukur hash selesai terhadap waktu berlalu. Arena memori baru menyelesaikan satu hash awal sebelum jendela pengukuran dimulai. Urutan acuan–kandidat–acuan membantu memisahkan pengaruh pengaturan dari perubahan kondisi. Pergeseran acuan besar, perubahan batas memori, atau kehilangan pekerjaan berkepanjangan dapat membatalkan perbandingan. Lonjakan singkat di dasbor hanya satu pengamatan dalam keputusan yang lebih panjang.
+
+## Mengapa tambahan thread bisa berhenti membantu?
+
+Setiap thread CPU aktif memakai arena memori besar dan berbagi bandwidth memori mesin. Thread tambahan memungkinkan lebih banyak pekerjaan bersamaan, tetapi hasilnya bergantung pada seluruh sistem. Penyetel membandingkan H/s CPU total, bukan menganggap jumlah thread terbesar selalu tercepat. [Panduan RAM](/id/blog/how-much-ram-to-mine-blocknet/) menjelaskan anggaran memori.
+
+Profil default adalah `balanced`. Profil menentukan kebijakan penyetelan dan nilai runtime; `efficiency` merupakan pilihan eksplisit yang dapat mengutamakan thread lebih sedikit. Gunakan profil yang sama saat mengevaluasi sesi. Jumlah thread, penempatan CPU, dan dukungan halaman memori saling memengaruhi, sehingga hasil mesin atau konfigurasi lain adalah referensi awal, bukan pengaturan untuk disalin otomatis.
+
+## Apa yang terjadi saat program lain membutuhkan RAM?
+
+Anggaran memori otomatis berubah mengikuti sumber daya tersedia. Saat memori tertekan, thread dapat menyelesaikan hash saat ini, diparkir, dan melepaskan arena. Ketika ruang yang cukup kembali secara berkelanjutan, penambang dapat mengaktifkan slot tersedia dan melanjutkan eksplorasi. Ini membantu komputer yang juga menjalankan aplikasi lain: jumlah aktif dapat mengikuti kondisi dalam sesi yang sama.
+
+Pengurangan sementara tidak harus menghapus jumlah lebih tinggi yang pernah dipelajari. Cache dan jumlah aktif memiliki fungsi berbeda. Di Linux, arena HugeTLB eksplisit yang dilepas kembali ke cadangan huge page; seine tidak mengubah ukuran cadangan sistem operasi itu. Gunakan [panduan huge page](/id/blog/huge-pages-blocknet-mining/) untuk mengubah reservasi dan bedakan dari RAM bebas biasa.
+
+## Apakah seine juga menyetel kernel CPU?
+
+CPU yang memenuhi syarat dapat membandingkan jalur kode hashing selain jumlah thread. Kernel di sini adalah implementasi perangkat lunak untuk perhitungan hash. Penambang memeriksa instruksi yang didukung dan membandingkan jalur yang sesuai memakai sampel berulang. Percobaan kernel dan thread bergantian, sementara penanganan memori tetap aktif. [Panduan teknis](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/autotuning.md) menjelaskan kandidat rilis ini.
+
+Perubahan CPU otomatis mempertahankan koneksi pool dan tidak memulai ulang backend GPU. Kernel berganti di antara hash lengkap dengan arena tetap dialokasikan. Berbeda dengan menekan `+` atau `-` secara manual di dasbor: perubahan manual memulai ulang backend, menyambung kembali ke pool, dan menonaktifkan penyesuaian CPU otomatis untuk sesi itu. Baca log untuk mengenali jenis perubahan.
+
+## Bagaimana hasil tersimpan digunakan kembali?
+
+Cache thread default adalah `seine.cpu-autotune.json` di bawah `--data-dir`; cache kernel pendamping adalah `seine.cpu-autotune.json.kernels.json`. Keduanya menyimpan pilihan yang dipelajari terpisah dari pengaturan koneksi pool. Pertahankan direktori data yang konsisten antar peluncuran. [Panduan pembaruan](/id/blog/update-seine-miner/) menjelaskan cara menyimpannya saat mengganti aplikasi.
+
+Penggunaan kembali bergantung pada kompatibilitas, termasuk identitas perangkat keras dan build, penempatan, serta pengaturan halaman. Batas sumber daya saat ini tetap membatasi jumlah awal aktif. Cache yang tidak cocok setelah perubahan konfigurasi penting adalah hal wajar; biarkan penambang mengumpulkan bukti yang sesuai lagi. Jangan menyalin cache rig lain atau mengedit pengukuran. Baca pesan awal dan penyetelan sebelum menganggap pencarian baru sebagai masalah.
+
+## Kapan sebaiknya menetapkan jumlah thread tetap?
+
+Gunakan jumlah tetap ketika memang memerlukan konfigurasi yang dapat diulang. Contohnya, `--threads 4` meminta empat thread dan biasanya menonaktifkan penyetelan thread serta kernel. `--cpu-autotune-threads` mengaktifkan penyetelan meskipun jumlah diberikan; `--disable-cpu-autotune-threads` menonaktifkan penyesuaian. [Referensi flag](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) menjelaskan batas pencarian dan interaksinya.
+
+Untuk penambangan sehari-hari, mulai dengan default dan beri waktu hingga perbandingan produktif selesai. Periksa baris perangkat CPU, pesan penyetelan, dan share diterima bersama-sama. Bandingkan beban kerja dan kondisi memori serupa. Hashrate pool diperkirakan dari share yang tiba: gunakan pengukuran CPU penambang untuk memahami percobaan dan [statistik pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) untuk mengikuti pekerjaan yang dikreditkan.
+
+<CTA target="seine" title="Menambang dengan penyetelan CPU otomatis" text="Unduh seine, pertahankan penyetelan default, dan ikuti keputusannya di dasbor." />

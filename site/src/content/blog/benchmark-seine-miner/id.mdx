@@ -1,0 +1,70 @@
+---
+title: 'Cara melakukan benchmark miner Blocknet'
+description: 'Uji seine dengan pengukuran CPU berulang, pemanasan, dan laporan JSON. Bandingkan waktu dengan pengaturan memori, beban, serta kebijakan tuning yang konsisten.'
+tags: ['Panduan penambangan', 'Benchmark', 'seine']
+faq:
+  - q: 'Apakah benchmark seine mengirim share ke pool?'
+    a: 'Tidak. --bench menjalankan pengujian lokal sebagai pengganti penambangan dan tidak memerlukan pool atau daemon. Laporan mengukur beban yang dipilih. Setelahnya, jalankan penambangan normal untuk memeriksa koneksi dan share diterima secara terpisah.'
+  - q: 'Mode mana yang sebaiknya digunakan dahulu?'
+    a: 'Mulai dengan backend untuk menguji backend pilihan. Pertahankan mode, versi, dan pengaturan yang sama. Kernel, kernel-effective, dan end-to-end mengukur cakupan berbeda; simpan mode dan informasi waktu bersama setiap hashrate.'
+  - q: 'Bagaimana membuat dua pengujian sebanding?'
+    a: 'Gunakan mesin, versi, backend, memori, beban latar, dan kebijakan cache yang sama. Ubah satu pengaturan, ulangi kedua konfigurasi dengan urutan bergantian, lalu simpan semua laporan. Pemanasan dan pengulangan membantu, tetapi satu uji singkat tidak membuktikan selisih kecil.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Ukur komputer dengan benchmark bawaan seine dan simpan catatan untuk perbandingan. Panduan ini memakai rilis publik v0.2.36 dan contoh CPU, tanpa klaim hasil perangkat keras baru. Instal melalui [panduan penambangan](/id/blog/how-to-mine-blocknet/). Hasil yang sudah diukur beserta kondisinya ada di [panduan perangkat keras](/id/blog/blocknet-mining-hardware-hashrate/).
+
+## Bagaimana melakukan benchmark seine?
+
+<Answer>
+Jalankan seine dengan `--bench`, pilih backend dan mode, tambahkan pemanasan, lalu simpan JSON. Ulangi beban yang sama dalam kondisi sebanding sebelum mengubah satu pengaturan. Pengujian bersifat lokal tanpa pool atau daemon; periksa share saat kembali menambang normal.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Pemanasan diikuti tiga putaran terukur dan laporan tersimpan; konfigurasi kedua mengulangi urutan yang sama." width="1200" height="675" loading="lazy" />
+
+## Siapkan kondisi awal yang konsisten
+
+Catat versi, sistem operasi, prosesor tepat, RAM tersedia, dan perintah; untuk NVIDIA tambahkan model serta driver. Pertahankan beban latar serupa. Game, kompilasi, atau miner lain yang hanya berjalan pada satu uji mengubah kondisi pengukuran.
+
+Tentukan pertanyaan: patokan CPU, perbandingan thread, atau halaman memori. Jaga penempatan CPU, daya, dan memori tetap sama kecuali variabel uji. Panduan [RAM](/id/blog/how-much-ram-to-mine-blocknet/) dan [huge pages](/id/blog/huge-pages-blocknet-mining/) membahas kapasitas dan persiapan. Catat mode halaman yang benar-benar diperoleh selain yang diminta.
+
+## Jalankan uji CPU dan simpan laporan
+
+Dari folder hasil ekstraksi, perintah pertama untuk Linux/macOS, kedua untuk Windows PowerShell. Keduanya memilih CPU, `backend`, satu pemanasan dan tiga putaran terukur, masing-masing meminta 20 detik. Nama berkas relatif terhadap direktori kerja. Gunakan nama baru untuk setiap pengujian berikutnya.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Thread dan kernel tetap otomatis. Persiapan dan tuning dapat memerlukan waktu sebelum putaran; pekerjaan aktif dapat selesai setelah interval yang diminta. Tunggu penulisan `cpu-baseline.json`. Pemanasan tidak termasuk ringkasan pengukuran. Total waktu bisa melampaui empat interval; 20 detik bukan durasi seluruh perintah.
+
+## Apa yang dibaca dalam laporan?
+
+Periksa mode, pengaturan efektif, dan tiap putaran sebelum ringkasan. JSON berisi `avg_hps`, `median_hps`, `min_hps`, `max_hps`, dan `runs`, berikut konfigurasi serta lingkungan. Simpan berkas asli, bukan angka maksimum saja. [Referensi flag](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) menjelaskan keluaran dan perbandingan patokan.
+
+Hashrate adalah pekerjaan selesai per detik. Samakan penghitungan dan definisi waktu. Periksa durasi aktual serta sebaran antarputaran; lonjakan tidak mewakili seluruh uji. Jika bervariasi besar, stabilkan kondisi atau perpanjang putaran. Sertakan konfigurasi saat membagikan hasil.
+
+## Bandingkan satu perubahan dengan pasangan berulang
+
+Sebut konfigurasi awal A dan perubahan B. Jalankan A lalu B, ulangi, dan ganti pihak yang mulai lebih dahulu antar pasangan. Samakan durasi serta pemanasan. Simpan misalnya `cpu-a-1.json` dan `cpu-b-1.json` untuk mengenali pengaruh urutan atau lingkungan selain pengaturan yang diuji.
+
+Terapkan kebijakan cache yang sama: peluncuran pertama dengan data baru dan mulai ulang dengan pilihan tersimpan menjawab pertanyaan berbeda. Pertahankan direktori harian dan pisahkan direktori uji untuk kondisi baru. [Panduan tuning otomatis](/id/blog/seine-automatic-cpu-tuning/) menjelaskan penggunaan ulang. `--threads` mengubah perilaku tuning; catat pilihan ini dibanding uji otomatis.
+
+## Mengapa mode harus sama?
+
+`backend` menguji backend penambangan; `kernel` berfokus pada perhitungan hash. `kernel-effective` mencakup waktu siklus hidup dan jalur target/evaluasi backend. Cakupannya berbeda pada mesin yang sama. Beri label mode pada angka; satuan sama tidak membuat pengukuran setara.
+
+`end-to-end` mencakup lebih banyak siklus penambangan. Pertahankan versi dan makna waktu juga. [Dokumentasi laboratorium](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) menjelaskan uji berpasangan, catatan lingkungan, dan kompatibilitas. Gunakan untuk keputusan berdasarkan selisih kecil, dengan seluruh hasil disimpan.
+
+## Kembali menambang dan periksa pekerjaan
+
+Setelah selesai, jalankan perintah biasa dengan alamat dan direktori yang dimaksud. Periksa perangkat dan share diterima di [dasbor](/id/blog/seine-dashboard-explained/). Benchmark mengukur performa lokal; share memverifikasi koneksi dan pengiriman pekerjaan. Catat keduanya untuk pengaturan harian.
+
+Pool memperkirakan hashrate dari share sepanjang waktu, berbeda dari uji lokal singkat. Ikuti kredit melalui [panduan pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/). Simpan versi, perintah, mesin, memori/halaman, cache, beban latar, dan seluruh JSON agar perbandingan bisa diulang dan dipahami.
+
+<CTA target="seine" title="Lakukan benchmark dengan seine" text="Unduh seine, simpan patokan yang dapat diulang, lalu ikuti penambangan normal di dasbor." />

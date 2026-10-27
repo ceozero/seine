@@ -97,6 +97,113 @@ fn seed_threads(
         .clamp(floor, max.min(available))
 }
 
+// Validated cold-start policy for native Linux/Windows 32-core/128 GiB
+// EPYC 9R14 hosts. Keep off other identities, topologies and profiles.
+// This changes only the initial count; normal resource shedding and repeated
+// count/kernel comparisons still decide the sustained setting.
+pub(super) fn full_count_cold_start(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    max: usize,
+    memory_capacity: usize,
+) -> bool {
+    identity.vendor.as_deref() == Some("AuthenticAMD")
+        && identity.family == Some(0x19)
+        && identity.model == Some(0x11)
+        && host.cpu_brand.as_deref() == Some("AMD EPYC 9R14")
+        && matches!(host.os.as_str(), "linux" | "windows")
+        && host.runtime_environment == "native"
+        && host.logical_cores == 32
+        && host.physical_cores == Some(32)
+        && (120 * 1024_u64.pow(3)..=130 * 1024_u64.pow(3)).contains(&host.total_memory_bytes)
+        && cfg.backend_specs.len() == 1
+        && instances(cfg) == 1
+        && cfg.backend_specs[0]
+            .cpu_affinity
+            .is_none_or(|affinity| affinity == crate::config::CpuAffinityMode::Auto)
+        && cfg.cpu_profile != CpuPerformanceProfile::Efficiency
+        && cfg.cpu_page_mode == crate::config::CpuPageMode::Auto
+        && cfg.cpu_affinity == crate::config::CpuAffinityMode::Auto
+        && max == 32
+        && memory_capacity >= 32
+}
+
+// Native cold-start comparison validated this exact Sapphire Rapids context.
+// Keep neighboring hosts, manual settings and efficiency mode unchanged.
+pub(super) fn sapphire_full_count_cold_start(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    max: usize,
+    memory_capacity: usize,
+) -> bool {
+    identity.vendor.as_deref() == Some("GenuineIntel")
+        && identity.family == Some(6)
+        && identity.model == Some(0x8f)
+        && host.cpu_brand.as_deref() == Some("Intel(R) Xeon(R) Platinum 8488C")
+        && host.os == "linux"
+        && host.runtime_environment == "native"
+        && host.logical_cores == 32
+        && host.physical_cores == Some(16)
+        && (120 * 1024_u64.pow(3)..=130 * 1024_u64.pow(3)).contains(&host.total_memory_bytes)
+        && cfg.backend_specs.len() == 1
+        && instances(cfg) == 1
+        && cfg.backend_specs[0]
+            .cpu_affinity
+            .is_none_or(|affinity| affinity == crate::config::CpuAffinityMode::Auto)
+        && cfg.cpu_profile != CpuPerformanceProfile::Efficiency
+        && cfg.cpu_page_mode == crate::config::CpuPageMode::Auto
+        && cfg.cpu_affinity == crate::config::CpuAffinityMode::Auto
+        && max == 32
+        && memory_capacity >= 32
+}
+
+// Native 9R45 cold pair: +12.77% with streaming startup and THP prefault order.
+// Keep neighboring hosts, manual settings and efficiency mode unchanged.
+pub(super) fn turin_full_count_cold_start(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    identity: &crate::runtime_identity::CpuIdentity,
+    max: usize,
+    memory_capacity: usize,
+) -> bool {
+    identity.vendor.as_deref() == Some("AuthenticAMD")
+        && identity.family == Some(0x1a)
+        && identity.model == Some(0x02)
+        && host.cpu_brand.as_deref() == Some("AMD EPYC 9R45")
+        && host.os == "linux"
+        && host.runtime_environment == "native"
+        && host.logical_cores == 32
+        && host.physical_cores == Some(32)
+        && (120 * 1024_u64.pow(3)..=130 * 1024_u64.pow(3)).contains(&host.total_memory_bytes)
+        && cfg.backend_specs.len() == 1
+        && instances(cfg) == 1
+        && cfg.backend_specs[0]
+            .cpu_affinity
+            .is_none_or(|affinity| affinity == crate::config::CpuAffinityMode::Auto)
+        && cfg.cpu_profile != CpuPerformanceProfile::Efficiency
+        && cfg.cpu_page_mode == crate::config::CpuPageMode::Auto
+        && cfg.cpu_affinity == crate::config::CpuAffinityMode::Auto
+        && max == 32
+        && memory_capacity >= 32
+}
+
+fn initial_threads(
+    record: Option<&CpuAutotuneRecord>,
+    min: usize,
+    max: usize,
+    available: usize,
+    memory_capacity: usize,
+    full_count: bool,
+) -> usize {
+    if record.is_none() && full_count {
+        max.min(memory_capacity).min(available)
+    } else {
+        seed_threads(record, min, max, available, memory_capacity)
+    }
+}
+
 // Threads already running (including the API's Tokio worker pool) are charged
 // in pids.current. Reserve only later work. DNS/blocking and GPU driver threads
 // are demand-driven, so the margin is best effort; startup also handles spawn
@@ -181,7 +288,34 @@ fn prepare_with_resources(
             None
         }
     };
-    let threads = seed_threads(seed.as_ref(), min, max, available, memory_capacity);
+    let full_count = seed.is_none()
+        && (full_count_cold_start(
+            cfg,
+            &cpu_autotune_host_fingerprint(),
+            &crate::runtime_identity::cpu_identity(),
+            max,
+            memory_capacity,
+        ) || sapphire_full_count_cold_start(
+            cfg,
+            &cpu_autotune_host_fingerprint(),
+            &crate::runtime_identity::cpu_identity(),
+            max,
+            memory_capacity,
+        ) || turin_full_count_cold_start(
+            cfg,
+            &cpu_autotune_host_fingerprint(),
+            &crate::runtime_identity::cpu_identity(),
+            max,
+            memory_capacity,
+        ));
+    let threads = initial_threads(
+        seed.as_ref(),
+        min,
+        max,
+        available,
+        memory_capacity,
+        full_count,
+    );
     // Zero is intentional here. A parked CPU backend stays connected and can
     // recover when a whole arena plus the configured reserve fits again.
     cfg.threads = threads;
@@ -591,6 +725,25 @@ impl Policy {
         };
         match (phase_before, self.phase) {
             (Phase::Baseline, Phase::Probe { base, .. }) => {
+                if self.joint.is_none() {
+                    if let Some(retry_at) =
+                        kernels.retry_at_for_threads(now, snapshots, self.current)
+                    {
+                        // Do not allocate/park workers at an unconfirmed count
+                        // just to wait for its kernel cooldown. Keep mining the
+                        // baseline, then retry with fresh count/kernel samples.
+                        let candidate = self.current;
+                        self.attempts = self.attempts.saturating_sub(1);
+                        self.reset(now, retry_at.saturating_sub(now));
+                        if candidate > base {
+                            self.next_up_probe = Some(candidate);
+                        }
+                        return (
+                            action,
+                            Some(self.change(base, "kernel retry deferred; retaining baseline")),
+                        );
+                    }
+                }
                 if let Some(joint) = self.joint.clone() {
                     // Second outer A/B/A: use the already-confirmed candidate
                     // kernel, then wait for acknowledgements before sampling.
@@ -1037,6 +1190,7 @@ impl Controller {
         cfg: Config,
         backends: Vec<Arc<CpuBackend>>,
         tui: Option<TuiState>,
+        telemetry: Option<crate::hardware_telemetry::Recorder>,
     ) -> Result<Self> {
         let (stop, rx) = bounded(1);
         let handle = if backends.is_empty() {
@@ -1057,6 +1211,9 @@ impl Controller {
                         discard_cached_scores(&mut record);
                         let host = cpu_autotune_host_fingerprint();
                         let mut kernels = super::adaptive_kernel::Tuner::new(&cfg, host.clone());
+                        kernels.monitor = telemetry
+                            .filter(|_| backends.len() <= seine_telemetry::tuning::MAX_MEMBERS)
+                            .map(|recorder| super::adaptive_telemetry::Monitor::new(recorder, &cfg));
                         let started = Instant::now();
                         let mut failures = 0;
                         let mut pressure = MemoryPressure::default();
@@ -1064,6 +1221,12 @@ impl Controller {
                         loop {
                             match rx.recv_timeout(Duration::from_secs(1)) {
                                 Ok(()) | Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                                    if let Some(monitor) = &mut kernels.monitor {
+                                        let now = started.elapsed().as_secs();
+                                        let snapshots: Vec<_> = backends.iter().map(|b| b.adaptive_snapshot()).collect();
+                                        monitor.observe(now, &snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
+                                        monitor.abort(now, seine_telemetry::tuning::TrialReason::UserInterrupted);
+                                    }
                                     break
                                 }
                                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
@@ -1074,6 +1237,11 @@ impl Controller {
                             let snapshots: Vec<_> =
                                 all_snapshots.iter().filter(|s| s.running).collect();
                             if snapshots.is_empty() {
+                                if let Some(monitor) = &mut kernels.monitor {
+                                    let now = started.elapsed().as_secs();
+                                    monitor.observe(now, &all_snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
+                                    monitor.abort(now, seine_telemetry::tuning::TrialReason::ExecutionFailure);
+                                }
                                 break;
                             }
                             let slots = backends.iter().zip(&all_snapshots)
@@ -1083,10 +1251,11 @@ impl Controller {
                             let owned = snapshots.iter().map(|s| s.committed_bytes).sum();
                             let count_failures =
                                 snapshots.iter().map(|s| s.allocation_failures).sum();
-                            let (_, available) = cpu_autotune_capacity(&cfg, owned);
+                            let ((_, available), resources) = crate::config::cpu_autotune_capacity_snapshot(&cfg, owned);
                             let cap =
                                 pressure_backoff.cap(pressure.elevated(), available.min(slots), actual, max);
                             let now = started.elapsed().as_secs();
+                            if let Some(monitor) = &mut kernels.monitor { monitor.observe(now, &all_snapshots, resources); }
                             let (action, decision) = policy.tick_joint(
                                 &mut kernels, now, &all_snapshots, cap, count_failures > failures,
                             );
@@ -1094,6 +1263,10 @@ impl Controller {
                                 for (backend, snapshot) in backends.iter().zip(&all_snapshots) {
                                     if snapshot.running {
                                         if let Err(err) = backend.set_active_kernel(kernel) {
+                                            if let Some(monitor) = &mut kernels.monitor {
+                                                let observed: Vec<_> = backends.iter().map(|b| b.adaptive_snapshot()).collect();
+                                                monitor.abort_observed(started.elapsed().as_secs(), &observed, resources, seine_telemetry::tuning::TrialReason::ExecutionFailure);
+                                            }
                                             warn("MINER", format!("cpu-autotune | kernel switch failed: {err:#}"));
                                         }
                                     }
@@ -1425,7 +1598,7 @@ mod tests {
         ));
         backend.start().unwrap();
         let mut controller =
-            Controller::start(cfg.clone(), vec![Arc::clone(&backend)], None).unwrap();
+            Controller::start(cfg.clone(), vec![Arc::clone(&backend)], None, None).unwrap();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             backend
                 .assign_work(WorkAssignment {
@@ -2234,6 +2407,240 @@ mod tests {
         assert_eq!(seed_threads(None, 1, 16, 16, 16), 8);
     }
 
+    #[test]
+    fn genoa_full_count_seed_requires_exact_native_host_and_configuration() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R14".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            stepping: Some(1),
+        };
+        assert!(full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        let mut windows = host.clone();
+        windows.os = "windows".into();
+        assert!(full_count_cold_start(&cfg, &windows, &identity, 32, 32));
+        for (vendor, family, model) in [
+            ("GenuineIntel", 0x19, 0x11),
+            ("AuthenticAMD", 0x1a, 0x11),
+            ("AuthenticAMD", 0x19, 0x10),
+        ] {
+            let mut other = identity.clone();
+            other.vendor = Some(vendor.into());
+            other.family = Some(family);
+            other.model = Some(model);
+            assert!(!full_count_cold_start(&cfg, &host, &other, 32, 32));
+        }
+        for field in ["brand", "os", "runtime", "logical", "physical", "memory"] {
+            let mut other = host.clone();
+            match field {
+                "brand" => other.cpu_brand = Some("AMD EPYC 9354P".into()),
+                "os" => other.os = "macos".into(),
+                "runtime" => other.runtime_environment = "wsl2".into(),
+                "logical" => other.logical_cores = 64,
+                "physical" => other.physical_cores = Some(16),
+                "memory" => other.total_memory_bytes = 64 * 1024_u64.pow(3),
+                _ => unreachable!(),
+            }
+            assert!(
+                !full_count_cold_start(&cfg, &other, &identity, 32, 32),
+                "{field}"
+            );
+        }
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 24, 32));
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 32, 24));
+        cfg.cpu_profile = CpuPerformanceProfile::Efficiency;
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_profile = CpuPerformanceProfile::Throughput;
+        assert!(full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_page_mode = CpuPageMode::Regular;
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_page_mode = CpuPageMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = Some(crate::config::CpuAffinityMode::Off);
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.backend_specs.push(cfg.backend_specs[0].clone());
+        assert!(!full_count_cold_start(&cfg, &host, &identity, 32, 32));
+    }
+
+    #[test]
+    fn sapphire_full_count_seed_requires_exact_native_host_and_configuration() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("Intel(R) Xeon(R) Platinum 8488C".into()),
+            logical_cores: 32,
+            physical_cores: Some(16),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("GenuineIntel".into()),
+            family: Some(6),
+            model: Some(0x8f),
+            stepping: Some(1),
+        };
+        assert!(sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+        let mut windows = host.clone();
+        windows.os = "windows".into();
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &windows, &identity, 32, 32
+        ));
+        for (vendor, family, model) in [
+            ("AuthenticAMD", 6, 0x8f),
+            ("GenuineIntel", 7, 0x8f),
+            ("GenuineIntel", 6, 0x8e),
+        ] {
+            let mut other = identity.clone();
+            other.vendor = Some(vendor.into());
+            other.family = Some(family);
+            other.model = Some(model);
+            assert!(!sapphire_full_count_cold_start(&cfg, &host, &other, 32, 32));
+        }
+        for field in ["brand", "os", "runtime", "logical", "physical", "memory"] {
+            let mut other = host.clone();
+            match field {
+                "brand" => other.cpu_brand = Some("AMD EPYC 9354P".into()),
+                "os" => other.os = "macos".into(),
+                "runtime" => other.runtime_environment = "wsl2".into(),
+                "logical" => other.logical_cores = 64,
+                "physical" => other.physical_cores = Some(32),
+                "memory" => other.total_memory_bytes = 64 * 1024_u64.pow(3),
+                _ => unreachable!(),
+            }
+            assert!(
+                !sapphire_full_count_cold_start(&cfg, &other, &identity, 32, 32),
+                "{field}"
+            );
+        }
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 24, 32
+        ));
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 24
+        ));
+        cfg.cpu_profile = CpuPerformanceProfile::Efficiency;
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+        cfg.cpu_profile = CpuPerformanceProfile::Throughput;
+        assert!(sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+        cfg.cpu_page_mode = CpuPageMode::Regular;
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+        cfg.cpu_page_mode = CpuPageMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = Some(crate::config::CpuAffinityMode::Off);
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.backend_specs.push(cfg.backend_specs[0].clone());
+        assert!(!sapphire_full_count_cold_start(
+            &cfg, &host, &identity, 32, 32
+        ));
+    }
+
+    #[test]
+    fn turin_full_count_seed_requires_exact_native_host_and_configuration() {
+        let mut cfg = super::super::tests::test_config();
+        cfg.cpu_affinity = crate::config::CpuAffinityMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = None;
+        let host = CpuAutotuneHostFingerprint {
+            cpu_brand: Some("AMD EPYC 9R45".into()),
+            logical_cores: 32,
+            physical_cores: Some(32),
+            total_memory_bytes: 128 * 1024_u64.pow(3),
+            os: "linux".into(),
+            runtime_environment: "native".into(),
+            ..Default::default()
+        };
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0x02),
+            stepping: Some(1),
+        };
+        assert!(turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        let mut windows = host.clone();
+        windows.os = "windows".into();
+        assert!(!turin_full_count_cold_start(
+            &cfg, &windows, &identity, 32, 32
+        ));
+        for (vendor, family, model) in [
+            ("GenuineIntel", 0x1a, 0x02),
+            ("AuthenticAMD", 0x19, 0x02),
+            ("AuthenticAMD", 0x1a, 0x44),
+        ] {
+            let mut other = identity.clone();
+            other.vendor = Some(vendor.into());
+            other.family = Some(family);
+            other.model = Some(model);
+            assert!(!turin_full_count_cold_start(&cfg, &host, &other, 32, 32));
+        }
+        for field in ["brand", "os", "runtime", "logical", "physical", "memory"] {
+            let mut other = host.clone();
+            match field {
+                "brand" => other.cpu_brand = Some("AMD EPYC 9354P".into()),
+                "os" => other.os = "macos".into(),
+                "runtime" => other.runtime_environment = "wsl2".into(),
+                "logical" => other.logical_cores = 64,
+                "physical" => other.physical_cores = Some(16),
+                "memory" => other.total_memory_bytes = 64 * 1024_u64.pow(3),
+                _ => unreachable!(),
+            }
+            assert!(
+                !turin_full_count_cold_start(&cfg, &other, &identity, 32, 32),
+                "{field}"
+            );
+        }
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 24, 32));
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 32, 24));
+        cfg.cpu_profile = CpuPerformanceProfile::Efficiency;
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_profile = CpuPerformanceProfile::Throughput;
+        assert!(turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_page_mode = CpuPageMode::Regular;
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.cpu_page_mode = CpuPageMode::Auto;
+        cfg.backend_specs[0].cpu_affinity = Some(crate::config::CpuAffinityMode::Off);
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+        cfg.backend_specs[0].cpu_affinity = None;
+        cfg.backend_specs.push(cfg.backend_specs[0].clone());
+        assert!(!turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
+    }
+
+    #[test]
+    fn full_count_seed_preserves_cache_and_transient_resource_limits() {
+        let cfg = super::super::tests::test_config();
+        let cached = record(&cfg, 24);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, true), 32);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, false), 16);
+        assert_eq!(initial_threads(Some(&cached), 1, 32, 32, 32, true), 24);
+        assert_eq!(initial_threads(Some(&cached), 1, 32, 8, 32, true), 8);
+        assert_eq!(initial_threads(None, 1, 32, 8, 32, true), 8);
+        assert_eq!(initial_threads(None, 1, 32, 32, 8, true), 8);
+        assert_eq!(initial_threads(None, 1, 32, 0, 32, true), 0);
+    }
+
     fn record(cfg: &Config, selected_threads: usize) -> CpuAutotuneRecord {
         CpuAutotuneRecord {
             schema_version: 10,
@@ -2414,6 +2821,77 @@ mod tests {
             warmed: candidate,
         };
         (p, kernels, s)
+    }
+
+    #[test]
+    fn joint_admission_keeps_baseline_until_candidate_kernel_retry_is_due() {
+        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
+            return;
+        }
+        for (base, candidate) in [(8, 12), (12, 11)] {
+            let (mut p, mut kernels, mut s) = joint_fixture("retry-admission", base, candidate);
+            assert!(kernels.tick(0, &[s], true, true).hold_counts);
+            kernels.abort(1);
+            assert_eq!(kernels.retry_at_for_threads(2, &[s], candidate), Some(301));
+            assert_eq!(kernels.retry_at_for_threads(2, &[s], base), None);
+            let mut missing = s;
+            missing.running = false;
+            assert_eq!(
+                kernels.retry_at_for_threads(2, &[missing, s], candidate),
+                None
+            );
+            assert_eq!(kernels.retry_at_for_threads(301, &[s], candidate), None);
+
+            // Isolate outer admission from another baseline kernel search.
+            // Existing tests cover the inner search after a retry expires.
+            kernels.test_candidates(vec![CpuKernel::Avx2]);
+            p.joint = None;
+            p.reset(2, 0);
+            p.current = base;
+            p.up = candidate > base;
+            p.previous_cap = 16;
+            p.cap_observed = true;
+            p.headroom_since = 0;
+            p.recovery_pending = false;
+            s.threads = base;
+            s.warmed = base;
+            s.committed_bytes = base as u64 * CPU_LANE_MEMORY_BYTES;
+            s.resident_bytes = s.committed_bytes;
+            s.backing_bytes = [0, 0, 0, s.committed_bytes, 0];
+            let mut saw_deferral = false;
+            for now in 2..301 {
+                // A changed baseline rate may request earlier discovery. It
+                // must still not enter this candidate before its own cooldown.
+                s.hashes += if base == 8 && now >= 100 { 12 } else { 10 };
+                let (_, decision) = p.tick_joint(&mut kernels, now, &[s], 16, false);
+                if let Some(decision) = decision {
+                    assert_eq!(decision.threads, base);
+                    assert!(decision.learned.is_none());
+                    assert_eq!(decision.reason, "kernel retry deferred; retaining baseline");
+                    saw_deferral = true;
+                }
+                assert_eq!(p.current, base);
+                assert!(p.joint.is_none());
+                assert!(matches!(p.phase, Phase::Baseline));
+            }
+            assert!(saw_deferral);
+            assert_eq!(p.attempts, 0, "waiting is not an attempted comparison");
+            let mut resumed = false;
+            for now in 301..=332 {
+                s.hashes += if base == 8 { 12 } else { 10 };
+                if let (_, Some(decision)) = p.tick_joint(&mut kernels, now, &[s], 16, false) {
+                    assert_eq!(decision.threads, candidate);
+                    assert!(decision.learned.is_none());
+                    assert!(matches!(p.phase, Phase::Probe { .. }));
+                    resumed = true;
+                    break;
+                }
+            }
+            assert!(
+                resumed,
+                "cooldown must permit a fresh probe, not suppress it"
+            );
+        }
     }
 
     #[test]

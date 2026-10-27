@@ -1,0 +1,68 @@
+---
+title: 'Warum sinkt meine Mining-Hashrate?'
+description: 'Sinkende Blocknet-Hashrate prüfen: gleiche Messwerte vergleichen, Geräte, Tuning, RAM, Taktraten und Shares kontrollieren und einzelne Änderungen überprüfen.'
+tags: ['Fehlersuche', 'Hashrate', 'seine']
+faq:
+  - q: 'Warum zeigt der Pool weniger Hashrate als der Miner?'
+    a: 'Der Miner zählt lokale Hashes, der Pool schätzt Arbeit anhand eingereichter Shares in seinem eigenen Zeitfenster. Vergleiche denselben Rechner über einen repräsentativen Zeitraum und prüfe neue akzeptierte Shares sowie Verbindungsmeldungen. Ein kurzer Unterschied belegt allein keine langsamere Hardware.'
+  - q: 'Bedeuten weniger CPU-Threads einen Fehler?'
+    a: 'Nicht allein. Das automatische Tuning vergleicht Threadzahlen und Codepfade; verfügbarer Speicher kann die aktive Zahl begrenzen. Betrachte Tuningmeldungen, freien Speicher und Hashrate je Gerät gemeinsam. Notiere zuerst die Änderung, bevor du entscheidest, ob ein Eingriff nötig ist.'
+  - q: 'Soll ich mehrere Einstellungen ändern, um Hashrate zurückzugewinnen?'
+    a: 'Beginne mit einer vergleichbaren Ausgangslage und ändere jeweils eine relevante Bedingung. Halte Version, Geräte, Last und Beobachtungsdauer fest. Prüfe danach anhaltende Rechenarbeit und neue akzeptierte Shares; ein einzelner höherer Momentanwert belegt keine Verbesserung.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Kläre zuerst, welcher Wert sich verändert hat, bevor du einen weiterhin laufenden Miner anpasst. Diese Anleitung trennt unterschiedliche Messfenster von Änderungen an Geräten, Last oder Ressourcen und prüft eine mögliche Ursache durch einen wiederholbaren Vergleich. Bewahre den funktionierenden Startaufruf auf, damit jede Beobachtung einen bekannten Ausgangspunkt hat.
+
+## Warum kann die Hashrate während einer Sitzung sinken?
+
+<Answer>
+Hashrate kann sich mit aktiven Geräten, CPU-Threadzahl, verfügbarem Speicher, konkurrierender Last oder Hardwaretakten ändern. Auch unterschiedliche Mittelungsfenster können einen Rückgang vortäuschen. Beginne mit demselben Gerät und Zeitraum, prüfe neue Arbeit und Protokolle, ändere dann eine Bedingung und beobachte das Ergebnis.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Zwei Hashratekurven führen zu Geräte-, Speicher- und Taktprüfungen und anschließend zu einem vergleichbaren Vorher-Nachher-Vergleich." width="1200" height="675" loading="lazy" />
+
+## Bestimme zuerst den gesunkenen Messwert
+
+Notiere die Anzeige: aktuelle lokale Hashrate, Sitzungsmittel, einzelne Gerätezeile oder Poolschätzung. Das sind verschiedene Beobachtungen. In seine umfassen aktuelle und mittlere Werte unterschiedliche Zeiträume; Geräte können Arbeit gebündelt melden. Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die Felder. Vergleiche zunächst jedes Feld mit seinem eigenen früheren Wert.
+
+Halte Einheit und Zeitraum neben jeder Zahl fest. H/s und kH/s musst du vor dem Vergleich umrechnen. Notiere, ob der Miner gerade gestartet, ein Backend neu gestartet oder Arbeit wieder aufgenommen wurde. Eine neue Sitzung hat eine andere Vorgeschichte als ein lang laufender Mittelwert; ein früher Spitzenwert ist keine gute Referenz für den ganzen Abend.
+
+## Betrifft die Änderung den Miner, den Pool oder ein Gerät?
+
+Prüfe Gerätezeilen und neue Meldungen akzeptierter Shares. Leistet ein Gerät weniger, während die anderen stabil bleiben, untersuche dieses zuerst. Bleibt lokale Arbeit vergleichbar, während die Poolschätzung schwankt, prüfe Shares und Verbindung. Die [Hashrate-Erklärung](https://bntpool.com/blog/de/what-is-hashrate/) beschreibt Unterschiede zwischen einer sharebasierten Schätzung und lokaler Rechenleistung.
+
+Kontrolliere Empfangsadresse und Rignamen in den Poolstatistiken. Mehrere Rechner unter einer Adresse machen die Kontosumme möglicherweise ungeeignet für den Vergleich mit einem einzelnen PC. Nutze die [Tracking-Anleitung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/). Ist der Prozess beendet oder meldet ein Backend einen Fehler, hilft die [Anleitung für Miner-Stopps](/de/blog/miner-keeps-stopping/); hier geht es um eine noch beobachtbare Sitzung.
+
+## Ordne Tuning und geänderte Threadzahlen ein
+
+seine vergleicht CPU-Threadzahlen und Rechenkerne beim Mining und kann kompatible gespeicherte Ergebnisse wiederverwenden. Diese Vergleiche können die aktive Konfiguration verändern. Lies zeitnahe Tuningmeldungen und notiere die aktive Zahl vor einer Diagnose. Die [Autotuning-Anleitung](/de/blog/seine-automatic-cpu-tuning/) erklärt Suche und Vorgaben; eine andere Threadzahl allein belegt keinen Rückschritt.
+
+Prüfe, ob der Start dieselben Backends und Einstellungen wie zuvor auswählt. Eine andere Verknüpfung, ein Arbeitsverzeichnis oder gespeicherte Werte können den Vergleich bereits verändern. Bewahre den funktionierenden Aufruf auf und lies in der [Konfigurationsanleitung](/de/blog/configure-seine-miner/), welche Werte gelten. Lösche den Tuningcache nicht nur wegen einer veränderten Anzeige.
+
+## Prüfe andere Aufgaben und verfügbaren Speicher
+
+Sieh in der Prozess- und Speicheransicht des Betriebssystems nach gleichzeitigen Änderungen. Spiele, Videobearbeitung, Builds oder andere Rechenaufgaben können CPU, GPU oder Speicher teilen. Vergleiche bei passender Gelegenheit mit pausierter oder beendeter optionaler Aufgabe. Halte die Desktoplast vergleichbar; sonst beantwortet der nächste Wert eine andere Frage.
+
+seines automatische CPU-Verwaltung berücksichtigt verfügbaren Speicher und kann bei knappen Ressourcen Threads reduzieren. Manche Betriebssysteme liefern zusätzlich Speicherdrucksignale. Betrachte Protokoll und freien Speicher gemeinsam, statt sofort die alte Zahl zu erzwingen. Die [RAM-Anleitung](/de/blog/how-much-ram-to-mine-blocknet/) erklärt den Bedarf. Kehrt Leistung nach Ende einer anderen Aufgabe zurück, notiere den Zusammenhang vor dauerhaften Änderungen.
+
+## Können Temperatur oder Stromversorgung die Änderung erklären?
+
+Temperaturen und Takte können eine anhaltende lokale Änderung erklären, wenn Last und Geräte sonst vergleichbar sind. Intel beschreibt [thermisches Drosseln](https://www.intel.com/content/www/us/en/support/articles/000088048.html) als schützende Senkung des CPU-Takts. Nutze die Herstellerangaben für dein genaues Prozessor- oder Rechnermodell; ein universeller Temperaturgrenzwert diagnostiziert nicht jeden Mining-PC.
+
+Bei NVIDIA unterscheidet die [Monitoring-Dokumentation](https://docs.nvidia.com/deploy/nvidia-smi/index.html) Taktbegrenzungsgründe, darunter Temperatur und Leistung, und kennzeichnet fehlende Daten. Halte unterstützte Messwerte zusammen mit der Hashrate fest. Notiere auch Akku-/Netzwechsel und geänderte Energiemodi. Beachte Kühlungshinweise des Herstellers und lasse Schutzfunktionen aktiv; das Verfahren verlangt keine Spannungs- oder Taktgrenzenänderung.
+
+## Vergleiche so, dass eine Antwort möglich ist
+
+Wähle eine vermutete Bedingung, etwa eine konkurrierende Anwendung, und vergleiche ansonsten gleiche Zeitabschnitte vor und nach ihrer Änderung. Notiere Version, Backends, Threadregel, Stromquelle und Vordergrundarbeit. Kennzeichne Start und Tuning getrennt. Wiederhole die Beobachtung bei unklaren normalen Schwankungen, ohne aus einem Einzelwert eine Ursache abzuleiten.
+
+Für ein gezieltes Leistungsexperiment nutze die [Benchmark-Anleitung](/de/blog/benchmark-seine-miner/) mit vergleichbaren Lasten. Trenne Benchmarks von Poolbelohnungen, die auch durch Blockankunft und Shareschwankungen beeinflusst werden. Weniger Strom beantwortet ebenfalls eine andere Frage: Die [Stromanleitung](/de/blog/mining-electricity-use/) verbindet Energie mit erledigter Arbeit, damit ein untätiges Gerät nicht als Verbesserung gilt.
+
+## Prüfe das Ergebnis und sichere brauchbare Belege
+
+Bestätige nach der gezielten Änderung die vorgesehenen Geräte, eine verstandene Threadzahl und neue akzeptierte Shares. Vergleiche dasselbe Feld über repräsentative Zeiträume. Bewahre auch Ergebnisse ohne wesentlichen Unterschied auf, um nutzlose Anpassungen nicht zu wiederholen. Nimm sachfremde Änderungen zurück, statt unerklärte Einstellungen anzuhäufen.
+
+Bleibt das Muster, sammle Version, Betriebssystem, Hardware, Startwerte, relevante Protokollzeiten und gepaarte Messwerte. Beschreibe Konstanten, Änderungen und ob ein Gerät oder der ganze Miner betroffen war. Entferne Zugangsdaten und persönliche Informationen vor dem Teilen. Ein kurzer Zeitablauf hilft einer Supportanalyse mehr als ein Screenshot mit einer einzigen niedrigen Zahl.
+
+<CTA target="seine" title="Bewahre eine wiederholbare seine-Konfiguration" text="Nutze Dashboard, vergleichbare Beobachtungen und neue Shares, um eine Hashrateänderung vor dem Umstellen zu verstehen." />

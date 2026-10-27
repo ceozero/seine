@@ -1,0 +1,62 @@
+---
+title: 'Dlaczego miner nie używa 100% CPU'
+description: 'Zrozum użycie CPU podczas kopania Blocknet z seine. Sprawdź wątki, pamięć, backend i zaakceptowaną pracę przed zmianą ustawień.'
+tags: ['Poradnik kopania', 'Użycie CPU', 'seine']
+faq:
+  - q: 'Czy miner powinien zawsze używać 100% CPU?'
+    a: 'Nie. Procent systemowy opisuje wykorzystanie dostępnych procesorów, a seine mierzy ukończone hashe. Przydatna liczba wątków zależy od pamięci i zmierzonej wydajności. Oceniaj razem aktywne wątki, hashrate i zaakceptowaną pracę.'
+  - q: 'Dlaczego seine wybiera mniej wątków?'
+    a: 'Każdy aktywny wątek CPU wymaga obszaru pamięci 2 GiB, a wątki dzielą przepustowość. Automatyczny wybór uwzględnia pamięć i testuje wydajność. Znaczenie mają też jawne limity, backend i środowisko.'
+  - q: 'Co sprawdzić, gdy spadają użycie i hashrate?'
+    a: 'Sprawdź backend CPU, wątki, komunikaty strojenia i pamięci oraz bieżące zadanie. Porównaj to samo urządzenie i okres, potem obciążenie w tle i limity. Przy problemach połączenia lub zerowym hashrate puli skorzystaj z poradnika śledzenia.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Czytaj użycie CPU razem z aktywnymi wątkami, lokalnymi H/s i zaakceptowanymi udziałami podczas kopania Blocknet w seine v0.2.36. Te kontrole poprzedzają zmianę ustawień. Instalację zacznij od [poradnika kopania](/pl/blog/how-to-mine-blocknet/).
+
+## Czy niższe użycie CPU oznacza mniej użytecznej pracy?
+
+<Answer>
+Sam procent CPU nie określa ilości ukończonej pracy. Sprawdź wybrany backend CPU, aktywne wątki, lokalny hashrate i napływające zadania. seine może wybrać mniej wątków niż dostępnych procesorów logicznych. Porównaj wyniki w jednakowych warunkach przed zmianą liczby.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Siatka aktywności procesora i licznik ukończonej pracy to osobne obserwacje połączone kontrolami wątków, pamięci i zadań." width="1200" height="675" loading="lazy" />
+
+## Najpierw sprawdź zakres procentu
+
+W Windows odróżnij proces seine od całego komputera. Znajdź seine w Menedżerze zadań, potem otwórz Wydajność i CPU. Wykresy procesorów logicznych pokazują rozkład, a wynik ogólny sumuje aktywność maszyny. [Poradnik Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) opisuje widoki. Zapisz użyty widok.
+
+W Linuksie procent procesu w `top` może mieć inną skalę niż podsumowanie. W trybie Irix proces wielowątkowy może przekraczać 100%; Solaris dzieli przez liczbę procesorów. Widok wątków zmienia wiersze. Sprawdź [podręcznik](https://man7.org/linux/man-pages/man1/top.1.html): zmiana skali nie jest pomiarem zmiany szybkości.
+
+## Sprawdź, które urządzenie pracuje
+
+Odczytaj H/s i wątki z wiersza CPU w [panelu seine](/pl/blog/seine-dashboard-explained/). Łączny wynik CPU/GPU obejmuje oba urządzenia; porównuj to samo. Po wybraniu wyłącznie NVIDIA niskie obciążenie CPU jest oczekiwane. Zobacz [poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/).
+
+Wątki kopania różnią się od liczby wątków procesu w systemie. seine ma też zadania sieciowe, sterowania i raportowania. Proces może mieć więcej wątków niż wiersz CPU. Sprawdź aktywne wątki haszujące i wykonywaną przez nie pracę.
+
+## Dlaczego pamięć ogranicza liczbę wątków?
+
+Każdy aktywny wątek CPU używa obszaru 2 GiB do Argon2id. Automatyczny dobór uwzględnia dostępną pamięć i zapas dla systemu. Czytaj faktyczną liczbę i komunikaty; nie traktuj podzielenia zainstalowanego RAM jako gwarancji. [Poradnik RAM](/pl/blog/how-much-ram-to-mine-blocknet/) omawia budżet, rezerwę i alokację.
+
+Pojemność określa liczbę mieszczących się obszarów, przepustowość wpływa na równoczesny transfer danych. Wątek może być liczony jako zajęty podczas czekania na pamięć. Niskie użycie nie dowodzi ograniczenia przepustowości, a 100% nie dowodzi najlepszego H/s. Zobacz [Argon2id](/pl/blog/argon2id-proof-of-work-explained/).
+
+## Czytaj zmiany automatyczne i ustawienia jawne
+
+Automatyczne strojenie porównuje wątki i kernele na podstawie zmierzonej pracy. Mniejsza liczba może być poprawnym wynikiem; zmiany pamięci też ją zmieniają. Poczekaj na ustabilizowanie próby i czytaj komunikaty. [Poradnik strojenia](/pl/blog/seine-automatic-cpu-tuning/) opisuje wybór i pamięć podręczną.
+
+Sprawdź uruchomione polecenie. `--threads`, maksimum strojenia i profil CPU mogą zmienić zakres lub liczbę; powinowactwo wpływa na rozmieszczenie. Kontenery, maszyny wirtualne i limity systemu mogą udostępniać mniej zasobów niż host. Zapisz konfigurację i ustal ograniczenie przed zwiększeniem.
+
+## Co jeśli spadają użycie i H/s?
+
+Sprawdź aktywność backendu i bieżące zadanie, połączenie, zmiany pamięci oraz błędy w logu. Rozruch i nowa próba strojenia mają kontekst niewidoczny na mierniku systemu. Jeśli GPU pracuje dalej, sprawdzaj urządzenia oddzielnie.
+
+Porównaj stabilny okres przy tej samej wersji, backendzie i ustawieniach. Zapisz inne aplikacje, pamięć, zasilanie i czas. Dla powtarzalnego porównania użyj [poradnika benchmarku](/pl/blog/benchmark-seine-miner/) i zachowaj raporty. Krótki szczyt lub pojedynczy procent nie jest wynikiem sprzętowym.
+
+## Zakończ na pracy ukończonej i przyjętej
+
+W normalnym kopaniu sprawdź postęp hashy CPU i odpowiedzi przyjęcia udziałów. Udziały przychodzą w odstępach, bez stałego odliczania. Pula szacuje hashrate z przesyłanych wyników w czasie. [Poradnik śledzenia](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) opisuje ten widok i połączenie.
+
+Zapisz wersję, polecenie, backend, wątki CPU, H/s CPU, narzędzie i widok systemu, pamięć oraz okno puli. Gdy praca postępuje, procent systemowy jest kontekstem. Gdy etap stoi, użyj jego poradnika. Każda zmiana odpowie wtedy na konkretne pytanie i da porównywalny wynik.
+
+<CTA target="seine" title="Śledź kopanie CPU w seine" text="Pobierz seine i sprawdzaj razem aktywne wątki, hashrate oraz zaakceptowaną pracę." />

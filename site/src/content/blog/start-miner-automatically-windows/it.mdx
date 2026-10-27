@@ -1,0 +1,68 @@
+---
+title: 'Avvia il miner Blocknet automaticamente su Windows'
+description: 'Avvia seine all''accesso a Windows con Utilità di pianificazione. Conserva la configurazione, evita avvii duplicati e controlla le share accettate dal pool.'
+tags: ['Guida al mining', 'Windows', 'Configurazione']
+faq:
+  - q: 'Il miner parte prima dell''accesso?'
+    a: 'Questa configurazione avvia seine quando l''utente Windows scelto accede e lo esegue nella sua sessione. Non crea un servizio Windows in background. Dopo un riavvio, accedi con quell''account per attivare l''attività e verifica le share accettate.'
+  - q: 'Le impostazioni di mining vengono mantenute?'
+    a: 'Usa lo stesso account Windows, la cartella dati esistente e le opzioni del comando funzionante. Imposta un percorso dati assoluto negli argomenti e la directory di lavoro corretta. seine ritroverà indirizzo, pool e nome della macchina salvati.'
+  - q: 'Come disattivo il mining automatico?'
+    a: 'Disabilita l''attività per impedire nuovi avvii, poi arresta normalmente il miner nella sua finestra. Disabilitare un''attività non chiude un processo già avviato. Puoi riabilitarla quando vuoi tornare ad avviare il mining all''accesso a Windows.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Fai aprire a Windows la configurazione funzionante di seine quando accedi. Useremo Utilità di pianificazione nella tua sessione, con un modo semplice per disattivarla. Completa prima la [configurazione Windows](/it/blog/mine-blocknet-on-windows/) e verifica che il pool accetti share. Un comando già funzionante rende il risultato facile da controllare.
+
+## Come si avvia automaticamente un miner Blocknet?
+
+<Answer>
+Crea un'attività per il tuo account Windows con attivazione all'accesso e un'azione che esegue il file seine estratto. Indica le cartelle dati e di lavoro esistenti, impedisci un'altra istanza della stessa attività e controlla le share accettate dopo un avvio di prova.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Un utente accede a Windows, Utilità di pianificazione avvia un miner e le share accettate raggiungono il pool." width="1200" height="675" loading="lazy" />
+
+## Quali file e impostazioni conservare?
+
+Scegli una cartella stabile per la versione estratta. Mantieni insieme tutto l'archivio, comprese le librerie, e usa l'eseguibile al suo interno. Trova i dati usati dall'avvio manuale riuscito. Per impostazione predefinita seine usa `./seine-data` rispetto alla directory di lavoro e salva la connessione in `seine.config.json`. Un'altra cartella iniziale può fargli cercare un'altra configurazione.
+
+Gli esempi usano `C:\Users\YOUR_USER\Apps\seine`: sostituisci l'intero percorso con quello reale. Lascia i dati nella posizione attuale. Conserva anche il comando funzionante: opzioni esplicite di backend o ottimizzazione possono restare necessarie. La pianificazione non richiede la frase di recupero né le chiavi private del portafoglio.
+
+## Crea l'attività all'accesso
+
+Apri **Utilità di pianificazione** da Start e scegli **Crea attività**. Assegna un nome riconoscibile, per esempio **seine mining**. In **Generale**, scegli l'account usato manualmente e **Esegui solo se l'utente è connesso**. Lascia deselezionato **Esegui con i privilegi più elevati** per questa normale configurazione. In **Attivazione**, aggiungi **All'accesso** per il tuo utente specifico e abilita l'attivazione. Consulta la [documentazione Microsoft](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+In **Azioni**, aggiungi **Avvio programma** e compila separatamente:
+
+- **Programma o script:** scegli `C:\Users\YOUR_USER\Apps\seine\seine.exe` con Sfoglia.
+- **Aggiungi argomenti:** inserisci `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` con la cartella dati esistente, poi le opzioni del comando funzionante.
+- **Inizio:** inserisci `C:\Users\YOUR_USER\Apps\seine` senza virgolette.
+
+La [directory di lavoro](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) stabilisce la cartella iniziale. Non mettere opzioni in Programma o script né il nome dell'eseguibile in Inizio. Seleziona il file reale, senza mantenere il percorso segnaposto.
+
+## Imposta le condizioni di esecuzione
+
+In **Impostazioni**, consenti l'esecuzione su richiesta per provare. Se l'attività è già in esecuzione, scegli **Non avviare una nuova istanza**. Questa [regola](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) riguarda solo l'attività e non riconosce un miner avviato separatamente. Chiudi l'istanza manuale prima della prova. Un solo processo intenzionale facilita il controllo ed evita una seconda copia sulla stessa configurazione.
+
+Per minare continuamente durante la sessione, deseleziona **Interrompi l'attività se eseguita per oltre**; altrimenti esiste un [limite di durata](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Controlla **Condizioni**: richiedere inattività può impedire l'avvio immediato della prova. Su un portatile, mantenere le condizioni di alimentazione da rete limita il flusso all'uso collegato alla corrente. Salva le scelte adatte al tuo utilizzo.
+
+## Come verifichi il mining automatico?
+
+Arresta normalmente il miner manuale, seleziona l'attività e **Esegui**. Verifica indirizzo di pagamento, pool e nome macchina nella finestra, poi attendi share accettate. Cerca quell'indirizzo in My Stats su bntpool.com e controlla la macchina prevista. Lo stato in esecuzione conferma solo un processo; le share accettate confermano lavoro utile al pool.
+
+Per provare l'attivazione reale, salva gli altri lavori, disconnettiti e accedi con l'utente scelto. Bloccare e sbloccare il desktop è un'altra azione. Ricontrolla indirizzo e share recenti. La [guida alla dashboard](/it/blog/seine-dashboard-explained/) spiega dispositivi e connessione. Annota nome dell'attività e cartelle per gli aggiornamenti.
+
+## Cosa controllare se non parte?
+
+Confronta eseguibile, account, argomenti e cartella iniziale con il comando manuale. Se ricompare la configurazione iniziale, controlla percorso dati e accesso. Se manca una libreria, verifica l'estrazione completa. Se non appare una finestra, verifica prima l'attivazione abilitata e le condizioni di alimentazione o inattività, poi le impostazioni del miner.
+
+Se il miner gira senza share visibili, controlla indirizzo, connessione al pool e share recenti della macchina. Per due computer sullo stesso portafoglio, assegna nomi distinti con la [guida per più computer](https://bntpool.com/blog/it/mine-multiple-computers-one-wallet/). L'attività deve aprire la configurazione provata; diagnostica rete e hardware nel miner in esecuzione.
+
+## Disattiva l'avvio o aggiorna il miner
+
+Per impedire avvii futuri, seleziona l'attività e **Disabilita**. Arresta normalmente il miner già aperto: la disabilitazione non lo ferma. Riabilita l'attività quando vuoi riprendere l'avvio all'accesso. La scelta rimane visibile e reversibile senza cambiare impostazioni generali di avvio o sospensione di Windows.
+
+Prima di sostituire una versione, disabilita l'attività e ferma il miner. Segui la [guida agli aggiornamenti](/it/blog/update-seine-miner/), conserva i dati e modifica l'azione se cambia il percorso. Prova con Esegui prima di riattivare l'avvio. Per un servizio Linux usa la [configurazione server](/it/blog/mine-blocknet-on-servers/), diversa da questo flusso di accesso Windows.
+
+<CTA target="seine" title="Scarica seine per Windows" text="Usa la versione ufficiale, verifica le prime share accettate e automatizza la configurazione funzionante." />

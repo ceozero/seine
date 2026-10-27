@@ -1,0 +1,62 @@
+---
+title: 'Blocknet madencim neden sürekli duruyor?'
+description: 'Blocknet madencisinin neden durduğunu bulun: son mesajı, belleği, GPU başlangıcını ve uykuyu kontrol edip seine ile kararlı yeniden başlatmayı doğrulayın.'
+tags: ['Sorun giderme', 'Madencilik rehberi', 'seine']
+faq:
+  - q: 'Bağlantısı kesilen madenci mutlaka çökmüş müdür?'
+    a: 'Havuz bağlantısı kesildiğinde süreç yeniden bağlanırken çalışmaya devam edebilir. Sürecin varlığını, son mesajları ve bağlantı düzeldikten sonra yeni kabul edilen payları kontrol edin. Kapanmış uygulama veya işletim sistemi çökme raporu farklı bir inceleme gerektirir.'
+  - q: 'seine durunca yapılandırmayı silmeli miyim?'
+    a: 'Değişiklik yapmadan yapılandırmayı koruyup konumunu kaydedin. Ayrıştırma mesajı belirli dosyayı veya değeri gösterir. Dosyayı yedekleyin, bildirilen sorunu düzeltin, adresi ve başlatma ayarlarını koruyun. Her şeyi silmek son çalışan oturumla karşılaştırmayı zorlaştırır.'
+  - q: 'Tekrarlanan durmayı araştırmak için hangi bilgiler gerekir?'
+    a: 'seine sürümü, işletim sistemi, CPU, GPU, kullanılabilir bellek, tüm başlatma argümanları, çalışma dizini ve durma saatini kaydedin. Son günlük mesajlarıyla ilgili sistem olaylarını ekleyin. Paylaşmadan kimlik bilgilerini ve kişisel verileri çıkarın; kurtarma ifadesi veya özel anahtarları asla eklemeyin.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Blocknet madencinizin hangi aşamada durduğunu belirleyerek düzenli çalışmasını sağlayın. Bu rehber seine v0.2.37'yi izler ve kendi bilgisayarınızdan toplayabileceğiniz kanıtlarla başlar. Son çalışan komutu ve yapılandırmayı saklayın; sonraki sonucu anlayabilmek için her seferinde ilgili tek ayarı değiştirin.
+
+## Madenci durduğunda neyi kontrol etmelisiniz?
+
+<Answer>
+Sürecin kapandığını mı, bilgisayarın uyuduğunu mu, havuz bağlantısının toparlandığını mı kontrol edin. Yeniden başlatmadan son mesajı ve saati kaydedin. Kanıtları başlangıç yapılandırması, bellek ayırma, GPU başlatma veya sistem olayıyla eşleştirin; düzeltmeyi yeni kabul edilen paylarla doğrulayın.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Madenci günlüğü uygulama, bellek ve bilgisayar gücü için ayrı kontrollere, ardından doğrulanmış yeniden başlatmaya gider." width="1200" height="675" loading="lazy" />
+
+## Son mesajı görünür tutun
+
+Normal başlatma dizininde terminal açıp mevcut komutunuzu çalıştırın. Pano yerine metin günlükleri için `--ui plain` ekleyin, diğer argümanları koruyun. Bu mevcut kurulumla madenciliği başlatır. Tekrarlanan bağlantı veya kapanma mesajlarından önceki ilk hata dahil son mesajları kopyalayın.
+
+Program sürümü, çalışma dizini ve seçilen veri dizinini birlikte kaydedin. Bu sürüm, ele alınan ölümcül hatayı çıkmadan önce `fatal:` ile yazdırır. İşletim sisteminin sonlandırması farklı kanıt bırakabilir. Süreç hâlâ çalışıyorsa [havuz bağlantısı kontrollerini](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) izleyin; gelmeyen pay veya geçici bağlantı kaybı çökme kanıtı değildir.
+
+## Madencilik başlamadan mı duruyor?
+
+Başlangıç mesajındaki dosyayı, seçeneği veya kütüphaneyi okuyun. Yapılandırma ayrıştırma hatası belirli dosyaya yönlendirir; sözdizimini düzeltmeden kopyasını alın. Kısayol veya hizmetin çalışma dizinini kontrol edin. [Yapılandırma rehberi](/tr/blog/configure-seine-miner/), aynı programın farklı klasörlerden farklı ayarları okuyabilmesini açıklar.
+
+Program başlamıyorsa işletim sistemi ve mimariye uygun arşivi doğrulayıp resmi sürümü kullanın. Güvenlik uyarısında [indirme doğrulama rehberini](/tr/blog/antivirus-flags-crypto-miner/) izleyin. Dosyayı ve mesajı belirlerken korumayı açık tutun. Güncellemeden sonra başladıysa yol ve argümanları [güncelleme yordamıyla](/tr/blog/update-seine-miner/) karşılaştırın.
+
+## Mesaj bellek veya sayfalardan söz ediyorsa?
+
+İstenen CPU iş parçacığı sayısını diğer uygulamalar ve kapsayıcı sınırları dahil kullanılabilir belleğe göre ayarlayın. Ayırma hatası araştırılacak kaynak sorununu gösterir, tek başına bozuk RAM kanıtı değildir. Gereksiz işleri kapatın veya zorlanan iş parçacığı sayısını azaltıp bir kez deneyin. Hangi değişikliğin etkili olduğunu ve madenciliğin başlayıp başlamadığını kaydedin.
+
+Açıkça zorunlu tutulan sayfa modu ilgili işletim sistemi rezervasyonunu gerektirir. Zorunlu huge pages ayırma hatası ve normal bellek yetersizliği ayrı kontrollerdir. Kapasite için [RAM rehberini](/tr/blog/how-much-ram-to-mine-blocknet/), sayfalar için [huge pages rehberini](/tr/blog/huge-pages-blocknet-mining/) kullanın. Birden çok ayar bayrağını aynı anda değiştirmeyin; bilinen basit yapılandırma sonraki günlüğü anlaşılır kılar.
+
+## GPU aşamasını ayrı kontrol edin
+
+Başlangıç CUDA kütüphanesi, aygıt veya GPU ayırmasından söz ediyorsa tam mesajı ve kurulu sürücü sürümünü kaydedin. [NVIDIA rehberi](/tr/blog/mine-blocknet-nvidia-gpu/) sürüm gereksinimlerini, çalışma zamanı kütüphanelerini ve aygıt seçimini kapsar. Çekirdek veya ayarları değiştirmeden ortamınızla karşılaştırın. Arşivin indirilmesi çalışma zamanının hazır olduğunu kanıtlamaz.
+
+seine bir arka uç hatasını yalıtırken diğer etkin arka uçlar çalışabilir. Tüm uygulamanın durduğuna karar vermeden mesajları ve kalan etkinliği inceleyin. Yeni oturum eski sıralamayı gizleyebileceğinden yeniden başlatmadan kanıtları kaydedin. Daha basit arka uç seçimini denerseniz asıl komutu saklayıp başlangıç, devam eden çalışma ve kabul edilen gönderimleri karşılaştırın.
+
+## Bilgisayar uyudu mu veya yeniden mi başladı?
+
+Saati uyku, hazırda bekletme, yeniden başlatma ve zamanlanmış görev geçmişiyle karşılaştırın. Ekranın kapanması ve bilgisayarın uyuması ayrı ayarlardır. Windows'ta [güç ve uyku ayarlarını](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11), kapak kapanmasını veya güç kaynağı değişimini kontrol edin. Makinenin kullanımına ve soğutmasına uygun ayarları seçin.
+
+Beklenmeyen süreç çıkışında aynı zamanın uygulama ve sistem günlüklerine bakın. Windows [Olay Görüntüleyicisi](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) hatayı programla ilişkilendirebilir. Tüm bilgisayarın yeniden başlaması sistem düzeyinde kanıt da gerektirir. Hizmet kurulumunda, ilk nedeni gizleyebilecek tekrarlı yeniden başlatmaları açmadan çıkış durumunu ve günlüğü inceleyin.
+
+## Düzeltmeyi doğrulayın ve yararlı rapor tutun
+
+Hedefli düzeltmeden sonra normal kısayol, terminal veya hizmetten başlatın. Hedefi, etkin arka uçları ve yeni kabul edilen payları doğrulayın. Tehlikeli donanım koşulu oluşturmadan normal masaüstü kullanımı veya sonraki zamanlanmış başlangıç gibi önceki durumu gözlemleyin. [Pano rehberi](/tr/blog/seine-dashboard-explained/) güncel çalışmayı birikmiş oturum istatistiklerinden ayırır.
+
+Durma tekrarlanırsa sürüm, sistem, donanım, bellek, tam seçenekler, saat ve son mesajları toplayın. Neyin değiştiğini ve tüm sürecin mi tek arka ucun mu durduğunu belirtin. Kimlik bilgileriyle kişisel verileri çıkarın; seed veya özel anahtarları paylaşmayın. Çalışan yapılandırmayı saklayın ve yalnız hashrate üzerinden neden tahmin etmeyin.
+
+<CTA target="seine" title="Güncel seine sürümünü edinin" text="Doğrulanmış sürümü ve başlatma komutunu koruyun; her hedefli düzeltmeden sonra kabul edilen çalışmayı doğrulayın." />

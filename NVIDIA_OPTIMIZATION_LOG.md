@@ -246,3 +246,45 @@ Each row is an explicit attempt ID. IDs are chronological and map 1:1 to the app
 Copy this row and fill every field after each pass:
 
 `| YYYY-MM-DD | <commit or working tree> | <exact code/config change> | <benchmark reports + averaged H/s> | <Kept/Reverted + rationale> |`
+
+
+## 2026-10-26: CUDA driver loader compatibility (validated)
+
+One native Windows v0.2.29 NVIDIA-only run reported initialization failure and a
+panic at cudarc 0.19.2 `driver/sys/mod.rs:21887`. The selected `cuda-12080`
+bindings eagerly require `cuEventElapsedTime_v2` while loading the driver, even
+though the CUDA 12 event-timing wrapper uses the original `cuEventElapsedTime`.
+The older v0.2.28 report at the same location continued hashing on its CPU.
+
+A synthetic driver fixture exports every generated symbol except that v2 event
+function. Its only called function, `cuInit`, returns CUDA_ERROR_NO_DEVICE.
+On both native Windows and Linux, the current CUDA 12.8 binding panics at exactly
+21887. Selecting the CUDA 12.0 driver ABI loads successfully and returns the
+expected ordinary no-device result. This reproduces the loader failure without
+assuming access to the affected user's driver. It is not a GPU mining test.
+
+The candidate changes only cudarc's selected ABI feature from `cuda-12080` to
+`cuda-12000`. The dependency version, CUDA kernels, GPU architecture selection
+and bundled Windows NVRTC 12.8 runtime are unchanged. The generic CUDA 12 NVRTC
+DLL name remains in the loader's candidate names. All 33 NVIDIA backend unit
+tests pass. The existing full-size GPU differential test passed on the RTX 5090
+through gpuq: five nonces match the CPU reference at full 2-GiB memory, each with
+an exact-target hit and one-less-target miss. The frozen compatibility test
+executable has SHA-256
+`3f9a2f1b1c768718da0123e021eb4171dd4cd4151a421b8312af0c99198594c2`.
+The bounded hardware job completed in 139.45 seconds with zero failures. This
+validates actual GPU execution on the available current driver; compatibility
+with the affected older driver is supported by the exact synthetic loader
+reproduction, not a claim of testing that user's hardware.
+
+Evidence: workspace `benchmark-evidence/longhorn-20261025/cuda-loader-probe/`;
+`result.json`, `windows-result.json`, generated synthetic fixture, build logs and
+`nvidia-tests.log`. This records compatibility evidence, not a hashrate gain.
+
+The full Seine target also passes Windows GNU cross-compilation. Native Windows
+NVRTC 12.8 compilation of the unchanged full CUDA kernel produces byte-identical
+CUBINs under both binding selections for Pascal `sm_61` and Blackwell `sm_120`,
+using the shipping compile options for those architectures. The compiler runs
+on the CPU; this checks bundled-runtime loading and generated code without
+claiming GPU execution. See `nvrtc-compilation-comparison.json`. The real-GPU
+differential check remains queued behind unrelated work.

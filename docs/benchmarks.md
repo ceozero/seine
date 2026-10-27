@@ -304,3 +304,121 @@ Both tools accept `--reference-library /path/to/libargon2` for an independent
 private build, including a macOS `.dylib`, without a system-wide installation.
 Do not infer energy efficiency from CPU TDP or VM rental price; record measured
 package or whole-system energy separately when trustworthy counters exist.
+
+## Queue, screen, and confirm experiments
+
+For the reusable competitor optimization objective and iteration policy, see
+[Competitor performance optimization goal](COMPETITOR_PERFORMANCE_GOAL.md).
+
+`benchctl campaign` executes a serial, resumable queue of trusted local commands.
+It builds each candidate once, checks correctness, screens out clear regressions,
+and gives the survivors a separate confirmation run. It does not edit source,
+commit winners, provision machines, or change miner defaults. An `accepted`
+decision means the configured benchmark gate passed on this host; shipping a
+change still requires the relevant integration checks and zero-config/cold-start
+validation described in `AGENTS.md`.
+
+Start with [the CPU campaign example](examples/bench-campaign-cpu.json). First
+build and freeze the baseline at `data/campaign-baseline/seine` from the desired
+baseline revision. Use an isolated candidate worktree and edit the hypothesis,
+hardware settings, correctness command, sample lengths and budgets for the
+experiment. The example explicitly fixes one CPU worker to isolate that
+comparison; it is not a test of automatic worker selection. Ten-second screening
+windows are only a starting point: slow CPUs need longer windows to complete
+enough hashes. Do not substitute reduced-memory hashes for production-size
+confirmation.
+
+```bash
+python3 scripts/benchctl.py campaign docs/examples/bench-campaign-cpu.json \
+  --output-dir data/campaigns/cpu-01
+
+# After Ctrl-C or SIGTERM: completed stages are retained, the interrupted
+# stage is rerun from scratch in a new attempt directory.
+python3 scripts/benchctl.py campaign docs/examples/bench-campaign-cpu.json \
+  --output-dir data/campaigns/cpu-01 --resume
+
+# Read saved decisions and phase timings without probing hardware or running work.
+python3 scripts/benchctl.py campaign docs/examples/bench-campaign-cpu.json \
+  --output-dir data/campaigns/cpu-01 --status
+```
+
+The JSON schema is `seine-benchmark-campaign/v1`. Each experiment has a unique
+`id`, a `hypothesis`, `cwd`, nonempty `inputs` and `artifacts` file lists, and
+`stages`. Paths in `cwd` are relative to the plan; input/artifact paths are relative
+to that working directory. List untracked source files and external scripts in
+`inputs`; Git HEAD and the entire tracked binary diff are captured automatically.
+Input files are also copied into the experiment directory. List both baseline
+and candidate executables in `artifacts`, including the resolved tools if their
+identity matters. For multiple candidates, use separate worktrees and artifact
+paths: a later build must not overwrite an earlier candidate or the baseline.
+
+Each stage contains an `argv` string array and a positive `timeout_seconds`.
+`build` is optional for prebuilt experiments; `correctness`, `screen` and `confirm`
+are required. No implicit shell is used. Explicitly invoking a shell runs the
+script you supplied, so campaign files must be trusted. The controller substitutes
+only `{python}`, `{cwd}`, `{experiment_dir}` and `{stage_dir}` in arguments.
+Commands must run in the foreground and finish their children before exiting.
+
+Screen and confirm commands must write `results.tsv` in their fresh `{stage_dir}`,
+using the existing A/B harness format. Each pair needs `baseline` and `candidate`
+rows, a positive metric (`avg_hps` by default), and `order` values `first`/`second`
+(or `1`/`2`). Order must be balanced across pairs. The exact `pairs` count must
+match the plan; incomplete or extended evidence is a failure. Defaults are:
+
+| Stage | Pairs | Decision |
+|---|---:|---|
+| Screen | 2 | Reject only when the 95% paired-bootstrap upper bound is below `-max_regression_pct` (default 2%) |
+| Confirm | 4 (minimum 3) | Accept only when the lower bound reaches `require_improvement_pct` (default 1%) |
+
+A screen pass means only that confirmation is worth running. Screening and
+confirmation use independent files and are never pooled. Budgets and thresholds
+are fixed before execution; there is no repeated significance checking or
+retry-until-positive loop. Rejected and failed experiments are terminal, including
+on resume. Correctness errors, missing/malformed evidence, launch errors and
+phase timeouts are failures, separate from a valid statistical rejection. Other
+queued experiments still run. Exit codes are `0` for a completed queue (including
+statistical rejections), `1` if any experiment failed, `2` for invalid configuration
+or a blocked resume/admission check, and `130` for interruption.
+
+`campaign.json` stores the normalized plan, decisions, binary hashes and per-stage
+command wall time, including all interrupted attempts with known durations.
+Each attempt retains stdout/stderr logs, command and timeout, plus measurement
+preflight and comparison JSON. `bookkeeping_seconds` separately totals recorded
+preflight and analysis time. Phase budgets cap the command, excluding capture,
+analysis and bounded termination cleanup. The benchmark command time includes
+initialization, warmup, measurement and cooldown: this version does not claim to
+separate those internal components. Original miner reports remain in the attempt
+folder for deeper timing analysis.
+
+Resume checks source, plan, host/OS, Rust/Cargo versions, selected performance
+environment, binary hashes and saved TSV hashes. A mismatch requires a new
+campaign. Preflight still records mutable conditions such as clocks, memory and
+load; matching provenance does not guarantee identical conditions or establish
+confidence across many screened candidates. Inspect the evidence before shipping.
+A hard kill or crash that leaves an attempt `running` is not automatically
+replayed: inspect logs, stop any surviving workload, and start a new campaign.
+Normal Ctrl-C/SIGTERM performs bounded child-process cleanup and supports resume.
+
+A per-user host lock serializes campaigns, including different output directories.
+It does not exclude other users, manually launched miners or unrelated workloads.
+On `gpuq` hosts the controller checks Gaming Mode before phases and after measured
+commands, without collecting optional GPU telemetry while admission is blocked.
+An unavailable/stale coordinator check also stops progress. GPU workloads must
+still be admitted through the host's configured `gpuq run` profile; the controller
+does not infer GPU requirements from arbitrary commands or turn Gaming Mode off.
+
+Run the controller and campaign tests without mining hardware:
+
+```bash
+python3 -m unittest scripts/test_benchctl.py scripts/test_bench_campaign.py -v
+```
+
+The [workflow showcase](showcases/benchctl-campaign/index.html) contains actual CLI
+transcripts with synthetic results for success, rejection, errors, timeout,
+interruption and resume. [Desktop](showcases/benchctl-campaign/desktop.png) and
+[mobile](showcases/benchctl-campaign/mobile.png) captures cover every displayed
+state. Regenerate the page with `python3 scripts/showcase_bench_campaign.py` and
+serve it with `python3 -m http.server 8876 --directory docs/showcases`, then open
+<http://localhost:8876/benchctl-campaign/>. Regeneration requires refreshing both
+captures through the configured Playwright MCP. The page labels its base revision
+and controller source digest; its rates are fixtures, not miner performance claims.

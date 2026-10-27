@@ -1,0 +1,108 @@
+---
+title: 'Linux’ta Blocknet nasıl kazılır?'
+description: 'seine ile Linux’ta Blocknet madenciliğini kurun: x86_64 veya ARM64 seçin, arşivi, glibc ve NVIDIA kitaplıklarını kontrol edip kabul edilen payları doğrulayın.'
+tags: ['Madencilik rehberi', 'Linux', 'NVIDIA']
+faq:
+  - q: 'Hangi Linux arşivini indirmeliyim?'
+    a: 'Terminalde uname -m çalıştırın. Çıktı x86_64 ise x86_64, aarch64 ise aarch64 arşivini seçin. İncelenen v0.2.26 Linux ikili dosyaları glibc 2.39 veya yenisini gerektirir. x86_64 paketi CPU ve NVIDIA’yı destekler; ARM64 paketi yalnızca CPU içindir.'
+  - q: 'seine’i sudo ile mi çalıştırmalıyım?'
+    a: 'Normal madenciyi yazılabilir bir klasörden kendi kullanıcınızla çalıştırın. Arşivi açın, gerekirse dosya sahibine çalıştırma izni verin ve ./seine ile başlatın. Ayrılmış huge pages hazırlamak ayrı bir yönetim işidir; normal başlatma sıradan bellek sayfalarını kullanabilir.'
+  - q: 'Linux neden NVRTC kitaplığının eksik olduğunu söylüyor?'
+    a: 'Linux NVIDIA arka ucu uyumlu bir sürücü ve eşleşen builtins kitaplığı dahil NVRTC çalışma zamanı kitaplıkları gerektirir. Bunları dağıtımınızın veya NVIDIA’nın desteklenen paketleriyle yükleyin. Linux arşivi Windows DLL’lerini içermez. GPU desteğini hazırlarken CPU arka ucunu seçebilirsiniz.'
+sourceHash: 'f5d2ea0db1d5'
+translation: draft
+---
+
+Bu rehber, arşiv seçiminden havuzun kabul ettiği payları kontrol etmeye kadar seine’i Linux masaüstünde veya sunucuda çalıştırır. Doğrulanmış örnek olarak resmi v0.2.26 sürümünü kullanır. Blocknet alım adresinizi hazırlayın; [cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) nerede bulacağınızı açıklar. Herkese açık adresinizi veya kayıtlı `@name` girin; asla cüzdan kurtarma ifadesini girmeyin.
+
+## Linux’ta Blocknet madenciliğine nasıl başlanır?
+
+<Answer>
+İşlemcinize uygun Linux arşivini seçin, SHA-256 sağlama toplamını doğrulayın ve yazılabilir bir klasöre açın. `./seine` çalıştırın, ödeme adresinizi girin ve varsayılan bntpool.com bağlantısını kabul edin. seine CPU iş parçacıklarını otomatik ayarlar; çalışma zamanı kitaplıkları kuruluysa Linux x86_64 üzerinde desteklenen NVIDIA kartlarını da kullanabilir.
+</Answer>
+
+## Adım 1: mimariyi ve glibc’yi kontrol edin
+
+Terminal açıp bu iki salt okunur kontrolü çalıştırın. İlki makine mimarisini belirler; ikincisi glibc tabanlı sistemde GNU C kitaplığı sürümünü gösterir. Madencilik başlatmaz veya bilgisayar yapılandırmasını değiştirmezler.
+
+```sh
+uname -m
+getconf GNU_LIBC_VERSION
+```
+
+Mimariyi aşağıdaki arşivle eşleştirin. Her iki v0.2.26 Linux paketi glibc 2.39 veya yenisini gerektirir. Daha yeni sürüm kurarken gereksinimleri yeniden kontrol edin. Sisteminiz başka bir C kitaplığı veya eski glibc kullanıyorsa uyumlu bir dağıtım ortamı kullanın ya da [kaynaktan derleme talimatlarını](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md) izleyin.
+
+| Komut çıktısı | Sürüm arşivi | Arka uçlar |
+|---|---|---|
+| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU ve NVIDIA |
+| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
+
+Her CPU madencilik iş parçacığı 2 GiB bellek bloğu gerektirir. seine kullanılabilir bellek ve CPU kaynaklarından başlangıç iş parçacığı sayısını seçer, ardından madencilik sırasında ayarlar. İlk çalıştırmada iş parçacığı ve kernel ayarlarını elle zorlamayın; performans ayarlarından önce çalışan bir bağlantı kurun.
+
+## Adım 2: arşivi indirin ve doğrulayın
+
+[İndirme bölümünde](/tr/#download) Linux veya Linux ARM64 seçin. Aynı [resmi sürümden](https://github.com/zpalmtree/seine/releases/latest) ayrı `SHA256SUMS.txt` dosyasını da indirin. Aynı sürüme ait arşiv ve sağlama toplamı dosyasını birlikte tutun. Örnekler x86_64 kullanır; ARM64’te komutlardaki `seine-linux-x86_64.tar.gz` yerine `seine-linux-aarch64.tar.gz` yazın.
+
+<img src="/assets/blog/linux-download.png" alt="Linux ve Linux ARM64 arşivlerini gösteren resmi indirme tablosu" width="1200" height="900" loading="lazy" />
+
+Terminalde tarayıcının dosyaları kaydettiği dizine gidip arşivin sağlama toplamını hesaplayın. Örnek, ev dizininizde Downloads klasörü olduğunu varsayar; adı farklıysa gerçek indirme dizininizi kullanın.
+
+```sh
+cd "$HOME/Downloads"
+sha256sum seine-linux-x86_64.tar.gz
+```
+
+Tam onaltılık özeti indirilen `SHA256SUMS.txt` içindeki tam olarak o arşive ait satırla karşılaştırın. Açmadan veya çalıştırmadan önce tüm basamaklar eşleşmelidir. Karşılaştırmada sürümle ayrı yayımlanan sağlama toplamı dosyasını kullanın: arşiv ayrıca çıkarılan dosyalar için bir bildirim içerir. Eşleşen toplam dosyayı yayımlanan değere karşı doğrular; her iki indirmeyi resmi kaynaktan alın.
+
+## Adım 3: arşivi açın ve çalıştırılabilir dosyayı kontrol edin
+
+Ev dizininde özel bir klasör oluşturun, arşivi içine açın ve ikili dosyadan yardımını göstermesini isteyin. v0.2.26 arşivinin kökünde `./seine` bulunur; bu komutlar programı doğrudan yeni klasöre koyar. Yardım komutu madencilik oturumu başlatmadan kapanır.
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+cd "$HOME/seine"
+chmod u+x ./seine
+./seine --help
+```
+
+Adımları kendi hesabınızla uygulayın. `chmod u+x` dosya sahibine çalıştırma izni verir; sistem genelinde kurulum gerekmez. `./` öneki kabuğa geçerli dizindeki dosyayı çalıştırmasını söyler. Çıkarılan belgeleri ve lisans dosyalarını programla birlikte tutun.
+
+## Adım 4: adresinizi girin ve bağlanın
+
+Arşivin açıldığı klasörden başlatın:
+
+```sh
+./seine
+```
+
+Alım adresinizi veya kayıtlı `@name` girin, `stratum+tcp://bntpool.com:3333` bağlantısını kabul edin ve istendiğinde kolay tanınan bir makine adı seçin. Sonraki başlatmalarda seine çalışma dizinine göre `seine-data/seine.config.json` dosyasını yeniden kullanır. Aynı klasörden başlatmak ayarları bulmayı kolaylaştırır. [Yapılandırma başvurusu](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) soruları ve veri dizinini açıklar.
+
+Madencinin hash gücünü ve kabul edilen pay sayacını izleyin. Ardından [My Stats](https://bntpool.com/stats) sayfasında aynı alım adresini arayın. Kabul edilen paylar havuzun iş aldığını doğrular; ödeme ayrı ödül ve ödeme sürecini izler. [Gösterge paneli rehberi](/tr/blog/seine-dashboard-explained/) madencinin panellerini açıklar. Düzgün durdurmak için `q` veya `Ctrl+C` kullanın.
+
+## Linux’ta NVIDIA madenciliği için ne gerekir?
+
+Linux x86_64 üzerinde GPU madenciliği NVIDIA sürücüsü ve uyumlu NVRTC çalışma zamanı kitaplıkları gerektirir. NVRTC başlangıçta GPU kernellerini derler. [NVIDIA kurulum rehberine](/tr/blog/mine-blocknet-nvidia-gpu/) göre dağıtımınızdan veya NVIDIA paketlerinden çalışma zamanını ve eşleşen builtins kitaplığını kurun. Paket adları dağıtım ve CUDA sürümüne bağlıdır; kendi sisteminizin talimatlarını izleyin.
+
+Bu kitaplıklarla varsayılan mod CPU ve desteklenen NVIDIA kartlarında birlikte madencilik yapabilir. GPU çalışma zamanını hazırlarken CPU madenciliği kurmak için açıkça seçin:
+
+```sh
+./seine --backend cpu
+```
+
+Bu seçim ilgili çalıştırmada yalnızca CPU kullanır. GPU aygıt seçimi ve kabul edilen GPU payları için NVIDIA rehberine devam edin. Burada anlatılan ARM64 sürümü CPU arka ucunu içerir; CUDA kurmak bu arşive NVIDIA arka ucu eklemez.
+
+## Linux başlatma hatası nasıl çözülür?
+
+Sonraki kontrolü ilk hata mesajına göre seçin. Mimari veya çalışma zamanı hatası kabul edilen paylardan önce oluşur; havuz adresini veya iş parçacığı sayısını değiştirmek bu aşamayı düzeltmez. Programı ve ortamı kontrol ederken doğrulanmış arşivi saklayın.
+
+| Mesaj veya belirti | Kontrol edilecekler |
+|---|---|
+| `Exec format error` | Yanlış mimari: `uname -m` çıktısını arşiv adıyla karşılaştırın. |
+| `GLIBC_2.39 not found` | İkili dosya daha yeni glibc gerektiriyor. Uyumlu sistem kullanın veya kaynaktan derleyin; sistem C kitaplığını dağıtımınız yönetmeye devam etsin. |
+| `Permission denied` | Kullanıcının çalıştırma iznini kontrol edin ve çalıştırmaya izin veren bir dosya sistemindeki klasörü kullanın. |
+| `libnvrtc` / `libnvrtc-builtins` | Uyumlu NVIDIA çalışma zamanını ve eşleşen builtins kitaplığını kurun veya hazırlarken `--backend cpu` kullanın. |
+
+Paylar kabul edilince [huge pages rehberi](/tr/blog/huge-pages-blocknet-mining/) isteğe bağlı Linux sayfa ayarlarını açıklar. [Sunucu rehberi](/tr/blog/mine-blocknet-on-servers/) grafik arayüzsüz çalışmayı ve NUMA yerleşimini kapsar. Bu ilk çalıştırma için ikisi de gerekmez; makinenizdeki etkisini anlayabilmek için değişiklikleri tek tek yapın.
+
+<CTA target="seine" title="Linux için seine indirin" text="Linux arşivinizi seçip doğrulayın ve otomatik CPU ayarıyla bntpool.com’a bağlanın." />

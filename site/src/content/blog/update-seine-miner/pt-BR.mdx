@@ -1,0 +1,72 @@
+---
+title: 'Como atualizar o minerador de Blocknet'
+description: 'Atualize o seine para Blocknet, preserve suas configurações, verifique o download oficial e confira a versão, a conexão e o envio de shares aceitas.'
+tags: ['Guia de mineração', 'seine', 'Atualizações']
+faq:
+  - q: 'O seine instala atualizações automaticamente?'
+    a: 'O verificador anuncia versões novas no painel e no log. Você escolhe quando instalar. Baixe e verifique o arquivo oficial, pare o minerador, substitua os arquivos do aplicativo e reinicie com o mesmo diretório de dados e as mesmas opções.'
+  - q: 'Quais arquivos guardam minhas configurações?'
+    a: 'Por padrão, elas ficam em seine-data/seine.config.json, relativo ao diretório de inicialização. data-dir muda esse local. Preserve os dados e o script ou serviço de inicialização: opções de backend e threads são separadas dos dados de conexão salvos.'
+  - q: 'Por que o endereço é solicitado novamente após atualizar?'
+    a: 'Confira o diretório de trabalho e data-dir. Iniciar de uma pasta nova pode fazer o seine procurar a configuração em outro lugar. Pare a instância, encontre os dados originais e reinicie com o caminho correto. Confira endereço e pool antes de continuar.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Atualize o seine mantendo a conexão e as opções que já funcionam. Este guia segue a versão pública v0.2.36 e cobre preparação, substituição e verificação. Para a primeira instalação, use os guias de [Windows](/pt-br/blog/mine-blocknet-on-windows/), [Linux](/pt-br/blog/mine-blocknet-on-linux/) ou [Mac](/pt-br/blog/mine-blocknet-on-mac/).
+
+## Como atualizar o seine?
+
+<Answer>
+Baixe e verifique o arquivo oficial para seu sistema, pare o minerador, preserve o diretório de dados e substitua os arquivos do aplicativo. Reinicie com o mesmo diretório de trabalho e argumentos. Confira versão, destino dos pagamentos, conexão e shares aceitas antes de atualizar outra máquina.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="O aplicativo é substituído, a pasta de configuração é preservada e a conexão é verificada." width="1200" height="675" loading="lazy" />
+
+## Como conferir sua versão atual?
+
+Execute o comando de versão no executável realmente usado. Uma cópia antiga pode diferir daquela iniciada pelo atalho ou serviço. Anote caminho, diretório de trabalho e argumentos juntos para repetir o procedimento. No Windows, abra o PowerShell na pasta atual do minerador:
+
+```powershell
+.\seine.exe --version
+```
+
+No Linux ou macOS, abra o terminal nessa pasta:
+
+```sh
+./seine --version
+```
+
+Compare com as [versões oficiais](https://github.com/zpalmtree/seine/releases). O seine verifica ao iniciar e a cada 12 horas, avisando no painel e no log. O aviso fornece o link; você escolhe a instalação. Leia as notas sobre sua plataforma, bibliotecas de execução e opções de inicialização.
+
+## Quais configurações preservar?
+
+Por padrão, o seine lê `./seine-data/seine.config.json`. `./` indica o diretório de trabalho; mover o executável e abri-lo em outra pasta pode mudar o local procurado. Mantenha o mesmo `--data-dir`, se usado. Um caminho absoluto explicita o local quando atalhos, scripts ou serviços escolhem o diretório de trabalho.
+
+A configuração salva modo de mineração, endereço de pagamento, URL do pool e nome da máquina. Preserve o diretório inteiro, inclusive arquivos de ajuste. Guarde também comando, script ou definição do serviço: `--backend` e `--threads` são separados dos campos de conexão. Ambos preservam a configuração pretendida após reiniciar.
+
+## Baixe e verifique a substituição
+
+Use a [página de downloads](/pt-br/#download) ou a versão oficial e escolha sistema e arquitetura da CPU. Baixe também o arquivo separado `SHA256SUMS.txt` da mesma versão. Compare o checksum antes de extrair em outra pasta. O [guia de verificação](/pt-br/blog/antivirus-flags-crypto-miner/) explica o procedimento no Windows e os avisos de download.
+
+Mantenha juntos todos os arquivos do pacote. No Windows, as bibliotecas NVIDIA acompanham `seine.exe`; copiar só o executável pode misturar versões. O [guia NVIDIA](/pt-br/blog/mine-blocknet-nvidia-gpu/) cobre o runtime. A [referência v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) documenta a configuração salva e o comportamento de inicialização usados aqui.
+
+## Pare, faça backup e substitua
+
+Saia com `q` ou `Ctrl+C` e espere o processo terminar. Para um serviço, use seu gerenciador e considere a reinicialização automática antes da troca. Com o minerador parado, faça uma cópia local das pastas do aplicativo e dos dados. Separe o backup da nova extração para identificar as versões.
+
+Coloque os novos arquivos no local da instalação, preservando os dados originais. Com pastas por versão, atualize o caminho do executável no atalho ou serviço e mantenha explicitamente os diretórios de trabalho e dados. Inicie uma instância com as mesmas opções. Em várias máquinas, complete as verificações em uma antes de seguir.
+
+## Como confirmar que a atualização funcionou?
+
+Confira novamente a versão do executável instalado e compare com o download. Inicie e verifique destino dos pagamentos, pool, nome da máquina e backends CPU ou GPU previstos. Ajustes compatíveis podem ser reutilizados; espere qualquer ajuste inicial terminar antes de avaliar o hashrate. O [guia do painel](/pt-br/blog/seine-dashboard-explained/) explica as seções.
+
+Procure shares aceitas e abra [My Stats](https://bntpool.com/stats) para o mesmo endereço. As estimativas precisam de shares e tempo para estabilizar; uma diferença imediata de hashrate não identifica sozinha um problema. Um processo novo também começa outra sessão local. Compare endereço, máquina e atividade antes dos contadores das duas sessões.
+
+## E se as perguntas iniciais reaparecerem?
+
+Confira primeiro diretório de trabalho e `--data-dir`. A pasta recém-extraída costuma não ter configuração no caminho relativo padrão. Pare a instância e indique os dados originais. Se um erro citar um arquivo de configuração, preserve arquivo e mensagem exata. Exclua seeds, chaves privadas e tokens da API de controle de capturas e relatos públicos.
+
+Se não iniciar, anote versão, sistema, caminho e erro exato, e consulte o guia da plataforma. O backup mantém aplicativo anterior e configurações juntos. Antes de restaurar, confira os requisitos de compatibilidade nas notas novas. Retome com configuração conhecida e verifique shares; trocar o minerador não exige criar outra carteira.
+
+<CTA target="seine" title="Baixe a versão atual do seine" text="Escolha o arquivo da sua plataforma e preserve a configuração durante a atualização." />

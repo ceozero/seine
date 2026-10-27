@@ -1,0 +1,70 @@
+---
+title: '如何测试 Blocknet 矿机性能'
+description: '使用 seine 的重复测试、预热轮次和 JSON 报告测量性能。保持内存、后台负载与自动调优条件一致，并比较相同范围的计时结果。'
+tags: ['挖矿指南', '性能测试', 'seine']
+faq:
+  - q: 'seine 测试会向矿池提交份额吗？'
+    a: '不会。--bench 运行本地测试而非实际挖矿，不需要矿池或守护进程。报告测量所选本地工作负载。之后请运行普通挖矿会话，单独检查连接和已接受份额。'
+  - q: '应从哪个模式开始？'
+    a: '先用 backend 测试所选挖矿后端。比较时保持模式、版本和设置相同。Kernel、kernel-effective 与 end-to-end 的测量范围不同，应连同算力保存模式和计时信息。'
+  - q: '怎样让两次测试可比？'
+    a: '使用相同机器、版本、后端、内存、后台负载和缓存策略。每次只改一个设置，交替重复两种配置并保留所有报告。一次短测试无法证明很小的性能差异。'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+使用 seine 内置测试测量自己的机器，并保存可比较的记录。本指南使用公开版 v0.2.36 和纯 CPU 示例，不宣称新的硬件测量结果。先按[安装指南](/zh-hans/blog/how-to-mine-blocknet/)准备；已有测量及其条件见[硬件指南](/zh-hans/blog/blocknet-mining-hardware-hashrate/)。
+
+## 如何测试 seine？
+
+<Answer>
+使用 `--bench`，选择后端和测量模式，加入预热轮次并保存 JSON。在改动一个设置前，先于相近条件下重复相同工作。测试不需要矿池或守护进程；恢复正常挖矿后再单独检查已接受份额。
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="一次预热后进行三轮测量并保存报告，第二种配置重复相同步骤。" width="1200" height="675" loading="lazy" />
+
+## 准备一致的起点
+
+记录版本、操作系统、准确的 CPU 型号、可用 RAM 和命令。若使用 NVIDIA，也记录显卡型号与驱动。保持后台负载相近；仅在其中一次测试时运行游戏、编译或其他矿工会改变测量条件。
+
+先确定问题：CPU 基准、线程数比较，还是内存页面效果。除测试变量外，保持 CPU 放置、电源和内存设置不变。[RAM 指南](/zh-hans/blog/how-much-ram-to-mine-blocknet/)与[大页指南](/zh-hans/blog/huge-pages-blocknet-mining/)解释准备方法。记录请求的页面模式，也记录实际获得的模式。
+
+## 运行 CPU 测试并保存报告
+
+在解压后的矿工目录中，第一条命令适用于 Linux/macOS，第二条用于 Windows PowerShell。两者都选择纯 CPU 的 `backend` 模式、一次预热和三轮测量，每轮请求 20 秒。输出路径相对于工作目录。每次使用新文件名保留旧结果。
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+线程数与计算内核仍自动选择。准备和调优可能在轮次开始前耗时，已启动的工作也可能在请求区间后才结束。等待 `cpu-baseline.json` 写完。预热不计入测量汇总。总时长可能超过四个区间；20 秒不是整个命令的执行时长。
+
+## 报告中应看什么？
+
+先看模式、实际设置与各轮结果，再看汇总速度。JSON 包含 `avg_hps`、`median_hps`、`min_hps`、`max_hps`、`runs` 及配置和环境信息。保存原文件，而非只抄最高数字。[参数参考](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md)说明报告输出与基准比较选项。
+
+算力表示每秒完成的工作量。所计工作和经过时间的定义都要一致。检查实际时长与轮次间波动；一个峰值不能代表整场测试。变化较大时应稳定条件或延长轮次。分享结果时说明配置，让读者知道数字代表什么。
+
+## 用重复配对比较一个改动
+
+将原配置称为 A，改后称为 B。先 A 后 B，重复这对测试，并交替谁先运行。保持轮次时长和预热策略。分别保存 `cpu-a-1.json`、`cpu-b-1.json` 等报告，便于发现顺序或环境变化的影响。
+
+两边采用相同缓存策略：以全新调优数据首次启动，与使用已保存选择重新启动，回答的是不同问题。保留日常数据目录，需要新状态比较时使用独立测试目录。[自动调优指南](/zh-hans/blog/seine-automatic-cpu-tuning/)解释缓存复用。`--threads` 会改变调优行为，与自动运行比较时应记录这一选择。
+
+## 为什么测试模式必须匹配？
+
+`backend` 测试挖矿后端，`kernel` 聚焦哈希计算路径。`kernel-effective` 包括生命周期计时及后端目标/评估路径。即使同一机器，范围也不同。速度旁应标注模式；单位相同不意味着测量等价。
+
+`end-to-end` 包括更多挖矿生命周期。版本和时间指标含义也需一致。[测试实验室文档](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md)解释配对工具、环境记录和兼容检查。小差异会影响决策时使用这些工具，并保留全部运行，而非只取最快一次。
+
+## 恢复挖矿并检查有效工作
+
+测试退出后，用预期地址与数据目录运行平常的挖矿命令。在[仪表盘](/zh-hans/blog/seine-dashboard-explained/)检查设备行和已接受份额。测试衡量本地性能，份额检查验证连接与工作送达。记录日常设置时应同时保留两种检查。
+
+矿池算力由随时间到达的份额估算，是与短时本地测试不同的观察。按[矿池追踪指南](https://bntpool.com/blog/zh-hans/track-your-miner-on-bntpool/)查看记账。保存版本、命令、机器、内存/页面、缓存、后台条件和所有 JSON，方便复现与理解下一次比较。
+
+<CTA target="seine" title="使用 seine 测量性能" text="下载 seine，保存可重复的基准，再通过仪表盘追踪正常挖矿。" />

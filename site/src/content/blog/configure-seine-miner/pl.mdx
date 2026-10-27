@@ -1,0 +1,76 @@
+---
+title: 'Konfiguracja seine: zapisane ustawienia i start'
+description: 'Znajdź konfigurację seine, zapisz pulę i adres, poznaj pierwszeństwo argumentów oraz sprawdź ustawienia programu do kopania Blocknet po ponownym uruchomieniu.'
+tags: ['Poradnik kopania', 'Konfiguracja', 'seine']
+faq:
+  - q: 'Gdzie seine zapisuje konfigurację?'
+    a: 'Domyślnie czyta seine-data/seine.config.json względem katalogu roboczego przy uruchomieniu. data-dir wybiera inny katalog bazowy. Terminal, skrót i zadanie harmonogramu mogą mieć różne katalogi robocze. Zapisz pełną ścieżkę konfiguracji razem z poleceniem uruchamiającym.'
+  - q: 'Czy argument zmienia zapisany plik?'
+    a: 'Przy istniejącej konfiguracji jawne argumenty połączenia mają pierwszeństwo w danym uruchomieniu, bez zastępowania zapisanego adresu, URL puli czy nazwy maszyny. Zachowaj argument w zwykłym poleceniu albo zatrzymaj program i zmień pole w pliku. Sprawdź potem normalny start.'
+  - q: 'Czy wszystkie opcje można umieścić w JSON?'
+    a: 'Plik ma niewielki schemat ustawień połączenia. Opcje sprzętu i działania, np. backend i wątki, należą do argumentów startowych. Podobnie nazwane pola JSON ich nie ustawiają. Wraz z katalogiem danych zachowaj kopię sposobu uruchamiania.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Uruchamiaj koparkę Blocknet z przewidywalnymi ustawieniami. Poradnik dla seine v0.2.37 wyjaśnia położenie danych, pierwszeństwo argumentów i trwałe zmiany. Zacznij od działającej instalacji; [poradnik aktualizacji](/pl/blog/update-seine-miner/) opisuje wymianę programu.
+
+## Jak seine wybiera ustawienia?
+
+<Answer>
+seine łączy zapisane wartości połączenia z argumentami startowymi. Jawne argumenty mają pierwszeństwo przed odpowiednimi wartościami pliku. Katalog danych wybiera czytany plik. Opcje sprzętowe i wykonania pozostają argumentami startowymi, więc zachowaj zarówno konfigurację, jak i zwykłe polecenie.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Zapisany plik i polecenie terminala prowadzą do koparki, a potem do kontroli po ponownym uruchomieniu." width="1200" height="675" loading="lazy" />
+
+## Znajdź rzeczywiście używany plik
+
+Domyślnie jest to `./seine-data/seine.config.json`, względem katalogu roboczego procesu, niekoniecznie folderu programu. Przed edycją sprawdź terminal, skrót lub usługę. Dwa sposoby uruchomienia mogą korzystać z tego samego programu i różnych danych.
+
+`--data-dir` wybiera katalog bazowy; plik nadal nazywa się `seine.config.json`. Przy uruchamianiu z różnych miejsc używaj stałej ścieżki bezwzględnej. Zapisz program, katalog roboczy, dane i wszystkie argumenty. [Poradnik startu Windows](/pl/blog/start-miner-automatically-windows/) pokazuje te ścieżki, również ze spacjami, w Harmonogramie zadań.
+
+## Jakie ustawienia należą do pliku?
+
+Przykład pokazuje główne pola połączenia. Zastąp `@yourname` swoim zarejestrowanym Blocknet ID lub pełnym adresem odbiorczym. To wzór formatu, nie polecenie. W istniejącej instalacji edytuj potrzebne pola zamiast zastępować cały plik.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` i `pool_worker` wybierają tryb, odbiorcę, pulę i nazwę maszyny. Zachowaj `schema_version` oraz istniejące `dev_fee_pool_worker`. Ostatnie pole jest oddzielnym generowanym identyfikatorem; dla swojej maszyny używaj `pool_worker`. Nie wpisuj tu frazy odzyskiwania ani kluczy prywatnych.
+
+## Jak zachować zmianę na stałe?
+
+Zatrzymaj program i skopiuj plik. Używaj edytora tekstu, poprawnego JSON z podwójnymi cudzysłowami i oryginalnej nazwy bez dodatkowego rozszerzenia. Zmień tylko potrzebne pole we właściwym katalogu. Sprawdź przecinki, unikaj komentarzy i końcowych przecinków, a jeśli dostępne, użyj walidacji JSON. Kopia pozwala dokładnie porównać stare wartości.
+
+Sprawdź argumenty nadpisujące tę samą wartość. Stare `--address` ma pierwszeństwo przed nowym adresem w pliku. Zaktualizuj argument lub usuń go, by użyć zapisu. Uruchom zwykłym skrótem, skryptem lub zadaniem i sprawdź efektywne wartości.
+
+## Świadomie używaj opcji tymczasowych
+
+Przy istniejącej konfiguracji poniższa opcja puli wybiera nazwę maszyny na to uruchomienie. Przy następnym starcie bez niej wraca zapisana nazwa. Pomaga to kontrolować zmianę; dla stałego działania dodaj opcję do zwykłego uruchamiania.
+
+```text
+--pool-worker desktop-02
+```
+
+Przy pierwszym starcie bez pliku seine tworzy go z początkowych danych połączenia. To inny przypadek niż tymczasowe zastąpienie istniejących wartości. Pamiętaj o tym, kopiując polecenie na komputer, który dopiero tworzy konfigurację. [Dokumentacja konfiguracji](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) opisuje pytania początkowe i obsługiwane opcje.
+
+## Opcje sprzętowe zachowaj w poleceniu
+
+`--backend` i `--threads` są argumentami startowymi. Schemat połączenia nie jest listą wszystkich opcji. Podobne pole JSON nie ustawi takiej opcji działania. Zachowaj wybory sprzętu w skrypcie, skrócie lub usłudze uruchamiającej program.
+
+Przyciski wątków w panelu zmieniają sesję bez zapisywania nowej wartości domyślnej. Automatyczne strojenie ma własne pamięci podręczne. Zachowaj je niezależnie od edycji połączenia i pozwól każdej maszynie dostroić się do sprzętu. [Poradnik strojenia](/pl/blog/seine-automatic-cpu-tuning/) wyjaśnia użycie cache i jawne liczby wątków.
+
+## Dlaczego ustawienia wyglądają na zresetowane?
+
+Porównaj ścieżkę danych i argumenty z ostatnim poprawnym startem. Nowy folder rozpakowania, inny terminal lub stare argumenty zadania mogą wyjaśnić różnicę. Przy błędzie parsowania przeczytaj nazwę pliku i komunikat. Przywróć kopię lub popraw JSON, potem uruchom raz właściwą metodą.
+
+Sprawdź odbiorcę, pulę, nazwę i zaakceptowane udziały. Powtórz zwykły start, by potwierdzić trwałość; jedno uruchomienie z argumentami sprawdza tylko to polecenie. Skorzystaj z [poradnika panelu](/pl/blog/seine-dashboard-explained/) i [zmiany adresu](https://bntpool.com/blog/pl/change-mining-wallet-address/) dla przyszłych nagród. Zachowaj razem działający sposób uruchamiania i kopię konfiguracji.
+
+<CTA target="seine" title="Pobierz aktualne seine" text="Używaj stałego katalogu danych i przechowuj sprawdzone polecenie wraz z zapisaną konfiguracją." />

@@ -1,0 +1,62 @@
+---
+title: 'Mengapa miner tidak memakai CPU 100%'
+description: 'Pahami penggunaan CPU saat menambang Blocknet dengan seine. Periksa thread aktif, memori, backend, dan pekerjaan diterima sebelum mengubah pengaturan.'
+tags: ['Panduan mining', 'Penggunaan CPU', 'seine']
+faq:
+  - q: 'Haruskah miner selalu memakai CPU 100%?'
+    a: 'Tidak. Persentase sistem menunjukkan pemakaian prosesor yang tersedia, sedangkan seine mengukur hash selesai. Jumlah thread yang berguna bergantung pada memori dan kinerja terukur. Periksa thread aktif, hashrate, dan pekerjaan diterima bersama.'
+  - q: 'Mengapa seine memilih lebih sedikit thread?'
+    a: 'Setiap thread mining CPU aktif memerlukan arena memori 2 GiB dan berbagi bandwidth. Pemilihan otomatis mempertimbangkan memori dan menguji kinerja. Batas eksplisit, backend, dan lingkungan eksekusi juga berpengaruh.'
+  - q: 'Apa yang diperiksa jika penggunaan dan hashrate turun?'
+    a: 'Periksa backend CPU, thread, pesan tuning dan memori, serta job terbaru. Bandingkan perangkat dan interval yang sama, lalu beban latar dan batas eksekusi. Untuk koneksi atau hashrate pool nol, ikuti panduan pemantauan.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Baca penggunaan CPU bersama thread aktif, H/s lokal, dan share diterima saat menambang Blocknet memakai seine v0.2.36. Lakukan pemeriksaan ini sebelum mengubah pengaturan. Untuk instalasi, mulai dari [panduan mining](/id/blog/how-to-mine-blocknet/).
+
+## Apakah penggunaan CPU rendah berarti pekerjaan berguna berkurang?
+
+<Answer>
+Persentase CPU saja tidak menunjukkan banyaknya pekerjaan berguna yang selesai. Periksa backend CPU terpilih, thread aktif, hashrate lokal, dan job masuk. seine dapat memilih lebih sedikit thread daripada jumlah prosesor logis. Bandingkan pekerjaan selesai pada kondisi konsisten sebelum mengubah jumlahnya.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Kisi aktivitas prosesor dan penghitung pekerjaan selesai merupakan pengamatan terpisah, dihubungkan pemeriksaan thread, memori, dan job." width="1200" height="675" loading="lazy" />
+
+## Periksa cakupan persentase terlebih dahulu
+
+Di Windows, bedakan proses seine dengan total komputer. Temukan seine di Task Manager, lalu buka Performance dan CPU. Grafik prosesor logis menunjukkan distribusi beban; angka keseluruhan menggabungkan aktivitas mesin. [Panduan Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) menjelaskan tampilan ini. Catat tampilan yang dipakai.
+
+Di Linux, persentase proses `top` dapat berbeda skala dari ringkasan sistem. Mode Irix memungkinkan proses multithread melebihi 100%; Solaris membaginya dengan jumlah prosesor. Tampilan thread mengubah baris. Baca [manual](https://man7.org/linux/man-pages/man1/top.1.html): perubahan skala bukan pengukuran perubahan kecepatan.
+
+## Periksa perangkat yang bekerja
+
+Baca H/s dan thread aktif pada baris CPU di [dashboard](/id/blog/seine-dashboard-explained/). Angka gabungan CPU/GPU mencakup keduanya; bandingkan perangkat yang sama. Jika perintah hanya memilih NVIDIA, beban mining CPU rendah memang diharapkan. Lihat [panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/).
+
+Thread mining aktif berbeda dari jumlah thread proses di sistem operasi. seine juga memiliki tugas jaringan, kontrol, dan pelaporan. Jumlah thread proses bisa lebih besar daripada baris CPU. Yang diperiksa adalah thread hashing aktif dan pekerjaan yang diselesaikan.
+
+## Mengapa memori membatasi thread aktif?
+
+Setiap thread CPU aktif memakai arena 2 GiB untuk Argon2id. Ukuran otomatis mempertimbangkan memori tersedia dan ruang sistem. Baca jumlah aktual dan pesan memori; jangan menjadikan pembagian RAM terpasang sebagai kapasitas terjamin. [Panduan RAM](/id/blog/how-much-ram-to-mine-blocknet/) membahas anggaran, cadangan, dan alokasi.
+
+Kapasitas menentukan jumlah arena yang muat; bandwidth memengaruhi perpindahan data serentak. Thread bisa tetap dihitung sibuk saat menunggu memori. Penggunaan rendah tidak membuktikan hambatan bandwidth, dan 100% tidak membuktikan H/s terbaik. Lihat [panduan Argon2id](/id/blog/argon2id-proof-of-work-explained/).
+
+## Baca perubahan otomatis dan pengaturan eksplisit
+
+Tuning CPU otomatis membandingkan thread dan kernel melalui pekerjaan terukur. Jumlah lebih rendah bisa valid; perubahan memori tersedia juga memengaruhinya. Tunggu percobaan stabil dan baca pesan. [Panduan tuning](/id/blog/seine-automatic-cpu-tuning/) menjelaskan keputusan dan penggunaan cache.
+
+Periksa perintah yang dijalankan. `--threads`, maksimum tuning, atau profil CPU dapat mengubah pencarian atau jumlah; afinitas mengubah penempatan. Container, mesin virtual, dan batas OS bisa menyediakan kapasitas lebih kecil daripada host. Simpan konfigurasi dan identifikasi batas sebelum menaikkan jumlah.
+
+## Bagaimana jika penggunaan dan H/s sama-sama turun?
+
+Pastikan backend CPU aktif dan memiliki job. Periksa koneksi, penyesuaian memori, dan kesalahan backend di log. Persiapan dan percobaan tuning baru memberi konteks yang tidak tampak di meter OS. Jika GPU tetap bekerja, periksa status perangkat secara terpisah.
+
+Bandingkan interval stabil dengan versi, backend, dan pengaturan sama. Catat aplikasi lain, memori, daya, dan waktu. Gunakan [panduan benchmark](/id/blog/benchmark-seine-miner/) untuk perbandingan lokal berulang dan simpan laporan. Puncak singkat atau satu persentase bukan hasil pengukuran hardware.
+
+## Akhiri dengan pekerjaan selesai dan diterima
+
+Saat mining normal, pastikan hash CPU maju dan share mendapat respons diterima. Share datang berselang, bukan sesuai hitung mundur tetap. Pool memperkirakan hashrate dari kiriman sepanjang waktu. [Panduan pemantauan](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) menjelaskan tampilan ini dan pemeriksaan koneksi.
+
+Catat versi, perintah, backend, thread CPU, H/s CPU, alat dan tampilan OS, memori, serta jendela pool. Jika pekerjaan maju, persentase sistem adalah konteks. Jika satu tahap terhenti, ikuti panduannya. Setiap perubahan menjadi jawaban untuk pertanyaan konkret dengan hasil yang sebanding.
+
+<CTA target="seine" title="Pantau mining CPU dengan seine" text="Unduh seine dan periksa thread aktif, hashrate, serta pekerjaan diterima bersama di dashboard." />

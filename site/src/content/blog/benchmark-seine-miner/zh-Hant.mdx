@@ -1,0 +1,70 @@
+---
+title: '如何測試 Blocknet 礦機效能'
+description: '使用 seine 的重複測試、暖機回合和 JSON 報告測量效能。維持記憶體、背景負載與自動調校條件一致，並比較相同範圍的計時結果。'
+tags: ['挖礦指南', '效能測試', 'seine']
+faq:
+  - q: 'seine 測試會向礦池提交份額嗎？'
+    a: '不會。--bench 執行本機測試而非實際挖礦，不需要礦池或常駐程式。報告測量所選本機工作負載。之後請執行一般挖礦工作階段，另外檢查連線和已接受份額。'
+  - q: '應從哪個模式開始？'
+    a: '先用 backend 測試所選挖礦後端。比較時維持模式、版本和設定相同。Kernel、kernel-effective 與 end-to-end 的測量範圍不同，應連同雜湊率儲存模式和計時資訊。'
+  - q: '怎樣讓兩次測試可比較？'
+    a: '使用相同機器、版本、後端、記憶體、背景負載和快取策略。每次只改一個設定，交替重複兩種配置並保留所有報告。一次短測試無法證明很小的效能差異。'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+使用 seine 內建測試測量自己的機器，並儲存可比較的紀錄。本指南使用公開版 v0.2.36 與純 CPU 範例，不宣稱新的硬體測量結果。先按[安裝指南](/zh-hant/blog/how-to-mine-blocknet/)準備；既有測量及條件見[硬體指南](/zh-hant/blog/blocknet-mining-hardware-hashrate/)。
+
+## 如何測試 seine？
+
+<Answer>
+使用 `--bench`，選擇後端和測量模式，加入暖機回合並儲存 JSON。在變更一個設定前，先於相近條件下重複相同工作。測試不需要礦池或常駐程式；恢復正常挖礦後再檢查已接受份額。
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="一次暖機後進行三回合測量並儲存報告，第二種配置重複相同步驟。" width="1200" height="675" loading="lazy" />
+
+## 準備一致的起點
+
+記錄版本、作業系統、確切 CPU 型號、可用 RAM 和指令。若使用 NVIDIA，也記錄顯示卡型號與驅動程式。維持相近背景負載；僅在其中一次測試執行遊戲、編譯或其他礦工會改變條件。
+
+先確定問題：CPU 基準、執行緒數比較，還是記憶體分頁效果。除測試變數外，維持 CPU 配置、電源和記憶體設定。[RAM 指南](/zh-hant/blog/how-much-ram-to-mine-blocknet/)與[大型分頁指南](/zh-hant/blog/huge-pages-blocknet-mining/)說明準備方式。記錄要求的分頁模式，也記錄實際取得的模式。
+
+## 執行 CPU 測試並儲存報告
+
+在解壓縮後的礦工目錄，第一個指令適用 Linux/macOS，第二個用於 Windows PowerShell。兩者都選擇純 CPU 的 `backend`、一次暖機和三回合測量，每回合要求 20 秒。輸出路徑相對於工作目錄。每次使用新檔名保留舊結果。
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+執行緒數與計算核心仍自動選擇。準備和調校可能在回合前耗時，已開始的工作也可能在要求區間後才完成。等待 `cpu-baseline.json` 寫入完畢。暖機不納入測量彙總。總時間可能超過四個區間；20 秒不是整個指令的執行時間。
+
+## 報告應看什麼？
+
+先看模式、實際設定與各回合，再看彙總速度。JSON 包含 `avg_hps`、`median_hps`、`min_hps`、`max_hps`、`runs` 以及配置和環境資訊。保留原始檔，不要只抄最高數字。[參數參考](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md)說明報告輸出與基準比較選項。
+
+雜湊率表示每秒完成的工作。計算工作量與經過時間的定義都要相同。檢查實際時間和回合間波動；單一高峰不能代表整場測試。變動較大時應穩定條件或延長回合。分享結果時說明配置，讓讀者了解數字代表什麼。
+
+## 用重複配對比較一項變更
+
+將原配置稱為 A，變更後稱為 B。先 A 後 B，重複配對並交替誰先執行。維持回合時間和暖機策略。分別儲存 `cpu-a-1.json`、`cpu-b-1.json` 等報告，較容易發現順序或環境變化的影響。
+
+兩邊使用相同快取策略：以全新調校資料首次啟動，與使用儲存選擇重新啟動，回答的是不同問題。保留日常資料目錄，需要新狀態比較時使用獨立測試目錄。[自動調校指南](/zh-hant/blog/seine-automatic-cpu-tuning/)說明快取重用。`--threads` 會改變調校行為，與自動執行比較時應記錄。
+
+## 為何測試模式必須相符？
+
+`backend` 測試挖礦後端，`kernel` 專注雜湊計算路徑。`kernel-effective` 包含生命週期計時與後端目標／評估路徑。即使同一機器，範圍也不同。速度旁應標示模式；單位相同不代表測量等價。
+
+`end-to-end` 包含更多挖礦生命週期。版本和時間指標意義也需一致。[測試實驗室文件](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md)說明配對工具、環境紀錄和相容性檢查。小差異影響決策時使用這些工具，並保留所有執行，而非只挑最快一次。
+
+## 恢復挖礦並檢查有效工作
+
+測試結束後，用預期地址和資料目錄執行平常的挖礦指令。在[儀表板](/zh-hant/blog/seine-dashboard-explained/)檢查裝置列與已接受份額。測試衡量本機效能，份額檢查確認連線和工作送達。記錄日常設定時應保留兩種檢查。
+
+礦池雜湊率由隨時間抵達的份額估算，是不同於短時本機測試的觀察。按[礦池追蹤指南](https://bntpool.com/blog/zh-hant/track-your-miner-on-bntpool/)查看記帳。儲存版本、指令、機器、記憶體／分頁、快取、背景條件和所有 JSON，方便重現與理解下次比較。
+
+<CTA target="seine" title="使用 seine 測量效能" text="下載 seine，儲存可重複的基準，再透過儀表板追蹤正常挖礦。" />

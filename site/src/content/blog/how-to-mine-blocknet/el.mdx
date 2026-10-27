@@ -9,7 +9,7 @@ faq:
     a: 'Το pool bntpool.com πληρώνει με PPLNS σε παράθυρο έξι ωρών. Η ανταμοιβή ενός μπλοκ μπορεί να πληρωθεί μόνο αφού το μπλοκ έχει βάθος 60 μπλοκ, δηλαδή περίπου πέντε ώρες με μπλοκ ανά πέντε λεπτά, και τα υπόλοιπα αποστέλλονται μόλις φτάσουν τα 0,1 BNT. Η πρώτη πληρωμή αναμένεται αρκετές ώρες μετά τα πρώτα αποδεκτά shares σας.'
   - q: 'Μπορώ να κάνω εξόρυξη Blocknet με CPU και GPU ταυτόχρονα;'
     a: 'Ναι. Σε Windows και Linux, το seine κάνει εξόρυξη με κάθε πυρήνα CPU και κάθε κάρτα γραφικών NVIDIA του υπολογιστή ταυτόχρονα, και τα δύο hashrate αθροίζονται. Ρυθμίζει τον επεξεργαστή και κάθε κάρτα ξεχωριστά όσο λειτουργεί, ώστε να παίρνετε το μέγιστο από όλο το hardware σας χωρίς να αλλάξετε καμία ρύθμιση.'
-sourceHash: ad835df628e2
+sourceHash: 'c15449bd790a'
 translation: draft
 ---
 
@@ -26,7 +26,7 @@ translation: draft
 - **Μια διεύθυνση Blocknet.** Εγκαταστήστε το επίσημο πορτοφόλι Blocknet, είτε το [πορτοφόλι γραμμής εντολών](https://github.com/blocknetprivacy/blocknet/releases/latest) είτε το [πορτοφόλι για υπολογιστή](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), και αντιγράψτε τη διεύθυνσή σας. Ο [οδηγός πορτοφολιού](/el/blog/blocknet-wallet-for-mining/) σας καθοδηγεί βήμα προς βήμα. Κρατήστε το πορτοφόλι και τη φράση ανάκτησής του στον δικό σας υπολογιστή· μην τα βάζετε σε κοινόχρηστο rig εξόρυξης.
 - **Ή ένα σύντομο όνομα.** Αν έχετε ένα [σύντομο όνομα Blocknet ID](/el/blog/blocknet-id-pay-by-name/) από το [blocknet.id](https://blocknet.id), μπορείτε να κάνετε εξόρυξη στο `@name` αντί να επικολλάτε τη μεγάλη διεύθυνση.
 - **Περίπου 2 GB μνήμης RAM ανά νήμα εξόρυξης.** Το seine προσαρμόζεται στον υπολογιστή σας και αφήνει περιθώριο για το σύστημα, οπότε δεν χρειάζεται να το υπολογίσετε πρώτα.
-- **Windows, macOS ή Linux.** Σε Windows και Linux, οι κάρτες γραφικών NVIDIA χρησιμοποιούνται αυτόματα όταν είναι εγκατεστημένος ένας πρόσφατος driver.
+- **Windows, macOS ή Linux.** NVIDIA — Windows: Πρόγραμμα οδήγησης NVIDIA· τα συνοδευτικά DLL εκτέλεσης δίπλα στο εκτελέσιμο; Linux: Πρόγραμμα οδήγησης NVIDIA και συμβατές βιβλιοθήκες εκτέλεσης NVRTC.
 
 ## Βήμα 1: κατεβάστε το seine
 
@@ -35,7 +35,7 @@ translation: draft
 | Σύστημα | Αρχείο | Κάρτες γραφικών |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA· το CUDA runtime περιλαμβάνεται |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, με εγκατεστημένο driver |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | Πρόγραμμα οδήγησης NVIDIA και συμβατές βιβλιοθήκες εκτέλεσης NVRTC; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 ή νεότερο) |
 | macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ translation: draft
 
 | Hardware | Νήματα | Hashrate |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68,3 H/s |
 | Διακομιστής Arm (AWS Graviton4) | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
 | Apple M4 Max (48 GB MacBook Pro) | 16 | 30,9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Η ταχύτερη διαμόρφωση σε αυτές τις μετρήσεις είναι ένα AMD EPYC 9355P στα 68,3 H/s: 64 νήματα εξόρυξης, 192 GiB RAM και huge pages 1 GiB που προετοιμάστηκαν χειροκίνητα στο Linux.
 
 Τα αποτελέσματα για κάθε CPU που δοκιμάστηκε βρίσκονται στη [σελίδα επιδόσεων](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), και ο [οδηγός hardware για εξόρυξη Blocknet](/el/blog/blocknet-mining-hardware-hashrate/) εξηγεί πώς η RAM και το εύρος ζώνης της μνήμης καθορίζουν αυτά τα νούμερα.
 

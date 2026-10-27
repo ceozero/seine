@@ -1,0 +1,106 @@
+---
+title: 'Blocknet 노드 실행 방법'
+description: '공식 클라이언트로 Blocknet 노드를 실행하세요. core 설치, 피어와 동기화 확인, 자동 업데이트 이해와 정상 mainnet 환경 검증을 설명합니다.'
+tags: ['Blocknet', '노드', '설정 가이드']
+faq:
+  - q: 'Blocknet 노드를 실행하려면 채굴해야 하나요?'
+    a: '노드 실행과 채굴 시작은 별개입니다. core는 체인 데이터와 네트워크 연결을 유지하며 채굴은 따로 켜야 합니다. 채굴 부하 없이 노드 상태와 피어를 확인할 수 있습니다. seine 풀 채굴도 자체 연결 흐름이 있으며 개인 노드가 필요하지 않습니다.'
+  - q: 'Blocknet 셸을 닫으면 노드도 멈추나요?'
+    a: '대화형 attach 세션은 백그라운드 core에 연결합니다. 셸을 종료해도 core는 계속 실행됩니다. 관리 노드를 멈출 의도라면 명시적 중지 명령을 사용한 뒤 상태를 확인하세요. 셸 종료와 실제 프로세스 중지는 다른 행동입니다.'
+  - q: 'Blocknet 노드가 동기화 중인지 어떻게 아나요?'
+    a: '체인 높이, 피어 수와 동기화 상태를 함께 읽고 시간에 따른 진행을 관찰하세요. 같은 네트워크의 최근 기준과 비교하세요. 지갑 스캔은 별도 작업이므로 노드가 최신이라고 새로 로드한 지갑이 자기 출력을 모두 찾았다는 뜻은 아닙니다.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+자신의 Blocknet 노드를 실행하고 연결 및 체인 추적 상태를 확인해 보세요. 이 가이드는 공식 명령줄 클라이언트로 mainnet core를 관리한 뒤 피어, 동기화와 업데이트를 살펴봅니다. 명령은 2026년 10월 26일 클라이언트 v1.2.0 기준으로 확인했습니다. 설치 버전의 [공식 명령 참조](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md)를 함께 보세요.
+
+## Blocknet 노드 실행에 무엇이 필요한가요?
+
+<Answer>
+OS에 맞는 공식 Blocknet 클라이언트, 체인 데이터를 저장할 공간이 있는 컴퓨터와 인터넷 연결이 필요합니다. 클라이언트가 백그라운드 core를 설치하고 관리합니다. 실행되면 피어와 체인 진행을 확인하세요. 지갑 생성과 채굴은 노드가 작동한 뒤 추가할 수 있는 별도 작업입니다.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="로컬 터미널이 백그라운드 Blocknet core에 연결하고, core가 체인 데이터를 저장하며 네트워크 피어와 블록을 교환하는 그림." width="1200" height="675" loading="lazy" />
+
+## 공식 클라이언트와 네트워크 선택하기
+
+[공식 클라이언트 릴리스](https://github.com/blocknetprivacy/blocknet/releases/latest)에서 OS와 프로세서에 맞는 압축 파일을 받으세요. 풀고 실행 파일을 쓸 수 있는 위치에서 터미널을 여세요. 아래 예시는 실행 이름 `blocknet`을 쓰며 Windows는 `blocknet.exe`를 사용합니다. 명령 검색 경로에 없다면 Linux나 macOS의 `./blocknet`처럼 실제 파일 경로로 실행하세요.
+
+일반 Blocknet 네트워크는 mainnet을 사용합니다. testnet은 설정과 데이터가 별도인 환경입니다. 선택 네트워크를 기록해 testnet 높이를 mainnet 탐색기와 비교하지 않게 하세요. 이 글은 노드 관리에 집중하며, 지갑 생성·복구·수신 주소 선택은 [지갑 가이드](/ko/blog/blocknet-wallet-for-mining/)를 보세요.
+
+## 백그라운드 core 설치하고 시작하기
+
+처음 설정한다면 대화형 터미널에서 마법사를 실행하세요.
+
+```sh
+blocknet setup
+```
+
+각 질문을 읽으세요. 검토한 마법사는 설정을 저장하고 자동 업그레이드를 예약하며 필요하면 core 다운로드와 실행을 제안합니다. 네트워크와 로컬 API 설정도 제공합니다. 이 컴퓨터에서 관리할 노드는 로컬 바인딩을 유지하세요.
+
+문서화된 수동 설치 경로는 다음과 같습니다.
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest`는 안정 core 버전을 선택합니다. mainnet을 시작하려면 설정에서 활성화돼 있어야 합니다. 클라이언트는 core를 백그라운드로 실행하고 API를 기다립니다. 시작 작업이 끝나도록 두세요. 초기 DB 시작과 체인이 완전히 따라잡은 상태는 다른 단계입니다.
+
+## 피어와 동기화 진행을 어떻게 확인하나요?
+
+실행 중인 mainnet core에 연결하세요.
+
+```sh
+blocknet attach mainnet
+```
+
+대화형 프롬프트에서 다음 검사 명령을 각각 입력하세요.
+
+```text
+status
+peers
+```
+
+[셸 참조](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md)는 노드 항목을 설명합니다. 높이, 최선 블록 해시, 피어 수와 동기화 상태를 기록하세요. 피어 목록은 노드에 네트워크 연결이 있는지 확인하는 데 도움이 됩니다.
+
+시간을 두고 높이를 관찰하고 [공식 탐색기](https://explorer.blocknetcrypto.com/) 같은 최근 mainnet 기준과 비교하세요. 블록 사이에 높이가 멈출 수 있고 관찰 시점도 다를 수 있습니다. 숫자 하나로 성공을 선언하지 말고 여러 항목을 함께 보세요. 따라잡는 중이면 네트워크와 저장소를 계속 사용할 수 있게 유지하세요.
+
+## 체인 동기화와 지갑 스캔 구분하기
+
+체인 동기화는 네트워크 블록을 따라갑니다. 지갑 스캔은 그 기록에서 로드한 지갑의 출력을 찾습니다. 노드가 따라잡아도 복구 지갑은 아직 스캔 중일 수 있습니다. 따라서 셸의 지갑 정보가 있다면 노드 높이와는 별도 관찰입니다. 특정 채굴 지급을 추적할 때는 [지갑 입금 가이드](https://bntpool.com/blog/ko/pool-payout-missing-from-wallet/)를 쓰세요.
+
+현재 클라이언트는 초기 동기화를 빠르게 하는 체크포인트도 지원합니다. 빠른 동기화 방식을 모두 같다고 보지 말고 [체크포인트 가이드](https://bntpool.com/blog/ko/blocknet-checkpoints-fast-sync/)로 출처와 검증 범위를 확인하세요. 진행 표시가 조용하다는 이유로 체인 DB를 일상적으로 삭제하지 마세요. 먼저 상태와 로그로 진행 중인 다운로드, 검증 작업, 지갑 스캔을 구분하세요.
+
+## 시작에 문제가 있으면 어디를 보나요?
+
+attach 셸 밖에서 관리 core 로그를 따라가세요.
+
+```sh
+blocknet logs mainnet
+```
+
+최근 시작·연결 메시지를 읽으세요. 로그 추적을 멈추려면 Ctrl-C를 누르세요. 설정, 경로, 설치 버전과 연결 확인은 다음 명령을 사용하세요.
+
+```sh
+blocknet doctor
+```
+
+문서의 doctor 명령은 구성을 바꾸지 않고 조사 결과를 보고합니다. 해결책을 고르기 전에 정확한 메시지를 저장하세요.
+
+예상 core와 네트워크가 설정됐는지, 선택한 바이너리가 설치됐는지, 로컬 API 주소가 맞는지 확인하세요. 해당 상태는 [공식 문제 해결 가이드](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md)를 참고하세요. 진단 공유 시 API 인증 정보와 지갑 자료는 비공개로 유지하세요. 설정 디렉터리 전체보다 버전, OS, 관련 오류가 대개 더 나은 시작점입니다.
+
+## 업데이트와 의도적 종료 이해하기
+
+검토한 클라이언트는 스케줄러와 일부 수명주기 명령에서 자동 업그레이드를 확인합니다. 바깥쪽 `blocknet status`는 업데이트 확인을 유발할 수 있으며 attach 안의 `status`와 다릅니다. 업데이트가 있으면 `latest`를 따르는 관리 core를 재시작할 수 있지만 고정 버전은 그대로 둡니다. 의존 서비스가 있는 노드에 쓰기 전 [업그레이드 참조](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md)를 읽으세요.
+
+노드 API를 쓰는 서비스에 맞춰 유지보수를 계획하세요. attach를 나가려면 `quit`을 입력하며 core는 계속 실행됩니다. 관리 mainnet core를 의도적으로 멈추려면 OS 터미널에서 `blocknet stop mainnet`을 실행하세요. 계획한 업데이트나 재시작 뒤 실행 버전, 연결과 체인 진행을 확인하세요. 지갑 백업은 설치된 core 바이너리와 독립적으로 보관하세요.
+
+## 원하는 작업에 노드 사용하기
+
+연결된 노드는 채굴을 켜지 않고도 지갑과 로컬 체인 조회를 지원할 수 있습니다. bntpool.com에서 채굴하려면 [풀 설정 가이드](https://bntpool.com/blog/ko/mine-blocknet-on-bntpool/)를 따라 seine의 일반 풀 연결을 사용하세요. 개인 노드 실행은 별도 선택입니다. 직접 채굴은 채굴기 데몬 모드 지침을 읽고 연결 전 API 설정을 검증하세요.
+
+네트워크, 클라이언트·core 버전, 데이터 위치, 업데이트 정책과 정상 진행을 확인한 결과를 간단히 기록하세요. [Faraday](/ko/blog/blocknet-faraday-upgrade/) 준비에도 유용하며, 향후 활성화 지침은 공식 릴리스에서 확인해야 합니다. 계획 변경 뒤 상태를 다시 확인해 기록이 다운로드한 소프트웨어가 아닌 실행 노드를 설명하도록 하세요.
+
+<CTA target="seine" title="seine으로 Blocknet 채굴하기" text="풀 또는 직접 채굴을 선택한 뒤 채굴 가이드로 원하는 장비를 연결하세요." />

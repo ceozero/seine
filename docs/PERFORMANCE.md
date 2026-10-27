@@ -49,8 +49,8 @@ choice for operators who prefer lower package power over peak throughput.
 
 ## Automatic AMD tuning
 
-The following improvements are merged on `master` after v0.2.24 and await the
-next release. These runs use automatic thread and kernel selection with the
+The following improvements shipped in v0.2.25. These runs use automatic thread
+and kernel selection with the
 balanced profile and prepared 2 MiB huge pages. Rates include discovery/startup
 and shutdown; cached restarts use each build's own previously learned settings.
 
@@ -75,8 +75,8 @@ fixed-kernel speedups or measurements of fully converged throughput.
 
 | CPU | Generation | Instance | Threads | Kernel | H/s |
 |---|---|---|---:|---|---:|
-| AMD EPYC 9R45 | Zen 5 Turin | m8a.8xlarge | 32 | streaming | 49.39 |
-| AMD EPYC 9R14 | Zen 4 Genoa | m7a.8xlarge | 32 | streaming | 38.18 |
+| AMD EPYC 9R45 | Zen 5 Turin | m8a.8xlarge | 32 | streaming ring 64 / depth 3 | 49.95 |
+| AMD EPYC 9R14 | Zen 4 Genoa | m7a.8xlarge | 32 | streaming ring 8 / depth 2 | 45.30 |
 | AMD EPYC 7R13 | Zen 3 Milan | c6a.8xlarge | 16 | AVX2 | 11.63 |
 | AMD EPYC 7R32 | Zen 2 Rome | c5a.8xlarge | 16 | AVX2 | 10.96 |
 | AMD EPYC 7571 | Zen 1 Naples | m5a.8xlarge | 16 | AVX2 | 9.38 |
@@ -90,9 +90,35 @@ fixed-kernel speedups or measurements of fully converged throughput.
 | AWS Graviton3 | Neoverse V1 | m7g.8xlarge | 32 | NEON + SHA3 | 27.70 |
 | AWS Graviton2 | Neoverse N1 | m6g.8xlarge | 30 | NEON | 18.63 |
 
-Each row is the best configuration measured on that CPU: a 32-vCPU AWS instance
-with explicit 2 MiB huge pages, swept across kernels and thread counts, four timed
-runs at the winning setting. Raw results, per-run data and the method are in the
+The EPYC 9R45 row uses 32 threads and full transparent huge-page backing.
+Three fresh alternating confirmation pairs measured **49.95 H/s versus 49.45 H/s**
+with the previous fence policy: **+1.01%**, with a paired 95% bootstrap interval
+of +0.39% to +1.64%. All 13,103 timed hashes across screening and confirmation
+verified independently. This fixed-kernel measurement excludes allocation,
+warmup and teardown; startup, pool throughput and energy are separate results.
+[Turin confirmation, frozen sources and raw reports](../experiments/turin-fences-20261026/README.md).
+
+The EPYC 9R14 row uses 32 threads and full transparent huge-page backing. Three
+alternating 30-second confirmation pairs measured **45.30 H/s versus 44.18 H/s**
+with the previous fence policy: **+2.55%**, with a paired 95% bootstrap interval
+of +2.53% to +2.58%. All 11,870 timed hashes across screening and confirmation
+were independently verified. This fixed-kernel research driver excludes allocation,
+warmup and teardown and includes completed in-flight hashes; its confirmed kernel
+change ships in v0.2.32. Cold-start, pool throughput and energy results are separate.
+[Genoa confirmation, frozen source and raw reports](../experiments/genoa-fences-20261026/README.md).
+The earlier ring-size improvement remains documented in the
+[previous confirmation](../experiments/genoa-ring-20261026/README.md).
+
+On native Windows Server 2025, the same EPYC 9R14 instance class measured
+**33.70 H/s versus 32.84 H/s** with ordinary pages at 32 threads: **+2.61%**
+from the Windows fence improvement in v0.2.33. Three fresh alternating
+30-second pairs gave a paired 95% interval of +2.19% to +2.99%; all 8,936
+timed hashes across screening and confirmation verified independently.
+[Windows method and raw reports](../experiments/genoa-windows-fences-20261026/README.md).
+
+Other rows use 32-vCPU AWS instances with explicit 2 MiB huge pages, swept
+across kernels and thread counts, with four timed runs at the winning setting.
+Their raw results and method remain in the
 [readme-hardware campaign](../experiments/readme-hardware-20261025/README.md).
 
 ## Desktops and laptops

@@ -1,0 +1,62 @@
+---
+title: 'Có thể đào Blocknet khi đang dùng PC không?'
+description: 'Đào Blocknet khi dùng PC: chọn CPU hoặc GPU, chừa bộ nhớ cho ứng dụng, điều chỉnh luồng seine và kiểm tra cấu hình phù hợp với công việc hằng ngày.'
+tags: ['Hướng dẫn đào', 'Máy tính cá nhân', 'seine']
+faq:
+  - q: 'Có thể chơi game khi seine đang đào không?'
+    a: 'Chọn backend theo thiết bị mà game cần. Chỉ đào bằng CPU sẽ không dùng backend NVIDIA, nhưng CPU và RAM vẫn chia sẻ với game. Với phiên chơi nặng, hãy thoát phần mềm đào bình thường rồi chạy lại lệnh đã lưu sau đó.'
+  - q: 'Cấu hình efficiency có giới hạn phần trăm CPU không?'
+    a: 'Cấu hình này hướng việc tinh chỉnh đến ít luồng hơn nhưng vẫn giữ một phần tốc độ băm đỉnh đã đo. Đây không phải giới hạn phần trăm CPU của hệ điều hành hay mục tiêu điện năng đo được. Kiểm tra độ phản hồi và bộ nhớ khi mở ứng dụng thường dùng.'
+  - q: 'Đổi số luồng trong bảng điều khiển có được giữ sau khởi động lại không?'
+    a: 'Thay đổi chỉ áp dụng cho phiên hiện tại và tắt tinh chỉnh CPU tự động trong phiên đó. Nó không lưu thành mặc định khởi chạy. Muốn lặp lại số cố định, thêm tùy chọn luồng vào lệnh hoặc lối tắt thường dùng rồi kiểm tra lần chạy sau.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Thiết lập seine để việc đào cùng hoạt động với ứng dụng bạn dùng. Hướng dẫn cho seine v0.2.38 này gồm chọn thiết bị, chừa bộ nhớ, giảm luồng CPU và lưu cách khởi chạy lặp lại được. Bắt đầu từ cấu hình đang hoạt động, giữ nguyên địa chỉ, pool và thư mục làm việc.
+
+## Có thể sử dụng máy tính trong khi đào không?
+
+<Answer>
+Có. Chọn backend và luồng CPU theo công việc, rồi kiểm tra độ phản hồi khi mở ứng dụng thường dùng. Theo dõi đồng thời bộ nhớ trống, hoạt động thiết bị và share được chấp nhận. Với game hoặc kết xuất nặng, thoát phần mềm đào bình thường và chạy lại lệnh đã lưu khi hoàn tất.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Ứng dụng và tiến trình đào dùng chung máy tính, với điều khiển riêng cho công việc CPU và GPU." width="1200" height="675" loading="lazy" />
+
+## Bắt đầu từ công việc cần giữ phản hồi tốt
+
+Mở các ứng dụng thường dùng và thử thao tác đại diện: chuyển tab, sửa tài liệu hoặc duyệt dự án. Quan sát khi chưa đào rồi lặp lại với phần mềm đào đang chạy. Giữ nhiệm vụ và trạng thái ứng dụng tương tự để so sánh trả lời được câu hỏi cụ thể.
+
+Theo dõi cả CPU, bộ nhớ và GPU. [Task Manager](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) của Windows hiển thị tài nguyên theo ứng dụng; hệ thống khác có công cụ riêng. Một tỷ lệ sử dụng không chứng minh còn đủ chỗ cho việc khác. [Hướng dẫn sử dụng CPU](/vi/blog/miner-cpu-usage/) giải thích các chỉ số và hoạt động thiết bị của phần mềm đào.
+
+## Thiết bị nào nên thực hiện việc đào?
+
+Chọn theo ứng dụng đang dùng. Chế độ tự chọn của seine sử dụng CPU và thiết bị NVIDIA được hỗ trợ mà nó phát hiện. Thêm `--backend cpu` vào lệnh hiện tại để chỉ đào CPU, không dùng backend NVIDIA. CPU và RAM vẫn chia sẻ với công việc khác. Kiểm tra các dòng thiết bị sau khi chạy.
+
+Cấu hình NVIDIA được hỗ trợ có thể dùng `--backend nvidia` để tắt đào CPU. Ứng dụng đồ họa trên cùng card chia sẻ bộ nhớ và xử lý GPU; lựa chọn này không dành riêng toàn bộ CPU cho phần mềm khác. Xem yêu cầu môi trường và cách chọn card trong [hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/), giữ lệnh gốc để so sánh.
+
+## Chọn khoảng tự động hoặc số luồng cố định
+
+Với tinh chỉnh CPU tự động, cân nhắc `--cpu-profile efficiency`. Nó ưu tiên ít luồng hơn gần mục tiêu tốc độ băm, không đo watt hay đặt mục tiêu thời gian phản hồi. `--cpu-autotune-max-threads 2` minh họa trần tìm kiếm. Chọn số phù hợp với máy và đọc [hướng dẫn tự tinh chỉnh](/vi/blog/seine-automatic-cpu-tuning/) trước khi kết hợp tùy chọn.
+
+Để so sánh cố định, `--threads 2` chọn hai luồng cho mỗi backend CPU và thường tắt tự tinh chỉnh. Đây là giá trị thử, không phải lời khuyên chung. Trong bảng điều khiển, `-` giảm một luồng mỗi backend CPU. Thay đổi thủ công khởi động lại các backend và kết nối pool, giữ thống kê phiên. Đợi hoàn tất rồi đánh giá.
+
+## Chừa bộ nhớ cho các ứng dụng khác
+
+Mỗi luồng CPU hoạt động dùng vùng Argon2id 2 GiB cùng phần bộ nhớ phụ của tiến trình. Hai vùng chiếm 4 GiB trước khi tính hệ điều hành và ứng dụng. Lập ngân sách theo bộ nhớ còn lại lúc làm việc bình thường. Tab, trình soạn thảo và dự án đồ họa thay đổi nhu cầu; chỉ dung lượng RAM lắp đặt là chưa đủ.
+
+Tự xác định số luồng chừa một phần bộ nhớ dự trữ, nhưng số luồng đặt rõ sẽ ghi đè phần đó. Với số cố định, tự kiểm tra bộ nhớ; nó không bảo đảm chỗ cho mọi ứng dụng mở sau này. [Hướng dẫn RAM](/vi/blog/how-much-ram-to-mine-blocknet/) nêu quy tắc. Giảm số luồng khi công việc cần thêm chỗ, rồi lặp lại cùng thao tác.
+
+## Khi nào nên dừng đào để làm việc khác?
+
+Trước cuộc gọi quan trọng, game nặng hoặc kết xuất, có thể thoát bằng `q` trong bảng điều khiển hoặc `Ctrl+C` trong terminal. Xác nhận tiến trình đã dừng trước khi đánh giá riêng công việc. Sau đó chạy lại lệnh đã lưu. Không cần đổi tài khoản, xóa cấu hình hay thay bảo vệ hệ điều hành.
+
+Giữ hệ thống tản nhiệt và cấp điện bình thường, quan sát chỉ báo nhiệt và năng lượng của máy. Hướng dẫn không chỉ định nhiệt độ hay tốc độ quạt cụ thể. Máy ngủ không tiếp tục đào như khi thức. Nếu thoát hoặc ngủ bất ngờ, dùng [hướng dẫn xử lý dừng](/vi/blog/miner-keeps-stopping/) xác định sự kiện trước khi đổi thêm cài đặt.
+
+## Lưu cách khởi chạy phù hợp hằng ngày
+
+Khi máy phản hồi tốt, ghi lệnh đầy đủ, thư mục và backend. Đổi luồng trong bảng điều khiển chỉ có hiệu lực trong phiên; muốn lặp lại hãy dùng tham số khởi chạy. [Hướng dẫn cấu hình](/vi/blog/configure-seine-miner/) phân biệt trường kết nối đã lưu với tùy chọn khác. Đặt tên rõ cho lối tắt làm việc và phiên không có người trông.
+
+Kiểm tra lần chạy kế tiếp: thiết bị, luồng CPU hoạt động, bộ nhớ trống và share mới được chấp nhận. Lặp lại thao tác ban đầu. [Hướng dẫn theo dõi pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) giúp xác nhận công việc được ghi nhận. Cấu hình hằng ngày hữu ích có thể tái tạo trong khi ứng dụng vẫn làm việc bình thường.
+
+<CTA target="seine" title="Chọn seine phù hợp với máy tính của bạn" text="Lưu lệnh khởi chạy, chọn thiết bị dùng chung và kiểm tra công việc được chấp nhận cùng độ phản hồi hằng ngày." />

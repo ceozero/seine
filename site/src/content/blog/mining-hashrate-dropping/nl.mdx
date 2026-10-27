@@ -1,0 +1,68 @@
+---
+title: 'Waarom daalt de hashrate van mijn miner?'
+description: 'Onderzoek dalende Blocknet-hashrate: vergelijk dezelfde metingen, controleer apparaten, tuning, geheugen, klokken en shares en toets één wijziging tegelijk.'
+tags: ['Problemen oplossen', 'Hashrate', 'seine']
+faq:
+  - q: 'Waarom toont de pool minder hashrate dan de miner?'
+    a: 'De miner telt lokale hashes; de pool schat werk uit ingediende shares binnen een eigen venster. Vergelijk dezelfde rig over een representatieve periode en controleer recente geaccepteerde shares en verbindingsmeldingen. Een kort verschil wijst op zichzelf geen vertraging van hardware aan.'
+  - q: 'Betekenen minder CPU-threads dat er iets mis is?'
+    a: 'Op zichzelf niet. Automatische tuning vergelijkt aantallen threads en codepaden; beschikbaar geheugen kan het actieve aantal beperken. Bekijk tuningmeldingen, geheugen en hashrate per apparaat samen. Noteer eerst wat veranderde voordat je beslist of ingrijpen nodig is.'
+  - q: 'Moet ik meerdere instellingen wijzigen om hashrate te herstellen?'
+    a: 'Begin met een vergelijkbare uitgangssituatie en verander één relevante omstandigheid per keer. Noteer versie, apparaten, belasting en interval. Controleer daarna aanhoudend rekenwerk en nieuwe geaccepteerde shares; één hogere actuele waarde bewijst geen verbetering.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Bepaal welke meting veranderde voordat je een nog draaiende miner aanpast. Deze gids onderscheidt verschillende meetvensters van veranderingen in apparaten, belasting of middelen en onderzoekt een mogelijke oorzaak met een herhaalbare vergelijking. Bewaar de werkende startconfiguratie zodat elke waarneming een bekend beginpunt heeft.
+
+## Waarom kan de hashrate tijdens een sessie dalen?
+
+<Answer>
+Hashrate kan veranderen met actieve apparaten, CPU-threads, beschikbaar geheugen, concurrerende taken of hardwareklokken. Ook verschillende gemiddeldevensters kunnen een daling suggereren. Begin met hetzelfde apparaat en interval, controleer nieuw werk en logs, verander één omstandigheid en observeer het resultaat.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Twee hashratecurves leiden naar controles van apparaten, geheugen en klokken, gevolgd door een vergelijkbare voor-en-nameting." width="1200" height="675" loading="lazy" />
+
+## Bepaal eerst welke waarde daalde
+
+Noteer waar de verandering stond: actuele lokale hashrate, sessiegemiddelde, apparaatregel of poolschatting. Dit zijn verschillende waarnemingen. In seine bestrijken actuele en gemiddelde waarden verschillende perioden; apparaten kunnen werk in groepen rapporteren. De [dashboardgids](/nl/blog/seine-dashboard-explained/) verklaart de velden. Vergelijk een veld eerst met zijn eigen eerdere waarde.
+
+Bewaar eenheid en meetinterval bij elk getal. Reken H/s en kH/s om voordat je vergelijkt. Noteer een recente start, herstart van een backend of hervatting van werk. Een nieuwe sessie heeft een andere geschiedenis dan een langlopend gemiddelde; een vroege piek is een slechte basis voor de hele avond.
+
+## Is de verandering lokaal, bij de pool of bij één apparaat?
+
+Controleer apparaatregels en recente berichten over geaccepteerde shares. Draagt één apparaat minder bij terwijl andere stabiel blijven, onderzoek dat eerst. Blijft lokaal werk vergelijkbaar maar verandert de poolschatting, bekijk shares en verbinding. De [hashrate-uitleg](https://bntpool.com/blog/nl/what-is-hashrate/) verklaart waarom een schatting uit shares afwijkt van lokaal rekenwerk.
+
+Controleer ontvangstadres en rignaam in de poolstatistieken. Meerdere computers onder één adres kunnen het accounttotaal ongeschikt maken voor vergelijking met één computer. Gebruik de [volggids](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/). Is het proces afgesloten of meldt een backend een fout, raadpleeg de [gids over stoppen](/nl/blog/miner-keeps-stopping/); hier gaan we uit van een nog te bekijken sessie.
+
+## Plaats tuning en gewijzigde threadaantallen in context
+
+seine vergelijkt CPU-threadaantallen en kernels tijdens mining en kan passende opgeslagen resultaten hergebruiken. Deze vergelijkingen kunnen de actieve configuratie wijzigen. Lees nabije tuningmeldingen en noteer het actieve aantal voordat je een daling diagnosticeert. De [autotuninggids](/nl/blog/seine-automatic-cpu-tuning/) verklaart de zoektocht en overrides; een gewijzigd aantal bewijst geen achteruitgang.
+
+Controleer of je start dezelfde backends en instellingen kiest als eerder. Een andere snelkoppeling, werkmap of opgeslagen configuratie kan de vergelijking veranderen voordat hardware aan bod komt. Bewaar het werkende commando en raadpleeg de [configuratiegids](/nl/blog/configure-seine-miner/) voor de werkelijk toegepaste waarden. Wis de tuningcache niet vanwege één veranderde meting.
+
+## Controleer ander werk en beschikbaar geheugen
+
+Bekijk processen en geheugen in het besturingssysteem om gelijktijdige veranderingen te vinden. Een game, videotaak, build of andere berekening kan CPU, GPU of geheugen delen. Vergelijk wanneer die optionele taak gepauzeerd of klaar is, als dat uitkomt. Houd het desktopwerk vergelijkbaar; anders beantwoordt de volgende meting een andere vraag.
+
+De automatische CPU-aansturing van seine houdt rekening met beschikbaar geheugen en kan threads verminderen bij krappe middelen. Sommige systemen leveren ook druksignalen. Bekijk log en geheugen samen in plaats van direct het oude aantal af te dwingen. De [RAM-gids](/nl/blog/how-much-ram-to-mine-blocknet/) behandelt allocatie. Keert snelheid terug na een andere taak, noteer die samenhang vóór permanente wijzigingen.
+
+## Kunnen temperatuur of stroomvoorziening dit verklaren?
+
+Temperatuur en klokken kunnen een aanhoudende lokale verandering verklaren wanneer belasting en apparaten verder vergelijkbaar zijn. Intel beschrijft [thermische begrenzing](https://www.intel.com/content/www/us/en/support/articles/000088048.html) als een beschermende verlaging van de CPU-klok. Volg de fabrikant van jouw exacte processor of computer; één temperatuurgrens diagnosticeert niet alle miningcomputers.
+
+Voor NVIDIA onderscheidt de [monitoringdocumentatie](https://docs.nvidia.com/deploy/nvidia-smi/index.html) redenen voor klokbeperking, waaronder warmte en vermogen, en markeert ontbrekende gegevens. Noteer ondersteunde metingen bij de hashrate. Vermeld ook wisselen tussen accu en netvoeding of een gewijzigde energiemodus. Volg koelingsadviezen en laat beveiligingen aan; dit vereist geen gewijzigde spanning of kloklimieten.
+
+## Maak een vergelijking die de vraag kan beantwoorden
+
+Kies één verdachte omstandigheid, zoals een concurrerend programma, en vergelijk verder gelijke intervallen vóór en na de verandering. Noteer versie, backends, threadbeleid, voeding en voorgrondwerk. Maak start en tuning apart herkenbaar. Herhaal bij onduidelijke normale schommelingen, zonder een oorzaak uit één datapunt af te leiden.
+
+Gebruik voor een gericht experiment de [benchmarkgids](/nl/blog/benchmark-seine-miner/) en passende belastingen. Scheid benchmarks van beloningssteekproeven, die ook door bloktijden en shares variëren. Minder elektriciteit beantwoordt eveneens iets anders: de [elektriciteitsgids](/nl/blog/mining-electricity-use/) verbindt energie met verricht werk zodat een stilstaand apparaat niet als nuttige verbetering geldt.
+
+## Controleer het resultaat en bewaar bruikbare gegevens
+
+Bevestig na de gerichte wijziging de gewenste apparaten, een verklaarbaar threadaantal en nieuwe geaccepteerde shares. Vergelijk hetzelfde veld over representatieve intervallen. Bewaar ook resultaten zonder betekenisvol verschil om nutteloze aanpassingen niet te herhalen. Draai niet-relevante wijzigingen terug in plaats van onverklaarde instellingen op te stapelen.
+
+Blijft het patroon bestaan, verzamel versie, systeem, hardware, startinstellingen, relevante logtijden en gepaarde metingen. Vermeld wat gelijk bleef, wat veranderde en of één apparaat of de hele miner werd getroffen. Verwijder inloggeheimen en persoonlijke gegevens vóór delen. Een korte tijdlijn helpt support meer dan een screenshot van één laag getal.
+
+<CTA target="seine" title="Bewaar een herhaalbare seine-configuratie" text="Gebruik dashboard, vergelijkbare waarnemingen en nieuwe shares om een hashrateverandering te begrijpen voordat je instellingen wijzigt." />

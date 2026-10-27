@@ -16,6 +16,8 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent
 REPEAT_SECONDS = 4 * 3600
+# Fleet findings remain visible in reports; only collector outages need nudges.
+REMINDER_CATEGORIES = {'infrastructure', 'ingestion', 'monitor'}
 CONFIRM_SECONDS = 240
 MAX_SENDS = 10
 
@@ -65,7 +67,13 @@ def evaluate(results):
             for row in diagnostics[field]:
                 count = row['affected_installations']
                 if count >= 3:
-                    active.append(issue('diagnostics', [field, row['version']], f'{label(row["version"])}: {count} installations with {title} in 24 hours. Run telemetry/agent_report.py for issue clusters.'))
+                    version = label(row['version'])
+                    attribution = ''
+                    if field == 'recent_unclean_versions':
+                        version = ('Unknown previous version' if row['version'] == 'unknown'
+                                   else f'Previous run {version}')
+                        attribution = ' The restarting version is not assumed to be the interrupted version.'
+                    active.append(issue('diagnostics', [field, row['version']], f'{version}: {count} installations with {title} in 24 hours.{attribution} Run telemetry/agent_report.py for issue clusters.'))
     performance = results.get('performance')
     if performance is not None:
         known.add('ingestion')
@@ -140,8 +148,10 @@ def advance(state, active, known, now, send, persist):
         if present:
             if now - record['first_seen'] < CONFIRM_SECONDS:
                 continue
-            if record['last_sent'] is not None and now - record['last_sent'] < REPEAT_SECONDS:
-                continue
+            if record['last_sent'] is not None:
+                if (record['category'] not in REMINDER_CATEGORIES
+                        or now - record['last_sent'] < REPEAT_SECONDS):
+                    continue
             transition = 'FIRING' if record['last_sent'] is None else 'REMINDER'
         else:
             if record['last_sent'] is None:

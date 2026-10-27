@@ -1,0 +1,62 @@
+---
+title: '¿Puedes minar Blocknet mientras usas tu PC?'
+description: 'Mina Blocknet mientras usas tu PC: elige CPU o GPU, reserva memoria para tus aplicaciones, ajusta los hilos de seine y verifica una configuración diaria.'
+tags: ['Guía de minería', 'Escritorio', 'seine']
+faq:
+  - q: '¿Puedo jugar mientras seine mina?'
+    a: 'Comprueba qué dispositivos necesita el juego y elige los backends adecuados. Minar solo con CPU deja sin usar el backend NVIDIA, pero el juego sigue compartiendo CPU y RAM. Para una sesión exigente, cierra el minero normalmente y vuelve a ejecutar después el comando guardado.'
+  - q: '¿El perfil de eficiencia limita el uso de CPU a un porcentaje?'
+    a: 'El perfil orienta el ajuste hacia menos hilos conservando una fracción del hashrate máximo medido. No impone un porcentaje de uso de CPU ni un objetivo de potencia medida. Comprueba la respuesta del escritorio y la memoria con tus aplicaciones habituales abiertas.'
+  - q: '¿Se conserva un cambio de hilos del panel al reiniciar?'
+    a: 'El cambio se aplica a la sesión actual y desactiva su ajuste automático de CPU. No se guarda como valor de inicio. Para repetir un número fijo, añade la opción de hilos al comando o acceso directo habitual y verifica el siguiente arranque.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Configura seine para que la minería conviva con tus aplicaciones. Esta guía de seine v0.2.38 cubre la elección de dispositivos, la memoria disponible, la reducción de hilos y un inicio reproducible. Parte de una instalación que ya funcione y conserva dirección, pool y directorio de trabajo.
+
+## ¿Puedes usar el ordenador mientras minas?
+
+<Answer>
+Sí. Elige los backends y los hilos de CPU según tu trabajo y prueba la respuesta con las aplicaciones habituales abiertas. Observa memoria, actividad de dispositivos y shares aceptadas. Para un juego o renderizado exigente, cierra el minero normalmente y retoma el inicio guardado cuando termines.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Una aplicación de escritorio y un proceso de minería comparten el ordenador, con controles separados para CPU y GPU." width="1200" height="675" loading="lazy" />
+
+## Empieza por la tarea que quieres mantener fluida
+
+Abre tus aplicaciones habituales. Prueba una acción representativa: cambiar de pestaña, editar un documento o navegar por un proyecto. Observa su respuesta sin minería y repítela con el minero funcionando. Mantén una tarea y un estado de aplicaciones comparables para que el resultado sea útil.
+
+Observa también CPU, memoria y GPU. El [Administrador de tareas](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) de Windows muestra recursos por aplicación; otros sistemas tienen sus monitores. Un porcentaje aislado no indica si queda margen para otra tarea. La [guía de uso de CPU](/es/blog/miner-cpu-usage/) explica los porcentajes y la actividad del minero.
+
+## ¿Qué dispositivo debe minar?
+
+Elige según la aplicación en primer plano. La selección automática usa CPU y dispositivos NVIDIA compatibles detectados. Añadir `--backend cpu` al inicio existente selecciona solo CPU y deja sin usar el backend NVIDIA. La CPU y la RAM siguen compartidas con el escritorio. Comprueba las filas de dispositivos al arrancar.
+
+En una instalación NVIDIA compatible, `--backend nvidia` desactiva la minería con CPU. Las aplicaciones gráficas que usan esa tarjeta comparten memoria y ejecución de GPU; esto no reserva toda la CPU para otros programas. Consulta requisitos y selección de tarjeta en la [guía NVIDIA](/es/blog/mine-blocknet-nvidia-gpu/) y conserva el comando original para comparar.
+
+## Elige un intervalo automático o un número fijo
+
+Para el ajuste automático, considera `--cpu-profile efficiency`. Favorece menos hilos cerca de su objetivo de hashrate; no mide vatios ni garantiza un tiempo de respuesta. `--cpu-autotune-max-threads 2` ilustra cómo limitar la búsqueda. Elige un límite apropiado y consulta la [guía de ajuste](/es/blog/seine-automatic-cpu-tuning/) antes de combinar opciones.
+
+Para una comparación fija, `--threads 2` selecciona dos hilos por backend CPU y normalmente desactiva el ajuste automático. Es un ejemplo de prueba, no una recomendación universal. En el panel, `-` quita un hilo por backend CPU; el cambio reinicia los backends y reconecta el pool conservando estadísticas. Espera a que termine antes de evaluar.
+
+## Deja memoria para el resto del escritorio
+
+Cada hilo de CPU activo usa un área Argon2id de 2 GiB, más la sobrecarga del proceso. Dos áreas suman 4 GiB antes del sistema y las aplicaciones. Calcula con la memoria disponible durante tu trabajo normal: pestañas, editores y proyectos gráficos cambian sus necesidades. La RAM instalada por sí sola no basta.
+
+El dimensionamiento automático deja una reserva configurada; un número explícito de hilos la sustituye. Con un valor fijo debes comprobar la memoria: no garantiza espacio para cualquier aplicación futura. Consulta las reglas en la [guía de RAM](/es/blog/how-much-ram-to-mine-blocknet/). Si tu trabajo necesita más margen, reduce hilos y repite la misma tarea.
+
+## ¿Cuándo conviene detener la minería para otra tarea?
+
+Para una llamada importante, un juego exigente o un renderizado, puedes salir con `q` en el panel o `Ctrl+C` en la terminal. Confirma que el proceso terminó y evalúa la tarea por separado. Después retoma el comando guardado. Así comparas sin cambiar la cuenta, borrar configuraciones ni modificar la protección del sistema.
+
+Mantén la refrigeración y alimentación normales y observa los indicadores térmicos y energéticos del equipo. Aquí no se prescribe una temperatura ni una velocidad de ventilador. Un ordenador suspendido no sigue minando como uno despierto. Ante una salida o suspensión inesperada, identifica el evento con la [guía de detenciones](/es/blog/miner-keeps-stopping/) antes de cambiar más opciones.
+
+## Guarda un inicio adaptado a tu rutina
+
+Cuando el escritorio responda bien, registra el comando completo, el directorio y los backends. Los cambios de hilos del panel duran esa sesión; usa argumentos de inicio para repetirlos. La [guía de configuración](/es/blog/configure-seine-miner/) distingue los campos de conexión guardados de otras opciones. Pon nombres claros a accesos directos para uso diario y sesiones desatendidas.
+
+Verifica el siguiente arranque: dispositivos, hilos activos, memoria disponible y nuevas shares aceptadas. Repite la acción inicial del escritorio. La [guía de seguimiento del pool](https://bntpool.com/blog/es/track-your-miner-on-bntpool/) permite confirmar trabajo acreditado. Busca una configuración reproducible con la que tus aplicaciones habituales sigan haciendo su trabajo.
+
+<CTA target="seine" title="Elige una configuración de seine para tu escritorio" text="Guarda el inicio, selecciona los dispositivos que compartirás y verifica trabajo aceptado junto con la respuesta diaria." />

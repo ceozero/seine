@@ -9,7 +9,7 @@ faq:
     a: 'พูล bntpool.com จ่ายเงินด้วย PPLNS ในช่วงเวลาหกชั่วโมง รางวัลของบล็อกจะจ่ายได้เมื่อบล็อกนั้นอยู่ลึก 60 บล็อกแล้ว ซึ่งใช้เวลาประมาณห้าชั่วโมงเมื่อมีบล็อกทุกห้านาที และจะส่งยอดเงินเมื่อถึง 0.1 BNT คุณจึงควรได้รับเงินครั้งแรกหลายชั่วโมงหลังจากแชร์แรกได้รับการยอมรับ'
   - q: 'ขุด Blocknet ด้วย CPU และ GPU พร้อมกันได้ไหม?'
     a: 'ได้ บน Windows และ Linux โปรแกรมขุด seine ใช้ทุกคอร์ของ CPU และการ์ดจอ NVIDIA ทุกใบในเครื่องพร้อมกัน โดยแฮชเรตของทั้งสองส่วนรวมกัน โปรแกรมปรับจูนหน่วยประมวลผลและการ์ดแต่ละใบแยกกันขณะทำงาน เพื่อให้คุณใช้ฮาร์ดแวร์ทั้งหมดได้เต็มที่โดยไม่ต้องเปลี่ยนการตั้งค่า'
-sourceHash: ad835df628e2
+sourceHash: 'c15449bd790a'
 translation: draft
 ---
 
@@ -26,7 +26,7 @@ translation: draft
 - **ที่อยู่ Blocknet** ติดตั้งกระเป๋าเงินทางการของ Blocknet ไม่ว่าจะเป็น[กระเป๋าเงินแบบบรรทัดคำสั่ง](https://github.com/blocknetprivacy/blocknet/releases/latest) หรือ[กระเป๋าเงินเดสก์ท็อป](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) แล้วคัดลอกที่อยู่ของคุณ [คู่มือกระเป๋าเงิน](/th/blog/blocknet-wallet-for-mining/) อธิบายทีละขั้นตอน เก็บกระเป๋าเงินและวลีกู้คืนไว้บนคอมพิวเตอร์ของคุณเอง อย่านำไปไว้บนริกขุดที่ใช้ร่วมกับผู้อื่น
 - **หรือใช้ชื่อสั้น** หากคุณมี[ชื่อสั้นของ Blocknet ID](/th/blog/blocknet-id-pay-by-name/) จาก [blocknet.id](https://blocknet.id) คุณสามารถขุดไปยัง `@name` แทนการวางที่อยู่ยาวได้
 - **RAM ประมาณ 2 GB ต่อเธรดขุด** โปรแกรมขุด seine ปรับการใช้ทรัพยากรให้เหมาะกับเครื่องและเผื่อหน่วยความจำให้ระบบ คุณจึงไม่ต้องคำนวณเองก่อน
-- **Windows, macOS หรือ Linux** บน Windows และ Linux โปรแกรมจะใช้การ์ดจอ NVIDIA โดยอัตโนมัติเมื่อติดตั้งไดรเวอร์รุ่นใหม่แล้ว
+- **Windows, macOS หรือ Linux** NVIDIA — Windows: ไดรเวอร์จอแสดงผล NVIDIA และไฟล์ DLL รันไทม์ที่ให้มา วางไว้ข้างไฟล์โปรแกรม; Linux: ไดรเวอร์ NVIDIA และไลบรารีรันไทม์ NVRTC ที่เข้ากันได้.
 
 ## ขั้นที่ 1: ดาวน์โหลด seine
 
@@ -35,7 +35,7 @@ translation: draft
 | ระบบ | ไฟล์ดาวน์โหลด | การ์ดจอ |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; รวม CUDA runtime มาให้แล้ว |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA เมื่อติดตั้งไดรเวอร์แล้ว |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | ไดรเวอร์ NVIDIA และไลบรารีรันไทม์ NVRTC ที่เข้ากันได้; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 หรือใหม่กว่า) |
 | macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ translation: draft
 
 | ฮาร์ดแวร์ | เธรด | แฮชเรต |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49.4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68.3 H/s |
 | เซิร์ฟเวอร์ Arm (AWS Graviton4) | 32 | 39.3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38.2 H/s |
 | Apple M4 Max (48 GB MacBook Pro) | 16 | 30.9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26.0 H/s |
+
+การตั้งค่าที่เร็วที่สุดในการวัดเหล่านี้คือ AMD EPYC 9355P ที่ 68.3 H/s โดยใช้ 64 เธรดขุด RAM 192 GiB และ huge pages ขนาด 1 GiB ที่เตรียมด้วยตนเองบน Linux
 
 ผลของ CPU ทุกตัวที่ทดสอบอยู่ใน[หน้าประสิทธิภาพ](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md) และ[คู่มือฮาร์ดแวร์ขุด Blocknet](/th/blog/blocknet-mining-hardware-hashrate/) อธิบายว่า RAM และแบนด์วิดท์หน่วยความจำกำหนดตัวเลขเหล่านี้อย่างไร
 

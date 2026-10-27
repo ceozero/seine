@@ -1,0 +1,62 @@
+---
+title: 'Pourquoi votre mineur n''utilise pas 100% du CPU'
+description: 'Comprenez l''utilisation CPU avec seine pour Blocknet. Vérifiez threads actifs, mémoire, backend et travail accepté avant de modifier vos réglages de minage.'
+tags: ['Guide de minage', 'Utilisation CPU', 'seine']
+faq:
+  - q: 'Un mineur doit-il toujours utiliser 100% du CPU ?'
+    a: 'Non. Le pourcentage global décrit les processeurs disponibles pour le système, tandis que seine mesure les hachages terminés. Le nombre utile de threads dépend de la mémoire et du débit mesuré. Vérifiez threads, hashrate et travail accepté avant de modifier un pourcentage inférieur.'
+  - q: 'Pourquoi seine choisit-il moins de threads ?'
+    a: 'Chaque thread CPU actif utilise une zone de 2 GiB et partage la bande passante mémoire. La sélection automatique tient compte de la mémoire et du débit, sans imposer un thread par processeur logique. Les limites explicites, le backend et l''environnement comptent aussi.'
+  - q: 'Que vérifier si utilisation et hashrate baissent ?'
+    a: 'Vérifiez le backend CPU, les threads, les messages de réglage et de mémoire, et la présence d''un travail courant. Comparez le même appareil et intervalle, puis la charge de fond et les limites. Pour la connexion ou un hashrate nul côté pool, suivez le guide de suivi.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Interprétez l'utilisation CPU pendant que seine mine Blocknet. Ce guide relie le pourcentage aux threads actifs, H/s locaux et shares acceptés de v0.2.36, avec des vérifications avant tout réglage. Pour installer, commencez par le [guide de minage](/fr/blog/how-to-mine-blocknet/).
+
+## Une utilisation moindre signifie-t-elle moins de travail utile ?
+
+<Answer>
+Le pourcentage seul ne mesure pas le travail terminé. Vérifiez backend CPU, threads actifs, hashrate local et travaux reçus. seine peut choisir moins de threads que de processeurs logiques. Comparez le travail accompli dans des conditions constantes avant de changer le nombre.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Une grille d&#x27;activité et un compteur de travail sont deux observations, reliées par les vérifications des threads, de la mémoire et des travaux." width="1200" height="675" loading="lazy" />
+
+## Identifiez d'abord la portée du pourcentage
+
+Sous Windows, distinguez le processus seine du total de la machine. Trouvez-le dans le Gestionnaire des tâches, puis consultez Performances et CPU. Les graphes des processeurs logiques montrent la répartition, le total combine la machine. Le [guide Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) décrit ces vues. Notez celle utilisée.
+
+Sous Linux, le pourcentage du processus dans `top` peut avoir une autre échelle que le résumé. En mode Irix, un processus multithread peut dépasser 100% ; Solaris divise par le nombre de processeurs. La vue des threads change les lignes. Consultez le [manuel top](https://man7.org/linux/man-pages/man1/top.1.html) avant comparaison. Changer d'échelle ne mesure pas un changement de vitesse.
+
+## Vérifiez quel appareil travaille
+
+Lisez H/s et threads actifs dans la ligne CPU du [tableau de bord](/fr/blog/seine-dashboard-explained/). Un total CPU+GPU inclut d'autres travaux ; comparez le même appareil. Si la commande sélectionne uniquement NVIDIA, une faible charge CPU de minage est attendue. Le [guide NVIDIA](/fr/blog/mine-blocknet-nvidia-gpu/) explique ce choix.
+
+Ne confondez pas threads de minage et threads du processus système. seine exécute aussi réseau, contrôle et rapports ; le processus peut donc afficher plus de threads que la ligne CPU. Vérifiez combien calculent des hachages et terminent du travail, plutôt que l'occupation de chaque thread.
+
+## Pourquoi la mémoire peut-elle limiter les threads ?
+
+Chaque thread CPU actif utilise une zone de 2 GiB pour Argon2id. La mémoire disponible compte autant que les processeurs ; le dimensionnement automatique garde de la place pour le système. Lisez le nombre réel et les messages, sans transformer la RAM installée en capacité garantie. Le [guide RAM](/fr/blog/how-much-ram-to-mine-blocknet/) détaille budget, réserve et allocation.
+
+La capacité indique combien de zones tiennent ; la bande passante influence les échanges simultanés. Un thread peut rester compté occupé en attendant la mémoire. Une faible utilisation ne prouve donc pas un goulot de bande passante ; remplir la jauge ne prouve pas les meilleurs H/s. Le [guide Argon2id](/fr/blog/argon2id-proof-of-work-explained/) décrit ce fonctionnement.
+
+## Lisez l'automatisation et les réglages explicites
+
+L'ajustement automatique compare threads et kernels sur le travail mesuré. Un nombre inférieur peut être un résultat valide ; la mémoire disponible peut aussi le modifier. Laissez finir l'essai et lisez les messages avant de juger un échantillon. Le [guide d'ajustement](/fr/blog/seine-automatic-cpu-tuning/) explique décisions et cache.
+
+Examinez la commande réelle. `--threads`, un maximum de recherche ou un profil CPU peuvent modifier sélection et recherche ; l'affinité modifie le placement. Conteneurs, machines virtuelles et limites du système peuvent exposer moins de capacité que l'hôte. Conservez la configuration et identifiez le réglage avant de l'augmenter.
+
+## Et si utilisation et H/s diminuent ensemble ?
+
+Vérifiez d'abord que le backend CPU est actif et reçoit du travail. Cherchez travail courant, connexion, ajustements mémoire et erreurs dans le journal. Préparation et essais de réglage fournissent un contexte absent de la jauge système. Si le GPU continue, examinez les appareils séparément.
+
+Comparez ensuite un intervalle stable avec mêmes version, backend et réglages. Notez applications, mémoire, alimentation et heure. Pour comparer localement, suivez le [guide de benchmark](/fr/blog/benchmark-seine-miner/) et gardez tous les rapports. Distinguez procédure et session pool ; un pic ou pourcentage isolé n'est pas un résultat matériel.
+
+## Terminez par le travail accompli et accepté
+
+En minage normal, vérifiez la progression des hachages CPU et les réponses de shares acceptés. Les shares arrivent par intervalles ; un instant calme ne fixe pas de compte à rebours. Le pool estime le hashrate sur les soumissions au fil du temps. Le [guide de suivi](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) explique cette vue et la connexion.
+
+Gardez version, commande, backend, threads CPU, H/s locaux, outil et vue système, mémoire et fenêtre du pool. Si le travail progresse, la jauge globale apporte du contexte. Sinon, suivez le guide de l'étape concernée. Chaque changement répond ainsi à une question précise avec un résultat comparable.
+
+<CTA target="seine" title="Suivez le minage CPU avec seine" text="Téléchargez seine et vérifiez ensemble threads actifs, hashrate et travail accepté dans le tableau de bord." />

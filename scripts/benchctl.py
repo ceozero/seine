@@ -1466,6 +1466,13 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--label", help="optional experiment label")
     add_artifact_arguments(run)
     run.add_argument("command", nargs=argparse.REMAINDER, help="command argv after --")
+    campaign = subparsers.add_parser(
+        "campaign", help="run or resume a serial build/correctness/screen/confirm queue"
+    )
+    campaign.add_argument("plan", type=Path, help="campaign JSON; paths are relative to this file")
+    campaign.add_argument("--output-dir", type=Path, required=True)
+    campaign.add_argument("--resume", action="store_true", help="preserve completed stages and retry interrupted stages")
+    campaign.add_argument("--status", action="store_true", help="print saved decisions and timing without running commands")
     return parser
 
 
@@ -1473,6 +1480,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.subcommand == "campaign":
+            from bench_campaign import CampaignError, run_campaign
+            try:
+                return run_campaign(args.plan, args.output_dir, args.resume, args.status)
+            except (CampaignError, OSError) as exc:
+                raise BenchctlError(str(exc)) from exc
         if args.subcommand == "preflight":
             report = collect_preflight(args.repo, args.artifact)
             if args.output:

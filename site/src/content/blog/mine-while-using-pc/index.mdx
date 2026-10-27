@@ -1,0 +1,63 @@
+---
+title: 'Can you mine Blocknet while using your PC?'
+description: 'Mine Blocknet while using your PC: choose CPU or GPU backends, leave memory for apps, adjust seine threads and verify a setup that fits your daily work.'
+date: 2026-10-26
+tags: ['Mining guide', 'Desktop', 'seine']
+faq:
+  - q: 'Can I game while seine is mining?'
+    a: 'Check which devices the game needs and choose the mining backends accordingly. CPU-only mining leaves the NVIDIA mining backend unused, but the CPU and system memory are still shared with the game. For a demanding session, close the miner normally and restart your recorded command afterward.'
+  - q: 'Does the efficiency profile limit CPU usage to a percentage?'
+    a: 'The efficiency profile guides CPU tuning toward a smaller thread count that retains a chosen fraction of measured peak hashrate. It is not an operating-system CPU-percentage limit or a measured power target. Check desktop responsiveness and memory use with your normal applications open.'
+  - q: 'Will a dashboard thread change survive a restart?'
+    a: 'Dashboard thread changes apply to the current run and disable CPU autotuning for that run. They are not saved as a new startup default. To repeat a fixed count, put the threads option in your usual launch command or shortcut, then verify the next launch.'
+related: [mining-electricity-use, miner-cpu-usage, seine-automatic-cpu-tuning, how-much-ram-to-mine-blocknet]
+image: /assets/blog/mine-while-using-pc.svg
+---
+
+Set up seine so that mining fits around the applications you actually use. This guide covers sharing a desktop in seine v0.2.38: choosing devices, leaving memory available, trying a smaller CPU thread count and keeping a repeatable launch. Begin with a working mining setup and keep its address, pool and working directory unchanged.
+
+## Can you use your computer while mining?
+
+<Answer>
+Yes. Choose the mining backends and CPU thread count around your desktop workload, then check responsiveness with your usual applications open. Watch available memory, device activity and accepted shares together. For a demanding game or rendering session, close the miner normally and restart the saved launch when that work finishes.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="A desktop application and a mining process share a computer, with separate controls for CPU work and GPU work." width="1200" height="675" loading="lazy" />
+
+## Start with the work you want to keep responsive
+
+Open the applications you normally use before choosing a mining configuration. Try a representative action such as switching browser tabs, editing a document or moving around a project. Note how that action feels without mining, then repeat it with your current miner running. Keep the task and application state similar so that the comparison answers a useful question.
+
+Inspect CPU, memory and GPU activity alongside that experience. Windows [Task Manager](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) can show resource use by application; other operating systems provide their own monitors. A single utilization percentage does not establish whether your desktop has enough room for another task. The [CPU usage guide](/blog/miner-cpu-usage/) explains the miner-side percentages and device activity in more detail.
+
+## Which device should do the mining?
+
+Choose devices according to the foreground application. With automatic backend selection, seine uses the CPU and supported NVIDIA devices it detects. Adding `--backend cpu` to your existing launch selects CPU mining only, leaving the NVIDIA mining backend unused. System RAM and CPU time still need to accommodate the desktop. Verify the active device rows after launching.
+
+A supported NVIDIA setup can instead use `--backend nvidia` when you want to leave CPU mining disabled. GPU memory and GPU execution are then shared with graphics applications using that card; this choice is not a reservation of the whole CPU for other software. Follow the [NVIDIA guide](/blog/mine-blocknet-nvidia-gpu/) for runtime requirements and card selection, and retain the original command for comparison.
+
+## Choose an automatic range or a fixed thread count
+
+For automatic CPU tuning, consider `--cpu-profile efficiency`. This profile favors a smaller count near its hashrate target; it does not measure watts or enforce a desktop response-time target. You can bound the search with `--cpu-autotune-max-threads 2` as an illustrative ceiling. Choose a count appropriate to your own machine and read the [autotuning guide](/blog/seine-automatic-cpu-tuning/) before combining overrides.
+
+For a deliberately fixed comparison, `--threads 2` selects two CPU threads per CPU backend and ordinarily disables CPU autotuning. It is a test setting, not a universal recommendation. In the dashboard, `-` removes one thread per CPU backend; that manual adjustment restarts mining backends and reconnects the pool while keeping session statistics. Wait for the change to finish before judging the result.
+
+## Leave memory available for the rest of the desktop
+
+Each active CPU mining thread uses a 2 GiB Argon2id arena, with additional process overhead. Two such arenas account for 4 GiB before the operating system and other applications. Budget from available memory while your normal workload is open. Browser tabs, editors and graphics projects can change that requirement during the day, so installed RAM alone is an incomplete budget.
+
+Automatic sizing leaves a configured memory reserve, but an explicit thread count overrides that reserve. A fixed count therefore needs your own memory check; it is not automatically a promise that enough RAM remains for every future application. Follow the [RAM planning guide](/blog/how-much-ram-to-mine-blocknet/) for the sizing rules. Prefer a smaller count when your usual workload needs more room, and compare the same desktop task again.
+
+## When should you stop mining for another task?
+
+For an important call, demanding game or rendering job, a clear option is to quit with `q` in the dashboard or `Ctrl+C` in the terminal. Confirm the miner has exited before judging the foreground task on its own. Restart your recorded command afterward. This gives you a clean comparison without changing account settings, deleting configuration files or modifying operating-system protection.
+
+Keep normal cooling and power arrangements in place during everyday use. Observe your computer's own thermal and power indicators; no particular temperature or fan setting is prescribed here. A sleeping computer does not continue its mining session as an awake computer would. If an unexpected exit or sleep event interrupts work, use the [stopping guide](/blog/miner-keeps-stopping/) to identify the event before changing more settings.
+
+## Save a launch that matches your everyday routine
+
+Once the desktop feels responsive, record the complete launch command, working directory and selected backends. Dashboard thread adjustments are session-only, so use the launch arguments for a count you want to repeat. The [configuration guide](/blog/configure-seine-miner/) distinguishes saved connection fields from other command-line choices. Give separate shortcuts clear names if you keep different settings for desktop use and unattended sessions.
+
+Verify the next launch rather than assuming it matches the previous session. Check the device rows, active CPU threads, available memory and fresh accepted shares, then repeat the desktop action you started with. The [pool tracking guide](https://bntpool.com/blog/track-your-miner-on-bntpool/) helps confirm credited work. A useful everyday setup is one you can reproduce while your normal applications continue to do their jobs.
+
+<CTA target="seine" title="Choose a seine setup for your desktop" text="Keep a recorded launch, select the devices you want to share and verify accepted work alongside everyday responsiveness." />

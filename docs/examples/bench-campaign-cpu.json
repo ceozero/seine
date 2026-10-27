@@ -1,0 +1,52 @@
+{
+  "schema": "seine-benchmark-campaign/v1",
+  "experiments": [
+    {
+      "id": "cpu-candidate",
+      "hypothesis": "Candidate improves backend throughput on the target CPU with shipping defaults.",
+      "cwd": "../..",
+      "inputs": ["Cargo.lock", "pow-kernel/src/fixed_argon.rs"],
+      "artifacts": ["data/campaign-baseline/seine", "target/release/seine"],
+      "stages": {
+        "build": {
+          "argv": ["cargo", "build", "--release", "--no-default-features"],
+          "timeout_seconds": 1800
+        },
+        "correctness": {
+          "argv": ["cargo", "test", "--release", "-p", "blocknet-pow-kernel"],
+          "timeout_seconds": 900
+        },
+        "screen": {
+          "argv": [
+            "bash", "scripts/bench_cpu_ab.sh",
+            "--baseline-dir", "{cwd}", "--candidate-dir", "{cwd}",
+            "--baseline-binary", "{cwd}/data/campaign-baseline/seine",
+            "--candidate-binary", "{cwd}/target/release/seine",
+            "--bench-kind", "backend", "--threads", "1",
+            "--pairs", "2", "--bench-secs", "10", "--bench-rounds", "1",
+            "--bench-warmup-rounds", "1", "--cooldown-secs", "5",
+            "--output-dir", "{stage_dir}"
+          ],
+          "timeout_seconds": 300,
+          "pairs": 2,
+          "max_regression_pct": 2
+        },
+        "confirm": {
+          "argv": [
+            "bash", "scripts/bench_cpu_ab.sh",
+            "--baseline-dir", "{cwd}", "--candidate-dir", "{cwd}",
+            "--baseline-binary", "{cwd}/data/campaign-baseline/seine",
+            "--candidate-binary", "{cwd}/target/release/seine",
+            "--bench-kind", "backend", "--threads", "1",
+            "--pairs", "4", "--bench-secs", "30", "--bench-rounds", "3",
+            "--bench-warmup-rounds", "1", "--cooldown-secs", "15",
+            "--output-dir", "{stage_dir}"
+          ],
+          "timeout_seconds": 1800,
+          "pairs": 4,
+          "require_improvement_pct": 1
+        }
+      }
+    }
+  ]
+}

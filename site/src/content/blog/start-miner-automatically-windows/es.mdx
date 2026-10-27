@@ -1,0 +1,68 @@
+---
+title: 'Iniciar el minero de Blocknet automáticamente en Windows'
+description: 'Inicia seine al entrar en Windows con el Programador de tareas. Conserva tu configuración, evita ejecuciones duplicadas y comprueba los shares aceptados.'
+tags: ['Guía de minería', 'Windows', 'Configuración']
+faq:
+  - q: '¿Se inicia el minero antes de entrar en Windows?'
+    a: 'Esta configuración inicia seine cuando el usuario de Windows elegido inicia sesión y lo ejecuta dentro de ella. No crea un servicio en segundo plano. Tras reiniciar el equipo, entra con esa cuenta para activar la tarea y comprueba los shares aceptados.'
+  - q: '¿El Programador de tareas conserva mi configuración?'
+    a: 'Utiliza la misma cuenta de Windows, la carpeta de datos existente y los parámetros de tu comando habitual. Indica una ruta absoluta a los datos en los argumentos y el directorio de trabajo correcto. Así seine encontrará la dirección, el pool y el nombre del equipo guardados.'
+  - q: '¿Cómo desactivo la minería automática?'
+    a: 'Deshabilita la tarea en el Programador para impedir futuros inicios y después detén normalmente el minero en su ventana. Deshabilitar una tarea no cierra un proceso que ya está funcionando. Puedes volver a habilitarla cuando quieras iniciar la minería al entrar en Windows.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Configura Windows para abrir tu instalación funcional de seine al iniciar sesión. Usaremos el Programador de tareas, dentro de tu sesión y con una forma clara de desactivarlo. Completa primero la [configuración de minería en Windows](/es/blog/mine-blocknet-on-windows/) y confirma que el pool acepta shares. Automatizar un comando que ya funciona facilita comprobar el resultado.
+
+## ¿Cómo se inicia automáticamente un minero de Blocknet?
+
+<Answer>
+Crea una tarea para tu cuenta de Windows, actívala al iniciar sesión y apunta su acción al ejecutable de seine extraído. Indica las carpetas de datos y trabajo existentes, impide otra instancia de la misma tarea y verifica los shares aceptados después de probar el inicio.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Un usuario inicia sesión en Windows, el Programador abre un minero y los shares aceptados llegan al pool." width="1200" height="675" loading="lazy" />
+
+## ¿Qué archivos y ajustes debes conservar?
+
+Elige una carpeta estable para la versión extraída. Conserva juntos todos los archivos del paquete, incluidas las bibliotecas, y apunta al ejecutable de esa carpeta. Localiza los datos que utiliza tu ejecución manual. Por defecto, seine utiliza `./seine-data` respecto al directorio de trabajo y guarda allí la conexión en `seine.config.json`. Otra carpeta de inicio puede hacer que busque otra configuración.
+
+Los ejemplos usan `C:\Users\YOUR_USER\Apps\seine`; sustituye la ruta completa por tu carpeta real. Conserva los datos donde estén. Guarda también el comando que funciona: los parámetros explícitos de backend o ajuste pueden seguir siendo necesarios. No necesitas la frase de recuperación ni las claves privadas del monedero para crear esta tarea.
+
+## Crea la tarea de inicio de sesión
+
+Abre **Programador de tareas** desde Inicio y selecciona **Crear tarea**. Ponle un nombre reconocible, como **seine mining**. En **General**, elige la misma cuenta de la ejecución manual y **Ejecutar solo cuando el usuario haya iniciado sesión**. Deja desmarcado **Ejecutar con los privilegios más altos** para esta configuración normal. En **Desencadenadores**, añade **Al iniciar sesión**, selecciona tu usuario y habilita el desencadenador. Microsoft explica este comportamiento en su [documentación de inicio de sesión](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+En **Acciones**, añade **Iniciar un programa** y completa los campos por separado:
+
+- **Programa o script:** selecciona `C:\Users\YOUR_USER\Apps\seine\seine.exe` mediante Examinar.
+- **Agregar argumentos:** introduce `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` con tu carpeta de datos existente y después los parámetros de tu comando habitual.
+- **Iniciar en:** introduce `C:\Users\YOUR_USER\Apps\seine` sin comillas.
+
+El [directorio de trabajo](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) establece la carpeta inicial del proceso. No pongas parámetros en Programa o script ni el nombre del ejecutable en Iniciar en. Selecciona el archivo real; no dejes la ruta de ejemplo.
+
+## Ajusta las condiciones de ejecución
+
+En **Configuración**, permite ejecutar la tarea a petición para probarla. Si ya está en ejecución, selecciona **No iniciar una instancia nueva**. Esta [política de instancias](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) solo se aplica a la tarea programada: no detecta un minero abierto manualmente. Cierra la instancia manual antes de probar. Un único proceso intencionado facilita la comprobación y evita otra copia con la misma configuración.
+
+Para minar continuamente mientras mantienes la sesión, desmarca **Detener la tarea si se ejecuta durante más de**; el Programador tiene un [límite de ejecución](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Revisa **Condiciones**: exigir inactividad puede impedir el inicio inmediato de la prueba. En un portátil, conservar las condiciones de alimentación de CA restringe este flujo al uso conectado a la corriente. Guarda la tarea con las opciones que encajen con tu uso.
+
+## ¿Cómo compruebas que la minería automática funciona?
+
+Detén normalmente el minero manual, selecciona la tarea guardada y pulsa **Ejecutar**. Comprueba la dirección de pago, el pool y el nombre del equipo en la ventana; espera shares aceptados. Busca esa dirección en My Stats de bntpool.com y confirma que el equipo esperado envía trabajo. El estado de tarea en ejecución solo confirma un proceso; los shares aceptados confirman trabajo útil para el pool.
+
+Para probar el desencadenador real, guarda tu trabajo, cierra sesión y vuelve a entrar con el usuario seleccionado. Bloquear y desbloquear el escritorio es otra acción. Confirma de nuevo la dirección y los shares recientes. La [guía del panel](/es/blog/seine-dashboard-explained/) explica los dispositivos y la conexión. Anota el nombre de la tarea y las carpetas para futuras actualizaciones.
+
+## ¿Qué revisar si no se inicia?
+
+Compara ejecutable, cuenta, argumentos e Iniciar en con el comando manual que funciona. Si vuelve a pedir la configuración inicial, revisa primero la ruta de datos y el acceso a ella. Si no carga una biblioteca, comprueba que extrajiste todo el paquete. Si no aparece una ventana, revisa el desencadenador habilitado y las condiciones de alimentación e inactividad antes de cambiar ajustes del minero.
+
+Si funciona pero no aparecen shares, comprueba su dirección y conexión al pool y después los shares recientes del equipo. Si dos ordenadores usan el mismo monedero, asigna nombres distintos con la [guía para varios ordenadores](https://bntpool.com/blog/es/mine-multiple-computers-one-wallet/). Mantén la tarea dedicada a abrir la configuración probada; diagnostica la conexión o el hardware en el minero en ejecución.
+
+## Desactiva el inicio o actualiza el minero
+
+Para impedir futuros inicios, selecciona la tarea y pulsa **Deshabilitar**. Detén normalmente el minero que ya esté abierto; deshabilitar la tarea no lo detiene. Vuelve a habilitarla cuando quieras recuperar el inicio de sesión automático. La elección queda visible y reversible sin modificar los ajustes generales de inicio o suspensión de Windows.
+
+Antes de sustituir una versión, deshabilita la tarea y detén el minero. Sigue la [guía de actualización](/es/blog/update-seine-miner/), conserva los datos y actualiza la acción si cambió la ruta del ejecutable. Prueba con Ejecutar antes de reactivar el desencadenador. Para iniciar minería como servicio de Linux, utiliza la [configuración de servidores](/es/blog/mine-blocknet-on-servers/), cuyo procedimiento es distinto de este inicio de sesión en Windows.
+
+<CTA target="seine" title="Descarga seine para Windows" text="Utiliza la versión oficial de Windows, verifica los primeros shares aceptados y automatiza la configuración que funciona." />

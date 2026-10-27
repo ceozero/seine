@@ -1,0 +1,62 @@
+---
+title: 'Por que meu minerador de Blocknet fica parando?'
+description: 'Descubra por que o minerador de Blocknet para: verifique mensagens, memória, inicialização da GPU e suspensão e confirme uma reinicialização estável.'
+tags: ['Solução de problemas', 'Guia de mineração', 'seine']
+faq:
+  - q: 'Uma desconexão sempre indica que o minerador travou?'
+    a: 'Uma queda na conexão com o pool pode deixar o processo ativo enquanto ele se reconecta. Verifique se continua em execução, leia as mensagens recentes e procure novos shares aceitos após a reconexão. Um aplicativo fechado ou relatório de falha do sistema exige outra investigação.'
+  - q: 'Devo apagar a configuração quando o seine para?'
+    a: 'Preserve a configuração e anote onde ela está antes de mudar algo. Uma mensagem de análise aponta o arquivo ou valor a conferir. Faça uma cópia, corrija o problema indicado e mantenha o endereço e os argumentos de inicialização. Apagar tudo dificulta comparar com a última execução que funcionou.'
+  - q: 'Quais informações ajudam a investigar paradas repetidas?'
+    a: 'Anote versão do seine, sistema operacional, CPU, GPU, memória disponível, argumentos completos, diretório de trabalho e horário. Inclua as últimas mensagens e eventos relevantes do sistema. Remova credenciais e dados pessoais antes de compartilhar; nunca inclua frase de recuperação nem chaves privadas.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Mantenha seu minerador de Blocknet funcionando de forma consistente identificando onde ele para. Este guia segue o seine v0.2.37 e começa com evidências disponíveis no seu computador. Guarde o último comando e configuração que funcionaram e altere uma opção relevante por vez, para que o próximo resultado seja informativo.
+
+## O que verificar quando o minerador para?
+
+<Answer>
+Verifique se o processo encerrou, se o computador suspendeu ou se a conexão com o pool está se recuperando. Guarde a última mensagem e o horário antes de reiniciar. Relacione as evidências à configuração, alocação de memória, inicialização da GPU ou evento do sistema e confirme a correção com novos shares aceitos.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Um log do minerador leva a verificações separadas do aplicativo, memória e energia, seguidas de uma reinicialização verificada." width="1200" height="675" loading="lazy" />
+
+## Mantenha a última mensagem visível
+
+Abra um terminal no diretório habitual e execute seu comando existente. Acrescente `--ui plain` para logs de texto em vez do painel, preservando os outros argumentos. Isso inicia mineração com a configuração atual. Copie as mensagens finais, incluindo o primeiro erro antes das mensagens repetidas de reconexão ou encerramento.
+
+Registre juntos versão do executável, diretório de trabalho e diretório de dados selecionado. Nesta versão, um erro fatal tratado aparece com `fatal:` antes da saída. Um encerramento pelo sistema pode deixar outras evidências. Se o processo continua ativo, siga as [verificações de conexão](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/): um share ausente ou uma desconexão temporária não comprova um travamento.
+
+## Ele para antes de começar a minerar?
+
+Leia o arquivo, opção ou biblioteca mencionado na inicialização. Um erro ao analisar a configuração aponta um arquivo específico; faça uma cópia antes de corrigir a sintaxe. Confira o diretório de trabalho do atalho ou serviço. O [guia de configuração](/pt-br/blog/configure-seine-miner/) explica como o mesmo executável pode ler ajustes diferentes conforme a pasta de execução.
+
+Se o executável não abre, confira o pacote para seu sistema e arquitetura e use a versão oficial. Para um alerta de segurança, siga o [guia de verificação do download](/pt-br/blog/antivirus-flags-crypto-miner/). Mantenha a proteção ativa enquanto identifica arquivo e mensagem. Se começou após uma atualização, compare caminho e argumentos com o [procedimento de atualização](/pt-br/blog/update-seine-miner/).
+
+## A mensagem menciona memória ou páginas?
+
+Ajuste a quantidade solicitada de threads de CPU à memória disponível, incluindo outros aplicativos e limites de contêineres. Uma falha de alocação indica um recurso a investigar, mas não comprova RAM defeituosa. Feche tarefas desnecessárias ou reduza uma quantidade imposta de threads e tente uma vez. Anote qual mudança afetou o resultado e se a mineração começou.
+
+Um modo de páginas explicitamente obrigatório exige a reserva correspondente do sistema. Falha na alocação de huge pages obrigatórias e falta de memória comum são verificações diferentes. Consulte o [guia de RAM](/pt-br/blog/how-much-ram-to-mine-blocknet/) para capacidade e o [guia de huge pages](/pt-br/blog/huge-pages-blocknet-mining/) para configuração. Evite mudar várias opções de ajuste juntas: uma configuração simples e conhecida facilita interpretar o próximo log.
+
+## Verifique a etapa de GPU separadamente
+
+Se a inicialização cita biblioteca CUDA, dispositivo ou alocação de GPU, registre a mensagem exata e a versão instalada do driver. O [guia NVIDIA](/pt-br/blog/mine-blocknet-nvidia-gpu/) cobre requisitos, bibliotecas e seleção de dispositivos. Compare com seu ambiente antes de modificar kernel ou ajustes. Um download bem-sucedido não comprova que o ambiente de execução está pronto.
+
+O seine pode isolar uma falha de backend enquanto outros backends ativos continuam. Confira as mensagens e a atividade restante antes de concluir que todo o aplicativo parou. Guarde as evidências antes de reiniciar, pois a nova sessão pode ocultar a sequência anterior. Ao testar uma seleção mais simples, preserve o comando original e compare inicialização, trabalho contínuo e envios aceitos.
+
+## O computador suspendeu ou reiniciou?
+
+Compare o horário com suspensão, hibernação, reinicializações e histórico de tarefas agendadas. Desligar a tela e suspender o computador são ajustes separados. No Windows, confira as [opções de energia e suspensão](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11) e se houve fechamento da tampa ou troca da fonte de energia. Escolha ajustes adequados ao uso e à refrigeração da máquina.
+
+Para uma saída inesperada, examine os logs de aplicativo e sistema próximos daquele horário. O [Visualizador de Eventos](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) do Windows pode associar um erro ao executável. Uma reinicialização completa exige também evidências do sistema. Em uma instalação gerenciada por serviço, confira estado de saída e log antes de ativar reinícios repetidos que escondam a causa original.
+
+## Verifique a correção e prepare um relatório útil
+
+Após a correção específica, abra pelo atalho, terminal ou serviço habitual. Confirme destino, backends ativos e novos shares aceitos. Observe a situação anterior à parada, como uso normal do desktop ou próxima execução agendada, sem reproduzir condições inseguras de hardware. O [guia do painel](/pt-br/blog/seine-dashboard-explained/) distingue trabalho atual de estatísticas acumuladas.
+
+Se voltar a parar, reúna versão, sistema, hardware, memória disponível, opções exatas, horário e últimas mensagens. Explique o que mudou e se todo o processo encerrou ou apenas um backend parou. Remova credenciais e dados pessoais; nunca compartilhe seed ou chaves privadas. Preserve a configuração funcional e não deduza a causa apenas pelo hashrate.
+
+<CTA target="seine" title="Obtenha a versão atual do seine" text="Mantenha uma versão verificada e seu comando de inicialização e confirme trabalho aceito após cada correção específica." />

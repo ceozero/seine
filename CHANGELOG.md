@@ -4,14 +4,76 @@ Short release notes for miners deciding whether to upgrade. Lead with the bigges
 user benefit, name the hardware for measured gains, and include required upgrade
 steps. Keep test results and implementation details in the engineering docs.
 Each `## vX.Y.Z` section becomes the corresponding GitHub release body.
+Never mention competitors in release notes; describe Seine improvements and
+supported hardware only.
 
 ## Unreleased
+
+- **Up to about 6% faster CPU hashing on Linux with AMD Zen 3 processors** (measured on EPYC 7R13).
+
+## v0.2.38
+
+- **Up to about 16% faster CPU hashing on AMD Zen 4 servers** (measured on 32-core EPYC 9R14) for systems using the default memory-streaming kernel, and up to about 3% on Ryzen 9000 (measured on Ryzen 7 9700X).
+- **Up to about 8% faster CPU hashing on Linux with AMD Zen 2 and Zen 3 processors** (measured on EPYC 7R32 and EPYC 7R13).
+- `seine --bench` now measures the same CPU kernel that mining uses, so benchmark results match real mining speed on AMD Zen 2 to Zen 5.
+
+## v0.2.37
+
+- **About 67% faster CPU hashing on Linux with AMD Zen 2 processors (measured on EPYC 7R32) and about 48% faster with Zen 3 (measured on EPYC 7443P)**, using a new memory-streaming kernel.
+- **About 31% faster for miners who set `--threads` on AMD Ryzen 9000** (measured on Ryzen 7 9700X): fixed thread counts on AMD Zen 4 and Zen 5 CPUs now use the streaming kernel, and automatic tuning now starts from it on every Zen 4 and Zen 5 model.
+- Seine now suggests removing `--threads` when the setting leaves more than half of the machine's cores and free memory unused.
+- Slightly faster CPU hashing on 32-core AMD EPYC 9R45 Linux systems with 128 GiB RAM and transparent huge pages, with saved tuning preserved.
+- Better diagnostics for interrupted mining runs and startup failures, helping identify reliability issues while keeping raw logs and panic contents private.
+
+## v0.2.36
+
+- About 1% faster CPU hashing on 32-core AMD EPYC 9R45 Linux systems with 128 GiB RAM and transparent huge pages, while retaining automatic tuning and saved settings.
+
+## v0.2.35
+
+- Faster mining startup on 32-core AMD EPYC 9R45 Linux systems with 128 GiB RAM and transparent huge pages. Seine initializes memory faster and starts from validated worker and kernel settings while continuing to tune automatically.
+
+## v0.2.34
+
+- Faster mining startup on Intel Xeon Platinum 8488C Linux systems with 32 logical CPUs, 128 GiB RAM and transparent huge pages. Seine starts from validated worker and kernel settings while continuing to tune automatically.
+
+## v0.2.33
+
+- Faster CPU hashing on 32-core AMD EPYC 9R14 Windows systems using ordinary memory pages.
+
+## v0.2.32
+
+- **Faster CPU hashing on 32-core AMD EPYC 9R14 Linux systems using transparent huge pages.**
+
+## v0.2.31
+
+- **Improved NVIDIA driver compatibility:** avoid a startup failure caused by a missing driver symbol on some older CUDA 12 drivers.
+
+## v0.2.30
+
+- **Faster startup tuning on 32-core AMD EPYC 9R14 Windows systems using ordinary memory pages.** Seine spends more time on proven fast settings while continuing to tune automatically and preserving saved tuning.
+
+## v0.2.29
+
+- **Faster startup tuning on 32-core AMD EPYC 9R14 Linux systems with transparent huge pages.** Seine spends more time on proven fast settings while continuing to tune automatically and preserving saved tuning.
+
+## v0.2.28
+
+- **Faster tuning on 32-core AMD EPYC 9R14 Linux systems with transparent huge pages.** Shorter comparisons spend less time on slower settings while preserving confirmed saved tuning.
+
+- **Improved CPU hashing on 32-core AMD EPYC 9R14 Windows systems using ordinary memory pages.** Saved tuning remains usable, and Seine continues comparing settings while mining.
+
+## v0.2.27
+
+- **Faster CPU mining on 32-core AMD EPYC 9R14 Linux systems with transparent huge pages.** Seine starts from the improved hashing path, preserves confirmed local tuning, and continues checking for faster settings.
+
+- **Faster mining startup on 32-core AMD EPYC 9R14 systems:** Linux and Windows start from validated worker and kernel settings while continuing to tune. Linux also initializes supported huge-page memory faster.
 
 - **One miner fee everywhere:** a flat 2% dev fee on every pool and in solo mode replaces the previous 1% bntpool.com / 2.5% elsewhere rates. Upgrade to use the new rate.
 
 - **More useful failure reports:** optional telemetry preserves specific memory and pool connection failure reasons, Windows code locations, and the last observed stage of interrupted runs.
 
-**For self-hosted telemetry collectors:** update the collector before installing miners built from this version; see the [deployment guide](telemetry/deploy/PRODUCTION.md).
+**For self-hosted telemetry collectors:** update the collector before upgrading miners to this version. The official collector is already updated; see the [deployment guide](telemetry/deploy/PRODUCTION.md).
 
 - **Clearer tuning startup:** CPU and NVIDIA messages explain when saved tuning is reused and why tuning runs again.
 

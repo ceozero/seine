@@ -1,0 +1,62 @@
+---
+title: 'Waarom je miner niet 100% CPU gebruikt'
+description: 'Begrijp CPU-gebruik bij Blocknet-mining met seine. Controleer actieve threads, geheugen, backend en geaccepteerd werk voordat je instellingen wijzigt.'
+tags: ['Mininggids', 'CPU-gebruik', 'seine']
+faq:
+  - q: 'Moet een miner altijd 100% CPU gebruiken?'
+    a: 'Nee. Het systeempercentage beschrijft gebruik van beschikbare processors, terwijl seine voltooide hashes meet. Een bruikbaar aantal threads hangt af van geheugen en gemeten prestaties. Bekijk actieve threads, hashrate en geaccepteerd werk samen.'
+  - q: 'Waarom kiest seine minder threads?'
+    a: 'Elke actieve CPU-miningthread heeft een geheugenarena van 2 GiB nodig; threads delen bandbreedte. Automatische selectie houdt rekening met geheugen en meet prestaties. Expliciete limieten, backend en uitvoeringsomgeving tellen ook mee.'
+  - q: 'Wat als CPU-gebruik en hashrate beide dalen?'
+    a: 'Controleer CPU-backend, actieve threads, afstemmings- en geheugenmeldingen en een actuele opdracht. Vergelijk hetzelfde apparaat en tijdvak, daarna achtergrondbelasting en limieten. Volg bij verbindingsproblemen of nul poolhashrate de trackinggids.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Lees CPU-gebruik naast actieve threads, lokale H/s en geaccepteerde shares tijdens Blocknet-mining met seine v0.2.36. Deze controles helpen vóór een wijziging. Begin voor installatie bij de [mininggids](/nl/blog/how-to-mine-blocknet/).
+
+## Betekent minder CPU-gebruik minder nuttig werk?
+
+<Answer>
+Een CPU-percentage zegt op zichzelf niet hoeveel nuttig werk wordt voltooid. Controleer geselecteerde CPU-backend, actieve threads, lokale hashrate en binnenkomende opdrachten. seine kan minder miningthreads kiezen dan er logische processors zijn. Vergelijk voltooid werk onder dezelfde omstandigheden voordat je het aantal verandert.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Een raster met processoractiviteit en een teller voor voltooid werk zijn afzonderlijke waarnemingen, verbonden door controles van threads, geheugen en opdrachten." width="1200" height="675" loading="lazy" />
+
+## Controleer eerst wat het percentage omvat
+
+Onderscheid in Windows het seine-proces van het hele systeem. Zoek seine in Taakbeheer en bekijk Prestaties en CPU. Grafieken per logische processor tonen de verdeling; het totaal combineert systeemactiviteit. De [Microsoft-gids](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) beschrijft deze weergaven. Noteer welke je gebruikt.
+
+In Linux kan het procespercentage in `top` anders geschaald zijn dan het systeemoverzicht. In Irix-modus kan een proces met meerdere threads boven 100% komen; Solaris deelt door het processoraantal. Threadweergave verandert de rijen. Lees de [handleiding](https://man7.org/linux/man-pages/man1/top.1.html): een andere schaal is geen gemeten snelheidsverandering.
+
+## Controleer welk apparaat werkt
+
+Lees H/s en actieve threads in de CPU-rij van het [dashboard](/nl/blog/seine-dashboard-explained/). Een gecombineerd CPU/GPU-cijfer bevat beide; vergelijk hetzelfde apparaat. Alleen NVIDIA selecteren geeft terecht weinig CPU-miningbelasting. De [NVIDIA-gids](/nl/blog/mine-blocknet-nvidia-gpu/) behandelt die opstelling.
+
+Miningthreads verschillen van het aantal procesthreads in het besturingssysteem. seine heeft ook netwerk-, besturings- en rapportagetaken. Een proces kan meer threads hebben dan de CPU-rij toont. Controleer hoeveel hashingthreads actief zijn en werk voltooien.
+
+## Waarom kan geheugen het aantal beperken?
+
+Elke actieve CPU-miningthread gebruikt een arena van 2 GiB voor Argon2id. Automatische bepaling houdt rekening met beschikbaar geheugen en systeemruimte. Lees werkelijk aantal en meldingen; deel geïnstalleerd RAM niet tot een beloofde capaciteit. De [RAM-gids](/nl/blog/how-much-ram-to-mine-blocknet/) behandelt budget, reserve en allocatie.
+
+Capaciteit bepaalt hoeveel arena's passen; bandbreedte beïnvloedt gelijktijdige gegevensoverdracht. Een thread kan als druk tellen terwijl hij op geheugen wacht. Laag gebruik bewijst dus geen bandbreedteknelpunt; 100% bewijst evenmin de beste H/s. Zie de [Argon2id-gids](/nl/blog/argon2id-proof-of-work-explained/).
+
+## Lees automatische wijzigingen en expliciete instellingen
+
+Automatische CPU-afstemming vergelijkt threads en kernels met gemeten werk. Minder threads kan een geldig resultaat zijn; beschikbaar geheugen kan het aantal veranderen. Laat de proef stabiliseren en lees meldingen. De [afstemmingsgids](/nl/blog/seine-automatic-cpu-tuning/) behandelt keuzes en cachehergebruik.
+
+Controleer je startopdracht. `--threads`, een afstemmingsmaximum of CPU-profiel kan zoekruimte of aantal veranderen; affiniteit beïnvloedt plaatsing. Containers, virtuele machines en systeemlimieten kunnen minder capaciteit tonen dan de host. Bewaar je instellingen en identificeer de beperking vóór je verhoogt.
+
+## Wat als gebruik én H/s dalen?
+
+Controleer of de CPU-backend actief is en werk heeft: actuele opdracht, verbinding, geheugenwijzigingen en backendfouten in het log. Opstarten en nieuwe afstemming geven context die een systeemmeter mist. Blijft de GPU werken, bekijk beide apparaten afzonderlijk.
+
+Vergelijk een stabiel tijdvak met dezelfde versie, backend en instellingen. Noteer andere apps, geheugen, energie-instellingen en tijd. Gebruik de [benchmarkgids](/nl/blog/benchmark-seine-miner/) voor herhaalbare lokale vergelijking en bewaar rapporten. Een korte piek of los percentage is geen hardware-uitkomst.
+
+## Eindig bij voltooid en geaccepteerd werk
+
+Controleer tijdens normaal minen voortgang van CPU-hashes en geaccepteerde shares. Shares komen met tussenpozen, zonder vaste aftelling. Het poolhashrate is een schatting uit inzendingen over tijd. De [trackinggids](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) beschrijft dit beeld en verbindingscontroles.
+
+Noteer versie, opdracht, backend, CPU-threads, lokale CPU-H/s, systeemtool en weergave, geheugen en pooltijdvak. Als werk doorgaat, is het systeempercentage context. Stagneert een stap, volg die gids. Zo heeft elke wijziging een concrete vraag en vergelijkbare uitkomst.
+
+<CTA target="seine" title="Volg CPU-mining met seine" text="Download seine en bekijk actieve threads, hashrate en geaccepteerd werk samen in het dashboard." />

@@ -1,0 +1,62 @@
+---
+title: 'Como o seine ajusta a mineração por CPU'
+description: 'Veja como o seine ajusta threads durante a mineração de Blocknet, compara configurações, reutiliza resultados salvos e responde à RAM disponível enquanto minera.'
+tags: ['Guia de mineração', 'Ajuste de CPU', 'seine']
+faq:
+  - q: 'O seine minera enquanto ajusta as threads?'
+    a: 'Sim. Na v0.2.36, a mineração normal por CPU parte de uma configuração salva compatível ou de uma estimativa baseada no hardware. O ajuste compara quantidades de threads com trabalho real de mineração. Benchmarks offline usam outro processo, portanto sua inicialização não descreve uma sessão normal.'
+  - q: 'Por que a quantidade de threads muda?'
+    a: 'O ajuste automático testa quantidades próximas e responde à memória disponível. A mudança pode ser um teste de desempenho ou uma reação à pressão de RAM. Consulte o log junto com a contagem e espere a comparação terminar antes de julgar uma leitura breve de hashrate.'
+  - q: 'Onde o seine salva os resultados de ajuste?'
+    a: 'Por padrão, os resultados de threads ficam em seine.cpu-autotune.json no diretório de dados. As escolhas de kernel usam o arquivo associado terminado em .kernels.json. Resultados compatíveis ajudam futuras inicializações. Mantenha o mesmo diretório e deixe o minerador verificar se as configurações ainda combinam com o ambiente.'
+sourceHash: '41f9cc188856'
+translation: draft
+---
+
+Entenda o que o seine faz quando a quantidade de threads de CPU muda durante a mineração. Este guia acompanha a versão pública v0.2.36 e explica ajuste produtivo, escolhas salvas e adaptação à memória. Para instalar, use o [guia de mineração](/pt-br/blog/how-to-mine-blocknet/); para os painéis, consulte o [guia do dashboard](/pt-br/blog/seine-dashboard-explained/).
+
+## Como funciona o ajuste automático de CPU?
+
+<Answer>
+Com o ajuste ativado, o seine começa a minerar com uma quantidade salva compatível ou uma estimativa do hardware e compara configurações usando trabalho real. Ele mede uma referência, testa uma candidata e mede a referência novamente. A RAM disponível e os limites configurados delimitam a busca pelas configurações adequadas à máquina.
+</Answer>
+
+<img src="/assets/blog/cpu-autotuning.svg" alt="Uma comparação repetida referência–candidata–referência leva a uma configuração salva, verificando a memória disponível durante todo o processo." width="1200" height="675" loading="lazy" />
+
+## A mineração começa antes de a busca terminar
+
+Deixe `--threads` sem definir para usar o ajuste automático. Na mineração normal, o seine escolhe uma quantidade inicial dentro do orçamento de recursos e começa a trabalhar sem uma varredura offline de threads. Um cache compatível pode fornecer o ponto inicial. Uma máquina nova começa com uma estimativa que melhora nas comparações seguintes.
+
+Cada teste mede hashes concluídos pelo tempo decorrido. Novas arenas de memória terminam um hash inicial antes de começar a janela de medição. A sequência referência–candidata–referência separa o efeito da configuração das mudanças de condição. Grande variação da referência, novos limites de memória ou perda prolongada de trabalho podem invalidar a comparação. Um pico breve no dashboard é apenas uma observação dentro de uma decisão mais longa.
+
+## Por que mais threads podem deixar de ajudar?
+
+Cada thread ativa usa uma grande arena de memória e compartilha a largura de banda da máquina. Mais threads permitem trabalho simultâneo, mas o resultado depende do sistema inteiro. O ajuste compara os H/s totais da CPU, sem presumir que a maior contagem será a mais rápida. O [guia de RAM](/pt-br/blog/how-much-ram-to-mine-blocknet/) explica o orçamento de memória.
+
+O perfil padrão é `balanced`. Perfis controlam a política de ajuste e os padrões de execução; `efficiency` é uma escolha explícita que pode favorecer menos threads. Mantenha o mesmo perfil ao avaliar uma sessão. Contagem, posicionamento na CPU e páginas de memória interagem: o resultado de outra máquina ou configuração é uma referência, não algo para copiar automaticamente.
+
+## O que acontece quando outros programas precisam de RAM?
+
+O orçamento automático acompanha os recursos disponíveis. Sob pressão de memória, threads podem terminar o hash atual, estacionar e liberar suas arenas. Quando volta a haver folga sustentada, o minerador pode ativar os slots disponíveis e retomar a exploração. Isso permite adaptar a quantidade ativa na mesma sessão quando o computador também executa outros aplicativos.
+
+Uma redução temporária não precisa apagar uma contagem maior aprendida anteriormente. Cache e quantidade ativa têm funções distintas. No Linux, arenas HugeTLB explícitas liberadas voltam à reserva de páginas grandes; o seine não redimensiona essa reserva do sistema. Use o [guia de huge pages](/pt-br/blog/huge-pages-blocknet-mining/) para alterar a reserva e diferencie essas configurações da RAM livre comum.
+
+## O seine também ajusta o kernel da CPU?
+
+CPUs compatíveis podem comparar caminhos de código de hashing além das quantidades de threads. Kernel aqui é a implementação de software do cálculo de hash. O minerador verifica as instruções suportadas e compara caminhos elegíveis com amostras repetidas de mineração. Testes de kernel e threads se alternam, mantendo a gestão de memória ativa. O [guia técnico](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/autotuning.md) descreve os candidatos desta versão.
+
+Mudanças automáticas de CPU preservam a conexão ao pool e não reiniciam backends de GPU. O kernel muda entre hashes completos, mantendo as arenas alocadas. Pressionar `+` ou `-` manualmente é diferente: reinicia os backends, reconecta a mineração e desativa o ajuste automático de CPU naquela execução. Consulte o log para identificar o tipo de mudança.
+
+## Como os resultados salvos são reutilizados?
+
+O cache padrão de threads é `seine.cpu-autotune.json` em `--data-dir`; o de kernels é `seine.cpu-autotune.json.kernels.json`. Eles guardam escolhas aprendidas separadamente das configurações de conexão ao pool. Use o mesmo diretório entre inicializações. O [guia de atualização](/pt-br/blog/update-seine-miner/) explica como preservá-lo ao substituir o aplicativo.
+
+A reutilização depende da compatibilidade do hardware, build, posicionamento e páginas. Os limites atuais ainda restringem a quantidade ativa inicial. Uma mudança relevante pode impedir o uso do cache; deixe o minerador reunir novas evidências. Evite copiar o cache de outro rig ou editar medições manualmente. Leia as mensagens de inicialização e ajuste antes de tratar uma nova busca como problema.
+
+## Quando definir uma quantidade fixa de threads?
+
+Use uma quantidade fixa quando precisar deliberadamente de uma configuração reproduzível. Por exemplo, `--threads 4` pede quatro threads e normalmente desativa o ajuste de threads e kernels. `--cpu-autotune-threads` ativa o ajuste mesmo com uma quantidade fornecida; `--disable-cpu-autotune-threads` desativa a adaptação. A [referência de flags](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) documenta limites e interações.
+
+No uso diário, comece com os padrões e dê tempo para as comparações produtivas terminarem. Confira a linha da CPU, mensagens e shares aceitas em conjunto. Compare cargas e condições de memória semelhantes. O hashrate do pool é estimado pelas shares recebidas: use as medições locais de CPU para entender um teste e as [estatísticas do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) para acompanhar o trabalho creditado.
+
+<CTA target="seine" title="Minere com ajuste automático de CPU" text="Baixe o seine, mantenha os ajustes padrão e acompanhe as decisões no dashboard." />

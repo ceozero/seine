@@ -17,11 +17,12 @@ class AlertsTests(unittest.TestCase):
 
     def tick(self, now, active=None, known=None, sender=None):
         return alerts.advance(self.state, [self.item] if active is None else active,
-                              {'diagnostics'} if known is None else known, now,
+                              {self.item['category']} if known is None else known, now,
                               sender or (lambda *args: self.sent.append(args)),
                               lambda state: self.saved.append(copy.deepcopy(state)))
 
     def test_confirmation_repeat_and_recovery(self):
+        self.item = alerts.issue('infrastructure', 'health', 'Collector unavailable')
         self.tick(1000)
         self.tick(1100)
         self.assertEqual(len(self.sent), 0)
@@ -35,6 +36,47 @@ class AlertsTests(unittest.TestCase):
         self.tick(16300, [])
         self.assertEqual(self.sent[-1][0], 'CLEARED')
         self.assertEqual(self.state['incidents'], {})
+
+    def test_fleet_incidents_stay_quiet_until_cleared_and_recur(self):
+        for category in ('quality', 'diagnostics', 'performance'):
+            with self.subTest(category=category):
+                self.setUp()
+                self.item = alerts.issue(category, 'v1', 'Known fleet finding', affected=3)
+                self.tick(1000, known={category})
+                self.tick(1300, known={category})
+                # Existing state from the old runner is enough to suppress repeats,
+                # even after restart, count changes, and several reminder periods.
+                self.state = json.loads(json.dumps(self.state))
+                self.item.update(affected=7, summary='Updated aggregate count')
+                for now in (1600, 16000, 31000, 100000):
+                    self.tick(now, known={category})
+                self.assertEqual([x[0] for x in self.sent], ['FIRING'])
+                self.assertEqual(self.state['incidents'][self.item['key']]['affected'], 7)
+                self.tick(100300, [], known={category})
+                self.tick(100600, [], known={category})
+                self.tick(100900, known={category})
+                self.tick(101200, known={category})
+                self.assertEqual([x[0] for x in self.sent], ['FIRING', 'CLEARED', 'FIRING'])
+
+    def test_collector_outages_keep_reminders(self):
+        for category in ('infrastructure', 'ingestion', 'monitor'):
+            with self.subTest(category=category):
+                self.setUp()
+                self.item = alerts.issue(category, 'outage', 'Collector unavailable')
+                self.tick(1000, known={category})
+                self.tick(1300, known={category})
+                self.tick(1300 + alerts.REPEAT_SECONDS - 1, known={category})
+                self.assertEqual(len(self.sent), 1)
+                self.tick(1300 + alerts.REPEAT_SECONDS, known={category})
+                self.assertEqual([x[0] for x in self.sent], ['FIRING', 'REMINDER'])
+
+    def test_quiet_incident_does_not_suppress_a_new_version(self):
+        self.tick(1000)
+        self.tick(1300)
+        new = alerts.issue('diagnostics', 'v2', 'New version errors')
+        self.tick(1600, [self.item, new])
+        self.tick(1900, [self.item, new])
+        self.assertEqual([x[1]['key'] for x in self.sent], [self.item['key'], new['key']])
 
     def test_transient_does_not_notify(self):
         self.tick(1000)
@@ -108,6 +150,16 @@ class AlertsTests(unittest.TestCase):
         self.assertIn('ingestion', {i['category'] for i in active})
         results['performance']['minutes_since_last_report'] = None
         self.assertIn('ingestion', {i['category'] for i in alerts.evaluate(results)[0]})
+
+    def test_unclean_alert_labels_interrupted_release_and_unknown_explicitly(self):
+        active, _ = alerts.evaluate({'diagnostics': {
+            'recent_error_versions': [], 'recent_unclean_versions': [
+                {'version': 'v0.2.35', 'affected_installations': 3, 'reporting_versions': ['v0.2.36']},
+                {'version': 'unknown', 'affected_installations': 4, 'reporting_versions': ['v0.2.26']},
+            ]}})
+        self.assertIn('Previous run v0.2.35', active[0]['summary'])
+        self.assertNotIn('v0.2.36:', active[0]['summary'])
+        self.assertIn('Unknown previous version', active[1]['summary'])
 
     def test_regression_requires_breadth_not_one_bad_rig(self):
         cohort = dict(version='v2', baseline_version='v1', hardware={'cpu_model': 'CPU'},

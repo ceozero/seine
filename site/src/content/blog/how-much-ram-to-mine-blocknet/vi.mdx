@@ -1,0 +1,90 @@
+---
+title: 'Đào Blocknet cần bao nhiêu RAM?'
+description: 'Tính RAM để đào Blocknet: 2 GiB cho mỗi luồng CPU, chừa chỗ cho ứng dụng, dùng tính năng tự điều chỉnh của seine và xử lý lỗi cấp phát bộ nhớ khi chạy.'
+tags: ['Hướng dẫn đào', 'RAM', 'CPU']
+faq:
+  - q: 'Một luồng đào Blocknet dùng bao nhiêu RAM?'
+    a: 'Mỗi luồng CPU cần vùng nhớ Argon2id 2 GiB. Đây là bộ nhớ làm việc, không phải toàn bộ nhu cầu của máy. Chừa RAM cho hệ điều hành, ứng dụng và phần mềm đào. Tính số luồng từ bộ nhớ khả dụng thay vì chỉ chia RAM lắp sẵn cho hai.'
+  - q: 'Có thể đào Blocknet với 8 GB RAM không?'
+    a: 'Có thể đào bằng CPU nếu đủ bộ nhớ khả dụng cho ít nhất một vùng 2 GiB cùng hệ thống và phần mềm đào. Nhãn 8 GB không tự quyết định số luồng. Bắt đầu bằng tự động, rồi xem bộ nhớ thực tế và số luồng đã chọn.'
+  - q: 'Huge pages có giảm RAM mỗi luồng không?'
+    a: 'Huge pages đổi cách hệ điều hành ánh xạ bộ nhớ, không giảm vùng 2 GiB mỗi luồng CPU. Xác định ngân sách bộ nhớ trước, rồi xem hướng dẫn riêng để cấu hình trang lớn tường minh trên hệ thống hỗ trợ.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Chọn số luồng CPU vừa với bộ nhớ khả dụng. Bài này giải thích vùng 2 GiB, tự điều chỉnh trong seine v0.2.26 và cách kiểm tra khi thiết lập thủ công không cấp phát được bộ nhớ. So sánh chip và tốc độ băm đã đo nằm ở [hướng dẫn phần cứng](/vi/blog/blocknet-mining-hardware-hashrate/). Ví dụ dưới đây là phép tính bộ nhớ, không phải đo hiệu năng.
+
+## Mỗi luồng đào cần bao nhiêu RAM?
+
+<Answer>
+Mỗi luồng CPU cần vùng nhớ Argon2id 2 GiB. Chừa chỗ cho hệ điều hành, ứng dụng và phần mềm đào. Bắt đầu bằng tự động của seine, có xét bộ nhớ khả dụng và tài nguyên CPU. Số luồng đặt tay phải vừa bộ nhớ thực sự còn trống khi khởi chạy.
+</Answer>
+
+GiB là đơn vị nhị phân: 2 GiB bằng 2.147.483.648 byte. Vùng nhớ được tái sử dụng giữa các hash; mỗi hash xong không chiếm vĩnh viễn thêm 2 GiB. Nhiều luồng đồng thời cần nhiều vùng hơn. [Giải thích Argon2id](/vi/blog/argon2id-proof-of-work-explained/) mô tả bộ nhớ làm việc này.
+
+<img src="/assets/blog/ram-budget.svg" alt="Bốn vùng đào riêng, mỗi vùng 2 GiB, bên cạnh bộ nhớ thêm cho hệ thống và ứng dụng" width="1200" height="675" loading="lazy" />
+
+## Tính ngân sách luồng thế nào?
+
+Nhân số luồng CPU với 2 GiB. Bảng chưa gồm hệ thống và chi phí bộ nhớ khác. Dùng bảng để tính vùng nhớ; chọn số luồng thực tế theo bộ nhớ khả dụng và thông lượng đã đo.
+
+| Luồng CPU | Chỉ bộ nhớ vùng đào |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Bốn luồng cần 8 GiB cho các vùng, nên máy phải còn hơn 8 GiB để chứa phần còn lại của tiến trình và hệ thống. Nếu chủ động dành 4 GiB trên máy 16 GiB, 12 GiB còn lại chứa được sáu vùng theo phép tính. Đây là lựa chọn ngân sách, không đảm bảo sáu luồng cho tốc độ băm cao nhất.
+
+Kiểm tra bộ nhớ khả dụng khi các ứng dụng thường dùng đang mở bằng Task Manager Windows, Activity Monitor macOS hoặc công cụ Linux. Máy ảo hay container có thể được cấp ít hơn máy chủ. Dùng giới hạn hiệu dụng đó; RAM quảng cáo của máy chủ không tự động khả dụng trong môi trường bị giới hạn.
+
+## seine tự chọn số luồng ra sao?
+
+Lần đầu chỉ dùng CPU, đừng đặt số luồng. Chạy lệnh trong thư mục đã giải nén trên Linux hoặc macOS. Windows dùng cùng cờ với tệp thực thi trong PowerShell. [Hướng dẫn bắt đầu](/vi/blog/how-to-mine-blocknet/) giải thích tải xuống và địa chỉ nhận.
+
+```sh
+./seine --backend cpu
+```
+
+Ở v0.2.26, tự xác định và điều chỉnh mặc định dành 5% tổng RAM hiệu dụng, ngoài việc tính bộ nhớ đã dùng. Tài nguyên CPU cũng giới hạn số luồng. Đặt trần để thu hẹp phạm vi tự điều chỉnh:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Bốn là trần ví dụ, không phải thiết lập chung. Bộ điều chỉnh có thể chọn ít hơn. Xem số luồng và tốc độ băm trung bình trên [bảng điều khiển](/vi/blog/seine-dashboard-explained/). Tính năng này đo cấu hình thực tế; chờ ổn định trước khi đánh giá từ dao động ngắn.
+
+## Khi nào nên cố định số luồng?
+
+Dùng số cố định cho ngân sách cụ thể hoặc cấu hình có thể lặp lại. Ví dụ chọn hai luồng CPU, cần 4 GiB cho vùng đào cộng bộ nhớ khác.
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+`--threads` tắt lựa chọn tự động thông thường trừ khi bạn bật điều chỉnh tường minh. Nó ghi đè chính sách dự phòng tự động, nên tự chừa khoảng trống. Kiểm tra bộ nhớ vẫn hoạt động. Số luồng vừa RAM lắp sẵn có thể vượt bộ nhớ khả dụng sau khi ứng dụng khác mở.
+
+Đổi từng thiết lập một. Ghi số luồng, RAM khả dụng và tốc độ băm trung bình với tải tương đương. Muốn trở lại tự động, bỏ tham số cố định và giá trị ghi đè đã lưu. [Tài liệu v0.2.26](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) giải thích cài đặt lưu và dòng lệnh.
+
+## Kiểm tra gì sau lỗi cấp phát bộ nhớ?
+
+Phân biệt thông báo về giới hạn hiệu dụng, bộ nhớ khả dụng hay cấp phát trang lớn tường minh. Mỗi loại cần kiểm tra khác nhau. Đóng ứng dụng không cần, giảm luồng và khởi động lại với chỗ cho sử dụng máy bình thường.
+
+Với máy ảo hoặc container, kiểm tra cả bộ nhớ được cấp và máy chủ. Giới hạn 1 GiB không chứa được vùng 2 GiB. Tăng tệp swap không đổi yêu cầu này; cần đủ bộ nhớ vật lý khả dụng cho tiến trình.
+
+Nếu chọn `--cpu-page-mode large` hoặc `--cpu-page-mode large-1g`, xác nhận quỹ trang dự trữ yêu cầu có sẵn. Các chế độ này đòi đúng loại trang. Theo [hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) hoặc trở lại tự chọn trang để có cấu hình nền hoạt động. Đổi trang và số luồng riêng biệt.
+
+## Bộ nhớ GPU có tính vào ngân sách CPU không?
+
+Trên NVIDIA rời, vùng đào GPU nằm trong VRAM. Luồng CPU vẫn cấp phát RAM hệ thống. Tính hai tài nguyên riêng khi đào kết hợp; VRAM trống không phải RAM thêm cho CPU. [Hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/) giải thích thiết lập và lane GPU.
+
+Apple Silicon dùng bộ nhớ hợp nhất chung cho CPU và GPU. Đừng tính cùng dung lượng hai lần khi lên kế hoạch tải khác. Theo [hướng dẫn Mac](/vi/blog/mine-blocknet-on-mac/) cho cấu hình CPU hỗ trợ. Dung lượng quyết định cái gì vừa; thông lượng đo được quyết định cấu hình tốt nhất.
+
+## Xác nhận gì trước khi để máy đào chạy?
+
+Kiểm tra số luồng vừa ngân sách, ứng dụng phản hồi tốt và có share được chấp nhận. Cấp phát nhiều hơn không tự chứng minh hiệu năng cao hơn. Giữ cấu hình hợp tải rồi dùng [hướng dẫn theo dõi pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) để xác nhận công việc mới ở địa chỉ nhận.
+
+<CTA target="seine" title="Tải seine" text="Bắt đầu bằng tự chọn CPU rồi chọn ngân sách bộ nhớ phù hợp với máy." />

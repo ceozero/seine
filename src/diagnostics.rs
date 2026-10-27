@@ -18,6 +18,8 @@ use std::{
 
 static ACTIVE: Mutex<Option<Weak<Recorder>>> = Mutex::new(None);
 static PANIC_HOOK: Once = Once::new();
+#[cfg(test)]
+pub(crate) static TEST_LOCK: Mutex<()> = Mutex::new(());
 type Key = (
     DiagnosticCode,
     DiagnosticKind,
@@ -32,6 +34,7 @@ pub(crate) struct Recorder {
     started: Instant,
     context: Diagnostics,
     events: Mutex<BTreeMap<Key, DiagnosticEvent>>,
+    recent: Mutex<(Vec<DiagnosticEvent>, bool)>,
     dropped: AtomicU64,
     failed: AtomicBool,
     previous_unclean: AtomicBool,
@@ -97,6 +100,7 @@ pub(crate) fn install(context: Diagnostics) -> Guard {
         started: Instant::now(),
         context,
         events: Mutex::new(BTreeMap::new()),
+        recent: Mutex::new((Vec::new(), false)),
         dropped: AtomicU64::new(0),
         failed: AtomicBool::new(false),
         previous_unclean: AtomicBool::new(false),
@@ -129,6 +133,32 @@ fn fingerprint(value: &str) -> String {
         value.into()
     } else {
         "unknown".into()
+    }
+}
+
+fn normalize_source(source: &str) -> String {
+    let normalized = source.replace('\\', "/");
+    if seine_telemetry::valid_source(&normalized) {
+        return normalized;
+    }
+    // Match complete, fixed dependency suffixes. Never upload a Cargo home,
+    // username, registry directory, arbitrary filename, or panic payload.
+    for &allowed in seine_telemetry::DEPENDENCY_SOURCES {
+        let suffix = allowed.strip_prefix("deps/").unwrap();
+        if normalized == suffix || normalized.ends_with(&format!("/{suffix}")) {
+            return allowed.into();
+        }
+    }
+    "unknown".into()
+}
+
+fn event_priority(event: &DiagnosticEvent) -> u8 {
+    match event.code {
+        DiagnosticCode::RustPanic => 3,
+        DiagnosticCode::Warning | DiagnosticCode::BackendWarning => {
+            u8::from(event.detail.is_some())
+        }
+        _ => 2,
     }
 }
 
@@ -250,6 +280,8 @@ pub(crate) fn allocation_failure(large: bool, bytes: usize, os_error: Option<i64
             operation: DiagnosticOperation::CpuAllocation,
             os_error,
             requested_bytes: Some(bytes as u64),
+            ready_workers: None,
+            expected_workers: None,
         },
     );
 }
@@ -273,6 +305,8 @@ pub(crate) fn io_detail(operation: DiagnosticOperation, error: &std::io::Error) 
         operation,
         os_error: error.raw_os_error().map(i64::from),
         requested_bytes: None,
+        ready_workers: None,
+        expected_workers: None,
     }
 }
 
@@ -315,14 +349,8 @@ impl Recorder {
             self.dropped.fetch_add(1, Ordering::Relaxed);
             return;
         };
-        // Rust locations on Windows use backslashes. Only normalize relative paths;
-        // never strip an absolute prefix (which could reveal private filenames).
-        let normalized = source.replace('\\', "/");
-        let source = if seine_telemetry::valid_source(&normalized) {
-            normalized.as_str()
-        } else {
-            "unknown"
-        };
+        let normalized = normalize_source(source);
+        let source = normalized.as_str();
         let phase = *self.phase.lock().unwrap_or_else(|e| e.into_inner());
         let backend = backend
             .filter(|b| matches!(*b, "cpu" | "nvidia" | "amd" | "metal"))
@@ -336,6 +364,19 @@ impl Recorder {
             detail.clone(),
             phase,
         );
+        let now = self.started.elapsed().as_secs();
+        self.remember(DiagnosticEvent {
+            code,
+            kind,
+            detail: detail.clone(),
+            phase: Some(phase),
+            source: source.into(),
+            line: line.min(1_000_000),
+            backend: backend.clone(),
+            count: 1,
+            first_seen_secs: now,
+            last_seen_secs: now,
+        });
         if events.len() >= 32 && !events.contains_key(&key) {
             let is_error = !matches!(
                 code,
@@ -372,7 +413,6 @@ impl Recorder {
                 return;
             }
         }
-        let now = self.started.elapsed().as_secs();
         let event = events.entry(key).or_insert_with(|| DiagnosticEvent {
             code,
             kind,
@@ -389,11 +429,48 @@ impl Recorder {
         event.last_seen_secs = now;
     }
 
+    fn remember(&self, mut event: DiagnosticEvent) {
+        let mut recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(index) = recent.0.iter().position(|e| {
+            e.code == event.code
+                && e.kind == event.kind
+                && e.source == event.source
+                && e.line == event.line
+                && e.backend == event.backend
+                && e.detail == event.detail
+                && e.phase == event.phase
+        }) {
+            let old = recent.0.remove(index);
+            event.count = old.count.saturating_add(1);
+            event.first_seen_secs = old.first_seen_secs;
+        } else if recent.0.len() == 8 {
+            recent.1 = true;
+            // Oldest group of the lowest priority goes first. Routine reconnect
+            // warnings must not erase a panic or a precise allocation failure.
+            let index = recent
+                .0
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, e)| event_priority(e))
+                .map(|(i, _)| i)
+                .unwrap();
+            if event_priority(&event) < event_priority(&recent.0[index]) {
+                return;
+            }
+            recent.0.remove(index);
+        }
+        recent.0.push(event);
+    }
+
     pub(crate) fn checkpoint(&self) -> PreviousRun {
+        let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
         PreviousRun {
             phase: *self.phase.lock().unwrap_or_else(|e| e.into_inner()),
             uptime_secs: self.started.elapsed().as_secs(),
             build_commit: self.context.build_commit.clone(),
+            miner_version: Some(crate::version::RELEASE_VERSION.into()),
+            recent_events: recent.0.clone(),
+            events_truncated: recent.1,
         }
     }
 
@@ -480,14 +557,13 @@ impl Store {
         let previous_run = if previous_unclean && fresh(&checkpoint_path) {
             fs::metadata(&checkpoint_path)
                 .ok()
-                .filter(|m| m.len() <= 1024)
+                .filter(|m| m.len() <= 8192)
                 .and_then(|_| fs::read(&checkpoint_path).ok())
                 .and_then(|bytes| serde_json::from_slice::<Checkpoint>(&bytes).ok())
                 .filter(|c| {
                     c.installation_id == installation_id
                         && Some(c.marker_modified_ns) == marker_stamp(&marker)
-                        && c.run.uptime_secs <= 315_360_000
-                        && fingerprint(&c.run.build_commit) == c.run.build_commit
+                        && c.run.validate()
                 })
                 .map(|c| c.run)
         } else {
@@ -558,6 +634,9 @@ impl Store {
         let _ = fs::write(&self.marker, installation_id);
     }
     pub(crate) fn checkpoint(&self, installation_id: &str, run: PreviousRun) {
+        if !run.validate() {
+            return;
+        }
         // Tie the sidecar to this exact marker write. A legacy miner can update
         // the plain marker without updating the sidecar; never attribute that
         // older checkpoint to its later run.
@@ -572,7 +651,7 @@ impl Store {
         };
         let temp = self.checkpoint_path.with_extension("tmp");
         if let Ok(bytes) = serde_json::to_vec(&checkpoint) {
-            if fs::write(&temp, bytes).is_ok() {
+            if bytes.len() <= 8192 && fs::write(&temp, bytes).is_ok() {
                 let _ = fs::rename(&temp, &self.checkpoint_path);
             }
         }
@@ -644,12 +723,120 @@ mod tests {
             started: Instant::now(),
             context: test_context(),
             events: Mutex::new(BTreeMap::new()),
+            recent: Mutex::new((Vec::new(), false)),
             dropped: AtomicU64::new(0),
             failed: AtomicBool::new(false),
             previous_unclean: AtomicBool::new(false),
             phase: Mutex::new(RunPhase::Starting),
             previous_run: Mutex::new(None),
         }
+    }
+
+    #[test]
+    fn dependency_sources_strip_only_fixed_allowlisted_locations() {
+        for source in [
+            "/home/private/.cargo/registry/src/index.example/cudarc-0.19.2/src/lib.rs",
+            r"C:\Users\private\.cargo\registry\src\index.example\cudarc-0.19.2\src\lib.rs",
+        ] {
+            assert_eq!(normalize_source(source), "deps/cudarc-0.19.2/src/lib.rs");
+        }
+        for source in [
+            "/home/private/src/lib.rs",
+            "private-cudarc-0.19.2/src/lib.rs",
+            "/home/private/cudarc-0.19.2/src/private.rs",
+            "deps/cudarc-0.19.3/src/lib.rs",
+        ] {
+            assert_eq!(normalize_source(source), "unknown");
+        }
+    }
+
+    #[test]
+    fn checkpoints_keep_failures_across_uploads_and_warning_floods() {
+        let recorder = recorder();
+        recorder.record(
+            DiagnosticCode::RustPanic,
+            DiagnosticKind::General,
+            None,
+            "/home/private/.cargo/registry/src/index/cudarc-0.19.2/src/lib.rs",
+            181,
+        );
+        assert_eq!(recorder.snapshot(false).events.len(), 1);
+        assert!(recorder.snapshot(false).events.is_empty());
+        for line in 0..40 {
+            recorder.record(
+                DiagnosticCode::Warning,
+                DiagnosticKind::Connection,
+                None,
+                "src/pool.rs",
+                line,
+            );
+        }
+        let previous = recorder.checkpoint();
+        assert!(previous.validate());
+        assert_eq!(previous.recent_events.len(), 8);
+        assert!(previous.events_truncated);
+        assert!(previous
+            .recent_events
+            .iter()
+            .any(|e| e.code == DiagnosticCode::RustPanic));
+        assert!(!serde_json::to_string(&previous)
+            .unwrap()
+            .contains("private"));
+        recorder.record(
+            DiagnosticCode::RustPanic,
+            DiagnosticKind::General,
+            None,
+            "/home/private/.cargo/registry/src/index/cudarc-0.19.2/src/lib.rs",
+            181,
+        );
+        assert_eq!(
+            recorder
+                .checkpoint()
+                .recent_events
+                .iter()
+                .find(|e| e.code == DiagnosticCode::RustPanic)
+                .unwrap()
+                .count,
+            2
+        );
+    }
+
+    #[test]
+    fn interrupted_run_recovers_diagnostics_and_clean_shutdown_clears_them() {
+        let dir = std::env::temp_dir().join(format!(
+            "seine-recovered-diagnostics-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let settings = dir.join("settings.json");
+        let id = "11111111111111111111111111111111";
+        let recorder = recorder();
+        recorder.record(
+            DiagnosticCode::RustPanic,
+            DiagnosticKind::General,
+            None,
+            "deps/cudarc-0.19.2/src/lib.rs",
+            181,
+        );
+        let (store, _) = Store::open(&settings, id).unwrap();
+        store.checkpoint(id, recorder.checkpoint());
+        drop(store);
+        let (store, unclean) = Store::open(&settings, id).unwrap();
+        assert!(unclean);
+        let previous = store.previous_run.as_ref().unwrap();
+        assert_eq!(
+            previous.miner_version.as_deref(),
+            Some(crate::version::RELEASE_VERSION)
+        );
+        assert_eq!(previous.recent_events[0].code, DiagnosticCode::RustPanic);
+        store.finish();
+        drop(store);
+        let (store, unclean) = Store::open(&settings, id).unwrap();
+        assert!(!unclean);
+        assert!(store.previous_run.is_none());
+        store.finish();
+        drop(store);
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
@@ -668,6 +855,8 @@ mod tests {
                     operation: DiagnosticOperation::CpuAllocation,
                     requested_bytes: Some(2147483648),
                     os_error: Some(errno),
+                    ready_workers: None,
+                    expected_workers: None,
                 }),
             );
         }
@@ -888,6 +1077,9 @@ mod tests {
                 phase: RunPhase::Tuning,
                 uptime_secs: 42,
                 build_commit: "abcdef".into(),
+                miner_version: None,
+                recent_events: Vec::new(),
+                events_truncated: false,
             },
         );
         drop(store); // Simulated abnormal exit: no finish().
@@ -936,6 +1128,9 @@ mod tests {
                 phase: RunPhase::Mining,
                 uptime_secs: 90,
                 build_commit: "abcdef".into(),
+                miner_version: None,
+                recent_events: Vec::new(),
+                events_truncated: false,
             },
         );
         drop(store);
@@ -955,6 +1150,9 @@ mod tests {
                 phase: RunPhase::Mining,
                 uptime_secs: 90,
                 build_commit: "abcdef".into(),
+                miner_version: None,
+                recent_events: Vec::new(),
+                events_truncated: false,
             },
         );
         drop(store);

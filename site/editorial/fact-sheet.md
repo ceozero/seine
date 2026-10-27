@@ -1,14 +1,16 @@
 # seineminer.com blog fact sheet
 
-All facts checked 2026-10-25. Writers may state only what is listed here. Every bullet ends with its source.
+Initial research checked 2026-10-25; release, platform and pool facts rechecked 2026-10-26. Writers may state only what is listed here. Every bullet ends with its source.
+
+**Released behavior:** `release-facts.json` pins the reviewed public release. Source on `master` may be newer and must not be described as released. Historical benchmark versions and screenshots retain their original labels.
 
 **How to read the sources**
-- `repo@ref:path:line` points at a file in one of the Blocknet repos. Refs used:
+- `repo@ref:path:line` points at a file in one of the Blocknet repos. Original research snapshots (these are historical commit pins, not today's branch heads):
   - `blocknet-core@pool` is commit c646196 (2026-10-15), the production daemon branch.
   - `blocknet-core@upstream/master` is commit 514a8cf, the public `blocknetprivacy/core` master.
   - `blocknet@master` is commit 973e56e (2026-03-11).
   - `blocknet-pool@master` is commit 9bf4eb6.
-  - `seine@master` is commit d20f253 (2026-10-25), the v0.2.22 line.
+  - Original `seine@master` research used d20f253, the v0.2.22 line. The current reviewed release is `seine@v0.2.26` (`899ff7ea8bd547163ae48d636f569a0a8c7e25bb`).
   - Seine and blocknet-pool were read from `master` with `git show`, because their working checkouts sit on feature branches.
 - **"Live"** means fetched from a public endpoint on 2026-10-25 at about 00:26 EDT. Live values can change.
 - **"Derived"** means computed by this sheet from the cited code. The math is shown so it can be checked.
@@ -269,26 +271,28 @@ All facts checked 2026-10-25. Writers may state only what is listed here. Every 
 
 ## 4. seine (the miner)
 - Seine is the external miner for Blocknet. License BSD-3-Clause. Repo: github.com/zpalmtree/seine.
-  - Latest release **v0.2.22**, published 2026-10-24 20:21 EDT.
-  - Source: `seine@master:README.md:5-14`, `Cargo.toml:3`; `gh release list -R zpalmtree/seine` (checked 2026-10-25)
+  - Latest reviewed release **v0.2.36**, published October 26, 2026 at 11:34:54 AM EDT.
+  - Source: GitHub latest-release API and `seine@v0.2.36:Cargo.toml`; rechecked October 26, 2026. `release-facts.json` records the immutable source and release assets.
 - Name styling: the wordmark is always lowercase, `seine.` with a lime full stop. README prose capitalizes "Seine" at sentence start.
   - Source: `seine@master:docs/BRAND.md:43-44`, `README.md:24` (checked 2026-10-25)
-- **Dev fee (current source, pending release):** flat **2% of mining time** on every pool and in solo mode. There is no pool-host discount. Older releases retain their previous rates.
+- **Historical released miner fee (v0.2.26):** 1% of mining time on bntpool.com and its subdomains; 2.5% on other pools and in solo mode. The current calculator now uses v0.2.36's 2% fee and names that version.
+  - Source: `seine@v0.2.26:src/dev_fee.rs`, `dev_fee_percent_for_pool_url`, and `src/miner/mining_pool.rs`.
+- **Released dev fee (v0.2.36):** flat **2% of mining time** on every pool and in solo mode. There is no pool-host discount. Older releases retain their previous rates.
   - Charged as time-sliced dev rounds to a hard-coded dev address, after a **10-minute** fee-free grace period.
   - Source: `src/dev_fee.rs`, `src/miner/mining_pool.rs`, `docs/guides/configuration.md`.
   - Solo/daemon mode uses the same tracker. If the daemon rejects the dev-fee reward address, the existing fallback disables the dev fee for that run.
-- **Pool fee transition:** bntpool.com now charges **0%**, confirmed via live `/api/info` after deployment on 2026-10-25 at 11:59 PM EDT. With a 0% pool fee and the new Seine release, the combined fee is **2%**; older miners retain their own dev fee.
+- **Pool fee transition:** bntpool.com now charges **0%**, confirmed via live `/api/info` after deployment on 2026-10-25 at 11:59 PM EDT. Rechecked 2026-10-26: `/api/info` still reports 0%. The released v0.2.26 miner uses 1% on bntpool.com; v0.2.36 uses a flat 2%; retain v0.2.26 fee values only in version-labelled historical examples.
 - **Release archives:**
 
   | Platform | Archive | GPU support |
   |---|---|---|
   | Windows x86_64 | `seine-windows-x86_64.zip` | NVIDIA (drivers only, CUDA runtime bundled) |
-  | Linux x86_64 | `seine-linux-x86_64.tar.gz` | NVIDIA (driver + NVRTC) |
+  | Linux x86_64 | `seine-linux-x86_64.tar.gz` | NVIDIA (driver + NVRTC); glibc 2.39+ |
   | Linux ARM64 | `seine-linux-aarch64.tar.gz` | CPU only (glibc 2.39+) |
   | macOS Apple Silicon | `seine-macos-aarch64.tar.gz` | CPU (Metal experimental) |
   | macOS Intel | `seine-macos-x86_64.tar.gz` | CPU only |
 
-  - Source: `seine@master:README.md:39-45`, `.github/workflows/release.yml:13-31` (checked 2026-10-25)
+  - Source: `seine@v0.2.26:README.md`, `.github/workflows/release.yml`, `docs/guides/nvidia.md`; official Linux archives verified against release `SHA256SUMS.txt`, then inspected with `readelf --version-info` (both require GLIBC_2.39). Checked 2026-10-26.
 - There is no Windows ARM64 build (release matrix). The Windows zip bundles the CUDA 12.8.61 NVRTC DLLs, so no CUDA Toolkit is needed.
   - Source: `seine@master:docs/guides/nvidia.md:26-27` (checked 2026-10-25)
 - **CPU kernels:**
@@ -359,9 +363,9 @@ All facts checked 2026-10-25. Writers may state only what is listed here. Every 
 
 ## 5. Performance numbers (pre-Faraday Argon2id; H/s = completed hashes per second)
 
-**Headline "best per generation"** (use these names and numbers as presented), from `seine@master:docs/assets/charts/benchmarks.json:112-143` (checked 2026-10-25).
+**Historical "best per generation" snapshot** (superseded for current headline claims; retain for dated comparisons), from `seine@master:docs/assets/charts/benchmarks.json:112-143` (checked 2026-10-25).
 
-**Update 2026-10-25:** the owner approved **49.4 H/s for AMD EPYC · Zen 5 (EPYC 9R45, 32 threads)** for the site, from a new 32-thread run. It replaces the 44.7 H/s / 24-thread headline below on the site and in posts.
+**Earlier update 2026-10-25 (superseded by the 9355P result below):** the owner approved **49.4 H/s for AMD EPYC · Zen 5 (EPYC 9R45, 32 threads)** for the site, from a new 32-thread run. It replaced the 44.7 H/s / 24-thread headline below. The current site and introductory guides use 68.3 H/s on EPYC 9355P, with 64 mining threads, 192 GiB RAM and manually prepared 1 GiB pages; see the detailed measurement at the end of this sheet and `site/src/data/benchmarks.json`.
   - Source: AWS m8a.8xlarge, seine v0.2.22, avx512-256-stream kernel, 32 threads, 49.39 H/s mean of 4 runs, 2026-10-25 (in-progress AWS hardware campaign).
   - Evidence: `seine:experiments/readme-hardware-20261025/summary.json`, host "zen5-turin" (AMD EPYC 9R45, 32 cores, no SMT), in seine PR #59 (`codex/zen5-turin-result`), which also updates `benchmarks.json`, `PERFORMANCE.md` and the README. TODO: switch this to the master path once #59 merges.
 
@@ -444,7 +448,7 @@ From owner preferences for seine marketing:
 Added by this sheet from the evidence:
 - Distinguish the miner dev fee from the pool fee. Check live `/api/info` and the miner version before quoting a combined rate.
 - Don't write "no dev fee" or "no dev tax" about seine.
-  - The tagline "No premine. No dev tax." (`taglines.md:30`) is true of the **protocol** only. Seine charges 1% or 2.5%.
+  - The tagline "No premine. No dev tax." (`taglines.md:30`) is true of the **protocol** only. Released v0.2.26 charges 1% or 2.5%, depending on the pool; v0.2.36 uses 2%. See §4.
 - Don't write "ASIC-proof" or "botnet-proof". The code claims design intent only ("resist ASICs", "impractical", `pow.rs:1-4`). "Designed to resist ASICs" is the safe wording.
   - Faraday's planned lighter PoW (§0) undercuts memory-hardness messaging after ~Feb 2027.
 - Don't claim AMD GPU support, Windows ARM64 builds, or production Metal support (§4).
@@ -556,3 +560,94 @@ checks extracted files (`.github/workflows/release.yml:105-110,138`). Matching a
 hash verifies correspondence to that reference, not a malware verdict. See
 `batches/2026-10-download-verification/research.md` for primary Microsoft sources,
 actual command output, capture provenance and failure-case checks.
+
+## RAM planning and share outcomes — checked October 26, 2026
+
+- Public seine v0.2.26 CPU arenas are 2 GiB per thread. Automatic sizing reserves
+  5% of effective total RAM in addition to accounting for current use; explicit
+  thread counts override that reserve but retain memory checks. Sources and
+  arithmetic: `research/ram-planning-2026-10-26.md`.
+- Pool submission acknowledgment, verification and payout eligibility are distinct.
+  Assignment difficulty and template+nonce deduplication govern shares. Sources:
+  sibling pool `frontend/blog/editorial/share-outcomes-2026-10-26.md`.
+
+## Miner updates and difficulty (October 26, 2026)
+
+- v0.2.36 configuration: default `./seine-data/seine.config.json` is relative to
+  the process working directory; `--data-dir` overrides the base. Saved fields
+  cover connection details; preserve launch flags separately. Sources:
+  `seine@v0.2.36:src/config.rs`, `src/user_config.rs`, `docs/guides/configuration.md`.
+- Update notices run at startup and every 12 hours; they announce releases and
+  do not replace the executable. Source: `src/update_check.rs`.
+- Current difficulty rules: 300-second block target, 60 solve intervals in LWMA,
+  recalculated per block. Source: `blocknet-core@c646196a:block.go`,
+  `expectedDifficultyFromParent` and `nextDifficultyLocked`. Target division:
+  `crypto-rs/src/pow.rs:blocknet_difficulty_to_target`.
+- Full evidence and publication notes: `research/update-and-difficulty-2026-10-26.md`.
+
+## Local benchmark procedure and reward maturity (October 26, 2026)
+
+- Public seine v0.2.36 `--bench` runs locally without pool or daemon. Warmup
+  rounds are excluded from measured summaries; preparation and in-flight work
+  can extend elapsed time beyond requested intervals. Compare like modes and
+  preserve JSON reports, environment, cache policy and all repeated pairs.
+- The pool's confirmation depth is current chain height minus found-block height,
+  starting at zero, with a separate node hash identity check. The public setting
+  checked October 26 is 60 blocks and the minimum payment is 0.1 BNT. The wallet
+  coinbase maturity rule also uses a depth of 60; a later payout transaction has
+  its own receipt and spendability state. Five hours is target arithmetic only.
+- Full source pins and verification: `research/benchmarks-and-confirmations-2026-10-26.md`.
+
+## CPU utilization and separate fee stages (October 26, 2026)
+
+- OS CPU utilization, local device H/s and pool-estimated address hashrate are
+  separate observations. Active hashing threads differ from process threads;
+  each active CPU mining thread uses a 2 GiB arena. Low utilization alone does
+  not demonstrate a memory-bandwidth bottleneck or a need for more threads.
+- Public seine v0.2.36 documents 2% developer mining time across pools and solo,
+  with the first 10 minutes excluded. Scheduling rounds mean a short window
+  need not match 2% exactly. bntpool separately reported a 0% pool fee on this date.
+- For gross estimates, retained fractions multiply. Do not apply a miner-time
+  factor again when the input already reflects it; confirmed balances and
+  recorded payments must not have the same fees deducted a second time.
+- Full sources and boundaries: `research/cpu-usage-and-fees-2026-10-26.md`.
+
+## Windows sign-in startup and multiple computers (October 26, 2026)
+
+- Public v0.2.36 defaults to `./seine-data` relative to the working directory,
+  with connection settings in `seine.config.json`. Use an absolute `--data-dir`
+  and correct scheduler working directory to preserve a working installation.
+- Existing saved rig names are not rewritten by a CLI override; keep the explicit
+  `--pool-worker` value in subsequent launch commands when overriding a copied
+  configuration. Source: v0.2.36 `src/config.rs:858–910,2445–2483`.
+- Task Scheduler ignore-new applies to the same scheduled task, not separately
+  started miners. A sign-in task runs in the selected user's session; disabling
+  the task does not stop an existing miner.
+- Several computers can use the same receiving address with different rig names.
+  Pool history groups by address/name; old shares keep their original name after
+  renaming. Rewards are accounted by address, not separate balances per rig.
+- Primary links and pinned pool source: [batch research](research/windows-startup-and-multiple-miners-2026-10-26.md).
+
+## Configuration persistence (verified October 26, 2026)
+
+v0.2.36 reads `seine.config.json` under `--data-dir` (default `./seine-data`, relative to the working directory). Its saved schema contains connection fields, not every CLI option. Explicit connection flags override existing saved values without rewriting them; missing-file bootstrap writes the initial inputs. Preserve other fields when editing, including the generated `dev_fee_pool_worker`. Dashboard thread changes are session-only. See `research/configuration-and-address-2026-10-26.md` for source functions and pool destination semantics.
+
+## Stop diagnosis and wallet receipt (October 26, 2026)
+
+v0.2.37 prints handled fatal errors before exit; `--ui plain` selects logs while still running mining. A backend fault can be isolated while remaining active backends continue. OS termination, sleep and a live reconnecting process require distinct observations. Wallet node synchronization and wallet output scanning are separate progress checks; ordinary public address searches do not reproduce private wallet balances. Source references and verification limits: `research/miner-stops-and-wallet-receipt-2026-10-26.md`.
+
+## Desktop sharing and connection quality (October 26, 2026)
+
+v0.2.38 supports CPU-only/NVIDIA-only selection, an automatic CPU search ceiling and explicit per-backend counts. Efficiency is a count/hashrate policy, not a CPU-utilization or measured-power cap. Dashboard count changes restart backends and reconnect, remain session-only and disable CPU autotuning for that run. Pool transport carries jobs, qualifying submissions and replies; local H/s and network bandwidth measure different work. See `research/desktop-and-network-2026-10-26.md` for source anchors, controlled-comparison procedure and verification limits.
+
+## Electricity and intermittent sessions (October 26, 2026)
+
+Energy budgeting distinguishes component sensors from whole-PC consumption and full from incremental use. The efficiency profile is a hashrate/thread selection policy, not a measured-watt cap. bntpool's current six-hour window uses share timestamps; reconnecting does not renew previous shares, and payout processing does not require a currently connected miner. Source anchors, explicit arithmetic assumptions and the stop/return example are recorded in `research/electricity-and-part-time-2026-10-26.md`.
+
+## Falling hashrate and wallet transaction fees (October 26, 2026)
+
+A running miner's current/session/device/pool measurements have different scopes; diagnosis compares like-for-like observations and resource evidence. Thermal/power causes need model-specific readings, not a universal threshold. The reviewed core send path estimates size from inputs/outputs/ring structure, with 1,000 atomic units minimum and 10 atomic units per estimated byte; 100,000,000 atomic units = 1 BNT. These are dated implementation defaults. CLI v1.2.0 displays a dry-run fee before confirmation, while the later send builds separately. See `research/hashrate-and-fees-2026-10-26.md` for pinned public sources, arithmetic and scope.
+
+## Faraday plan and node lifecycle (October 26, 2026)
+
+The official Faraday page describes a future network upgrade, with tentative activation around February 16, 2027 and a proposed one-year wallet migration period ending around February 16, 2028. Old-format coins would become unspendable after that window. Do not describe planned cryptography, mining rules or speedups as shipped behavior. CLI v1.2.0 manages a background core separately from attach; setup schedules updates, and outer status can trigger automatic update checks that restart unpinned managed cores. Attach status is distinct. Pinned sources and scope are recorded in `research/faraday-and-node-2026-10-26.md`.

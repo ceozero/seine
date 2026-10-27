@@ -1,0 +1,76 @@
+---
+title: 'Configurar seine: ajustes guardados y opciones de inicio'
+description: 'Encuentra la configuración de seine, guarda los datos del pool y la cartera, entiende las opciones de inicio y verifica tu minero Blocknet al reiniciarlo.'
+tags: ['Guía de minería', 'Configuración', 'seine']
+faq:
+  - q: '¿Dónde guarda seine su configuración?'
+    a: 'Por defecto, seine lee seine-data/seine.config.json desde el directorio de trabajo usado al iniciarlo. La opción data-dir selecciona otra carpeta base. Un acceso directo, terminal o tarea programada puede usar otro directorio de trabajo; anota la ruta completa de configuración junto al comando de inicio.'
+  - q: '¿Una opción de línea de comandos actualiza el archivo?'
+    a: 'En una configuración existente, las opciones explícitas de conexión tienen prioridad durante esa ejecución sin reemplazar la dirección, URL del pool ni nombre del equipo guardados. Conserva la opción en tu lanzador habitual o detén el minero y edita el campo guardado. Comprueba después el inicio normal.'
+  - q: '¿Puedo poner todas las opciones de minería en el JSON?'
+    a: 'La configuración guardada tiene un esquema pequeño para la conexión. Las opciones de hardware y ejecución, como backend e hilos, van en los argumentos de inicio. Añadir campos JSON con nombres parecidos no configura esas opciones. Guarda también el lanzador al hacer una copia de la carpeta de datos.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Haz que tu minero Blocknet arranque siempre con ajustes predecibles. Esta guía sigue seine v0.2.37 y explica dónde se guarda la conexión, qué argumentos tienen prioridad y cómo conservar un cambio. Parte de una instalación funcional; la [guía de actualización](/es/blog/update-seine-miner/) explica cómo reemplazar la aplicación.
+
+## ¿Cómo elige seine sus ajustes?
+
+<Answer>
+seine combina los ajustes de conexión guardados con los argumentos del inicio. Los argumentos explícitos tienen prioridad sobre los valores guardados correspondientes. El directorio de datos determina qué archivo se lee. Las opciones de hardware y ejecución siguen siendo argumentos de inicio: conserva el archivo y tu comando habitual.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Un archivo de configuración y un comando alimentan un minero, seguido de una comprobación tras reiniciarlo." width="1200" height="675" loading="lazy" />
+
+## Localiza la configuración de tu lanzador
+
+El archivo predeterminado es `./seine-data/seine.config.json`. La ruta relativa empieza en el directorio de trabajo del proceso, que puede ser distinto de la carpeta del ejecutable. Comprueba la carpeta del terminal, del acceso directo o del servicio antes de editar. Dos lanzadores pueden ejecutar el mismo programa con carpetas de datos distintas.
+
+`--data-dir` selecciona la carpeta base; el archivo sigue llamándose `seine.config.json`. Usa una ruta absoluta estable si inicias desde distintos sitios. Anota el ejecutable, directorio de trabajo, carpeta de datos y argumentos completos. La [guía de inicio en Windows](/es/blog/start-miner-automatically-windows/) explica estas rutas en el Programador de tareas, incluidas las que contienen espacios.
+
+## ¿Qué ajustes pertenecen al archivo guardado?
+
+El ejemplo muestra los campos principales de conexión. Sustituye `@yourname` por tu Blocknet ID registrado o dirección receptora completa. Es una referencia del formato, no un comando. En una instalación existente, cambia los campos necesarios en lugar de reemplazar todo el archivo con el ejemplo.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` y `pool_worker` eligen el modo, destino, pool y etiqueta del equipo. Conserva `schema_version` y cualquier campo `dev_fee_pool_worker` existente. Este último es una etiqueta generada independiente; usa `pool_worker` para tu equipo. No guardes frases de recuperación ni claves privadas en este archivo de conexión.
+
+## ¿Cómo se conserva un cambio?
+
+Detén el minero y copia el archivo antes de editarlo. Usa un editor de texto, mantén JSON válido con cadenas entre comillas dobles y guarda el nombre original sin añadir otra extensión. Cambia solo el campo necesario en la carpeta que usa tu lanzador. Revisa comas y evita comentarios y comas finales. Usa la validación JSON del editor si dispone de ella. La copia permite comparar los valores anteriores exactamente.
+
+Busca en el lanzador una opción explícita para el mismo ajuste. Cambiar la dirección guardada no tiene efecto si el comando mantiene un `--address` antiguo. Actualiza ese argumento o elimínalo para usar el valor guardado. Reinicia desde el acceso directo, script o tarea habitual y verifica los ajustes efectivos.
+
+## Usa las opciones temporales de forma deliberada
+
+Con una configuración existente, la siguiente opción del pool selecciona el nombre del equipo para esa ejecución. La etiqueta guardada vuelve a aplicarse en el siguiente inicio sin esa opción. Sirve para un cambio controlado; si quieres conservarlo, incluye la opción en tu lanzador habitual.
+
+```text
+--pool-worker desktop-02
+```
+
+Al arrancar por primera vez sin archivo, seine lo crea con los datos iniciales de conexión. Ese proceso difiere de reemplazar temporalmente valores de un archivo existente. Recuerda la diferencia al copiar un comando a otro ordenador, donde quizá se cree la primera configuración. La [referencia de configuración](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) documenta las preguntas iniciales y opciones admitidas.
+
+## Conserva los ajustes de rendimiento en el comando
+
+Opciones como `--backend` y `--threads` se proporcionan al iniciar. El esquema de conexión guardado no es una lista general de todas las opciones. Añadir un campo JSON de nombre similar no establece esa opción de ejecución. Mantén las decisiones de hardware en el script, acceso directo o servicio que inicia el minero.
+
+Los controles de hilos del panel cambian la sesión actual sin guardar un nuevo valor predeterminado. El ajuste automático tiene sus propios archivos de caché. Consérvalos separados de los cambios de conexión y deja que cada ordenador se ajuste a su hardware. La [guía de ajuste automático](/es/blog/seine-automatic-cpu-tuning/) explica la caché y la selección explícita de hilos.
+
+## ¿Por qué parece que los ajustes se restablecen?
+
+Compara primero la ruta de datos y los argumentos con la última ejecución correcta. Otra carpeta de extracción o terminal, o un argumento antiguo de una tarea, pueden explicar el cambio. Si falla el análisis, lee la ruta y el mensaje antes de modificar nada más. Restaura la copia o corrige el JSON e inicia una vez desde el lugar previsto.
+
+Comprueba destino, pool, nombre del equipo y participaciones aceptadas. Repite un inicio normal para verificar que el cambio persiste; una ejecución con opciones solo verifica ese comando. La [guía del panel](/es/blog/seine-dashboard-explained/) ayuda a leer la sesión y la [guía de cambio de dirección](https://bntpool.com/blog/es/change-mining-wallet-address/) explica el destino del trabajo futuro. Guarda juntos el lanzador funcional y la copia de configuración.
+
+<CTA target="seine" title="Obtén la versión actual de seine" text="Usa una carpeta de datos estable y conserva el comando probado junto a la conexión guardada." />

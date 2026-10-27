@@ -2432,6 +2432,7 @@ fn selected_cpu_kernel(cfg: &Config) -> Option<String> {
         .any(|spec| spec.kind == BackendKind::Cpu)
         .then(|| {
             cfg.bench_cpu_kernel
+                .or_else(|| super::adaptive_kernel::static_kernel_for(cfg.threads))
                 .unwrap_or_else(blocknet_pow_kernel::CpuKernel::preferred)
                 .to_string()
         })

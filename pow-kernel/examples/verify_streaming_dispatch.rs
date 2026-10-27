@@ -32,6 +32,8 @@ fn main() {
             CpuKernel::Avx512,
             CpuKernel::Avx512256Stream,
             CpuKernel::Avx512256,
+            CpuKernel::Avx512256StreamR8D2,
+            CpuKernel::Avx512256StreamR8D2,
             CpuKernel::Avx512256Stream,
             CpuKernel::Avx2,
         ] {

@@ -1,0 +1,72 @@
+---
+title: 'Cara memperbarui miner Blocknet'
+description: 'Perbarui miner seine untuk Blocknet, simpan pengaturan, verifikasi unduhan resmi, lalu periksa versi, koneksi pool, dan share yang diterima setelah mulai ulang.'
+tags: ['Panduan penambangan', 'seine', 'Pembaruan']
+faq:
+  - q: 'Apakah seine memasang pembaruan otomatis?'
+    a: 'Pemeriksa versi mengumumkan rilis baru di dasbor dan log. Anda memilih waktu pemasangan. Unduh dan verifikasi arsip resmi, hentikan miner, ganti berkas aplikasi, lalu mulai ulang dengan direktori data dan opsi peluncuran yang sama.'
+  - q: 'Berkas mana menyimpan pengaturan saya?'
+    a: 'Konfigurasi bawaan berada di seine-data/seine.config.json, relatif terhadap direktori peluncuran. data-dir mengubah lokasinya. Simpan direktori data beserta skrip atau konfigurasi layanan: opsi backend dan thread terpisah dari rincian koneksi yang disimpan.'
+  - q: 'Mengapa alamat diminta lagi setelah pembaruan?'
+    a: 'Periksa direktori kerja dan data-dir. Menjalankan dari folder baru dapat membuat seine mencari konfigurasi di tempat lain. Hentikan instans itu, temukan data asli, lalu jalankan dengan jalur yang benar. Periksa alamat dan pool sebelum melanjutkan.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Perbarui seine sambil mempertahankan koneksi pool dan opsi yang sudah berfungsi. Panduan ini mengikuti rilis publik v0.2.36 untuk persiapan, penggantian, dan pemeriksaan. Untuk pemasangan pertama, gunakan panduan [Windows](/id/blog/mine-blocknet-on-windows/), [Linux](/id/blog/mine-blocknet-on-linux/), atau [Mac](/id/blog/mine-blocknet-on-mac/).
+
+## Bagaimana cara memperbarui seine?
+
+<Answer>
+Unduh dan verifikasi arsip resmi untuk sistem Anda, hentikan miner, simpan direktori datanya, lalu ganti berkas aplikasi. Mulai ulang dengan direktori kerja dan argumen yang sama. Periksa versi, tujuan pembayaran, koneksi pool, serta share diterima sebelum memperbarui mesin berikutnya.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="Paket aplikasi diganti, folder konfigurasi dipertahankan, lalu koneksi diperiksa." width="1200" height="675" loading="lazy" />
+
+## Bagaimana memeriksa versi saat ini?
+
+Jalankan perintah versi pada executable yang benar-benar digunakan. Salinan lama dapat berbeda dari yang dijalankan pintasan atau layanan. Catat jalur executable, direktori kerja, dan argumen bersama agar proses dapat diulangi. Di Windows, buka PowerShell di folder miner saat ini:
+
+```powershell
+.\seine.exe --version
+```
+
+Di Linux atau macOS, buka terminal di folder tersebut:
+
+```sh
+./seine --version
+```
+
+Bandingkan hasilnya dengan [rilis resmi](https://github.com/zpalmtree/seine/releases). seine memeriksa saat mulai dan setiap 12 jam, lalu menampilkan pemberitahuan di dasbor dan log. Pemberitahuan menyediakan tautan unduhan; Anda memilih pemasangannya. Baca catatan tentang platform, runtime, dan opsi peluncuran.
+
+## Pengaturan apa yang perlu disimpan?
+
+Secara bawaan, seine membaca `./seine-data/seine.config.json`. `./` berarti direktori kerja saat ini; memindahkan executable dan menjalankannya di tempat lain dapat mengubah lokasi pencarian. Pertahankan direktori `--data-dir` yang sama jika dipakai. Jalur absolut memperjelas lokasi ketika pintasan, skrip, atau layanan menentukan direktori kerja.
+
+Konfigurasi menyimpan mode penambangan, alamat pembayaran, URL pool, dan nama rig. Simpan seluruh direktori data termasuk berkas tuning. Simpan pula perintah, skrip, atau definisi layanan: `--backend` dan `--threads` terpisah dari kolom koneksi tersebut. Keduanya mempertahankan konfigurasi yang dimaksud saat mulai ulang.
+
+## Unduh dan verifikasi pengganti
+
+Pilih arsip sistem dan arsitektur CPU dari [halaman unduhan](/id/#download) atau rilis resmi. Unduh juga aset terpisah `SHA256SUMS.txt` dari rilis yang sama. Bandingkan checksum sebelum mengekstrak ke folder lain. [Panduan verifikasi](/id/blog/antivirus-flags-crypto-miner/) menjelaskan langkah Windows dan peringatan unduhan.
+
+Simpan semua berkas paket bersama. Paket Windows menyertakan pustaka runtime NVIDIA di samping `seine.exe`; menyalin executable saja dapat mencampur versi. [Panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/) membahas runtime. [Referensi v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) mendokumentasikan konfigurasi tersimpan dan perilaku peluncuran ini.
+
+## Hentikan, cadangkan, dan ganti
+
+Keluar dengan `q` atau `Ctrl+C` dan tunggu proses berhenti. Untuk layanan, gunakan pengelolanya dan perhatikan kebijakan mulai ulang otomatis sebelum mengganti berkas. Saat miner berhenti, buat cadangan lokal folder aplikasi dan data. Pisahkan cadangan dari ekstraksi baru agar kedua versi mudah dikenali.
+
+Letakkan berkas baru di lokasi pemasangan sambil mempertahankan data asli. Jika memakai folder per versi, perbarui jalur executable pintasan atau layanan dan pertahankan direktori kerja serta data secara eksplisit. Jalankan satu instans dengan opsi yang sama. Untuk banyak rig, selesaikan pemeriksaan pada satu mesin terlebih dahulu.
+
+## Bagaimana memastikan pembaruan berhasil?
+
+Periksa kembali versi executable terpasang terhadap rilis unduhan. Jalankan dan periksa tujuan pembayaran, pool, nama rig, serta backend CPU atau GPU yang diinginkan. Tuning tersimpan dapat dipakai kembali jika kompatibel; tunggu tuning awal selesai sebelum menilai hashrate. [Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan panelnya.
+
+Cari share diterima, lalu buka [My Stats](https://bntpool.com/stats) untuk alamat yang sama. Estimasi pool memerlukan share dan waktu untuk stabil; perbedaan hashrate langsung tidak cukup menandakan masalah pembaruan. Proses baru juga memulai sesi lokal baru. Bandingkan alamat, rig, dan aktivitas sebelum penghitung jangka pendek kedua sesi.
+
+## Bagaimana jika pertanyaan awal muncul lagi?
+
+Periksa direktori kerja dan `--data-dir` dahulu. Folder baru sering belum memiliki konfigurasi di jalur relatif bawaan. Hentikan instans dan arahkan ke data asli. Jika kesalahan menyebut berkas konfigurasi, simpan berkas dan pesan persisnya untuk penyelidikan. Jangan sertakan seed dompet, kunci privat, atau token API kontrol dalam tangkapan layar atau laporan publik.
+
+Jika gagal mulai, catat versi, sistem, jalur, dan kesalahan persisnya, lalu ikuti panduan platform. Cadangan menyimpan aplikasi lama beserta pengaturannya. Sebelum memulihkan, periksa persyaratan kompatibilitas pada catatan rilis baru. Lanjutkan dengan konfigurasi yang diketahui dan periksa share; mengganti miner tidak memerlukan dompet baru.
+
+<CTA target="seine" title="Unduh rilis seine saat ini" text="Pilih arsip platform Anda dan pertahankan konfigurasi saat memperbarui." />

@@ -1,0 +1,62 @@
+---
+title: 'Mengapa penambang Blocknet saya terus berhenti?'
+description: 'Cari penyebab penambang Blocknet berhenti: periksa pesan terakhir, memori, awal GPU dan tidur komputer, lalu pastikan seine berjalan stabil kembali.'
+tags: ['Pemecahan masalah', 'Panduan penambangan', 'seine']
+faq:
+  - q: 'Apakah koneksi terputus selalu berarti program crash?'
+    a: 'Koneksi pool yang terputus dapat membiarkan proses tetap berjalan sambil menyambung kembali. Periksa apakah proses masih ada, baca pesan terbaru, lalu cari share diterima setelah koneksi pulih. Aplikasi yang tertutup atau laporan crash sistem operasi memerlukan pemeriksaan berbeda.'
+  - q: 'Haruskah konfigurasi dihapus ketika seine berhenti?'
+    a: 'Simpan konfigurasi dan catat lokasinya sebelum mengubah apa pun. Pesan parsing menunjukkan berkas atau nilai tertentu. Cadangkan berkas itu, perbaiki masalah yang disebutkan, dan pertahankan alamat serta pengaturan peluncur. Menghapus semuanya mempersulit perbandingan dengan sesi terakhir yang berhasil.'
+  - q: 'Informasi apa yang membantu memeriksa penghentian berulang?'
+    a: 'Catat versi seine, sistem operasi, CPU, GPU, memori tersedia, argumen lengkap, direktori kerja dan waktu berhenti. Sertakan pesan terakhir dan kejadian sistem terkait. Hapus kredensial dan data pribadi sebelum berbagi; jangan pernah menyertakan frasa pemulihan atau private key wallet.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Jalankan penambang Blocknet secara konsisten dengan mengenali tahap saat ia berhenti. Panduan ini mengikuti seine v0.2.37 dan dimulai dari bukti yang bisa Anda kumpulkan di komputer sendiri. Simpan perintah dan konfigurasi terakhir yang berhasil, lalu ubah satu pengaturan terkait pada satu waktu agar hasil berikutnya berguna.
+
+## Apa yang diperiksa ketika penambang berhenti?
+
+<Answer>
+Periksa apakah proses keluar, komputer tidur, atau koneksi pool sedang pulih. Simpan pesan terakhir dan waktunya sebelum memulai ulang. Hubungkan bukti tersebut dengan konfigurasi awal, alokasi memori, inisialisasi GPU atau kejadian sistem operasi, lalu verifikasi perbaikannya dengan share diterima yang baru.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Log penambang mengarah ke pemeriksaan terpisah atas aplikasi, memori dan daya komputer, kemudian mulai ulang yang terverifikasi." width="1200" height="675" loading="lazy" />
+
+## Biarkan pesan terakhir terlihat
+
+Buka terminal di direktori peluncuran biasa dan jalankan perintah yang sudah Anda gunakan. Tambahkan `--ui plain` untuk log teks alih-alih dasbor, tanpa mengubah argumen lain. Ini memulai penambangan dengan pengaturan Anda. Salin pesan akhir, termasuk kesalahan pertama sebelum pesan koneksi ulang atau penghentian yang berulang.
+
+Catat versi program, direktori kerja dan direktori data yang dipilih bersama-sama. Pada rilis ini, kesalahan fatal yang ditangani dicetak dengan `fatal:` sebelum keluar. Penghentian oleh sistem operasi dapat meninggalkan bukti berbeda. Jika proses masih hidup, ikuti [pemeriksaan koneksi pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/); share yang belum datang atau putus sementara bukan bukti crash.
+
+## Apakah berhenti sebelum penambangan dimulai?
+
+Baca nama berkas, opsi atau pustaka pada pesan awal. Kesalahan parsing konfigurasi mengarahkan Anda ke berkas tertentu; buat salinan sebelum memperbaiki sintaks. Periksa direktori kerja pintasan atau layanan. [Panduan konfigurasi](/id/blog/configure-seine-miner/) menjelaskan mengapa program yang sama dapat membaca pengaturan berbeda dari folder peluncuran yang berbeda.
+
+Jika program tidak bisa dimulai, pastikan arsip sesuai sistem dan arsitektur serta gunakan rilis resmi. Untuk peringatan keamanan, ikuti [panduan verifikasi unduhan](/id/blog/antivirus-flags-crypto-miner/). Pertahankan perlindungan saat mengidentifikasi berkas dan pesan. Jika masalah muncul setelah pembaruan, bandingkan jalur dan argumen dengan [prosedur pembaruan](/id/blog/update-seine-miner/).
+
+## Bagaimana jika pesan menyebut memori atau halaman?
+
+Sesuaikan jumlah thread CPU yang diminta dengan memori tersedia, termasuk aplikasi lain dan batas container. Kesalahan alokasi menunjukkan sumber daya yang perlu diperiksa, bukan bukti RAM rusak. Tutup beban yang tidak perlu atau kurangi jumlah thread yang dipaksakan, lalu coba sekali lagi. Catat perubahan yang berpengaruh dan apakah penambangan dimulai.
+
+Mode halaman yang diwajibkan membutuhkan reservasi sistem operasi yang sesuai. Kegagalan alokasi huge pages wajib berbeda dari kekurangan memori biasa. Gunakan [panduan RAM](/id/blog/how-much-ram-to-mine-blocknet/) untuk kapasitas dan [panduan huge pages](/id/blog/huge-pages-blocknet-mining/) untuk pengaturan halaman. Jangan ubah banyak opsi tuning sekaligus: konfigurasi sederhana yang dikenal memudahkan membaca log berikutnya.
+
+## Periksa tahap GPU secara terpisah
+
+Jika awal program menyebut pustaka CUDA, perangkat atau alokasi GPU, catat pesan tepat dan versi driver terpasang. [Panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/) membahas kebutuhan rilis, pustaka runtime dan pemilihan perangkat. Bandingkan dengan lingkungan Anda sebelum mengubah kernel atau tuning. Unduhan arsip yang berhasil belum membuktikan runtime siap.
+
+seine dapat mengisolasi kegagalan backend sementara backend aktif lainnya terus bekerja. Periksa pesan dan aktivitas tersisa sebelum menyimpulkan seluruh aplikasi berhenti. Simpan bukti sebelum memulai ulang karena sesi baru dapat menutupi urutan sebelumnya. Jika menguji pilihan backend lebih sederhana, simpan perintah asli dan bandingkan awal, pekerjaan berkelanjutan serta kiriman diterima.
+
+## Apakah komputer tidur atau dimulai ulang?
+
+Bandingkan waktu berhenti dengan tidur, hibernasi, restart dan riwayat tugas terjadwal. Layar mati dan komputer tidur adalah pengaturan terpisah. Di Windows, periksa [pengaturan daya dan tidur](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11), termasuk penutupan layar laptop atau perubahan sumber daya. Pilih pengaturan sesuai penggunaan dan pendinginan komputer.
+
+Untuk proses yang keluar tak terduga, periksa log aplikasi dan sistem pada waktu yang sama. [Event Viewer](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) Windows dapat menghubungkan kesalahan aplikasi dengan programnya. Restart seluruh komputer juga membutuhkan bukti tingkat sistem. Pada instalasi layanan, baca status keluar dan log sebelum mengaktifkan restart berulang yang dapat menutupi penyebab awal.
+
+## Verifikasi perbaikan dan simpan laporan berguna
+
+Setelah koreksi terarah, mulai lewat pintasan, terminal atau layanan biasa. Pastikan tujuan, backend aktif dan share diterima yang baru. Amati kondisi yang dahulu memicu berhenti, seperti penggunaan desktop biasa atau peluncuran terjadwal berikutnya, tanpa menciptakan kondisi perangkat keras berbahaya. [Panduan dasbor](/id/blog/seine-dashboard-explained/) membedakan kerja saat ini dari statistik sesi terkumpul.
+
+Jika berulang, kumpulkan versi, sistem, perangkat keras, memori tersedia, opsi tepat, waktu dan pesan terakhir. Jelaskan perubahan serta apakah seluruh proses keluar atau hanya satu backend berhenti. Hapus kredensial dan data pribadi; jangan berbagi seed atau private key. Simpan konfigurasi yang bekerja dan jangan menebak sebab hanya dari hashrate.
+
+<CTA target="seine" title="Dapatkan rilis seine terbaru" text="Simpan rilis terverifikasi dan perintah peluncuran, lalu pastikan pekerjaan diterima setelah setiap perbaikan terarah." />

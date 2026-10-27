@@ -1,0 +1,62 @@
+---
+title: 'Perché il mio miner Blocknet continua a fermarsi?'
+description: 'Scopri perché il miner Blocknet si ferma: controlla messaggi, memoria, avvio GPU e sospensione, poi verifica un riavvio stabile con seine.'
+tags: ['Risoluzione dei problemi', 'Guida al mining', 'seine']
+faq:
+  - q: 'Un miner disconnesso è sempre andato in crash?'
+    a: 'Una connessione al pool interrotta può lasciare il processo attivo durante la riconnessione. Controlla se esiste ancora, leggi gli ultimi messaggi e cerca nuovi share accettati dopo il ripristino. Un''applicazione chiusa o un rapporto di crash del sistema richiedono un''indagine diversa.'
+  - q: 'Devo eliminare la configurazione quando seine si ferma?'
+    a: 'Conserva la configurazione e annotane la posizione prima di modificarla. Un errore di parsing indica un file o valore preciso. Esegui una copia, correggi il problema segnalato e mantieni indirizzo e impostazioni di avvio. Eliminare tutto rende più difficile il confronto con l''ultima esecuzione funzionante.'
+  - q: 'Quali informazioni servono per arresti ripetuti?'
+    a: 'Annota versione di seine, sistema, CPU e GPU, memoria disponibile, argomenti completi, directory di lavoro e orario. Includi gli ultimi messaggi e gli eventi di sistema pertinenti. Rimuovi credenziali e dati personali prima di condividere; non includere mai frasi di recupero o chiavi private.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Rendi costante il funzionamento del miner Blocknet individuando il punto in cui si ferma. Questa guida segue seine v0.2.37 e parte da prove raccolte sul tuo computer. Conserva l'ultimo comando e la configurazione funzionanti, poi modifica una sola impostazione pertinente alla volta per interpretare il risultato successivo.
+
+## Cosa controllare quando il miner si ferma?
+
+<Answer>
+Verifica se il processo è terminato, il computer è sospeso o la connessione al pool si sta ripristinando. Conserva ultimo messaggio e orario prima di riavviare. Collega le prove a configurazione, allocazione della memoria, inizializzazione GPU o eventi del sistema e verifica la correzione con nuovi share accettati.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Un log del miner porta a controlli distinti di applicazione, memoria e alimentazione, seguiti da un riavvio verificato." width="1200" height="675" loading="lazy" />
+
+## Mantieni visibile l'ultimo messaggio
+
+Apri un terminale nella directory abituale ed esegui il comando esistente. Aggiungi `--ui plain` per log testuali anziché dashboard, lasciando invariati gli altri argomenti. Questo avvia il mining con la configurazione esistente. Copia i messaggi finali, incluso il primo errore precedente ai messaggi ripetuti di riconnessione o arresto.
+
+Annota insieme versione dell'eseguibile, directory di lavoro e directory dati selezionata. In questa versione, un errore fatale gestito viene stampato con `fatal:` prima dell'uscita. Una terminazione del sistema può lasciare prove diverse. Se il processo è vivo, segui i [controlli della connessione](https://bntpool.com/blog/it/track-your-miner-on-bntpool/): uno share assente o una disconnessione temporanea non dimostra un crash.
+
+## Si ferma prima di iniziare il mining?
+
+Leggi il file, l'opzione o la libreria citata all'avvio. Un errore di parsing rimanda a un file preciso; copialo prima di correggere la sintassi. Controlla la directory di lavoro del collegamento o servizio. La [guida alla configurazione](/it/blog/configure-seine-miner/) spiega perché lo stesso eseguibile può leggere impostazioni diverse da cartelle differenti.
+
+Se l'eseguibile non parte, verifica l'archivio per sistema e architettura e usa la versione ufficiale. Per un avviso di sicurezza segui la [guida alla verifica del download](/it/blog/antivirus-flags-crypto-miner/), mantenendo la protezione attiva mentre identifichi file e messaggio. Se è iniziato dopo un aggiornamento, confronta percorso e argomenti con la [procedura di aggiornamento](/it/blog/update-seine-miner/).
+
+## Il messaggio riguarda memoria o pagine?
+
+Adatta il numero richiesto di thread CPU alla memoria disponibile, considerando altre applicazioni e limiti dei container. Un errore di allocazione segnala una risorsa da indagare, non dimostra da solo RAM difettosa. Chiudi attività superflue o riduci un numero di thread imposto e riprova una volta. Annota quale modifica ha inciso e se il mining è iniziato.
+
+Una modalità di pagine obbligatoria richiede la prenotazione corrispondente del sistema. Un'allocazione di huge pages richieste fallita e la carenza di memoria ordinaria richiedono controlli diversi. Consulta la [guida RAM](/it/blog/how-much-ram-to-mine-blocknet/) per la capacità e quella delle [huge pages](/it/blog/huge-pages-blocknet-mining/) per la configurazione. Evita più modifiche di tuning insieme: una configurazione semplice e nota facilita la lettura del log.
+
+## Controlla separatamente la fase GPU
+
+Se l'avvio cita libreria CUDA, dispositivo o allocazione GPU, annota messaggio esatto e versione del driver. La [guida NVIDIA](/it/blog/mine-blocknet-nvidia-gpu/) tratta requisiti, librerie runtime e scelta dei dispositivi. Confrontali con l'ambiente installato prima di cambiare kernel o tuning. Un archivio scaricato correttamente non dimostra che il runtime sia pronto.
+
+seine può isolare un guasto del backend mentre gli altri backends attivi continuano. Controlla messaggi e attività restante prima di concludere che tutta l'applicazione si sia fermata. Salva le prove prima del riavvio, perché la nuova sessione può nascondere la sequenza precedente. Se provi una selezione più semplice, conserva il comando originale e confronta avvio, lavoro continuo e invii accettati.
+
+## Il computer era sospeso o si è riavviato?
+
+Confronta l'orario con sospensione, ibernazione, riavvii e cronologia delle attività pianificate. Spegnimento dello schermo e sospensione del computer sono impostazioni distinte. In Windows controlla le [impostazioni di alimentazione e sospensione](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11) e l'eventuale chiusura del coperchio o cambio di alimentazione. Scegli impostazioni adatte a uso e raffreddamento della macchina.
+
+Per un'uscita inattesa, esamina i log di applicazioni e sistema nello stesso intervallo. Il [Visualizzatore eventi](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) di Windows può associare un errore al suo eseguibile. Un riavvio completo richiede anche prove di sistema. Se usi un servizio, controlla stato di uscita e log prima di attivare riavvii ripetuti che possano nascondere la causa iniziale.
+
+## Verifica la soluzione e conserva un rapporto utile
+
+Dopo la correzione mirata avvia dal normale collegamento, terminale o servizio. Conferma destinazione, backends attivi e nuovi share accettati. Osserva la condizione precedente all'arresto, come l'uso normale del desktop o il prossimo avvio pianificato, senza ricreare condizioni hardware pericolose. La [guida alla dashboard](/it/blog/seine-dashboard-explained/) distingue lavoro attuale e statistiche accumulate.
+
+Se si ripete, raccogli versione, sistema, hardware, memoria disponibile, opzioni esatte, ora e messaggi finali. Spiega cosa è cambiato e se è terminato il processo o solo un backend. Rimuovi credenziali e dati personali; non condividere seed o chiavi private. Mantieni la configurazione funzionante e non dedurre la causa dal solo hashrate.
+
+<CTA target="seine" title="Scarica la versione attuale di seine" text="Conserva una versione verificata e il comando di avvio e conferma il lavoro accettato dopo ogni correzione mirata." />

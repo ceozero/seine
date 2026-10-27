@@ -1,0 +1,70 @@
+---
+title: 'Cómo hacer un benchmark de tu minero de Blocknet'
+description: 'Mide seine con pruebas de CPU repetibles, rondas de calentamiento e informes JSON. Compara tiempos manteniendo constantes el ajuste, la memoria y la carga.'
+tags: ['Guía de minería', 'Benchmarks', 'seine']
+faq:
+  - q: '¿Un benchmark de seine envía shares al pool?'
+    a: 'No. --bench ejecuta una prueba local en lugar de minería real y no necesita pool ni daemon. El informe mide la carga local seleccionada. Después, inicia una sesión normal para comprobar por separado la conexión y los shares aceptados.'
+  - q: '¿Con qué modo de benchmark empiezo?'
+    a: 'Empieza con backend para probar los motores de minería seleccionados. Mantén el mismo modo, versión y configuración. Kernel, kernel-effective y end-to-end miden ámbitos distintos; conserva el modo y los datos de tiempo junto a cada tasa de hash.'
+  - q: '¿Cómo hago comparables dos pruebas?'
+    a: 'Usa la misma máquina, versión, motores, memoria, carga de fondo y política de caché. Cambia una sola variable, repite ambas configuraciones alternando el orden y conserva todos los informes. Calentar y repetir mejora el método, pero una prueba breve no demuestra una diferencia pequeña.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Mide tu equipo con el benchmark integrado de seine y guarda un registro para futuras comparaciones. Esta guía usa la versión pública v0.2.36 y un ejemplo solo de CPU, sin atribuir resultados nuevos a ningún equipo. Instala primero con la [guía de inicio](/es/blog/how-to-mine-blocknet/). Los equipos medidos y sus condiciones están en la [guía de hardware](/es/blog/blocknet-mining-hardware-hashrate/).
+
+## ¿Cómo haces un benchmark de seine?
+
+<Answer>
+Ejecuta seine con `--bench`, elige motor y modo, incluye calentamiento y guarda un informe JSON. Repite la misma carga en condiciones comparables antes de cambiar una variable. La prueba funciona localmente sin pool ni daemon; comprueba los shares aceptados al volver a la minería normal.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Un calentamiento precede a tres rondas medidas que se guardan en un informe; una segunda configuración repite la secuencia." width="1200" height="675" loading="lazy" />
+
+## Prepara un punto de partida constante
+
+Anota versión, sistema operativo, procesador exacto, RAM utilizable y comando. Si incluyes NVIDIA, añade modelo y controlador. Elige un periodo con carga de fondo parecida durante toda la comparación. Un juego, compilación u otro minero activo solo en una prueba cambia las condiciones medidas.
+
+Define si buscas una referencia de CPU, comparar hilos o estudiar las páginas de memoria. Mantén ubicación de CPU, energía y memoria constantes salvo la variable elegida. La [guía de RAM](/es/blog/how-much-ram-to-mine-blocknet/) trata la capacidad y la [guía de páginas grandes](/es/blog/huge-pages-blocknet-mining/) su preparación. Registra el modo de páginas obtenido además del solicitado.
+
+## Ejecuta una prueba de CPU y guarda el informe
+
+Desde la carpeta extraída, el primer comando sirve para Linux o macOS y el segundo para PowerShell de Windows. Ambos seleccionan CPU y modo `backend`, una ronda de calentamiento y tres medidas, solicitando 20 segundos por ronda. La ruta de salida es relativa al directorio actual. Usa un nombre distinto en cada ejecución para conservar las anteriores.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Los comandos dejan automáticos los hilos y el núcleo de cálculo. Preparación y ajuste pueden añadir tiempo antes de las rondas, y el trabajo en curso puede terminar después del intervalo pedido. Espera a que se escriba `cpu-baseline.json`. El calentamiento queda fuera del resumen medido. La duración total puede superar los cuatro intervalos solicitados: 20 segundos no describe el tiempo total del comando.
+
+## ¿Qué debes leer en el informe?
+
+Revisa modo, configuración efectiva y rondas individuales antes del resumen. El JSON incluye `avg_hps`, `median_hps`, `min_hps`, `max_hps` y `runs`, junto con configuración y entorno. Conserva el archivo original, no solo el máximo. La [referencia de opciones](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) documenta informes y comparaciones con referencias.
+
+La tasa de hash expresa trabajo completado por segundo. Una comparación útil conserva la definición del trabajo contado y del tiempo transcurrido. Examina duración real y dispersión entre rondas; un pico no resume la prueba. Si varían mucho, repite en condiciones más estables o alarga las rondas. Al compartir resultados, describe la configuración medida.
+
+## Compara un cambio con pares repetidos
+
+Llama A a la configuración original y B a la modificada. Ejecuta A y luego B, repite el par y alterna cuál empieza entre pares. Mantén duración y calentamiento. Guarda archivos distintos como `cpu-a-1.json` y `cpu-b-1.json`. Así puedes detectar resultados que siguen el orden o el entorno en vez del ajuste probado.
+
+Aplica la misma política de caché a ambos lados: el primer arranque con datos nuevos y un reinicio con ajustes guardados responden preguntas distintas. Conserva tu directorio habitual y separa los de prueba si necesitas estados iniciales nuevos. La [guía de ajuste automático](/es/blog/seine-automatic-cpu-tuning/) explica la reutilización. `--threads` cambia el comportamiento del ajuste en una prueba fija; documenta esa elección frente a una automática.
+
+## ¿Por qué deben coincidir los modos?
+
+`backend` ejercita los motores de minería; `kernel` se centra en el cálculo de hashes. `kernel-effective` incluye tiempos del ciclo de vida y la ruta de objetivo/evaluación del motor. Son ámbitos distintos incluso en la misma máquina. Etiqueta cada tasa con su modo; compartir unidades no convierte las mediciones en equivalentes.
+
+`end-to-end` incluye más del ciclo de vida de minería. Conserva versión y significado de los tiempos además del modo. La [documentación del laboratorio](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) explica pruebas pareadas, registros del entorno y comprobaciones de compatibilidad. Úsalas cuando una decisión dependa de una diferencia pequeña y conserva todas las ejecuciones.
+
+## Vuelve a minar y verifica el trabajo útil
+
+Al terminar, inicia tu comando habitual con dirección y directorio previstos. Comprueba dispositivos y mensajes de shares aceptados en el [panel](/es/blog/seine-dashboard-explained/). El benchmark mide rendimiento local; los shares confirman conexión y entrega de trabajo en la sesión normal. Documenta ambas comprobaciones para la configuración diaria.
+
+El pool estima la tasa a partir de shares recibidos a lo largo del tiempo, una observación distinta del benchmark breve. Sigue el trabajo acreditado con la [guía del pool](https://bntpool.com/blog/es/track-your-miner-on-bntpool/). Guarda versión, comando, máquina, memoria y páginas, política de caché, carga de fondo y todos los JSON para reproducir e interpretar la próxima comparación.
+
+<CTA target="seine" title="Haz benchmarks con seine" text="Descarga seine, guarda una referencia repetible y sigue después tu sesión normal en el panel." />

@@ -1,0 +1,62 @@
+---
+title: 'Czy można kopać Blocknet podczas używania PC?'
+description: 'Kop Blocknet podczas pracy na PC: wybierz CPU lub GPU, zostaw pamięć aplikacjom, dostosuj wątki seine i sprawdź ustawienia odpowiednie do codziennej pracy.'
+tags: ['Poradnik kopania', 'Pulpit', 'seine']
+faq:
+  - q: 'Czy mogę grać, gdy seine kopie?'
+    a: 'Dobierz backendy do urządzeń potrzebnych grze. Kopanie tylko CPU pozostawia backend NVIDIA nieużywany, ale procesor i RAM nadal są współdzielone. Przy wymagającej sesji zamknij miner normalnie, a później uruchom ponownie zapisane polecenie.'
+  - q: 'Czy profil efektywności ogranicza CPU do procentu?'
+    a: 'Profil kieruje strojenie ku mniejszej liczbie wątków utrzymującej część zmierzonego szczytowego hashrate. Nie jest procentowym limitem CPU w systemie ani celem zmierzonego poboru mocy. Sprawdź responsywność i pamięć przy otwartych zwykłych aplikacjach.'
+  - q: 'Czy zmiana wątków w panelu pozostaje po restarcie?'
+    a: 'Obowiązuje w bieżącej sesji i wyłącza w niej automatyczne strojenie CPU. Nie zapisuje nowej wartości startowej. Aby powtarzać stałą liczbę, dodaj opcję wątków do zwykłego polecenia lub skrótu i sprawdź następne uruchomienie.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Dopasuj seine do używanych aplikacji. Poradnik dla seine v0.2.38 obejmuje wybór urządzeń, wolną pamięć, mniej wątków CPU i powtarzalny start. Zacznij od działającego zestawu, zachowując adres, pulę i katalog roboczy.
+
+## Czy można używać komputera podczas kopania?
+
+<Answer>
+Tak. Dobierz backendy i wątki CPU do pracy, a potem sprawdź reakcję z otwartymi zwykłymi aplikacjami. Obserwuj razem dostępną pamięć, aktywność urządzeń i zaakceptowane udziały. Przed wymagającą grą lub renderowaniem zamknij miner normalnie i wróć do zapisanego uruchomienia po zakończeniu.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Aplikacja i proces kopania współdzielą komputer, z osobnymi ustawieniami pracy CPU i GPU." width="1200" height="675" loading="lazy" />
+
+## Zacznij od zadania, które ma działać płynnie
+
+Otwórz zwykłe aplikacje i wykonaj reprezentatywną czynność: przełącz karty, edytuj dokument albo przeglądaj projekt. Porównaj reakcję bez kopania i przy uruchomionym minerze. Zachowaj podobne zadanie i stan aplikacji, aby porównanie odpowiadało na konkretną potrzebę.
+
+Obserwuj też CPU, pamięć i GPU. Windowsowy [Menedżer zadań](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) pokazuje zasoby aplikacji; inne systemy mają własne monitory. Sam procent użycia nie dowodzi, że zostało miejsce na kolejne zadanie. [Poradnik wykorzystania CPU](/pl/blog/miner-cpu-usage/) objaśnia wskaźniki i aktywność urządzeń minera.
+
+## Które urządzenie powinno kopać?
+
+Wybierz według aplikacji na pierwszym planie. Automatyczny wybór seine używa CPU i wykrytych obsługiwanych urządzeń NVIDIA. Dodanie `--backend cpu` do polecenia wybiera tylko CPU i nie używa backendu NVIDIA. Procesor i RAM nadal dzielisz z pulpitem. Po starcie sprawdź wiersze urządzeń.
+
+Obsługiwana konfiguracja NVIDIA może użyć `--backend nvidia`, wyłączając kopanie CPU. Aplikacje graficzne na tej samej karcie dzielą pamięć i wykonanie GPU; nie rezerwuje to całego procesora dla innych programów. [Poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/) opisuje środowisko i wybór karty. Zachowaj pierwotne polecenie do porównań.
+
+## Wybierz zakres automatyczny lub stałą liczbę wątków
+
+Przy automatycznym strojeniu rozważ `--cpu-profile efficiency`. Preferuje mniej wątków blisko swojego celu hashrate; nie mierzy watów ani nie ustala czasu reakcji pulpitu. `--cpu-autotune-max-threads 2` to przykład ograniczenia poszukiwań. Dobierz wartość i przeczytaj [poradnik strojenia](/pl/blog/seine-automatic-cpu-tuning/) przed łączeniem nadpisań.
+
+Do stałego porównania `--threads 2` wybiera dwa wątki na backend CPU i zwykle wyłącza autotuning. To wartość testowa, nie uniwersalna rada. W panelu `-` usuwa jeden wątek na backend CPU. Ręczna zmiana restartuje backendy i połączenie z pulą, zachowując statystyki sesji. Zaczekaj na zakończenie przed oceną.
+
+## Zostaw pamięć pozostałym aplikacjom
+
+Każdy aktywny wątek CPU używa areny Argon2id 2 GiB oraz dodatkowej pamięci procesu. Dwie areny zajmują 4 GiB przed systemem i aplikacjami. Planuj według pamięci dostępnej przy normalnej pracy. Karty przeglądarki, edytory i projekty graficzne zmieniają zapotrzebowanie; sama zainstalowana pamięć nie daje pełnego budżetu.
+
+Automatyczny dobór zostawia skonfigurowaną rezerwę, ale jawna liczba wątków ją nadpisuje. Przy stałej wartości sam sprawdź pamięć: nie gwarantuje miejsca każdej przyszłej aplikacji. Reguły opisuje [poradnik RAM](/pl/blog/how-much-ram-to-mine-blocknet/). Gdy praca wymaga więcej przestrzeni, zmniejsz liczbę wątków i powtórz tę samą czynność.
+
+## Kiedy zatrzymać kopanie dla innego zadania?
+
+Przed ważną rozmową, wymagającą grą lub renderowaniem możesz wyjść przez `q` w panelu albo `Ctrl+C` w terminalu. Potwierdź zamknięcie procesu, oceń zadanie osobno i potem ponów zapisane polecenie. Nie trzeba zmieniać konta, usuwać konfiguracji ani modyfikować zabezpieczeń systemu.
+
+Zachowaj normalne chłodzenie i zasilanie oraz obserwuj wskaźniki temperatury i energii komputera. Nie narzucamy tu temperatury ani ustawień wentylatora. Uśpiony komputer nie kopie dalej tak jak aktywny. Przy nieoczekiwanym wyjściu lub uśpieniu użyj [poradnika zatrzymań](/pl/blog/miner-keeps-stopping/), zanim zmienisz kolejne ustawienia.
+
+## Zapisz uruchomienie pasujące do codziennej pracy
+
+Gdy pulpit reaguje dobrze, zanotuj pełne polecenie, katalog i backendy. Zmiany w panelu dotyczą sesji; powtarzalne wartości umieść w argumentach startowych. [Poradnik konfiguracji](/pl/blog/configure-seine-miner/) rozróżnia zapisane pola połączenia i inne opcje. Jasno nazwij osobne skróty do pracy codziennej i sesji bez nadzoru.
+
+Sprawdź następny start: urządzenia, aktywne wątki, wolną pamięć i nowe zaakceptowane udziały. Powtórz początkową czynność. [Poradnik śledzenia puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) pomaga potwierdzić zaliczoną pracę. Przydatny codzienny zestaw da się odtworzyć, gdy zwykłe aplikacje nadal wykonują swoje zadania.
+
+<CTA target="seine" title="Dobierz seine do swojego pulpitu" text="Zapisz uruchomienie, wybierz współdzielone urządzenia i sprawdź zaakceptowaną pracę oraz codzienną responsywność." />

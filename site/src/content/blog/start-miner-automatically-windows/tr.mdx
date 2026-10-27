@@ -1,0 +1,68 @@
+---
+title: 'Blocknet madencisini Windows''ta otomatik başlatın'
+description: 'seine''i Görev Zamanlayıcı ile Windows oturumunda başlatın. Ayarları koruyun, yinelenen süreçleri önleyin, kabul edilen payları kontrol edin ve gerektiğinde kapatın.'
+tags: ['Madencilik rehberi', 'Windows', 'Kurulum']
+faq:
+  - q: 'Madenci oturum açmadan önce başlar mı?'
+    a: 'Bu kurulum seine''i seçilen Windows kullanıcısı oturum açtığında, o oturumun içinde başlatır. Arka planda çalışan bir Windows hizmeti oluşturmaz. Yeniden başlatmanın ardından görevi tetiklemek için bu hesapla oturum açın ve kabul edilen payları kontrol edin.'
+  - q: 'Madencilik ayarlarım korunur mu?'
+    a: 'Aynı Windows hesabını, mevcut veri klasörünü ve çalışan komutunuzun seçeneklerini kullanın. Bağımsız değişkenlerde mutlak veri yolunu ve doğru çalışma dizinini belirtin. Böylece seine kayıtlı adresi, havuzu ve makine adını bulur.'
+  - q: 'Otomatik madenciliği nasıl kapatırım?'
+    a: 'Sonraki başlatmaları önlemek için Görev Zamanlayıcı''da görevi devre dışı bırakın, ardından çalışan madenciyi kendi penceresinde normal şekilde durdurun. Görevi kapatmak mevcut süreci sonlandırmaz. Oturum açarken madenciliği yeniden başlatmak istediğinizde görevi etkinleştirebilirsiniz.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Windows'u, çalışan seine kurulumunuzu oturum açtığınızda başlatacak şekilde ayarlayın. Bu rehber kullanıcı oturumunda Görev Zamanlayıcı'yı kullanır ve kolayca kapatılabilir. Önce [Windows kurulumunu](/tr/blog/mine-blocknet-on-windows/) tamamlayın ve havuzun payları kabul ettiğini doğrulayın. Çalıştığı bilinen komutu otomatikleştirmek sonucu kontrol etmeyi kolaylaştırır.
+
+## Blocknet madencisi otomatik nasıl başlatılır?
+
+<Answer>
+Windows hesabınız için oturum açılışında tetiklenen ve çıkarılmış seine programını çalıştıran bir görev oluşturun. Mevcut veri klasörünü ve çalışma dizinini belirtin, aynı görevin ikinci örneğini engelleyin ve deneme başlatmasından sonra kabul edilen payları doğrulayın.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Kullanıcı Windows&#x27;a giriş yapar, Görev Zamanlayıcı tek madenci başlatır ve kabul edilen paylar havuza ulaşır." width="1200" height="675" loading="lazy" />
+
+## Hangi dosyalar ve ayarlar korunmalı?
+
+Çıkarılmış sürüm için sabit bir klasör seçin. Kütüphaneler dahil tüm arşiv içeriğini bir arada tutun ve içindeki programı kullanın. Başarılı elle çalıştırmanın veri klasörünü bulun. seine varsayılan olarak çalışma dizinine göre `./seine-data` kullanır ve bağlantı ayarlarını `seine.config.json` içinde saklar. Farklı başlangıç klasörü başka yapılandırmanın aranmasına yol açabilir.
+
+Örnekler `C:\Users\YOUR_USER\Apps\seine` kullanır; yolun tamamını gerçek kurulum klasörünüzle değiştirin. Mevcut verileri bulundukları yerde tutun. Çalışan komutu da saklayın: açıkça verilen backend veya ayarlama seçenekleri hâlâ gerekli olabilir. Bu görev cüzdan kurtarma ifadesi veya özel anahtar gerektirmez.
+
+## Oturum açma görevini oluşturun
+
+Başlat'tan **Görev Zamanlayıcı** açıp **Görev Oluştur** seçin. **seine mining** gibi tanınabilir bir ad verin. **Genel** bölümünde elle madencilik yaptığınız hesabı ve **Yalnızca kullanıcı oturum açtığında çalıştır** seçin. Bu normal kurulumda **En yüksek ayrıcalıklarla çalıştır** seçili olmasın. **Tetikleyiciler** altında kendi kullanıcınız için **Oturum açıldığında** ekleyip etkinleştirin. Microsoft'un [oturum tetikleyicisi belgesine](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on) bakın.
+
+**Eylemler** altında **Program başlat** ekleyin ve alanları ayrı doldurun:
+
+- **Program/komut dosyası:** Gözat ile `C:\Users\YOUR_USER\Apps\seine\seine.exe` seçin.
+- **Bağımsız değişken ekle:** mevcut veri klasörünüzle `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"`, ardından çalışan komutunuzun seçeneklerini girin.
+- **Başlangıç:** `C:\Users\YOUR_USER\Apps\seine` yolunu tırnaksız girin.
+
+[Çalışma dizini](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) sürecin başlangıç klasörünü belirler. Seçenekleri program alanına, program adını başlangıç alanına koymayın. Örnek yolu bırakmak yerine gerçek dosyayı seçin.
+
+## Çalışma koşullarını ayarlayın
+
+**Ayarlar** altında test için isteğe bağlı çalıştırmaya izin verin. Görev zaten çalışıyorsa **Yeni örnek başlatma** seçin. Bu [örnek ilkesi](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) yalnızca zamanlanmış göreve uygulanır; ayrı başlatılmış madenciyi algılamaz. Testten önce elle çalışan örneği kapatın. Tek bilinçli süreç kontrolü kolaylaştırır ve aynı yapılandırmayla ikinci kopyayı önler.
+
+Oturum boyunca kesintisiz madencilik için **Görev şu süreden uzun çalışırsa durdur** seçimini kaldırın; aksi halde [çalışma süresi sınırı](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit) vardır. **Koşullar** bölümünü inceleyin: boşta olma koşulu hemen test başlatmayı engelleyebilir. Dizüstünde AC güç koşullarını korumak bu akışı prize bağlı kullanımla sınırlar. Kullanımınıza uygun seçimleri kaydedin.
+
+## Otomatik madencilik nasıl doğrulanır?
+
+Elle çalışan madenciyi normal şekilde durdurun, görevi seçip **Çalıştır** deyin. Pencerede ödeme adresi, havuz ve makine adını kontrol edin; kabul edilen payları bekleyin. bntpool.com My Stats'te adresi arayıp beklenen makinenin iş gönderdiğini doğrulayın. Görevin çalışması yalnızca süreci, kabul edilen paylar havuz için yararlı işi doğrular.
+
+Gerçek tetikleyiciyi denemek için diğer işlerinizi kaydedin, oturumu kapatıp seçilen hesapla yeniden açın. Masaüstünü kilitleyip açmak farklıdır. Adresi ve son payları yeniden kontrol edin. [Panel rehberi](/tr/blog/seine-dashboard-explained/) cihazları ve bağlantıyı açıklar. Gelecek güncellemeler için görev adını ve klasörleri not edin.
+
+## Başlamazsa ne kontrol edilmeli?
+
+Program yolu, hesap, argümanlar ve başlangıç klasörünü çalışan elle komutla karşılaştırın. İlk kurulum tekrar istenirse veri yolunu ve erişimi kontrol edin. Kütüphane yüklenmezse tam çıkarılmış arşivi kontrol edin. Pencere yoksa madenci ayarlarını değiştirmeden önce etkin tetikleyiciyi, güç ve boşta kalma koşullarını inceleyin.
+
+Madenci çalışıp paylar görünmüyorsa adresi, havuz bağlantısını ve makinenin son paylarını kontrol edin. Aynı cüzdanı kullanan iki bilgisayara [çoklu bilgisayar rehberiyle](https://bntpool.com/blog/tr/mine-multiple-computers-one-wallet/) farklı ad verin. Görev test edilmiş yapılandırmayı açsın; bağlantı ve donanımı çalışan madencide inceleyin.
+
+## Başlatmayı kapatın veya madenciyi güncelleyin
+
+Gelecek açılışları önlemek için görevi seçip **Devre Dışı Bırak** deyin. Zaten çalışan madenciyi kendi penceresinde normal durdurun; görevi kapatmak süreci bitirmez. İstediğinizde yeniden etkinleştirin. Böylece seçim görünür ve geri alınabilir olur; Windows genel başlangıç veya uyku ayarları değişmez.
+
+Sürüm değiştirmeden önce görevi devre dışı bırakıp madenciyi durdurun. [Güncelleme rehberini](/tr/blog/update-seine-miner/) izleyin, verileri koruyun ve program yolu değiştiyse eylemi güncelleyin. Tetikleyiciyi açmadan önce Çalıştır ile deneyin. Linux sistem hizmeti için bu Windows oturum akışından farklı olan [sunucu kurulumunu](/tr/blog/mine-blocknet-on-servers/) kullanın.
+
+<CTA target="seine" title="Windows için seine indirin" text="Resmî sürümü kullanın, ilk kabul edilen payları doğrulayın ve çalışan kurulumunuzu otomatikleştirin." />

@@ -92,6 +92,34 @@ pub(super) fn detect(allowed: &BTreeSet<usize>) -> Option<Topology> {
     read_topology(Path::new("/sys/devices/system"), allowed, &mems)
 }
 
+/// Telemetry requires complete measured topology, unlike the placement/cache
+/// fallback. Include the full memory mask even when it does not change ordering.
+pub(super) fn measured_inputs(allowed: &BTreeSet<usize>) -> Option<String> {
+    let before = current_mems()?;
+    let result = measured_inputs_at(Path::new("/sys/devices/system"), allowed, &before)?;
+    (current_mems()? == before).then_some(result)
+}
+
+fn current_mems() -> Option<BTreeSet<usize>> {
+    let status = fs::read_to_string("/proc/thread-self/status").ok()?;
+    parse_cpu_list(
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix("Mems_allowed_list:"))?,
+    )
+}
+
+fn measured_inputs_at(
+    root: &Path,
+    allowed: &BTreeSet<usize>,
+    mems: &BTreeSet<usize>,
+) -> Option<String> {
+    let topology = read_topology(root, allowed, mems)?;
+    // Missing/contradictory L3 data still permits the existing runtime fallback,
+    // but must not masquerade as a fully known telemetry cohort.
+    (!topology.l3_groups.is_empty()).then(|| format!("{allowed:?}:{mems:?}:{topology:?}"))
+}
+
 fn read_topology(
     root: &Path,
     allowed: &BTreeSet<usize>,
@@ -482,6 +510,11 @@ mod tests {
             );
         }
         let detected = || read_topology(&scratch.0, &cpus, &mems).unwrap();
+        let measured = measured_inputs_at(&scratch.0, &cpus, &mems).unwrap();
+        assert_ne!(
+            measured,
+            measured_inputs_at(&scratch.0, &cpus, &BTreeSet::from([0, 2])).unwrap()
+        );
         assert_eq!(detected().ordered_cpus().unwrap(), [1, 3, 8, 9, 11]);
         assert_eq!(
             detected().l3_groups,
@@ -491,9 +524,11 @@ mod tests {
         // usable NUMA/core topology, but cannot enable single-node spreading.
         scratch.write("cpu/cpu11/cache/index7/shared_cpu_list", "11");
         assert!(detected().ordered_cpus().is_none());
+        assert!(measured_inputs_at(&scratch.0, &cpus, &mems).is_none());
         scratch.write("cpu/cpu11/cache/index7/shared_cpu_list", "2-3,10-11");
         fs::remove_file(scratch.0.join("cpu/cpu11/cache/index7/level")).unwrap();
         assert!(detected().ordered_cpus().is_none());
+        assert!(measured_inputs_at(&scratch.0, &cpus, &mems).is_none());
         scratch.write("cpu/cpu11/cache/index7/level", "3");
         scratch.write("cpu/cpu11/cache/index8/level", "3");
         scratch.write("cpu/cpu11/cache/index8/type", "Unified");

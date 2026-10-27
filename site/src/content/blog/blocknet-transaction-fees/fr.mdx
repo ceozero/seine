@@ -1,0 +1,68 @@
+---
+title: 'Comprendre les frais de transaction Blocknet'
+description: 'Comprenez les frais Blocknet, les entrées et la monnaie rendue. Vérifiez l’aperçu du portefeuille et distinguez frais de réseau et frais de minage.'
+tags: ['Blocknet', 'Portefeuille', 'Paiements']
+faq:
+  - q: 'Les frais Blocknet sont-ils un pourcentage du montant envoyé ?'
+    a: 'L’implémentation examinée calcule les frais à partir d’une estimation prudente de la taille de la transaction et d’un minimum. Les entrées et sorties influencent cette estimation. Le montant peut influer sur les entrées choisies, mais les frais ne sont pas un pourcentage fixe des BNT envoyés.'
+  - q: 'Puis-je consulter les frais sans diffuser de paiement ?'
+    a: 'Le portefeuille en ligne de commande documenté demande un aperçu et affiche les frais avant la confirmation. Vérifiez destination, montant et monnaie rendue. Si vous souhaitiez seulement examiner le paiement, annulez à l’invite. D’autres clients peuvent présenter la vérification autrement.'
+  - q: 'La monnaie rendue constitue-t-elle des frais supplémentaires ?'
+    a: 'La monnaie rendue est le reste des entrées sélectionnées après prise en compte du montant du destinataire et des frais réseau. Elle revient au portefeuille sous forme de sortie. Distinguez-la des frais, et séparez le solde total des fonds actuellement dépensables.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Vérifiez ce qu’utilisera votre paiement Blocknet avant de le confirmer. Ce guide explique comment le portefeuille examiné estime les frais réseau, pourquoi le choix des entrées compte et comment s’articulent montant du destinataire, frais et monnaie rendue. Il indique aussi où le client en ligne de commande documenté présente son aperçu, pour examiner un paiement sans le diffuser.
+
+## Comment sont calculés les frais Blocknet ?
+
+<Answer>
+Le portefeuille examiné détermine les frais à partir d’une estimation prudente de la taille de la transaction et d’un minimum configuré. Les entrées choisies et les sorties créées influencent cette estimation. Les frais sont distincts du montant du destinataire ; la valeur inutilisée des entrées devient la monnaie rendue. Vérifiez l’aperçu actuel de votre paiement avant confirmation.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Les entrées du portefeuille se répartissent entre montant du destinataire, frais réseau et monnaie retournée au portefeuille." width="1200" height="675" loading="lazy" />
+
+## Comprendre le calcul et ses unités
+
+Dans le [code du daemon examiné](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), l’envoi standard utilise un minimum de 1 000 unités atomiques et un tarif de 10 unités atomiques par octet estimé. Un BNT contient 100 000 000 unités atomiques : ces valeurs correspondent à 0,00001 BNT et 0,0000001 BNT par octet estimé. Il s’agit de paramètres d’implémentation vérifiés le 26 octobre 2026, pas d’un devis pour chaque version de portefeuille.
+
+Le calcul retient le plus grand du minimum et de la taille estimée multipliée par le tarif. Avec une taille supposée, explicitement illustrative, de 5 000 octets : 5 000 × 10 = 50 000 unités atomiques, soit 0,0005 BNT. Ce résultat dépasse le minimum indiqué. C’est un calcul sur une taille hypothétique, ni une transaction mesurée ni une promesse pour votre prochain transfert.
+
+## Pourquoi deux paiements peuvent-ils avoir des frais différents ?
+
+Un portefeuille dépense des sorties existantes comme entrées et crée des sorties pour les destinataires et, au besoin, la monnaie rendue. Le [constructeur de transactions](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) estime la taille avec le nombre d’entrées, de sorties et la taille de l’anneau, en prévoyant des marges prudentes pour les preuves. La taille estimée n’est pas simplement le nombre de caractères de l’adresse, du mémo ou du formulaire.
+
+Un paiement financé par plusieurs petites sorties disponibles peut demander un nombre d’entrées différent d’un paiement utilisant une sortie plus grande. Le portefeuille tient aussi compte des frais pour sélectionner assez de valeur dépensable : sélection et estimation interagissent. Un même montant au destinataire n’implique donc pas les mêmes frais dans deux états du portefeuille. Les [signatures en anneau](/fr/blog/ring-signatures-explained/) et les [preuves de plage](/fr/blog/bulletproofs-explained/) expliquent les structures de confidentialité concernées.
+
+## Séparer montant, frais et monnaie rendue
+
+Pour un envoi ordinaire à montant fixe, les entrées sélectionnées couvrent le montant du destinataire et les frais, et le reste revient comme monnaie rendue. Exemple : 10 BNT d’entrées, 3 BNT au destinataire et des frais supposés de 0,0005 BNT laissent 6,9995 BNT de monnaie. Le destinataire reçoit les 3 BNT indiqués ; la monnaie rendue n’est pas un autre prélèvement.
+
+Cet exemple décrit les entrées sélectionnées, pas forcément tout votre solde. D’autres sorties peuvent rester intactes. Envoyer tout vise autre chose : l’implémentation examinée soustrait les frais du total dépensable sélectionné pour déterminer ce que reçoit le destinataire. Lisez le montant affiché pour cette opération au lieu de supposer que tout le solde total peut être envoyé sans déduction.
+
+## Comment vérifier les frais avant d’envoyer ?
+
+Dans le [client CLI documenté](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), le parcours d’envoi demande un aperçu à blanc, puis affiche montant, destination, frais et éventuelle monnaie rendue avant `Confirm [y/N]:`. Saisissez vos coordonnées de réception et le montant souhaité dans le parcours normal, puis arrêtez-vous à cette vérification. Le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/) explique sa préparation et la recherche d’une adresse.
+
+Lisez d’abord destination et montant, puis frais et monnaie rendue. Pour seulement examiner le calcul, appuyez sur Entrée ou répondez non à la confirmation : le client annule au lieu de demander l’envoi. Ce guide ne demande aucun paiement d’essai. Un portefeuille graphique peut utiliser d’autres libellés ; examinez son écran sans supposer qu’il reprend la présentation CLI.
+
+## Que vérifier si l’aperçu change ?
+
+L’aperçu CLI et l’envoi final sont deux requêtes distinctes. L’envoi réel utilise l’état disponible à ce moment ; l’aperçu ne réserve donc pas définitivement les frais affichés. Modifier montant, destinataires, sorties sélectionnées ou fonds dépensables peut changer le résultat. Évitez les dépenses simultanées pendant la vérification et demandez un nouvel aperçu après toute modification du paiement.
+
+Si le portefeuille ne couvre pas montant plus frais, consultez les fonds dépensables plutôt que le solde total. Les fonds encore en confirmation constituent une autre catégorie. Conservez version du portefeuille et message exact si l’aperçu ne peut être produit. Pour recevoir les paiements de minage, le [guide du versement au portefeuille](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/) suit transaction et analyse du portefeuille ; c’est une autre tâche que chiffrer un nouvel envoi.
+
+## Distinguer frais réseau et frais de minage
+
+Les frais de cet article concernent une transaction de portefeuille. Ceux d’un pool concernent sa comptabilité des récompenses ; ceux du développeur du mineur relèvent de la politique de travail du logiciel. Leurs bases et leurs étapes diffèrent. Le [guide des frais de minage](https://bntpool.com/blog/fr/mining-pool-fees-vs-miner-fees/) explique ce côté-là ; n’appliquez pas ses pourcentages à la taille estimée d’une transaction.
+
+De même, le versement minimum d’un pool est un seuil de solde, pas les frais annoncés pour un envoi ordinaire. Gardez chaque nombre avec son libellé et sa source pour préparer un transfert. L’aperçu du portefeuille est l’endroit pertinent pour examiner le paiement sortant prévu ; un calculateur de minage ou l’affichage du solde du pool ne le remplace pas.
+
+## Garder un relevé clair du paiement
+
+Avant de confirmer un paiement voulu, examinez ensemble destination, montant, mémo éventuel, frais et monnaie rendue. Un [lien de paiement](/fr/blog/blocknet-payment-links/) peut préremplir les détails, mais vous les vérifiez toujours dans le portefeuille. En documentant une procédure, notez la version ayant fourni l’estimation, afin de distinguer plus tard cet exemple daté de l’interface actuelle.
+
+Après un envoi volontairement confirmé, conservez l’identifiant de transaction dans vos propres relevés et suivez son statut dans le portefeuille. Ne partagez jamais les mots de récupération ou les clés privées pour expliquer des frais. Pour une demande d’aide, version, type d’opération et montants affichés constituent généralement un point de départ plus utile que des données privées copiées. Revérifiez l’aperçu à chaque nouveau paiement.
+
+<CTA target="seine" title="Explorer Blocknet avec seine" text="Découvrez le fonctionnement du minage Blocknet et connectez votre propre installation au réseau avec seine." />

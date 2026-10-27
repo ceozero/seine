@@ -125,3 +125,25 @@ every article in static HTML, newest first within each topic, with native fragme
 links and article breadcrumbs back to the topic. Rewards links lead to the
 matching bntpool.com language; the pool links back to hardware guides. No extra
 category pages or sitemap URLs are created.
+
+## Release and content accuracy
+
+`release-facts.json` pins the reviewed public release, its fees, platform archives
+and relevant source hashes. `npm run check:release` checks GitHub's latest release;
+`npm test` exercises drift detection. Normal builds validate the manifest offline.
+The **Content facts** workflow checks both this manifest and the pool calculator's
+`frontend/blog/miner-release.json` after Build Release completes, on manifest
+changes, or on manual dispatch. It reports drift without changing or deploying copy.
+
+When it fails, review the new release's fee policy, runtime requirements and assets,
+update both manifests and the affected pages in all 20 languages, then rerun checks.
+Do not copy pending `master` behavior into claims about a published version. Preserve
+version labels on historical measurements and screenshots. The calculator names its
+reviewed version and lets users enter the fee for their own miner.
+
+2026-10-26 accuracy pass: v0.2.26 release source and archive checksums verified;
+both Linux executables require GLIBC_2.39. Setup now includes Linux NVRTC, and three
+introductory guides use the documented 68.3 H/s EPYC 9355P measurement with its manual
+1 GiB page/64-thread/192 GiB conditions. Older 9R45 measurements remain historical.
+Translations were updated in place and remain marked draft; no independent
+linguistic review is claimed.

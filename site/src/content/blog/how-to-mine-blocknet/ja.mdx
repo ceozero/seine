@@ -9,8 +9,8 @@ faq:
     a: 'bntpool.com のマイニングプールは 6 時間のウィンドウによる PPLNS で支払います。ブロック報酬はそのブロックの上に 60 ブロックが積まれてから（5 分間隔のブロックで約 5 時間）支払い可能になり、残高が 0.1 BNT に達すると送金されます。最初のシェアが受理されてから数時間後に最初の支払いが届く見込みです。'
   - q: 'CPU と GPU で同時に Blocknet をマイニングできますか？'
     a: 'はい。Windows と Linux では、seine はマシン内のすべての CPU コアとすべての NVIDIA グラフィックカードで同時にマイニングし、両方のハッシュレートが合算されます。実行中にプロセッサーと各カードを個別に調整するので、設定を変えなくてもすべてのハードウェアの性能を最大限に引き出せます。'
-sourceHash: ad835df628e2
-translation: reviewed
+sourceHash: 'c15449bd790a'
+translation: draft
 ---
 
 このガイドでは、**seine** のダウンロードから、bntpool.com のマイニングプールで最初のシェアが受理され支払いを受け取るまでを、Windows、macOS、Linux それぞれについて説明します。マイニングが初めての方は、まず[暗号資産マイニングの仕組み](/ja/blog/how-crypto-mining-works/)でブロック、難易度、プールについてご覧ください。
@@ -26,7 +26,7 @@ Blocknet アドレスまたは Blocknet ID のショートネームを用意し�
 - **Blocknet アドレス。** 公式の Blocknet ウォレット（[コマンドライン版ウォレット](https://github.com/blocknetprivacy/blocknet/releases/latest)または[デスクトップ版ウォレット](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)）をインストールし、アドレスをコピーします。手順は[ウォレットガイド](/ja/blog/blocknet-wallet-for-mining/)で一つずつ説明しています。ウォレットとそのリカバリーフレーズは自分のコンピューターに保管し、共用のマイニングリグには置かないでください。
 - **またはショートネーム。** [blocknet.id](https://blocknet.id) で取得した [Blocknet ID のショートネーム](/ja/blog/blocknet-id-pay-by-name/)があれば、長いアドレスを貼り付ける代わりに `@name` 宛てにマイニングできます。
 - **マイニングスレッド 1 つにつき約 2 GB の RAM。** seine はマシンに合わせて自動で設定を決め、システム用の余裕も残すので、事前に計算する必要はありません。
-- **Windows、macOS、Linux のいずれか。** Windows と Linux では、最新のドライバーがインストールされていれば NVIDIA グラフィックカードが自動で使われます。
+- **Windows、macOS、Linux のいずれか。** NVIDIA — Windows: NVIDIAディスプレイドライバー、実行ファイルと同じフォルダーに置く同梱ランタイムDLL; Linux: NVIDIAドライバーと対応するNVRTCランタイムライブラリ.
 
 ## ステップ 1：seine をダウンロード
 
@@ -35,7 +35,7 @@ Blocknet アドレスまたは Blocknet ID のショートネームを用意し�
 | システム | アーカイブ | グラフィックカード |
 |---|---|---|
 | Windows（x86_64） | `seine-windows-x86_64.zip` | NVIDIA。CUDA ランタイム同梱 |
-| Linux（x86_64） | `seine-linux-x86_64.tar.gz` | NVIDIA（ドライバーのインストールが必要） |
+| Linux（x86_64） | `seine-linux-x86_64.tar.gz` | NVIDIAドライバーと対応するNVRTCランタイムライブラリ; glibc ≥ 2.39 |
 | Linux（ARM64） | `seine-linux-aarch64.tar.gz` | CPU（glibc 2.39 以降） |
 | macOS（Apple シリコン） | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS（Intel） | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ bntpool.com のマイニングプールは PPLNS を採用しています。各�
 
 | ハードウェア | スレッド | ハッシュレート |
 |---|---|---|
-| AMD EPYC · Zen 5（EPYC 9R45） | 32 | 49.4 H/s |
+| AMD EPYC · Zen 5（EPYC 9355P） | 64 | 68.3 H/s |
 | Arm サーバー（AWS Graviton4） | 32 | 39.3 H/s |
 | AMD EPYC · Zen 4（EPYC 9R14） | 32 | 38.2 H/s |
 | Apple M4 Max（48 GB MacBook Pro） | 16 | 30.9 H/s |
 | Intel Xeon（Sapphire Rapids 8488C） | 32 | 26.0 H/s |
+
+これらの測定で最も速い構成はAMD EPYC 9355Pの68.3 H/sです。マイニングスレッド64本、RAM 192 GiB、Linuxで手動準備した1 GiBのヒュージページを使用しています。Blocknetのマイニングにはメモリ帯域幅と、1スレッドあたり2 GiBを確保できるRAM容量が役立ちます。NVIDIAカードはCPUにハッシュレートを加算できます。
 
 テストしたすべての CPU の結果は[パフォーマンスページ](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)に掲載しています。RAM とメモリ帯域幅がこれらの数値をどう決めるかは [Blocknet マイニングハードウェアガイド](/ja/blog/blocknet-mining-hardware-hashrate/)で説明しています。
 

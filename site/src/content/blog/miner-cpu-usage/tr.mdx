@@ -1,0 +1,62 @@
+---
+title: 'Madenciniz neden CPU''nun %100''ünü kullanmıyor?'
+description: 'seine ile Blocknet madenciliğinde CPU kullanımını anlayın. Ayarları değiştirmeden etkin iş parçacıklarını, belleği, arka ucu ve kabul edilen işi kontrol edin.'
+tags: ['Madencilik rehberi', 'CPU kullanımı', 'seine']
+faq:
+  - q: 'Madenci her zaman %100 CPU kullanmalı mı?'
+    a: 'Hayır. Sistem yüzdesi kullanılabilir işlemcilerin kullanımını, seine ise tamamlanan hash''leri ölçer. Yararlı iş parçacığı sayısı belleğe ve ölçülen verime bağlıdır. Etkin sayıyı, hashrate''i ve kabul edilen işi birlikte değerlendirin.'
+  - q: 'seine neden daha az iş parçacığı seçer?'
+    a: 'Her etkin CPU madencilik iş parçacığı 2 GiB bellek alanı gerektirir; bant genişliği paylaşılır. Otomatik seçim belleği ve ölçülen verimi dikkate alır. Açık sınırlar, arka uç ve çalışma ortamı da sayıyı etkiler.'
+  - q: 'Kullanım ve hashrate birlikte düşerse neyi kontrol etmeliyim?'
+    a: 'CPU arka ucunu, etkin sayıyı, ayarlama ve bellek mesajlarını, güncel işi kontrol edin. Aynı cihaz ve süreyi karşılaştırın; ardından arka plan yüküne ve sınırlara bakın. Bağlantı veya sıfır havuz hashrate''i için takip rehberini izleyin.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+seine v0.2.36 ile Blocknet madenciliğinde CPU yüzdesini etkin iş parçacıkları, yerel H/s ve kabul edilen paylarla birlikte okuyun. Ayar değişikliğinden önce bu sırayı izleyin. Kurulum için [madencilik rehberinden](/tr/blog/how-to-mine-blocknet/) başlayın.
+
+## Düşük CPU kullanımı daha az yararlı iş mi demek?
+
+<Answer>
+CPU yüzdesi tek başına tamamlanan yararlı işi göstermez. Seçili CPU arka ucunu, etkin iş parçacıklarını, yerel hashrate'i ve gelen işleri kontrol edin. seine, mantıksal işlemci sayısından daha az madencilik iş parçacığı seçebilir. Sayıyı değiştirmeden işi tutarlı koşullarda karşılaştırın.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="İşlemci etkinlik ızgarası ve tamamlanan iş sayacı ayrı gözlemlerdir; iş parçacığı, bellek ve iş kontrolleriyle ilişkilendirilir." width="1200" height="675" loading="lazy" />
+
+## Önce yüzdenin kapsamını okuyun
+
+Windows'ta seine süreci ile tüm bilgisayarı ayırın. Görev Yöneticisi'nde seine'i, sonra Performans ve CPU'yu açın. Mantıksal işlemci grafikleri dağılımı, toplam değer bütün etkinliği gösterir. [Microsoft rehberi](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) bu görünümleri açıklar. Kullandığınız görünümü kaydedin.
+
+Linux'ta `top` süreç yüzdesi sistem özetinden farklı ölçeklenebilir. Irix modunda çok iş parçacıklı süreç %100'ü aşabilir; Solaris işlemci sayısına böler. İş parçacığı görünümü satırları değiştirir. [Kılavuza](https://man7.org/linux/man-pages/man1/top.1.html) bakın: ölçek değişimi ölçülmüş hız değişimi değildir.
+
+## İşi hangi cihazın yaptığını kontrol edin
+
+[seine panelinin](/tr/blog/seine-dashboard-explained/) CPU satırındaki H/s ve etkin sayıyı okuyun. Birleşik CPU/GPU hızı ikisini kapsar; aynı cihazı karşılaştırın. Komut yalnız NVIDIA seçiyorsa düşük CPU madencilik yükü beklenir. [NVIDIA rehberine](/tr/blog/mine-blocknet-nvidia-gpu/) bakın.
+
+Etkin madencilik iş parçacıkları işletim sisteminin süreç sayısından farklıdır. seine ağ, kontrol ve raporlama işleri de yürütür. Süreç, CPU satırından daha fazla iş parçacığı içerebilir. Etkin hash iş parçacıklarının işi tamamladığını kontrol edin.
+
+## Bellek neden etkin sayıyı sınırlar?
+
+Her etkin CPU iş parçacığı Argon2id için 2 GiB alan kullanır. Otomatik boyutlandırma kullanılabilir belleği ve sistem payını hesaba katar. Gerçek sayı ve mesajları okuyun; kurulu RAM'i bölerek garanti kapasite çıkarmayın. [RAM rehberi](/tr/blog/how-much-ram-to-mine-blocknet/) bütçe, rezerv ve ayırmayı açıklar.
+
+Kapasite kaç alanın sığacağını, bant genişliği eşzamanlı veri hareketini belirler. Bellek bekleyen bir iş parçacığı hâlâ meşgul sayılabilir. Düşük kullanım bant genişliği darboğazını kanıtlamaz; %100 de en iyi H/s'yi kanıtlamaz. [Argon2id rehberini](/tr/blog/argon2id-proof-of-work-explained/) okuyun.
+
+## Otomatik değişiklikleri ve açık ayarları okuyun
+
+Otomatik CPU ayarı iş parçacıklarını ve çekirdek uygulamalarını ölçülen işle karşılaştırır. Daha düşük sayı geçerli sonuç olabilir; bellek değişimleri de sayıyı etkiler. Denemenin oturmasını bekleyin ve mesajları okuyun. [Ayarlama rehberi](/tr/blog/seine-automatic-cpu-tuning/) kararları ve önbelleği açıklar.
+
+Başlattığınız komutu inceleyin. `--threads`, ayarlama üst sınırı veya CPU profili aramayı ve sayıyı; yakınlık ayarı yerleşimi değiştirebilir. Konteynerler, sanal makineler ve OS sınırları ana makineden daha az kapasite sunabilir. Artırmadan önce yapılandırmayı kaydedip sınırı belirleyin.
+
+## Kullanım ve H/s birlikte düşerse?
+
+CPU arka ucunun etkin ve iş sahibi olduğunu doğrulayın. Güncel iş, bağlantı, bellek ayarlamaları ve arka uç hataları için günlüğe bakın. Başlangıç ve yeni denemelerin bağlamı OS göstergesinde görünmez. GPU sürerken CPU değişiyorsa cihazları ayrı inceleyin.
+
+Aynı sürüm, arka uç ve ayarlarla kararlı süreyi karşılaştırın. Diğer uygulamalar, bellek, güç ayarları ve zamanı kaydedin. Tekrarlanabilir yerel ölçüm için [benchmark rehberini](/tr/blog/benchmark-seine-miner/) izleyin, raporları saklayın. Kısa zirve veya tek yüzde donanım sonucu değildir.
+
+## Tamamlanan ve kabul edilen işle bitirin
+
+Normal madencilikte CPU hash ilerlemesini ve kabul edilen pay yanıtlarını doğrulayın. Paylar aralıklarla gelir; sabit geri sayım yoktur. Havuz hashrate'i zaman içindeki gönderimlerden tahmin edilir. [Takip rehberi](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) bu görünümü ve bağlantıyı açıklar.
+
+Sürüm, komut, arka uç, CPU iş parçacıkları, CPU H/s, OS aracı ve görünümü, bellek ve havuz süresini kaydedin. İş ilerliyorsa sistem yüzdesi bağlam sağlar. Bir aşama ilerlemiyorsa onun rehberini izleyin. Her değişiklik somut soru ve karşılaştırılabilir sonuç taşır.
+
+<CTA target="seine" title="CPU madenciliğini seine ile izleyin" text="seine&#x27;i indirin; panelde etkin iş parçacıkları, hashrate ve kabul edilen işi birlikte kontrol edin." />

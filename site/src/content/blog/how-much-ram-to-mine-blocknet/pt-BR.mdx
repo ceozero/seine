@@ -1,0 +1,90 @@
+---
+title: 'Quanta RAM é necessária para minerar Blocknet?'
+description: 'Planeje a RAM para minerar Blocknet: 2 GiB por thread de CPU, espaço para aplicativos, ajuste automático do seine e solução de erros de alocação de memória.'
+tags: ['Guia de mineração', 'RAM', 'CPU']
+faq:
+  - q: 'Quanta RAM uma thread de mineração de Blocknet usa?'
+    a: 'Cada thread de CPU precisa de uma área Argon2id de 2 GiB. Esse bloco de trabalho não é toda a memória necessária ao computador. Reserve RAM adicional para o sistema, os aplicativos e o minerador. Calcule as threads com a memória disponível, em vez de simplesmente dividir a RAM instalada por dois.'
+  - q: 'Posso minerar Blocknet com 8 GB de RAM?'
+    a: 'É possível minerar com CPU quando há memória disponível para ao menos uma área de 2 GiB, além do sistema e do minerador. A indicação de 8 GB sozinha não determina as threads. Comece pelo ajuste automático e confira a memória disponível e a quantidade selecionada.'
+  - q: 'Huge pages reduzem a RAM necessária por thread?'
+    a: 'Huge pages alteram como o sistema operacional mapeia a memória. Elas não reduzem a área de 2 GiB de cada thread de CPU. Defina primeiro o orçamento de memória e depois siga o guia específico para configurar páginas grandes explícitas em um sistema compatível.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Escolha threads de CPU que caibam na memória disponível. Este guia explica as áreas de 2 GiB, o ajuste automático do seine v0.2.26 e o que conferir quando uma configuração manual falha ao alocar memória. Comparações de chips e hashrates medidos estão no [guia de hardware](/pt-br/blog/blocknet-mining-hardware-hashrate/). Os exemplos aqui são cálculos de memória, não medições de desempenho.
+
+## Quanta RAM cada thread de mineração precisa?
+
+<Answer>
+Cada thread de CPU precisa de uma área de memória Argon2id de 2 GiB. Deixe espaço para sistema, aplicativos e minerador. Comece pelo ajuste automático do seine, que considera memória disponível e recursos da CPU. Uma quantidade manual de threads deve caber na memória realmente disponível ao iniciar.
+</Answer>
+
+GiB é uma unidade binária: 2 GiB equivalem a 2.147.483.648 bytes. A área é reutilizada entre hashes; cada hash concluído não consome permanentemente mais 2 GiB. Mais threads simultâneas exigem mais áreas. A [explicação do Argon2id](/pt-br/blog/argon2id-proof-of-work-explained/) descreve essa memória de trabalho.
+
+<img src="/assets/blog/ram-budget.svg" alt="Quatro áreas de mineração de 2 GiB ao lado de memória adicional reservada para sistema e aplicativos" width="1200" height="675" loading="lazy" />
+
+## Como calcular um orçamento de threads?
+
+Multiplique as threads planejadas por 2 GiB. A tabela exclui o sistema e outras despesas de memória. Use-a para calcular as áreas; escolha a quantidade real conforme a memória disponível e o desempenho medido.
+
+| Threads de CPU | Apenas memória das áreas |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Quatro threads precisam de 8 GiB para suas áreas. Portanto, o computador precisa de mais de 8 GiB disponíveis para o restante do processo e do sistema. Ao reservar deliberadamente 4 GiB de uma máquina de 16 GiB, os 12 GiB restantes comportam seis áreas por cálculo. É uma escolha de orçamento, não uma promessa de melhor hashrate com seis threads.
+
+Confira a memória disponível com seus aplicativos habituais abertos, usando o Gerenciador de Tarefas do Windows, o Monitor de Atividade do macOS ou ferramentas do Linux. Uma máquina virtual ou contêiner pode ter menos memória que o host. Use esse limite efetivo; a RAM anunciada do host não fica automaticamente disponível no ambiente restrito.
+
+## Como o seine escolhe threads automaticamente?
+
+Na primeira execução apenas com CPU, não defina as threads. Execute o comando na pasta extraída no Linux ou macOS. No Windows, use as mesmas opções com o executável no PowerShell. O [guia de início](/pt-br/blog/how-to-mine-blocknet/) explica o download e o endereço de recebimento.
+
+```sh
+./seine --backend cpu
+```
+
+Na v0.2.26, o dimensionamento e ajuste automáticos reservam por padrão 5% da RAM total efetiva, além de considerar a memória em uso. Os recursos da CPU também limitam a quantidade. Para restringir a faixa de ajuste, defina um máximo:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Quatro é um teto de exemplo, não uma configuração universal. O ajuste pode escolher menos threads. Observe as threads e o hashrate médio no [painel](/pt-br/blog/seine-dashboard-explained/) após iniciar. O ajuste mede a configuração real; espere estabilizar antes de avaliar uma mudança por uma oscilação breve.
+
+## Quando definir uma quantidade fixa de threads?
+
+Use uma quantidade fixa para um orçamento específico ou uma configuração repetível. O exemplo seleciona duas threads de CPU, que precisam de 4 GiB para suas áreas mais a memória restante:
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+Definir `--threads` desativa a seleção automática comum, a menos que você também ative explicitamente o ajuste. Isso substitui a política de reserva automática; deixe sua própria margem. As verificações de memória continuam ativas. Uma quantidade compatível com a RAM instalada pode exceder a disponível após abrir outros aplicativos.
+
+Altere uma opção por vez. Anote threads, RAM disponível e hashrate médio sob cargas comparáveis. Para voltar ao automático, remova o argumento fixo e qualquer substituição salva. A [referência da v0.2.26](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) explica as configurações salvas e de linha de comando.
+
+## O que verificar após um erro de alocação?
+
+Veja se a mensagem trata do limite efetivo, da memória disponível ou de páginas grandes explícitas. Cada caso exige verificações diferentes. Feche aplicativos desnecessários, reduza as threads e reinicie deixando espaço para o uso normal do computador.
+
+Em contêineres ou máquinas virtuais, confira a memória atribuída e a do host. Um limite de 1 GiB não comporta uma área de 2 GiB. Aumentar o arquivo de troca não muda esse requisito; planeje memória física suficiente disponível para o processo.
+
+Com `--cpu-page-mode large` ou `--cpu-page-mode large-1g`, confirme que a reserva de páginas solicitada está disponível. Esses modos exigem o tipo escolhido. Siga o [guia de huge pages](/pt-br/blog/huge-pages-blocknet-mining/) ou volte à seleção automática para estabelecer uma configuração funcional. Separe mudanças de páginas e de threads.
+
+## A memória da GPU conta no orçamento da CPU?
+
+Em uma NVIDIA dedicada, as áreas de mineração da GPU ficam na VRAM. As threads de CPU continuam usando RAM do sistema. Dimensione cada recurso separadamente ao minerar com CPU e GPU; VRAM livre não amplia as áreas da CPU. O [guia NVIDIA](/pt-br/blog/mine-blocknet-nvidia-gpu/) explica configuração e lanes da GPU.
+
+No Apple Silicon, CPU e GPU compartilham memória unificada. Não conte essa capacidade duas vezes ao planejar outras cargas. Siga o [guia para Mac](/pt-br/blog/mine-blocknet-on-mac/) para a configuração de CPU compatível. A capacidade determina o que cabe; o desempenho medido mostra a melhor configuração para sua máquina.
+
+## O que conferir antes de deixar o minerador rodando?
+
+Verifique se as threads cabem no orçamento, os aplicativos respondem e chegam shares aceitos. Uma alocação maior sozinha não comprova desempenho superior. Mantenha a configuração adequada à sua carga e use o [guia de acompanhamento do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) para confirmar trabalho recente no endereço de recebimento.
+
+<CTA target="seine" title="Baixe o seine" text="Comece com o dimensionamento automático da CPU e escolha um orçamento de memória adequado ao computador." />

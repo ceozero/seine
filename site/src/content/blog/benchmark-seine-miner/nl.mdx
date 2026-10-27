@@ -1,0 +1,70 @@
+---
+title: 'Zo benchmark je je Blocknet-miner'
+description: 'Test seine met herhaalbare CPU-metingen, opwarmrondes en JSON-rapporten. Vergelijk passende meettijden bij gelijk geheugen, achtergrondwerk en afstemming.'
+tags: ['Mininggids', 'Benchmarks', 'seine']
+faq:
+  - q: 'Stuurt een seine-benchmark shares naar de pool?'
+    a: 'Nee. --bench voert een lokale test uit in plaats van mining en heeft geen pool of daemon nodig. Het rapport meet de gekozen lokale belasting. Start daarna normaal mining om verbinding en geaccepteerde shares apart te controleren.'
+  - q: 'Met welke modus begin ik?'
+    a: 'Begin met backend voor een praktische test van de gekozen backends. Houd modus, versie en instellingen gelijk. Kernel, kernel-effective en end-to-end meten verschillende onderdelen; bewaar modus en tijdgegevens bij iedere hashrate.'
+  - q: 'Hoe maak ik twee tests vergelijkbaar?'
+    a: 'Gebruik dezelfde machine, versie, backends, geheugeninstellingen, achtergrondlast en cacheregel. Verander één instelling, herhaal beide configuraties in wisselende volgorde en bewaar alle rapporten. Opwarmen en herhalen helpen, maar één korte test bewijst geen klein verschil.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Meet je computer met de ingebouwde seine-benchmark en bewaar een vergelijkbaar verslag. Deze gids gebruikt de openbare v0.2.36 en een CPU-voorbeeld, zonder nieuwe hardwarecijfers te claimen. Installeer via de [mininggids](/nl/blog/how-to-mine-blocknet/). Bestaande metingen met omstandigheden staan in de [hardwaregids](/nl/blog/blocknet-mining-hardware-hashrate/).
+
+## Hoe benchmark je seine?
+
+<Answer>
+Start seine met `--bench`, kies backend en meetmodus, voeg opwarmrondes toe en sla JSON op. Herhaal dezelfde belasting onder vergelijkbare omstandigheden voordat je één instelling verandert. De test werkt lokaal zonder pool of daemon; controleer shares bij terugkeer naar normaal mining.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Na het opwarmen volgen drie meetrondes en een opgeslagen rapport; de tweede configuratie herhaalt dezelfde volgorde." width="1200" height="675" loading="lazy" />
+
+## Zorg voor een gelijk uitgangspunt
+
+Noteer versie, besturingssysteem, exacte processor, bruikbaar RAM en opdracht; bij NVIDIA ook model en driver. Kies vergelijkbare achtergrondlast. Een spel, compilatie of andere miner tijdens slechts één test verandert de meetomstandigheden.
+
+Bepaal of je een CPU-basislijn, threadaantallen of geheugenpagina's vergelijkt. Houd CPU-plaatsing, energie en geheugen gelijk behalve de testvariabele. De gidsen voor [RAM](/nl/blog/how-much-ram-to-mine-blocknet/) en [huge pages](/nl/blog/huge-pages-blocknet-mining/) behandelen capaciteit en voorbereiding. Noteer ook de werkelijk verkregen paginamodus.
+
+## Voer de CPU-test uit en bewaar het rapport
+
+In de uitgepakte map werkt de eerste opdracht op Linux/macOS, de tweede in Windows PowerShell. Beide kiezen CPU, `backend`, één opwarmronde en drie meetrondes met 20 seconden per ronde aangevraagd. Het bestand is relatief aan de werkmap. Gebruik bij volgende tests andere namen.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Threads en kernel blijven automatisch. Voorbereiding en afstemming kunnen vooraf tijd kosten; lopend werk kan na het aangevraagde interval eindigen. Wacht op `cpu-baseline.json`. De opwarmronde telt niet mee in de meetsamenvatting. De totale uitvoering kan de vier intervallen overschrijden; 20 seconden bepaalt niet de hele looptijd.
+
+## Wat lees je in het rapport?
+
+Bekijk modus, werkelijke instellingen en afzonderlijke rondes vóór het gemiddelde. JSON bevat `avg_hps`, `median_hps`, `min_hps`, `max_hps` en `runs`, plus configuratie en omgeving. Bewaar het origineel in plaats van alleen het maximum. De [optierreferentie](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) beschrijft uitvoer en basislijnvergelijking.
+
+Hashrate is voltooid werk per seconde. Vergelijk dezelfde telling en tijddefinitie. Bekijk werkelijke duur en spreiding; een piek vat de test niet samen. Bij grote variatie stabiliseer je de omstandigheden of verleng je rondes. Vermeld de configuratie wanneer je resultaten deelt.
+
+## Vergelijk één wijziging met herhaalde paren
+
+Noem de basis A en de wijziging B. Voer A gevolgd door B uit, herhaal en wissel de startvolgorde tussen paren. Houd duur en opwarming gelijk. Bewaar bijvoorbeeld `cpu-a-1.json` en `cpu-b-1.json`. Zo herken je effecten van volgorde of omstandigheden naast de onderzochte instelling.
+
+Pas dezelfde cacheregel toe: een eerste start met nieuwe afstemmingsdata en een herstart met opgeslagen keuzes beantwoorden andere vragen. Bewaar je dagelijkse map en scheid testmappen voor verse toestanden. De [automatische-afstemmingsgids](/nl/blog/seine-automatic-cpu-tuning/) verklaart hergebruik. `--threads` verandert de afstemming; leg dat vast tegenover een automatische test.
+
+## Waarom moeten de modi overeenkomen?
+
+`backend` test miningbackends; `kernel` richt zich op hashberekening. `kernel-effective` neemt levenscyclustijd en het doel-/evaluatiepad mee. Dit zijn verschillende meetgebieden op dezelfde machine. Label iedere snelheid met de modus; gelijke eenheden maken metingen niet gelijkwaardig.
+
+`end-to-end` omvat meer van de miningcyclus. Houd ook versie en betekenis van tijden gelijk. De [benchmarklabdocumentatie](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) behandelt gepaarde tests, omgevingsregistratie en compatibiliteit. Gebruik die hulpmiddelen voor kleine verschillen en bewaar alle pogingen.
+
+## Ga terug naar mining en controleer het werk
+
+Start na afloop je normale opdracht met de bedoelde adres- en datamapinstellingen. Controleer apparaten en geaccepteerde shares in het [dashboard](/nl/blog/seine-dashboard-explained/). De benchmark meet lokale prestaties; shares bevestigen verbinding en werklevering. Leg beide controles vast voor dagelijks gebruik.
+
+De pool schat hashrate uit ontvangen shares over tijd, anders dan een korte lokale meting. Volg krediet via de [poolgids](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/). Bewaar versie, opdracht, machine, geheugen/pagina's, cacheregel, achtergrondlast en alle JSON-rapporten voor herhaalbare, begrijpelijke vergelijkingen.
+
+<CTA target="seine" title="Benchmark met seine" text="Download seine, bewaar een herhaalbare basislijn en volg daarna normale mining in het dashboard." />

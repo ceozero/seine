@@ -1,0 +1,70 @@
+---
+title: 'Blocknet madencinizi nasıl kıyaslarsınız?'
+description: 'Seine ile tekrarlanabilir CPU testleri, ısınma turları ve JSON raporları oluşturun. Süreleri, belleği ve ayarlama koşullarını tutarlı biçimde karşılaştırın.'
+tags: ['Madencilik rehberi', 'Performans testleri', 'seine']
+faq:
+  - q: 'Seine testi havuza pay gönderir mi?'
+    a: 'Hayır. --bench canlı madencilik yerine yerel test çalıştırır; havuz veya daemon gerekmez. Rapor seçilen yerel işi ölçer. Bağlantıyı ve kabul edilen payları sonrasında normal madencilikte kontrol edin.'
+  - q: 'Hangi modla başlamalıyım?'
+    a: 'Seçilen arka uçları sınamak için backend ile başlayın. Karşılaştırmada sürümü, modu ve ayarları koruyun. Kernel, kernel-effective ve end-to-end farklı kapsamları ölçer; hızla birlikte mod ve süre bilgisini saklayın.'
+  - q: 'İki çalıştırma nasıl karşılaştırılabilir?'
+    a: 'Aynı makine, sürüm, arka uçlar, bellek, arka plan yükü ve önbellek politikasını kullanın. Tek ayarı değiştirin, iki yapılandırmayı dönüşümlü tekrarlayın ve bütün raporları saklayın. Kısa bir test küçük bir farkı kanıtlamaz.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Seine’in yerleşik testiyle makinenizi ölçün ve karşılaştırılabilir kayıtlar tutun. Bu rehber herkese açık v0.2.36 sürümünü ve CPU örneğini kullanır; yeni donanım sonucu iddia etmez. Önce [kurulum rehberini](/tr/blog/how-to-mine-blocknet/) okuyun. Mevcut ölçümler ve koşulları [donanım rehberindedir](/tr/blog/blocknet-mining-hardware-hashrate/).
+
+## Seine performans testi nasıl yapılır?
+
+<Answer>
+`--bench` ile arka uç ve ölçüm modu seçin, ısınma turları ekleyin ve JSON raporu kaydedin. Tek ayarı değiştirmeden önce aynı işi benzer koşullarda tekrarlayın. Test yereldir; normal madenciliğe döndüğünüzde kabul edilen payları ayrıca kontrol edin.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Bir ısınma turunu üç ölçüm turu ve kayıtlı rapor izler; ikinci yapılandırma aynı sırayı tekrarlar." width="1200" height="675" loading="lazy" />
+
+## Tutarlı bir başlangıç hazırlayın
+
+Sürümü, işletim sistemini, tam işlemci modelini, kullanılabilir RAM’i ve komutu kaydedin. NVIDIA kullanıyorsanız model ve sürücüyü de yazın. Arka plan yükünü benzer tutun; yalnız bir testte oyun, derleme veya başka madenci çalışması koşulları değiştirir.
+
+CPU başlangıç değeri, iş parçacığı sayısı ya da bellek sayfaları gibi tek soruyu seçin. Test edilen değişken dışında CPU yerleşimi, güç ve belleği sabit tutun. [RAM](/tr/blog/how-much-ram-to-mine-blocknet/) ve [büyük sayfalar](/tr/blog/huge-pages-blocknet-mining/) rehberleri hazırlığı açıklar. İstenen ve gerçekten elde edilen sayfa modunu kaydedin.
+
+## CPU testi çalıştırıp raporu kaydedin
+
+Çıkarılmış madenci klasöründe ilk komut Linux/macOS, ikincisi Windows PowerShell içindir. İkisi de yalnız CPU, `backend`, bir ısınma ve üç ölçüm turu seçer; her tur için 20 saniye ister. Dosya yolu çalışma dizinine göredir. Her çalıştırmada yeni ad kullanın.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+İş parçacıkları ve çekirdek seçimi otomatik kalır. Hazırlık ve ayarlama turlardan önce zaman alabilir; başlamış iş istenen süreden sonra bitebilir. `cpu-baseline.json` yazılana dek bekleyin. Isınma özete katılmaz. Toplam süre dört aralığı aşabilir; 20 saniye tüm komutun süresi değildir.
+
+## Raporda nelere bakmalısınız?
+
+Özet hızdan önce modu, etkin ayarları ve turları okuyun. JSON, yapılandırma ve ortamla birlikte `avg_hps`, `median_hps`, `min_hps`, `max_hps` ve `runs` içerir. Yalnız en yüksek sayıyı değil, dosyanın tamamını saklayın. [Bayrak başvurusu](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) rapor ve başlangıç karşılaştırmalarını açıklar.
+
+Hash hızı saniyede tamamlanan iştir. Sayılan iş ve geçen süre tanımı aynı olmalıdır. Gerçek süreyi ve turlar arasındaki dağılımı inceleyin. Tek bir zirve testi özetlemez. Değişkenlik fazlaysa koşulları sabitleyin veya turları uzatın. Sonucu paylaşırken yapılandırmayı belirtin.
+
+## Tek değişikliği tekrarlanan çiftlerle karşılaştırın
+
+İlk yapılandırmaya A, değiştirilene B deyin. A ardından B çalıştırın, çifti tekrarlayın ve başlangıç sırasını dönüşümlü değiştirin. Tur ve ısınma sürelerini koruyun. `cpu-a-1.json` ve `cpu-b-1.json` gibi ayrı raporlar, sıranın veya ortamın etkisini görmeyi sağlar.
+
+İki tarafta aynı önbellek politikasını kullanın: yeni ayarlama verisiyle ilk açılış, kaydedilmiş seçimlerle yeniden açılıştan farklıdır. Günlük veri dizinini koruyup yeni durum testlerini ayrı dizinlerde yapın. [Otomatik ayarlama rehberi](/tr/blog/seine-automatic-cpu-tuning/) yeniden kullanımı açıklar. `--threads` ayarlama davranışını değiştirir; otomatik testle kıyaslarken bunu kaydedin.
+
+## Test modları neden eşleşmeli?
+
+`backend` madencilik arka uçlarını, `kernel` karma hesaplama yolunu sınar. `kernel-effective` yaşam döngüsü süresini ve arka ucun hedef/değerlendirme yolunu içerir. Aynı makinede bile kapsamları farklıdır. Hızların yanına mod yazın; aynı birimler eşdeğer ölçüm demek değildir.
+
+`end-to-end` madencilik yaşam döngüsünün daha fazlasını içerir. Sürümü ve sürelerin anlamını da tutarlı tutun. [Test laboratuvarı belgeleri](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) çift çalıştırmaları, ortam kayıtlarını ve uyumluluğu açıklar. Küçük farklar için bu araçları ve bütün sonuçları kullanın.
+
+## Madenciliğe dönüp işi doğrulayın
+
+Test bitince amaçlanan adres ve veri diziniyle normal komutunuzu başlatın. [Panelde](/tr/blog/seine-dashboard-explained/) cihaz satırlarını ve kabul edilen payları kontrol edin. Test yerel performansı, kabul edilen paylar bağlantıyı ve iş teslimini doğrular. Günlük ayarınız için ikisini birlikte kaydedin.
+
+Havuz hızı zamanla gelen paylardan tahmin edilir; kısa yerel testten ayrı bir gözlemdir. [Havuz takip rehberiyle](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) kayıtları izleyin. Sürüm, komut, makine, bellek/sayfa, önbellek, arka plan koşulları ve tüm JSON raporları karşılaştırmayı yeniden üretilebilir kılar.
+
+<CTA target="seine" title="Seine ile ölçün" text="Seine’i indirin, tekrarlanabilir bir başlangıç raporu kaydedin ve normal madenciliğinizi panelden izleyin." />

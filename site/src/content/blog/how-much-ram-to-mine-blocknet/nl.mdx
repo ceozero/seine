@@ -1,0 +1,90 @@
+---
+title: 'Hoeveel RAM heb je nodig om Blocknet te minen?'
+description: 'Plan RAM voor Blocknet-mining: 2 GiB per CPU-thread, ruimte voor apps, automatische instellingen van seine en oplossingen voor fouten bij geheugentoewijzing.'
+tags: ['Mininggids', 'RAM', 'CPU']
+faq:
+  - q: 'Hoeveel RAM gebruikt één Blocknet-miningthread?'
+    a: 'Elke CPU-thread heeft een Argon2id-geheugengebied van 2 GiB nodig. Dit werkgeheugen is niet het volledige geheugenverbruik van de computer. Houd extra RAM vrij voor besturingssysteem, apps en miner. Bereken threads op basis van beschikbaar geheugen in plaats van geïnstalleerd RAM simpelweg door twee te delen.'
+  - q: 'Kan ik Blocknet minen met 8 GB RAM?'
+    a: 'CPU-mining kan als er voldoende geheugen beschikbaar is voor minstens één gebied van 2 GiB plus systeem en miner. Alleen het label 8 GB bepaalt het aantal threads niet. Begin automatisch en controleer het werkelijk beschikbare geheugen en de gekozen threads.'
+  - q: 'Verminderen huge pages de RAM-behoefte per thread?'
+    a: 'Huge pages veranderen hoe het besturingssysteem geheugen adresseert. Ze verkleinen het gebied van 2 GiB per CPU-thread niet. Stel eerst een geheugenbudget vast en volg daarna de aparte huge-pages-gids om expliciete grote pagina’s op een ondersteund systeem in te stellen.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Kies CPU-threads die passen in je beschikbare geheugen. Deze gids behandelt de gebieden van 2 GiB, automatische instellingen in seine v0.2.26 en controles wanneer een handmatige instelling geen geheugen kan toewijzen. Chipvergelijkingen en gemeten hashrates staan in de [hardwaregids](/nl/blog/blocknet-mining-hardware-hashrate/). Hier zijn de voorbeelden geheugenberekeningen, geen prestatiemetingen.
+
+## Hoeveel RAM heeft elke miningthread nodig?
+
+<Answer>
+Elke CPU-thread heeft een Argon2id-geheugengebied van 2 GiB nodig. Houd ruimte voor systeem, apps en miner. Begin met seine’s automatische keuze, die beschikbaar geheugen en CPU-bronnen meeweegt. Een handmatig aantal threads moet passen in het geheugen dat bij de start werkelijk beschikbaar is.
+</Answer>
+
+GiB is binair: 2 GiB is 2.147.483.648 bytes. Het gebied wordt tussen hashes hergebruikt; een voltooide hash verbruikt niet permanent nog eens 2 GiB. Meer gelijktijdige threads vragen meer gebieden. De [Argon2id-uitleg](/nl/blog/argon2id-proof-of-work-explained/) beschrijft dit werkgeheugen.
+
+<img src="/assets/blog/ram-budget.svg" alt="Vier mininggebieden van elk 2 GiB naast extra geheugen voor systeem en apps" width="1200" height="675" loading="lazy" />
+
+## Hoe bereken je een threadbudget?
+
+Vermenigvuldig de geplande CPU-threads met 2 GiB. De tabel sluit systeemgeheugen en overige overhead uit. Bereken hiermee de gebieden; kies het werkelijke aantal op basis van beschikbaar geheugen en gemeten doorvoer.
+
+| CPU-threads | Alleen mininggeheugen |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Vier threads vragen 8 GiB voor hun gebieden, dus er moet meer dan 8 GiB beschikbaar zijn voor proces en systeem. Reserveer je bewust 4 GiB van een computer met 16 GiB, dan passen rekenkundig zes gebieden in de resterende 12 GiB. Dit budgetvoorbeeld belooft niet dat zes threads de beste hashrate geven.
+
+Controleer beschikbaar geheugen terwijl je gebruikelijke apps openstaan, via Windows Taakbeheer, macOS Activiteitenweergave of Linux-hulpmiddelen. Een VM of container kan minder geheugen krijgen dan de host. Gebruik die effectieve grens; het geadverteerde hostgeheugen is niet automatisch toegankelijk binnen een begrensde omgeving.
+
+## Hoe kiest seine automatisch threads?
+
+Laat bij de eerste CPU-only-start het aantal threads open. Voer dit commando uit in de uitgepakte Linux- of macOS-map. Gebruik onder Windows dezelfde opties met het programma in PowerShell. De [installatiegids](/nl/blog/how-to-mine-blocknet/) behandelt downloaden en het ontvangstadres.
+
+```sh
+./seine --backend cpu
+```
+
+In v0.2.26 reserveren automatische sizing en tuning standaard 5% van het effectieve totale RAM, naast het verrekenen van gebruikt geheugen. Ook CPU-bronnen begrenzen het aantal. Stel een maximum in om het zoekbereik te verkleinen:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Vier is een voorbeeldplafond, geen universele instelling. Tuning kan minder threads kiezen. Bekijk het gekozen aantal en de gemiddelde hashrate in het [dashboard](/nl/blog/seine-dashboard-explained/). De tuner meet je echte configuratie; laat deze stabiliseren voordat je een verandering beoordeelt op een korte fluctuatie.
+
+## Wanneer stel je een vast aantal threads in?
+
+Kies een vast aantal voor een specifiek budget of een herhaalbare configuratie. Dit voorbeeld kiest twee CPU-threads: 4 GiB voor hun gebieden plus overig geheugen.
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+`--threads` schakelt de gewone automatische threadkeuze uit, tenzij je tuning ook expliciet inschakelt. Het overschrijft de automatische reserve; houd zelf marge. De geheugencontroles blijven actief. Een aantal dat in geïnstalleerd RAM past, kan na het starten van apps het beschikbare geheugen overschrijden.
+
+Wijzig één instelling tegelijk. Noteer threads, beschikbaar RAM en gemiddelde hashrate onder vergelijkbare belasting. Verwijder voor automatische keuze het vaste argument en opgeslagen overrides. De [configuratiereferentie van v0.2.26](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) legt opdrachtregel- en opgeslagen instellingen uit.
+
+## Wat controleer je na een allocatiefout?
+
+Bepaal of de melding gaat over de effectieve limiet, beschikbaar geheugen of expliciete grote pagina’s. Dat vraagt verschillende controles. Sluit onnodige apps, verlaag de threads en start opnieuw met ruimte voor normaal desktopgebruik.
+
+Controleer voor een VM of container het toegewezen geheugen én de host. Een limiet van 1 GiB kan geen gebied van 2 GiB bevatten. Een groter wisselbestand verandert dit niet; plan voldoende fysiek geheugen voor het proces.
+
+Bij `--cpu-page-mode large` of `--cpu-page-mode large-1g` moet de gevraagde gereserveerde paginapool beschikbaar zijn. Die modi vereisen het gekozen type. Volg de [huge-pages-gids](/nl/blog/huge-pages-blocknet-mining/) of ga terug naar automatische paginakeuze voor een werkende uitgangssituatie. Wijzig pagina’s en threads afzonderlijk.
+
+## Telt GPU-geheugen mee voor het CPU-budget?
+
+Op een aparte NVIDIA-kaart staan GPU-mininggebieden in VRAM. CPU-threads gebruiken systeem-RAM. Begroot beide apart bij gecombineerd minen; ongebruikt VRAM is geen extra ruimte voor CPU-gebieden. De [NVIDIA-gids](/nl/blog/mine-blocknet-nvidia-gpu/) behandelt installatie en GPU-lanes.
+
+Op Apple Silicon delen CPU en GPU unified memory. Tel die capaciteit niet dubbel voor andere taken. Volg de [Mac-gids](/nl/blog/mine-blocknet-on-mac/) voor de ondersteunde CPU-configuratie. Capaciteit bepaalt wat past; gemeten doorvoer bepaalt welke instelling het beste werkt.
+
+## Wat controleer je voor langdurig minen?
+
+Controleer of threads passen, apps responsief blijven en geaccepteerde shares aankomen. Meer geheugen toewijzen bewijst op zichzelf geen betere prestaties. Behoud de configuratie voor jouw gebruik en bevestig via de [pooltrackinggids](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) recente activiteit op je ontvangstadres.
+
+<CTA target="seine" title="Download seine" text="Begin met automatische CPU-sizing en kies daarna een geheugenbudget dat bij je computer past." />

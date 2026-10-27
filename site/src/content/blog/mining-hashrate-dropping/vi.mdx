@@ -1,0 +1,68 @@
+---
+title: 'Vì sao tốc độ băm của máy đào giảm?'
+description: 'Chẩn đoán tốc độ băm Blocknet giảm: so sánh cùng chỉ số, kiểm tra thiết bị, tinh chỉnh, bộ nhớ, xung nhịp và share, rồi xác minh từng thay đổi.'
+tags: ['Khắc phục sự cố', 'Tốc độ băm', 'seine']
+faq:
+  - q: 'Vì sao pool hiển thị tốc độ băm thấp hơn máy đào?'
+    a: 'Máy đào đếm phép băm cục bộ; pool ước tính công việc từ share trong cửa sổ riêng. Hãy so sánh cùng máy trong khoảng đại diện, kiểm tra share mới được chấp nhận và thông báo kết nối. Chênh lệch ngắn không tự chứng minh phần cứng chậm đi.'
+  - q: 'Ít luồng CPU hơn có nghĩa là có lỗi không?'
+    a: 'Không thể kết luận chỉ từ đó. Tinh chỉnh tự động so sánh số luồng và đường mã; bộ nhớ sẵn có cũng có thể giới hạn số hoạt động. Xem cùng lúc thông báo tinh chỉnh, bộ nhớ và tốc độ từng thiết bị. Ghi thay đổi trước khi quyết định can thiệp.'
+  - q: 'Có nên đổi nhiều thiết lập để phục hồi tốc độ băm?'
+    a: 'Bắt đầu từ mốc so sánh được và mỗi lần chỉ đổi một điều kiện liên quan. Ghi phiên bản, thiết bị, tải và khoảng quan sát. Sau đó xác minh tính toán liên tục và share mới được chấp nhận; một số tức thời cao hơn chưa chứng minh cải thiện.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Xác định chỉ số nào đổi trước khi điều chỉnh máy đào vẫn đang chạy. Hướng dẫn này tách khác biệt cửa sổ đo khỏi thay đổi thiết bị, tải hoặc tài nguyên, rồi kiểm tra nguyên nhân có thể bằng phép so sánh lặp lại được. Giữ cấu hình khởi chạy đang hoạt động để mỗi quan sát có điểm bắt đầu rõ ràng.
+
+## Vì sao tốc độ băm có thể giảm trong phiên?
+
+<Answer>
+Tốc độ băm thay đổi khi thiết bị hoạt động, số luồng CPU, bộ nhớ sẵn có, tải cạnh tranh hoặc xung nhịp thay đổi. So sánh các cửa sổ trung bình khác nhau cũng có thể tạo cảm giác giảm. Bắt đầu với cùng thiết bị và khoảng đo, kiểm tra công việc mới cùng nhật ký, rồi đổi một điều kiện và quan sát.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Hai đường tốc độ băm dẫn tới kiểm tra thiết bị, bộ nhớ và xung nhịp, sau đó so sánh trước và sau trong điều kiện tương đương." width="1200" height="675" loading="lazy" />
+
+## Trước tiên xác định chỉ số đã giảm
+
+Ghi nơi thấy thay đổi: tốc độ cục bộ hiện tại, trung bình phiên, hàng của một thiết bị hay ước tính pool. Đây là các quan sát khác nhau. Trong seine, số hiện tại và trung bình dùng các khoảng khác nhau; thiết bị có thể báo công việc theo lô. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích từng trường; trước tiên so trường với giá trị cũ của chính nó.
+
+Ghi đơn vị và khoảng quan sát cạnh mỗi số. Quy đổi H/s với kH/s trước khi so. Ghi máy vừa khởi động, khởi động lại backend hay tiếp tục công việc. Phiên mới có lịch sử khác trung bình chạy lâu; một đỉnh ban đầu là mốc không phù hợp cho cả buổi tối.
+
+## Thay đổi ở máy, ở pool hay chỉ một thiết bị?
+
+Xem hàng từng thiết bị và thông báo share mới được chấp nhận. Nếu một thiết bị đóng góp ít hơn còn các thiết bị khác ổn định, kiểm tra nó trước. Nếu công việc cục bộ tương đương nhưng ước tính pool đổi, xem share và kết nối. [Bài giải thích tốc độ băm](https://bntpool.com/blog/vi/what-is-hashrate/) nêu vì sao ước tính từ share khác tính toán cục bộ.
+
+Xác nhận địa chỉ nhận và tên rig trong thống kê pool. Nhiều máy cùng một địa chỉ có thể khiến tổng tài khoản không phù hợp để so với một máy. Dùng [hướng dẫn theo dõi](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/). Nếu tiến trình thoát hoặc backend báo lỗi, chuyển sang [hướng dẫn máy đào dừng](/vi/blog/miner-keeps-stopping/); bài này giả định phiên vẫn quan sát được.
+
+## Đọc thay đổi tinh chỉnh và số luồng đúng ngữ cảnh
+
+seine so sánh số luồng CPU và kernel khi đang đào, đồng thời có thể dùng lại kết quả tương thích đã lưu. Các thử nghiệm đó có thể đổi cấu hình đang hoạt động. Đọc thông báo gần thời điểm đó và ghi số luồng trước khi chẩn đoán. [Hướng dẫn tinh chỉnh tự động](/vi/blog/seine-automatic-cpu-tuning/) giải thích tìm kiếm và ghi đè; đổi số luồng không tự chứng minh suy giảm.
+
+Kiểm tra lệnh khởi chạy còn chọn cùng backend và thiết lập như trước. Lối tắt khác, thư mục làm việc hoặc cấu hình lưu có thể đổi phép so sánh trước cả phần cứng. Giữ lệnh hoạt động và dùng [hướng dẫn cấu hình](/vi/blog/configure-seine-miner/) để xác định giá trị thực áp dụng. Đừng xóa bộ nhớ đệm tinh chỉnh chỉ vì một chỉ số thay đổi.
+
+## Kiểm tra công việc khác và bộ nhớ sẵn có
+
+Dùng màn hình tiến trình và bộ nhớ của hệ điều hành để tìm thay đổi đồng thời. Trò chơi, tác vụ video, biên dịch hoặc tính toán khác có thể dùng chung CPU, GPU hay bộ nhớ. Khi thuận tiện, so với tác vụ tùy chọn đó đã tạm dừng hoặc kết thúc. Giữ tải desktop tương đương; nếu không, số tiếp theo trả lời câu hỏi khác.
+
+Quản lý CPU tự động của seine xét bộ nhớ sẵn có và có thể giảm luồng khi tài nguyên chật. Một số hệ thống cũng cung cấp tín hiệu áp lực. Xem nhật ký và bộ nhớ cùng nhau thay vì ép ngay số cũ. [Hướng dẫn RAM](/vi/blog/how-much-ram-to-mine-blocknet/) nói về cấp phát. Nếu hiệu năng trở lại khi tác vụ khác kết thúc, ghi mối liên hệ trước khi đổi lâu dài.
+
+## Nhiệt độ hoặc nguồn điện có giải thích được thay đổi?
+
+Nhiệt độ và xung nhịp giúp giải thích thay đổi cục bộ kéo dài khi tải và thiết bị vẫn tương đương. Intel mô tả [giới hạn nhiệt](https://www.intel.com/content/www/us/en/support/articles/000088048.html) là giảm xung CPU để bảo vệ. Dùng hướng dẫn nhà sản xuất cho đúng mẫu CPU hoặc máy; không có một ngưỡng nhiệt chung chẩn đoán mọi máy đào.
+
+Với NVIDIA, [tài liệu giám sát](https://docs.nvidia.com/deploy/nvidia-smi/index.html) phân biệt các lý do giới hạn xung, gồm nhiệt và công suất, đồng thời đánh dấu dữ liệu không có. Ghi chỉ số được hỗ trợ cùng tốc độ băm. Ghi cả chuyển pin/nguồn ngoài hoặc đổi chế độ điện. Tuân thủ hướng dẫn làm mát, giữ bảo vệ bật; quy trình này không cần đổi điện áp hay giới hạn xung.
+
+## Thực hiện phép so sánh trả lời được câu hỏi
+
+Chọn một điều kiện nghi ngờ như ứng dụng cạnh tranh, rồi so các khoảng tương đương trước và sau khi nó đổi. Ghi phiên bản, backend, chính sách luồng, nguồn điện và tác vụ tiền cảnh. Tách riêng khởi động và tinh chỉnh. Lặp lại nếu dao động bình thường làm kết quả không rõ, không suy nguyên nhân từ một điểm.
+
+Với thử nghiệm hiệu năng chủ động, dùng [hướng dẫn benchmark](/vi/blog/benchmark-seine-miner/) và tải khớp nhau. Tách benchmark khỏi mẫu phần thưởng pool vốn còn chịu thời điểm khối và biến động share. Điện thấp hơn cũng trả lời câu khác: [hướng dẫn điện năng](/vi/blog/mining-electricity-use/) ghép năng lượng với công việc hoàn thành để tránh coi thiết bị nhàn rỗi là cải thiện hữu ích.
+
+## Xác minh kết quả và giữ bằng chứng hữu ích
+
+Sau thay đổi có mục tiêu, xác nhận thiết bị dự kiến đang băm, số luồng đã rõ và share mới được chấp nhận. So cùng trường trong khoảng đại diện. Giữ cả kết quả không có khác biệt đáng kể để khỏi lặp lại chỉnh sửa vô ích. Hoàn tác thay đổi không liên quan thay vì tích lũy thiết lập không giải thích được.
+
+Nếu mẫu giảm vẫn còn, thu thập phiên bản, hệ điều hành, phần cứng, cấu hình chạy, mốc nhật ký và các cặp chỉ số. Nêu điều giữ nguyên, điều đổi và một thiết bị hay toàn bộ máy đào bị ảnh hưởng. Bỏ thông tin đăng nhập và dữ liệu cá nhân trước khi chia sẻ. Dòng thời gian ngắn hữu ích hơn ảnh chụp một con số thấp.
+
+<CTA target="seine" title="Giữ cấu hình seine lặp lại được" text="Dùng bảng điều khiển, quan sát tương đương và share mới để hiểu thay đổi tốc độ trước khi sửa cấu hình." />

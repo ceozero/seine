@@ -1,0 +1,72 @@
+---
+title: 'Den Blocknet-Miner aktualisieren'
+description: 'Aktualisiere den seine-Miner für Blocknet, behalte deine Einstellungen, prüfe den offiziellen Download und kontrolliere Verbindung und akzeptierte Shares.'
+tags: ['Mining-Anleitung', 'seine', 'Updates']
+faq:
+  - q: 'Installiert seine Updates automatisch?'
+    a: 'Die Versionsprüfung meldet neue Releases im Dashboard und Log. Du bestimmst den Zeitpunkt der Installation. Lade das offizielle Archiv herunter, prüfe es, stoppe den Miner und ersetze die Programmdateien. Starte danach mit demselben Datenverzeichnis und denselben Startoptionen.'
+  - q: 'Welche Dateien speichern meine Einstellungen?'
+    a: 'Standardmäßig liegt die Konfiguration unter seine-data/seine.config.json relativ zum Startverzeichnis. data-dir ändert diesen Ort. Bewahre das Datenverzeichnis sowie Startskript oder Dienstkonfiguration auf: Backend- und Thread-Optionen sind von den gespeicherten Verbindungsdaten getrennt.'
+  - q: 'Warum wird nach dem Update erneut nach meiner Adresse gefragt?'
+    a: 'Prüfe Arbeitsverzeichnis und data-dir. Beim Start aus einem neu entpackten Ordner kann seine an einem anderen Ort nach der Konfiguration suchen. Stoppe diese Instanz, finde das ursprüngliche Datenverzeichnis und starte mit dem richtigen Pfad. Kontrolliere Adresse und Pool vor dem Weiterbetrieb.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Aktualisiere seine und behalte deine funktionierende Poolverbindung und Startoptionen. Diese Anleitung behandelt Vorbereitung, Dateiaustausch und Kontrolle anhand des öffentlichen Releases v0.2.36. Für die Erstinstallation nutze die Anleitung für [Windows](/de/blog/mine-blocknet-on-windows/), [Linux](/de/blog/mine-blocknet-on-linux/) oder [Mac](/de/blog/mine-blocknet-on-mac/).
+
+## Wie aktualisierst du den seine-Miner?
+
+<Answer>
+Lade das offizielle Archiv für dein Betriebssystem herunter und prüfe es. Stoppe den Miner, bewahre sein Datenverzeichnis und ersetze die Programmdateien. Starte mit demselben Arbeitsverzeichnis und denselben Argumenten. Prüfe Version, Auszahlungsziel, Poolverbindung und akzeptierte Shares, bevor du einen weiteren Rechner aktualisierst.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="Das Anwendungspaket wird ersetzt, der Konfigurationsordner bleibt erhalten und anschließend wird die Verbindung geprüft." width="1200" height="675" loading="lazy" />
+
+## Wie prüfst du deine aktuelle Version?
+
+Führe den Versionsbefehl für die tatsächlich verwendete Programmdatei aus. Eine alte Kopie in einem anderen Ordner kann von der per Verknüpfung oder Dienst gestarteten Version abweichen. Notiere Programmpfad, Arbeitsverzeichnis und Startargumente zusammen; so bleibt das Update nachvollziehbar. Öffne unter Windows PowerShell im aktuellen Miner-Ordner:
+
+```powershell
+.\seine.exe --version
+```
+
+Unter Linux oder macOS öffnest du dort ein Terminal:
+
+```sh
+./seine --version
+```
+
+Vergleiche das Ergebnis mit den [offiziellen Releases](https://github.com/zpalmtree/seine/releases). seine prüft beim Start und alle 12 Stunden auf eine neue Version und meldet sie im Dashboard und Log. Die Meldung liefert einen Downloadlink; du bestimmst die Installation. Lies die Release-Hinweise zu Plattform, Laufzeitbibliotheken und Startoptionen.
+
+## Welche Einstellungen solltest du behalten?
+
+Standardmäßig liest seine `./seine-data/seine.config.json`. `./` steht für das aktuelle Arbeitsverzeichnis. Verschiebst du das Programm und startest es woanders, kann sich damit der Suchort ändern. Zeigt dein Befehl mit `--data-dir` auf ein Verzeichnis, behalte dieses bei. Ein absoluter Pfad macht den Ort eindeutig, wenn Verknüpfung, Skript oder Dienstmanager das Arbeitsverzeichnis festlegen.
+
+Die Konfiguration speichert etwa Mining-Modus, Auszahlungsadresse, Pool-URL und Gerätenamen. Bewahre das gesamte Datenverzeichnis einschließlich Tuning-Dateien auf. Sichere außerdem Startbefehl, Skript oder Dienstdefinition: `--backend` und `--threads` gehören nicht zu diesen gespeicherten Verbindungsfeldern. Beides zusammen erhält die beabsichtigte Einrichtung nach dem Neustart.
+
+## Neue Version herunterladen und prüfen
+
+Wähle auf der [Downloadseite](/de/#download) oder offiziellen Release-Seite das Archiv für Betriebssystem und CPU-Architektur. Lade die separate Datei `SHA256SUMS.txt` desselben Releases herunter. Vergleiche die Archiv-Prüfsumme, bevor du es in einen separaten Ordner entpackst. Die [Download-Prüfanleitung](/de/blog/antivirus-flags-crypto-miner/) erklärt das Windows-Verfahren und den Umgang mit Downloadwarnungen.
+
+Halte alle mitgelieferten Dateien zusammen. Das Windows-Paket enthält NVIDIA-Laufzeitbibliotheken neben `seine.exe`; nur die Programmdatei zu kopieren kann verschiedene Versionen vermischen. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) behandelt die Laufzeitumgebung. Die [Konfigurationsreferenz v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) dokumentiert gespeicherte Einstellungen und das hier beschriebene Startverhalten.
+
+## Stoppen, sichern und ersetzen
+
+Beende den interaktiven Miner mit `q` oder `Ctrl+C` und warte auf sein Ende. Stoppe einen Dienst über dessen Manager und beachte automatische Neustartregeln vor dem Dateiaustausch. Sichere bei gestopptem Miner Anwendungs- und Datenordner lokal. Halte die Sicherung von den neu entpackten Dateien getrennt, damit beide Versionen erkennbar bleiben.
+
+Lege die neuen Programmdateien im Installationsordner ab und erhalte das ursprüngliche Datenverzeichnis. Bei versionsbezogenen Ordnern passe den Programmpfad von Verknüpfung oder Dienst an und behalte Arbeits- und Datenverzeichnis ausdrücklich bei. Starte eine Instanz mit denselben Optionen. Bei mehreren Geräten prüfe zunächst eines vollständig, bevor du die übrigen aktualisierst.
+
+## Wie bestätigst du ein erfolgreiches Update?
+
+Prüfe erneut die Version der installierten Programmdatei und vergleiche sie mit dem Download. Starte den Miner und kontrolliere Auszahlungsziel, Pool und Gerätenamen sowie die vorgesehenen CPU- oder GPU-Backends. Kompatible Tuning-Daten können wiederverwendet werden; warte laufendes Start-Tuning ab, bevor du die Hashrate beurteilst. Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die Anzeigen.
+
+Achte auf akzeptierte Shares und öffne [My Stats](https://bntpool.com/stats) für dieselbe Adresse. Poolschätzungen benötigen eintreffende Shares und Zeit; ein sofortiger Hashrate-Unterschied allein belegt kein Updateproblem. Ein neuer Prozess beginnt auch eine neue lokale Sitzung. Vergleiche Adresse, Gerät und Aktivität, bevor du kurzfristige Zähler alter und neuer Sitzungen vergleichst.
+
+## Was tun, wenn die Ersteinrichtung erneut erscheint?
+
+Prüfe zuerst Arbeitsverzeichnis und `--data-dir`. Im neu entpackten Ordner fehlt oft eine Konfiguration am relativen Standardpfad. Stoppe diese Instanz und verwende das ursprüngliche Datenverzeichnis. Nennt ein Fehler eine Konfigurationsdatei, bewahre Datei und genauen Meldungstext für die Untersuchung auf. Wallet-Seeds, private Schlüssel und Control-API-Token gehören nicht in öffentliche Berichte oder Screenshots.
+
+Bei einem Startfehler notiere Version, Betriebssystem, Programmpfad und genaue Meldung und nutze die passende Plattformanleitung. Deine Sicherung erhält alte Anwendung und Einstellungen gemeinsam. Prüfe vor einer Wiederherstellung die Kompatibilitätsanforderungen der neueren Release-Hinweise. Starte mit bekannter Konfiguration und kontrolliere wieder Shares; für den Austausch des Miners musst du keine neue Wallet erstellen.
+
+<CTA target="seine" title="Aktuelles seine-Release herunterladen" text="Wähle das Plattformarchiv und behalte deine vorhandene Konfiguration beim Update." />

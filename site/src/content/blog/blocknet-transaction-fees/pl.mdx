@@ -1,0 +1,68 @@
+---
+title: 'Jak działają opłaty transakcyjne Blocknet'
+description: 'Poznaj opłaty Blocknet, wybór wejść i resztę. Sprawdź podgląd portfela przed potwierdzeniem i odróżniaj opłaty sieciowe od opłat za kopanie.'
+tags: ['Blocknet', 'Portfel', 'Płatności']
+faq:
+  - q: 'Czy opłata Blocknet jest procentem wysyłanej kwoty?'
+    a: 'Sprawdzona implementacja wylicza opłatę z ostrożnego oszacowania rozmiaru transakcji i opłaty minimalnej. Wejścia i wyjścia wpływają na ten szacunek. Kwota może wpływać na wybór wejść, ale obliczenie nie jest stałym procentem wysyłanych BNT.'
+  - q: 'Czy mogę sprawdzić opłatę bez rozgłaszania płatności?'
+    a: 'Udokumentowany portfel wiersza poleceń pobiera podgląd i pokazuje opłatę przed potwierdzeniem. Sprawdź tam cel, kwotę i resztę. Jeśli chcesz tylko obejrzeć płatność, anuluj przy pytaniu. Inne klienty mogą inaczej przedstawiać ekran kontroli.'
+  - q: 'Czy reszta transakcji to dodatkowa opłata?'
+    a: 'Reszta to wartość wybranych wejść pozostała po uwzględnieniu kwoty odbiorcy i opłaty sieciowej. Wraca do portfela jako wyjście. Oddzielaj resztę od opłaty i odróżniaj całkowite saldo od środków, które można obecnie wydać.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Przed potwierdzeniem sprawdź, co wykorzysta twoja płatność Blocknet. Poradnik wyjaśnia szacowanie opłaty sieciowej w sprawdzonym portfelu, znaczenie wyboru wejść i związek kwoty odbiorcy, opłaty oraz reszty. Wskazuje też podgląd w udokumentowanym kliencie wiersza poleceń, by można było sprawdzić płatność bez rozgłaszania jej w sieci.
+
+## Jak oblicza się opłaty transakcyjne Blocknet?
+
+<Answer>
+Sprawdzony portfel ustala opłatę na podstawie ostrożnego szacunku rozmiaru transakcji i skonfigurowanego minimum. Wybrane wejścia i tworzone wyjścia wpływają na szacunek. Opłata jest oddzielna od kwoty odbiorcy, a niewykorzystana wartość wejść staje się resztą. Przed potwierdzeniem sprawdź aktualny podgląd konkretnej płatności.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Wybrane wejścia portfela dzielą się na kwotę odbiorcy, opłatę sieciową i resztę wracającą do portfela." width="1200" height="675" loading="lazy" />
+
+## Zrozum obliczenie i jednostki
+
+W [sprawdzonym kodzie demona](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go) standardowa wysyłka używa minimum 1000 jednostek atomowych i stawki 10 jednostek atomowych za szacowany bajt. Jeden BNT zawiera 100 000 000 jednostek atomowych, więc odpowiada to 0,00001 BNT oraz 0,0000001 BNT za szacowany bajt. To ustawienia implementacji sprawdzone 26 października 2026 r., a nie oferta opłaty dla każdej wersji portfela.
+
+Obliczenie wybiera większą wartość: minimum albo szacowany rozmiar pomnożony przez stawkę. Przy wyraźnie przykładowym założeniu 5000 bajtów: 5000 × 10 = 50 000 jednostek atomowych, czyli 0,0005 BNT. To więcej niż podane minimum. Jest to arytmetyka z założonym rozmiarem, nie zmierzona transakcja ani obietnica opłaty następnego przelewu.
+
+## Dlaczego dwie płatności mogą mieć różne opłaty?
+
+Portfel wydaje istniejące wyjścia jako wejścia transakcji i tworzy wyjścia dla odbiorców oraz, gdy trzeba, reszty. [Konstruktor transakcji](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) szacuje rozmiar według liczby wejść, wyjść i wielkości pierścienia, z ostrożnym zapasem na dowody. Rozmiar nie jest po prostu liczbą znaków adresu, notatki czy formularza płatności.
+
+Płatność złożona z kilku mniejszych dostępnych wyjść może wymagać innej liczby wejść niż płatność finansowana większym wyjściem. Portfel uwzględnia też opłatę, dobierając dostateczną wartość możliwą do wydania, więc wybór i szacowanie oddziałują na siebie. Ta sama kwota dla odbiorcy nie musi oznaczać tej samej opłaty w dwóch stanach portfela. Struktury prywatności opisują [podpisy pierścieniowe](/pl/blog/ring-signatures-explained/) i [dowody zakresu](/pl/blog/bulletproofs-explained/).
+
+## Oddzielaj kwotę, opłatę i resztę
+
+Przy zwykłej wysyłce ustalonej kwoty wybrane wejścia pokrywają kwotę odbiorcy plus opłatę, a pozostałość wraca jako reszta. Przykład: wejścia łącznie 10 BNT, odbiorca 3 BNT i założona opłata 0,0005 BNT dają 6,9995 BNT reszty. Odbiorca dostaje określone 3 BNT; reszta nie jest kolejnym kosztem.
+
+Przykład opisuje wybrane wejścia, niekoniecznie całe saldo portfela. Inne wyjścia mogą pozostać nietknięte. Wysyłka wszystkiego ma inny cel: sprawdzona implementacja odejmuje opłatę od wybranej sumy możliwej do wydania, aby ustalić kwotę odbiorcy. Czytaj kwotę wyświetlaną dla tej operacji, zamiast zakładać, że całe saldo można wysłać bez potrącenia.
+
+## Jak sprawdzić opłatę przed wysłaniem?
+
+W [udokumentowanym kliencie CLI](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) wysyłka najpierw żąda podglądu bez wykonania, a następnie pokazuje kwotę, cel, opłatę i ewentualną resztę przed `Confirm [y/N]:`. Użyj własnych danych odbioru i zamierzonej kwoty w zwykłej ścieżce portfela, po czym zatrzymaj się na weryfikacji. [Poradnik portfela](/pl/blog/blocknet-wallet-for-mining/) obejmuje przygotowanie i znalezienie adresu.
+
+Najpierw przeczytaj cel i kwotę, potem opłatę i resztę. Jeśli chodziło tylko o sprawdzenie obliczeń, naciśnij Enter lub odpowiedz przecząco: klient anuluje zamiast wysyłać żądanie płatności. Poradnik nie prosi o płatność testową. Portfel graficzny może używać innych etykiet; sprawdź jego ekran zamiast zakładać układ znany z CLI.
+
+## Co sprawdzić, jeśli podgląd się zmienia?
+
+Podgląd CLI i ostateczna wysyłka są osobnymi żądaniami. Rzeczywista wysyłka korzysta ze stanu portfela dostępnego w tym momencie; podgląd nie rezerwuje na stałe podanej opłaty. Zmiana kwoty, odbiorców, wyjść lub dostępnych środków może zmienić wynik. Unikaj równoczesnego wydawania podczas kontroli i pobierz nowy podgląd po zmianie płatności.
+
+Jeśli portfel nie pokrywa kwoty z opłatą, sprawdzaj środki możliwe do wydania, nie saldo całkowite. Środki czekające na potwierdzenie stanowią osobną kategorię. Zapisz wersję portfela i dokładny komunikat, jeśli podgląd nie powstaje. Przy odbieraniu wypłat z kopania [poradnik wpływu do portfela](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/) śledzi transakcję i skanowanie; to inne zadanie niż wycena nowej płatności wychodzącej.
+
+## Rozróżniaj opłaty sieciowe i wydobywcze
+
+Opłata w tym artykule dotyczy transakcji portfela. Opłata puli wiąże się z rozliczaniem jej nagród, a opłata twórcy minera z zasadami pracy programu. Mają różne podstawy i etapy. [Poradnik opłat za kopanie](https://bntpool.com/blog/pl/mining-pool-fees-vs-miner-fees/) wyjaśnia stronę wydobywczą; nie stosuj jego procentów do oszacowania rozmiaru transakcji portfela.
+
+Tak samo minimalna wypłata puli jest progiem salda, nie opłatą za zwykłą wysyłkę. Planując przelew, zachowaj etykietę i źródło każdej liczby. Podgląd portfela jest właściwym miejscem kontroli przygotowywanej płatności; kalkulator kopania lub widok salda puli go nie zastępują.
+
+## Prowadź jasny zapis płatności
+
+Przed zamierzonym potwierdzeniem sprawdź razem cel, kwotę, notatkę, jeśli jest, opłatę i resztę. [Link płatniczy](/pl/blog/blocknet-payment-links/) może uzupełnić dane, ale nadal weryfikujesz je w portfelu. Opisując procedurę, zapisz wersję, która podała szacunek, by późniejsi czytelnicy odróżniali datowany przykład od obecnego interfejsu.
+
+Po świadomie potwierdzonej wysyłce zachowaj identyfikator transakcji w swoim rejestrze i śledź status w portfelu. Nigdy nie udostępniaj słów odzyskiwania ani kluczy prywatnych, by wyjaśnić opłatę. Przy pytaniu do wsparcia wersja, typ operacji i wyświetlone kwoty są zwykle lepszym początkiem niż kopiowanie prywatnych danych portfela. Sprawdzaj podgląd każdej nowej płatności.
+
+<CTA target="seine" title="Poznaj Blocknet z seine" text="Dowiedz się, jak działa kopanie Blocknet, i podłącz własny sprzęt do sieci z seine." />

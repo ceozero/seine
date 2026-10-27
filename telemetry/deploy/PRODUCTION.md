@@ -37,9 +37,15 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://telemetry.seineminer.com/healt
 
 Expect HTTP 204. This public endpoint alone does not verify the database.
 
-Schema 4 miners require the upgraded collector; deploy it before the miner release.
-The upgraded collector still accepts schemas 1–3. Deploy updated `diagnostics.sql`
-and `agent_report.py` with it to expose typed causes and interrupted-run context.
+Schema 6 miners require the upgraded collector; deploy it before the miner release.
+The upgraded collector still accepts schemas 1–5. Deploy updated `tuning_report.sql`,
+`diagnostics.sql`, `alerts.py` and `agent_report.py` with it to expose paired research
+hints, recovered diagnostics and correct interrupted-release attribution. The collector must be rebuilt; scripts alone cannot
+accept schema 6. No database migration or pool/daemon restart is required.
+Paired-trial producer hooks need runtime integration too; collector upgrade alone
+does not produce fleet trial evidence. See [the contract](../TUNING.md).
+Old checkpoints with an unambiguous observed build mapping can be attributed now;
+missing release/evidence fields cannot be recovered from existing payloads.
 Existing records remain readable; missing cause details cannot be reconstructed. After this upgrade, the
 completeness check may continue failing for old pool miners until they upgrade
 or their inventory-only reports leave the six-hour window. Use the agent
@@ -53,13 +59,21 @@ These checks are recorded in journald and evaluated independently by the alert r
 Legacy inventory-only reports produce their own version-specific alert; they do not
 prevent collector outages or miner failures from being reported.
 
+The [October 26 schema-6 rollout proposal](ROLLOUT-SCHEMA6-20261026.md) pins the
+reviewed target and records acceptance checks, exact collector-only commands and
+image rollback. The approved collector-only rollout completed October 26 at
+14:49 EDT on exact source `af236c276e01080ff15863d4e716dd13e07f3b9d`; see the
+[deployment receipt](../../docs/validation/collector-schema6-deployment-20261026.md)
+for image IDs, retained overrides and verification. Further deployments require
+an explicit request.
+
 For deployment, first review the intended commit and create a fresh recovery backup.
 Then fast-forward the checkout and rebuild only the collector:
 
 ```sh
 systemctl start seine-telemetry-backup.service
 git pull --ff-only origin master
-docker compose -f telemetry/deploy/compose.yaml --env-file telemetry/deploy/.env up -d --build collector
+docker compose -f telemetry/deploy/compose.yaml --env-file telemetry/deploy/.env up -d --no-deps --build collector
 systemctl start seine-telemetry-check.service
 ```
 
@@ -87,7 +101,10 @@ The runner evaluates these independent categories:
 - Sample quality: five installations of one version with three inventory-only
   reports spanning two hours within the last six hours.
 - Reliability: errors/quarantines or unclean previous runs on three distinct
-  installations of one version in 24 hours. An unclean run is not proof of a crash.
+  installations of one version in 24 hours. Interrupted runs use their previous
+  release, resolved from the checkpoint or an unambiguous observed build mapping.
+  Unattributed runs use an explicitly unknown-version bucket. The restart version
+  is never substituted. An unclean run is not proof of a crash.
 - Performance: matching installation, hardware/environment, build target/features
   and backend settings across the recent 36 hours versus the preceding part of
   the seven-day window. Each period/version requires three reports spanning 24
@@ -99,8 +116,13 @@ The runner evaluates these independent categories:
   previously reported incidents in the affected categories.
 
 Opening and clearing require two observations at least four minutes apart;
-normal delivery occurs on the next five-minute tick. Repeats are suppressed
-for four hours. A gap longer than 15 minutes resets pending confirmation.
+normal delivery occurs on the next five-minute tick. Sample quality, reliability
+and performance incidents notify once when opened and once when cleared, with no
+periodic reminders while active. Counts and descriptions continue updating in
+state and reports. A new version/cohort or a confirmed recurrence after clearing
+can notify again. Infrastructure, ingestion and monitor outages retain four-hour
+reminders. Existing delivered incidents become quiet immediately without resetting
+state. A gap longer than 15 minutes resets pending confirmation.
 Clearing means the threshold cleared or its observations aged out, not that
 all affected miners demonstrably recovered. Missing diagnostic coverage is
 not evidence of healthy miners; inspect coverage with `agent_report.py`.
@@ -117,15 +139,15 @@ Notifications use Discord embed cards with the pool relay's blue informational,
 orange warning, red critical and green cleared colors. The incident key and
 Eastern timestamp appear in the footer. Known v0.2.24/v0.2.25 pool sampling gaps
 are informational and recommend v0.2.26 or later; other versions remain warnings.
-This changes presentation only: thresholds, confirmation, reminders and incident
-identities are preserved. Missing samples do not establish lost mining or earnings.
+Thresholds, confirmation and incident identities are preserved. Missing samples do not establish lost mining or earnings.
 
 Preview the real formatter's synthetic payloads locally (no Discord sends):
 
 ```sh
 python3 telemetry/showcase/serve.py --port 9081
 # http://localhost:9081/alerts.json
-# Select ?state=legacy|warning|reminder|cleared|critical|setup|old-state
+# Select ?state=legacy|warning|reminder|cleared|critical|setup|old-state|quiet-lifecycle
+# Interrupted runs: ?state=unclean-upgrade|unclean-unknown|unclean-cleared
 ```
 
 The preview labels the current source revision. It shows actual webhook JSON,

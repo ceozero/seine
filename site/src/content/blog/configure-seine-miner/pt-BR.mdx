@@ -1,0 +1,76 @@
+---
+title: 'Configurar seine: ajustes salvos e opções de início'
+description: 'Encontre a configuração do seine, salve pool e endereço, entenda a prioridade dos argumentos e confira os ajustes do seu minerador Blocknet após reiniciá-lo.'
+tags: ['Guia de mineração', 'Configuração', 'seine']
+faq:
+  - q: 'Onde o seine salva a configuração?'
+    a: 'Por padrão, lê seine-data/seine.config.json a partir do diretório de trabalho usado na inicialização. data-dir escolhe outra pasta base. Terminal, atalho e tarefa agendada podem usar diretórios diferentes. Anote o caminho completo da configuração junto com o comando de início.'
+  - q: 'Um argumento atualiza o arquivo salvo?'
+    a: 'Em uma configuração existente, argumentos explícitos de conexão têm prioridade naquela execução sem substituir endereço, URL do pool ou nome da máquina salvos. Mantenha o argumento no inicializador habitual ou pare o minerador e edite o campo. Confira depois uma inicialização normal.'
+  - q: 'Todas as opções cabem no JSON?'
+    a: 'O arquivo salvo tem um esquema pequeno de conexão. Opções de hardware e execução, como backend e threads, pertencem aos argumentos de início. Campos JSON com nomes semelhantes não configuram essas opções. Faça backup do inicializador junto com a pasta de dados.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Inicie seu minerador Blocknet com ajustes previsíveis. Este guia segue o seine v0.2.37 e explica onde ficam as conexões, quais argumentos prevalecem e como manter uma alteração. Parta de uma instalação funcional; o [guia de atualização](/pt-br/blog/update-seine-miner/) trata da troca do aplicativo.
+
+## Como o seine escolhe os ajustes?
+
+<Answer>
+O seine combina a conexão salva com os argumentos de início. Argumentos explícitos prevalecem sobre os respectivos valores salvos. O diretório de dados determina qual arquivo é lido. Opções de hardware e execução continuam sendo argumentos: preserve tanto a configuração quanto o comando habitual.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Um arquivo salvo e um comando alimentam o minerador, seguido de uma conferência após reiniciar." width="1200" height="675" loading="lazy" />
+
+## Localize a configuração usada pelo inicializador
+
+O padrão é `./seine-data/seine.config.json`, relativo ao diretório de trabalho do processo, que pode ser diferente da pasta do executável. Confira terminal, atalho ou serviço antes de editar. Dois inicializadores podem abrir o mesmo programa usando pastas de dados diferentes.
+
+`--data-dir` seleciona a pasta base; o nome continua `seine.config.json`. Use um caminho absoluto estável ao iniciar de locais diferentes. Anote executável, diretório de trabalho, dados e argumentos completos. O [guia de início no Windows](/pt-br/blog/start-miner-automatically-windows/) mostra esses caminhos no Agendador de Tarefas, inclusive com espaços.
+
+## Quais ajustes pertencem ao arquivo salvo?
+
+O exemplo mostra os campos principais. Substitua `@yourname` pelo seu Blocknet ID registrado ou endereço completo. É uma referência de formato, não um comando. Em uma instalação existente, altere os campos necessários em vez de substituir o arquivo inteiro.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` e `pool_worker` definem modo, destino, pool e nome da máquina. Preserve `schema_version` e qualquer `dev_fee_pool_worker` existente. Este é um identificador gerado separado; use `pool_worker` para sua máquina. Não coloque frases de recuperação nem chaves privadas nesse arquivo.
+
+## Como tornar uma alteração permanente?
+
+Pare o minerador e copie o arquivo. Use editor de texto, JSON válido com aspas duplas e o nome original sem extensão adicional. Altere apenas o campo necessário na pasta realmente selecionada. Confira vírgulas, evite comentários e vírgulas finais e use a validação JSON do editor, se houver. O backup permite comparar os valores exatos.
+
+Procure uma opção conflitante no inicializador. Um `--address` antigo prevalece sobre o endereço editado no arquivo. Atualize o argumento ou remova-o para usar o valor salvo. Reinicie pelo atalho, script ou tarefa habitual e confira os ajustes efetivos.
+
+## Use substituições temporárias com intenção
+
+Com configuração existente, a opção de pool abaixo escolhe o nome da máquina naquela execução. Sem ela, o próximo início retoma o nome salvo. Isso permite uma mudança controlada; para manter o comportamento, coloque a opção no inicializador habitual.
+
+```text
+--pool-worker desktop-02
+```
+
+No primeiro início sem arquivo, o seine cria a configuração a partir dos dados iniciais. Isso difere de substituir temporariamente valores existentes. Lembre-se disso ao copiar um comando para outro computador, que talvez crie seu primeiro arquivo. A [referência de configuração](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) documenta as perguntas iniciais e opções disponíveis.
+
+## Mantenha opções de desempenho no comando
+
+`--backend` e `--threads` são argumentos de início. O esquema de conexão não é uma lista geral de opções. Adicionar um campo JSON parecido não define essa opção de execução. Guarde as escolhas de hardware no script, atalho ou serviço que inicia o minerador.
+
+Os controles de threads no painel alteram a sessão sem gravar um novo padrão. O ajuste automático usa seus próprios caches. Preserve-os separadamente das alterações de conexão e deixe cada máquina ajustar seu hardware. O [guia de ajuste automático](/pt-br/blog/seine-automatic-cpu-tuning/) explica reutilização de cache e escolhas explícitas de threads.
+
+## Por que os ajustes parecem redefinidos?
+
+Compare caminho de dados e argumentos com a última execução correta. Nova pasta extraída, outro terminal ou argumento antigo de tarefa podem explicar a diferença. Se houver erro de análise, leia o arquivo e a mensagem. Restaure o backup ou corrija o JSON e inicie uma vez pelo caminho previsto.
+
+Confira destino, pool, nome e shares aceitas. Repita um início normal para testar a persistência; uma execução com opções só comprova aquele comando. Consulte o [guia do painel](/pt-br/blog/seine-dashboard-explained/) e o [guia de mudança de endereço](https://bntpool.com/blog/pt-br/change-mining-wallet-address/) para o destino dos próximos créditos. Guarde juntos o inicializador funcional e o backup.
+
+<CTA target="seine" title="Baixe a versão atual do seine" text="Use uma pasta estável e mantenha o comando testado junto com a conexão salva." />

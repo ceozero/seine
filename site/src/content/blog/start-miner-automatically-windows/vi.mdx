@@ -1,0 +1,68 @@
+---
+title: 'Tự khởi động trình đào Blocknet trên Windows'
+description: 'Khởi động seine khi đăng nhập Windows bằng Task Scheduler. Giữ cấu hình, tránh chạy trùng, kiểm tra share được chấp nhận và tắt tự khởi động khi cần.'
+tags: ['Hướng dẫn đào', 'Windows', 'Thiết lập']
+faq:
+  - q: 'Trình đào có chạy trước khi đăng nhập không?'
+    a: 'Thiết lập này chạy seine khi người dùng Windows đã chọn đăng nhập, ngay trong phiên của người đó. Nó không tạo dịch vụ Windows chạy nền. Sau khi khởi động lại máy, đăng nhập tài khoản ấy để kích hoạt tác vụ rồi kiểm tra share được chấp nhận.'
+  - q: 'Cài đặt đào có được giữ lại không?'
+    a: 'Dùng cùng tài khoản Windows, thư mục dữ liệu hiện có và các tùy chọn của lệnh đã chạy tốt. Đặt đường dẫn dữ liệu tuyệt đối trong đối số và thư mục làm việc chính xác. Nhờ đó seine tìm được địa chỉ, pool và tên máy đã lưu.'
+  - q: 'Làm sao tắt đào tự động?'
+    a: 'Vô hiệu hóa tác vụ trong Task Scheduler để ngăn các lần khởi chạy sau, rồi dừng trình đào đang chạy theo cách bình thường trong cửa sổ của nó. Vô hiệu hóa tác vụ không đóng tiến trình hiện tại. Bạn có thể bật lại khi muốn đào lúc đăng nhập.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Cho Windows mở cấu hình seine đang hoạt động khi bạn đăng nhập. Hướng dẫn dùng Task Scheduler trong phiên người dùng và có cách tắt rõ ràng. Trước tiên hoàn tất [thiết lập Windows](/vi/blog/mine-blocknet-on-windows/) và xác nhận pool chấp nhận share. Tự động hóa lệnh đã chạy tốt giúp kiểm tra kết quả dễ hơn.
+
+## Làm sao tự khởi động trình đào Blocknet?
+
+<Answer>
+Tạo tác vụ cho tài khoản Windows, kích hoạt khi đăng nhập và trỏ hành động tới chương trình seine đã giải nén. Chỉ định thư mục dữ liệu và làm việc hiện có, ngăn phiên chạy thứ hai của cùng tác vụ, rồi kiểm tra share được chấp nhận sau khi chạy thử.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Người dùng đăng nhập Windows, Task Scheduler chạy một trình đào và share được chấp nhận đến pool." width="1200" height="675" loading="lazy" />
+
+## Cần giữ những tệp và cài đặt nào?
+
+Chọn thư mục cố định cho bản phát hành đã giải nén. Giữ toàn bộ nội dung gói cùng nhau, gồm cả thư viện, và trỏ tới chương trình bên trong. Tìm thư mục dữ liệu của lần chạy thủ công thành công. Mặc định seine dùng `./seine-data` theo thư mục làm việc và lưu kết nối trong `seine.config.json`. Thư mục khởi chạy khác có thể khiến nó tìm cấu hình khác.
+
+Ví dụ dùng `C:\Users\YOUR_USER\Apps\seine`; thay toàn bộ bằng đường dẫn cài đặt thực. Giữ dữ liệu tại vị trí hiện có. Lưu cả lệnh hoạt động tốt: tùy chọn backend hoặc tinh chỉnh chỉ định rõ có thể vẫn cần thiết. Tác vụ không cần cụm từ khôi phục hay khóa riêng của ví.
+
+## Tạo tác vụ lúc đăng nhập
+
+Mở **Task Scheduler** từ Start, chọn **Create Task** và đặt tên dễ nhận biết như **seine mining**. Trong **General**, chọn tài khoản đã dùng để đào thủ công và **Run only when user is logged on**. Không chọn **Run with highest privileges** cho thiết lập thông thường này. Trong **Triggers**, thêm **At log on** cho đúng người dùng và bật trình kích hoạt. Xem [tài liệu Microsoft](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Trong **Actions**, thêm **Start a program**, điền riêng từng ô:
+
+- **Program/script:** chọn `C:\Users\YOUR_USER\Apps\seine\seine.exe` bằng Browse.
+- **Add arguments:** nhập `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` với thư mục dữ liệu hiện có, rồi các tùy chọn từ lệnh đã chạy tốt.
+- **Start in:** nhập `C:\Users\YOUR_USER\Apps\seine` không có dấu ngoặc kép.
+
+[Thư mục làm việc](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) xác định nơi bắt đầu của tiến trình. Không đưa tùy chọn vào Program/script hay tên tệp chương trình vào Start in. Chọn tệp thực thay vì giữ đường dẫn mẫu.
+
+## Đặt điều kiện chạy
+
+Trong **Settings**, cho phép chạy tác vụ theo yêu cầu để thử. Khi tác vụ đã chạy, chọn **Do not start a new instance**. [Chính sách phiên chạy](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) này chỉ áp dụng cho tác vụ, không phát hiện trình đào mở riêng. Đóng phiên thủ công trước khi thử. Một tiến trình có chủ đích dễ kiểm tra và tránh bản sao thứ hai dùng cùng cấu hình.
+
+Để đào liên tục trong phiên đăng nhập, bỏ chọn **Stop the task if it runs longer than**; nếu không sẽ có [giới hạn thời gian](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Kiểm tra **Conditions**: yêu cầu máy nhàn rỗi có thể ngăn chạy thử ngay. Trên laptop, giữ điều kiện nguồn AC sẽ giới hạn quy trình này khi cắm điện. Lưu lựa chọn phù hợp cách sử dụng.
+
+## Làm sao kiểm tra đào tự động?
+
+Dừng trình đào thủ công bình thường, chọn tác vụ rồi **Run**. Kiểm tra địa chỉ nhận, pool và tên máy trong cửa sổ, chờ share được chấp nhận. Tra địa chỉ trong My Stats trên bntpool.com và xác nhận máy mong đợi gửi công việc. Trạng thái tác vụ đang chạy chỉ xác nhận tiến trình; share được chấp nhận xác nhận công việc hữu ích cho pool.
+
+Để thử kích hoạt thật, lưu công việc khác, đăng xuất rồi đăng nhập đúng tài khoản. Khóa và mở khóa màn hình là thao tác khác. Kiểm tra lại địa chỉ và share gần đây. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích thiết bị và kết nối. Ghi tên tác vụ, thư mục để dùng khi cập nhật.
+
+## Cần kiểm tra gì nếu không khởi chạy?
+
+So sánh đường dẫn chương trình, tài khoản, đối số và Start in với lệnh thủ công hoạt động. Nếu hỏi thiết lập ban đầu lần nữa, kiểm tra đường dẫn dữ liệu và quyền truy cập. Nếu thiếu thư viện, kiểm tra giải nén đầy đủ. Nếu không có cửa sổ, kiểm tra trình kích hoạt được bật và điều kiện nguồn hoặc nhàn rỗi trước khi đổi cài đặt miner.
+
+Nếu trình đào chạy nhưng không thấy share, kiểm tra địa chỉ, kết nối pool và share gần đây của máy. Với hai máy cùng ví, đặt tên riêng theo [hướng dẫn nhiều máy tính](https://bntpool.com/blog/vi/mine-multiple-computers-one-wallet/). Tác vụ chỉ cần mở cấu hình đã thử; chẩn đoán kết nối hoặc phần cứng trong trình đào đang chạy.
+
+## Tắt tự khởi động hoặc cập nhật
+
+Để ngăn lần khởi chạy sau, chọn tác vụ rồi **Disable**. Dừng trình đào đã mở bình thường trong cửa sổ; tắt tác vụ không dừng tiến trình ấy. Bật lại khi muốn khôi phục. Lựa chọn rõ ràng, có thể đảo ngược mà không đổi thiết lập khởi động hoặc ngủ toàn Windows.
+
+Trước khi thay bản phát hành, tắt tác vụ và dừng trình đào. Theo [hướng dẫn cập nhật](/vi/blog/update-seine-miner/), giữ dữ liệu và sửa hành động nếu đường dẫn thay đổi. Thử bằng Run trước khi bật lại kích hoạt. Để chạy như dịch vụ Linux, dùng [thiết lập máy chủ](/vi/blog/mine-blocknet-on-servers/), khác với quy trình đăng nhập Windows này.
+
+<CTA target="seine" title="Tải seine cho Windows" text="Dùng bản chính thức, xác nhận những share đầu tiên được chấp nhận rồi tự động hóa cấu hình đang hoạt động." />

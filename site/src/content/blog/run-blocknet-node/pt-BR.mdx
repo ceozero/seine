@@ -1,0 +1,106 @@
+---
+title: 'Como executar um nó Blocknet'
+description: 'Execute um nó Blocknet com o cliente oficial: instale o core, confira peers e sincronização, entenda as atualizações e verifique a conexão com a rede principal.'
+tags: ['Blocknet', 'Nó', 'Configuração']
+faq:
+  - q: 'Preciso minerar para executar um nó Blocknet?'
+    a: 'Executar um nó e iniciar a mineração são operações separadas. O core mantém dados da cadeia e conexões; a mineração é ativada à parte. Você pode conferir estado e peers sem iniciar mineração. A conexão da seine com uma pool também tem seu próprio fluxo e não exige um nó próprio.'
+  - q: 'Fechar o console Blocknet para o nó?'
+    a: 'A sessão interativa attach se conecta a um core em segundo plano. Sair do console deixa o core funcionando. Use o comando explícito de parada quando quiser interromper um nó gerenciado e depois confira o estado. Fechar um console e parar o processo são ações diferentes.'
+  - q: 'Como sei se meu nó Blocknet está sincronizando?'
+    a: 'Leia altura, quantidade de peers e estado de sincronização em conjunto e acompanhe o progresso. Compare com uma referência recente da mesma rede. A varredura da carteira é separada: um nó atualizado não comprova que uma carteira recém-carregada encontrou todas as suas saídas.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Execute seu próprio nó Blocknet e aprenda a verificar a conexão e o acompanhamento da cadeia. Este guia usa o cliente oficial de linha de comando para gerenciar um core mainnet e examinar peers, sincronização e atualizações. Comandos conferidos no cliente v1.2.0 em 26 de outubro de 2026. Tenha a [referência oficial](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) da versão instalada à mão.
+
+## O que é necessário para executar um nó Blocknet?
+
+<Answer>
+Use o cliente oficial do seu sistema, um computador com espaço para a cadeia e internet. O cliente instala e gerencia o core em segundo plano. Depois de iniciar, confira peers e progresso. Criar uma carteira e minerar são tarefas separadas que podem ser adicionadas quando o nó funcionar.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Um terminal local se conecta a um core Blocknet em segundo plano, que guarda a cadeia e troca blocos com peers da rede." width="1200" height="675" loading="lazy" />
+
+## Escolha o cliente oficial e sua rede
+
+Baixe o arquivo para seu sistema e processador nas [versões oficiais](https://github.com/blocknetprivacy/blocknet/releases/latest). Extraia e abra um terminal onde o executável esteja disponível. Os exemplos usam `blocknet`; no Windows, use `blocknet.exe`. Se não estiver no caminho de busca de comandos, use o caminho real, como `./blocknet` no Linux ou macOS.
+
+Use mainnet para a rede normal do Blocknet. Testnet é um ambiente separado, com dados e configuração próprios. Anote a rede escolhida para nunca comparar uma altura testnet com um explorador mainnet. Aqui tratamos do nó; o [guia da carteira](/pt-br/blog/blocknet-wallet-for-mining/) cobre criação, recuperação e endereço de recebimento.
+
+## Instale e inicie o core em segundo plano
+
+Na primeira configuração, execute o assistente em um terminal interativo:
+
+```sh
+blocknet setup
+```
+
+Leia cada pergunta. O assistente examinado salva a configuração, agenda atualizações automáticas e oferece baixar um core quando necessário e iniciá-lo. Também apresenta ajustes de rede e API local. Mantenha a vinculação local para um nó gerenciado neste computador.
+
+A instalação manual documentada é:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` seleciona a versão estável do core. Mainnet precisa estar habilitada na configuração. O cliente executa o core em segundo plano e aguarda a API. Deixe a inicialização terminar: iniciar o banco e alcançar a cadeia atual são marcos diferentes.
+
+## Como verificar peers e sincronização?
+
+Conecte-se ao core mainnet em execução:
+
+```sh
+blocknet attach mainnet
+```
+
+No prompt interativo, digite separadamente:
+
+```text
+status
+peers
+```
+
+A [referência do console](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) descreve os campos. Registre altura, hash do último bloco, quantidade de peers e estado de sincronização. A lista de peers ajuda a confirmar conexões de rede.
+
+Observe a altura ao longo do tempo e compare com uma referência mainnet recente, como o [explorador oficial](https://explorer.blocknetcrypto.com/). Ela pode parar entre blocos, e observações podem ter horários distintos. Combine os campos em vez de concluir por um número. Durante a atualização, mantenha conexão e armazenamento disponíveis.
+
+## Separe sincronização da cadeia e varredura da carteira
+
+A sincronização acompanha os blocos da rede. A varredura busca nesse histórico as saídas da carteira carregada. Uma carteira restaurada pode continuar varrendo depois que o nó alcançou a rede. Suas informações no console são, portanto, distintas da altura do nó. Para rastrear um pagamento de mineração, use o [guia de recebimento](https://bntpool.com/blog/pt-br/pool-payout-missing-from-wallet/).
+
+O cliente atual também aceita checkpoints para acelerar a sincronização inicial. Consulte o [guia de checkpoints](https://bntpool.com/blog/pt-br/blocknet-checkpoints-fast-sync/) para origem e escopo de verificação; os métodos rápidos não são todos iguais. Não exclua rotineiramente o banco porque o indicador ficou parado. Primeiro distinga download, verificação e varredura usando estado e logs.
+
+## Onde procurar quando a inicialização precisa de atenção?
+
+Fora de attach, acompanhe o log do core gerenciado:
+
+```sh
+blocknet logs mainnet
+```
+
+Leia mensagens recentes de início e conexão. Ctrl-C encerra o acompanhamento. Para conferir configuração, caminhos, versões e conectividade:
+
+```sh
+blocknet doctor
+```
+
+O doctor documentado relata resultados sem alterar a configuração. Salve a mensagem exata antes de escolher uma correção.
+
+Confira core e rede esperados, instalação do binário selecionado e endereço da API local. Consulte a [solução de problemas oficial](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) para a condição relatada. Preserve credenciais API e material da carteira ao compartilhar diagnósticos. Versão, sistema e erro relevante costumam ajudar mais que todo o diretório de configuração.
+
+## Entenda atualizações e paradas intencionais
+
+No cliente examinado, o agendador e alguns comandos de gerenciamento buscam atualizações. O comando externo `blocknet status` pode disparar uma busca; difere de `status` dentro de attach. Atualizações disponíveis podem reiniciar cores gerenciados que seguem `latest`; versões fixadas permanecem. Leia a [referência de atualização](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) para nós com serviços dependentes.
+
+Planeje a manutenção considerando os usuários da API. Para sair de attach, digite `quit`; o core continua. Para parar esse core mainnet de propósito, execute `blocknet stop mainnet` no terminal do sistema. Após atualizar ou reiniciar, confirme versão ativa, conexão e progresso. Guarde o backup da carteira independentemente dos binários.
+
+## Use o nó para a tarefa pretendida
+
+Um nó conectado pode servir a carteira e consultas locais sem ativar mineração. Para minerar na bntpool.com, siga o [guia da pool](https://bntpool.com/blog/pt-br/mine-blocknet-on-bntpool/) e a conexão normal da seine. Executar nó próprio é outra escolha. Para mineração direta, leia o modo daemon e verifique a API antes de conectar.
+
+Mantenha um registro: rede, versões do cliente e core, local dos dados, política de atualização e verificações do progresso. Ele ajuda também na preparação para [Faraday](/pt-br/blog/blocknet-faraday-upgrade/), cujas futuras instruções de ativação devem vir da versão oficial. Reconfira o estado após mudanças planejadas para descrever o nó ativo, não só o software baixado.
+
+<CTA target="seine" title="Minere Blocknet com seine" text="Use os guias para conectar sua configuração depois de escolher mineração em pool ou direta." />

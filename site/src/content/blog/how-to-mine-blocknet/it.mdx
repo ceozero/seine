@@ -9,8 +9,8 @@ faq:
     a: 'La pool bntpool.com paga con PPLNS su una finestra di sei ore. La ricompensa di un blocco può essere pagata solo quando ha 60 blocchi sopra di sé, circa cinque ore con blocchi da cinque minuti, e i saldi vengono inviati quando raggiungono 0,1 BNT. Aspettati il primo pagamento qualche ora dopo le tue prime share accettate.'
   - q: 'Posso minare Blocknet con CPU e GPU contemporaneamente?'
     a: 'Sì. Su Windows e Linux, seine mina contemporaneamente su tutti i core della CPU e su tutte le schede grafiche NVIDIA del computer, e i due hashrate si sommano. Ottimizza il processore e ogni scheda separatamente mentre è in esecuzione, così ottieni il massimo da tutto il tuo hardware senza cambiare alcuna impostazione.'
-sourceHash: ad835df628e2
-translation: reviewed
+sourceHash: 'c15449bd790a'
+translation: draft
 ---
 
 Questa guida ti accompagna dal download di **seine** alle tue prime share accettate e ai primi pagamenti sulla pool bntpool.com, su Windows, macOS o Linux. Sei alle prime armi con il mining? [Come funziona il mining di criptovalute](/it/blog/how-crypto-mining-works/) spiega prima blocchi, difficoltà e pool.
@@ -26,7 +26,7 @@ Procurati un indirizzo Blocknet o uno shortname Blocknet ID, scarica seine per i
 - **Un indirizzo Blocknet.** Installa il wallet ufficiale di Blocknet, il [wallet da riga di comando](https://github.com/blocknetprivacy/blocknet/releases/latest) oppure il [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), e copia il tuo indirizzo. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) ti spiega tutto passo per passo. Tieni il wallet e la sua frase di recupero sul tuo computer; non metterli su un rig di mining condiviso.
 - **Oppure uno shortname.** Se hai uno [shortname Blocknet ID](/it/blog/blocknet-id-pay-by-name/) da [blocknet.id](https://blocknet.id), puoi minare verso `@name` invece di incollare l'indirizzo lungo.
 - **Circa 2 GB di RAM per thread di mining.** seine si adatta al tuo computer e lascia margine al sistema, quindi non devi calcolarlo prima.
-- **Windows, macOS o Linux.** Su Windows e Linux, le schede grafiche NVIDIA vengono usate automaticamente se è installato un driver recente.
+- **Windows, macOS o Linux.** NVIDIA — Windows: Driver grafico NVIDIA; DLL runtime incluse accanto all'eseguibile; Linux: Driver NVIDIA e librerie runtime NVRTC compatibili.
 
 ## Passo 1: scarica seine
 
@@ -35,7 +35,7 @@ Scarica l'archivio per il tuo sistema dalla [sezione download](/it/#download). N
 | Sistema | Archivio | Schede grafiche |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; il runtime CUDA è incluso |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, con il driver installato |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | Driver NVIDIA e librerie runtime NVRTC compatibili; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 o successiva) |
 | macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ L'hashrate dipende soprattutto dalla banda di memoria e dal numero di thread che
 
 | Hardware | Thread | Hashrate |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68,3 H/s |
 | Server Arm (AWS Graviton4) | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
 | Apple M4 Max (MacBook Pro da 48 GB) | 16 | 30,9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+La configurazione più veloce in queste misurazioni è un AMD EPYC 9355P a 68,3 H/s: 64 thread di mining, 192 GiB di RAM e huge pages da 1 GiB preparate manualmente su Linux.
 
 I risultati di ogni CPU testata sono nella [pagina delle prestazioni](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), e la [guida all'hardware per il mining di Blocknet](/it/blog/blocknet-mining-hardware-hashrate/) spiega come RAM e banda di memoria determinano questi numeri.
 

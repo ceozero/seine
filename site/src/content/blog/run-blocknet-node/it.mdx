@@ -1,0 +1,106 @@
+---
+title: 'Come eseguire un nodo Blocknet'
+description: 'Esegui un nodo Blocknet con il client ufficiale: installa il core, controlla peer e sincronizzazione, comprendi gli aggiornamenti e verifica la rete principale.'
+tags: ['Blocknet', 'Nodo', 'Configurazione']
+faq:
+  - q: 'Devo minare per eseguire un nodo Blocknet?'
+    a: 'Eseguire un nodo e avviare il mining sono operazioni separate. Il core mantiene dati della catena e connessioni; il mining si abilita a parte. Puoi controllare stato e peer senza avviare lavoro di mining. Anche seine in pool ha un proprio flusso e non richiede un nodo personale.'
+  - q: 'Chiudere la console Blocknet ferma il nodo?'
+    a: 'La sessione interattiva attach si collega a un core in background. Uscire dalla console lascia il core attivo. Usa il comando esplicito di arresto quando vuoi fermare un nodo gestito, poi controllane lo stato. Chiudere la console e fermare il processo sottostante sono azioni diverse.'
+  - q: 'Come capisco se il nodo Blocknet si sta sincronizzando?'
+    a: 'Leggi insieme altezza, numero di peer e stato di sincronizzazione, quindi osserva il progresso. Confronta con un riferimento recente della stessa rete. La scansione del wallet è separata: un nodo aggiornato non dimostra che un wallet appena caricato abbia già trovato tutti i suoi output.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Esegui il tuo nodo Blocknet e verifica che sia connesso e segua la catena. La guida usa il client ufficiale a riga di comando per gestire un core mainnet e controllare peer, sincronizzazione e aggiornamenti. Comandi verificati con client v1.2.0 il 26 ottobre 2026. Tieni a portata il [riferimento ufficiale](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) della versione installata.
+
+## Cosa serve per eseguire un nodo Blocknet?
+
+<Answer>
+Usa il client ufficiale per il tuo sistema, un computer con spazio per i dati della catena e internet. Il client installa e gestisce il core in background. Dopo l’avvio controlla peer e progresso. Creazione del wallet e mining sono attività separate, da aggiungere quando il nodo funziona.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Un terminale locale si collega a un core Blocknet in background che conserva la catena e scambia blocchi con i peer." width="1200" height="675" loading="lazy" />
+
+## Scegli client ufficiale e rete
+
+Scarica l’archivio adatto a sistema e processore dalle [release ufficiali](https://github.com/blocknetprivacy/blocknet/releases/latest). Estrailo e apri un terminale dove l’eseguibile sia disponibile. Gli esempi usano `blocknet`; su Windows usa `blocknet.exe`. Se non è nel percorso di ricerca, specifica il percorso reale, per esempio `./blocknet` su Linux o macOS.
+
+Mainnet è la rete ordinaria Blocknet. Testnet è un ambiente distinto, con dati e configurazione propri. Annota la rete scelta per non confrontare mai un’altezza testnet con un explorer mainnet. Qui gestiamo il nodo; la [guida al wallet](/it/blog/blocknet-wallet-for-mining/) copre creazione, recupero e indirizzo di ricezione.
+
+## Installa e avvia il core in background
+
+Per la prima configurazione esegui la procedura guidata in un terminale interattivo:
+
+```sh
+blocknet setup
+```
+
+Leggi ogni richiesta. La procedura esaminata salva la configurazione, pianifica aggiornamenti automatici e propone download del core se necessario e avvio. Espone anche impostazioni di rete e API locale. Mantieni il binding locale per gestire il nodo su questo computer.
+
+Il percorso manuale documentato è:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` seleziona il core stabile. Mainnet deve essere abilitata nella configurazione. Il client avvia il core in background e attende l’API. Lascia finire l’avvio: inizializzare il database e raggiungere la catena corrente sono traguardi diversi.
+
+## Come controlli peer e sincronizzazione?
+
+Collegati al core mainnet attivo:
+
+```sh
+blocknet attach mainnet
+```
+
+Nel prompt interattivo inserisci separatamente:
+
+```text
+status
+peers
+```
+
+Il [riferimento della console](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) descrive i campi. Annota altezza, hash dell’ultimo blocco, numero di peer e stato sync. L’elenco peer aiuta a confermare le connessioni.
+
+Osserva l’altezza nel tempo e confrontala con un riferimento mainnet recente, come l’[explorer ufficiale](https://explorer.blocknetcrypto.com/). Può fermarsi tra blocchi e le osservazioni possono riferirsi a momenti diversi. Valuta tutti i campi invece di un solo numero. Durante il recupero mantieni disponibili rete e spazio di archiviazione.
+
+## Distingui sync della catena e scansione del wallet
+
+La sincronizzazione segue i blocchi della rete. La scansione cerca nella cronologia gli output del wallet caricato. Un wallet ripristinato può continuare a scansionare dopo che il nodo ha raggiunto la rete. Le informazioni del wallet nella console sono quindi separate dall’altezza del nodo. Per un pagamento di mining specifico usa la [guida alla ricezione](https://bntpool.com/blog/it/pool-payout-missing-from-wallet/).
+
+Il client supporta anche checkpoint per velocizzare la sincronizzazione iniziale. Consulta la [guida ai checkpoint](https://bntpool.com/blog/it/blocknet-checkpoints-fast-sync/) per fonte e ambito di verifica: i metodi rapidi non sono tutti uguali. Non cancellare normalmente il database perché l’indicatore è fermo. Distingui prima download, verifica e scansione con stato e log.
+
+## Dove guardi se l’avvio richiede attenzione?
+
+Fuori da attach, segui il log del core gestito:
+
+```sh
+blocknet logs mainnet
+```
+
+Leggi i messaggi recenti di avvio e connessione. Ctrl-C termina il seguito del log. Per configurazione, percorsi, versioni e connettività:
+
+```sh
+blocknet doctor
+```
+
+Il comando doctor documentato riporta risultati senza modificare la configurazione. Salva il messaggio esatto prima di scegliere una correzione.
+
+Controlla core e rete previsti, installazione del binario scelto e indirizzo API locale. Consulta la [risoluzione problemi ufficiale](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) per la condizione segnalata. Proteggi credenziali API e materiale del wallet nelle diagnosi condivise. Versione, sistema ed errore pertinente aiutano spesso più di un’intera directory di configurazione.
+
+## Comprendi aggiornamenti e arresti volontari
+
+Nel client esaminato, scheduler e alcuni comandi di gestione cercano aggiornamenti. Il comando esterno `blocknet status` può avviare un controllo; è diverso da `status` dentro attach. Gli aggiornamenti possono riavviare core gestiti che seguono `latest`; le versioni fissate restano invariate. Leggi il [riferimento aggiornamenti](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) per nodi con servizi dipendenti.
+
+Pianifica manutenzione considerando chi usa l’API. Per lasciare attach inserisci `quit`: il core continua. Per fermare intenzionalmente quel core mainnet usa `blocknet stop mainnet` nel terminale del sistema. Dopo aggiornamenti o riavvii verifica versione attiva, connessione e progresso. Conserva il backup del wallet indipendentemente dai binari.
+
+## Usa il nodo per l’attività prevista
+
+Un nodo connesso supporta wallet e interrogazioni locali senza attivare mining. Per bntpool.com segui la [guida al pool](https://bntpool.com/blog/it/mine-blocknet-on-bntpool/) e la normale connessione di seine. Gestire un nodo proprio è una scelta distinta. Per mining diretto leggi le istruzioni della modalità daemon e verifica l’API prima di collegarti.
+
+Mantieni un breve registro: rete, versioni di client e core, percorso dati, politica aggiornamenti e verifiche del progresso. È utile anche per [Faraday](/it/blog/blocknet-faraday-upgrade/), le cui future istruzioni di attivazione devono venire dalla release ufficiale. Ricontrolla lo stato dopo modifiche pianificate, così descrivi il nodo attivo e non solo il software scaricato.
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Usa le guide per collegare la configurazione scelta dopo aver deciso tra pool e mining diretto." />

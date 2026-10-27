@@ -1,0 +1,68 @@
+---
+title: 'Inicie o minerador de Blocknet automaticamente no Windows'
+description: 'Inicie o seine ao entrar no Windows com o Agendador de Tarefas. Preserve a configuração, evite execuções duplicadas e confira os shares aceitos pelo pool.'
+tags: ['Guia de mineração', 'Windows', 'Configuração']
+faq:
+  - q: 'O minerador inicia antes de eu entrar no Windows?'
+    a: 'Esta configuração inicia o seine quando o usuário escolhido entra no Windows, dentro da sessão dele. Ela não cria um serviço em segundo plano. Depois de reiniciar o computador, entre nessa conta para acionar a tarefa e confira os shares aceitos.'
+  - q: 'O Agendador preserva meus ajustes de mineração?'
+    a: 'Use a mesma conta do Windows, a pasta de dados existente e as opções do comando que já funciona. Informe um caminho absoluto para os dados nos argumentos e o diretório de trabalho correto. Assim o seine encontra o endereço, pool e nome da máquina salvos.'
+  - q: 'Como desativo a mineração automática?'
+    a: 'Desabilite a tarefa no Agendador para impedir novos inícios e encerre normalmente o minerador na janela dele. Desabilitar a tarefa não fecha um processo já em execução. Você pode habilitá-la novamente quando quiser minerar ao entrar no Windows.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Configure o Windows para abrir sua instalação funcional do seine ao entrar na conta. Usaremos o Agendador de Tarefas dentro da sua sessão, com uma forma simples de desativar. Conclua primeiro a [configuração no Windows](/pt-br/blog/mine-blocknet-on-windows/) e confirme shares aceitos pelo pool. Automatizar um comando já testado facilita conferir o resultado.
+
+## Como iniciar um minerador de Blocknet automaticamente?
+
+<Answer>
+Crie uma tarefa para sua conta do Windows, com gatilho ao entrar na sessão e uma ação que execute o seine extraído. Informe as pastas de dados e de trabalho existentes, impeça outra instância da mesma tarefa e verifique shares aceitos após um teste.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Um usuário entra no Windows, o Agendador inicia um minerador e os shares aceitos chegam ao pool." width="1200" height="675" loading="lazy" />
+
+## Quais arquivos e ajustes preservar?
+
+Escolha uma pasta fixa para a versão extraída. Mantenha todo o conteúdo do pacote junto, inclusive bibliotecas, e aponte para o executável dessa pasta. Localize os dados usados na execução manual. Por padrão, o seine usa `./seine-data` relativo ao diretório de trabalho e salva a conexão em `seine.config.json`. Outra pasta inicial pode levar a outra configuração.
+
+Os exemplos usam `C:\Users\YOUR_USER\Apps\seine`; substitua o caminho inteiro pela sua pasta real. Mantenha os dados onde já estão. Guarde também o comando funcional: opções explícitas de backend ou ajuste podem continuar necessárias. A tarefa de inicialização não precisa da frase de recuperação nem das chaves privadas da carteira.
+
+## Crie a tarefa de entrada na sessão
+
+Abra o **Agendador de Tarefas** pelo Iniciar e escolha **Criar Tarefa**. Use um nome reconhecível, como **seine mining**. Em **Geral**, selecione a conta usada na mineração manual e **Executar somente quando o usuário estiver conectado**. Deixe **Executar com privilégios mais altos** desmarcado nesta configuração comum. Em **Disparadores**, adicione **Ao fazer logon**, escolha seu usuário específico e habilite o disparador. Veja a [documentação da Microsoft](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Em **Ações**, adicione **Iniciar um programa** e preencha separadamente:
+
+- **Programa/script:** selecione `C:\Users\YOUR_USER\Apps\seine\seine.exe` em Procurar.
+- **Adicione argumentos:** informe `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` com sua pasta de dados existente, seguido das opções do comando funcional.
+- **Iniciar em:** informe `C:\Users\YOUR_USER\Apps\seine` sem aspas.
+
+O [diretório de trabalho](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) define a pasta inicial. Não coloque opções em Programa/script nem o nome do executável em Iniciar em. Selecione o arquivo real em vez de deixar o caminho de exemplo.
+
+## Defina as condições de execução
+
+Em **Configurações**, permita executar a tarefa sob demanda para testar. Se já estiver em execução, selecione **Não iniciar uma nova instância**. Essa [política de instâncias](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) vale apenas para a tarefa e não detecta um minerador aberto separadamente. Feche a instância manual antes do teste. Um único processo intencional facilita conferir e evita outra cópia com a mesma configuração.
+
+Para minerar continuamente durante a sessão, desmarque **Interromper a tarefa se ela for executada por mais de**; caso contrário, existe um [limite de duração](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Confira **Condições**: exigir ociosidade pode impedir o teste imediato. Em notebooks, manter as condições de alimentação CA restringe este fluxo ao uso na tomada. Salve as escolhas adequadas ao seu uso.
+
+## Como verificar a mineração automática?
+
+Encerre normalmente o minerador manual, selecione a tarefa e **Executar**. Confira endereço de pagamento, pool e nome da máquina na janela e aguarde shares aceitos. Consulte esse endereço em My Stats no bntpool.com e confirme o trabalho da máquina esperada. O estado em execução só confirma um processo; shares aceitos confirmam trabalho útil para o pool.
+
+Para testar o gatilho real, salve outros trabalhos, saia da sessão e entre com o usuário escolhido. Bloquear e desbloquear a área de trabalho é outra ação. Confira novamente endereço e shares recentes. O [guia do painel](/pt-br/blog/seine-dashboard-explained/) explica dispositivos e conexão. Anote o nome da tarefa e as pastas para futuras atualizações.
+
+## O que conferir se não iniciar?
+
+Compare executável, conta, argumentos e Iniciar em com o comando manual funcional. Se pedir a configuração inicial novamente, confira o caminho dos dados e o acesso à pasta. Se faltar uma biblioteca, confira a extração completa. Se não aparecer janela, revise o disparador habilitado e as condições de energia ou ociosidade antes de alterar o minerador.
+
+Se o minerador funcionar sem shares visíveis, confira endereço, conexão ao pool e shares recentes da máquina. Para dois computadores na mesma carteira, use nomes distintos conforme o [guia de vários computadores](https://bntpool.com/blog/pt-br/mine-multiple-computers-one-wallet/). A tarefa deve abrir a configuração testada; diagnostique conexão e hardware no minerador em execução.
+
+## Desative a inicialização ou atualize o minerador
+
+Para impedir novos inícios, selecione a tarefa e **Desabilitar**. Encerre normalmente o minerador já aberto; desabilitar não encerra esse processo. Habilite novamente quando quiser retomar o início ao entrar na conta. A escolha fica visível e reversível sem mudar ajustes gerais de inicialização ou suspensão do Windows.
+
+Antes de trocar a versão, desabilite a tarefa e pare o minerador. Siga o [guia de atualização](/pt-br/blog/update-seine-miner/), preserve os dados e ajuste a ação se o caminho mudar. Teste com Executar antes de reativar o disparador. Para mineração como serviço Linux, use a [configuração de servidor](/pt-br/blog/mine-blocknet-on-servers/), diferente deste fluxo de entrada no Windows.
+
+<CTA target="seine" title="Baixe o seine para Windows" text="Use a versão oficial, confira os primeiros shares aceitos e automatize a configuração que funciona." />

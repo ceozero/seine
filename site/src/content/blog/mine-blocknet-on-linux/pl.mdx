@@ -1,0 +1,108 @@
+---
+title: 'Jak kopać Blocknet w systemie Linux'
+description: 'Uruchom kopanie Blocknet w Linuksie z seine: wybierz x86_64 lub ARM64, sprawdź archiwum, glibc i biblioteki NVIDIA oraz potwierdź zaakceptowane udziały.'
+tags: ['Poradnik kopania', 'Linux', 'NVIDIA']
+faq:
+  - q: 'Które archiwum dla Linuksa pobrać?'
+    a: 'Uruchom uname -m w terminalu. Dla wyniku x86_64 wybierz archiwum x86_64, a dla aarch64 archiwum aarch64. Sprawdzone pliki wykonywalne Linuksa v0.2.26 wymagają glibc 2.39 lub nowszej. Pakiet x86_64 obsługuje CPU i NVIDIA, natomiast pakiet ARM64 wyłącznie CPU.'
+  - q: 'Czy seine trzeba uruchamiać przez sudo?'
+    a: 'Uruchamiaj zwykły miner na własnym koncie z katalogu z prawem zapisu. Rozpakuj archiwum, w razie potrzeby nadaj właścicielowi prawo wykonywania i uruchom ./seine. Rezerwowanie huge pages to osobne zadanie administracyjne; zwykły start może korzystać ze standardowych stron pamięci.'
+  - q: 'Dlaczego Linux zgłasza brak biblioteki NVRTC?'
+    a: 'Backend NVIDIA w Linuksie wymaga zgodnego sterownika oraz bibliotek uruchomieniowych NVRTC, w tym pasującej biblioteki builtins. Zainstaluj je z pakietów dystrybucji lub obsługiwanych pakietów NVIDIA. Archiwum Linuksa nie zawiera bibliotek DLL Windows. Podczas przygotowywania GPU możesz wybrać backend CPU.'
+sourceHash: 'f5d2ea0db1d5'
+translation: draft
+---
+
+Ten poradnik uruchomi seine na komputerze lub serwerze z Linuksem: od wyboru archiwum po sprawdzenie zaakceptowanych udziałów w puli. Zweryfikowanym przykładem jest oficjalna wersja v0.2.26. Przygotuj adres odbiorczy Blocknet; [poradnik portfela](/pl/blog/blocknet-wallet-for-mining/) wyjaśnia, gdzie go znaleźć. Wpisujesz publiczny adres lub zarejestrowany `@name`, nigdy frazę odzyskiwania portfela.
+
+## Jak rozpocząć kopanie Blocknet w Linuksie?
+
+<Answer>
+Wybierz archiwum Linuksa pasujące do procesora, sprawdź sumę SHA-256 i rozpakuj do katalogu z prawem zapisu. Uruchom `./seine`, podaj adres wypłat i zaakceptuj domyślne połączenie z bntpool.com. seine automatycznie dobiera wątki CPU, a w Linuksie x86_64 może także używać obsługiwanych kart NVIDIA, jeśli zainstalowano ich biblioteki uruchomieniowe.
+</Answer>
+
+## Krok 1: sprawdź architekturę i glibc
+
+Otwórz terminal i wykonaj te dwie operacje tylko do odczytu. Pierwsza identyfikuje architekturę komputera, druga pokazuje wersję biblioteki GNU C w systemie opartym na glibc. Nie rozpoczynają kopania ani nie zmieniają konfiguracji komputera.
+
+```sh
+uname -m
+getconf GNU_LIBC_VERSION
+```
+
+Dopasuj architekturę do archiwum poniżej. Oba pakiety Linuksa v0.2.26 wymagają glibc 2.39 lub nowszej. Przy instalacji późniejszej wersji ponownie sprawdź wymagania. Jeśli system używa innej biblioteki C lub starszej glibc, użyj zgodnego środowiska dystrybucji albo [instrukcji kompilacji ze źródeł](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+
+| Wynik polecenia | Archiwum wydania | Backend |
+|---|---|---|
+| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU i NVIDIA |
+| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
+
+Każdy wątek kopania na CPU potrzebuje bloku pamięci 2 GiB. seine wybiera początkową liczbę wątków na podstawie dostępnej pamięci i zasobów CPU, a następnie dostraja ją podczas kopania. Przy pierwszym uruchomieniu nie wymuszaj wątków ani kerneli; najpierw uzyskaj działające połączenie, potem zmieniaj ustawienia wydajności.
+
+## Krok 2: pobierz i sprawdź archiwum
+
+Wybierz Linux lub Linux ARM64 w [sekcji pobierania](/pl/#download). Z tego samego [oficjalnego wydania](https://github.com/zpalmtree/seine/releases/latest) pobierz również osobny plik `SHA256SUMS.txt`. Przechowuj razem archiwum i sumy tej samej wersji. Przykłady dotyczą x86_64; na ARM64 zastąp w poleceniach `seine-linux-x86_64.tar.gz` przez `seine-linux-aarch64.tar.gz`.
+
+<img src="/assets/blog/linux-download.png" alt="Oficjalna tabela pobierania z archiwami Linux i Linux ARM64" width="1200" height="900" loading="lazy" />
+
+W terminalu otwórz katalog, w którym przeglądarka zapisała pliki, i oblicz sumę archiwum. Przykład zakłada katalog Downloads w katalogu domowym; jeśli twój katalog pobierania nazywa się inaczej, użyj jego rzeczywistej nazwy.
+
+```sh
+cd "$HOME/Downloads"
+sha256sum seine-linux-x86_64.tar.gz
+```
+
+Porównaj cały szesnastkowy skrót z wierszem dokładnie tego archiwum w pobranym `SHA256SUMS.txt`. Każda cyfra musi się zgadzać przed rozpakowaniem lub uruchomieniem. Użyj osobnego pliku sum z wydania: archiwum zawiera też wykaz dotyczący rozpakowanych plików. Zgodna suma potwierdza zgodność z opublikowaną wartością; pobierz oba pliki z oficjalnego źródła.
+
+## Krok 3: rozpakuj i sprawdź plik wykonywalny
+
+Utwórz osobny folder w katalogu domowym, rozpakuj do niego archiwum i wyświetl pomoc programu. Archiwum v0.2.26 zawiera `./seine` na najwyższym poziomie, więc te polecenia umieszczą plik bezpośrednio w nowym folderze. Polecenie pomocy kończy działanie bez rozpoczynania kopania.
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+cd "$HOME/seine"
+chmod u+x ./seine
+./seine --help
+```
+
+Wykonuj te kroki na własnym koncie. `chmod u+x` nadaje właścicielowi pliku prawo wykonywania; instalacja ogólnosystemowa nie jest potrzebna. Prefiks `./` mówi powłoce, aby uruchomiła plik z bieżącego katalogu. Zachowaj rozpakowaną dokumentację i licencje obok programu.
+
+## Krok 4: wpisz adres i połącz się
+
+Uruchom z katalogu, do którego rozpakowano archiwum:
+
+```sh
+./seine
+```
+
+Podaj adres odbiorczy lub zarejestrowany `@name`, zaakceptuj `stratum+tcp://bntpool.com:3333` i na prośbę programu wybierz rozpoznawalną nazwę maszyny. Przy następnych startach seine użyje ponownie `seine-data/seine.config.json` względem katalogu roboczego. Uruchamianie z tego samego folderu ułatwia znalezienie ustawień. [Dokumentacja konfiguracji](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) opisuje pytania i katalog danych.
+
+Obserwuj hashrate i licznik zaakceptowanych udziałów. Następnie otwórz [My Stats](https://bntpool.com/stats) i wyszukaj ten sam adres. Akceptowane udziały potwierdzają odbieranie pracy przez pulę; płatność wynika z osobnego procesu nagród i wypłat. [Poradnik panelu](/pl/blog/seine-dashboard-explained/) opisuje widoki minera. Naciśnij `q` lub `Ctrl+C`, aby poprawnie zakończyć pracę.
+
+## Czego wymaga kopanie na NVIDIA w Linuksie?
+
+Kopanie GPU w Linuksie x86_64 wymaga sterownika NVIDIA i zgodnych bibliotek uruchomieniowych NVRTC. NVRTC kompiluje kernele GPU podczas startu. Zainstaluj środowisko i pasującą bibliotekę builtins z dystrybucji lub pakietów NVIDIA według [poradnika NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/). Nazwy pakietów zależą od dystrybucji i wersji CUDA; stosuj instrukcje dla własnego systemu.
+
+Z tymi bibliotekami tryb domyślny może kopać jednocześnie na CPU i obsługiwanych kartach NVIDIA. Aby rozpocząć na CPU podczas przygotowywania GPU, wybierz go jawnie:
+
+```sh
+./seine --backend cpu
+```
+
+Ten wybór dotyczy wyłącznie CPU w danym uruchomieniu. Wybór urządzeń GPU i sprawdzanie ich udziałów opisuje poradnik NVIDIA. Opisane tu wydanie ARM64 zawiera backend CPU; instalacja CUDA nie dodaje backendu NVIDIA do tego archiwum.
+
+## Jak rozwiązać błąd uruchamiania w Linuksie?
+
+Wybierz następne sprawdzenie według pierwszego komunikatu błędu. Błąd architektury lub środowiska występuje przed zaakceptowanymi udziałami; zmiana adresu puli lub liczby wątków go nie rozwiąże. Zachowaj zweryfikowane archiwum podczas sprawdzania programu i środowiska.
+
+| Komunikat lub objaw | Co sprawdzić |
+|---|---|
+| `Exec format error` | Niewłaściwa architektura: porównaj `uname -m` z nazwą archiwum. |
+| `GLIBC_2.39 not found` | Program wymaga nowszej glibc. Użyj zgodnego systemu lub skompiluj źródła; pozostaw zarządzanie systemową biblioteką C dystrybucji. |
+| `Permission denied` | Sprawdź prawo wykonywania użytkownika i użyj folderu na systemie plików zezwalającym na wykonywanie. |
+| `libnvrtc` / `libnvrtc-builtins` | Zainstaluj zgodne środowisko NVIDIA i pasującą bibliotekę builtins albo używaj `--backend cpu` podczas przygotowań. |
+
+Po zaakceptowaniu udziałów [poradnik huge pages](/pl/blog/huge-pages-blocknet-mining/) opisuje opcjonalną konfigurację stron w Linuksie. [Poradnik serwerów](/pl/blog/mine-blocknet-on-servers/) obejmuje pracę bez interfejsu graficznego i rozmieszczenie NUMA. Żadne z tych przygotowań nie jest potrzebne do pierwszego uruchomienia; wprowadzaj zmiany oddzielnie, aby rozpoznać ich wpływ na komputer.
+
+<CTA target="seine" title="Pobierz seine dla Linuksa" text="Wybierz archiwum Linuksa, sprawdź je i połącz się z bntpool.com z automatycznym dostrajaniem CPU." />

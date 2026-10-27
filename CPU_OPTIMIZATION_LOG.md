@@ -2,6 +2,44 @@
 
 This log tracks CPU backend/hash-kernel tuning attempts and measured outcomes.
 
+## 2026-10-26 cohort defaults: Zen 4/5 streaming everywhere, AVX2 streaming for Zen 2/3
+
+Native Cherry bare metal, release v0.2.36 vs candidate, `--bench-kind backend`, fixed
+counts, ABBA pairs, full 2 GiB reference parity first. Evidence:
+`benchmark-evidence/hashrate-20261026/` (workspace). One line per experiment:
+
+| Hypothesis | Host | Δ | Verdict |
+|---|---|---|---|
+| Streaming beats `avx512` at the tuned count on Zen 5 desktop | Ryzen 7 9700X, 15 workers | 9.65 vs 7.37 H/s, **+31%** | adopted: cohort default (Zen 4/5, ≥8 workers, incl. fixed `--threads`) |
+| R8D2 / R64D3 demand-fence variants beat plain streaming there | 9700X, 15 workers | 9.53 / 9.59 vs 9.65 | rejected for this cohort (no change) |
+| AVX2 ring + NT stores (`avx2-stream`) beats `avx2` on Zen 3 | EPYC 7443P, 12 workers | 14.76 vs 9.97, **+48%** | adopted for Zen 3 (family 19h without AVX-512) |
+| Same, high count | 7443P, 24 workers | 13.54 vs 8.23, +65% | confirms |
+| Replace demand MFENCE with SFENCE every 32 blocks | 7443P, 12 / 24 workers | ±0.5% / +0.9% | adopted for `avx2-stream` (same-core NT store→load parity verified) |
+| Drop software prefetch in `avx2-stream` | 7443P, 12 / 24 / 30 workers | −14.9% / +8.8% / +6% | rejected: best-point gain ~3% at 2× RAM |
+| `avx2-stream` beats `avx2` on a Zen 3 VM | EPYC 7R13 (c6a.8xlarge), 16 workers | 14.54 vs 11.62, +25% | confirms Zen 3 (shared-socket VM) |
+| `avx2-stream` beats `avx2` on Zen 2 | EPYC 7R32 (c5a.8xlarge), 16 / 28 workers | 17.16 vs 10.27 (**+67%**) / 15.98 vs 9.26 (+73%) | adopted for Zen 2 (family 17h, model ≥ 30h); full 2 GiB parity |
+| Prefetch depth 3 instead of 7 in `avx2-stream` | EPYC 7R32, 16 / 28 workers | +0.1% / −7.0% | rejected; depth 7 kept |
+| `avx2-stream` ring 2 (depth 7 / depth 3) instead of ring 8 / depth 7 | EPYC 7R13 (c6a.8xlarge), 16 / 28 workers | d7 +5.5% / +7.5%; d3 +7.0% / +8.4% | adopted ring 2 / depth 3 |
+| Same | EPYC 7R32 (c5a.8xlarge), 16 / 28 workers | d7 +1.4% / +7.5%; d3 +1.4% / +6.8% | confirms (neighbour cohort) |
+| Plain AVX-512 stream: ring 2 + SFENCE/32 instead of ring 64 + MFENCE per wrap | Ryzen 7 9700X, 8 / 12 / 16 workers | 0% / +2.0% / +2.8% | adopted |
+| Same, Zen 4 neighbour check | EPYC 9R14 (m7a.8xlarge), 16 / 32 workers | +0.8% (drift) / **+16.4%** (44.22 vs 38.01) | confirms; full 2 GiB parity |
+| Pre-103f170 AVX2 compress (no paired rounds) under `avx2-stream` | EPYC 7R13, 12 / 16 / 28 workers | −2.2% / −2.5% / −2.4% | rejected; paired rounds stay |
+| 16-byte NT stores (`_mm_stream_si128`) in `avx2-stream` | EPYC 7R13 (c6a.8xlarge), 16 / 24 workers | +5.9% / +1.9% | adopted |
+| Same, Zen 2 neighbour check | EPYC 7R32, 16 / 28 workers | +0.3% / +0.2% | neutral; adopted for the shared kernel |
+| 16-byte or 64-byte NT stores in the AVX-512 streaming kernel | Ryzen 7 9700X, 8 / 12 / 16 workers | 16-byte ±0.5%; 64-byte −0.4 to −1.3% | rejected; 32-byte stays |
+| Drop the periodic SFENCE in `avx2-stream` | EPYC 7R13, 16 / 24 workers | +0.8% / −0.2% | rejected (neutral); SFENCE stays |
+| Same-host check vs a non-temporal-store competitor after ring 2 / 16-byte stores | EPYC 7443P bare metal, 12 / 24 workers | 17.19 vs 15.78 (+8.9%) / 18.26 vs 18.97 (−3.7%; bench drops ~4% late hashes at 24) | Zen 3 gross parity; this morning's default was 10.32 H/s. perf: IPC 1.05 vs 1.14, dTLB misses 1.7× at 24 workers (open lead) |
+| Full-width AVX-512 compress in the streaming ring loop | Ryzen 7 9700X, 8 / 12 / 16 workers | +0.2% / −0.5% / +0.2% | rejected (bandwidth-bound) |
+| Same-host defaults vs competitors after today's changes | Ryzen 7 9700X | Seine autotune 11 lanes 9.79 H/s (3.5% late-hash bench loss); 0%-fee NTM 10.04 @16; 2%-fee paired-arena miner tune 10.47 / bench 10.0 @16×2 | gross parity; open lead: paired arenas on SMT (~+4% in that miner's own tune) |
+| Paired arenas (two hashes per thread) with the shipping ring-2 streaming policy | Ryzen 7 9700X, research harness, 2 interleaved reps | single@16 SMT 10.10; paired@8 phys 10.01; paired@16 10.05; single@8 9.96 | rejected (−0.5% vs SMT at 2× RAM). Raw kernel at 16 = competitor parity; Seine's lower bench numbers are round-fence loss and an 11-worker autotune pick |
+| Worker placement explains high-count flattening | 7443P, 24 workers, affinity off/os/auto | 14.28 / 14.13 / 14.11 | rejected (placement-neutral) |
+
+Open: Zen 3 still flattens past ~12 workers (seine ~14.8 H/s) while a
+non-temporal-store miner without a cached ring reached 19.0 H/s at 24 workers on the same
+host; bench round fences drop 4-8% as late hashes at these counts. Zen 1/Zen+ (family 17h
+below model 30h) is not enabled: no native evidence. A local WSL screen was invalid
+(agent cgroup throttling) and is excluded.
+
 ## 2026-10-25 joint tuner interruption diagnostics
 
 The native Windows EPYC 9R14 comparison exposed an observability gap: an inner
@@ -315,6 +353,7 @@ explicit opt-out check. Runner: `run_lifecycle_merged.py`.
 
 ## Newest-first index
 
+- `2026-10-26 cohort defaults: Zen 4/5 streaming everywhere, AVX2 streaming for Zen 2/3`
 - `2026-10-25 native Ice Lake: the x86 regression follows function layout`
 - `2026-10-24 parked CPU worker task budgets and spawn failure recovery`
 - `2026-10-24 streaming-store kernel integration on validated EPYC`
@@ -3662,6 +3701,7 @@ cargo run --release -- --bench --bench-kind kernel --backend cpu --threads 1 --d
 cargo run --release -- --bench --bench-kind backend --backend cpu --threads 1 --disable-cpu-autotune-threads --bench-secs 12 --bench-rounds 4 --bench-warmup-rounds 1 --ui plain --bench-output <report.json>
 ```
 
+
 ## 2026-10-25 CPU kernel benchmark lifecycle accounting
 
 The native EPYC 9R14 fixed-kernel screen revealed that `--bench-kind kernel`
@@ -3691,3 +3731,1128 @@ remain unchanged. Tests exercise each case and run the shell workflow with
 fixture executables, including both directions of a mixed-version pair. The
 CPU-only landing workspace passed 581 tests with eight hardware tests ignored; the
 three shell-workflow tests passed without allocating mining arenas.
+
+## 2026-10-25 experimental EPYC 9R14 full-core cold seed (not validated)
+
+The Longhorn comparison's first complete 900-second native Linux capture on
+an m7a.8xlarge (EPYC 9R14, family 19h/model 11h, 32 physical guest cores,
+no SMT, 128 GiB) starts Seine at 16 workers. It confirms streaming at 301s,
+24 workers at 595s, and 32 workers at 900s. These log observations motivate
+an experiment; the captured shares are still undergoing independent full-hash
+verification, and no performance claim or new shipping default is approved.
+
+The experimental candidate starts at the full count only for that CPU brand,
+numeric identity, Linux native runtime, 32-core topology and 120–130 GiB host
+memory range, with one CPU backend, automatic affinity and pages, and a
+32-worker memory/search ceiling. Compatible cached counts take precedence.
+Current available RAM and task-slot limits still clamp startup; zero available
+arenas still parks the backend. Efficiency mode retains its prior behavior.
+This changes no kernel or ISA gate, pressure handling, or confirmation threshold.
+The build fingerprint changes with the source, preserving cache separation.
+
+Gate tests cover adjacent CPU identities, a different brand, Windows/WSL,
+SMT/different core counts, smaller memory, explicit resource bounds, efficiency,
+manual pages/affinity, multiple backends, cached seeds and zero available RAM.
+The CPU-only workspace test suite passes. Native fixed-kernel screening and
+interleaved cold/warm comparisons remain required before landing this policy.
+
+
+### 2026-10-25: experimental Genoa streaming startup (not landed)
+
+The native Longhorn comparison repeatedly reaches the streaming path only
+after several minutes. At 32 workers, Seine's live comparison logs favor it
+over AVX-512 and AVX2; independent verification of the full captured work is
+still in progress. The old fixed-kernel screen includes allocation time and
+is retained only as lifecycle evidence.
+
+An experimental candidate starts streaming on the exact native Linux EPYC
+9R14, 32-physical-core, 128 GiB configuration already covered by the full-count
+seed experiment. It additionally requires exactly 32 active workers in one
+CPU backend and all 64 GiB backed by transparent huge pages. Other identities,
+worker counts, explicit-page modes, mixed backing and efficiency mode retain
+their previous starting policy. Cached winners still take precedence; normal
+repeated comparisons can replace the starting kernel. The cache fingerprint
+records this experimental policy separately.
+
+Three new tests cover host/ISA eligibility, backing and worker-count limits,
+and a losing startup kernel being replaced and cached after repeated trials.
+The CPU-only workspace passes 580 tests with eight hardware tests ignored at
+four test threads. A prior default-parallel run failed the existing 1 ms
+enqueue-timeout classification assertion; both logs are preserved. Native
+candidate measurements and reference-hash verification are required before
+this policy can land. No mining speedup is claimed yet.
+
+
+## 2026-10-25: native EPYC hint-before-populate allocation (experimental)
+
+The interleaved native EPYC 9R14 allocation-only probe used the same 2 GiB arenas
+and full measured THP coverage. Two 32-worker trials took 30.110/30.107 seconds
+with MAP_POPULATE before the hugepage hint, versus 1.851/1.803 seconds when the
+hint preceded MADV_POPULATE_WRITE. At 16 workers the corresponding observations
+were 14.814/15.549 versus 0.789/1.051 seconds. This is startup evidence, not a
+steady hashrate or energy result. Python probe measurements need in-miner validation.
+
+The unlanded candidate applies the alternative only to native Linux, AuthenticAMD
+family 0x19/model 0x11, exact EPYC 9R14, 32 physical/32 logical CPUs, 120–130 GiB
+RAM, Auto page mode and full-size 2 GiB arenas. Explicit HugeTLB is still attempted
+first. A failed hugepage hint or writable-prefault advice discards that mapping
+and retries the legacy MAP_POPULATE path; Regular remains explicitly non-THP.
+Host CPU inventory is used because workers have already been pinned. Cache build
+fingerprints change with this candidate. Other CPU identities and WSL are excluded.
+
+Validation: 578 CPU tests passed, nine ignored; the ignored full-size reference
+check was then run optimized and passed both the new advice and forced-fallback
+paths with dirty reuse. Native end-to-end comparison against v0.2.26 and Longhorn
+is pending. Do not land this default before that comparison validates it.
+
+Evidence: benchmark-evidence/longhorn-20261025/native-page-startup-summary.json,
+current-allocation-candidate-tests.log and allocation-full-parity.log.
+
+## 2026-10-26: EPYC cold-start evidence and integration review (not landed)
+
+The frozen `47089f8` candidate now has three independently verified cold
+comparisons against released v0.2.26 on the same m7a.8xlarge: EPYC 9R14,
+32 physical guest cores without SMT, 128 GiB RAM, one visible NUMA node,
+native Linux, and full THP backing. Each run measures 900 seconds from launch,
+including productive tuning and the observed developer-fee intervals. All
+captured hashes match the independent full-size C Argon2 reference.
+
+| Frozen build | Mean useful user hashes/second |
+| --- | ---: |
+| Seine v0.2.26 | 29.4404 |
+| Seine 47089f8 | 35.9863 |
+| Longhorn 2026.10.25-5667e12 | 40.9252 |
+
+The candidate improves this cold window by 22.23%; the mean paired improvement
+is 6.5459 H/s with a 95% paired Student-t interval of [6.4578, 6.6341]. It remains
+4.9389 H/s behind that Longhorn build, interval [-5.0576, -4.8202]. Three pairs
+are a small sample, and these observations are neither a sustained-throughput
+claim nor evidence for other EPYC models, Windows, power efficiency, or newer
+Longhorn versions. Warm repetitions are still running. The full-count seed,
+streaming start and prefault-order changes were measured together; their
+individual end-to-end contributions are not isolated by this comparison.
+
+This integration branch applies only those three changes to current master
+(`e921c19`). The cache-read conflict preserves master's rejection diagnostics
+and uses a valid cached seed before the new cold-start policy. Ring/depth,
+two-arena and shortened-trial research are excluded. Master also contains an
+unreleased flat 2% fee policy, so the numbers above describe the frozen
+measured builds, not an as-yet-unmeasured integrated release.
+
+Evidence: `benchmark-evidence/longhorn-20261025/native-linux-amd-current/`
+contains raw captures, per-capture verification and `series-summary.json`/CSV.
+Integration regression results go to `epyc-integration-tests.log`. Keep this
+branch unlanded until the remaining warm comparisons and integration review
+are complete; release and deployment remain separate actions.
+
+### Restart cache regression found during integration review
+
+The first completed warm `47089f8` run selected 31 workers and saved kernel
+winners for 32, 31 and 30 workers. The experimental startup-policy fingerprint
+incorrectly depended on `cfg.threads == 32`: restoring the confirmed 31-worker
+count on the next launch would change that fingerprint and reject the entire
+kernel cache. This was reproduced by an executed regression test before the
+fix. It is an unreleased candidate issue, not a v0.2.26 regression.
+
+The integration now separates host-policy eligibility from the runtime context.
+Changing the starting count no longer invalidates the same host's kernel cache;
+the automatic streaming start still requires the measured 32-worker context
+with full THP backing. Cached winners remain tied to the exact worker count,
+backing, host, build and supported ISA. The regression test confirms a saved
+31-worker winner survives restart and that a fresh 31-worker context does not
+receive the 32-worker startup hint.
+
+Existing native warm repetitions each restore the immutable cold-run cache
+whose selected count is 32, so this finding does not invalidate those captures.
+It prevents a later restart from discarding the additional evidence they learn.
+No extra hashrate gain is claimed for this correction. Evidence:
+`comparison-diagnostics/genoa-cache-seed-restart.json`,
+`epyc-cache-seed-regression-red-exact.log`,
+`epyc-cache-seed-regression-green.log`, and `epyc-cache-seed-adaptive-tests.log`
+under the campaign evidence directory.
+
+
+### Completed cold and warm validation
+
+All three cold and three warm triplets for the frozen `47089f8` candidate,
+shipping v0.2.26 and Longhorn `2026.10.25-5667e12` are complete and independently
+verified. Warm runs each restore their miner's immutable third cold-run cache;
+they include further productive tuning of previously unseen worker contexts.
+They do not measure only the final selected kernel.
+
+| Frozen build | Cold useful H/s | Warm useful H/s |
+| --- | ---: | ---: |
+| Seine v0.2.26 | 29.4404 | 34.6441 |
+| Seine 47089f8 | 35.9863 | 36.6659 |
+| Longhorn 2026.10.25-5667e12 | 40.9252 | 40.9070 |
+
+The candidate improves the cold launch window by 22.23% and the warm launch
+window by 5.84% over shipping Seine. The warm paired improvement is 2.0219 H/s,
+with a 95% Student-t interval of [1.9365, 2.1072]. Its warm deficit to Longhorn
+remains 4.2411 H/s, interval [-4.3916, -4.0906]. These small-sample intervals
+apply only to this native Linux EPYC 9R14 cohort and the exact frozen builds.
+The complete raw captures, verification reports and JSON/CSV remain in
+`benchmark-evidence/longhorn-20261025/native-linux-amd-current/` in the workspace.
+
+A post-hoc 600–850-second window in each warm candidate run contains no logged
+tuning activity. Independently verified gross throughput averages 38.104 H/s
+versus Longhorn's 41.7387 H/s in the matching windows. This diagnostic motivates
+a separate fixed-kernel experiment; it is not a new headline, confidence
+interval, or proof that all of the residual deficit belongs to the kernel.
+See `comparison-diagnostics/warm-residual.json` and its reproducible exporter.
+
+The integration's frozen `6c70b4d` Linux build is now undergoing a separate
+native comparison against the shorter-trial experiment. It retains the current
+master fee policy and the corrected cache fingerprint. Source-equivalent
+Windows parent `f61107f` fixes a platform import; Windows startup-policy changes
+are a separate, unlanded experiment. Keep the older cohort's rates attributed
+to its measured builds. No release or deployment follows automatically from
+these results.
+## 2026-10-26 — Windows EPYC 9R14 startup experiment (unreleased)
+
+Three independently verified native Windows cold captures (62,576 captured hashes, ordinary pages, 32 physical cores / 128 GiB) consistently start at 16 workers and discover streaming winners at 16, 24 and 32. In the third capture, the tuner begins the 32-worker comparison at 612.6 seconds and confirms 32 at 867.4 seconds. Its internal 32-worker streaming samples are 32.9–33.7 H/s, versus 27.13 for AVX-512 and 26.83 for AVX2. These internal samples diagnose discovery cost; they are not standalone benchmark results. Evidence: `../benchmark-evidence/longhorn-20261025/comparison-diagnostics/windows-startup-policy-evidence.json`.
+
+This separate research candidate starts the exact native Windows EPYC 9R14 32-core / 120–130 GiB host at 32 workers when resources permit, preserving existing count caches and limits. It starts streaming only on a single 32-worker backend with entirely ordinary-page backing and runtime-supported instructions. Efficiency profiles, other CPUs/topologies, large/mixed pages and manual overrides retain the existing rules. Confirmed kernel winners take precedence, and ordinary repeated comparisons can replace the startup choice. The policy fingerprint is independent of the cached initial count. Linux behavior is unchanged from parent `6c70b4d`; the shorter-trial experiment is not included.
+
+Validation: 83 adaptive CPU/kernel tests passed, 3 hardware tests ignored, including Windows backing/host gates, cache precedence and a startup hint losing to another kernel. The native MSVC release build and paired screen below subsequently passed.
+
+
+### Native Windows startup screen and integration decision
+
+On the same native Windows EPYC 9R14 host (32 physical cores, 128 GiB,
+ordinary pages), frozen parent `f61107f` and candidate `6c34e62` completed one
+900-second cold pair using identical kernels and fee policy. Independently
+verified useful throughput was 17.9800 versus 29.3722 H/s (+63.36%); gross
+throughput was 18.4089 versus 30.0422 H/s. All 16,570 parent and 27,039 candidate
+captured hashes passed full-size independent reference verification, with no
+invalid hashes or duplicates. Native MSVC release builds used Rust 1.93.0.
+
+The parent started at 16 workers and encountered noisy kernel/count comparisons.
+The candidate began with 32 workers and applied the streaming hint once arena
+backing was known. This single pair supports the narrowly scoped startup policy;
+it does not establish a precise repeatable percentage, sustained kernel gain,
+or performance against Longhorn. No confidence interval or marketing headline
+is claimed. Evidence and frozen artifact hashes are retained in
+`../benchmark-evidence/longhorn-20261025/native-windows-amd-startup-screen/`
+and `windows-startup-build/`.
+
+The integrated Linux parent `6c70b4d` also completed its separate 900-second cold
+screen: 33,369 independently verified captured hashes, no invalid hashes or
+duplicates, and 36.2600 useful H/s. This build uses the current fee policy and
+corrected cache fingerprint. The shorter-trial candidate remains separate.
+
+Integration proceeds on the existing evidence and targeted regression checks;
+another long Windows confirmation is not required to make this decision. The
+startup choice remains limited to the measured host/backing contexts, preserves
+confirmed caches and explicit settings, and can lose to productive autotuning.
+Release and deployment remain separate actions.
+
+
+## 2026-10-26 — Eight-block streaming ring with depth-two prefetch (candidate)
+
+A predeclared native Linux EPYC 9R14 fixed-kernel A/B/A screen used 32 workers,
+64 GiB of measured THP backing, 30-second warmup and 60-second measured windows.
+The existing ring64/depth3 path measured 38.9393 and 39.0133 H/s around the
+ring8/depth2 candidate at 44.6165 H/s: +14.47% over the bracket mean, with 0.19%
+baseline drift. Allocation/warmup were excluded and completed in-flight hashes
+were included in elapsed time. All fifteen full-size parity/dirty-reuse/guard
+checks passed, as did the first independent reference hash on every worker.
+Timed-loop hashes were not individually captured or independently verified;
+this is a kernel screen, not a public pool-throughput claim.
+
+The integration candidate exposes `avx512-256-stream-r8d2` as a distinct kernel
+identity, preserving the old path for comparisons and making the selected
+parameters visible in existing logs, caches and telemetry. Automatic eligibility
+is limited to the existing native Linux EPYC 9R14 32-core / 128 GiB host gate.
+The initial hint requires one 32-worker backend with full THP backing; confirmed
+local results retain precedence and productive comparisons can replace the hint.
+Windows and other hosts retain their existing automatic candidates. Manual
+benchmark selection remains runtime ISA-guarded.
+
+The first integration workspace run passed 600 tests (10 hardware tests ignored).
+Additional targeted tests passed for host/backing policy and both ring variants
+across segment boundaries, guard blocks, dirty reuse and kernel switches.
+An integrated native miner comparison with full captured-hash verification is
+still pending before landing. The separate shorter-trial candidate is excluded.
+Raw screen and frozen research build: workspace
+`benchmark-evidence/longhorn-20261025/native-linux-amd-ring-screen/` and
+`ring-experiment/build.json`.
+
+
+### Preserve the known winner when adding the ring candidate
+
+Review found that expanding the kernel list would invalidate a previously
+confirmed 31-worker cache and restart that context on the baseline AVX-512 path.
+A regression test reproduced the loss before the fix. The integration now
+recognizes only the exact preceding candidate-list policy on the same host and
+settings, restores its valid context-specific winner as a seed, and compares
+only the newly added ring kernel. This seed cannot certify the new candidate;
+normal repeated comparisons must finish before saving the expanded policy.
+Existing schema, age, backing, worker-count and comparison-proof checks apply.
+Invalid settings and stale evidence are rejected by regression tests.
+
+The targeted adaptive suite passes 98 tests (5 hardware tests ignored). The
+native cold comparison continues with frozen `3641add`: it has no prior cache,
+so this upgrade-only fix does not require replacing its binaries or restarting
+its measurements. Final source and the measured artifact remain distinguished
+in the campaign receipts.
+
+
+### Integrated native miner result and landing
+
+A predeclared fresh 900-second candidate/baseline pair on one native Linux
+EPYC 9R14 host completed with the frozen binaries `3641add` and `9ac37d5`.
+The candidate delivered 40.3533 useful user H/s versus 34.9067 H/s for baseline,
+a 15.60% improvement. Gross captured rates were 41.2900 and 35.6889 H/s.
+These launch-anchored rates include productive tuning and the observed current
+fee schedule; they are not isolated steady-state speeds or earnings estimates.
+All 37,164 candidate and 32,120 baseline captured hashes independently matched
+libargon2, with zero invalid hashes, duplicates, stale or rejected work. The
+26 new reference values were computed separately on the Mac; no reference cache
+or claimed output was exposed to either timed miner.
+
+The native fixed-kernel bracket and integrated miner pair both support landing
+the scoped Linux improvement. A single cold pair has no publication confidence
+interval; README/site steady-state headline values remain unchanged. Final
+source includes the separately tested warm-cache upgrade fix (`76225cd`), which
+does not change these cache-free measurements. The full integration suite passed
+600 tests (10 hardware tests ignored), with additional boundary/host tests and
+98 adaptive tests after the upgrade fix. Edited Rust files pass pinned formatting.
+
+The first attempt retained a verified baseline but never launched its candidate
+because the controller passed an unsupported binary directory. That failed
+attempt and its cost remain separate; the successful fresh pair uses the actual
+parser-validated directory and both measurements from the same replacement host.
+Evidence: workspace `benchmark-evidence/longhorn-20261025/native-linux-amd-ring-retry/`
+(`series-summary.json` / `.csv` and per-case full verification), with cleanup
+verified in `amd-ring-retry-prep/cleanup.json`. The separate Windows ring and
+shorter-window interaction candidates remain research until their own results.
+
+
+### Native Windows ring candidate (research)
+
+Extend the exact EPYC 9R14 / 32-core / 128 GiB automatic ring candidate to
+Windows for an isolated native comparison. The startup hint requires 32 workers
+and ordinary-page backing; explicit large pages, other hosts and confirmed local
+cache precedence remain unchanged. This is a separate hypothesis from the
+already validated Windows full-core startup gain: Linux kernel speed does not
+establish Windows speed. The targeted adaptive suite passes 99 tests with five
+hardware tests ignored. Native MSVC build and paired full-capture validation are
+pending; do not land this Windows gate based solely on the Linux result.
+
+
+### Native Windows ring result and scoped integration
+
+The same-host native Windows EPYC 9R14 / 32-core / 128 GiB cold pair completed
+with ordinary pages. Frozen `789cbe8` delivered 32.1244 useful user H/s versus
+31.4356 H/s for `9ac37d5`, a 2.19% gain over 900 seconds including productive
+tuning and the observed fee schedule. All 29,542 candidate and 28,929 baseline
+captured hashes independently matched libargon2; none were invalid or duplicated.
+
+The candidate also bracketed the old streaming path during productive tuning:
+at 32 workers the new path measured 34.33 / 34.35 H/s around the old path's
+33.30 H/s, and at 31 workers 33.33 / 33.20 H/s around 32.33 H/s. These internal
+samples support the direction of the modest cold-pair gain; they are not
+independent publication runs or a confidence interval. The kernel change is
+therefore retained behind the exact Windows host and ordinary-page startup
+gate, preserving valid caches and productive comparisons. No broad Windows
+performance claim or README/site headline change follows from this single pair.
+
+Native MSVC builds and the 99-test adaptive suite passed. The integration
+reapplies the exact measured source onto v0.2.27; only the engineering journal
+conflicted, and the Rust/kernel/telemetry trees match frozen `789cbe8` exactly.
+Evidence: workspace `benchmark-evidence/longhorn-20261025/native-windows-amd-ring-screen/`,
+`windows-ring-build/` and `comparison-diagnostics/windows-ring-integration.json`.
+The rental terminated immediately after the pair; cleanup is verified in
+`windows-ring-prep/cleanup.json`.
+
+
+### Ring kernel plus shorter productive trials (research)
+
+The integrated ring run retained the new path, but spent two full sweeps comparing
+slower alternatives at 32 and 31 workers. Each 30-second challenger sample
+reduces useful output during convergence. Combine the previously promising
+short-window policy with the new ring kernel: ten seconds and at least 256 hashes
+per sample, retaining A/B/A drift checks and repeated promotion requirements.
+Only native Linux EPYC 9R14 / 128 GiB, 30–32 workers and full THP backing qualify.
+Explicit windows, efficiency settings and other hosts keep existing behavior.
+
+The pre-ring short-window cold pair improved useful throughput by 1.31%; the
+interaction with the faster ring kernel remains unmeasured. Exact-context
+confirmed winners from the preceding longer-window policy remain reusable,
+while adding the new kernel still requires comparing it against the prior winner.
+Frozen ring-only measurements continue untouched; this is a separate follow-up.
+
+## 2026-10-26: shorter Genoa samples confirmed with the improved ring kernel
+
+A predeclared, same-host 900-second cold pair compared frozen ring-only
+`3641add` with ring-plus-short-samples `1603e06` on native Linux EPYC 9R14,
+32 physical cores, 128 GiB and full transparent huge-page backing. Useful
+user throughput increased from 40.5200 to 41.8167 H/s (+3.2001%). Gross
+throughput was 41.4578 versus 42.7722 H/s. All 75,810 captured hashes matched
+independent libargon2 references; zero invalid, duplicate, stale or rejected
+hashes. This is a single engineering pair, not a steady-state headline or a
+confidence interval. It agrees with the earlier +1.31% pre-ring screen.
+
+The first completed thread comparison moved from 674.8 to 315.7 seconds.
+Short samples still encountered baseline drift and retained the incumbent;
+the drift gate and two-cycle promotion requirement remain unchanged. The
+policy is restricted to default sample settings, matched native Linux hosts,
+30–32 workers and full THP. Confirmed previous-policy winners remain usable.
+Combined Linux/Windows integration: 102 adaptive tests passed, five ignored.
+Evidence: `benchmark-evidence/longhorn-20261025/native-linux-amd-ring-short/`
+and `comparison-diagnostics/linux-ring-short-integration.json` in the workspace.
+
+The separate steady-state publication phase passed full-size kernel parity
+but failed before timed hashing because its configuration directory was on a
+read-only mount. That harness failure is retained separately and provides no
+performance result. The completed miner pair remains valid.
+
+## 2026-10-26: prioritize streaming during native Genoa startup
+
+The verified 32/31-thread native Genoa traces repeatedly put AVX-512 and AVX2
+around 28–29 H/s while the improved streaming kernel produces 44–45 H/s.
+A scoped policy compares only the two streaming paths on the first
+sweep of a previously unmeasured 31/32-thread full-THP context. Once a winner
+is saved, periodic rechecks use all eligible kernels again. Other counts,
+page backing, hardware and explicit sample settings retain full searches.
+
+Prior confirmed cache entries survive both the original-window and the
+shorter-window policy upgrades. The cache context, age and sample-proof
+checks remain in place. The focused adaptive suite passed 103 tests, with
+five ignored, including restored prior-policy winners, scoped initial paths
+and the later exhaustive recheck.
+
+The predeclared native Linux EPYC 9R14 comparison used 32 physical cores,
+128 GiB RAM and full THP, with a fresh 600-second launch window per build.
+Baseline v0.2.28 (`eb97927`) delivered 41.6400 H/s; candidate `21c5292`
+delivered 43.7033 H/s, a **4.955% startup-throughput gain**. All 51,211
+captured hashes independently matched libargon2, with no invalid or duplicate
+results. The first confirmed worker-count decision moved from 315.6 to 167.8
+seconds. Both kept the 32-worker setting. The baseline also rejected one
+drifting comparison and later retried; the single pair does not isolate every
+source of variance or establish a confidence interval. This is not a sustained
+hashrate or long-run fee-adjusted claim.
+
+Evidence: workspace `benchmark-evidence/longhorn-20261025/`
+`native-linux-amd-frontier/` and
+`comparison-diagnostics/linux-startup-frontier.json`.
+
+## 2026-10-26: do not extend the Genoa ring setting to Zen 5
+
+On native Linux EPYC 9R45 (m8a.8xlarge, 32 physical cores, 128 GiB,
+32 workers with full THP), ring 8/depth 2 regressed against ring 64/depth 3.
+Three fresh interleaved 60-second confirmation pairs measured 49.4492 versus
+48.8690 H/s: **-1.173%**, paired bootstrap 95% interval [-1.250%, -1.084%],
+with the candidate slower in all three pairs. Full-size kernel reference
+parity passed first. Timings exclude allocation and warmup; measured-loop
+outputs were not individually exported. The separate two-pair screen was
+also slower and is retained separately. Keep automatic selection scoped to
+the measured Genoa contexts; this is a demonstrated regression, not merely
+an inconclusive improvement gate. Evidence: workspace campaign
+`native-linux-amd-zen5-ring/ring-publication/campaign/campaign.json`.
+
+
+## 2026-10-26: paired arenas help a constrained comparison, not maximum Genoa throughput
+
+Native Linux AMD EPYC 9R14, 32 physical cores and 128 GiB, full transparent
+hugepage backing, ring 8/depth 2, OS scheduling. A frozen research binary
+(`b4e5645`, SHA256 `1ab50326861c23f80c9c10219f3ae728cabfa9c57b072655a75e5bc2371922dd`)
+compared matched 64 GiB allocations through `benchctl campaign`.
+
+After a separate two-pair screen, three fresh interleaved confirmation pairs
+measured 16 sequential workers at 27.3474 H/s and 16 paired workers at
+29.5173 H/s: +7.9216% paired geometric gain, bootstrap 95% interval
+[6.1316%, 8.9278%], three of three pairs faster. However, a separate two-pair
+screen measured 32 single-arena workers at 43.8882 H/s versus 16 paired workers
+at 29.7860 H/s: -32.1322%, interval [-32.1779%, -32.0865%]. That contrast was
+rejected without redundant confirmation.
+
+All 10,606 timed hash claims independently match cached libargon2 outputs;
+96 full-size RustCrypto parity checks also passed. Allocation and warmup are
+excluded. These are offline fixed-kernel rates, not pool, startup, energy or
+fee-adjusted throughput. The +7.9% result does not establish a gain over
+ordinary 16 single-arena workers, which were not measured. Preserve the
+conditional research but do not select paired arenas as the 32-core default.
+A future CPU-slot-limited host with spare memory would require its own matched
+single-versus-paired comparison and an integration-level check.
+
+Evidence: workspace `benchmark-evidence/longhorn-20261025/` under
+`native-linux-amd-pair-ring-retry/ring-publication/campaign/`, including
+`independent-verification.json`, raw reports, stage tables and confidence
+intervals. The preceding Spot attempt lost raw captures to an AWS interruption;
+its provisional status output is excluded. Both rentals were terminated and
+cleanup verified.
+
+
+## 2026-10-26: Windows Genoa first-sweep frontier (validated startup gain)
+
+Native EPYC 9R14 Windows ordinary-page captures repeatedly reject AVX512 and
+AVX2 at 31 and 32 workers: roughly 27 H/s versus 34 H/s on streaming. The
+current v0.2.29 cold comparison spends most of its first 600 seconds on these
+comparisons. An isolated candidate extends the already validated Linux first-
+sweep policy only to native Windows 9R14, 32-core/128-GiB automatic throughput
+contexts with ordinary pages, at 31/32 workers and default sample settings.
+It starts from the existing validated kernel, compares the two streaming paths
+first, and restores the full candidate set for periodic retuning. It does not
+change the Windows sample duration or any kernel implementation.
+
+The cache policy has a separate Windows fingerprint and preserves compatible
+previous confirmed winners; context, age and sample-proof checks remain in force.
+105 focused adaptive tests passed, five ignored, including neighboring identity,
+unsupported path, mixed backing, count, periodic full-search and cache-boundary
+checks.
+
+The frozen native MSVC comparison used baseline `8747ea1` (v0.2.29 plus a
+journal-only commit) and candidate `de74dce`. On native Windows Server 2025,
+EPYC 9R14 / m7a.8xlarge, 32 physical cores and 128 GiB, a standard account used
+ordinary VirtualAlloc pages and shipping defaults with empty caches. The fixed
+600-second baseline followed by 600-second candidate measured **32.40833 to
+34.15333 useful H/s, +5.3844%**. All **39,941 captured hashes** independently
+matched libargon2, with zero invalid or duplicate hashes.
+
+The candidate reached its first confirmed count decision at **303.9 seconds**;
+the baseline did not reach one within its 600-second window. One candidate
+comparison rejected baseline drift; the existing safety gate remained effective.
+This is one launch-anchored startup pair, with no confidence interval. It is not
+a sustained-throughput or long-run fee-adjusted result, and not every observed
+variation can be attributed to the code. Kernel implementations, sample durations,
+periodic exhaustive retuning and efficiency opt-in behavior remain unchanged.
+
+Evidence: workspace `benchmark-evidence/longhorn-20261025/` under
+`native-windows-amd-frontier/` and
+`comparison-diagnostics/windows-startup-frontier.json`. All captures, exact build
+identities and independent verification receipts are retained.
+
+## 2026-10-26: native Genoa ring/depth neighbors retain the current default
+
+On native Linux EPYC 9R14 / m7a.8xlarge, 32 physical cores and 128 GiB RAM,
+compare the existing ring 8 / depth 2 with three single-parameter neighbors.
+Every variant uses 32 workers and 64 GiB of measured THP backing; allocation
+and five-second warmup are excluded. Frozen research revision `58f007c` has
+binary SHA-256
+`83109fc321de9d0fb5011db3b34bfa47442aeee77a4a1016ed816a7405b49127`.
+The existing benchctl campaign uses two interleaved 20-second screen pairs,
+then three fresh 30-second confirmation pairs when the screen remains promising
+or unresolved. Every timed hash is retained.
+
+| Candidate | Screen vs 8/2 | Paired bootstrap 95% interval | Fresh confirmation |
+|---|---:|---:|---|
+| Ring 4 / depth 2 | -2.057% | [-2.193%, -1.920%] | Not run: both screen pairs slower |
+| Ring 16 / depth 2 | -8.364% | [-8.612%, -8.116%] | Not run: both screen pairs slower |
+| Ring 8 / depth 1 | -0.014% | [-0.177%, +0.150%] | -0.238%, interval [-0.340%, -0.148%]; all three pairs slower |
+
+The depth-1 screen was inconclusive, so it received fresh confirmation rather
+than being discarded for a missed significance threshold. Its confirmation
+supports keeping depth 2 on this exact host and backing. These short-run
+intervals describe the observed pairs, not all Genoa machines or Windows.
+Keep the existing Linux default; none of these candidates justifies a change.
+Deeper lookahead remains unmeasured at ring 8 and is a separate hypothesis.
+
+All **18,779 timed hashes** independently matched cached libargon2 reference
+outputs, including 235 newly computed references on the native M4 Max verifier.
+All 36 full-size RustCrypto parity checks passed before timing. The rental was
+terminated immediately after evidence collection; storage and security-group
+cleanup were verified. Evidence: workspace
+`benchmark-evidence/longhorn-20261025/native-linux-amd-ring-grid/ring-publication/campaign/`
+contains raw reports, comparisons, exact source identities and
+`independent-verification.json`. No release or public performance headline
+follows from these rejected candidates.
+
+## 2026-10-26: Windows ordinary-page ring/depth neighbors retain the default
+
+The same neighborhood was measured independently on native Windows Server 2025,
+EPYC 9R14 / m7a.8xlarge, 32 physical cores and 128 GiB RAM. A standard account
+used 32 workers and 64 GiB of ordinary VirtualAlloc pages, explicitly without
+MEM_LARGE_PAGES. Resident working-set and private-byte observations were checked
+before every measurement. Frozen native MSVC research revision `6f956af` has
+binary SHA-256
+`87bc84be855a325ea962f74be4f3ee2a60f7a2a73e0b0af9732bb34094e83ed3`.
+
+Two interleaved 20-second screen pairs per candidate exclude allocation and a
+five-second warmup. Relative to ring 8 / depth 2:
+
+| Candidate | Paired difference | Paired bootstrap 95% interval |
+|---|---:|---:|
+| Ring 4 / depth 2 | -2.520% | [-3.155%, -1.882%] |
+| Ring 16 / depth 2 | -4.985% | [-5.556%, -4.410%] |
+| Ring 8 / depth 1 | -1.102% | [-1.569%, -0.632%] |
+
+Both screen pairs were slower in every comparison. The predeclared runner
+stopped these candidates before confirmation; keep the current Windows default.
+These are exact-host, short kernel comparisons, not cross-platform scaling or
+long-run user-throughput claims. All **7,957 timed hashes** independently matched
+libargon2 and all 36 native full-size RustCrypto parity checks passed before
+measurement. The rental was promptly terminated with disk/security-group cleanup
+verified. Raw reports, memory observations, source identities and verification
+receipts are retained in workspace
+`benchmark-evidence/longhorn-20261025/native-windows-amd-ring-grid/ring-grid/campaign/`.
+No public headline or release follows from these rejected candidates.
+
+## 2026-10-26: Genoa spare-memory pairing and deeper lookahead screens
+
+Native Linux EPYC 9R14 / m7a.8xlarge, 32 physical cores and 128 GiB RAM,
+tested three further hypotheses with the existing benchctl campaign. Each
+screen used two interleaved 20-second pairs after a five-second warmup,
+excluding allocation, with measured THP backing and the OS scheduler.
+
+The spare-memory experiment compared 32 single workers using 64 GiB against
+28 paired workers using 112 GiB. Before each run, admission required at least
+120 GiB MemAvailable and no swap: 112 GiB for the larger candidate plus an
+8 GiB reserve. This intentionally spends more RAM; it is not a same-memory
+comparison. The paired binary remains frozen at research revision `b4e5645`,
+SHA-256 `1ab50326861c23f80c9c10219f3ae728cabfa9c57b072655a75e5bc2371922dd`.
+
+Depth experiments retained ring 8, 32 single workers and 64 GiB, comparing
+depths 3 and 4 against depth 2. Frozen research revision `633752a` has binary
+SHA-256 `640104a55bb6367f4aa0d39b33afdfeb3e054b667c8c0128339dbbaefa637f49`.
+
+| Candidate | Paired difference | Paired bootstrap 95% interval |
+|---|---:|---:|
+| 28 paired workers / 112 GiB vs 32 single / 64 GiB | -18.677% | [-18.695%, -18.659%] |
+| Ring 8 / depth 3 vs depth 2 | -0.194% | [-0.344%, -0.045%] |
+| Ring 8 / depth 4 vs depth 2 | -0.247% | [-0.283%, -0.211%] |
+
+Both pairs were slower for every candidate, so no confirmation was scheduled.
+The tiny depth differences describe this short exact-host screen; they are not
+claims about every machine or operating system. Keep the existing 8/2 default.
+Depth 8 was compiled but deferred before the rental and remains unmeasured.
+
+All **10,495 timed hashes** independently matched cached libargon2 outputs,
+and all **72 native full-size RustCrypto parity checks** passed before timing.
+The local full-size smoke was deferred before execution because WSL lacked its
+memory reserve; native correctness checks supplied the required evidence.
+The rental was terminated promptly and disk/security-group cleanup verified.
+Raw reports, memory admission, source identities and independent verification
+are retained under workspace
+`benchmark-evidence/longhorn-20261025/native-linux-amd-headroom-depth/ring-publication/campaign/`.
+No code/default change, release or public performance headline follows.
+
+
+## 2026-10-26: demand-triggered streaming fences on native Genoa Linux
+
+A fixed eight-block ring previously imposed MFENCE at every wrap. The new
+policy retains the ring and depth-two prefetch but tracks the committed arena
+prefix. Recent references use the cached ring; an older reference into pending
+non-temporal stores fences before loading and advances the committed prefix.
+The final arena read always retains MFENCE. SFENCE is not a substitute for this
+store-to-load ordering. Seeds use ordinary stores, and a reference exactly one
+ring-length back uses the arena to avoid aliasing the output slot.
+
+On native Linux EPYC 9R14 / m7a.8xlarge, 32 physical cores, 128 GiB RAM and
+64 GiB of measured THP backing, the frozen research screen improved **3.024%**
+in both interleaved 20-second pairs. Three fresh 30-second confirmation pairs
+measured **44.17659 to 45.30134 H/s**, **+2.5460%**, with paired bootstrap 95%
+interval **[+2.5262%, +2.5792%]** and all three pairs faster. Allocation and
+five-second warmup are excluded. This is a same-host offline kernel comparison,
+not a cold-start, pool, power-efficiency or universal hardware claim.
+
+Baseline research revision `633752a` has binary SHA-256
+`640104a55bb6367f4aa0d39b33afdfeb3e054b667c8c0128339dbbaefa637f49`.
+Candidate research revision `de967b5` has SHA-256
+`131259d9ad7413fd3ea2edece00250f72b18a14d06741deec3f464ee9a9994a2`.
+All **11,870 timed hashes** independently matched libargon2, including fourteen
+new reference inputs computed on the native M4 Max. Twelve full-size RustCrypto
+checks passed before timing; 360 reduced checks cover dirty reuse and ring/slice
+boundaries. The rental was terminated immediately after collection, with root
+volume and security-group cleanup verified.
+
+Integration limits the new fence policy to the existing Linux R8/D2 kernel.
+Its precise Genoa automatic-selection and independent ISA gates are unchanged;
+other streaming variants and Windows retain their periodic fences. The changed
+source fingerprint prevents reuse of old timing proof. The existing kernel
+selection/reference and dirty-reuse tests exercise the integrated dispatcher;
+the full-size dispatch example now includes R8/D2 explicitly. Native Windows
+MSVC research separately passed 360 reduced checks, six full-size checks and
+three independently verified smoke hashes, but Windows performance is unmeasured.
+
+Evidence: workspace `benchmark-evidence/longhorn-20261025/` under
+`native-linux-amd-demand-fence/ring-publication/campaign/`,
+`demand-fence-reference/` and `windows-demand-fence-build/`.
+Ring-size interaction experiments are separate and do not alter this frozen
+comparison or justify extrapolating its gain.
+
+
+### Demand-fence integration and ring-size follow-up
+
+The integrated Linux specialization, after substituting its compile-time fence
+policy and removing comments/whitespace, is identical to the complete native-
+tested research loop. Eight kernel tests passed, including runtime dispatch,
+reference vectors, dirty reuse and guards; 105 adaptive tests passed with five
+ignored. The default-feature release miner built successfully. Autotune selection,
+page policy and CPU topology code did not change.
+
+A separate native 9R14 rental then compared the same demand-fence binary at
+ring 4, 2 and 16 against ring 8, with depth 2 and the same 32 workers / 64 GiB
+THP backing. Two interleaved 20-second screen pairs per alternative measured:
+
+| Candidate | Paired difference | Paired bootstrap 95% interval |
+|---|---:|---:|
+| Ring 4 | -0.148% | [-0.180%, -0.117%] |
+| Ring 2 | -0.101% | [-0.169%, -0.032%] |
+| Ring 16 | -10.229% | [-10.603%, -9.853%] |
+
+Both pairs were slower in each screen; no confirmation was run. The small
+ring-2/ring-4 differences are limited to this short exact-host experiment.
+Keep ring 8. All **10,944 timed hashes** independently matched libargon2, with
+36 full-size RustCrypto checks before timing. The rental was terminated promptly
+and cleanup verified. Evidence:
+`benchmark-evidence/longhorn-20261025/native-linux-amd-demand-ring/ring-publication/campaign/`.
+
+## 2026-10-26: demand-triggered fences confirmed on native Genoa Windows
+
+The separately frozen Windows candidate passed the predeclared two-pair
+20-second screen and three fresh alternating 30-second confirmation pairs.
+The 32-worker, 64 GiB ordinary-page comparison measured 32.83906 baseline versus
+33.69681 candidate H/s: +2.61177%, paired bootstrap 95% interval
+[+2.19450%, +2.99261%], three of three pairs faster. Allocation, five-second
+warmup and teardown are excluded; this is fixed-kernel throughput, not pool
+or startup performance. The host was native Windows Server 2025, EPYC 9R14,
+32 physical cores and 128 GiB, with OS placement and no power limit.
+
+All 8,936 timed hashes independently matched the existing libargon2 cache;
+12 native full-size RustCrypto checks passed before timing. Baseline executable
+SHA-256: 87bc84be855a325ea962f74be4f3ee2a60f7a2a73e0b0af9732bb34094e83ed3.
+Candidate: 1612f4ee93e88184fffa84f45d3960a7ef8432b243876fcfc1edeab807e399ea.
+The baseline periodic loop and timing/allocation functions are unchanged
+between their frozen sources except for the candidate's policy label. The
+candidate uses the same demand-fence loop already integrated on Linux.
+
+Enable that existing implementation for Windows R8D2 as well. Keep the existing
+precise hardware, runtime ISA, thread-count, backing and tuning gates; other
+kernel specializations remain unchanged. The rental terminated at 9:13 AM EDT,
+with root volume, security group and local key cleanup verified. Evidence:
+local campaign `native-windows-amd-demand-fence/demand-fence/campaign/`.
+
+Integration verification: all eight native Windows MSVC kernel tests passed,
+including explicit dispatch, dirty arena reuse and streaming boundary guards.
+Only the R8D2 platform predicate changes from Linux to Linux-or-Windows; the
+Linux specialization and implementation body are unchanged. Public raw evidence
+and reproduction instructions: `experiments/genoa-windows-fences-20261026/`.
+
+## 2026-10-26: Sapphire Rapids streaming startup validated on native Linux
+
+The completed native Linux m7i.8xlarge discovery triplet used official v0.2.31,
+Longhorn e2f4faf and NTMminer 1.2.2. All 59,967 captured hashes, including the
+120-second preflight, independently verified. In the 900-second cold window,
+Seine delivered 20.4967 useful H/s, Longhorn 16.1733 and NTMminer 26.0044.
+This is one discovery triplet, not a confidence-qualified superiority claim.
+The original rental was terminated immediately after capture.
+
+Seine started at 16 workers, reached 32 at 534 seconds, and tried only AVX-512
+and AVX2. A post-hoc 600–850-second diagnostic window measured 22.172 gross H/s
+for Seine, 25.652 for Longhorn and 26.084 for NTMminer. Previous fixed-kernel
+measurements reached 26.0 H/s on this instance class with streaming, but used
+explicit huge pages. These observations motivate a native experiment; they do
+not prove a new default on THP.
+
+This isolated candidate starts at 32 workers on the exact native Linux Intel
+Xeon Platinum 8488C host (GenuineIntel family 6/model 8Fh, 32 logical/16 physical
+cores, 120–130 GiB), only with automatic page mode and placement, one CPU
+backend, enough resource capacity, and a throughput profile. The startup kernel
+requires runtime-supported instructions and actual full THP backing at 32
+workers. Existing caches and normal productive comparisons retain precedence;
+unsupported, neighboring, mixed-page and efficiency contexts keep their previous
+behavior. No new hash implementation is introduced.
+
+A separately frozen, predeclared 600-second cold baseline/candidate pair on
+m7i.8xlarge measured **19.7683 -> 22.4400 useful H/s (+13.5149%)**. The baseline
+was official v0.2.32 (source-equivalent to parent e5f636d), and the candidate was
+2de1390. All **25,325 captured hashes** independently matched libargon2, with
+zero invalid or duplicate hashes. Both data directories started empty. The
+candidate cache confirms 32-worker/64-GiB and 31-worker/62-GiB full THP contexts
+selected the streaming path. This is one startup screen with no confidence
+interval; it does not establish sustained or long-run fee-adjusted throughput.
+
+The candidate still spends time productively checking AVX-512 and AVX2 and
+confirmed 32 workers at 531.5 seconds. Allocation delayed its initial mining
+until about 39 seconds; that remains a distinct optimization opportunity.
+Do not attribute all run-to-run variation to the policy. The native instance
+was terminated promptly, with root volume and security-group cleanup verified.
+All 108 adaptive regression tests passed (five full-size tests ignored).
+
+Full local evidence: `native-linux-intel-startup/` and
+`comparison-diagnostics/intel-startup-streaming.json` in the campaign directory.
+
+Evidence: local campaign `native-linux-intel-latest/series-summary.json` and
+`comparison-diagnostics/intel-latest-startup-decomposition.json`.
+
+## 2026-10-26: Zen 5 demand-fence interaction is positive but very small
+
+Current shipping kernels were compared on native Linux EPYC 9R45 / m8a.8xlarge,
+32 physical cores and 128 GiB RAM, 32 workers with full 64-GiB THP backing.
+The frozen capture driver at 9606516 calls production kernel dispatch unchanged.
+Two alternating 20-second screen pairs suggested +0.8676% for demand-fence
+ring8/depth2 over periodic ring64/depth3. Three fresh 30-second confirmation
+pairs shrank that to **+0.06318%**, 49.4581 -> 49.4893 H/s, paired bootstrap
+95% interval **[+0.04807%, +0.07486%]**, three of three faster. The earlier
+periodic-ring result was -1.17%; this is a distinct implementation comparison.
+
+All **13,055 timed hashes** independently verified against libargon2, including
+62 newly computed references on the idle M4 Max; 12 full-size RustCrypto parity
+checks preceded timing. There were no invalid hashes or missing references.
+The $0.2712 compute-upper-bound rental was terminated immediately, with root
+volume/security-group cleanup verified. Evidence is retained in local campaign
+`native-linux-amd-zen5-demand/ring-publication/campaign/`.
+
+The runner accepted this narrow confirmation. Preserve the positive result,
+but do not advertise the larger screen effect or infer a meaningful miner-level
+win from 0.06% on one host. Automatic ring promotion is deferred: its extra
+productive search cost needs justification, and the existing streaming path is
+already nearly tied. The existing explicit ring option remains available.
+
+## 2026-10-26: Turin streaming startup and prefault order validated
+
+The larger opportunity is avoiding cold-start discovery of the known 32-worker
+streaming path. This candidate seeds 32 workers and the existing streaming kernel
+only on native Linux EPYC 9R45, family1Ah/model02h, 32physical/32logical cores,
+120-130GiB RAM, automatic pages/placement and throughput objectives. The kernel
+startup requires actual full THP backing. Confirmed count/kernel caches, resource
+limits and productive challenger comparisons retain precedence. Prior kernel
+cache records with identical candidates/settings remain compatible with the new
+startup marker. Efficiency retains its count/kernel policy; neighboring hardware retains its
+existing startup and allocation policy.
+
+The same exact host also uses the already-tested THP hint-before-prefault
+allocation path; unsupported advice falls back to the original allocator.
+No hash implementation or automatic ring eligibility changes.
+
+The predeclared 600-second cold baseline/candidate pair on the same on-demand
+m8a.8xlarge completed: **42.3650 -> 47.7733 useful H/s (+12.7660%)**.
+The baseline was official v0.2.34 and candidate ce975fc. All **54,083 captured
+hashes** independently matched libargon2 with zero invalid/duplicate hashes.
+The candidate started 32 workers at launch, completed initialization at 2.7s
+and selected streaming at 3.7s. Its first share arrived at 3.543s versus 7.148s
+for the baseline. Saved winner records confirm full THP backing at 32, 31 and
+30 workers. Productive tuning briefly selected 31 and later returned to 32;
+this remains a starting hint, not a fixed worker count.
+
+This is one launch-anchored startup screen without a confidence interval,
+not sustained or long-run fee-adjusted throughput. It measures the combined
+count/kernel startup and allocation changes, not their individual contributions.
+The separate same-host miner discovery cases continue with their frozen binaries;
+no additional confirmation is required to integrate this scoped startup gain.
+Local evidence: `native-linux-amd-turin-startup/` and
+`comparison-diagnostics/turin-startup-streaming.json`. Regression checks:
+112 integrated adaptive tests, seven Turin-specific tests including saved-cache migration,
+and three prefault tests passed; the expensive local full-size test remained
+ignored, with full-size hash proof supplied by the native captured work.
+
+## 2026-10-26: Turin demand fences retain the original depth and ring
+
+Native m8a.8xlarge / EPYC 9R45 (family 1Ah, model 02h), Linux, 32 physical
+cores, 128 GiB, 32 workers and full 64 GiB THP backing. Frozen baseline9606516
+and candidateed7466, existing benchctl screen2x20s then fresh confirm3x30s:
+
+- Demand fences, ring64/depth3: screen +1.2970%; confirmation
+  **49.45196 -> 49.95097 H/s (+1.00794%)**, paired95% bootstrap interval
+  **[+0.38664%,+1.63641%]**, three of three pairs faster. Keep.
+- Demand fences, ring8/depth3: screen -0.0232% with an interval crossing zero;
+  fresh confirmation **-1.60939%**, interval [-2.36356%,-0.54163%], all three
+  pairs slower. Reject this alternative; retain its raw evidence.
+
+All **26,040 timed hashes** across both experiments independently verified;
+24 native full-size RustCrypto checks passed. Nine previously absent references
+were computed with the separate Mac libargon2 verifier; no claimed miner hash
+was used as a reference. Rental termination, root-volume and SG cleanup verified.
+
+Integrate the distinct `avx512-256-stream-r64d3` path. Generic streaming remains
+periodic; Genoa R8/D2 remains unchanged. Automatic eligibility requires the exact
+native Linux9R45 host/configuration already validated for Turin startup; ISA/OS
+support is checked separately. The startup hint requires32workers/fullTHP.
+Saved prior winners seed productive comparison of only the newly available path.
+Efficiency and manual configuration retain their existing policies. Candidate-set
+fingerprints distinguish the new path while strict host/context/age/proof checks
+preserve usable prior winners. Local checks:115 adaptive tests passed5ignored;
+eight kernel tests including dirty reuse, guards and all-path parity passed.
+The integrated complete loop equals the measured research algorithm after
+constant-branch resolution; this does not assert identical assembly.
+
+Public positive-result evidence: `experiments/turin-fences-20261026/`.
+Full local campaign including the rejected interaction:
+`native-linux-amd-zen5-demand-depth/ring-publication/campaign/`.
+Kernel throughput excludes startup/warmup/teardown; no energy or fee claim.
+
+The cached-upgrade path initially exposed the generic2% switching margin, which
+would hide this1% gain from existing cached users. For the old64/3streaming vs
+new64/3demand pair only, retain two fresh A/B/A cycles but require >=30s and
+>=1024hashes per sample, <=1% baseline drift and a gain exceeding the existing
+three-sample hash-quantization allowance. Other pairs retain the2% margin and5%
+drift limit. Longer user-requested windows remain honored. Cache proof uses the
+same pair-specific rule. Tests exercise a1% productive promotion, two-cycle
+requirement, saved-winner restoration, low-count/short-window refusal, quantized
+ties and drift. No extra native hash run is required for this policy-only change;
+the hash loop and independently verified native captures are unchanged.
+
+## 2026-10-26 Turin demand-fence prefetch depth — depth four accepted
+
+On native Linux EPYC 9R45 / m8a.8xlarge (32 physical cores, 128 GiB RAM,
+32 full-THP 2 GiB arenas, OS scheduling), compare two neighbors against the
+confirmed R64/D3 demand-fence path. Frozen baseline `ed7466c`, candidate
+`2bcb02c`; use the existing benchctl screen/confirm driver. Each sample excludes
+allocation, five seconds of warmup and teardown, and includes in-flight hash
+completion. Screen and confirmation use distinct alternating pairs.
+
+- **Depth two rejected:** two 20-second screen pairs, 49.95044 → 49.22382 H/s,
+  paired -1.45585%, bootstrap interval [-2.27447%, -0.63038%], both slower.
+  Preserve all 4,066 verified timed hashes; no confirmation was warranted.
+- **Depth four accepted:** screen +0.56837%; three fresh 30-second pairs,
+  50.29349 → 50.46967 H/s, paired **+0.35033%**, bootstrap interval
+  [+0.21890%, +0.42964%], all three faster. All **13,302 timed hashes** matched
+  independent libargon2, plus 12 native full-size RustCrypto parity/dirty-reuse/
+  guard checks. The complete campaign verified 17,368 timed hashes and 24
+  native full-size checks with no invalid outputs.
+
+The candidate changes only data-independent prefetch depth, retaining the
+64-block ring and demand-fence policy. Integrated as `avx512-256-stream-r64d4`,
+with exact-host automatic eligibility and actual THP startup checks. The old
+D3 path remains a challenger. Compatible old caches retain their proved winner
+and compare only the new path immediately; normal full rechecks remain.
+The existing small-gain A/B/A policy covers the measured Turin streaming paths:
+30 seconds and 1,024 hashes per sample, 1% maximum baseline drift, hash-count
+quantization allowance, and two successful cycles before promotion/caching.
+All other comparisons retain their existing margin.
+
+Public raw reports, independent reference subset, frozen source archives and
+reproduction commands: [turin-prefetch-20261026](experiments/turin-prefetch-20261026/README.md).
+The integrated complete loop matches the native-tested research algorithm after
+resolving constant branches. This is not a whole-miner performance comparison,
+and rates from different rentals are not combined into a cumulative gain.
+This improvement is held for the next combined release per the requested cadence.
+
+Integration validation: 117 adaptive tests passed (five existing heavyweight
+tests ignored), all five compiled kernel reference/compression tests passed,
+and the default-feature release build passed. Public evidence audit verifies
+all 13,302 captured hashes and all 40 artifact checksums. The new 0.33%
+synthetic A/B/A case exercises both promotion cycles and saved-cache proof;
+old periodic and demand-fence cache upgrades retain their confirmed winners.
+
+## 2026-10-26 Windows 30-worker frontier — condition unexercised
+
+The earlier native Windows EPYC 9R14 trace exposed slow initial AVX2/AVX-512
+trials after a count search reached 30 workers. Research candidate `34c20a9`
+extended the streaming-first initial sweep from 31–32 to 30–32 workers,
+retaining periodic exhaustive searches and compatible cached winners.
+
+A predeclared 900-second cold baseline/candidate pair on m7a.8xlarge,
+Windows Server 2025, 32 physical cores and ordinary pages compared frozen
+`f3c8175` against `34c20a9`. Both started with empty caches. All 62,447 captured
+hashes matched the independent libargon2 reference cache, with no invalid or
+duplicate hashes; 62,446 arrived inside the measurement windows. Observed gross
+rates were 34.66444 and 34.72000 H/s; observed user rates were 33.92444 and
+33.98222 H/s, including this window's fee work.
+
+**Inconclusive: neither run reached 30 workers.** Both retained 32 workers and
+probed 31. The +0.16% gross difference therefore does not demonstrate the
+proposed conditional gain, and the candidate remains unshipped. This also does
+not disprove the earlier 30-worker hypothesis. Preserve the candidate and
+raw logs rather than rerunning cold pairs until the desired condition appears.
+
+Next, screen shorter high-count kernel samples in the reliably exercised
+31–32-worker ordinary-page contexts. Keep the existing minimum hash count,
+A/B/A drift check, two-cycle promotion requirement and cached winners.
+Campaign evidence: `windows-frontier30-prep/series-plan.json`,
+`native-windows-amd-frontier30/`, and
+`comparison-diagnostics/windows-frontier30-result.json` under the October 25
+local benchmark evidence directory. These are discovery results, not sustained
+throughput or a confidence-qualified marketing claim.
+
+## 2026-10-26 Turin prefetch depth six — small conditional gain
+
+Native Linux EPYC 9R45 / m8a.8xlarge, 32 physical cores, 128 GiB RAM,
+32 full-THP 2 GiB arenas and OS scheduling. Frozen D4 baseline `2bcb02c`
+versus D5/D6 research candidate `c28a2b8`. The existing benchctl campaign
+used two alternating 20-second screen pairs and three fresh alternating
+30-second confirmation pairs for unresolved or promising screens.
+
+- **Depth five inconclusive:** screen -0.31238%, interval
+  [-0.76734%, +0.14467%]; confirmation 49.85944 → 49.82618 H/s,
+  -0.06686%, interval [-0.52537%, +0.22032%], two of three pairs faster.
+  The runner labeled this rejected because its confirmation lower bound did
+  not exceed zero. That is not evidence of a regression. Preserve the result
+  and all 13,166 verified hashes; do not promote or rerun without a new reason.
+- **Depth six accepted in this context:** screen -0.41978%, interval
+  [-0.90873%, +0.07158%], advanced under the predeclared unresolved-screen
+  rule. Fresh confirmation **49.53885 → 49.63379 H/s**, **+0.19166%**,
+  interval **[+0.12560%, +0.26755%]**, all three pairs faster.
+  Preserve the initial negative point estimate alongside confirmation.
+
+All **26,285 timed hashes** independently match libargon2, including 13,119
+for D6; 24 native full-size RustCrypto parity/dirty-reuse/guard checks passed.
+The integrated complete loop matches the tested algorithm after constant-branch
+resolution. This does not establish identical machine code. Allocation, five
+seconds of warmup and teardown are excluded; this is kernel throughput, with
+no whole-miner, fee, energy or cross-host claim. Do not add gains or compare
+absolute rates across separate rentals.
+
+Integrate `avx512-256-stream-r64d6` for the same exact native Linux 9R45 host
+and full-THP/32-worker startup context. Preserve D4, D3 and periodic streaming
+as challengers. Compatible confirmed local caches retain their initial winner
+and initially compare only D6. To resolve the measured gain above the
+three-sample hash-count quantization allowance, D6 comparisons require at
+least 45 seconds and 2,048 hashes per sample, at most 1% baseline drift and
+two successful A/B/A cycles. Longer configured windows remain honored. Other
+Turin pairs keep their 30-second/1,024-hash policy; generic comparisons retain
+their existing 2% margin. Mining continues during these comparisons.
+
+Integration validation: 121 adaptive tests passed (five existing heavyweight
+tests ignored), all five kernel reference/compression tests passed, and the
+default-feature release build passed. Tests cover two-cycle small-gain
+promotion and cached proof, quantized ties, inadequate samples, drift, older
+confirmed-cache migration, ISA/OS/identity gates and actual memory backing.
+The enclosing joint thread/kernel trial budget accounts for D6's longer sample
+minimum, so the count search does not prematurely abort a valid kernel sweep.
+Public evidence and reproduction:
+[turin-depth6-20261026](experiments/turin-depth6-20261026/README.md).
+Local complete campaign, including inconclusive D5:
+`native-linux-amd-zen5-deeper-prefetch/ring-publication/campaign/`.
+Hold this with the other validated changes for the next combined release.
+
+## 2026-10-26 Windows ten-second kernel trials — promising but noisy
+
+One predeclared 660-second cold baseline/candidate pair on native Windows
+Server 2025 / m7a.8xlarge, EPYC 9R14, 32 physical cores, 128 GiB RAM and
+ordinary pages. Baseline `f3c8175` versus research candidate `3f422c1`:
+shorten kernel samples only at 31–32 workers from 30 to 10 seconds when at
+least 256 hashes are available. Preserve the A/B/A drift guard, two-cycle
+promotion requirement, repeated comparisons and confirmed caches.
+
+All **43,671 captured hashes** match independent libargon2 references, with
+zero invalid or duplicate hashes. Both windows include the first fee phase:
+gross throughput **32.95455 → 33.21212 H/s (+0.78161%)** and user throughput
+**31.99091 → 32.26212 H/s (+0.84778%)**. These are observed differences from
+one cold pair, not a confidence-qualified sustained or long-run fee claim.
+
+The changed condition was exercised: kernel comparisons shortened from
+95.3–96.3 seconds to 35.1–36.3 seconds. Both runs retained the demand-fence
+R8/D2 kernel and 32-worker setting. However, three of the candidate's four
+kernel comparisons hit the baseline-drift guard, versus zero of two baseline
+comparisons. The first confirmed worker-count decision moved from 303.8 to
+519.1 seconds. A failed 31-worker comparison entered the existing retry delay
+and kept the joint search unresolved longer despite productive mining.
+
+**Promising throughput, unresolved tuning stability.** Preserve this gain and
+its mechanism; do not classify it as a regression, or ship the ten-second
+policy unchanged. The next separately budgeted candidate uses 20-second
+samples with at least 512 hashes, retaining the full 30-second fallback for
+slow contexts. This tests whether lower window noise can retain reduced
+comparison cost without the repeated drift failures. Do not rerun the same
+ten-second comparison until it passes, and do not loosen the drift gate.
+
+The original preparation attempt failed before mining because a staging ZIP
+checksum was stale; it was terminated, and the corrected attempt used a new
+output directory and explicit staging-map checks. Its measured pair completed
+unchanged. Both rentals, root volumes, temporary security groups and keys were
+cleaned up; no idle expiry wait was used.
+
+Local evidence: `windows-short-trials-retry-prep/series-plan.json`,
+`native-windows-amd-short-trials-retry/`, and
+`comparison-diagnostics/windows-short-trials-result.json` under the October 25
+campaign directory. The prepared integration passed 122 adaptive tests (five
+existing heavyweight tests ignored) and a default-feature release build, but
+remains unlanded pending a satisfactory native follow-up.
+
+
+## 2026-10-26 current Linux Genoa cold comparison
+
+The official v0.2.36 Linux artifact (`f3c8175`, executable SHA-256
+`43684e9894fc98a01370246ab1b1a6e0b2c113282b2142cba2ecf57ba7e749aa`)
+completed the previously missing current NTM 1.2.2 comparison on one native
+EPYC 9R14 rental with 32 physical cores, 128 GiB RAM and transparent huge pages.
+The predeclared order was 120 seconds of NTM admission, 900 seconds of cold
+Seine, then 900 seconds of cold NTM; both measured cases used fresh settings.
+
+All **86,221 captured hashes** passed independent full-size libargon2 cache
+verification, with no invalid or duplicate hashes. Seine captured 40,506 hashes
+(40,505 inside its window), NTM captured 40,372 in its measured window, and the
+admission run contributed 5,343. Gross rates were **45.00556 versus 44.85778 H/s**
+(+0.32944%); user-directed rates including observed fee work were **44.04778
+versus 44.85778 H/s** (-1.80571%). These are descriptive results from one fixed
+cold pair, with no confidence interval or long-run fee/power claim. Gross
+near-parity does not establish an overall win. No fee policy was changed.
+
+The result also demonstrates why earlier slower rentals cannot establish a
+Seine regression: the unchanged NTM executable returned to 44.525 H/s in this
+admission run, compared with approximately 31.34 H/s on the earlier rental.
+Hardware identity alone did not make those environments performance-equivalent.
+
+Seine retained 32 workers and the R8/D2 demand-fence kernel. Its first count
+comparison completed at 168.8 seconds. Keep targeting the remaining throughput
+and startup deficit; do not rerun solely to seek a favorable result. The rental
+and its disk/access resources were deleted immediately after completion.
+
+Local campaign evidence: `comparison-diagnostics/linux-v36-comparison.json`,
+`native-linux-amd-v36-comparison/`, and the reproducible summary command
+`python3 operations/summarize_linux_v36.py` from the campaign directory. The
+summary binds the exact executable, raw capture and independent reference cache
+hashes. This comparison does not replace the separately scoped README/site
+steady-throughput records.
+
+
+## 2026-10-26 Windows sample windows and kernel retry admission
+
+The separate 20-second/512-hash follow-up completed one fixed 660-second cold
+baseline/candidate pair on native Windows EPYC 9R14, 32 physical cores, 128 GiB
+RAM and ordinary pages. All **44,295 captured hashes** passed independent
+full-size reference-cache verification (zero invalid or duplicate hashes).
+Gross rates were **33.59242 → 33.51515 H/s** (-0.23003%); observed user-directed
+rates were **32.59242 → 32.55909 H/s** (-0.10227%). This is inconclusive speed
+evidence from one pair, not proof of a regression. The 20-second policy remains
+research-only; no unchanged rerun is scheduled to seek a favorable result.
+
+Comparisons shortened from 94.9–96.4 seconds to 64.8–65.4 seconds, but one of the
+three candidate comparisons drifted. After restoring the 32-worker baseline at
+179.8 seconds, the outer tuner reentered the uncertain 31-worker context at
+211.9 seconds and waited until its kernel retry at 479.8 seconds. Its first
+completed count decision arrived at 608.0 seconds versus 303.0 for control.
+The full trace and exact binary/capture hashes are retained in local campaign
+`comparison-diagnostics/windows-medium-trials-result.json`.
+
+The resulting scheduling fix checks an existing kernel retry deadline before
+applying a proposed count. During that cooldown it retains the baseline instead
+of changing worker count to wait for a comparison that cannot begin. Once the
+cooldown expires, normal fresh count/kernel measurements remain necessary; no
+uncertain sample becomes a learned winner. The retry key remains the existing
+stable CPU membership and per-backend count. This does not shorten sample windows
+or loosen drift/confirmation thresholds, and makes no measured speedup claim.
+
+The focused regression exercises upward and downward probes, baseline-rate
+drift, different CPU membership, absence of learned scores while deferred, and
+resumption after the original deadline. Existing pressure, allocation failure,
+membership and joint-search tests remain in the adaptive suite. The hash kernel
+is unchanged; native performance attribution for this scheduling fix is pending.
+
+
+### 2026-10-26: Genoa prefetch locality and wider streaming stores
+
+Two separate changes were tested on native Linux EPYC 9R14, 32 physical
+workers with 64 GiB of verified THP arenas, OS scheduling, and the existing
+R8D2 demand-fence path. Allocation and five-second warmup were excluded.
+Frozen baseline c28a2b8 used T0 prefetch and 256-bit streaming stores. Each
+experiment had two interleaved 20-second screen pairs, with three fresh
+30-second confirmation pairs if the predeclared screen gate advanced.
+
+- NTA prefetch (e48a985): -0.06392% paired geometric screen result,
+  95% bootstrap interval [-0.09759%, -0.03024%], both pairs slower.
+  This exact change is retained as rejected research, without integration.
+- 512-bit streaming stores (de7a1f4), with unchanged T0 prefetch, addresses,
+  fences and ring: screen +0.37962%, interval [-0.14835%, +0.91038%].
+  Fresh confirmation passed the predeclared gate: +2.35286%, interval
+  [+0.16626%, +6.43741%], three of three pairs faster. The individual
+  confirmation gains were approximately +0.166%, +6.437%, and +0.574%;
+  substantial host variation limits the point estimate. This is a narrow
+  candidate for scoped integration, not a universal or whole-miner claim.
+
+All 15,406 timed hashes independently matched cached libargon2 references;
+24 native full-size RustCrypto parity checks also passed. The rental was
+terminated and its disk, security group and key cleanup verified at
+2:42:57 PM EDT, with a $0.3495 compute upper estimate. Neither kernel change
+is in the shipping default yet. User requested a pause after the current
+collector deployment, so integration is deferred until work resumes.
+
+Local raw evidence: `benchmark-evidence/longhorn-20261025/` under
+`native-linux-amd-genoa-prefetch-locality/ring-publication/campaign/`.
+Its `independent-verification.json` preserves report hashes and verification
+counts; `comparison-diagnostics/genoa-prefetch-and-wide-stores-result.json`
+preserves decisions and cleanup. These results do not replace the public
+steady-state benchmark or establish a power-efficiency gain.

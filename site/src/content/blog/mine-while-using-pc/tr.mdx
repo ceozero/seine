@@ -1,0 +1,62 @@
+---
+title: 'PC kullanırken Blocknet madenciliği yapılır mı?'
+description: 'PC kullanırken Blocknet kazın: CPU veya GPU seçin, uygulamalara bellek bırakın, seine iş parçacıklarını ayarlayın ve günlük kullanıma uygun başlangıcı doğrulayın.'
+tags: ['Madencilik rehberi', 'Masaüstü', 'seine']
+faq:
+  - q: 'seine çalışırken oyun oynayabilir miyim?'
+    a: 'Arka uçları oyunun ihtiyaç duyduğu aygıtlara göre seçin. Yalnız CPU madenciliği NVIDIA arka ucunu kullanmaz; CPU ve RAM ise oyunla paylaşılır. Yoğun bir oturum için madenciyi normal biçimde kapatıp sonrasında kaydettiğiniz komutla yeniden başlatabilirsiniz.'
+  - q: 'Verimlilik profili CPU kullanımını bir yüzdeyle sınırlar mı?'
+    a: 'Profil, ölçülen en yüksek hash gücünün bir bölümünü koruyan daha az iş parçacığına yönelir. İşletim sisteminde CPU yüzdesi sınırı veya ölçülmüş güç hedefi değildir. Normal uygulamalarınız açıkken masaüstü tepkisini ve belleği kontrol edin.'
+  - q: 'Paneldeki iş parçacığı değişikliği yeniden başlatmada kalır mı?'
+    a: 'Değişiklik mevcut oturuma uygulanır ve bu oturumda otomatik CPU ayarını kapatır. Yeni başlangıç varsayılanı olarak kaydedilmez. Sabit sayıyı tekrarlamak için iş parçacığı seçeneğini normal komuta veya kısayola ekleyip sonraki açılışı doğrulayın.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+seine ayarlarını kullandığınız uygulamalara göre düzenleyin. seine v0.2.38 rehberi aygıt seçimini, boş belleği, daha az CPU iş parçacığını ve tekrarlanabilir başlangıcı kapsar. Çalışan madencilik kurulumunuzla başlayın; adresi, havuzu ve çalışma dizinini koruyun.
+
+## Madencilik sırasında bilgisayarı kullanabilir misiniz?
+
+<Answer>
+Evet. Arka uçları ve CPU iş parçacıklarını masaüstü işine göre seçip normal uygulamalar açıkken tepkisini kontrol edin. Boş bellek, aygıt etkinliği ve kabul edilen payları birlikte izleyin. Yoğun oyun veya render için madenciyi normal kapatın, iş bitince kayıtlı komutla tekrar başlatın.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Bir uygulama ile madencilik işlemi bilgisayarı paylaşır; CPU ve GPU işleri ayrı kontrollerle ayarlanır." width="1200" height="675" loading="lazy" />
+
+## Akıcı kalmasını istediğiniz işle başlayın
+
+Normal uygulamalarınızı açıp sekme değiştirme, belge düzenleme veya projede gezinme gibi temsilî bir işlem deneyin. Madencilik kapalıyken tepkisini gözleyin, ardından madenci açıkken tekrarlayın. Yararlı bir karşılaştırma için görev ve uygulama durumunu benzer tutun.
+
+CPU, bellek ve GPU etkinliğini de izleyin. Windows [Görev Yöneticisi](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) uygulama kaynaklarını gösterir; diğer sistemlerin kendi araçları vardır. Tek bir kullanım yüzdesi başka işe yeterli alan kaldığını kanıtlamaz. [CPU kullanım rehberi](/tr/blog/miner-cpu-usage/), madenci göstergelerini ve aygıt etkinliğini açıklar.
+
+## Hangi aygıt madencilik yapmalı?
+
+Ön plandaki uygulamaya göre seçin. Otomatik seçim CPU ile algılanan destekli NVIDIA aygıtlarını kullanır. Var olan komuta `--backend cpu` eklemek yalnız CPU madenciliğini seçer, NVIDIA arka ucunu boşta bırakır. CPU süresi ve RAM hâlâ masaüstüyle paylaşılır. Açılıştan sonra aygıt satırlarını doğrulayın.
+
+Desteklenen NVIDIA kurulumu, CPU madenciliğini kapatmak için `--backend nvidia` kullanabilir. Aynı karttaki grafik uygulamaları GPU belleğini ve yürütmeyi paylaşır; bu seçim bütün CPU’yu başka yazılımlara ayırmaz. Çalışma zamanı gereksinimleri ve kart seçimi için [NVIDIA rehberini](/tr/blog/mine-blocknet-nvidia-gpu/) okuyup karşılaştırma amacıyla ilk komutu saklayın.
+
+## Otomatik aralık veya sabit iş parçacığı sayısı seçin
+
+Otomatik CPU ayarı için `--cpu-profile efficiency` düşünülebilir. Profil, hash gücü hedefine yakın daha küçük sayıyı tercih eder; watt ölçmez veya masaüstü tepki süresi belirlemez. `--cpu-autotune-max-threads 2` örnek arama tavanıdır. Makinenize uygun sayıyı seçin ve seçenekleri birleştirmeden [otomatik ayar rehberini](/tr/blog/seine-automatic-cpu-tuning/) okuyun.
+
+Sabit karşılaştırma için `--threads 2`, CPU arka ucu başına iki iş parçacığı seçer ve normalde otomatik ayarı kapatır. Evrensel tavsiye değil, test değeridir. Panelde `-` CPU arka ucu başına bir iş parçacığını kaldırır. Bu elle değişiklik arka uçları ve havuz bağlantısını yeniden başlatırken oturum istatistiklerini korur. Sonucu değerlendirmeden tamamlanmasını bekleyin.
+
+## Masaüstünün kalanı için bellek bırakın
+
+Her aktif CPU iş parçacığı 2 GiB Argon2id alanı ve ek işlem belleği kullanır. İki alan, sistem ve uygulamalardan önce 4 GiB eder. Normal işiniz açıkken kullanılabilir belleğe göre bütçe yapın. Sekmeler, editörler ve grafik projeleri gün içinde farklı bellek ister; yalnız takılı RAM miktarı yeterli ölçüt değildir.
+
+Otomatik boyutlandırma yapılandırılmış bir rezerv bırakır, açık iş parçacığı sayısı ise bunu geçersiz kılar. Sabit sayıda belleği kendiniz kontrol edin; ilerideki her uygulamaya alan garantisi vermez. [RAM rehberi](/tr/blog/how-much-ram-to-mine-blocknet/) kuralları açıklar. İşiniz daha fazla alan istiyorsa sayıyı azaltıp aynı masaüstü görevini tekrarlayın.
+
+## Başka bir iş için madenciliği ne zaman durdurmalı?
+
+Önemli görüşme, yoğun oyun veya render için panelde `q`, terminalde `Ctrl+C` ile çıkabilirsiniz. Ön plan görevini tek başına değerlendirmeden madencinin kapandığını doğrulayın. Sonra kayıtlı komutu başlatın. Hesabı değiştirmeye, yapılandırma silmeye veya sistem korumasını değiştirmeye gerek yoktur.
+
+Normal soğutma ve güç düzenini koruyup bilgisayarın sıcaklık ve enerji göstergelerini izleyin. Burada belirli sıcaklık ya da fan ayarı önerilmez. Uyuyan bilgisayar uyanıkken olduğu gibi madenciliğe devam etmez. Beklenmedik çıkış veya uyku durumunda daha fazla ayar değiştirmeden [durma rehberiyle](/tr/blog/miner-keeps-stopping/) olayı belirleyin.
+
+## Günlük rutininize uygun başlangıcı kaydedin
+
+Masaüstü iyi tepki verince tam komutu, çalışma dizinini ve arka uçları kaydedin. Panel değişiklikleri oturumluk olduğundan tekrar için başlangıç argümanları kullanın. [Yapılandırma rehberi](/tr/blog/configure-seine-miner/), kayıtlı bağlantı alanlarını diğer seçeneklerden ayırır. Masaüstü ve gözetimsiz oturum kısayollarına açık isimler verin.
+
+Sonraki açılışı doğrulayın: aygıtlar, aktif CPU iş parçacıkları, boş bellek ve yeni kabul edilen paylar. İlk masaüstü işlemini tekrarlayın. [Havuz izleme rehberi](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) hesaba geçen işi doğrular. Yararlı günlük kurulum, uygulamalar işlerini sürdürürken yeniden oluşturabileceğiniz kurulumdur.
+
+<CTA target="seine" title="Masaüstünüze uygun seine ayarını seçin" text="Başlangıcı kaydedin, paylaşılacak aygıtları seçin, kabul edilen işi ve günlük tepkiyi birlikte doğrulayın." />

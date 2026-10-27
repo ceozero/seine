@@ -1,0 +1,62 @@
+---
+title: 'Vì sao phần mềm đào Blocknet liên tục dừng?'
+description: 'Tìm nguyên nhân phần mềm đào Blocknet dừng: kiểm tra thông báo, bộ nhớ, khởi động GPU và chế độ ngủ, rồi xác nhận seine khởi động lại ổn định.'
+tags: ['Khắc phục sự cố', 'Hướng dẫn đào', 'seine']
+faq:
+  - q: 'Mất kết nối có luôn là phần mềm bị crash không?'
+    a: 'Khi mất kết nối pool, tiến trình có thể vẫn chạy và kết nối lại. Kiểm tra tiến trình, đọc thông báo mới nhất và tìm share được chấp nhận mới sau khi kết nối phục hồi. Ứng dụng đóng hoặc báo cáo crash của hệ điều hành cần hướng kiểm tra khác.'
+  - q: 'Có nên xóa cấu hình khi seine dừng không?'
+    a: 'Giữ cấu hình và ghi vị trí trước khi thay đổi. Thông báo lỗi phân tích chỉ ra tệp hoặc giá trị cụ thể. Sao lưu tệp, sửa lỗi được báo và giữ địa chỉ cùng thiết lập khởi chạy. Xóa tất cả khiến việc so sánh với lần chạy thành công gần nhất khó hơn.'
+  - q: 'Cần thông tin gì để kiểm tra việc dừng lặp lại?'
+    a: 'Ghi phiên bản seine, hệ điều hành, CPU, GPU, bộ nhớ khả dụng, toàn bộ tham số, thư mục làm việc và thời điểm dừng. Kèm thông báo cuối và sự kiện hệ thống liên quan. Xóa thông tin xác thực và dữ liệu cá nhân trước khi chia sẻ; không gửi cụm từ khôi phục hay khóa riêng.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Xác định giai đoạn dừng để phần mềm đào Blocknet hoạt động ổn định. Hướng dẫn này theo seine v0.2.37 và bắt đầu từ bằng chứng trên máy của bạn. Giữ lệnh và cấu hình hoạt động gần nhất, rồi chỉ thay đổi một thiết lập liên quan mỗi lần để hiểu kết quả tiếp theo.
+
+## Cần kiểm tra gì khi phần mềm đào dừng?
+
+<Answer>
+Kiểm tra tiến trình đã thoát, máy đã ngủ hay kết nối pool đang phục hồi. Lưu thông báo cuối và thời gian trước khi chạy lại. Đối chiếu với cấu hình khởi động, cấp phát bộ nhớ, khởi tạo GPU hoặc sự kiện hệ điều hành, rồi xác nhận sửa lỗi bằng share được chấp nhận mới.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Nhật ký phần mềm dẫn đến các kiểm tra riêng về ứng dụng, bộ nhớ và nguồn điện, sau đó là lần khởi động lại được xác nhận." width="1200" height="675" loading="lazy" />
+
+## Giữ thông báo cuối trên màn hình
+
+Mở terminal trong thư mục thường dùng và chạy lệnh hiện tại. Thêm `--ui plain` để hiện nhật ký văn bản thay cho bảng điều khiển, giữ nguyên tham số khác. Thao tác này bắt đầu đào với cấu hình hiện có. Sao chép thông báo cuối, gồm lỗi đầu tiên trước các thông báo kết nối lại hoặc tắt lặp đi lặp lại.
+
+Ghi cùng nhau phiên bản chương trình, thư mục làm việc và thư mục dữ liệu đã chọn. Bản này in lỗi nghiêm trọng đã xử lý với `fatal:` trước khi thoát. Hệ điều hành chấm dứt tiến trình có thể để lại bằng chứng khác. Nếu tiến trình còn sống, dùng [kiểm tra kết nối pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/); thiếu một share hoặc mất kết nối tạm thời chưa chứng minh crash.
+
+## Có dừng trước khi bắt đầu đào không?
+
+Đọc tên tệp, tùy chọn hoặc thư viện trong thông báo khởi động. Lỗi phân tích cấu hình dẫn đến tệp cụ thể; sao lưu trước khi sửa cú pháp. Kiểm tra thư mục làm việc của lối tắt hoặc dịch vụ. [Hướng dẫn cấu hình](/vi/blog/configure-seine-miner/) giải thích vì sao cùng chương trình có thể đọc thiết lập khác từ thư mục khởi chạy khác.
+
+Nếu chương trình không mở, kiểm tra gói đúng hệ điều hành và kiến trúc, dùng bản phát hành chính thức. Với cảnh báo bảo mật, theo [hướng dẫn xác minh tải xuống](/vi/blog/antivirus-flags-crypto-miner/). Giữ bảo vệ bật trong lúc xác định tệp và thông báo. Nếu lỗi xuất hiện sau cập nhật, so sánh đường dẫn và tham số với [quy trình cập nhật](/vi/blog/update-seine-miner/).
+
+## Thông báo đề cập bộ nhớ hoặc trang nhớ thì sao?
+
+Điều chỉnh số luồng CPU yêu cầu theo bộ nhớ khả dụng, tính cả ứng dụng khác và giới hạn container. Lỗi cấp phát chỉ ra tài nguyên cần kiểm tra, tự nó không chứng minh RAM hỏng. Đóng tác vụ không cần thiết hoặc giảm số luồng ép buộc rồi thử một lần. Ghi thay đổi có tác dụng và việc đào đã bắt đầu chưa.
+
+Chế độ trang bắt buộc cần phần đặt trước tương ứng của hệ điều hành. Không cấp phát được huge pages bắt buộc và thiếu bộ nhớ thường là hai kiểm tra khác nhau. Dùng [hướng dẫn RAM](/vi/blog/how-much-ram-to-mine-blocknet/) cho dung lượng và [hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) cho cấu hình trang. Tránh đổi nhiều tùy chọn cùng lúc; cấu hình đơn giản đã biết giúp đọc nhật ký tiếp theo.
+
+## Kiểm tra riêng giai đoạn GPU
+
+Nếu khởi động nhắc thư viện CUDA, thiết bị hoặc cấp phát GPU, ghi nguyên văn thông báo và phiên bản driver. [Hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/) nêu yêu cầu bản phát hành, thư viện runtime và chọn thiết bị. So sánh với môi trường đã cài trước khi đổi kernel hay tinh chỉnh. Tải gói thành công chưa chứng minh runtime sẵn sàng.
+
+seine có thể cô lập lỗi một backend trong khi backend khác vẫn chạy. Kiểm tra thông báo và hoạt động còn lại trước khi kết luận cả ứng dụng dừng. Lưu bằng chứng trước khi chạy lại vì phiên mới có thể che chuỗi sự kiện cũ. Nếu thử lựa chọn backend đơn giản hơn, giữ lệnh gốc và so sánh khởi động, công việc liên tục và lượt gửi được chấp nhận.
+
+## Máy tính ngủ hay khởi động lại?
+
+Đối chiếu thời điểm dừng với ngủ, ngủ đông, khởi động lại và lịch sử tác vụ định kỳ. Tắt màn hình và cho máy ngủ là thiết lập riêng. Trong Windows, xem [thiết lập nguồn và ngủ](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11), việc đóng nắp hoặc đổi nguồn điện. Chọn thiết lập phù hợp cách dùng và khả năng làm mát của máy.
+
+Nếu tiến trình thoát bất ngờ, xem nhật ký ứng dụng và hệ thống cùng thời điểm. [Event Viewer](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) của Windows có thể gắn lỗi ứng dụng với tệp thực thi. Máy khởi động lại hoàn toàn cần cả bằng chứng cấp hệ thống. Với dịch vụ, kiểm tra trạng thái thoát và nhật ký trước khi bật khởi động lại liên tục có thể che nguyên nhân ban đầu.
+
+## Xác minh sửa lỗi và giữ báo cáo hữu ích
+
+Sau sửa đổi có mục tiêu, chạy qua lối tắt, terminal hoặc dịch vụ thông thường. Xác nhận địa chỉ đích, backend đang hoạt động và share mới được chấp nhận. Quan sát điều kiện từng gây dừng, như dùng desktop bình thường hoặc lần chạy định kỳ tiếp theo, không tái tạo tình huống phần cứng nguy hiểm. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) phân biệt công việc hiện tại và thống kê tích lũy.
+
+Nếu lặp lại, thu thập phiên bản, hệ điều hành, phần cứng, bộ nhớ, tùy chọn chính xác, thời gian và thông báo cuối. Nêu điều đã đổi và toàn tiến trình hay chỉ một backend dừng. Bỏ thông tin xác thực và dữ liệu cá nhân; không chia sẻ seed hoặc khóa riêng. Giữ cấu hình hoạt động và không đoán nguyên nhân chỉ bằng hashrate.
+
+<CTA target="seine" title="Tải bản seine hiện tại" text="Giữ bản phát hành đã xác minh và lệnh khởi chạy, rồi xác nhận công việc được chấp nhận sau mỗi sửa đổi có mục tiêu." />

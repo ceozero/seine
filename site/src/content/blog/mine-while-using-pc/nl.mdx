@@ -1,0 +1,62 @@
+---
+title: 'Blocknet minen terwijl je je pc gebruikt?'
+description: 'Mine Blocknet terwijl je je pc gebruikt: kies CPU of GPU, houd geheugen vrij voor apps, pas seine-threads aan en controleer een passende dagelijkse start.'
+tags: ['Mininggids', 'Desktop', 'seine']
+faq:
+  - q: 'Kan ik gamen terwijl seine mint?'
+    a: 'Kies backends volgens de apparaten die het spel nodig heeft. Alleen CPU-mining laat de NVIDIA-backend ongebruikt, maar CPU en RAM worden nog gedeeld. Sluit de miner voor een zware sessie normaal af en voer daarna je vastgelegde startopdracht opnieuw uit.'
+  - q: 'Beperkt het efficiëntieprofiel de CPU tot een percentage?'
+    a: 'Het profiel stuurt de afstelling naar minder threads die een deel van de gemeten piekhashrate behouden. Het is geen CPU-percentagegrens van het besturingssysteem of doel voor gemeten stroomverbruik. Controleer respons en geheugen met je normale apps open.'
+  - q: 'Blijft een threadwijziging in het dashboard na herstart bestaan?'
+    a: 'De wijziging geldt voor de huidige sessie en schakelt daarin CPU-autotuning uit. Ze wordt niet als nieuwe startwaarde opgeslagen. Zet voor een herhaalbaar vast aantal de threadoptie in je normale startopdracht of snelkoppeling en controleer de volgende start.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Stem seine af op de toepassingen die je gebruikt. Deze gids voor seine v0.2.38 behandelt apparaatkeuze, vrij geheugen, minder CPU-threads en een herhaalbare start. Begin met een werkende miningconfiguratie en behoud adres, pool en werkmap.
+
+## Kun je de computer gebruiken tijdens het minen?
+
+<Answer>
+Ja. Kies backends en CPU-threads passend bij je werk en controleer de respons met je normale apps open. Bekijk vrij geheugen, apparaatbelasting en geaccepteerde shares samen. Sluit de miner bij een zware game of rendertaak normaal af en hervat de vastgelegde start wanneer je klaar bent.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Een desktopapp en miningproces delen een computer, met afzonderlijke bediening voor CPU- en GPU-werk." width="1200" height="675" loading="lazy" />
+
+## Begin bij de taak die soepel moet blijven
+
+Open je normale apps en probeer een representatieve actie: tabs wisselen, een document bewerken of door een project navigeren. Vergelijk de reactie zonder mining en met de miner actief. Houd taak en appstatus vergelijkbaar, zodat de vergelijking een bruikbare vraag beantwoordt.
+
+Bekijk ook CPU, geheugen en GPU. Windows-[Taakbeheer](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) toont middelen per toepassing; andere systemen hebben eigen monitors. Eén percentage bewijst niet dat er genoeg ruimte is voor een extra taak. De [CPU-gebruikgids](/nl/blog/miner-cpu-usage/) legt minerpercentages en apparaatactiviteit uit.
+
+## Welk apparaat moet minen?
+
+Kies volgens de app op de voorgrond. Automatische selectie gebruikt de CPU en gevonden ondersteunde NVIDIA-apparaten. `--backend cpu` aan je bestaande opdracht toevoegen kiest alleen CPU-mining en laat de NVIDIA-backend ongebruikt. CPU-tijd en RAM blijven gedeeld met de desktop. Controleer de apparaatregels na het starten.
+
+Een ondersteunde NVIDIA-installatie kan `--backend nvidia` gebruiken om CPU-mining uit te schakelen. Grafische apps op dezelfde kaart delen GPU-geheugen en uitvoering; deze keuze reserveert niet de hele CPU voor andere software. De [NVIDIA-gids](/nl/blog/mine-blocknet-nvidia-gpu/) behandelt runtimevereisten en kaartkeuze. Bewaar de oorspronkelijke opdracht ter vergelijking.
+
+## Kies automatisch bereik of vast aantal threads
+
+Overweeg voor automatisch CPU-tunen `--cpu-profile efficiency`. Het profiel kiest liever minder threads dicht bij zijn hashratedoel; het meet geen watts en stelt geen desktopresponstijd vast. `--cpu-autotune-max-threads 2` is een voorbeeld van een zoeklimiet. Kies een passende waarde en lees de [autotuninggids](/nl/blog/seine-automatic-cpu-tuning/) voordat je opties combineert.
+
+Voor een vaste vergelijking kiest `--threads 2` twee threads per CPU-backend en schakelt gewoonlijk autotuning uit. Dit is een testinstelling, geen algemene aanbeveling. In het dashboard haalt `-` één thread per CPU-backend weg. De handmatige wijziging herstart backends en verbindt opnieuw met de pool, met behoud van sessiestatistieken. Wacht tot dat klaar is.
+
+## Houd geheugen vrij voor de rest van de desktop
+
+Elke actieve CPU-thread gebruikt een Argon2id-arena van 2 GiB plus procesoverhead. Twee arena’s nemen 4 GiB in vóór besturingssysteem en apps. Reken met beschikbaar geheugen terwijl normaal werk openstaat. Tabs, editors en grafische projecten veranderen hun behoefte gedurende de dag; geïnstalleerd RAM alleen is geen volledig budget.
+
+Automatische groottebepaling houdt een ingestelde reserve aan; een expliciet threadaantal overschrijft die reserve. Bij een vast aantal moet je dus zelf geheugen controleren: het garandeert geen ruimte voor alle toekomstige apps. De [RAM-gids](/nl/blog/how-much-ram-to-mine-blocknet/) beschrijft de regels. Verlaag het aantal als je werk meer ruimte vraagt en herhaal dezelfde desktopactie.
+
+## Wanneer stop je mining voor een andere taak?
+
+Voor een belangrijk gesprek, zware game of render kun je afsluiten met `q` in het dashboard of `Ctrl+C` in de terminal. Controleer of de miner is gestopt voordat je de andere taak afzonderlijk beoordeelt. Start daarna je vastgelegde opdracht. Hiervoor hoef je geen accountinstellingen, configuratiebestanden of systeembescherming te wijzigen.
+
+Behoud normale koeling en stroomvoorziening en bekijk de temperatuur- en energie-indicatoren van de computer. Hier wordt geen specifieke temperatuur of ventilatorstand voorgeschreven. Een slapende computer mint niet door zoals een wakkere. Gebruik bij onverwacht afsluiten of slapen de [stopgids](/nl/blog/miner-keeps-stopping/) om het voorval te herkennen voordat je meer instellingen wijzigt.
+
+## Bewaar een start voor je dagelijkse routine
+
+Noteer bij een goed reagerende desktop de volledige opdracht, werkmap en backends. Dashboardwijzigingen gelden alleen voor de sessie; gebruik startargumenten voor een herhaalbaar aantal. De [configuratiegids](/nl/blog/configure-seine-miner/) onderscheidt opgeslagen verbindingsvelden van andere opties. Geef aparte snelkoppelingen voor desktopwerk en onbewaakte sessies duidelijke namen.
+
+Controleer de volgende start: apparaten, actieve CPU-threads, vrij geheugen en nieuwe geaccepteerde shares. Herhaal je eerste desktopactie. De [poolvolggids](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) helpt bij het controleren van bijgeschreven werk. Een bruikbare dagelijkse instelling is herhaalbaar terwijl gewone apps hun werk blijven doen.
+
+<CTA target="seine" title="Kies seine passend bij je desktop" text="Leg je start vast, kies welke apparaten je deelt en controleer geaccepteerd werk naast de dagelijkse respons." />

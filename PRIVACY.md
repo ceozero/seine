@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: October 25, 2026.
+Last updated: October 26, 2026.
 
 This policy describes hardware, performance and reliability telemetry in the Seine miner.
 Telemetry helps the project understand which hardware is in use, identify
@@ -37,9 +37,18 @@ settings, hash counts and measurement durations. Reports
 identify measurement windows in which settings changed or telemetry samples
 were missed so those windows can be excluded from performance comparisons.
 
+Paired CPU tuning evidence can include baseline and candidate worker/kernel
+settings, per-window hashes and durations, resource snapshots, outcome and fixed
+reason codes, acceptance policy, and measured switching, settling and idle costs.
+Unknown costs remain unknown. An optional digest describes CPU topology and
+placement without transmitting hostnames or configuration secrets. A random run
+ID and run-local trial numbers prevent duplicate comparisons. Inconclusive and
+aborted trials are retained too; explicit counts identify omitted evidence.
+
 Reliability summaries include bounded counts of warnings, errors, backend failures
 and quarantines, failed mining runs and Rust panics. Each summary includes a
-repository-relative source file and line, a fixed failure category, backend type
+repository-relative source file and line (or a fixed, allowlisted dependency
+source identifier), a fixed failure category, backend type
 where known, occurrence counts and elapsed times within the mining run. Categories
 are hints derived locally; free-form error messages, panic contents and stack
 traces are never uploaded. Reports include the source revision and fingerprint,
@@ -48,9 +57,12 @@ affinity policies and whether CPU thread tuning is enabled. They also identify
 truncated summaries and an unclean previous run, which may reflect a forced stop
 or power loss rather than a crash. Where available, structured failure details
 include a fixed reason and operation, a numeric operating-system error code and
-the requested allocation size. Reports also include the current run phase and,
+the requested allocation size. CPU startup timeouts can include ready and expected
+worker counts. Reports also include the current run phase and,
 for an interrupted previous run, its last observed phase, elapsed runtime and
-build revision. These checkpoints do not identify the termination cause.
+build revision and release. Checkpoints preserve up to eight diagnostic groups
+from that run, prioritizing panics/errors and structured causes, with an indication
+when groups were omitted. These checkpoints do not identify the termination cause.
 
 Seine creates a random installation ID in its data directory to distinguish
 installations and avoid counting frequent reports as additional users. This ID
@@ -66,18 +78,18 @@ hardware serial numbers, command lines or raw logs.
 ## Transmission, access and retention
 
 Regular reports are attempted after five minutes of a mining run, followed by
-hourly reports. A mining run that ends with diagnostics can attempt a final report,
-including failures before the first regular report. Reports use HTTPS, except
+hourly reports. A mining run that ends with diagnostics or paired trial evidence
+can attempt a final report, including failures before the first regular report. Reports use HTTPS, except
 when explicitly configured for a local loopback test server. Collection failures
 do not stop mining.
 
-Seine keeps at most one pending diagnostic report (up to 32 KiB) and a small
-run-state marker in its data directory. A failed diagnostic upload can be retried
-on a later reporting cycle or launch, with the same report ID to avoid duplicate
-storage. New diagnostics may replace older pending diagnostics. Reports older
+Seine keeps at most one pending diagnostic or paired-trial report (up to 32 KiB)
+and a small run-state marker and checkpoint (up to 8 KiB) in its data directory.
+A failed evidence upload can be retried on a later reporting cycle or launch, with the same report ID to avoid duplicate
+storage. New evidence may replace an older pending report. Reports older
 than 24 hours are discarded when next checked, rather than uploaded. The local
-upload cooldown limits repeated attempts across launches. Ordinary performance
-reports without diagnostics are not queued. Opting out suppresses pending uploads
+upload cooldown limits repeated attempts across launches. Ordinary rate-only
+reports are not queued. Opting out suppresses pending uploads
 and removes pending state when the miner can acquire it; an active reporting
 worker also checks opt-out before sending. A forced termination may leave the
 marker for the next launch. No crash dump is collected.

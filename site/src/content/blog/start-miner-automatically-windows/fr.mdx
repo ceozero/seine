@@ -1,0 +1,68 @@
+---
+title: 'Démarrer le mineur Blocknet automatiquement sous Windows'
+description: 'Lancez seine à la connexion Windows avec le Planificateur de tâches. Gardez vos réglages, évitez les doubles lancements et vérifiez les parts acceptées.'
+tags: ['Guide de minage', 'Windows', 'Configuration']
+faq:
+  - q: 'Le mineur démarre-t-il avant ma connexion ?'
+    a: 'Cette configuration lance seine lorsque l''utilisateur Windows choisi ouvre sa session, et l''exécute dans celle-ci. Elle ne crée pas de service Windows en arrière-plan. Après un redémarrage, connectez-vous avec ce compte pour déclencher la tâche, puis vérifiez les parts acceptées.'
+  - q: 'Mes réglages de minage sont-ils conservés ?'
+    a: 'Utilisez le même compte Windows, le dossier de données existant et les options de votre commande fonctionnelle. Indiquez un chemin absolu pour les données et le bon répertoire de travail. seine retrouvera ainsi l''adresse, le pool et le nom de machine enregistrés.'
+  - q: 'Comment désactiver le minage automatique ?'
+    a: 'Désactivez la tâche dans le Planificateur pour empêcher les prochains lancements, puis arrêtez normalement le mineur dans sa fenêtre. Désactiver une tâche ne ferme pas un processus déjà lancé. Vous pourrez la réactiver lorsque vous souhaiterez reprendre le démarrage à la connexion.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Demandez à Windows de lancer votre installation fonctionnelle de seine à l'ouverture de session. Ce guide utilise le Planificateur de tâches dans votre session et prévoit une désactivation simple. Terminez d'abord la [configuration Windows](/fr/blog/mine-blocknet-on-windows/) et vérifiez que le pool accepte des parts. Une commande déjà opérationnelle facilite la vérification.
+
+## Comment démarrer automatiquement un mineur Blocknet ?
+
+<Answer>
+Créez une tâche pour votre compte Windows, déclenchée à l'ouverture de session, qui lance l'exécutable seine extrait. Indiquez les dossiers de données et de travail existants, empêchez une seconde instance de la même tâche, puis vérifiez les parts acceptées après un lancement d'essai.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Un utilisateur ouvre sa session Windows, le Planificateur lance un mineur et les parts acceptées arrivent au pool." width="1200" height="675" loading="lazy" />
+
+## Quels fichiers et réglages conserver ?
+
+Choisissez un dossier stable pour la version extraite. Gardez tout le contenu de l'archive ensemble, bibliothèques comprises, et pointez vers son exécutable. Repérez les données de votre lancement manuel réussi. Par défaut, seine utilise `./seine-data` par rapport au répertoire de travail et y enregistre la connexion dans `seine.config.json`. Un autre dossier de lancement peut conduire à une autre configuration.
+
+Les exemples utilisent `C:\Users\YOUR_USER\Apps\seine` : remplacez le chemin entier par votre dossier réel. Gardez vos données à leur emplacement actuel. Conservez aussi votre commande fonctionnelle : ses options explicites de backend ou de réglage peuvent rester nécessaires. Aucune phrase de récupération ni clé privée du portefeuille n'est requise pour cette tâche.
+
+## Créez la tâche de connexion
+
+Ouvrez le **Planificateur de tâches** depuis Démarrer et choisissez **Créer une tâche**. Donnez-lui un nom reconnaissable, comme **seine mining**. Dans **Général**, sélectionnez votre compte habituel et **N'exécuter que si l'utilisateur est connecté**. Laissez **Exécuter avec les autorisations maximales** décoché pour cette configuration ordinaire. Dans **Déclencheurs**, ajoutez **À l'ouverture de session** pour votre utilisateur précis et activez-le. Microsoft décrit ce [déclencheur de connexion](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Dans **Actions**, ajoutez **Démarrer un programme** et remplissez séparément :
+
+- **Programme/script :** sélectionnez `C:\Users\YOUR_USER\Apps\seine\seine.exe` avec Parcourir.
+- **Ajouter des arguments :** saisissez `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` avec votre dossier de données existant, puis les options de votre commande fonctionnelle.
+- **Commencer dans :** saisissez `C:\Users\YOUR_USER\Apps\seine` sans guillemets.
+
+Le [répertoire de travail](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) fixe le dossier de départ. Les options ne vont pas dans Programme/script, ni le nom de l'exécutable dans Commencer dans. Choisissez le vrai fichier au lieu de conserver le chemin d'exemple.
+
+## Réglez les conditions d'exécution
+
+Dans **Paramètres**, autorisez l'exécution à la demande pour les essais. Si la tâche s'exécute déjà, choisissez **Ne pas démarrer une nouvelle instance**. Cette [règle d'instances](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) concerne uniquement cette tâche et ne détecte pas un mineur lancé séparément. Fermez donc l'instance manuelle avant l'essai. Un seul processus intentionnel facilite la vérification et évite une seconde copie sur la même configuration.
+
+Pour miner en continu pendant votre session, décochez **Arrêter la tâche si elle s'exécute plus de** ; le Planificateur applique sinon une [limite de durée](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Vérifiez les **Conditions** : l'exigence d'inactivité peut empêcher le démarrage immédiat de l'essai. Sur un portable, conserver les conditions d'alimentation secteur limite ce fonctionnement à l'ordinateur branché. Enregistrez les choix adaptés à votre usage.
+
+## Comment vérifier le minage automatique ?
+
+Arrêtez normalement le mineur manuel, sélectionnez la tâche et **Exécuter**. Vérifiez adresse de paiement, pool et nom de machine dans la fenêtre, puis attendez des parts acceptées. Consultez cette adresse dans My Stats sur bntpool.com et contrôlez l'activité de la machine attendue. Le statut en cours confirme seulement un processus ; les parts acceptées confirment du travail utile pour le pool.
+
+Pour tester le vrai déclencheur, enregistrez votre travail, fermez la session et reconnectez-vous avec le compte choisi. Verrouiller puis déverrouiller le bureau est une autre action. Revérifiez adresse et parts récentes. Le [guide du tableau de bord](/fr/blog/seine-dashboard-explained/) explique appareils et connexion. Notez le nom de tâche et les dossiers pour une future mise à jour.
+
+## Que vérifier si le démarrage échoue ?
+
+Comparez chemin de l'exécutable, compte, arguments et dossier de départ avec la commande manuelle fonctionnelle. Si la configuration initiale réapparaît, vérifiez le chemin des données et son accès. Si une bibliothèque manque, vérifiez l'extraction complète. Sans fenêtre, contrôlez d'abord le déclencheur activé et les conditions d'alimentation ou d'inactivité avant de modifier le mineur.
+
+Si le mineur tourne sans parts visibles, vérifiez son adresse, sa connexion au pool et les parts récentes de la machine. Pour deux ordinateurs partageant ce portefeuille, utilisez des noms distincts grâce au [guide multi-ordinateurs](https://bntpool.com/blog/fr/mine-multiple-computers-one-wallet/). La tâche lance la configuration testée ; le diagnostic réseau ou matériel se fait dans le mineur en cours.
+
+## Désactivez le démarrage ou mettez à jour
+
+Pour empêcher les lancements futurs, sélectionnez la tâche et **Désactiver**. Arrêtez normalement le mineur déjà ouvert : désactiver la tâche ne l'arrête pas. Réactivez-la lorsque vous souhaitez reprendre. Ce choix reste visible et réversible sans modifier les réglages généraux de démarrage ou de veille de Windows.
+
+Avant de remplacer une version, désactivez la tâche et arrêtez le mineur. Suivez le [guide de mise à jour](/fr/blog/update-seine-miner/), conservez les données et adaptez l'action si le chemin change. Testez avec Exécuter avant de réactiver le déclencheur. Pour un service système Linux, utilisez la [configuration serveur](/fr/blog/mine-blocknet-on-servers/), différente de ce démarrage à la connexion Windows.
+
+<CTA target="seine" title="Télécharger seine pour Windows" text="Utilisez la version officielle, vérifiez vos premières parts acceptées et automatisez votre configuration fonctionnelle." />

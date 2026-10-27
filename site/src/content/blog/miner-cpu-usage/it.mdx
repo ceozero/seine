@@ -1,0 +1,62 @@
+---
+title: 'Perché il miner non usa il 100% della CPU'
+description: 'Interpreta l''uso della CPU nel mining Blocknet con seine: controlla thread attivi, memoria, backend e lavoro accettato prima di cambiare impostazioni.'
+tags: ['Guida al mining', 'Uso CPU', 'seine']
+faq:
+  - q: 'Il miner dovrebbe usare sempre il 100% della CPU?'
+    a: 'No. La percentuale complessiva misura l''utilizzo dei processori disponibili al sistema, mentre seine misura hash completati. Il numero utile di thread dipende da memoria e prestazioni misurate. Confronta thread attivi, hashrate e lavoro accettato.'
+  - q: 'Perché seine sceglie meno thread di quelli supportati?'
+    a: 'Ogni thread CPU attivo richiede un''area di memoria da 2 GiB e condivide la banda. La selezione automatica considera memoria e prestazioni. Anche limiti espliciti, backend e ambiente di esecuzione influiscono sul numero.'
+  - q: 'Cosa controllare se scendono utilizzo e hashrate?'
+    a: 'Controlla backend CPU, thread, messaggi di regolazione e memoria, e presenza di un job corrente. Confronta stesso dispositivo e intervallo, poi carichi esterni e limiti. Per problemi di connessione o hashrate del pool nullo, segui la guida al monitoraggio.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Leggi l'utilizzo CPU insieme a thread attivi, H/s locali e share accettate durante il mining Blocknet con seine v0.2.36. Questa sequenza precede i cambiamenti alle impostazioni. Per l'installazione inizia dalla [guida al mining](/it/blog/how-to-mine-blocknet/).
+
+## Meno CPU significa meno lavoro utile?
+
+<Answer>
+La percentuale CPU da sola non misura il lavoro utile completato. Controlla backend CPU selezionato, thread attivi, hashrate locale e job ricevuti. seine può scegliere meno thread di mining dei processori logici disponibili. Confronta il lavoro completato in condizioni uniformi prima di cambiare il numero.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Una griglia di attività CPU e un contatore di lavoro completato sono osservazioni distinte, collegate da controlli su thread, memoria e job." width="1200" height="675" loading="lazy" />
+
+## Controlla prima cosa misura la percentuale
+
+Su Windows distingui il processo seine dal totale del computer. In Gestione attività trova seine, poi Prestazioni e CPU. I grafici dei processori logici mostrano la distribuzione del carico; il totale aggrega la macchina. La [guida Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) documenta queste viste. Annota quella usata.
+
+Su Linux la percentuale di processo in `top` può avere una scala diversa dal riepilogo. In modalità Irix un processo multithread può superare il 100%; Solaris divide per il numero di processori. La vista thread cambia le righe. Consulta il [manuale](https://man7.org/linux/man-pages/man1/top.1.html): cambiare scala non equivale a misurare un cambio di velocità.
+
+## Verifica quale dispositivo lavora
+
+Leggi H/s e thread nella riga CPU della [dashboard](/it/blog/seine-dashboard-explained/). La velocità combinata CPU/GPU include entrambi: confronta lo stesso dispositivo. Se il comando seleziona solo NVIDIA, un carico CPU basso è previsto. La [guida NVIDIA](/it/blog/mine-blocknet-nvidia-gpu/) spiega questa configurazione.
+
+Il numero di thread di mining attivi è diverso dai thread del processo nel sistema operativo. seine svolge anche rete, controllo e reportistica. Il processo può quindi avere più thread della riga CPU. Verifica quanti thread di hashing lavorano e completano hash.
+
+## Perché la memoria limita i thread attivi?
+
+Ogni thread CPU attivo usa un'area da 2 GiB per Argon2id. La selezione automatica considera memoria disponibile e lascia spazio al sistema. Leggi numero effettivo e messaggi, senza trasformare la RAM installata in una capacità promessa. La [guida RAM](/it/blog/how-much-ram-to-mine-blocknet/) tratta budget, riserva e allocazione.
+
+La capacità determina quante aree entrano; la banda quanto efficacemente i thread trasferiscono dati. Un thread può risultare occupato mentre attende memoria: poco utilizzo non prova un collo di bottiglia di banda. Neppure il 100% prova il miglior H/s. Consulta la [guida Argon2id](/it/blog/argon2id-proof-of-work-explained/).
+
+## Leggi regolazioni automatiche e impostazioni esplicite
+
+La regolazione CPU automatica confronta thread e kernel tramite lavoro misurato. Un numero inferiore può essere corretto; variazioni di memoria possono modificarlo. Aspetta che la prova si stabilizzi e leggi i messaggi. La [guida alla regolazione](/it/blog/seine-automatic-cpu-tuning/) spiega decisioni e cache.
+
+Controlla il comando avviato: `--threads`, massimo di regolazione e profilo CPU possono cambiare ricerca o numero; l'affinità cambia il posizionamento. Container, macchine virtuali e limiti del sistema possono esporre meno capacità dell'host. Conserva la configurazione e identifica il limite prima di aumentarla.
+
+## E se scendono sia utilizzo sia H/s?
+
+Verifica backend CPU attivo, job corrente, connessione, modifiche alla memoria ed errori nel log. Avvio e nuove prove hanno un contesto che il contatore del sistema non mostra. Se la GPU continua mentre cambia la CPU, esamina separatamente i dispositivi.
+
+Confronta poi un intervallo stabile con stessa versione, backend e impostazioni. Annota applicazioni, memoria, alimentazione e orario. Per una prova ripetibile segui la [guida benchmark](/it/blog/benchmark-seine-miner/) e conserva i report. Un picco breve o una percentuale non costituiscono un risultato hardware.
+
+## Concludi con lavoro completato e accettato
+
+Nel mining normale verifica progressione degli hash CPU e risposte di share accettate. Le share arrivano a intervalli, senza conto alla rovescia fisso. Il pool stima l'hashrate dalle submission nel tempo. La [guida al monitoraggio](https://bntpool.com/blog/it/track-your-miner-on-bntpool/) tratta questa vista e la connessione.
+
+Registra versione, comando, backend, thread CPU, H/s CPU, strumento e vista del sistema, memoria e finestra del pool. Se il lavoro procede, il totale CPU offre contesto. Se una fase si blocca, segui la sua guida: ogni modifica avrà una domanda precisa e un risultato confrontabile.
+
+<CTA target="seine" title="Segui il mining CPU con seine" text="Scarica seine e controlla insieme thread attivi, hashrate e lavoro accettato nella dashboard." />

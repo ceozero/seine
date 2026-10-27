@@ -1,0 +1,68 @@
+---
+title: 'Por que o hashrate do meu minerador está caindo?'
+description: 'Investigue quedas no hashrate do Blocknet: compare leituras, confira dispositivos, ajuste, memória, clocks e shares e verifique uma mudança por vez.'
+tags: ['Diagnóstico', 'Hashrate', 'seine']
+faq:
+  - q: 'Por que o pool mostra menos hashrate que o minerador?'
+    a: 'O minerador conta hashes locais; o pool estima trabalho pelas shares em sua própria janela. Compare a mesma máquina durante um intervalo representativo e confira shares aceitas recentes e mensagens de conexão. Uma diferença breve, isoladamente, não identifica lentidão no hardware.'
+  - q: 'Menos threads de CPU significam algum problema?'
+    a: 'Não por si só. O ajuste automático compara quantidades de threads e caminhos de cálculo, enquanto a memória disponível pode limitar o número ativo. Examine mensagens de ajuste, memória e hashrate por dispositivo juntos. Registre a mudança antes de decidir se precisa intervir.'
+  - q: 'Devo mudar várias configurações para recuperar hashrate?'
+    a: 'Comece com uma referência comparável e altere uma condição relevante por vez. Registre versão, dispositivos, carga e intervalo. Depois confira trabalho sustentado e novas shares aceitas; um único valor instantâneo maior não demonstra que a alteração ajudou.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Descubra qual leitura mudou antes de ajustar um minerador que continua funcionando. Este guia separa diferenças nas janelas de cálculo de mudanças nos dispositivos, na carga ou nos recursos, e testa a causa provável com uma comparação repetível. Preserve a configuração de inicialização funcional para manter um ponto de partida conhecido.
+
+## Por que o hashrate pode cair durante uma sessão?
+
+<Answer>
+O hashrate pode mudar com dispositivos ativos, threads de CPU, memória disponível, outras tarefas ou clocks do hardware. Comparar janelas diferentes também pode aparentar uma queda. Comece pelo mesmo dispositivo e intervalo, confira trabalho recente e registros, altere uma condição e observe o resultado.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Duas curvas de hashrate levam a verificações de dispositivos, memória e clocks, seguidas de uma comparação equivalente antes e depois." width="1200" height="675" loading="lazy" />
+
+## Identifique primeiro a leitura que caiu
+
+Anote onde apareceu a mudança: hashrate local atual, média da sessão, linha de um dispositivo ou estimativa do pool. São observações distintas. No seine, valores atuais e médios usam horizontes diferentes, e dispositivos podem informar trabalho em lotes. O [guia do painel](/pt-br/blog/seine-dashboard-explained/) explica os campos; compare cada campo com seu próprio valor anterior.
+
+Guarde unidade e intervalo ao lado de cada número. Converta H/s e kH/s antes de comparar. Anote início recente, reinicialização de backend ou retomada do trabalho. Uma sessão nova tem histórico diferente de uma média prolongada; um pico inicial é uma referência inadequada para o restante da noite.
+
+## A mudança é local, do pool ou de um dispositivo?
+
+Confira linhas por dispositivo e mensagens recentes de shares aceitas. Se um dispositivo contribui menos e os demais ficam estáveis, investigue-o primeiro. Se o trabalho local é comparável, mas a estimativa do pool muda, examine shares e conexão. A [explicação do hashrate](https://bntpool.com/blog/pt-br/what-is-hashrate/) mostra por que estimativas baseadas em shares diferem do cálculo local.
+
+Confirme endereço de recebimento e nome do rig nas estatísticas. Vários computadores no mesmo endereço podem tornar o total da conta inadequado à comparação com um único PC. Use o [guia de acompanhamento](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/). Se o processo terminou ou um backend informou falha, consulte o [guia de paradas](/pt-br/blog/miner-keeps-stopping/); aqui se presume uma sessão ainda observável.
+
+## Interprete ajustes e mudanças de threads no contexto
+
+O seine compara quantidades de threads e kernels de CPU enquanto minera e pode reutilizar resultados salvos compatíveis. Esses testes podem modificar a configuração ativa. Leia mensagens próximas e anote a quantidade ativa antes do diagnóstico. O [guia de ajuste automático](/pt-br/blog/seine-automatic-cpu-tuning/) explica a busca e suas opções; mudar o número de threads não comprova uma regressão.
+
+Verifique se a inicialização seleciona os mesmos backends e parâmetros de antes. Outro atalho, diretório de trabalho ou arquivo salvo pode alterar a comparação antes de considerar o hardware. Preserve o comando funcional e consulte o [guia de configuração](/pt-br/blog/configure-seine-miner/) para identificar os valores efetivos. Não apague o cache de ajuste apenas porque uma leitura mudou.
+
+## Confira outras tarefas e a memória disponível
+
+Use a visualização de processos e memória do sistema para identificar mudanças simultâneas. Jogos, vídeo, compilação ou outros cálculos podem compartilhar CPU, GPU ou memória. Quando for conveniente, compare com a tarefa opcional pausada ou encerrada. Mantenha a carga do desktop equivalente; caso contrário, a próxima leitura responde a outra pergunta.
+
+A gestão automática de CPU do seine considera a memória disponível e pode reduzir threads quando os recursos ficam apertados. Alguns sistemas também fornecem sinais de pressão. Observe registro e memória juntos em vez de forçar imediatamente a quantidade anterior. O [guia de RAM](/pt-br/blog/how-much-ram-to-mine-blocknet/) explica as alocações. Se o desempenho retorna após outra tarefa terminar, registre essa relação antes de mudar ajustes permanentes.
+
+## Temperatura ou alimentação podem explicar a mudança?
+
+Temperaturas e clocks ajudam a explicar uma mudança local sustentada quando carga e dispositivos continuam comparáveis. A Intel descreve a [limitação térmica](https://www.intel.com/content/www/us/en/support/articles/000088048.html) como redução protetora do clock da CPU. Consulte as orientações do fabricante para o modelo exato do processador ou computador; não existe um único limite de temperatura que diagnostique todos os computadores de mineração.
+
+Para NVIDIA, a [documentação de monitoramento](https://docs.nvidia.com/deploy/nvidia-smi/index.html) distingue motivos de limitação dos clocks, incluindo temperatura e potência, e identifica dados indisponíveis. Registre leituras suportadas junto ao hashrate. Anote também mudanças entre bateria e tomada ou no modo de energia. Siga orientações de refrigeração e mantenha proteções ativas; não é necessário mudar tensão nem limites de clock.
+
+## Faça uma comparação que responda à pergunta
+
+Escolha uma condição suspeita, como outro aplicativo, e compare intervalos equivalentes antes e depois da mudança. Registre versão, backends, política de threads, alimentação e atividade em primeiro plano. Identifique inicialização e ajuste separadamente. Repita se oscilações normais impedirem uma conclusão, sem atribuir causa a um único ponto.
+
+Para um experimento deliberado, use o [guia de benchmark](/pt-br/blog/benchmark-seine-miner/) e cargas comparáveis. Separe benchmarks de amostras de recompensas do pool, afetadas pela chegada de blocos e variação das shares. Menor consumo também responde a outra pergunta: o [guia de eletricidade](/pt-br/blog/mining-electricity-use/) combina energia e trabalho concluído para não confundir dispositivo ocioso com melhoria útil.
+
+## Verifique o resultado e preserve evidências úteis
+
+Após a alteração direcionada, confirme dispositivos esperados, quantidade de threads compreendida e novas shares aceitas. Compare o mesmo campo em intervalos representativos. Guarde também resultados sem diferença significativa para evitar repetir ajustes inúteis. Reverta mudanças sem relação em vez de acumular parâmetros inexplicados.
+
+Se o padrão persistir, reúna versão, sistema, hardware, inicialização, horários dos registros e leituras comparadas. Informe o que permaneceu constante, o que mudou e se afetou um dispositivo ou todo o minerador. Remova credenciais e informações pessoais antes de compartilhar. Uma cronologia breve ajuda mais o suporte que uma captura de um único número baixo.
+
+<CTA target="seine" title="Mantenha uma configuração seine repetível" text="Use o painel, observações equivalentes e novas shares para entender mudanças de hashrate antes de alterar a configuração." />

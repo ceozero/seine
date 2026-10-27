@@ -1,0 +1,62 @@
+---
+title: 'Pourquoi mon mineur Blocknet s’arrête-t-il ?'
+description: 'Trouvez pourquoi votre mineur Blocknet s’arrête : messages, mémoire, démarrage GPU et veille, puis vérifiez un redémarrage stable avec seine.'
+tags: ['Dépannage', 'Guide de minage', 'seine']
+faq:
+  - q: 'Une déconnexion signifie-t-elle toujours un plantage ?'
+    a: 'Une connexion au pool perdue peut laisser le processus actif pendant la reconnexion. Vérifiez sa présence, lisez ses derniers messages et cherchez de nouveaux shares acceptés après le retour de la connexion. Une application fermée ou un rapport de plantage du système demande une autre investigation.'
+  - q: 'Faut-il supprimer la configuration quand seine s’arrête ?'
+    a: 'Conservez la configuration et notez son emplacement avant toute modification. Un message d’analyse désigne un fichier ou une valeur à examiner. Sauvegardez ce fichier, corrigez le problème signalé et préservez l’adresse et les paramètres du lanceur. Tout supprimer complique la comparaison avec la dernière exécution correcte.'
+  - q: 'Quelles informations aident à diagnostiquer un arrêt répété ?'
+    a: 'Notez la version de seine, le système, le CPU et le GPU, la mémoire disponible, les arguments complets, le répertoire de travail et l’heure. Joignez les derniers messages et événements système pertinents. Retirez identifiants et données personnelles avant partage, sans jamais inclure de phrase de récupération ni de clé privée.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Stabilisez votre mineur Blocknet en identifiant l’étape où il s’arrête. Ce guide suit seine v0.2.37 et commence par des éléments que vous pouvez recueillir sur votre ordinateur. Gardez la dernière commande et configuration fonctionnelles, puis modifiez un seul réglage pertinent à la fois pour comprendre le résultat suivant.
+
+## Que vérifier lorsqu’un mineur s’arrête ?
+
+<Answer>
+Vérifiez si le processus a quitté, si l’ordinateur s’est mis en veille ou si la connexion au pool se rétablit. Conservez le dernier message et l’heure avant de relancer. Reliez ces éléments à la configuration, à la mémoire, au GPU ou à un événement système, puis vérifiez la correction avec de nouveaux shares acceptés.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Un journal du mineur mène à des vérifications distinctes de l’application, de la mémoire et de l’alimentation, puis à un redémarrage vérifié." width="1200" height="675" loading="lazy" />
+
+## Gardez le dernier message visible
+
+Ouvrez un terminal dans votre répertoire habituel et lancez la commande existante. Ajoutez `--ui plain` pour afficher un journal texte plutôt que le tableau de bord, en conservant les autres arguments. Cela démarre le minage avec votre configuration. Copiez les messages finaux, y compris la première erreur précédant les messages répétés de reconnexion ou d’arrêt.
+
+Notez ensemble la version de l’exécutable, le répertoire de travail et le répertoire de données choisi. Dans cette version, une erreur fatale gérée est affichée avec `fatal:` avant la sortie. Un arrêt imposé par le système peut laisser d’autres indices. Si le processus reste actif, consultez les [vérifications de connexion](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) : un share absent ou une déconnexion temporaire ne prouve pas un plantage.
+
+## S’arrête-t-il avant de commencer à miner ?
+
+Lisez le fichier, l’option ou la bibliothèque citée au démarrage. Une erreur d’analyse de configuration indique un fichier précis ; copiez-le avant de corriger la syntaxe. Vérifiez le répertoire de travail du raccourci ou service. Le [guide de configuration](/fr/blog/configure-seine-miner/) explique pourquoi le même exécutable peut lire des réglages différents selon le dossier de lancement.
+
+Si l’exécutable ne démarre pas, vérifiez l’archive adaptée au système et à l’architecture et utilisez la version officielle. Pour une alerte de sécurité, suivez le [guide de vérification](/fr/blog/antivirus-flags-crypto-miner/). Gardez la protection active pendant l’identification du fichier et du message. Si cela suit une mise à jour, comparez chemin et arguments avec la [procédure de mise à jour](/fr/blog/update-seine-miner/).
+
+## Le message mentionne-t-il la mémoire ou les pages ?
+
+Adaptez le nombre demandé de threads CPU à la mémoire disponible, autres applications et limites de conteneur comprises. Une erreur d’allocation signale une ressource à examiner ; elle ne prouve pas à elle seule une RAM défectueuse. Fermez les tâches inutiles ou réduisez un nombre de threads imposé, puis réessayez une fois. Notez le changement et si le minage a commencé.
+
+Un mode de pages explicitement exigé nécessite la réservation correspondante du système. L’échec d’allocation de huge pages obligatoires et le manque de mémoire ordinaire demandent des vérifications distinctes. Consultez le [guide RAM](/fr/blog/how-much-ram-to-mine-blocknet/) pour la capacité et le [guide huge pages](/fr/blog/huge-pages-blocknet-mining/) pour les réservations. Évitez de modifier plusieurs options de réglage ensemble : une configuration simple et connue facilite la lecture du journal.
+
+## Vérifiez séparément l’étape GPU
+
+Si le démarrage cite une bibliothèque CUDA, un périphérique ou une allocation GPU, notez le message exact et la version du pilote installé. Le [guide NVIDIA](/fr/blog/mine-blocknet-nvidia-gpu/) couvre les exigences de la version, les bibliothèques et le choix du périphérique. Comparez-les à votre environnement avant de modifier kernels ou réglages. Télécharger correctement l’archive ne prouve pas que l’environnement d’exécution est prêt.
+
+seine peut isoler une panne de backend pendant que les autres backends actifs continuent. Vérifiez les messages et l’activité restante avant de conclure que toute l’application s’est arrêtée. Conservez les éléments avant de relancer, car une nouvelle session peut masquer la séquence précédente. Pour tester un choix de backends plus simple, gardez la commande initiale et comparez démarrage, travail continu et soumissions acceptées.
+
+## L’ordinateur était-il en veille ou a-t-il redémarré ?
+
+Comparez l’heure de l’arrêt à l’historique de veille, hibernation, redémarrages et tâches planifiées. Éteindre l’écran et mettre l’ordinateur en veille sont deux réglages distincts. Sous Windows, examinez les [réglages d’alimentation et de veille](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11), la fermeture du capot et les changements d’alimentation. Choisissez des réglages adaptés à l’usage et au refroidissement de la machine.
+
+Pour une sortie inattendue, consultez les journaux d’application et système à cette heure. L’[Observateur d’événements](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) Windows peut associer une erreur à son exécutable. Un redémarrage complet demande aussi des éléments système. Pour une installation gérée par un service, inspectez son état de sortie et son journal avant d’activer des relances répétées qui pourraient masquer la cause initiale.
+
+## Vérifiez la correction et préparez un rapport utile
+
+Relancez par le raccourci, terminal ou service habituel après la correction ciblée. Confirmez destination, backends actifs et nouveaux shares acceptés. Observez la situation qui précédait l’arrêt, comme l’usage ordinaire du bureau ou le prochain lancement planifié, sans recréer une condition matérielle dangereuse. Le [guide du tableau de bord](/fr/blog/seine-dashboard-explained/) distingue travail actuel et statistiques cumulées.
+
+Si l’arrêt se répète, rassemblez version, système, matériel, mémoire disponible, options exactes, heure et derniers messages. Indiquez ce qui a changé et si tout le processus ou un backend s’est arrêté. Retirez identifiants et données personnelles ; ne partagez jamais de seed ni de clés privées. Préservez la configuration fonctionnelle et ne déduisez pas la cause du seul hashrate.
+
+<CTA target="seine" title="Obtenir la version actuelle de seine" text="Conservez une version vérifiée et votre commande de lancement, puis confirmez le travail accepté après chaque correction ciblée." />

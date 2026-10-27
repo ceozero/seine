@@ -1,0 +1,62 @@
+---
+title: 'Bisakah menambang Blocknet sambil memakai PC?'
+description: 'Tambang Blocknet sambil memakai PC: pilih CPU atau GPU, sisakan memori untuk aplikasi, atur thread seine, lalu periksa konfigurasi yang cocok sehari-hari.'
+tags: ['Panduan penambangan', 'Desktop', 'seine']
+faq:
+  - q: 'Bisakah bermain gim saat seine menambang?'
+    a: 'Pilih backend sesuai perangkat yang diperlukan gim. Penambangan CPU saja membiarkan backend NVIDIA tidak digunakan, tetapi CPU dan RAM tetap dibagi dengan gim. Untuk sesi berat, tutup penambang secara normal dan jalankan kembali perintah yang sudah dicatat setelah selesai.'
+  - q: 'Apakah profil efisiensi membatasi persentase penggunaan CPU?'
+    a: 'Profil ini mengarahkan penyetelan ke jumlah thread lebih sedikit yang mempertahankan sebagian hashrate puncak terukur. Ini bukan batas persentase CPU sistem operasi atau target daya terukur. Periksa respons desktop dan memori dengan aplikasi biasa terbuka.'
+  - q: 'Apakah perubahan thread di dasbor tersimpan setelah mulai ulang?'
+    a: 'Perubahan berlaku untuk sesi saat ini dan menonaktifkan penyetelan CPU otomatis pada sesi tersebut. Nilainya tidak disimpan sebagai bawaan awal. Untuk mengulang jumlah tetap, masukkan opsi thread ke perintah atau pintasan biasa, lalu periksa peluncuran berikutnya.'
+sourceHash: 'a32a9b2fd540'
+translation: draft
+---
+
+Atur seine agar penambangan berjalan bersama aplikasi yang Anda gunakan. Panduan seine v0.2.38 ini membahas pemilihan perangkat, ruang memori, pengurangan thread CPU, dan peluncuran yang dapat diulang. Mulailah dari konfigurasi yang sudah berfungsi, dengan alamat, pool, dan direktori kerja tetap.
+
+## Bisakah komputer digunakan sambil menambang?
+
+<Answer>
+Bisa. Pilih backend dan thread CPU menurut pekerjaan desktop, lalu periksa respons dengan aplikasi biasa terbuka. Amati memori tersedia, aktivitas perangkat, dan share diterima secara bersamaan. Untuk gim atau rendering berat, tutup penambang secara normal dan jalankan kembali perintah yang dicatat setelah pekerjaan selesai.
+</Answer>
+
+<img src="/assets/blog/mine-while-using-pc.svg" alt="Aplikasi desktop dan proses penambangan berbagi komputer, dengan pengaturan terpisah untuk kerja CPU dan GPU." width="1200" height="675" loading="lazy" />
+
+## Mulai dari pekerjaan yang harus tetap responsif
+
+Buka aplikasi biasa dan coba tindakan yang mewakili penggunaan Anda: berpindah tab, menyunting dokumen, atau menjelajahi proyek. Amati respons tanpa penambangan, lalu ulangi saat penambang aktif. Pertahankan tugas dan keadaan aplikasi yang serupa agar perbandingan menjawab pertanyaan yang jelas.
+
+Amati juga CPU, memori, dan GPU. [Task Manager](https://support.microsoft.com/en-us/windows/experience/performance-optimization/tips-to-improve-pc-performance-in-windows) Windows menampilkan sumber daya per aplikasi; sistem lain memiliki pemantau sendiri. Satu angka penggunaan tidak membuktikan masih ada ruang untuk tugas lain. [Panduan penggunaan CPU](/id/blog/miner-cpu-usage/) menjelaskan persentase dan aktivitas perangkat penambang.
+
+## Perangkat mana yang sebaiknya menambang?
+
+Pilih berdasarkan aplikasi latar depan. Pemilihan otomatis seine memakai CPU dan perangkat NVIDIA kompatibel yang terdeteksi. Menambahkan `--backend cpu` pada peluncuran lama memilih CPU saja dan membiarkan backend NVIDIA tidak digunakan. CPU dan RAM tetap berbagi dengan desktop. Periksa baris perangkat setelah peluncuran.
+
+Konfigurasi NVIDIA yang didukung dapat memakai `--backend nvidia` untuk menonaktifkan penambangan CPU. Aplikasi grafis pada kartu yang sama berbagi memori dan eksekusi GPU; pilihan ini tidak mencadangkan seluruh CPU bagi aplikasi lain. Lihat persyaratan runtime dan pemilihan kartu di [panduan NVIDIA](/id/blog/mine-blocknet-nvidia-gpu/). Simpan perintah asli untuk perbandingan.
+
+## Pilih rentang otomatis atau jumlah thread tetap
+
+Untuk penyetelan CPU otomatis, pertimbangkan `--cpu-profile efficiency`. Profil ini mengutamakan jumlah lebih kecil dekat target hashrate, bukan mengukur watt atau menetapkan waktu respons desktop. `--cpu-autotune-max-threads 2` adalah contoh batas pencarian. Sesuaikan nilainya dan baca [panduan penyetelan](/id/blog/seine-automatic-cpu-tuning/) sebelum menggabungkan opsi.
+
+Untuk perbandingan tetap, `--threads 2` memilih dua thread per backend CPU dan biasanya mematikan penyetelan otomatis. Ini nilai uji, bukan anjuran universal. Di dasbor, `-` mengurangi satu thread per backend CPU. Perubahan manual ini memulai ulang backend dan menyambungkan kembali pool sambil mempertahankan statistik sesi. Tunggu sampai selesai sebelum menilai.
+
+## Sisakan memori untuk desktop lainnya
+
+Setiap thread CPU aktif menggunakan arena Argon2id 2 GiB, ditambah overhead proses. Dua arena berarti 4 GiB sebelum sistem operasi dan aplikasi. Buat anggaran dari memori tersedia ketika pekerjaan biasa terbuka. Tab, editor, dan proyek grafis dapat berubah kebutuhannya sepanjang hari; RAM terpasang saja tidak cukup menjadi patokan.
+
+Ukuran otomatis meninggalkan cadangan memori yang dikonfigurasi, tetapi jumlah thread eksplisit mengesampingkannya. Dengan jumlah tetap, Anda perlu memeriksa memori sendiri; itu tidak menjamin ruang bagi semua aplikasi mendatang. [Panduan RAM](/id/blog/how-much-ram-to-mine-blocknet/) menjelaskan aturannya. Kurangi thread jika pekerjaan memerlukan ruang lebih banyak, lalu ulangi tugas yang sama.
+
+## Kapan sebaiknya menghentikan penambangan?
+
+Untuk panggilan penting, gim berat, atau rendering, Anda dapat keluar dengan `q` di dasbor atau `Ctrl+C` di terminal. Pastikan proses sudah berhenti sebelum menilai tugas itu sendiri. Setelahnya jalankan kembali perintah yang dicatat. Anda tidak perlu mengubah akun, menghapus konfigurasi, atau memodifikasi perlindungan sistem.
+
+Pertahankan pendinginan dan suplai daya normal serta amati indikator suhu dan daya komputer. Panduan ini tidak menetapkan suhu atau kecepatan kipas tertentu. Komputer yang tidur tidak meneruskan penambangan seperti saat terjaga. Bila terjadi keluar atau tidur tak terduga, identifikasi peristiwa melalui [panduan penghentian](/id/blog/miner-keeps-stopping/) sebelum mengubah setelan lain.
+
+## Simpan peluncuran yang sesuai rutinitas
+
+Setelah desktop responsif, catat perintah lengkap, direktori kerja, dan backend. Perubahan thread dasbor hanya untuk sesi itu; gunakan argumen peluncuran agar dapat diulang. [Panduan konfigurasi](/id/blog/configure-seine-miner/) membedakan kolom koneksi tersimpan dari opsi lain. Beri nama jelas pada pintasan terpisah untuk kerja desktop dan sesi tanpa pengawasan.
+
+Periksa peluncuran berikutnya: perangkat, thread aktif, memori tersedia, dan share baru yang diterima. Ulangi tindakan desktop awal. [Panduan pelacakan pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) membantu memastikan kerja dikreditkan. Konfigurasi harian yang berguna bisa diulang sambil membiarkan aplikasi biasa menyelesaikan tugasnya.
+
+<CTA target="seine" title="Pilih konfigurasi seine untuk desktop Anda" text="Catat peluncuran, pilih perangkat yang dibagi, lalu periksa kerja diterima dan respons sehari-hari." />

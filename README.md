@@ -62,7 +62,7 @@ automatically. More options: [setup and configuration](docs/guides/configuration
 ## Performance
 
 <p align="center">
-  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 68.3 H/s, Arm server (AWS Graviton4) 39.3, EPYC Zen 4 38.2, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
+  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 68.3 H/s, EPYC Zen 4 45.3, Arm server (AWS Graviton4) 39.3, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
 </p>
 
 **68.3 H/s on the AMD EPYC 9355P**, measured with 64 threads and 1 GiB huge

@@ -9,8 +9,8 @@ faq:
     a: 'bntpool.com 풀은 6시간 구간의 PPLNS 방식으로 지급합니다. 블록 보상은 해당 블록 위에 60개 블록이 쌓인 뒤(5분 블록 기준 약 5시간)에 지급할 수 있으며, 잔액이 0.1 BNT에 도달하면 전송됩니다. 첫 지급은 첫 셰어가 승인되고 몇 시간 뒤로 예상하면 됩니다.'
   - q: 'CPU와 GPU로 동시에 Blocknet을 채굴할 수 있습니까?'
     a: '네. Windows와 Linux에서 seine는 컴퓨터의 모든 CPU 코어와 모든 NVIDIA 그래픽 카드로 동시에 채굴하며, 두 해시레이트가 합산됩니다. 실행 중에 프로세서와 각 카드를 따로 튜닝하므로 설정을 바꾸지 않아도 모든 하드웨어의 성능을 최대한 끌어냅니다.'
-sourceHash: ad835df628e2
-translation: reviewed
+sourceHash: 'c15449bd790a'
+translation: draft
 ---
 
 이 가이드는 **seine** 다운로드부터 bntpool.com 풀에서 첫 셰어가 승인되고 지급을 받기까지의 과정을 Windows, macOS, Linux 기준으로 안내합니다. 채굴이 처음이라면 [암호화폐 채굴의 원리](/ko/blog/how-crypto-mining-works/)에서 블록, 난이도, 채굴 풀을 먼저 설명합니다.
@@ -26,7 +26,7 @@ Blocknet 주소나 Blocknet ID 짧은 이름을 준비하고, 사용하는 시�
 - **Blocknet 주소.** 공식 Blocknet 지갑인 [명령줄 지갑](https://github.com/blocknetprivacy/blocknet/releases/latest)이나 [데스크톱 지갑](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)을 설치하고 주소를 복사하세요. [지갑 가이드](/ko/blog/blocknet-wallet-for-mining/)에서 단계별로 안내합니다. 지갑과 복구 문구는 본인 컴퓨터에 보관하고, 여러 사람이 함께 쓰는 채굴 리그에는 두지 마세요.
 - **또는 짧은 이름.** [blocknet.id](https://blocknet.id)에서 받은 [Blocknet ID 짧은 이름](/ko/blog/blocknet-id-pay-by-name/)이 있다면 긴 주소를 붙여 넣는 대신 `@name`으로 채굴할 수 있습니다.
 - **채굴 스레드당 약 2 GB의 RAM.** seine가 컴퓨터에 맞게 스스로 조정하고 시스템용 여유 메모리를 남기므로 미리 계산할 필요가 없습니다.
-- **Windows, macOS 또는 Linux.** Windows와 Linux에서는 최신 드라이버가 설치되어 있으면 NVIDIA 그래픽 카드를 자동으로 사용합니다.
+- **Windows, macOS 또는 Linux.** NVIDIA — Windows: NVIDIA 디스플레이 드라이버, 실행 파일과 같은 폴더에 둔 동봉 런타임 DLL; Linux: NVIDIA 드라이버와 호환되는 NVRTC 런타임 라이브러리.
 
 ## 1단계: seine 다운로드
 
@@ -35,7 +35,7 @@ Blocknet 주소나 Blocknet ID 짧은 이름을 준비하고, 사용하는 시�
 | 시스템 | 압축 파일 | 그래픽 카드 |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA, CUDA 런타임 포함 |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, 드라이버 설치 필요 |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA 드라이버와 호환되는 NVRTC 런타임 라이브러리; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 이상) |
 | macOS (Apple 실리콘) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ bntpool.com 풀은 PPLNS 방식을 사용합니다. 각 블록의 보상은 그 
 
 | 하드웨어 | 스레드 | 해시레이트 |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49.4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68.3 H/s |
 | Arm 서버 (AWS Graviton4) | 32 | 39.3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38.2 H/s |
 | Apple M4 Max (48 GB MacBook Pro) | 16 | 30.9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26.0 H/s |
+
+이 측정에서 가장 빠른 구성은 68.3 H/s를 기록한 AMD EPYC 9355P입니다. 채굴 스레드 64개, RAM 192 GiB, Linux에서 수동으로 준비한 1 GiB 휴즈 페이지를 사용했습니다. Blocknet 채굴은 메모리 대역폭과 스레드당 2 GiB를 제공할 만큼 충분한 RAM의 이점을 얻습니다. NVIDIA 카드는 CPU와 함께 해시레이트를 더할 수 있습니다.
 
 테스트한 모든 CPU의 결과는 [성능 페이지](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md)에 있으며, [Blocknet 채굴 하드웨어 가이드](/ko/blog/blocknet-mining-hardware-hashrate/)에서 RAM과 메모리 대역폭이 이 수치를 어떻게 결정하는지 설명합니다.
 

@@ -1,0 +1,68 @@
+---
+title: 'Perché l’hashrate del miner diminuisce?'
+description: 'Diagnostica un calo dell’hashrate Blocknet: confronta letture, dispositivi, tuning, memoria, frequenze e share, poi verifica una modifica alla volta.'
+tags: ['Risoluzione problemi', 'Hashrate', 'seine']
+faq:
+  - q: 'Perché il pool mostra meno hashrate del miner?'
+    a: 'Il miner conta gli hash locali, mentre il pool stima il lavoro dalle share su una propria finestra temporale. Confronta lo stesso computer durante un intervallo rappresentativo e controlla nuove share accettate e messaggi di connessione. Una breve differenza non dimostra da sola un rallentamento hardware.'
+  - q: 'Meno thread CPU indicano un problema?'
+    a: 'Non da soli. Il tuning automatico confronta numeri di thread e percorsi di calcolo, mentre la memoria disponibile può limitare i thread attivi. Esamina insieme messaggi di tuning, memoria e hashrate per dispositivo. Annota il cambiamento prima di decidere se intervenire.'
+  - q: 'Devo modificare più impostazioni per recuperare hashrate?'
+    a: 'Parti da una base confrontabile e modifica una condizione pertinente alla volta. Registra versione, dispositivi, carico e intervallo. Poi verifica calcolo continuativo e nuove share accettate: un singolo valore corrente più alto non dimostra un miglioramento.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Individua quale lettura è cambiata prima di regolare un miner ancora in funzione. Questa guida distingue differenze nelle finestre di calcolo da cambiamenti di dispositivo, carico o risorse, poi verifica la possibile causa con un confronto ripetibile. Conserva la configurazione di avvio funzionante per mantenere un punto di partenza noto.
+
+## Perché l’hashrate può scendere durante una sessione?
+
+<Answer>
+L’hashrate può cambiare con dispositivi attivi, thread CPU, memoria disponibile, attività concorrenti o frequenze hardware. Anche finestre di media diverse possono far apparire un calo. Parti dallo stesso dispositivo e intervallo, controlla lavoro recente e registri, poi modifica una condizione e osserva il risultato.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Due curve di hashrate portano a controlli di dispositivi, memoria e frequenze, seguiti da un confronto equivalente prima e dopo." width="1200" height="675" loading="lazy" />
+
+## Identifica prima la lettura diminuita
+
+Annota dove hai visto il cambiamento: hashrate locale corrente, media della sessione, riga di un dispositivo o stima del pool. Sono osservazioni diverse. In seine, valori correnti e medi coprono periodi differenti e i dispositivi possono riportare lavoro a gruppi. La [guida al dashboard](/it/blog/seine-dashboard-explained/) spiega i campi; confronta ciascuno con il proprio valore precedente.
+
+Conserva unità e intervallo accanto a ogni numero. Converti H/s e kH/s prima del confronto. Annota avvio recente, riavvio di un backend o ripresa del lavoro. Una nuova sessione non ha la stessa storia di una media lunga; un picco iniziale è una base poco adatta per il resto della serata.
+
+## Il cambiamento è locale, del pool o di un dispositivo?
+
+Controlla le righe dei dispositivi e i messaggi di nuove share accettate. Se un dispositivo contribuisce meno e gli altri restano stabili, parti da quello. Se il lavoro locale è comparabile ma cambia la stima del pool, esamina share e connessione. La [spiegazione dell’hashrate](https://bntpool.com/blog/it/what-is-hashrate/) descrive perché la stima basata sulle share può differire dal calcolo locale.
+
+Verifica indirizzo destinatario e nome del rig nelle statistiche. Più computer sotto un indirizzo possono rendere il totale dell’account inadatto al confronto con un singolo PC. Consulta la [guida al monitoraggio](https://bntpool.com/blog/it/track-your-miner-on-bntpool/). Se il processo è terminato o un backend segnala un errore, passa alla [guida agli arresti](/it/blog/miner-keeps-stopping/); qui si presume una sessione ancora osservabile.
+
+## Interpreta tuning e numero di thread nel contesto
+
+seine confronta thread CPU e kernel durante il mining e può riutilizzare risultati salvati compatibili. Questi confronti possono cambiare la configurazione attiva. Leggi i messaggi vicini e annota i thread attivi prima della diagnosi. La [guida al tuning automatico](/it/blog/seine-automatic-cpu-tuning/) descrive ricerca e opzioni; un diverso numero di thread non dimostra una regressione.
+
+Verifica che l’avvio selezioni gli stessi backend e parametri di prima. Un altro collegamento, directory di lavoro o file salvato può alterare il confronto prima ancora di esaminare l’hardware. Conserva il comando funzionante e consulta la [guida alla configurazione](/it/blog/configure-seine-miner/) per i valori effettivi. Non cancellare la cache di tuning per una sola lettura diversa.
+
+## Controlla attività concorrenti e memoria disponibile
+
+Usa la vista processi e memoria del sistema per vedere cosa è cambiato contemporaneamente. Gioco, video, compilazione o altro calcolo possono condividere CPU, GPU o memoria. Quando opportuno, confronta con l’attività facoltativa sospesa o conclusa. Mantieni equivalente il lavoro desktop; altrimenti la lettura successiva risponde a una domanda diversa.
+
+La gestione automatica CPU di seine considera la memoria disponibile e può ridurre i thread quando le risorse scarseggiano. Alcuni sistemi forniscono anche segnali di pressione. Leggi registro e memoria insieme anziché imporre subito il vecchio numero. La [guida RAM](/it/blog/how-much-ram-to-mine-blocknet/) tratta le allocazioni. Se le prestazioni tornano dopo un’altra attività, annota il rapporto prima di cambiare impostazioni permanenti.
+
+## Temperatura o alimentazione possono spiegare il cambiamento?
+
+Temperatura e frequenze aiutano a spiegare un cambiamento locale persistente quando carico e dispositivi sono comparabili. Intel descrive il [throttling termico](https://www.intel.com/content/www/us/en/support/articles/000088048.html) come riduzione protettiva della frequenza CPU. Segui le indicazioni del produttore per quel modello preciso: nessuna soglia unica di temperatura diagnostica tutti i computer di mining.
+
+Per NVIDIA, la [documentazione di monitoraggio](https://docs.nvidia.com/deploy/nvidia-smi/index.html) distingue cause di limitazione delle frequenze, incluse temperatura e potenza, e segnala dati indisponibili. Registra letture supportate insieme all’hashrate. Annota anche passaggio batteria/rete e modalità energetica. Segui i consigli di raffreddamento e mantieni le protezioni attive; questa procedura non richiede modifiche a tensione o limiti di frequenza.
+
+## Fai un confronto capace di rispondere alla domanda
+
+Scegli una condizione sospetta, come un’applicazione concorrente, e confronta intervalli altrimenti equivalenti prima e dopo la modifica. Registra versione, backend, politica dei thread, alimentazione e attività in primo piano. Distingui avvio e tuning. Ripeti se le normali oscillazioni rendono incerto l’esito, senza attribuire una causa a un solo punto.
+
+Per un esperimento intenzionale, usa la [guida ai benchmark](/it/blog/benchmark-seine-miner/) e carichi confrontabili. Separa benchmark e campioni di ricompense del pool, influenzati da arrivo dei blocchi e variazione delle share. Anche meno elettricità risponde a un’altra domanda: la [guida energetica](/it/blog/mining-electricity-use/) associa energia e lavoro svolto per non scambiare un dispositivo inattivo per un miglioramento utile.
+
+## Verifica il risultato e conserva prove utili
+
+Dopo la modifica mirata, conferma dispositivi previsti, numero di thread compreso e nuove share accettate. Confronta lo stesso campo in intervalli rappresentativi. Conserva anche un esito senza differenze significative per evitare prove inutili ripetute. Annulla modifiche estranee invece di accumulare impostazioni inspiegate.
+
+Se il comportamento persiste, raccogli versione, sistema, hardware, avvio, orari dei registri e letture abbinate. Specifica costanti, cambiamenti e se il calo riguarda un dispositivo o tutto il miner. Rimuovi credenziali e informazioni personali prima di condividere. Una cronologia compatta è più utile al supporto di una schermata con un solo valore basso.
+
+<CTA target="seine" title="Mantieni una configurazione seine ripetibile" text="Usa dashboard, osservazioni confrontabili e nuove share per capire una variazione prima di modificare la configurazione." />

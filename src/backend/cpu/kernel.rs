@@ -685,6 +685,7 @@ mod tests {
                 CpuKernel::Avx512,
                 CpuKernel::Avx512256Stream,
                 CpuKernel::Avx512256,
+                CpuKernel::Avx512256StreamR8D2,
                 CpuKernel::Avx512256Stream,
                 CpuKernel::Neon,
                 CpuKernel::NeonSha3,
@@ -1318,6 +1319,182 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn hint_first_thp_requires_exact_native_host() {
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x11),
+            ..Default::default()
+        };
+        let matches =
+            |id: &crate::runtime_identity::CpuIdentity, brand, logical, physical, memory, env| {
+                super::hint_first_thp_matches(id, brand, logical, physical, memory, env)
+            };
+        let memory = 128 * 1024_u64.pow(3);
+        assert!(matches(
+            &identity,
+            Some("AMD EPYC 9R14"),
+            32,
+            Some(32),
+            memory,
+            "native"
+        ));
+        for (field, value) in [("model", 0x61), ("family", 0x1a), ("vendor", 0)] {
+            let mut other = identity.clone();
+            match field {
+                "model" => other.model = Some(value),
+                "family" => other.family = Some(value),
+                _ => other.vendor = Some("GenuineIntel".into()),
+            }
+            assert!(!matches(
+                &other,
+                Some("AMD EPYC 9R14"),
+                32,
+                Some(32),
+                memory,
+                "native"
+            ));
+        }
+        for (brand, logical, physical, mem, env) in [
+            (Some("AMD EPYC 9354P"), 32, Some(32), memory, "native"),
+            (Some("AMD EPYC 9R14"), 64, Some(32), memory, "native"),
+            (Some("AMD EPYC 9R14"), 32, Some(16), memory, "native"),
+            (Some("AMD EPYC 9R14"), 32, None, memory, "native"),
+            (
+                Some("AMD EPYC 9R14"),
+                32,
+                Some(32),
+                64 * 1024_u64.pow(3),
+                "native",
+            ),
+            (Some("AMD EPYC 9R14"), 32, Some(32), memory, "wsl2"),
+        ] {
+            assert!(!matches(&identity, brand, logical, physical, mem, env));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn turin_hint_first_thp_requires_exact_native_host() {
+        let identity = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x1a),
+            model: Some(0x02),
+            ..Default::default()
+        };
+        let matches =
+            |id: &crate::runtime_identity::CpuIdentity, brand, logical, physical, memory, env| {
+                super::hint_first_thp_matches(id, brand, logical, physical, memory, env)
+            };
+        let memory = 128 * 1024_u64.pow(3);
+        assert!(matches(
+            &identity,
+            Some("AMD EPYC 9R45"),
+            32,
+            Some(32),
+            memory,
+            "native"
+        ));
+        for (field, value) in [("model", 0x61), ("family", 0x19), ("vendor", 0)] {
+            let mut other = identity.clone();
+            match field {
+                "model" => other.model = Some(value),
+                "family" => other.family = Some(value),
+                _ => other.vendor = Some("GenuineIntel".into()),
+            }
+            assert!(!matches(
+                &other,
+                Some("AMD EPYC 9R45"),
+                32,
+                Some(32),
+                memory,
+                "native"
+            ));
+        }
+        for (brand, logical, physical, mem, env) in [
+            (Some("AMD EPYC 9354P"), 32, Some(32), memory, "native"),
+            (Some("AMD EPYC 9R45"), 64, Some(32), memory, "native"),
+            (Some("AMD EPYC 9R45"), 32, Some(16), memory, "native"),
+            (Some("AMD EPYC 9R45"), 32, None, memory, "native"),
+            (
+                Some("AMD EPYC 9R45"),
+                32,
+                Some(32),
+                64 * 1024_u64.pow(3),
+                "native",
+            ),
+            (Some("AMD EPYC 9R45"), 32, Some(32), memory, "wsl2"),
+        ] {
+            assert!(!matches(&identity, brand, logical, physical, mem, env));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn hint_first_thp_prefault_and_unsupported_fallback_are_zeroed_and_usable() {
+        // Odd MiB size prevents an explicit HugeTLB success bypassing this path.
+        let bytes = 3 * 1024 * 1024;
+        let blocks = bytes / std::mem::size_of::<blocknet_pow_kernel::PowBlock>();
+        for advice in [23, -1] {
+            let arena =
+                super::MmapArena::new_with_prefault(blocks, bytes, CpuPageMode::Auto, Some(advice))
+                    .unwrap();
+            assert_eq!(arena.backing, super::MmapBacking::TransparentHuge);
+            if advice == -1 {
+                assert_eq!(arena.allocation_failures, 2);
+            }
+            let data = unsafe { std::slice::from_raw_parts_mut(arena.ptr, bytes) };
+            assert!(data.iter().all(|b| *b == 0));
+            for page in data.chunks_mut(4096) {
+                page[0] = 0xa5;
+            }
+            assert!(data.chunks(4096).all(|page| page[0] == 0xa5));
+        }
+        let regular =
+            super::MmapArena::new_with_prefault(blocks, bytes, CpuPageMode::Regular, Some(-1))
+                .unwrap();
+        assert_eq!(regular.backing, super::MmapBacking::Regular);
+        assert_eq!(regular.allocation_failures, 0);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "full 2 GiB reference hash and prefault/fallback reuse; run optimized"]
+    fn hint_first_thp_full_size_reference_parity() {
+        use argon2::{Algorithm, Argon2, Params, Version};
+        use blocknet_pow_kernel::{CpuKernel, FixedArgon2id};
+        const KIB: u32 = 2 * 1024 * 1024;
+        let salt = b"prefault-fallback-parity";
+        let nonce = 12345u64.to_le_bytes();
+        let mut expected = [0; 32];
+        Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(KIB, 1, 1, Some(32)).unwrap(),
+        )
+        .hash_password_into(&nonce, salt, &mut expected)
+        .unwrap();
+        let fixed = FixedArgon2id::with_kernel(KIB, CpuKernel::preferred()).unwrap();
+        for advice in [23, -1] {
+            let mut arena = super::MmapArena::new_with_prefault(
+                KIB as usize,
+                KIB as usize * 1024,
+                CpuPageMode::Auto,
+                Some(advice),
+            )
+            .unwrap();
+            for _ in 0..2 {
+                let mut got = [0; 32];
+                fixed
+                    .hash_password_into_with_memory(&nonce, salt, &mut got, arena.as_mut_slice())
+                    .unwrap();
+                assert_eq!(got, expected, "prefault advice {advice}");
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn regular_page_mode_reports_measured_regular_backing() {
         let block_count = 16;
         let arena = PowArena::new(block_count, CpuPageMode::Regular)
@@ -1757,6 +1934,48 @@ enum MmapBacking {
     Regular,
 }
 
+#[cfg(target_os = "linux")]
+fn hint_first_thp_matches(
+    identity: &crate::runtime_identity::CpuIdentity,
+    brand: Option<&str>,
+    logical: usize,
+    physical: Option<usize>,
+    memory: u64,
+    environment: &str,
+) -> bool {
+    identity.vendor.as_deref() == Some("AuthenticAMD")
+        && ((identity.family == Some(0x19)
+            && identity.model == Some(0x11)
+            && brand == Some("AMD EPYC 9R14"))
+            || (identity.family == Some(0x1a)
+                && identity.model == Some(0x02)
+                && brand == Some("AMD EPYC 9R45")))
+        && logical == 32
+        && physical == Some(32)
+        && (120 * 1024_u64.pow(3)..=130 * 1024_u64.pow(3)).contains(&memory)
+        && environment == "native"
+}
+
+#[cfg(target_os = "linux")]
+fn hint_first_thp_host() -> bool {
+    static ELIGIBLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ELIGIBLE.get_or_init(|| {
+        let mut system = sysinfo::System::new();
+        system.refresh_memory();
+        system.refresh_cpu_all();
+        // Workers are already pinned here. available_parallelism() would describe
+        // that single worker's mask, so use the host CPU inventory instead.
+        hint_first_thp_matches(
+            &crate::runtime_identity::cpu_identity(),
+            system.cpus().first().map(|cpu| cpu.brand()),
+            system.cpus().len(),
+            system.physical_core_count(),
+            system.total_memory(),
+            &crate::runtime_identity::runtime_environment(),
+        )
+    })
+}
+
 /// RAII wrapper around an mmap-backed arena.
 #[cfg(unix)]
 pub(super) struct MmapArena {
@@ -1774,6 +1993,24 @@ impl MmapArena {
         block_count: usize,
         byte_len: usize,
         page_mode: CpuPageMode,
+    ) -> Result<Self, String> {
+        #[cfg(target_os = "linux")]
+        let prefault_advice = (page_mode == CpuPageMode::Auto
+            && byte_len == POW_MEMORY_KB as usize * 1024
+            && hint_first_thp_host())
+        .then_some(23); // MADV_POPULATE_WRITE; unsupported kernels fall back below.
+        #[cfg(not(target_os = "linux"))]
+        let prefault_advice = None;
+        Self::new_with_prefault(block_count, byte_len, page_mode, prefault_advice)
+    }
+
+    fn new_with_prefault(
+        block_count: usize,
+        byte_len: usize,
+        page_mode: CpuPageMode,
+        #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] prefault_advice: Option<
+            libc::c_int,
+        >,
     ) -> Result<Self, String> {
         #[cfg(target_os = "linux")]
         {
@@ -1817,12 +2054,13 @@ impl MmapArena {
             }
 
             // Attempt 2: a regular mapping with either THP hints or an explicit THP ban.
-            let populate_flag = if page_mode == CpuPageMode::Regular {
+            let prefault_advice = prefault_advice.filter(|_| page_mode == CpuPageMode::Auto);
+            let populate_flag = if page_mode == CpuPageMode::Regular || prefault_advice.is_some() {
                 0
             } else {
                 libc::MAP_POPULATE
             };
-            let ptr = unsafe {
+            let mut ptr = unsafe {
                 libc::mmap(
                     std::ptr::null_mut(),
                     byte_len,
@@ -1840,6 +2078,42 @@ impl MmapArena {
                     error.raw_os_error().map(i64::from),
                 );
                 return Err(format!("regular mmap failed for {byte_len} bytes: {error}"));
+            }
+            if let Some(advice) = prefault_advice {
+                // Validated native 32-core EPYC path: hint before faulting
+                // to avoid allocating 4 KiB pages only to collapse them afterward.
+                // Allocation and end-to-end evidence are in CPU_OPTIMIZATION_LOG.md.
+                let populated = unsafe {
+                    libc::madvise(ptr, byte_len, libc::MADV_HUGEPAGE) == 0
+                        && libc::madvise(ptr, byte_len, advice) == 0
+                };
+                if !populated {
+                    // Advice can fail after partially populating the mapping.
+                    // Discard it and restore the exact legacy allocation path.
+                    unsafe { libc::munmap(ptr, byte_len) };
+                    allocation_failures = allocation_failures.saturating_add(1);
+                    ptr = unsafe {
+                        libc::mmap(
+                            std::ptr::null_mut(),
+                            byte_len,
+                            libc::PROT_READ | libc::PROT_WRITE,
+                            libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_POPULATE,
+                            -1,
+                            0,
+                        )
+                    };
+                    if ptr == libc::MAP_FAILED {
+                        let error = std::io::Error::last_os_error();
+                        crate::diagnostics::allocation_failure(
+                            false,
+                            byte_len,
+                            error.raw_os_error().map(i64::from),
+                        );
+                        return Err(format!(
+                            "fallback mmap failed for {byte_len} bytes: {error}"
+                        ));
+                    }
+                }
             }
             let backing = if page_mode == CpuPageMode::Regular {
                 unsafe {

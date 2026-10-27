@@ -1,0 +1,68 @@
+---
+title: 'Jalankan miner Blocknet otomatis di Windows'
+description: 'Jalankan seine saat masuk Windows dengan Task Scheduler. Pertahankan konfigurasi, hindari proses ganda, periksa share diterima, dan nonaktifkan saat perlu.'
+tags: ['Panduan mining', 'Windows', 'Pengaturan']
+faq:
+  - q: 'Apakah miner berjalan sebelum saya masuk Windows?'
+    a: 'Pengaturan ini menjalankan seine ketika pengguna Windows yang dipilih masuk, di dalam sesi pengguna tersebut. Ini tidak membuat layanan Windows di latar belakang. Setelah komputer dimulai ulang, masuk dengan akun itu untuk memicu tugas, lalu periksa share yang diterima.'
+  - q: 'Apakah pengaturan mining tetap tersimpan?'
+    a: 'Gunakan akun Windows, folder data, dan opsi perintah yang sama dengan proses manual yang berhasil. Isi argumen dengan jalur data absolut dan direktori kerja yang benar. Dengan begitu seine menemukan alamat, pool, dan nama mesin yang tersimpan.'
+  - q: 'Bagaimana mematikan mining otomatis?'
+    a: 'Nonaktifkan tugas di Task Scheduler untuk mencegah peluncuran berikutnya, lalu hentikan miner yang sedang berjalan secara normal melalui jendelanya. Menonaktifkan tugas tidak menutup proses yang sudah berjalan. Aktifkan kembali ketika ingin mining dimulai saat masuk Windows.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Atur Windows agar membuka konfigurasi seine yang sudah berfungsi saat Anda masuk. Panduan ini memakai Task Scheduler dalam sesi pengguna dengan cara penonaktifan yang jelas. Selesaikan dahulu [pengaturan Windows](/id/blog/mine-blocknet-on-windows/) dan pastikan pool menerima share. Perintah yang telah berfungsi lebih mudah diperiksa setelah diotomatisasi.
+
+## Bagaimana menjalankan miner Blocknet secara otomatis?
+
+<Answer>
+Buat tugas Task Scheduler untuk akun Windows Anda, picu saat masuk, dan arahkan aksinya ke program seine yang telah diekstrak. Gunakan folder data serta direktori kerja yang ada, cegah instans kedua dari tugas yang sama, lalu periksa share diterima setelah uji peluncuran.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Pengguna masuk Windows, Task Scheduler menjalankan satu miner, dan share diterima dikirim ke pool." width="1200" height="675" loading="lazy" />
+
+## File dan pengaturan apa yang dipertahankan?
+
+Pilih folder tetap untuk rilis yang diekstrak. Simpan seluruh isi arsip bersama, termasuk pustaka, dan gunakan program di dalamnya. Temukan folder data dari peluncuran manual yang berhasil. Secara bawaan seine memakai `./seine-data` relatif terhadap direktori kerja dan menyimpan pengaturan koneksi dalam `seine.config.json`. Folder awal berbeda dapat membuatnya mencari konfigurasi berbeda.
+
+Contoh memakai `C:\Users\YOUR_USER\Apps\seine`; ganti seluruh jalur dengan folder instalasi sebenarnya. Biarkan data yang ada di tempatnya. Simpan juga perintah yang berfungsi: opsi backend atau penyetelan eksplisit mungkin masih diperlukan. Tugas ini tidak memerlukan frasa pemulihan atau kunci privat dompet.
+
+## Buat tugas saat masuk
+
+Buka **Task Scheduler** dari Start, pilih **Create Task**, dan beri nama jelas seperti **seine mining**. Pada **General**, pilih akun yang dipakai untuk mining manual dan **Run only when user is logged on**. Biarkan **Run with highest privileges** tidak dicentang untuk pengaturan biasa ini. Pada **Triggers**, tambahkan **At log on**, pilih pengguna Anda secara khusus, dan aktifkan pemicu. Lihat [dokumentasi pemicu Microsoft](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Pada **Actions**, tambahkan **Start a program** dan isi terpisah:
+
+- **Program/script:** pilih `C:\Users\YOUR_USER\Apps\seine\seine.exe` melalui Browse.
+- **Add arguments:** masukkan `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` dengan folder data yang sudah ada, lalu opsi dari perintah yang berfungsi.
+- **Start in:** masukkan `C:\Users\YOUR_USER\Apps\seine` tanpa tanda kutip.
+
+[Direktori kerja](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) menentukan folder awal proses. Jangan taruh opsi di Program/script atau nama program di Start in. Pilih file sebenarnya, bukan membiarkan jalur contoh.
+
+## Atur syarat pelaksanaan tugas
+
+Pada **Settings**, izinkan tugas dijalankan sesuai permintaan untuk pengujian. Jika tugas sudah berjalan, pilih **Do not start a new instance**. [Kebijakan instans](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) ini hanya berlaku untuk tugas tersebut dan tidak mendeteksi miner yang dijalankan terpisah. Tutup proses manual sebelum menguji. Satu proses yang disengaja lebih mudah diperiksa dan mencegah salinan kedua memakai konfigurasi sama.
+
+Untuk mining terus-menerus selama sesi, hapus centang **Stop the task if it runs longer than**; jika tidak, ada [batas waktu eksekusi](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Periksa **Conditions**: syarat komputer menganggur dapat menahan peluncuran uji. Pada laptop, mempertahankan syarat daya AC membatasi alur ini saat terhubung listrik. Simpan pilihan sesuai penggunaan Anda.
+
+## Bagaimana memverifikasi mining otomatis?
+
+Hentikan miner manual secara normal, pilih tugas, lalu **Run**. Periksa alamat pembayaran, pool, dan nama mesin di jendela miner; tunggu share diterima. Cari alamat itu di My Stats bntpool.com dan pastikan mesin yang dimaksud mengirim pekerjaan. Status tugas berjalan hanya membuktikan proses aktif; share diterima membuktikan pekerjaan berguna bagi pool.
+
+Untuk menguji pemicu asli, simpan pekerjaan lain, keluar dari sesi, lalu masuk dengan pengguna yang dipilih. Mengunci dan membuka desktop adalah tindakan berbeda. Periksa kembali alamat dan share terbaru. [Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan perangkat dan koneksi. Catat nama tugas serta folder untuk pembaruan berikutnya.
+
+## Apa yang diperiksa jika tidak berjalan?
+
+Bandingkan jalur program, akun, argumen, dan Start in dengan perintah manual yang berhasil. Jika pengaturan awal muncul lagi, periksa jalur data dan akses folder. Jika pustaka tidak dimuat, periksa ekstraksi lengkap. Jika tidak muncul jendela, periksa pemicu aktif dan syarat daya atau kondisi menganggur sebelum mengubah pengaturan miner.
+
+Jika miner berjalan tetapi share tidak terlihat, periksa alamat, koneksi pool, dan share terbaru mesin. Untuk dua komputer dengan dompet sama, berikan nama berbeda melalui [panduan beberapa komputer](https://bntpool.com/blog/id/mine-multiple-computers-one-wallet/). Tugas cukup meluncurkan konfigurasi teruji; diagnosis koneksi atau perangkat keras dilakukan pada miner yang berjalan.
+
+## Nonaktifkan startup atau perbarui miner
+
+Untuk mencegah peluncuran berikutnya, pilih tugas dan **Disable**. Hentikan miner yang sudah berjalan secara normal; menonaktifkan tugas tidak menghentikannya. Aktifkan kembali saat ingin memulihkan startup. Pilihan ini terlihat dan dapat dibatalkan tanpa mengubah pengaturan startup atau tidur Windows secara menyeluruh.
+
+Sebelum mengganti rilis, nonaktifkan tugas dan hentikan miner. Ikuti [panduan pembaruan](/id/blog/update-seine-miner/), pertahankan folder data, dan ubah aksi jika jalur program berubah. Uji dengan Run sebelum mengaktifkan pemicu lagi. Untuk layanan sistem Linux, gunakan [pengaturan server](/id/blog/mine-blocknet-on-servers/), yang berbeda dari alur masuk Windows ini.
+
+<CTA target="seine" title="Unduh seine untuk Windows" text="Gunakan rilis resmi, periksa share pertama yang diterima, lalu otomatisasikan pengaturan yang berfungsi." />

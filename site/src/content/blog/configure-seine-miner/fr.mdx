@@ -1,0 +1,76 @@
+---
+title: 'Configurer seine : réglages et options de lancement'
+description: 'Retrouvez la configuration de seine, enregistrez le pool et l’adresse, comprenez les options de lancement et vérifiez votre mineur Blocknet après redémarrage.'
+tags: ['Guide de minage', 'Configuration', 'seine']
+faq:
+  - q: 'Où seine enregistre-t-il sa configuration ?'
+    a: 'Par défaut, seine lit seine-data/seine.config.json depuis le répertoire de travail au lancement. L’option data-dir choisit un autre répertoire de base. Un raccourci, terminal ou tâche planifiée peut utiliser un autre répertoire de travail : notez le chemin complet avec la commande de lancement.'
+  - q: 'Une option en ligne de commande modifie-t-elle le fichier ?'
+    a: 'Avec une configuration existante, les options explicites de connexion sont prioritaires pour cette exécution sans remplacer l’adresse, l’URL du pool ou le nom de machine enregistrés. Gardez l’option dans le lanceur habituel ou arrêtez le mineur et modifiez le champ enregistré. Vérifiez ensuite un démarrage normal.'
+  - q: 'Puis-je placer toutes les options dans le JSON ?'
+    a: 'Le fichier enregistré suit un petit schéma de connexion. Les choix de matériel et d’exécution, comme le backend et les threads, passent par les arguments de lancement. Ajouter des champs JSON similaires ne configure pas ces options. Sauvegardez le lanceur avec le dossier de données.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Retrouvez les mêmes réglages à chaque démarrage de votre mineur Blocknet. Ce guide suit seine v0.2.37 : emplacement de la configuration, priorité des arguments et changements persistants. Partez d’une installation fonctionnelle ; le [guide de mise à jour](/fr/blog/update-seine-miner/) couvre le remplacement de l’application.
+
+## Comment seine choisit-il ses réglages ?
+
+<Answer>
+seine combine la connexion enregistrée avec les arguments de démarrage. Les arguments explicites priment sur les valeurs correspondantes du fichier. Le répertoire de données détermine le fichier lu. Les options de matériel et d’exécution restent des arguments : conservez donc le fichier et votre commande habituelle.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Un fichier enregistré et une commande alimentent un mineur, puis un contrôle valide le redémarrage." width="1200" height="675" loading="lazy" />
+
+## Trouvez le fichier utilisé par votre lanceur
+
+Le fichier par défaut est `./seine-data/seine.config.json`. Ce chemin part du répertoire de travail, parfois différent du dossier de l’exécutable. Vérifiez le terminal, le raccourci ou le service avant toute modification. Deux lanceurs peuvent utiliser le même exécutable avec des dossiers de données différents.
+
+`--data-dir` choisit le répertoire de base ; le nom reste `seine.config.json`. Préférez un chemin absolu stable si vous lancez depuis plusieurs endroits. Notez ensemble exécutable, répertoire de travail, données et arguments. Le [guide de démarrage Windows](/fr/blog/start-miner-automatically-windows/) présente ces chemins dans le Planificateur de tâches, y compris les espaces.
+
+## Quels réglages appartiennent au fichier ?
+
+L’exemple montre les principaux champs de connexion. Remplacez `@yourname` par votre Blocknet ID enregistré ou votre adresse complète. Il illustre le format et n’est pas une commande. Dans une installation existante, modifiez les champs utiles au lieu de remplacer tout le fichier par cet exemple.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` et `pool_worker` choisissent mode, destination, pool et nom de machine. Conservez `schema_version` et tout champ `dev_fee_pool_worker` existant. Ce dernier est un identifiant généré distinct ; votre machine utilise `pool_worker`. Ne placez ni phrase de récupération ni clé privée dans ce fichier de connexion.
+
+## Comment rendre une modification permanente ?
+
+Arrêtez le mineur et sauvegardez le fichier. Utilisez un éditeur de texte, des chaînes JSON entre guillemets doubles et le nom d’origine sans extension supplémentaire. Changez uniquement le champ voulu dans le dossier sélectionné par le lanceur. Vérifiez les virgules ; évitez commentaires et virgules finales. Utilisez la validation JSON de l’éditeur si disponible. La sauvegarde permet une comparaison exacte.
+
+Vérifiez si le lanceur impose le même réglage. Une adresse enregistrée reste masquée par un ancien `--address`. Mettez cet argument à jour ou retirez-le pour utiliser le fichier. Redémarrez avec le raccourci, script ou tâche habituel, puis contrôlez les valeurs effectives.
+
+## Utilisez les remplacements temporaires volontairement
+
+Avec un fichier existant, l’option de pool suivante choisit le nom de machine pour cette exécution. Le nom enregistré revient au lancement suivant sans cette option. C’est utile pour un changement contrôlé ; ajoutez l’option au lanceur habituel pour la conserver à chaque démarrage.
+
+```text
+--pool-worker desktop-02
+```
+
+Sans fichier au premier démarrage, seine en crée un à partir des informations initiales. Cette création diffère d’un remplacement temporaire dans une installation existante. Pensez-y en copiant une commande sur un autre ordinateur, qui peut créer sa première configuration. La [référence de configuration](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) décrit les questions initiales et les options disponibles.
+
+## Gardez le réglage matériel dans la commande
+
+Les options comme `--backend` et `--threads` sont des arguments de lancement. Le schéma de connexion n’est pas une liste de toutes les options. Ajouter un champ JSON similaire n’applique pas ce réglage. Conservez vos choix matériels dans le script, raccourci ou service qui démarre le mineur.
+
+Les commandes de threads du tableau de bord modifient la session sans enregistrer une nouvelle valeur par défaut. Le réglage automatique utilise ses propres caches. Préservez-les lors des modifications de connexion et laissez chaque machine s’adapter à son matériel. Le [guide du réglage automatique](/fr/blog/seine-automatic-cpu-tuning/) explique leur réutilisation et les choix explicites de threads.
+
+## Pourquoi les réglages semblent-ils réinitialisés ?
+
+Comparez le chemin des données et les arguments avec la dernière exécution correcte. Un nouveau dossier d’extraction, un autre terminal ou un ancien argument de tâche peut expliquer le changement. En cas d’erreur d’analyse, lisez le fichier indiqué et le message. Restaurez la sauvegarde ou corrigez le JSON, puis lancez une seule fois depuis l’entrée prévue.
+
+Vérifiez destination, pool, nom de machine et shares acceptées. Refaites un démarrage normal pour vérifier la persistance ; une exécution avec options ne valide que cette commande. Consultez le [guide du tableau de bord](/fr/blog/seine-dashboard-explained/) et le [guide de changement d’adresse](https://bntpool.com/blog/fr/change-mining-wallet-address/) pour les futurs crédits du pool. Conservez ensemble le lanceur fonctionnel et la sauvegarde.
+
+<CTA target="seine" title="Obtenir la version actuelle de seine" text="Utilisez un dossier stable et conservez votre commande testée avec les paramètres de connexion." />

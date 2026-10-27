@@ -1,0 +1,68 @@
+---
+title: 'Gebühren für Blocknet-Transaktionen'
+description: 'Verstehe Blocknet-Gebühren, Eingänge und Wechselgeld. Prüfe die Wallet-Vorschau vor der Bestätigung und unterscheide Netzwerk- von Mining-Gebühren.'
+tags: ['Blocknet', 'Wallet', 'Zahlungen']
+faq:
+  - q: 'Ist die Blocknet-Transaktionsgebühr ein Prozentsatz des gesendeten Betrags?'
+    a: 'Die geprüfte Wallet berechnet die Gebühr anhand einer vorsichtigen Schätzung der Transaktionsgröße und einer Mindestgebühr. Eingänge und Ausgänge beeinflussen die Schätzung. Der Betrag kann bestimmen, welche Eingänge gewählt werden; die Gebühr ist aber kein fester Prozentsatz der gesendeten BNT.'
+  - q: 'Kann ich die Gebühr prüfen, ohne eine Zahlung zu veröffentlichen?'
+    a: 'Die dokumentierte Kommandozeilen-Wallet fordert eine Vorschau an und zeigt die Gebühr vor der Bestätigungsfrage. Prüfe dort Ziel, Betrag und Wechselgeld. Wenn du nur nachsehen wolltest, brich bei der Abfrage ab. Andere Clients können die Prüfung anders darstellen.'
+  - q: 'Ist Wechselgeld eine zusätzliche Gebühr?'
+    a: 'Wechselgeld ist der Rest der gewählten Eingänge nach Abzug von Empfängerbetrag und Netzwerkgebühr. Es kehrt als Ausgang in deine Wallet zurück. Trenne Wechselgeld von der Gebühr und unterscheide das gesamte Guthaben von aktuell ausgebbaren Mitteln.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Prüfe vor der Bestätigung, was deine Blocknet-Zahlung verwendet. Dieser Leitfaden erklärt die Gebührenschätzung der geprüften Wallet, die Bedeutung der Eingangsauswahl sowie das Zusammenspiel von Empfängerbetrag, Gebühr und Wechselgeld. Er zeigt auch die Vorschau des dokumentierten Kommandozeilen-Clients, damit du eine Zahlung prüfen kannst, ohne sie zu veröffentlichen.
+
+## Wie werden Blocknet-Transaktionsgebühren berechnet?
+
+<Answer>
+Die geprüfte Wallet bestimmt die Gebühr aus einer vorsichtigen Schätzung der Transaktionsgröße und einem eingestellten Mindestwert. Gewählte Eingänge und erzeugte Ausgänge beeinflussen die Schätzung. Die Gebühr ist vom Empfängerbetrag getrennt; ungenutzter Eingangswert wird Wechselgeld. Prüfe die aktuelle Vorschau für deine konkrete Zahlung vor der Bestätigung.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Gewählte Wallet-Eingänge teilen sich in Empfängerbetrag, Netzwerkgebühr und an die Wallet zurückgehendes Wechselgeld auf." width="1200" height="675" loading="lazy" />
+
+## Berechnung und Einheiten verstehen
+
+Im [geprüften Daemon-Code](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go) verwendet der normale Sendeweg mindestens 1.000 atomare Einheiten und 10 atomare Einheiten je geschätztem Byte. Ein BNT enthält 100.000.000 atomare Einheiten; das entspricht 0,00001 BNT und 0,0000001 BNT je geschätztem Byte. Diese Implementierungseinstellungen wurden am 26. Oktober 2026 geprüft und sind kein Gebührenangebot für jede Wallet-Version.
+
+Die Berechnung nimmt den größeren Wert aus Mindestgebühr und geschätzter Größe mal Gebührensatz. Bei ausdrücklich beispielhaft angenommenen 5.000 Bytes ergibt 5.000 × 10 = 50.000 atomare Einheiten, also 0,0005 BNT. Das liegt über dem genannten Minimum. Es ist eine Rechnung mit angenommener Größe, keine gemessene Transaktion und keine Zusage für deine nächste Überweisung.
+
+## Warum können zwei Zahlungen unterschiedlich viel kosten?
+
+Eine Wallet gibt bestehende Ausgänge als Transaktionseingänge aus und erzeugt Ausgänge für Empfänger sowie nötigenfalls Wechselgeld. Der [Transaktionsaufbau](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) schätzt die Größe aus Anzahl der Eingänge, Anzahl der Ausgänge und Ringgröße, einschließlich vorsichtiger Zuschläge für Beweise. Die Größe ist nicht einfach die Zeichenanzahl von Adresse, Memo oder Zahlungsformular.
+
+Eine Zahlung aus mehreren kleinen verfügbaren Ausgängen kann eine andere Eingangsanzahl benötigen als eine aus einem größeren Ausgang. Bei der Auswahl ausreichender ausgebbarer Werte berücksichtigt die Wallet auch die Gebühr; Auswahl und Schätzung beeinflussen sich daher gegenseitig. Derselbe Empfängerbetrag muss in zwei Wallet-Zuständen nicht dieselbe Gebühr ergeben. Die verwendeten Datenschutzstrukturen erläutern [Ringsignaturen](/de/blog/ring-signatures-explained/) und [Range Proofs](/de/blog/bulletproofs-explained/).
+
+## Empfängerbetrag, Gebühr und Wechselgeld trennen
+
+Bei einem gewöhnlichen Versand mit festem Betrag decken die gewählten Eingänge Empfängerbetrag plus Gebühr; der Rest kommt als Wechselgeld zurück. Beispielrechnung: Eingänge von insgesamt 10 BNT, Empfängerbetrag 3 BNT und angenommene Gebühr 0,0005 BNT ergeben 6,9995 BNT Wechselgeld. Der Empfänger bekommt die angegebenen 3 BNT; Wechselgeld ist keine weitere Gebühr.
+
+Das Beispiel beschreibt die gewählten Eingänge, nicht unbedingt das gesamte Wallet-Guthaben. Andere Ausgänge können unberührt bleiben. Alles zu senden hat ein anderes Ziel: Die geprüfte Implementierung zieht die Gebühr vom gewählten ausgebbaren Gesamtbetrag ab und bestimmt so den Empfängerbetrag. Lies den angezeigten Betrag dieser Aktion, statt anzunehmen, dass das gesamte Guthaben ohne Abzug versendet werden kann.
+
+## Wie prüfst du die Gebühr vor dem Senden?
+
+Im [dokumentierten CLI-Client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) fordert der Sendeablauf eine Vorschau ohne Ausführung an und zeigt Betrag, Ziel, Gebühr und gegebenenfalls Wechselgeld vor `Confirm [y/N]:`. Verwende die vorgesehenen Empfangsdaten und den gewünschten Betrag im normalen Wallet-Ablauf und halte bei dieser Prüfung an. Der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) erklärt Vorbereitung und Adresssuche.
+
+Lies zuerst Ziel und Betrag, danach Gebühr und Wechselgeld. Wenn du nur die Rechnung prüfen wolltest, drücke Enter oder antworte mit Nein: Der Client bricht ab, statt die Sendeanfrage auszulösen. Dieser Leitfaden verlangt keine Testzahlung. Eine grafische Wallet kann andere Beschriftungen verwenden; prüfe ihre Übersicht, statt das CLI-Layout vorauszusetzen.
+
+## Was ist zu prüfen, wenn sich die Vorschau ändert?
+
+CLI-Vorschau und tatsächlicher Versand sind getrennte Anfragen. Der Versand verwendet den dann verfügbaren Wallet-Zustand; die Vorschau reserviert eine angezeigte Gebühr nicht dauerhaft. Änderungen an Betrag, Empfängern, gewählten Ausgängen oder ausgebbaren Mitteln können das Ergebnis ändern. Vermeide gleichzeitiges Ausgeben während der Prüfung und fordere nach Zahlungsänderungen eine neue Vorschau an.
+
+Prüfe ausgebbare Mittel statt Gesamtguthaben, wenn Betrag plus Gebühr nicht gedeckt sind. Noch auf Bestätigung wartende Mittel sind eine eigene Kategorie. Notiere Wallet-Version und genaue Meldung, wenn keine Vorschau erstellt werden kann. Für Mining-Auszahlungen verfolgt der [Leitfaden zum Zahlungseingang](https://bntpool.com/blog/de/pool-payout-missing-from-wallet/) Transaktion und Wallet-Scan; das ist eine andere Aufgabe als die Berechnung einer neuen ausgehenden Zahlung.
+
+## Netzwerk- und Mining-Gebühren unterscheiden
+
+Die Gebühr dieses Artikels gehört zu einer Wallet-Transaktion. Pool-Gebühren betreffen die Abrechnung von Pool-Belohnungen, Entwicklergebühren des Miners dagegen die Arbeitsregeln der Mining-Software. Sie haben unterschiedliche Grundlagen und Schritte. Der [Leitfaden zu Mining-Gebühren](https://bntpool.com/blog/de/mining-pool-fees-vs-miner-fees/) erläutert die Mining-Seite; wende dessen Prozentsätze nicht auf die Größenschätzung einer Wallet-Transaktion an.
+
+Auch die Mindestauszahlung eines Pools ist eine Guthabenschwelle, nicht die Gebühr eines normalen Wallet-Versands. Bewahre bei der Überweisungsplanung jede Zahl mit Bezeichnung und Quelle auf. Die Wallet-Vorschau ist der passende Ort, um deine vorbereitete ausgehende Zahlung zu prüfen; Mining-Rechner oder Pool-Guthabenanzeige ersetzen sie nicht.
+
+## Eine klare Zahlungsaufzeichnung führen
+
+Prüfe vor der beabsichtigten Bestätigung Ziel, Betrag, gegebenenfalls Memo, Gebühr und Wechselgeld gemeinsam. Ein [Zahlungslink](/de/blog/blocknet-payment-links/) kann die Angaben ausfüllen, doch du prüfst sie weiterhin in der Wallet. Notiere beim Dokumentieren eines Ablaufs die Wallet-Version der Schätzung, damit spätere Leser das datierte Beispiel von ihrer aktuellen Oberfläche unterscheiden können.
+
+Bewahre nach einem bewusst bestätigten Versand die Transaktionskennung in deinen Zahlungsunterlagen auf und verfolge den Status in der Wallet. Teile niemals Wiederherstellungswörter oder private Schlüssel, um eine Gebühr zu erklären. Bei Supportfragen sind Version, Vorgangsart und angezeigte Beträge meist hilfreicher als kopierte private Wallet-Daten. Prüfe die Vorschau für jede neue Zahlung erneut.
+
+<CTA target="seine" title="Blocknet mit seine entdecken" text="Erfahre, wie Blocknet-Mining funktioniert, und verbinde deine eigene Einrichtung mit seine mit dem Netzwerk." />

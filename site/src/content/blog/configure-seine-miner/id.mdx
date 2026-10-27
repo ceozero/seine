@@ -1,0 +1,76 @@
+---
+title: 'Mengatur seine: setelan tersimpan dan opsi mulai'
+description: 'Temukan konfigurasi seine, simpan pool dan alamat, pahami prioritas argumen, lalu periksa setelan penambang Blocknet setelah menjalankannya kembali.'
+tags: ['Panduan penambangan', 'Konfigurasi', 'seine']
+faq:
+  - q: 'Di mana seine menyimpan konfigurasi?'
+    a: 'Secara bawaan, seine membaca seine-data/seine.config.json relatif terhadap direktori kerja saat dimulai. data-dir memilih direktori dasar lain. Terminal, pintasan, atau tugas terjadwal dapat memakai direktori berbeda. Catat jalur lengkap konfigurasi bersama perintah mulai.'
+  - q: 'Apakah argumen mengubah berkas tersimpan?'
+    a: 'Pada konfigurasi yang sudah ada, argumen koneksi eksplisit didahulukan untuk sesi itu tanpa mengganti alamat, URL pool, atau nama rig tersimpan. Pertahankan argumen pada peluncur biasa atau hentikan penambang lalu edit bidangnya. Periksa lagi saat memulai secara normal.'
+  - q: 'Bisakah semua opsi dimasukkan ke JSON?'
+    a: 'Konfigurasi tersimpan memakai skema kecil untuk koneksi. Opsi perangkat keras dan runtime seperti backend serta thread menjadi argumen peluncuran. Menambah bidang JSON bernama serupa tidak mengatur opsi tersebut. Cadangkan peluncur bersama folder data.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Mulai penambang Blocknet dengan setelan yang konsisten. Panduan seine v0.2.37 ini membahas lokasi koneksi, prioritas argumen, dan perubahan permanen. Gunakan instalasi yang sudah bekerja; [panduan pembaruan](/id/blog/update-seine-miner/) membahas penggantian aplikasi.
+
+## Bagaimana seine memilih setelan?
+
+<Answer>
+seine menggabungkan koneksi tersimpan dengan argumen saat mulai. Argumen koneksi eksplisit mengungguli nilai tersimpan yang sesuai. Direktori data menentukan berkas yang dibaca. Opsi perangkat keras dan runtime tetap berupa argumen peluncuran, jadi simpan berkas konfigurasi serta perintah mulai biasa.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Berkas konfigurasi dan perintah terminal menuju penambang, lalu pemeriksaan setelah mulai ulang." width="1200" height="675" loading="lazy" />
+
+## Temukan konfigurasi yang dipakai peluncur
+
+Berkas bawaan adalah `./seine-data/seine.config.json`, relatif terhadap direktori kerja proses, yang bisa berbeda dari folder program. Periksa terminal, pintasan, atau layanan sebelum mengedit. Dua peluncur dapat memakai program sama dengan folder data berbeda.
+
+`--data-dir` memilih direktori dasar; nama berkas tetap `seine.config.json`. Gunakan jalur absolut tetap jika memulai dari beberapa tempat. Catat program, direktori kerja, data, dan semua argumen. [Panduan mulai Windows](/id/blog/start-miner-automatically-windows/) menjelaskan jalur tersebut di Task Scheduler, termasuk spasi.
+
+## Setelan apa yang masuk berkas?
+
+Contoh menunjukkan bidang koneksi utama. Ganti `@yourname` dengan Blocknet ID terdaftar atau alamat penerima lengkap milik Anda. Ini contoh format, bukan perintah. Pada instalasi yang ada, edit bidang terkait alih-alih mengganti seluruh berkas.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url`, dan `pool_worker` menentukan mode, tujuan, pool, dan nama rig. Pertahankan `schema_version` serta `dev_fee_pool_worker` yang ada. Bidang terakhir adalah label terpisah yang dibuat otomatis; gunakan `pool_worker` untuk rig Anda. Jangan masukkan frasa pemulihan atau kunci privat.
+
+## Bagaimana membuat perubahan permanen?
+
+Hentikan penambang dan cadangkan berkas. Gunakan editor teks, JSON valid dengan tanda kutip ganda, dan nama asli tanpa ekstensi tambahan. Edit hanya bidang perlu di folder yang benar. Periksa koma; hindari komentar dan koma terakhir. Gunakan validasi JSON editor jika tersedia. Cadangan memungkinkan perbandingan nilai lama secara tepat.
+
+Periksa apakah peluncur menimpa setelan itu. `--address` lama mengungguli alamat yang baru disimpan. Perbarui argumen atau hapus agar nilai berkas berlaku. Mulai ulang melalui pintasan, skrip, atau tugas biasa, kemudian periksa setelan efektif.
+
+## Gunakan penggantian sementara dengan sengaja
+
+Dengan konfigurasi yang ada, opsi pool berikut memilih nama rig untuk sesi ini. Pada awal berikutnya tanpa opsi tersebut, nama tersimpan kembali berlaku. Cocok untuk perubahan terkendali; masukkan opsi ke peluncur biasa jika ingin selalu memakainya.
+
+```text
+--pool-worker desktop-02
+```
+
+Saat mulai pertama tanpa berkas, seine membuatnya dari masukan koneksi awal. Ini berbeda dari menimpa sementara konfigurasi yang ada. Ingat perbedaan ini saat menyalin perintah ke komputer lain yang mungkin membuat konfigurasi pertama. [Referensi konfigurasi](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) menjelaskan pertanyaan awal dan opsi yang didukung.
+
+## Simpan opsi penyetelan dalam perintah
+
+`--backend` dan `--threads` adalah argumen peluncuran. Skema koneksi bukan daftar seluruh opsi. Menambah bidang JSON serupa tidak mengatur opsi runtime itu. Simpan pilihan perangkat keras pada skrip, pintasan, atau layanan yang menjalankan penambang.
+
+Kontrol thread di dasbor mengubah sesi tanpa menyimpan bawaan baru. Penyetelan otomatis memiliki cache sendiri. Pertahankan cache terpisah dari edit koneksi dan biarkan tiap komputer menyesuaikan perangkat kerasnya. [Panduan penyetelan otomatis](/id/blog/seine-automatic-cpu-tuning/) menjelaskan penggunaan cache dan pilihan thread eksplisit.
+
+## Mengapa setelan tampak kembali ke awal?
+
+Bandingkan jalur data dan argumen dengan sesi terakhir yang berhasil. Folder ekstraksi baru, terminal lain, atau argumen tugas lama dapat menjelaskan perbedaan. Jika parsing gagal, baca nama berkas dan pesan. Pulihkan cadangan atau perbaiki JSON, lalu mulai satu kali melalui jalur yang dimaksud.
+
+Periksa tujuan, pool, nama rig, dan share diterima. Ulangi awal normal untuk memastikan persistensi; satu sesi dengan argumen hanya membuktikan perintah itu. Gunakan [panduan dasbor](/id/blog/seine-dashboard-explained/) dan [panduan ganti alamat](https://bntpool.com/blog/id/change-mining-wallet-address/) untuk tujuan kredit berikutnya. Simpan peluncur yang bekerja bersama cadangan konfigurasi.
+
+<CTA target="seine" title="Unduh versi seine terkini" text="Gunakan folder data tetap dan simpan perintah teruji bersama koneksi tersimpan." />

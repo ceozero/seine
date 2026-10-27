@@ -1,0 +1,106 @@
+---
+title: '如何執行 Blocknet 節點'
+description: '使用官方客戶端執行 Blocknet 節點：安裝 core、查看對等節點與同步進度、理解自動更新，並驗證正常運作的主網環境。'
+tags: ['Blocknet', '節點', '設定指南']
+faq:
+  - q: '執行 Blocknet 節點必須挖礦嗎？'
+    a: '執行節點與啟動挖礦是兩項操作。core 維護鏈資料及網路連線，挖礦需另外啟用。你可以不啟動挖礦負載就查看狀態和對等節點。seine 礦池挖礦也有獨立連線流程，不要求自己的節點。'
+  - q: '關閉 Blocknet shell 會停止節點嗎？'
+    a: '互動式 attach 工作階段連接背景 core。離開 shell 後 core 繼續執行。若要停止受管理節點，請使用客戶端明確的停止指令，再檢查狀態。關閉 shell 與停止底層程序是不同操作。'
+  - q: '如何判斷節點是否正在同步？'
+    a: '結合鏈高度、對等節點數及同步狀態，再觀察隨時間的進展。與同一網路的近期參考值比較。錢包掃描是獨立活動，因此節點已最新，並不能單獨證明剛載入的錢包已找到全部輸出。'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+執行自己的 Blocknet 節點，學習檢查它是否連線並跟上鏈進度。本指南使用官方命令列客戶端管理 mainnet core，再查看對等節點、同步與更新。指令於2026年10月26日依客戶端 v1.2.0 核對。請隨時參照所安裝版本的[官方指令參考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md)。
+
+## 執行 Blocknet 節點需要什麼？
+
+<Answer>
+使用適合作業系統的官方 Blocknet 客戶端、一台有鏈資料儲存空間的電腦，以及網際網路連線。客戶端會安裝並管理背景 core。執行後檢查對等節點與鏈進度。建立錢包和挖礦是獨立工作，可在節點正常運作後加入。
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="本機終端機連接背景 Blocknet core，core 儲存鏈資料並與網路對等節點交換區塊。" width="1200" height="675" loading="lazy" />
+
+## 選擇官方客戶端及網路
+
+從[官方客戶端發布頁](https://github.com/blocknetprivacy/blocknet/releases/latest)下載符合系統與處理器的壓縮檔。解壓縮後，在可呼叫執行檔的位置開啟終端機。下例使用名稱 `blocknet`；Windows 使用 `blocknet.exe`。若不在指令搜尋路徑中，請透過實際檔案路徑呼叫，例如 Linux 或 macOS 的 `./blocknet`。
+
+一般 Blocknet 網路使用 mainnet。testnet 是設定與資料均獨立的環境。記下選定網路，避免將 testnet 高度與 mainnet 瀏覽器比較。本指南著重節點管理；建立、復原錢包與選擇收款地址請看[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)。
+
+## 安裝並啟動背景 core
+
+首次設定時，在互動式終端機執行精靈：
+
+```sh
+blocknet setup
+```
+
+閱讀每個提示。已檢查的精靈會保存設定、安排自動升級，並在需要時提供下載及啟動 core 的選項。它也提供網路與本機 API 設定。在這台電腦管理的節點請保留本機綁定。
+
+文件中的手動安裝路徑是：
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` 選擇穩定 core 版本。啟動 mainnet 需先在設定中啟用。客戶端在背景執行 core，並等待其 API。請讓啟動工作完成；初始資料庫啟動與鏈完全追上是不同階段。
+
+## 如何檢查對等節點與同步進度？
+
+連接正在執行的 mainnet core：
+
+```sh
+blocknet attach mainnet
+```
+
+在互動提示字元分別輸入下列檢查指令：
+
+```text
+status
+peers
+```
+
+[shell 參考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md)說明節點欄位。記錄高度、最佳區塊雜湊、對等節點數與同步狀態。對等節點清單有助確認節點具備網路連線。
+
+隨時間觀察高度，與[官方瀏覽器](https://explorer.blocknetcrypto.com/)等近期 mainnet 參考比較。區塊之間高度可能暫停，不同觀察也可能發生在不同時刻。請結合欄位判斷，不要只用一個數字宣告成功。若節點正在追趕，保持網路連線與儲存空間可用。
+
+## 區分鏈同步與錢包掃描
+
+鏈同步追蹤網路區塊。錢包掃描從歷史尋找屬於已載入錢包的輸出。復原錢包可能在節點追上後仍掃描。因此，shell 中可用的錢包資訊與節點高度是不同觀察。追蹤特定挖礦付款時，請使用[付款到錢包指南](https://bntpool.com/blog/zh-hant/pool-payout-missing-from-wallet/)。
+
+目前客戶端也支援檢查點，以加速初始同步。請依[檢查點指南](https://bntpool.com/blog/zh-hant/blocknet-checkpoints-fast-sync/)了解來源與驗證範圍，不要認為所有快速同步方法都相同。不要因進度顯示平靜，就將刪除鏈資料庫視為例行處理。先用狀態與紀錄區分下載中、驗證工作和錢包掃描。
+
+## 啟動需要排查時看哪裡？
+
+在 attach shell 外追蹤受管理 core 的紀錄：
+
+```sh
+blocknet logs mainnet
+```
+
+閱讀最新啟動與連線訊息。按 Ctrl-C 停止追蹤紀錄。檢查設定、路徑、安裝版本與連線時使用：
+
+```sh
+blocknet doctor
+```
+
+文件所述 doctor 指令回報發現，不更改設定。選擇修正方式前保存精確訊息。
+
+確認預期 core 與網路已設定、選定執行檔已安裝、本機 API 位址相符。依回報情況查閱[官方疑難排解指南](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md)。分享診斷時保護 API 憑證及錢包資料。版本、作業系統和相關錯誤通常比整個設定目錄更適合作為起點。
+
+## 理解更新與刻意停止
+
+已檢查的客戶端透過排程器及部分生命週期指令執行自動升級檢查。外部 `blocknet status` 可能觸發更新檢查，與 attach 內的 `status` 不同。可用更新可能重新啟動跟隨 `latest` 的受管理 core，固定版本則維持不變。有相依服務的節點使用此客戶端前，請閱讀[升級參考](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md)。
+
+依使用節點 API 的服務安排維護。離開 attach 輸入 `quit`，core 仍繼續執行。若要刻意停止該受管理 mainnet core，請在作業系統終端機執行 `blocknet stop mainnet`。預定更新或重新啟動後，確認執行版本、連線與鏈進度。錢包備份應獨立於安裝的 core 執行檔保存。
+
+## 將節點用於預定工作
+
+連線節點可在不啟用挖礦的情況下支援錢包及本機鏈查詢。若透過 bntpool.com 挖礦，請遵循[礦池設定指南](https://bntpool.com/blog/zh-hant/mine-blocknet-on-bntpool/)並使用 seine 一般礦池連線。自建節點是另一個選擇。直接挖礦請讀挖礦程式的 daemon 模式說明，連接前驗證 API 設定。
+
+保留簡短維運紀錄：網路、客戶端與 core 版本、資料位置、更新政策，以及顯示正常進展的檢查結果。準備[Faraday](/zh-hant/blog/blocknet-faraday-upgrade/)時也有幫助，其未來啟用說明應來自官方發布。預定改動後重新檢查狀態，讓紀錄描述執行中的節點，不只是下載的軟體。
+
+<CTA target="seine" title="使用 seine 挖 Blocknet" text="選擇礦池或直接挖礦後，使用挖礦指南連接自己偏好的設備。" />

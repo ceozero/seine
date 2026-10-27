@@ -1,7 +1,8 @@
 //! The upload allowlist, deliberately independent of miner config and logs.
 use serde::{Deserialize, Serialize};
+pub mod tuning;
 
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 6;
 pub const MAX_BODY_BYTES: usize = 32 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -20,6 +21,8 @@ pub struct Report {
     pub backends: Vec<BackendSample>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Diagnostics>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tuning: Option<tuning::TuningReport>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -65,6 +68,7 @@ pub enum FailureReason {
     LoginRejected,
     BackendStartFailed,
     NoBackendAvailable,
+    CpuStartupTimedOut,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -99,6 +103,10 @@ pub struct FailureDetail {
     pub os_error: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub requested_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_workers: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_workers: Option<u32>,
 }
 
 impl FailureDetail {
@@ -108,6 +116,8 @@ impl FailureDetail {
             operation,
             os_error: None,
             requested_bytes: None,
+            ready_workers: None,
+            expected_workers: None,
         }
     }
 }
@@ -119,6 +129,43 @@ pub struct PreviousRun {
     pub phase: RunPhase,
     pub uptime_secs: u64,
     pub build_commit: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub miner_version: Option<String>,
+    /// Up to eight recent diagnostic groups, prioritizing panics/errors and typed causes.
+    /// These may already have been uploaded; they are context, not additional incidents.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_events: Vec<DiagnosticEvent>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub events_truncated: bool,
+}
+
+impl PreviousRun {
+    pub fn validate(&self) -> bool {
+        self.uptime_secs <= 315_360_000
+            && valid_fingerprint(&self.build_commit)
+            && self
+                .miner_version
+                .as_deref()
+                .is_none_or(valid_release_version)
+            && self.recent_events.len() <= 8
+            && self
+                .recent_events
+                .iter()
+                .all(|e| e.validate(self.uptime_secs))
+    }
+}
+
+pub fn valid_release_version(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b))
+}
+
+fn valid_fingerprint(value: &str) -> bool {
+    value == "unknown"
+        || (!value.is_empty() && value.len() <= 64 && value.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -130,13 +177,43 @@ pub struct DiagnosticEvent {
     pub phase: Option<RunPhase>,
     pub code: DiagnosticCode,
     pub kind: DiagnosticKind,
-    /// Repository-relative source location, never a local path or log message.
+    /// Repository-relative source or an allowlisted dependency location, never a local path.
     pub source: String,
     pub line: u32,
     pub backend: Option<String>,
     pub count: u64,
     pub first_seen_secs: u64,
     pub last_seen_secs: u64,
+}
+
+impl DiagnosticEvent {
+    fn validate(&self, uptime_secs: u64) -> bool {
+        self.detail.as_ref().is_none_or(|d| {
+            d.os_error
+                .is_none_or(|n| (i32::MIN as i64..=u32::MAX as i64).contains(&n))
+                && d.requested_bytes.is_none_or(|n| n > 0 && n <= (1u64 << 50))
+                && d.ready_workers.is_none_or(|n| n <= 65536)
+                && d.expected_workers.is_none_or(|n| n <= 65536)
+                && d.ready_workers
+                    .zip(d.expected_workers)
+                    .is_none_or(|(r, e)| r <= e)
+        }) && valid_source(&self.source)
+            && self.line <= 1_000_000
+            && self.backend.as_deref().is_none_or(backend_name)
+            && self.count > 0
+            && self.count <= 1_000_000_000_000
+            && self.first_seen_secs <= self.last_seen_secs
+            && self.last_seen_secs <= uptime_secs
+    }
+
+    fn schema4_compatible(&self) -> bool {
+        !DEPENDENCY_SOURCES.contains(&self.source.as_str())
+            && self.detail.as_ref().is_none_or(|d| {
+                d.reason != FailureReason::CpuStartupTimedOut
+                    && d.ready_workers.is_none()
+                    && d.expected_workers.is_none()
+            })
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -164,8 +241,16 @@ pub struct Diagnostics {
     pub events: Vec<DiagnosticEvent>,
 }
 
+/// Only these dependency locations can cross the privacy boundary.
+pub const DEPENDENCY_SOURCES: &[&str] = &[
+    "deps/cudarc-0.19.2/src/lib.rs",
+    "deps/cudarc-0.19.2/src/driver/sys/mod.rs",
+    "deps/cudarc-0.19.2/src/nvrtc/sys/mod.rs",
+];
+
 pub fn valid_source(source: &str) -> bool {
     source == "unknown"
+        || DEPENDENCY_SOURCES.contains(&source)
         || (source.starts_with("src/")
             && source.ends_with(".rs")
             && source.len() <= 120
@@ -181,12 +266,8 @@ fn backend_name(value: &str) -> bool {
 
 impl Diagnostics {
     fn validate(&self) -> bool {
-        let fingerprint = |s: &str| {
-            s == "unknown"
-                || (!s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_hexdigit()))
-        };
-        fingerprint(&self.build_commit)
-            && fingerprint(&self.source_fingerprint)
+        valid_fingerprint(&self.build_commit)
+            && valid_fingerprint(&self.source_fingerprint)
             && matches!(self.mode.as_str(), "pool" | "daemon")
             && self.requested_backends.len() <= 4
             && self.requested_backends.iter().all(|b| backend_name(b))
@@ -200,28 +281,15 @@ impl Diagnostics {
                 "auto" | "os" | "off" | "pcore-only"
             )
             && matches!(self.reason.as_str(), "periodic" | "shutdown" | "failure")
-            && self.previous_run.as_ref().is_none_or(|r| {
-                self.previous_run_unclean
-                    && r.uptime_secs <= 315_360_000
-                    && fingerprint(&r.build_commit)
-            })
+            && self
+                .previous_run
+                .as_ref()
+                .is_none_or(|r| self.previous_run_unclean && r.validate())
             && self.events.len() <= 32
             && self.uptime_secs <= 315_360_000
             && self.dropped_events <= 1_000_000_000_000
             && self.dropped_backend_samples <= 128
-            && self.events.iter().all(|e| {
-                e.detail.as_ref().is_none_or(|d| {
-                    d.os_error
-                        .is_none_or(|n| (i32::MIN as i64..=u32::MAX as i64).contains(&n))
-                        && d.requested_bytes.is_none_or(|n| n > 0 && n <= (1u64 << 50))
-                }) && valid_source(&e.source)
-                    && e.line <= 1_000_000
-                    && e.backend.as_deref().is_none_or(backend_name)
-                    && e.count > 0
-                    && e.count <= 1_000_000_000_000
-                    && e.first_seen_secs <= e.last_seen_secs
-                    && e.last_seen_secs <= self.uptime_secs
-            })
+            && self.events.iter().all(|e| e.validate(self.uptime_secs))
     }
 }
 
@@ -300,6 +368,17 @@ impl Report {
     pub fn validate(&self) -> bool {
         let h = &self.hardware;
         (1..=SCHEMA_VERSION).contains(&self.schema_version)
+            && self.tuning.as_ref().is_none_or(|t| {
+                self.schema_version >= 6
+                    && t.validate()
+                    && self.diagnostics.as_ref().is_some_and(|d| {
+                        t.trials.iter().all(|trial| {
+                            trial.outcome.finished_ms
+                                <= d.uptime_secs.saturating_mul(1000).saturating_add(999)
+                        })
+                    })
+                    && serde_json::to_vec(t).is_ok_and(|b| b.len() <= tuning::MAX_TUNING_BYTES)
+            })
             && valid_id(&self.installation_id)
             && valid_id(&self.report_id)
             && [
@@ -339,6 +418,12 @@ impl Report {
             && self.diagnostics.as_ref().is_none_or(|d| {
                 self.schema_version >= 3
                     && d.validate()
+                    && (self.schema_version >= 5
+                        || (d.previous_run.as_ref().is_none_or(|r| {
+                            r.miner_version.is_none()
+                                && r.recent_events.is_empty()
+                                && !r.events_truncated
+                        }) && d.events.iter().all(DiagnosticEvent::schema4_compatible)))
                     && (self.schema_version >= 4
                         || (d.phase.is_none()
                             && d.previous_run.is_none()
@@ -377,6 +462,104 @@ impl Report {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovered_diagnostics_are_bounded_private_and_schema5_only() {
+        let report: Report =
+            serde_json::from_str(include_str!("../reliability-fixture.json")).unwrap();
+        assert!(report.validate());
+        let mut old = report.clone();
+        old.schema_version = 4;
+        assert!(!old.validate());
+        for source in [
+            "/home/private/cudarc/src/lib.rs",
+            "deps/private.rs",
+            "deps/cudarc-0.19.2/src/secret.rs",
+        ] {
+            let mut bad = report.clone();
+            bad.diagnostics
+                .as_mut()
+                .unwrap()
+                .previous_run
+                .as_mut()
+                .unwrap()
+                .recent_events[0]
+                .source = source.into();
+            assert!(!bad.validate());
+        }
+        let mut bad = report.clone();
+        let previous = bad
+            .diagnostics
+            .as_mut()
+            .unwrap()
+            .previous_run
+            .as_mut()
+            .unwrap();
+        previous.recent_events = vec![previous.recent_events[0].clone(); 9];
+        assert!(!bad.validate());
+        let mut bad = report.clone();
+        bad.diagnostics
+            .as_mut()
+            .unwrap()
+            .previous_run
+            .as_mut()
+            .unwrap()
+            .recent_events[0]
+            .last_seen_secs = 20;
+        assert!(!bad.validate()); // Previous uptime, not the restarted process's uptime.
+        let mut bad = report.clone();
+        bad.diagnostics
+            .as_mut()
+            .unwrap()
+            .previous_run
+            .as_mut()
+            .unwrap()
+            .miner_version = Some("/home/private".into());
+        assert!(!bad.validate());
+        let mut value = serde_json::to_value(&report).unwrap();
+        value["diagnostics"]["previous_run"]["recent_events"][0]["message"] = "private".into();
+        assert!(serde_json::from_value::<Report>(value).is_err());
+
+        let mut max = report.clone();
+        let d = max.diagnostics.as_mut().unwrap();
+        let mut event = d.events[0].clone();
+        event.source = format!("src/{}.rs", "a".repeat(113));
+        d.events = vec![event.clone(); 32];
+        let previous = d.previous_run.as_mut().unwrap();
+        previous.uptime_secs = d.uptime_secs;
+        previous.recent_events = vec![event; 8];
+        assert!(max.validate());
+        assert!(serde_json::to_vec(&max).unwrap().len() < MAX_BODY_BYTES);
+    }
+
+    #[test]
+    fn readiness_counts_and_dependency_sources_cannot_be_downgraded() {
+        let mut report: Report =
+            serde_json::from_str(include_str!("../diagnostics-fixture.json")).unwrap();
+        report.schema_version = 5;
+        let mut detail = FailureDetail::new(
+            FailureReason::CpuStartupTimedOut,
+            DiagnosticOperation::BackendStartup,
+        );
+        detail.ready_workers = Some(2);
+        detail.expected_workers = Some(8);
+        report.diagnostics.as_mut().unwrap().events[0].detail = Some(detail);
+        assert!(report.validate());
+        report.schema_version = 4;
+        assert!(!report.validate());
+        report.schema_version = 5;
+        report.diagnostics.as_mut().unwrap().events[0]
+            .detail
+            .as_mut()
+            .unwrap()
+            .ready_workers = Some(9);
+        assert!(!report.validate());
+        report.diagnostics.as_mut().unwrap().events[0].detail = None;
+        report.diagnostics.as_mut().unwrap().events[0].source = DEPENDENCY_SOURCES[0].into();
+        assert!(report.validate());
+        report.schema_version = 4;
+        assert!(!report.validate());
+    }
 
     #[test]
     fn diagnostics_are_allowlisted_bounded_and_versioned() {

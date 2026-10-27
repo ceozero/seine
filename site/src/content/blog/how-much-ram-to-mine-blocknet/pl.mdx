@@ -1,0 +1,90 @@
+---
+title: 'Ile RAM potrzeba do kopania Blocknet?'
+description: 'Zaplanuj RAM do kopania Blocknet: 2 GiB na wątek CPU, miejsce dla aplikacji, automatyczny dobór w seine oraz rozwiązywanie błędów przydzielania pamięci.'
+tags: ['Poradnik kopania', 'RAM', 'CPU']
+faq:
+  - q: 'Ile RAM zużywa jeden wątek kopania Blocknet?'
+    a: 'Każdy wątek CPU potrzebuje obszaru Argon2id o wielkości 2 GiB. To pamięć robocza kopania, a nie całe zapotrzebowanie komputera. Zostaw RAM dla systemu, aplikacji i minera. Obliczaj wątki z pamięci dostępnej, zamiast dzielić zainstalowany RAM przez dwa.'
+  - q: 'Czy można kopać Blocknet z 8 GB RAM?'
+    a: 'Kopanie CPU jest możliwe, jeśli dostępna pamięć mieści co najmniej jeden obszar 2 GiB oraz system i minera. Samo oznaczenie 8 GB nie wyznacza liczby wątków. Zacznij od automatycznego doboru i sprawdź dostępną pamięć oraz wybraną liczbę.'
+  - q: 'Czy huge pages zmniejszają RAM na wątek?'
+    a: 'Huge pages zmieniają sposób mapowania pamięci przez system, ale nie zmniejszają obszaru 2 GiB na wątek CPU. Najpierw ustal budżet pamięci, potem skorzystaj z osobnego poradnika dużych stron, aby skonfigurować je jawnie w obsługiwanym systemie.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Dobierz wątki CPU do dostępnej pamięci. Poradnik omawia obszary 2 GiB, automatykę seine v0.2.26 i kontrole, gdy ręczna konfiguracja nie może przydzielić pamięci. Porównania procesorów i zmierzony hashrate znajdziesz w [poradniku sprzętowym](/pl/blog/blocknet-mining-hardware-hashrate/). Tutaj przykłady są obliczeniami pamięci, nie pomiarami wydajności.
+
+## Ile RAM potrzebuje każdy wątek?
+
+<Answer>
+Każdy wątek CPU wymaga obszaru Argon2id o wielkości 2 GiB. Zostaw miejsce dla systemu, aplikacji i minera. Zacznij od automatyki seine uwzględniającej dostępną pamięć i zasoby CPU. Ręcznie ustawiona liczba musi mieścić się w pamięci faktycznie dostępnej przy uruchomieniu.
+</Answer>
+
+GiB jest jednostką binarną: 2 GiB to 2 147 483 648 bajtów. Obszar jest używany ponownie dla kolejnych hashy; każdy ukończony hash nie zajmuje na stałe kolejnych 2 GiB. Więcej równoległych wątków potrzebuje więcej obszarów. [Opis Argon2id](/pl/blog/argon2id-proof-of-work-explained/) wyjaśnia tę pamięć roboczą.
+
+<img src="/assets/blog/ram-budget.svg" alt="Cztery obszary kopania po 2 GiB obok dodatkowej pamięci dla systemu i aplikacji" width="1200" height="675" loading="lazy" />
+
+## Jak obliczyć budżet wątków?
+
+Pomnóż planowane wątki CPU przez 2 GiB. Tabela pomija system i pozostały narzut. Oblicz nią obszary, a rzeczywistą liczbę dobierz według dostępnej pamięci i zmierzonej wydajności.
+
+| Wątki CPU | Tylko pamięć obszarów |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Cztery wątki potrzebują 8 GiB na obszary, więc dostępne musi być więcej niż 8 GiB na resztę procesu i system. Jeśli celowo zostawisz 4 GiB z maszyny mającej 16 GiB, pozostałe 12 GiB arytmetycznie mieści sześć obszarów. To wybór budżetu, nie obietnica najwyższego hashrate przy sześciu wątkach.
+
+Sprawdź dostępną pamięć z otwartymi zwykłymi aplikacjami: Menedżer zadań Windows, Monitor aktywności macOS albo narzędzia Linux. Maszyna wirtualna lub kontener może mieć mniej pamięci niż host. Używaj tego efektywnego limitu; deklarowany RAM hosta nie jest automatycznie dostępny wewnątrz ograniczonego środowiska.
+
+## Jak seine automatycznie wybiera wątki?
+
+Przy pierwszym uruchomieniu tylko CPU nie ustawiaj liczby. Wykonaj polecenie z rozpakowanego folderu Linux lub macOS. W Windows użyj tych samych opcji z plikiem wykonywalnym w PowerShell. [Poradnik startowy](/pl/blog/how-to-mine-blocknet/) opisuje pobieranie i adres odbiorczy.
+
+```sh
+./seine --backend cpu
+```
+
+W v0.2.26 automatyczny dobór i strojenie domyślnie rezerwują 5% efektywnej całkowitej pamięci, dodatkowo uwzględniając pamięć już używaną. Zasoby CPU też ograniczają liczbę. Ustaw maksimum, aby zawęzić zakres strojenia:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Cztery to przykładowy pułap, nie ustawienie uniwersalne. Strojenie może wybrać mniej wątków. Obserwuj liczbę i średni hashrate w [panelu](/pl/blog/seine-dashboard-explained/). Automat mierzy rzeczywistą konfigurację; poczekaj na ustabilizowanie, zanim ocenisz zmianę po krótkim wahaniu.
+
+## Kiedy ustawić stałą liczbę wątków?
+
+Użyj stałej liczby dla konkretnego budżetu lub powtarzalnej konfiguracji. Przykład wybiera dwa wątki CPU: 4 GiB na ich obszary plus pozostała pamięć.
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+`--threads` wyłącza zwykły automatyczny wybór, chyba że jawnie włączysz też strojenie. Nadpisuje automatyczną rezerwę, więc sam zostaw zapas. Kontrole pamięci pozostają aktywne. Liczba pasująca do zainstalowanego RAM może przekroczyć pamięć dostępną po otwarciu innych aplikacji.
+
+Zmieniaj jeden parametr naraz. Zapisuj wątki, dostępny RAM i średni hashrate przy porównywalnym obciążeniu. Aby wrócić do automatyki, usuń stały argument i zapisane nadpisania. [Dokumentacja v0.2.26](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) wyjaśnia ustawienia zapisane i wiersz poleceń.
+
+## Co sprawdzić po błędzie alokacji?
+
+Rozróżnij komunikaty o efektywnym limicie, dostępnej pamięci i jawnej alokacji dużych stron. Wymagają innych kontroli. Zamknij niepotrzebne aplikacje, zmniejsz liczbę wątków i uruchom ponownie z miejscem na normalną pracę pulpitu.
+
+W kontenerze lub maszynie wirtualnej sprawdź przydział pamięci oraz host. Limit 1 GiB nie pomieści obszaru 2 GiB. Powiększenie pliku wymiany nie zmienia wymogu; zaplanuj odpowiednią ilość fizycznej pamięci dostępnej procesowi.
+
+Przy `--cpu-page-mode large` lub `--cpu-page-mode large-1g` sprawdź dostępność żądanej puli zarezerwowanych stron. Te tryby wymagają wskazanego rodzaju pamięci. Skorzystaj z [poradnika huge pages](/pl/blog/huge-pages-blocknet-mining/) lub wróć do automatycznych stron, aby uzyskać działającą bazę. Zmieniaj strony i wątki osobno.
+
+## Czy pamięć GPU wchodzi do budżetu CPU?
+
+Na osobnej karcie NVIDIA obszary GPU znajdują się w VRAM. Wątki CPU nadal używają RAM systemu. Przy wspólnym kopaniu licz zasoby oddzielnie; wolny VRAM nie jest dodatkowym RAM dla CPU. [Poradnik NVIDIA](/pl/blog/mine-blocknet-nvidia-gpu/) opisuje konfigurację i lane GPU.
+
+Na Apple Silicon CPU i GPU dzielą pamięć zunifikowaną. Nie licz tej samej pojemności dwukrotnie dla innych obciążeń. [Poradnik Mac](/pl/blog/mine-blocknet-on-mac/) opisuje obsługiwane kopanie CPU. Pojemność mówi, co się zmieści; zmierzona wydajność wskazuje najlepszą konfigurację.
+
+## Co sprawdzić przed pozostawieniem minera włączonego?
+
+Upewnij się, że wątki mieszczą się w budżecie, aplikacje reagują i przybywają zaakceptowane udziały. Większa alokacja sama nie dowodzi wyższej wydajności. Zachowaj konfigurację odpowiednią dla obciążenia i potwierdź świeżą pracę na adresie w [poradniku śledzenia puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/).
+
+<CTA target="seine" title="Pobierz seine" text="Zacznij od automatycznego doboru CPU i wybierz budżet pamięci pasujący do komputera." />

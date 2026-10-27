@@ -1,0 +1,108 @@
+---
+title: 'Blocknet minen op Linux'
+description: 'Stel Blocknet-mining op Linux in met seine: kies x86_64 of ARM64, controleer het archief, glibc en NVIDIA-bibliotheken en bevestig geaccepteerde shares.'
+tags: ['Mininghandleiding', 'Linux', 'NVIDIA']
+faq:
+  - q: 'Welk Linux-archief moet ik downloaden?'
+    a: 'Voer uname -m uit in je terminal. Kies het x86_64-archief bij de uitvoer x86_64 of het aarch64-archief bij aarch64. De gecontroleerde Linux-programma’s van v0.2.26 vereisen glibc 2.39 of nieuwer. Het x86_64-pakket ondersteunt CPU en NVIDIA; het ARM64-pakket alleen CPU.'
+  - q: 'Moet ik seine met sudo starten?'
+    a: 'Voer de gewone miner uit als je eigen gebruiker vanuit een beschrijfbare map. Pak het archief uit, geef de eigenaar zo nodig uitvoerrechten en start met ./seine. Huge pages reserveren is een aparte beheerstaak; normaal opstarten kan met gewone geheugenpagina’s.'
+  - q: 'Waarom meldt Linux een ontbrekende NVRTC-bibliotheek?'
+    a: 'De NVIDIA-backend op Linux heeft een geschikte driver en NVRTC-runtimebibliotheken nodig, inclusief de bijpassende builtins-bibliotheek. Installeer deze via je distributie of ondersteunde NVIDIA-pakketten. Het Linux-archief bevat geen Windows-DLL’s. Je kunt de CPU-backend gebruiken terwijl je de GPU voorbereidt.'
+sourceHash: 'f5d2ea0db1d5'
+translation: draft
+---
+
+Deze handleiding helpt seine starten op een Linux-desktop of -server, van het juiste archief tot geaccepteerde poolshares. De officiële versie v0.2.26 dient als gecontroleerd voorbeeld. Houd je Blocknet-ontvangstadres klaar; de [wallethandleiding](/nl/blog/blocknet-wallet-for-mining/) legt uit waar je het vindt. Je voert een openbaar adres of geregistreerde `@name` in, nooit een herstelzin.
+
+## Hoe begin je met Blocknet minen op Linux?
+
+<Answer>
+Kies het Linux-archief voor je processor, controleer de SHA-256-controlesom en pak het uit in een beschrijfbare map. Start `./seine`, voer je uitbetalingsadres in en accepteer de standaardverbinding met bntpool.com. seine kiest automatisch CPU-threads en kan op Linux x86_64 ook ondersteunde NVIDIA-kaarten gebruiken als hun runtimebibliotheken zijn geïnstalleerd.
+</Answer>
+
+## Stap 1: controleer de architectuur en glibc
+
+Open een terminal en voer deze twee controles uit die alleen gegevens lezen. De eerste toont de architectuur; de tweede de GNU C-bibliotheekversie op een glibc-systeem. Ze starten geen mining en veranderen niets aan de computerconfiguratie.
+
+```sh
+uname -m
+getconf GNU_LIBC_VERSION
+```
+
+Koppel de architectuur aan het archief hieronder. Beide Linux-pakketten van v0.2.26 vereisen glibc 2.39 of nieuwer. Controleer de eisen opnieuw bij een latere versie. Gebruikt je systeem een andere C-bibliotheek of oudere glibc, kies dan een geschikte distributieomgeving of volg de [instructies om vanuit broncode te bouwen](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+
+| Opdrachtuitvoer | Release-archief | Backends |
+|---|---|---|
+| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU en NVIDIA |
+| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
+
+Elke CPU-miningthread heeft een geheugenblok van 2 GiB nodig. seine kiest een beginwaarde voor het aantal threads op basis van beschikbaar geheugen en CPU-capaciteit en stemt tijdens het minen verder af. Stel bij de eerste start geen handmatige thread- of kernelkeuzes in; zorg eerst voor een werkende verbinding voordat je prestaties aanpast.
+
+## Stap 2: download en controleer het archief
+
+Kies Linux of Linux ARM64 in de [downloadsectie](/nl/#download). Download ook het afzonderlijke bestand `SHA256SUMS.txt` van dezelfde [officiële release](https://github.com/zpalmtree/seine/releases/latest). Bewaar archief en controlesombestand van dezelfde versie bij elkaar. De voorbeelden gebruiken x86_64; vervang op ARM64 `seine-linux-x86_64.tar.gz` door `seine-linux-aarch64.tar.gz` in de opdrachten.
+
+<img src="/assets/blog/linux-download.png" alt="Officiële downloadtabel met Linux- en Linux ARM64-archieven" width="1200" height="900" loading="lazy" />
+
+Open in de terminal de map waar de browser de bestanden heeft opgeslagen en bereken de controlesom. Dit voorbeeld gaat uit van een map Downloads in je thuismap; gebruik je werkelijke downloadmap als die anders heet.
+
+```sh
+cd "$HOME/Downloads"
+sha256sum seine-linux-x86_64.tar.gz
+```
+
+Vergelijk de volledige hexadecimale hash met de regel voor precies dat archief in `SHA256SUMS.txt`. Elk cijfer moet kloppen voordat je het uitpakt of uitvoert. Gebruik het afzonderlijk gepubliceerde controlesombestand: het archief bevat ook een manifest voor de uitgepakte bestanden. Een gelijke controlesom vergelijkt het bestand met de gepubliceerde waarde; haal beide downloads bij de officiële bron.
+
+## Stap 3: pak uit en controleer het programma
+
+Maak een aparte map in je thuismap, pak het archief daarin uit en laat het programma zijn hulptekst tonen. Het v0.2.26-archief bevat `./seine` op het hoogste niveau, dus deze opdrachten zetten het programma direct in de nieuwe map. De hulpopdracht stopt zonder een miningsessie te starten.
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+cd "$HOME/seine"
+chmod u+x ./seine
+./seine --help
+```
+
+Voer deze stappen uit met je eigen account. `chmod u+x` geeft de eigenaar van het bestand uitvoerrechten; een systeembrede installatie is niet nodig. Het voorvoegsel `./` vertelt de shell het bestand uit de huidige map te starten. Bewaar de uitgepakte documentatie en licenties bij het programma.
+
+## Stap 4: voer je adres in en verbind
+
+Start vanuit de uitgepakte map:
+
+```sh
+./seine
+```
+
+Voer je ontvangstadres of geregistreerde `@name` in, accepteer `stratum+tcp://bntpool.com:3333` en kies op verzoek een herkenbare machinenaam. Bij volgende starts gebruikt seine `seine-data/seine.config.json` opnieuw, relatief aan de werkmap. Steeds vanuit dezelfde map starten houdt de instellingen makkelijk vindbaar. De [configuratiereferentie](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) beschrijft de vragen en gegevensmap.
+
+Bekijk de hashrate en teller voor geaccepteerde shares. Open daarna [My Stats](https://bntpool.com/stats) en zoek hetzelfde ontvangstadres op. Geaccepteerde shares bevestigen dat de pool werk ontvangt; betaling volgt het afzonderlijke belonings- en uitbetalingsproces. De [dashboardhandleiding](/nl/blog/seine-dashboard-explained/) verklaart de panelen van de miner. Stop netjes met `q` of `Ctrl+C`.
+
+## Wat heb je nodig voor NVIDIA-mining op Linux?
+
+GPU-mining op Linux x86_64 vereist een NVIDIA-driver en geschikte NVRTC-runtimebibliotheken. NVRTC compileert de GPU-kernels bij het starten. Installeer de runtime en bijpassende builtins-bibliotheek via je distributie of NVIDIA-pakketten volgens de [NVIDIA-handleiding](/nl/blog/mine-blocknet-nvidia-gpu/). Pakketnamen verschillen per distributie en CUDA-versie; gebruik de instructies voor jouw systeem.
+
+Met deze bibliotheken kan de standaardmodus tegelijk op CPU en ondersteunde NVIDIA-kaarten minen. Selecteer CPU expliciet om alvast te minen terwijl je de GPU-runtime voorbereidt:
+
+```sh
+./seine --backend cpu
+```
+
+Deze keuze gebruikt bij deze uitvoering alleen de CPU. Voor GPU-selectie en geaccepteerde GPU-shares lees je verder in de NVIDIA-handleiding. De hier beschreven ARM64-release bevat de CPU-backend; CUDA installeren voegt geen NVIDIA-backend aan dat archief toe.
+
+## Hoe los je een Linux-opstartfout op?
+
+Gebruik de eerste foutmelding om de volgende controle te kiezen. Een architectuur- of runtimefout treedt op vóór geaccepteerde shares; andere pooladressen of threadaantallen lossen die fase niet op. Bewaar het gecontroleerde archief terwijl je programma en omgeving nakijkt.
+
+| Melding of symptoom | Wat controleren? |
+|---|---|
+| `Exec format error` | Verkeerde architectuur: vergelijk `uname -m` met de archiefnaam. |
+| `GLIBC_2.39 not found` | Het programma vereist een nieuwere glibc. Gebruik een geschikt systeem of bouw vanuit broncode; laat je distributie de C-systeembibliotheek beheren. |
+| `Permission denied` | Controleer de uitvoerrechten van de gebruiker en gebruik een map op een bestandssysteem dat uitvoering toestaat. |
+| `libnvrtc` / `libnvrtc-builtins` | Installeer de geschikte NVIDIA-runtime en bijpassende builtins-bibliotheek of gebruik tijdens de voorbereiding `--backend cpu`. |
+
+Zodra shares worden geaccepteerd, behandelt de [huge-pages-handleiding](/nl/blog/huge-pages-blocknet-mining/) de optionele Linux-instellingen. De [serverhandleiding](/nl/blog/mine-blocknet-on-servers/) behandelt gebruik zonder grafische interface en NUMA-plaatsing. Geen van beide is nodig voor deze eerste start; voer wijzigingen afzonderlijk uit om hun effect op je machine te herkennen.
+
+<CTA target="seine" title="Download seine voor Linux" text="Kies je Linux-archief, controleer het en verbind met bntpool.com met automatische CPU-afstemming." />

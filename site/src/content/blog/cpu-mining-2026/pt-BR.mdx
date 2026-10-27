@@ -11,8 +11,8 @@ faq:
     a: 'Um hash memory-hard precisa de gigabytes de memória rápida a cada tentativa, então um chip feito só para calcular hashes ainda precisaria de muita RAM ao lado de cada núcleo. Desktops, notebooks e servidores já vêm com bastante RAM e controladores de memória rápidos, o que deixa o hardware que as pessoas já têm perto do que o algoritmo precisa.'
   - q: 'Dá para minerar com a CPU e a placa de vídeo ao mesmo tempo?'
     a: 'Sim, ao minerar Blocknet com o seine no Windows ou no Linux. O seine minera com o processador e todas as placas de vídeo NVIDIA que detecta ao mesmo tempo, e os hashrates se somam. Ele ajusta o processador enquanto minera e cada placa na primeira execução, então não há nada para configurar antes de começar.'
-sourceHash: 67d582c389a6
-translation: reviewed
+sourceHash: 747601f9e429
+translation: draft
 ---
 
 Este guia explica a situação da mineração com CPU em 2026, por que moedas com prova de trabalho memory-hard mantêm os computadores comuns competitivos, o que observar ao escolher uma moeda para minerar com um processador e como começar a minerar Blocknet com o seine em poucos minutos.
@@ -58,7 +58,7 @@ Três coisas decidem quantos hashes por segundo (H/s) um processador produz no B
 
 **Capacidade de RAM.** Cada thread de mineração precisa do seu próprio bloco de 2 GiB para cada hash, então divida sua RAM por dois para saber o máximo de threads que cabem. Um computador com 32 GB comporta 16 blocos no papel. O seine mantém 5% da RAM em reserva e deixa espaço para o sistema operacional, o que leva essa máquina a cerca de 14 threads. A RAM costuma limitar o número de threads antes do número de núcleos. O guia de [mineração em um PC antigo ou notebook](/pt-br/blog/mine-crypto-on-old-pc-or-laptop/) analisa máquinas de 4-16 GB.
 
-**Largura de banda da memória.** Cada hash movimenta gigabytes pelo sistema de memória. A 49,4 H/s, a máquina mais rápida medida com o seine grava cerca de 99 GiB de blocos de memória novos por segundo (49,4 × 2 GiB). Processadores com mais canais de memória e memória mais rápida saem na frente.
+**Largura de banda da memória.** Cada hash movimenta gigabytes pelo sistema de memória. A 68,3 H/s, a máquina mais rápida medida com o seine grava cerca de 136,6 GiB de blocos de memória novos por segundo (68,3 × 2 GiB). Processadores com mais canais de memória e memória mais rápida saem na frente.
 
 **O kernel certo.** O seine traz vários kernels Argon2id: AVX2, AVX-512 e um kernel de streaming no x86, e NEON com um caminho rápido SHA3 no Arm. No mesmo chip, o kernel faz uma grande diferença. No AWS Graviton4, o kernel SHA3 com prefetch minera 56% mais rápido que o NEON simples (de 13,80 para 21,50 H/s), e no AMD EPYC 9R45 o kernel de streaming minera 30% mais rápido que o AVX2 (de 34,47 para 44,74 H/s com 24 threads). O seine compara os kernels enquanto minera e fica com o mais rápido.
 
@@ -66,13 +66,15 @@ Estes são os melhores resultados medidos com o seine em cada geração de hardw
 
 | Hardware | Chip exato | Threads | Hashrate |
 |---|---|---|---|
-| AMD EPYC · Zen 5 | Servidor EPYC 9R45 | 32 | 49,4 H/s |
+| AMD EPYC · Zen 5 | Servidor EPYC 9355P | 64 | 68,3 H/s |
 | Servidor Arm | AWS Graviton4 | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 | Servidor EPYC 9R14 | 32 | 38,2 H/s |
 | Apple M4 Max | MacBook Pro de 48 GB | 16 | 30,9 H/s |
 | Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
 
-A linha do Apple M4 Max é um notebook, o que mostra como um sistema de memória forte combina bem com o Argon2id. As linhas de servidor rodaram em máquinas da AWS com huge pages de 2 MiB. O [guia de hardware para minerar Blocknet](/pt-br/blog/blocknet-mining-hardware-hashrate/) aprofunda as dicas de compra e o dimensionamento da RAM, e o [guia para Mac](/pt-br/blog/mine-blocknet-on-mac/) cobre o Apple Silicon.
+A configuração mais rápida nestas medições é um AMD EPYC 9355P a 68,3 H/s: 64 threads de mineração, 192 GiB de RAM e huge pages de 1 GiB preparadas manualmente no Linux.
+
+A linha do Apple M4 Max é um notebook, o que mostra como um sistema de memória forte combina bem com o Argon2id. As outras linhas de servidor rodaram em máquinas da AWS com huge pages de 2 MiB. O [guia de hardware para minerar Blocknet](/pt-br/blog/blocknet-mining-hardware-hashrate/) aprofunda as dicas de compra e o dimensionamento da RAM, e o [guia para Mac](/pt-br/blog/mine-blocknet-on-mac/) cobre o Apple Silicon.
 
 ## Como começar a minerar Blocknet com CPU?
 

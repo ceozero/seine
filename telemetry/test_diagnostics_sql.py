@@ -40,14 +40,15 @@ class DiagnosticSQLTests(unittest.TestCase):
         legacy['backends'] = []
         self.insert_diagnostic(legacy)
         report = self.diagnostics()
-        self.assertEqual(report['status'], 'attention')
+        self.assertEqual(report['status'], 'ok')
         self.assertEqual(len(report['issue_clusters']), 3)
         causes = {c['detail']['os_error']: c for c in report['issue_clusters'] if c['detail']}
         self.assertEqual(causes[12]['affected_installations'], 1)
         self.assertEqual(causes[12]['occurrences'], 200)
         self.assertEqual(causes[12]['detail']['requested_bytes'], 2147483648)
         self.assertEqual(causes[12]['phase'], 'initializing_backends')
-        self.assertEqual(report['recent_unclean_versions'][0]['affected_installations'], 3)
+        counts = {r['version']: r['affected_installations'] for r in report['recent_unclean_versions']}
+        self.assertEqual(counts, {fixture['miner_version']: 2, 'unknown': 1})
         observed = next(c for c in report['unclean_run_clusters'] if c['last_observed_phase'])
         self.assertEqual(observed['affected_installations'], 2)
         self.assertEqual(observed['installations_hashing_in_restart_report'], 2)
@@ -57,6 +58,56 @@ class DiagnosticSQLTests(unittest.TestCase):
         self.assertEqual(unknown['installations_hashing_in_restart_report'], 0)
         self.assertNotIn(identity, json.dumps(report))
         self.assertNotIn('installation_id', json.dumps(report))
+
+    def test_upgrade_attributes_previous_build_and_unknown_is_not_new_release(self):
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        fixture['miner_version'] = 'v0.2.35'
+        fixture['diagnostics']['previous_run_unclean'] = False
+        fixture['diagnostics'].pop('previous_run')
+        fixture['diagnostics']['events'] = []
+        self.insert_diagnostic(fixture)
+        restart = copy.deepcopy(fixture)
+        restart['miner_version'] = 'v0.2.36'
+        restart['diagnostics']['build_commit'] = 'bbbbbbbbbbbb'
+        restart['diagnostics']['previous_run_unclean'] = True
+        restart['diagnostics']['previous_run'] = {
+            'build_commit': 'abcdef123456', 'phase': 'mining', 'uptime_secs': 60}
+        for _ in range(3):
+            self.insert_diagnostic(restart)
+        unknown = copy.deepcopy(restart)
+        unknown['diagnostics']['previous_run']['build_commit'] = 'cccccccccccc'
+        self.insert_diagnostic(unknown)
+        result = self.diagnostics()
+        counts = {r['version']: r['affected_installations'] for r in result['recent_unclean_versions']}
+        self.assertEqual(counts, {'v0.2.35': 3, 'unknown': 1})
+        self.assertEqual(result['status'], 'attention')
+        self.assertEqual(result['recent_error_versions'], [])
+        old = next(c for c in result['unclean_run_clusters'] if c['version'] == 'v0.2.35')
+        self.assertEqual(old['reporting_versions'], ['v0.2.36'])
+
+        # Conflicting source labels cannot resolve a historical checkpoint.
+        fixture['miner_version'] = 'different-label'
+        self.insert_diagnostic(fixture)
+        self.assertEqual(self.diagnostics()['recent_unclean_versions'][0]['version'], 'unknown')
+
+    def test_checkpoint_events_are_context_not_new_errors_and_explicit_version_survives(self):
+        fixture = json.loads((Path(__file__).parent / 'reliability-fixture.json').read_text())
+        fixture['diagnostics']['events'] = []
+        fixture['diagnostics']['previous_run']['miner_version'] = 'v0.2.30'
+        fixture['diagnostics']['previous_run']['events_truncated'] = True
+        identity = uuid.uuid4().hex
+        self.insert_diagnostic(fixture, identity)
+        self.insert_diagnostic(fixture, identity)
+        result = self.diagnostics()
+        self.assertEqual(result['recent_error_versions'], [])
+        self.assertEqual(result['issue_clusters'], [])
+        cluster, = result['previous_run_issue_clusters']
+        self.assertEqual(cluster['version'], 'v0.2.30')
+        self.assertEqual(cluster['code'], 'rust_panic')
+        self.assertEqual(cluster['affected_installations'], 1)
+        self.assertNotIn('occurrences', cluster)
+        self.assertEqual(result['unclean_run_clusters'][0]['installations_with_truncated_previous_events'], 1)
+        self.assertNotIn(identity, json.dumps(result))
 
     def test_unique_failure_is_not_hidden_by_common_warning_limit(self):
         fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())

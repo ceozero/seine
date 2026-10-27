@@ -1,0 +1,62 @@
+---
+title: '¿Por qué se detiene mi minero de Blocknet?'
+description: 'Averigua por qué se detiene tu minero de Blocknet: revisa mensajes, memoria, inicio de GPU y suspensión, y comprueba un reinicio estable con seine.'
+tags: ['Solución de problemas', 'Guía de minería', 'seine']
+faq:
+  - q: '¿Una desconexión siempre significa que el minero falló?'
+    a: 'La pérdida de conexión con el pool puede dejar el proceso activo mientras intenta reconectarse. Comprueba si sigue ejecutándose, lee los mensajes recientes y busca nuevos shares aceptados tras la reconexión. Una aplicación cerrada o un informe de error del sistema requieren otra investigación.'
+  - q: '¿Debo borrar la configuración cuando seine se detiene?'
+    a: 'Conserva la configuración y anota su ubicación antes de modificarla. Un error de análisis señala un archivo o valor concreto. Haz una copia, corrige el problema indicado y conserva la dirección y el lanzador. Borrarlo todo dificulta comparar con la última ejecución correcta.'
+  - q: '¿Qué datos ayudan a investigar una detención repetida?'
+    a: 'Anota la versión de seine, sistema operativo, CPU, GPU, memoria disponible, argumentos completos, directorio de trabajo y hora. Incluye los últimos mensajes y eventos relevantes del sistema. Elimina credenciales y datos personales antes de compartirlos; nunca incluyas frases de recuperación ni claves privadas.'
+sourceHash: '2e054f0c0100'
+translation: draft
+---
+
+Haz que tu minero de Blocknet funcione de forma constante identificando dónde se detiene. Esta guía corresponde a seine v0.2.37 y comienza con pruebas que puedes recopilar en tu computadora. Conserva el último comando y configuración que funcionaron y cambia una opción relevante a la vez para que el siguiente resultado sea útil.
+
+## ¿Qué debes comprobar cuando se detiene el minero?
+
+<Answer>
+Comprueba si terminó el proceso, si la computadora se suspendió o si la conexión al pool se está recuperando. Conserva el último mensaje y la hora antes de reiniciar. Relaciona esas pruebas con la configuración inicial, la asignación de memoria, la GPU o un evento del sistema y verifica la corrección con nuevos shares aceptados.
+</Answer>
+
+<img src="/assets/blog/miner-keeps-stopping.svg" alt="Un registro del minero conduce a comprobaciones separadas de la aplicación, la memoria y la energía de la computadora, seguidas de un reinicio verificado." width="1200" height="675" loading="lazy" />
+
+## Mantén visible el último mensaje
+
+Abre una terminal en tu directorio habitual y ejecuta allí el comando existente. Añade `--ui plain` para obtener registros de texto en lugar del panel, conservando los demás argumentos. Esto inicia la minería con tu configuración. Copia los mensajes finales, incluido el primer error anterior a los mensajes repetidos de reconexión o cierre.
+
+Anota juntos la versión del ejecutable, el directorio de trabajo y el de datos seleccionado. En esta versión, un error fatal gestionado se imprime con `fatal:` antes de salir. Una terminación del sistema puede dejar otras pruebas. Si el proceso sigue activo, consulta las [comprobaciones de conexión](https://bntpool.com/blog/es/track-your-miner-on-bntpool/); la ausencia de un share o una desconexión temporal no demuestra un fallo del proceso.
+
+## ¿Se detiene antes de empezar a minar?
+
+Lee el archivo, opción o biblioteca que menciona el mensaje inicial. Un error al analizar la configuración te lleva al archivo guardado concreto; copia ese archivo antes de corregir la sintaxis. Comprueba el directorio de trabajo del acceso directo o servicio. La [guía de configuración](/es/blog/configure-seine-miner/) explica por qué el mismo ejecutable puede leer ajustes distintos desde carpetas diferentes.
+
+Si el ejecutable no arranca, verifica el paquete correcto para tu sistema y arquitectura y usa la versión oficial. Ante una alerta de seguridad, sigue la [guía de verificación de descargas](/es/blog/antivirus-flags-crypto-miner/). Mantén la protección activa mientras identificas el archivo y mensaje. Si empezó tras actualizar, compara la ruta y argumentos con el [procedimiento de actualización](/es/blog/update-seine-miner/).
+
+## ¿El mensaje menciona memoria o páginas?
+
+Ajusta el número solicitado de hilos de CPU a la memoria disponible, teniendo en cuenta otras aplicaciones y límites de contenedores. Un error de asignación señala un recurso que investigar; por sí solo no demuestra RAM defectuosa. Cierra tareas innecesarias o reduce un número de hilos fijado manualmente y vuelve a probar una vez. Anota qué cambio influyó y si empezó la minería.
+
+Un modo de páginas obligatorio necesita la reserva correspondiente del sistema. Un fallo al asignar huge pages exigidas y la falta de memoria ordinaria requieren comprobaciones diferentes. Consulta la [guía de RAM](/es/blog/how-much-ram-to-mine-blocknet/) para capacidad y la [guía de huge pages](/es/blog/huge-pages-blocknet-mining/) para su configuración. Evita cambiar varias opciones de ajuste a la vez: una configuración conocida y sencilla facilita interpretar el siguiente registro.
+
+## Comprueba por separado la etapa de GPU
+
+Si el inicio menciona una biblioteca CUDA, dispositivo o asignación de GPU, anota el mensaje exacto y la versión del controlador instalado. La [guía de NVIDIA](/es/blog/mine-blocknet-nvidia-gpu/) explica requisitos, bibliotecas y selección de dispositivos. Compáralos con tu entorno antes de cambiar opciones del kernel o ajuste. Descargar correctamente el archivo no demuestra que el entorno de ejecución esté listo.
+
+seine puede aislar un fallo de backend mientras otros backends activos continúan. Revisa sus mensajes y la actividad restante antes de concluir que toda la aplicación se detuvo. Guarda las pruebas antes de reiniciar, pues una nueva sesión puede ocultar la secuencia anterior. Si pruebas una selección más sencilla, conserva el comando original y compara el inicio, trabajo continuo y envíos aceptados.
+
+## ¿La computadora se suspendió o reinició?
+
+Compara la hora con el historial de suspensión, hibernación, reinicios y tareas programadas. Apagar la pantalla y suspender la computadora son ajustes distintos. En Windows, revisa los [ajustes de energía y suspensión](https://support.microsoft.com/en-us/windows/experience/power-battery/power-settings-in-windows-11) y si ocurrió al cerrar la tapa o cambiar la alimentación. Elige ajustes adecuados para el uso y refrigeración del equipo.
+
+Ante una salida inesperada del proceso, revisa los registros de aplicaciones y del sistema a esa hora. El [Visor de eventos](https://learn.microsoft.com/en-us/windows/win32/cossdk/finding-the-source-of-an-error) de Windows puede vincular un error con su ejecutable. Si se reinició toda la computadora, también necesitas pruebas del sistema. En una instalación gestionada como servicio, revisa el estado de salida y registro antes de activar reinicios repetidos que oculten la causa inicial.
+
+## Verifica la solución y prepara un informe útil
+
+Tras la corrección concreta, inicia desde el acceso directo, terminal o servicio habitual. Confirma el destino, backends activos y nuevos shares aceptados. Observa la condición que antes provocaba la detención, como el uso normal del escritorio o el siguiente inicio programado, sin recrear una condición de hardware insegura. La [guía del panel](/es/blog/seine-dashboard-explained/) distingue trabajo actual de estadísticas acumuladas.
+
+Si vuelve a detenerse, reúne versión, sistema, hardware, memoria disponible, opciones exactas, hora y mensajes finales. Explica qué cambió y si terminó todo el proceso o un backend. Elimina credenciales y datos personales; nunca compartas semillas ni claves privadas. Conserva la configuración que funciona y no atribuyas una causa basándote únicamente en la tasa de hash.
+
+<CTA target="seine" title="Obtén la versión actual de seine" text="Conserva una versión verificada y tu comando de inicio; comprueba el trabajo aceptado tras cada corrección concreta." />

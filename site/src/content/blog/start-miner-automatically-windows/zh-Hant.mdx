@@ -1,0 +1,68 @@
+---
+title: '在 Windows 中自動啟動 Blocknet 礦工'
+description: '用工作排程器在登入 Windows 時啟動 seine。保留現有挖礦設定，防止重複執行，檢查已接受的份額，並了解關閉自動啟動與更新礦工的方法。'
+tags: ['挖礦指南', 'Windows', '設定']
+faq:
+  - q: '礦工會在登入之前啟動嗎？'
+    a: '此設定在指定的 Windows 使用者登入時，於該使用者工作階段內啟動 seine，不會建立背景 Windows 服務。重新啟動電腦後，請登入該帳戶觸發工作，再檢查礦池接受的份額。'
+  - q: '工作排程器會保留挖礦設定嗎？'
+    a: '使用相同的 Windows 帳戶、現有資料夾和已驗證指令中的選項。在引數中指定資料的絕對路徑，並設定正確的工作目錄，seine 就能找到儲存的位址、礦池和機器名稱。'
+  - q: '如何關閉自動挖礦？'
+    a: '在工作排程器中停用工作，阻止之後的啟動，再於礦工視窗正常停止正在執行的程式。停用工作不會關閉已執行的處理程序。需要恢復登入時挖礦時，再啟用工作即可。'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+讓 Windows 在登入時啟動已正常運作的 seine 設定。本指南使用使用者工作階段內的工作排程器，並提供清楚的關閉方法。先完成 [Windows 挖礦設定](/zh-hant/blog/mine-blocknet-on-windows/)，確認礦池接受份額。自動執行已驗證的指令，更容易檢查結果。
+
+## 如何自動啟動 Blocknet 礦工？
+
+<Answer>
+為自己的 Windows 帳戶建立登入時觸發的工作，將動作指向已解壓縮的 seine 程式。指定現有資料夾與工作目錄，阻止同一工作的第二個執行個體，然後試執行並檢查已接受的份額。
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="使用者登入 Windows，工作排程器啟動一個礦工，已接受的份額抵達礦池。" width="1200" height="675" loading="lazy" />
+
+## 應保留哪些檔案與設定？
+
+為解壓縮後的發行版選擇固定資料夾。將整個壓縮檔的內容放在一起，包括隨附程式庫，並指向其中的程式。找到手動執行成功時使用的資料夾。seine 預設使用相對於工作目錄的 `./seine-data`，並在其中的 `seine.config.json` 儲存連線設定。啟動目錄不同，可能會尋找另一套設定。
+
+範例使用 `C:\Users\YOUR_USER\Apps\seine`，請把整個路徑替換為實際安裝位置。現有資料保留在原處，也保存已驗證的啟動指令：明確指定的後端或調校選項可能仍需要。建立此工作不需要錢包復原詞組或私密金鑰。
+
+## 建立登入工作
+
+從開始功能表開啟**工作排程器**，選擇**建立工作**，取容易辨識的名稱，例如 **seine mining**。在**一般**選擇手動挖礦時的帳戶與**只有在使用者登入時才執行**。此一般設定不勾選**以最高權限執行**。在**觸發程序**為指定使用者新增**登入時**，並啟用。可參閱 [Microsoft 登入觸發說明](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on)。
+
+在**動作**新增**啟動程式**，分別填寫：
+
+- **程式或指令碼：**透過瀏覽選擇 `C:\Users\YOUR_USER\Apps\seine\seine.exe`。
+- **新增引數：**輸入指向現有資料目錄的 `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"`，後接已驗證指令的選項。
+- **開始位置：**輸入 `C:\Users\YOUR_USER\Apps\seine`，不加引號。
+
+[工作目錄](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory)決定處理程序的起始資料夾。不要把選項放入程式欄，也不要把執行檔名稱放入開始位置。選擇實際檔案，不要原樣保留範例路徑。
+
+## 設定執行條件
+
+在**設定**允許依需求執行，以便測試。工作已執行時，選擇**不要啟動新的執行個體**。此[執行個體原則](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances)僅適用於該排程工作，不會偵測另外開啟的礦工。測試前先關閉手動執行的程式。明確啟動的一個處理程序較易核對，也避免第二份程式使用相同設定。
+
+若要在登入期間持續挖礦，取消超過指定時間就停止工作的選項，否則會有[執行時間限制](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit)。還要檢查**條件**：要求閒置可能阻止立即試執行。筆電保留交流電源條件，可將此流程限定為插電時使用。依自己的用途儲存設定。
+
+## 如何確認自動挖礦有效？
+
+正常停止手動礦工，選擇已儲存的工作並按**執行**。在視窗檢查收款位址、礦池和機器名稱，等待已接受的份額。在 bntpool.com 的 My Stats 查詢該位址，確認預期機器正在提交工作。工作顯示執行中只代表處理程序存在；已接受的份額才證明有效的礦池工作。
+
+測試真正的觸發程序時，先儲存其他工作，登出後用指定帳戶重新登入。鎖定與解鎖桌面是另一種操作。再次確認位址和最近的份額。[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)解釋裝置與連線資訊。記下工作名稱和資料夾，方便日後更新。
+
+## 未啟動時該檢查什麼？
+
+將程式路徑、帳戶、引數及開始位置與有效的手動指令比較。再次要求初始設定時，先檢查資料路徑與存取權；無法載入程式庫時，檢查是否完整解壓縮。沒有視窗時，先檢查已啟用的觸發程序及電源、閒置條件，再調整礦工設定。
+
+礦工運作卻看不到份額時，檢查位址、礦池連線和該機器最近的份額。兩台電腦共用錢包時，依[多電腦指南](https://bntpool.com/blog/zh-hant/mine-multiple-computers-one-wallet/)設定不同名稱。排程工作只負責開啟已驗證設定，連線或硬體問題則在執行中的礦工診斷。
+
+## 關閉自動啟動或更新礦工
+
+要阻止日後啟動，選擇工作並按**停用**。已執行的礦工需在視窗中正常停止，停用工作不會結束該處理程序。需要恢復時再啟用。此選擇清楚且可還原，不會變更 Windows 全域啟動或睡眠設定。
+
+替換發行版前，停用工作並停止礦工。按照[更新指南](/zh-hant/blog/update-seine-miner/)保留資料，程式路徑改變時更新動作。先按執行測試，再啟用觸發程序。Linux 系統服務請用獨立的[伺服器設定](/zh-hant/blog/mine-blocknet-on-servers/)，其流程與這裡的 Windows 登入啟動不同。
+
+<CTA target="seine" title="下載 Windows 版 seine" text="使用官方發行版，確認最初的已接受份額，再自動執行已驗證的設定。" />

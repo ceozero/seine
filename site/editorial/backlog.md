@@ -13,7 +13,6 @@ proof of work changes.
 | # | Slug | Primary cluster | Search job | Evidence needed |
 |---|---|---|---|---|
 | 2 | `argon2id-vs-randomx` | randomx vs argon2; blocknet vs monero mining | How Argon2id differs from RandomX for a Monero miner, and which machines suit which | Same-machine XMRig vs seine runs on 4-6 hosts |
-| 3 | `how-much-ram-to-mine-blocknet` | ram per thread mining; argon2id 2gb per thread | How many threads my RAM allows, and why a 1 GB VPS fails | Thread-scaling on 2-channel vs 12-channel machines |
 | 4 | `blocknet-mining-pools` | blocknet pool; blocknet mining pool list | Which pools exist and how fees and payouts compare | Dated table of every pool; disclose that we run bntpool.com |
 | 5 | `blocknet-faraday-upgrade-miners` | blocknet faraday; blocknet hard fork 2027 | What miners must change for Faraday, and when | Final public spec and a seine release that supports it; publish around Jan 2027 |
 
@@ -49,3 +48,5 @@ including all 20 languages. Do not create a competing Seine article.
 Published 2026-10-25: `mine-blocknet-nvidia-gpu` owns NVIDIA setup, runtime diagnosis, accepted-share verification and the measured RTX 5090 GPU-only/CPU-plus-GPU comparison. See `batches/2026-10-nvidia-guide/research.md`. Other cards, including RTX 4090, still need their own measurements before adding results.
 
 Published 2026-10-25: `antivirus-flags-crypto-miner` owns Windows download warnings, official-release checksum verification and reporting unresolved detections. It includes an actual v0.2.26 Windows PowerShell verification record and release-assets capture.
+
+Published October 26, 2026: `how-much-ram-to-mine-blocknet` covers memory arithmetic, current-release sizing and allocation troubleshooting. No new hardware measurements were commissioned; channel-scaling benchmarks remain separate future research.

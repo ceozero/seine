@@ -209,3 +209,96 @@ for _ in range(5):
 assert analysis('data_quality.sql')['status'] == 'ok'
 assert query("SELECT count(*) FROM telemetry_reports WHERE payload::text LIKE '%PRIVATE WALLET%'") == '0'
 print('PASS: schema 4 diagnostics, early failures, private-data rejection, installation-weighted incident thresholds and periodic/final separation')
+
+recovered = json.loads(Path(__file__).with_name('reliability-fixture.json').read_text())
+recovered['installation_id'] = uuid.uuid4().hex
+recovered['report_id'] = uuid.uuid4().hex
+assert send(recovered) == 204
+stored = json.loads(query(f"SELECT payload #> '{{diagnostics,previous_run}}' FROM telemetry_reports WHERE report_id='{recovered['report_id']}'"))
+assert stored['miner_version'] == 'v0.2.35-fixture'
+assert stored['recent_events'][0]['source'] == 'deps/cudarc-0.19.2/src/lib.rs'
+for mutate in (
+    lambda p: p.update(schema_version=4),
+    lambda p: p['diagnostics']['previous_run']['recent_events'][0].update(message='PRIVATE WALLET'),
+    lambda p: p['diagnostics']['previous_run']['recent_events'][0].update(source='/home/private/src/lib.rs'),
+):
+    bad = json.loads(json.dumps(recovered))
+    bad['installation_id'] = uuid.uuid4().hex
+    bad['report_id'] = uuid.uuid4().hex
+    mutate(bad)
+    assert send(bad) == 422
+assert query("SELECT count(*) FROM telemetry_reports WHERE payload::text LIKE '%PRIVATE WALLET%'") == '0'
+print('PASS: schema 5 recovered evidence, previous version, downgrade and private-field rejection')
+
+tuning = json.loads(Path(__file__).with_name('tuning-fixture.json').read_text())
+tuning['installation_id'] = uuid.uuid4().hex
+tuning['report_id'] = uuid.uuid4().hex
+assert send(tuning) == 204
+stored = json.loads(query(f"SELECT payload->'tuning' FROM telemetry_reports WHERE report_id='{tuning['report_id']}'"))
+assert stored['run_id'] == tuning['tuning']['run_id']
+assert stored['trials'][0]['outcome']['samples'][1]['hashes'] == 3090
+assert stored['trials'][0]['outcome']['policy']['quantization'] == 'three_window_hash'
+for mutate in (
+    lambda p: p.update(schema_version=5),
+    lambda p: p['tuning']['trials'][0]['outcome'].update(message='PRIVATE WALLET'),
+    lambda p: p['tuning']['trials'][0]['outcome']['samples'][0]['context']['resources'].update(placement_fingerprint='/home/private'),
+):
+    bad = json.loads(json.dumps(tuning))
+    bad['installation_id'] = uuid.uuid4().hex
+    bad['report_id'] = uuid.uuid4().hex
+    mutate(bad)
+    assert send(bad) == 422
+assert analysis('tuning_report.sql')['unique_trials'] == 1
+assert query("SELECT count(*) FROM telemetry_reports WHERE payload::text LIKE '%PRIVATE WALLET%'") == '0'
+print('PASS: schema 6 paired trials, raw samples and policy persistence, strict rejection and analysis')
+
+alternative = json.loads(json.dumps(tuning))
+alternative['installation_id'] = uuid.uuid4().hex
+alternative['report_id'] = uuid.uuid4().hex
+trial = alternative['tuning']['trials'][0]['outcome']
+trial['policy'].update(minimum_sample_ms=30000, minimum_hashes=32,
+                       short_sample_ms=10000, short_minimum_hashes=256)
+trial.update(decision='no_confirmed_gain', applied='baseline')
+trial['context_after'] = json.loads(json.dumps(trial['context_before']))
+trial['samples'] = trial['samples'][:3]
+for sample in trial['samples']:
+    sample.update(elapsed_ms=30000 if sample['arm'] == 'candidate' else 10000,
+                  hashes=64 if sample['arm'] == 'candidate' else 300)
+assert send(alternative) == 204
+assert analysis('tuning_report.sql')['qualified_trials'] == 2
+alternative['installation_id'] = uuid.uuid4().hex
+alternative['report_id'] = uuid.uuid4().hex
+del trial['policy']['short_minimum_hashes']
+assert send(alternative) == 422
+print('PASS: schema 6 mixed short/full window rules and incomplete alternative rejection')
+
+# Optional artifact emitted by the real runtime Monitor test. Keep this boundary
+# check separate from the handwritten collector fixture and production data.
+if runtime_fixture := os.environ.get('TELEMETRY_TEST_TRIAL_FIXTURE'):
+    runtime = json.loads(Path(runtime_fixture).read_text())
+    before = analysis('tuning_report.sql')['qualified_trials']
+    for _ in range(5):
+        runtime['installation_id'] = uuid.uuid4().hex
+        runtime['report_id'] = uuid.uuid4().hex
+        assert send(runtime) == 204
+    result = analysis('tuning_report.sql')
+    assert result['qualified_trials'] == before + 5, result
+    hint, = result['ranked_hints']
+    assert hint['installations'] == 5
+    assert hint['confidence'] == 'observational_support'
+    assert hint['installations_with_resolved_gain'] == 5
+    assert abs(hint['median_ratio'] - 1.1) < 1e-9
+    assert hint['median_idle_ms'] is None
+    assert not hint['automatic_default_eligible']
+    for mutation in ('changed', 'unknown'):
+        invalid_context = json.loads(json.dumps(runtime))
+        invalid_context['installation_id'] = uuid.uuid4().hex
+        invalid_context['report_id'] = uuid.uuid4().hex
+        sample = invalid_context['tuning']['trials'][0]['outcome']['samples'][1]
+        if mutation == 'changed':
+            sample['changed'] = True
+        else:
+            sample['context']['resources']['placement_fingerprint'] = None
+        assert send(invalid_context) == 204
+        assert analysis('tuning_report.sql')['qualified_trials'] == before + 5
+    print('PASS: runtime Monitor output accepted, five-installation research hint, changed/unknown context excluded and unknown costs preserved')

@@ -1,0 +1,68 @@
+---
+title: 'Automatyczny start minera Blocknet w Windows'
+description: 'Uruchamiaj seine przy logowaniu do Windows przez Harmonogram zadań. Zachowaj konfigurację, unikaj podwójnych procesów i sprawdzaj zaakceptowane udziały.'
+tags: ['Poradnik kopania', 'Windows', 'Konfiguracja']
+faq:
+  - q: 'Czy miner ruszy przed zalogowaniem?'
+    a: 'Ta konfiguracja uruchamia seine po zalogowaniu wybranego użytkownika Windows, w jego sesji. Nie tworzy usługi działającej w tle. Po restarcie komputera zaloguj się na to konto, aby wyzwolić zadanie, a następnie sprawdź zaakceptowane udziały.'
+  - q: 'Czy zachowam ustawienia kopania?'
+    a: 'Użyj tego samego konta Windows, istniejącego katalogu danych i opcji działającego polecenia. Podaj bezwzględną ścieżkę danych w argumentach oraz właściwy katalog roboczy. Dzięki temu seine znajdzie zapisany adres, pulę i nazwę maszyny.'
+  - q: 'Jak wyłączyć automatyczne kopanie?'
+    a: 'Wyłącz zadanie w Harmonogramie, aby zapobiec kolejnym uruchomieniom, a następnie normalnie zatrzymaj minera w jego oknie. Wyłączenie zadania nie zamyka działającego procesu. Możesz je ponownie włączyć, kiedy zechcesz uruchamiać kopanie przy logowaniu.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Ustaw Windows tak, aby otwierał działającą konfigurację seine przy logowaniu. Użyjemy Harmonogramu zadań w sesji użytkownika, z prostą możliwością wyłączenia. Najpierw ukończ [konfigurację Windows](/pl/blog/mine-blocknet-on-windows/) i potwierdź przyjmowanie udziałów przez pulę. Działające już polecenie łatwo sprawdzić po automatyzacji.
+
+## Jak automatycznie uruchamiać minera Blocknet?
+
+<Answer>
+Utwórz zadanie dla swojego konta Windows, wyzwalane przy logowaniu, z akcją uruchamiającą rozpakowany program seine. Wskaż istniejący katalog danych i katalog roboczy, zablokuj kolejną instancję tego zadania, a po próbie sprawdź zaakceptowane udziały.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Użytkownik loguje się do Windows, Harmonogram uruchamia jeden miner, a zaakceptowane udziały trafiają do puli." width="1200" height="675" loading="lazy" />
+
+## Jakie pliki i ustawienia zachować?
+
+Wybierz stały katalog rozpakowanej wersji. Zachowaj razem wszystkie pliki archiwum, także biblioteki, i wskaż znajdujący się tam program. Znajdź dane używane przy udanym ręcznym starcie. Domyślnie seine używa `./seine-data` względem katalogu roboczego i zapisuje połączenie w `seine.config.json`. Inny katalog startowy może oznaczać inną konfigurację.
+
+Przykłady używają `C:\Users\YOUR_USER\Apps\seine`; zastąp całą ścieżkę rzeczywistym katalogiem instalacji. Zachowaj dane w dotychczasowym miejscu. Zapisz również działające polecenie: jawne opcje backendu lub strojenia mogą nadal być potrzebne. Zadanie nie wymaga frazy odzyskiwania ani prywatnych kluczy portfela.
+
+## Utwórz zadanie logowania
+
+Otwórz **Harmonogram zadań** z menu Start i wybierz **Utwórz zadanie**. Nadaj czytelną nazwę, np. **seine mining**. W **Ogólne** wybierz dotychczasowe konto i **Uruchom tylko wtedy, gdy użytkownik jest zalogowany**. Dla tej zwykłej konfiguracji nie zaznaczaj **Uruchom z najwyższymi uprawnieniami**. W **Wyzwalacze** dodaj **Przy logowaniu** dla konkretnego użytkownika i włącz wyzwalacz. Zobacz [dokumentację Microsoft](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+W **Akcje** dodaj **Uruchom program** i osobno wypełnij pola:
+
+- **Program/skrypt:** wybierz `C:\Users\YOUR_USER\Apps\seine\seine.exe` przez Przeglądaj.
+- **Dodaj argumenty:** wpisz `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` z istniejącym katalogiem danych, a następnie opcje działającego polecenia.
+- **Rozpocznij w:** wpisz `C:\Users\YOUR_USER\Apps\seine` bez cudzysłowów.
+
+[Katalog roboczy](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) ustala folder startowy procesu. Nie wpisuj opcji do Program/skrypt ani nazwy programu do Rozpocznij w. Wybierz prawdziwy plik, zamiast pozostawiać przykładową ścieżkę.
+
+## Ustaw warunki działania
+
+W **Ustawienia** zezwól na uruchamianie na żądanie do testów. Dla zadania już uruchomionego wybierz **Nie uruchamiaj nowego wystąpienia**. Ta [zasada instancji](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) dotyczy tylko zadania i nie wykrywa osobno uruchomionego minera. Zamknij ręczną instancję przed próbą. Jeden zamierzony proces łatwiej sprawdzić i uniknąć drugiej kopii z tą samą konfiguracją.
+
+Aby kopać stale podczas sesji, odznacz **Zatrzymaj zadanie, jeśli działa dłużej niż**; inaczej obowiązuje [limit czasu](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Sprawdź **Warunki**: wymaganie bezczynności może opóźnić próbę. Na laptopie pozostawienie warunków zasilania sieciowego ogranicza ten tryb do pracy z podłączonym zasilaczem. Zapisz ustawienia zgodne ze swoim sposobem użycia.
+
+## Jak sprawdzić automatyczne kopanie?
+
+Normalnie zatrzymaj ręcznego minera, zaznacz zadanie i wybierz **Uruchom**. Sprawdź w oknie adres wypłaty, pulę i nazwę maszyny, a potem poczekaj na zaakceptowane udziały. Wyszukaj adres w My Stats na bntpool.com i potwierdź pracę właściwej maszyny. Stan uruchomienia potwierdza tylko proces; przyjęte udziały potwierdzają użyteczną pracę dla puli.
+
+Aby sprawdzić rzeczywisty wyzwalacz, zapisz inne prace, wyloguj się i zaloguj wybranym kontem. Zablokowanie i odblokowanie pulpitu to inna czynność. Ponownie sprawdź adres i najnowsze udziały. [Poradnik panelu](/pl/blog/seine-dashboard-explained/) wyjaśnia urządzenia i połączenie. Zapisz nazwę zadania oraz katalogi na potrzeby aktualizacji.
+
+## Co sprawdzić, jeśli nie startuje?
+
+Porównaj ścieżkę programu, konto, argumenty i Rozpocznij w z działającym poleceniem ręcznym. Ponowna konfiguracja początkowa wymaga najpierw sprawdzenia danych i dostępu do katalogu. Brak biblioteki — pełnego rozpakowania. Brak okna — aktywnego wyzwalacza oraz warunków zasilania lub bezczynności, zanim zmienisz minera.
+
+Jeśli miner działa bez widocznych udziałów, sprawdź adres, połączenie i ostatnie udziały maszyny. Dwóm komputerom z jednym portfelem nadaj różne nazwy według [poradnika wielu komputerów](https://bntpool.com/blog/pl/mine-multiple-computers-one-wallet/). Zadanie ma otwierać sprawdzoną konfigurację; sieć i sprzęt diagnozuj w działającym minerze.
+
+## Wyłącz start lub zaktualizuj minera
+
+Aby zapobiec przyszłym startom, wybierz zadanie i **Wyłącz**. Działającego minera zatrzymaj normalnie w jego oknie; wyłączenie zadania go nie kończy. Włącz zadanie ponownie, gdy zechcesz wrócić do tego trybu. Decyzja pozostaje widoczna i odwracalna bez zmian globalnego startu lub uśpienia Windows.
+
+Przed wymianą wersji wyłącz zadanie i zatrzymaj minera. Zastosuj [poradnik aktualizacji](/pl/blog/update-seine-miner/), zachowaj dane i popraw akcję, jeśli ścieżka się zmieniła. Przetestuj Uruchom przed ponownym włączeniem wyzwalacza. Dla usługi systemowej Linux użyj [konfiguracji serwera](/pl/blog/mine-blocknet-on-servers/), odmiennej od tego logowania w Windows.
+
+<CTA target="seine" title="Pobierz seine dla Windows" text="Użyj oficjalnej wersji, sprawdź pierwsze zaakceptowane udziały i zautomatyzuj działającą konfigurację." />

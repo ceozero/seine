@@ -1,0 +1,106 @@
+---
+title: 'Comment faire fonctionner un nœud Blocknet'
+description: 'Lancez un nœud Blocknet avec le client officiel : installez le core, vérifiez pairs et synchronisation, comprenez les mises à jour et contrôlez le réseau principal.'
+tags: ['Blocknet', 'Nœud', 'Guide de configuration']
+faq:
+  - q: 'Faut-il miner pour faire fonctionner un nœud Blocknet ?'
+    a: 'Faire fonctionner un nœud et lancer le minage sont deux opérations distinctes. Le core conserve les données de chaîne et les connexions ; le minage se lance séparément. Vous pouvez consulter état et pairs sans miner. Le minage en pool avec seine suit aussi son propre parcours et ne nécessite pas votre propre nœud.'
+  - q: 'Fermer la console Blocknet arrête-t-il le nœud ?'
+    a: 'La session interactive attach se connecte à un core en arrière-plan. Quitter cette console laisse le core fonctionner. Employez la commande explicite d’arrêt pour arrêter un nœud géré, puis vérifiez son état. Fermer une console et arrêter le processus sous-jacent sont deux actions différentes.'
+  - q: 'Comment savoir si mon nœud Blocknet se synchronise ?'
+    a: 'Lisez ensemble hauteur, nombre de pairs et état de synchronisation, puis observez leur évolution. Comparez à une référence récente du même réseau. Le balayage du portefeuille est distinct : un nœud à jour ne prouve pas qu’un portefeuille fraîchement chargé a trouvé toutes ses sorties.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Faites fonctionner votre propre nœud Blocknet et vérifiez sa connexion et son suivi de la chaîne. Ce guide utilise le client officiel en ligne de commande pour gérer un core mainnet, puis examiner pairs, synchronisation et mises à jour. Commandes vérifiées avec le client v1.2.0 le 26 octobre 2026. Gardez la [référence officielle](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) de votre version à portée de main.
+
+## Que faut-il pour faire fonctionner un nœud Blocknet ?
+
+<Answer>
+Utilisez le client officiel adapté à votre système, un ordinateur disposant d’espace pour la chaîne et une connexion internet. Le client installe et gère le core en arrière-plan. Une fois lancé, vérifiez pairs et progression. Création du portefeuille et minage restent des tâches distinctes, à ajouter quand le nœud fonctionne.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Un terminal local se connecte à un core Blocknet en arrière-plan qui conserve la chaîne et échange des blocs avec les pairs." width="1200" height="675" loading="lazy" />
+
+## Choisissez le client officiel et votre réseau
+
+Téléchargez l’archive adaptée au système et au processeur depuis les [versions officielles](https://github.com/blocknetprivacy/blocknet/releases/latest). Extrayez-la et ouvrez un terminal où l’exécutable est accessible. Les exemples utilisent `blocknet` ; sous Windows, utilisez `blocknet.exe`. S’il n’est pas dans le chemin de recherche, indiquez son chemin réel, par exemple `./blocknet` sous Linux ou macOS.
+
+Choisissez mainnet pour le réseau habituel de Blocknet. Testnet est un environnement séparé avec ses propres données et paramètres. Notez le réseau pour ne jamais comparer une hauteur testnet à un explorateur mainnet. Ce guide traite du nœud ; le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/) couvre création, restauration et adresse de réception.
+
+## Installez et lancez le core en arrière-plan
+
+Pour une première configuration, lancez l’assistant dans un terminal interactif :
+
+```sh
+blocknet setup
+```
+
+Lisez chaque question. L’assistant examiné enregistre les paramètres, programme les mises à jour, propose de télécharger un core si nécessaire et de le lancer. Il expose aussi réseau et API locale. Conservez la liaison locale pour un nœud géré depuis cet ordinateur.
+
+La procédure manuelle documentée est :
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+Ici, `latest` choisit la version stable du core. Mainnet doit être activé dans la configuration. Le client lance le core en arrière-plan et attend son API. Laissez le démarrage se terminer : ouverture initiale de la base et rattrapage complet de la chaîne sont des étapes différentes.
+
+## Comment examiner les pairs et la synchronisation ?
+
+Connectez-vous au core mainnet lancé :
+
+```sh
+blocknet attach mainnet
+```
+
+À l’invite interactive, saisissez séparément :
+
+```text
+status
+peers
+```
+
+La [référence de la console](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) décrit les champs. Notez hauteur, hash du dernier bloc, nombre de pairs et état de synchronisation. La liste des pairs permet de confirmer les connexions réseau.
+
+Observez la hauteur dans le temps et comparez-la à une référence mainnet récente, comme l’[explorateur officiel](https://explorer.blocknetcrypto.com/). Elle peut rester stable entre deux blocs et les observations peuvent dater de moments différents. Croisez les champs au lieu de conclure sur un seul nombre. Pendant le rattrapage, laissez connexion et stockage disponibles.
+
+## Distinguez chaîne et balayage du portefeuille
+
+La synchronisation suit les blocs du réseau. Le balayage recherche dans cet historique les sorties du portefeuille chargé. Un portefeuille restauré peut encore travailler après le rattrapage du nœud. Ses informations dans la console constituent donc une observation distincte de la hauteur du nœud. Pour un paiement minier précis, suivez le [guide de réception](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/).
+
+Le client actuel prend aussi en charge les checkpoints pour accélérer la synchronisation initiale. Consultez le [guide des checkpoints](https://bntpool.com/blog/fr/blocknet-checkpoints-fast-sync/) pour leur source et leur portée de vérification ; toutes les méthodes rapides ne sont pas identiques. Ne supprimez pas systématiquement la base parce qu’un indicateur reste calme. Distinguez téléchargement, vérification et balayage grâce à l’état et aux journaux.
+
+## Où regarder si le démarrage demande une intervention ?
+
+Hors de la console attach, suivez le journal du core géré :
+
+```sh
+blocknet logs mainnet
+```
+
+Lisez les derniers messages de démarrage et connexion. Ctrl-C arrête le suivi. Pour vérifier paramètres, chemins, versions installées et connectivité :
+
+```sh
+blocknet doctor
+```
+
+La commande doctor documentée rapporte ses observations sans modifier la configuration. Conservez le message exact avant de choisir une correction.
+
+Vérifiez le core et le réseau attendus, l’installation du binaire choisi et l’adresse de l’API locale. Consultez le [dépannage officiel](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) pour la situation indiquée. Gardez identifiants API et données du portefeuille privés lorsque vous partagez un diagnostic. Version, système et erreur pertinente sont souvent plus utiles que tout le répertoire de configuration.
+
+## Comprenez les mises à jour et les arrêts volontaires
+
+Dans le client examiné, le planificateur et certaines commandes de gestion recherchent des mises à jour. La commande externe `blocknet status` peut déclencher une recherche ; elle diffère de `status` dans attach. Les mises à jour peuvent redémarrer les cores suivant `latest`, tandis que les versions fixées restent inchangées. Lisez la [référence des mises à jour](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) pour un nœud avec services dépendants.
+
+Planifiez la maintenance autour des utilisateurs de l’API. Saisissez `quit` pour quitter attach : le core continue. Pour arrêter volontairement ce core mainnet, lancez `blocknet stop mainnet` depuis le terminal du système. Après mise à jour ou redémarrage, vérifiez version active, connexion et progression. Gardez la sauvegarde du portefeuille indépendamment des binaires installés.
+
+## Utilisez le nœud pour la tâche prévue
+
+Un nœud connecté peut servir le portefeuille et les requêtes locales sans activer le minage. Pour miner sur bntpool.com, suivez le [guide du pool](https://bntpool.com/blog/fr/mine-blocknet-on-bntpool/) et la connexion habituelle de seine. Gérer son nœud est un choix séparé. Pour miner directement, lisez les instructions du mode daemon et vérifiez l’API avant la connexion.
+
+Conservez une fiche : réseau, versions du client et du core, emplacement des données, politique de mise à jour et contrôles de progression. Elle servira aussi pour [Faraday](/fr/blog/blocknet-faraday-upgrade/), dont les futures instructions d’activation doivent provenir de la version officielle. Revérifiez l’état après un changement prévu afin de décrire le nœud actif, pas seulement le logiciel téléchargé.
+
+<CTA target="seine" title="Minez Blocknet avec seine" text="Suivez les guides pour connecter votre configuration après avoir choisi le minage en pool ou direct." />

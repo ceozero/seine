@@ -1,0 +1,76 @@
+---
+title: 'seine konfigurieren: gespeicherte Werte und Startoptionen'
+description: 'Finde die seine-Konfiguration, speichere Pool und Wallet-Adresse, verstehe Startoptionen und prüfe nach dem Neustart die Einstellungen deines Blocknet-Miners.'
+tags: ['Mining-Anleitung', 'Konfiguration', 'seine']
+faq:
+  - q: 'Wo speichert seine die Konfiguration?'
+    a: 'Standardmäßig liest seine seine-data/seine.config.json relativ zum Arbeitsverzeichnis beim Start. data-dir wählt ein anderes Basisverzeichnis. Terminal, Verknüpfung und geplante Aufgabe können unterschiedliche Arbeitsverzeichnisse verwenden. Notiere deshalb den vollständigen Konfigurationspfad zusammen mit dem Startbefehl.'
+  - q: 'Ändert ein Kommandozeilenargument die Datei?'
+    a: 'Bei vorhandener Konfiguration haben explizite Verbindungsargumente für diesen Lauf Vorrang, ohne gespeicherte Adresse, Pool-URL oder Rig-Namen zu ersetzen. Behalte das Argument im regulären Startbefehl oder stoppe den Miner und ändere das gespeicherte Feld. Prüfe danach den normalen Start.'
+  - q: 'Gehören alle Mining-Optionen in die JSON-Datei?'
+    a: 'Das gespeicherte Schema enthält wenige Verbindungsfelder. Hardware- und Laufzeitoptionen wie Backend und Threads gehören in die Startargumente. Ähnlich benannte JSON-Felder setzen diese Optionen nicht. Sichere deshalb neben dem Datenordner auch den Startbefehl beziehungsweise das Startskript.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Starte deinen Blocknet-Miner jedes Mal mit nachvollziehbaren Einstellungen. Diese Anleitung für seine v0.2.37 erklärt Speicherort, Vorrang der Startargumente und dauerhafte Änderungen. Voraussetzung ist eine funktionierende Installation; der [Update-Leitfaden](/de/blog/update-seine-miner/) behandelt den Austausch der Anwendung.
+
+## Wie wählt seine die Einstellungen?
+
+<Answer>
+seine kombiniert gespeicherte Verbindungswerte mit Startargumenten. Explizite Verbindungsargumente haben Vorrang vor den entsprechenden gespeicherten Werten. Das Datenverzeichnis bestimmt die gelesene Datei. Hardware- und Laufzeitoptionen bleiben Startargumente. Bewahre deshalb sowohl die Konfigurationsdatei als auch den normalen Startbefehl auf.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Konfigurationsdatei und Terminalbefehl führen zum Miner; nach dem Neustart folgt eine Prüfung." width="1200" height="675" loading="lazy" />
+
+## Finde die tatsächlich verwendete Konfiguration
+
+Standard ist `./seine-data/seine.config.json`, relativ zum Arbeitsverzeichnis des Prozesses. Dieses kann vom Programmordner abweichen. Prüfe Terminalordner, Verknüpfung oder Dienst vor dem Bearbeiten. Zwei Startwege können dasselbe Programm mit verschiedenen Datenordnern öffnen.
+
+`--data-dir` wählt das Basisverzeichnis; der Dateiname bleibt `seine.config.json`. Verwende bei mehreren Startorten einen festen absoluten Pfad. Notiere Programm, Arbeitsverzeichnis, Datenpfad und alle Argumente. Die [Windows-Startanleitung](/de/blog/start-miner-automatically-windows/) zeigt diese Angaben einschließlich Leerzeichen in der Aufgabenplanung.
+
+## Welche Werte gehören in die Datei?
+
+Das Beispiel zeigt die wichtigsten Verbindungsfelder. Ersetze `@yourname` durch deine registrierte Blocknet ID oder vollständige Empfangsadresse. Es beschreibt das Dateiformat und ist kein Befehl. Ändere in einer bestehenden Installation nur die betreffenden Felder, statt die gesamte Datei zu ersetzen.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` und `pool_worker` wählen Modus, Ziel, Pool und Rig-Namen. Erhalte `schema_version` und ein vorhandenes `dev_fee_pool_worker`. Letzteres ist eine separat erzeugte Kennung; dein Rig nutzt `pool_worker`. Wiederherstellungsphrase und private Schlüssel gehören nicht in diese Verbindungsdatei.
+
+## Wie bleibt eine Änderung erhalten?
+
+Stoppe den Miner und sichere die Datei. Bearbeite sie als Klartext mit gültigem JSON und doppelten Anführungszeichen; behalte den Dateinamen ohne zusätzliche Endung. Ändere nur das benötigte Feld im tatsächlich verwendeten Datenordner. Prüfe Kommas, vermeide Kommentare und abschließende Kommas und nutze gegebenenfalls die JSON-Prüfung des Editors. Das Backup ermöglicht einen exakten Vergleich.
+
+Prüfe den Startweg auf explizite Gegenwerte. Eine neue gespeicherte Adresse wirkt nicht, solange ein altes `--address` im Befehl steht. Aktualisiere das Argument oder entferne es zugunsten der Datei. Starte über die gewöhnliche Verknüpfung, das Skript oder die Aufgabe und kontrolliere die wirksamen Werte.
+
+## Temporäre Optionen bewusst verwenden
+
+Bei vorhandener Konfiguration setzt folgende Pool-Option den Rig-Namen für diesen Lauf. Ohne das Argument gilt beim nächsten Start wieder der gespeicherte Name. Das eignet sich für kontrollierte Änderungen; für jeden Start gehört das Argument in den regulären Startbefehl.
+
+```text
+--pool-worker desktop-02
+```
+
+Fehlt die Datei beim ersten Start, erstellt seine sie aus den anfänglichen Verbindungsangaben. Das unterscheidet sich vom Übersteuern einer vorhandenen Datei. Beachte dies beim Kopieren eines Befehls auf einen anderen Computer, der möglicherweise erstmals konfiguriert wird. Die [Konfigurationsreferenz](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) dokumentiert Startabfragen und Optionen.
+
+## Tuning-Optionen beim Startbefehl aufbewahren
+
+`--backend` und `--threads` werden als Startargumente übergeben. Das Verbindungsschema ist keine allgemeine Optionsliste. Ein ähnlich benanntes JSON-Feld setzt keine solche Laufzeitoption. Bewahre bewusste Hardware-Einstellungen im Skript, in der Verknüpfung oder im Dienst auf.
+
+Thread-Tasten im Dashboard ändern die aktuelle Sitzung, nicht einen gespeicherten Standard. Automatisches Tuning besitzt eigene Cache-Dateien. Erhalte sie getrennt von Verbindungsänderungen und lasse jeden Rechner seine Hardware abstimmen. Die [Autotuning-Anleitung](/de/blog/seine-automatic-cpu-tuning/) erklärt Cache-Nutzung und explizite Thread-Zahlen.
+
+## Warum scheinen Einstellungen zurückgesetzt?
+
+Vergleiche Datenpfad und Argumente mit dem letzten funktionierenden Lauf. Neuer Entpackordner, anderer Terminalordner oder alte Aufgabenargumente erklären oft den Unterschied. Lies bei einem Parserfehler zuerst Dateiname und Meldung. Stelle das Backup wieder her oder korrigiere JSON und starte einmal über den vorgesehenen Weg.
+
+Prüfe Zieladresse, Pool, Rig-Namen und akzeptierte Shares. Wiederhole einen normalen Start, um Dauerhaftigkeit zu prüfen; ein einzelner Lauf mit Argumenten bestätigt nur diesen Befehl. Nutze die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) und bei neuem Gutschriftziel die [Adresswechsel-Anleitung](https://bntpool.com/blog/de/change-mining-wallet-address/). Bewahre funktionierenden Startbefehl und Konfigurationsbackup zusammen auf.
+
+<CTA target="seine" title="Aktuelle seine-Version herunterladen" text="Nutze einen festen Datenordner und bewahre den geprüften Startbefehl mit den Verbindungswerten auf." />

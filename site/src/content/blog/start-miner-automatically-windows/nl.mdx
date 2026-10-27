@@ -1,0 +1,68 @@
+---
+title: 'Je Blocknet-miner automatisch starten in Windows'
+description: 'Start seine bij aanmelden in Windows met Taakplanner. Behoud je configuratie, voorkom dubbele starts en controleer geaccepteerde shares voordat je doorgaat.'
+tags: ['Mininghandleiding', 'Windows', 'Instellen']
+faq:
+  - q: 'Start de miner voordat ik me aanmeld?'
+    a: 'Deze instelling start seine zodra de gekozen Windows-gebruiker zich aanmeldt, binnen diens sessie. Er wordt geen Windows-achtergrondservice ingesteld. Meld je na een herstart met dat account aan om de taak te activeren en controleer daarna geaccepteerde shares.'
+  - q: 'Blijven mijn mininginstellingen behouden?'
+    a: 'Gebruik hetzelfde Windows-account, de bestaande gegevensmap en de opties uit je werkende opdracht. Geef een absoluut gegevenspad bij de argumenten en de juiste werkmap op. Zo vindt seine het opgeslagen adres, de pool en de naam van de machine.'
+  - q: 'Hoe schakel ik automatisch minen uit?'
+    a: 'Schakel de taak uit in Taakplanner om volgende starts te voorkomen en stop de draaiende miner normaal in zijn venster. Een taak uitschakelen sluit een bestaand proces niet. Je kunt de taak weer inschakelen wanneer je bij aanmelden wilt minen.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Laat Windows je werkende seine-installatie bij aanmelden openen. Deze handleiding gebruikt Taakplanner binnen je gebruikerssessie en biedt een eenvoudige uitknop. Voltooi eerst de [Windows-installatie](/nl/blog/mine-blocknet-on-windows/) en controleer of de pool shares accepteert. Een opdracht die al werkt is eenvoudig na automatisering te controleren.
+
+## Hoe start je een Blocknet-miner automatisch?
+
+<Answer>
+Maak een Taakplanner-taak voor je Windows-account, activeer die bij aanmelden en laat de actie het uitgepakte seine-programma starten. Geef de bestaande gegevensmap en werkmap op, voorkom een tweede instantie van dezelfde taak en controleer geaccepteerde shares na een proefstart.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Een gebruiker meldt zich aan bij Windows, Taakplanner start één miner en geaccepteerde shares bereiken de pool." width="1200" height="675" loading="lazy" />
+
+## Welke bestanden en instellingen behoud je?
+
+Kies een vaste map voor de uitgepakte release. Houd alle archiefbestanden bij elkaar, inclusief bibliotheken, en wijs naar het programma daarin. Zoek de gegevensmap van je geslaagde handmatige start. Standaard gebruikt seine `./seine-data` ten opzichte van de werkmap en bewaart het daar verbindingsinstellingen in `seine.config.json`. Een andere startmap kan naar een andere configuratie leiden.
+
+De voorbeelden gebruiken `C:\Users\YOUR_USER\Apps\seine`; vervang het hele pad door je echte installatiemap. Laat bestaande gegevens op hun huidige plek staan. Bewaar ook de werkende opdracht: expliciete backend- of afstelopties kunnen nodig blijven. Je hebt geen herstelzin of privésleutels van de wallet nodig voor deze starttaak.
+
+## Maak de aanmeldtaak
+
+Open **Taakplanner** via Start en kies **Taak maken**. Geef een herkenbare naam, zoals **seine mining**. Kies onder **Algemeen** je bestaande account en **Alleen uitvoeren als gebruiker is aangemeld**. Laat **Met meeste bevoegdheden uitvoeren** uit voor deze gewone instelling. Voeg onder **Triggers** **Bij aanmelden** voor jouw specifieke gebruiker toe en schakel de trigger in. Microsoft beschrijft deze [aanmeldtrigger](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Voeg bij **Acties** **Een programma starten** toe en vul de velden afzonderlijk in:
+
+- **Programma/script:** selecteer `C:\Users\YOUR_USER\Apps\seine\seine.exe` via Bladeren.
+- **Parameters toevoegen:** voer `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` in met je bestaande gegevensmap, gevolgd door opties uit je werkende opdracht.
+- **Beginnen in:** voer `C:\Users\YOUR_USER\Apps\seine` zonder aanhalingstekens in.
+
+De [werkmap](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) bepaalt de startmap. Zet geen opties in Programma/script en geen programmanaam in Beginnen in. Selecteer het echte bestand in plaats van het voorbeeldpad over te nemen.
+
+## Stel de uitvoeringsvoorwaarden in
+
+Sta onder **Instellingen** handmatige uitvoering op aanvraag toe voor tests. Kies bij een al draaiende taak **Geen nieuw exemplaar starten**. Dit [instantiebeleid](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) geldt alleen voor de geplande taak en detecteert geen apart gestarte miner. Sluit de handmatige instantie voor de test. Eén bewust gestart proces is eenvoudiger te controleren en voorkomt een tweede kopie met dezelfde configuratie.
+
+Voor doorlopend minen tijdens je sessie schakel je **Taak stoppen als deze langer duurt dan** uit; anders geldt een [uitvoeringstijdlimiet](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Controleer **Voorwaarden**: een eis van inactiviteit kan een directe teststart verhinderen. Op een laptop beperken behouden netstroomvoorwaarden dit gebruik tot aangesloten voeding. Sla passende keuzes op.
+
+## Hoe controleer je automatisch minen?
+
+Stop de handmatige miner normaal, selecteer de taak en kies **Uitvoeren**. Controleer uitbetalingsadres, pool en machinenaam in het venster en wacht op geaccepteerde shares. Zoek dat adres op in My Stats op bntpool.com en controleer de verwachte machine. Een actieve taak bevestigt alleen een proces; geaccepteerde shares bevestigen nuttig poolwerk.
+
+Sla voor de echte triggertest ander werk op, meld je af en weer aan met het gekozen account. Vergrendelen en ontgrendelen is een andere handeling. Controleer opnieuw adres en recente shares. De [dashboardhandleiding](/nl/blog/seine-dashboard-explained/) legt apparaten en verbinding uit. Noteer taaknaam en mappen voor een latere update.
+
+## Wat controleer je als de start uitblijft?
+
+Vergelijk programmapad, account, argumenten en Beginnen in met de werkende handmatige opdracht. Vraagt de miner opnieuw om eerste instellingen, controleer dan gegevenspad en toegang. Ontbreekt een bibliotheek, controleer de volledige uitpakking. Verschijnt geen venster, controleer eerst de ingeschakelde trigger en stroom- of inactiviteitsvoorwaarden voordat je minerinstellingen wijzigt.
+
+Draait de miner zonder zichtbare shares, controleer adres, poolverbinding en recente shares van de machine. Geef twee computers met dezelfde wallet verschillende namen via de [handleiding voor meerdere computers](https://bntpool.com/blog/nl/mine-multiple-computers-one-wallet/). Laat de taak de geteste configuratie openen; onderzoek verbinding en hardware in de draaiende miner.
+
+## Schakel de start uit of werk de miner bij
+
+Selecteer de taak en **Uitschakelen** om toekomstige starts te voorkomen. Stop de reeds draaiende miner normaal in zijn venster; uitschakelen stopt dat proces niet. Schakel de taak weer in wanneer gewenst. De keuze blijft zichtbaar en omkeerbaar zonder algemene Windows-start- of slaapinstellingen te veranderen.
+
+Schakel voor een nieuwe release de taak uit en stop de miner. Volg de [updatehandleiding](/nl/blog/update-seine-miner/), behoud de gegevensmap en pas de actie aan als het programmapad wijzigt. Test met Uitvoeren voordat je de trigger weer inschakelt. Gebruik voor een Linux-systeemservice de [serverhandleiding](/nl/blog/mine-blocknet-on-servers/); die verschilt van deze Windows-aanmeldprocedure.
+
+<CTA target="seine" title="Download seine voor Windows" text="Gebruik de officiële Windows-release, controleer de eerste geaccepteerde shares en automatiseer je werkende installatie." />

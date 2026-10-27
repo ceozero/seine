@@ -1,0 +1,68 @@
+---
+title: '在 Windows 中自动启动 Blocknet 矿工'
+description: '用任务计划程序在登录 Windows 时启动 seine。保留现有挖矿配置，防止重复运行，检查已接受的份额，并掌握关闭自动启动和更新矿工的方法。'
+tags: ['挖矿指南', 'Windows', '设置']
+faq:
+  - q: '矿工会在登录之前启动吗？'
+    a: '此设置在指定的 Windows 用户登录时，在该用户会话内启动 seine，不会创建后台 Windows 服务。重启电脑后，请登录该账户触发任务，再检查矿池接受的份额。'
+  - q: '任务计划程序会保留挖矿设置吗？'
+    a: '使用相同的 Windows 账户、现有数据文件夹和已验证命令中的选项。在参数中指定数据的绝对路径，并设置正确的工作目录，seine 就能找到保存的地址、矿池和机器名称。'
+  - q: '如何关闭自动挖矿？'
+    a: '在任务计划程序中禁用任务，阻止今后的启动，再在矿工窗口中正常停止正在运行的程序。禁用任务不会关闭已经运行的进程。需要恢复登录时挖矿时，再启用任务即可。'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+让 Windows 在你登录时启动已经能正常工作的 seine 配置。本指南使用用户会话内的任务计划程序，并提供明确的关闭方法。先完成 [Windows 挖矿设置](/zh-hans/blog/mine-blocknet-on-windows/)，确认矿池接受份额。自动运行已验证的命令，更容易检查结果。
+
+## 如何自动启动 Blocknet 矿工？
+
+<Answer>
+为自己的 Windows 账户创建登录时触发的任务，将操作指向已解压的 seine 程序。指定现有数据文件夹和工作目录，阻止同一任务的第二个实例，然后试运行并检查已接受的份额。
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="用户登录 Windows，任务计划程序启动一个矿工，已接受的份额到达矿池。" width="1200" height="675" loading="lazy" />
+
+## 应保留哪些文件和设置？
+
+为解压后的发行版选择固定文件夹。将整个压缩包的内容放在一起，包括附带的库，并指向其中的程序。找到手动运行成功时使用的数据文件夹。seine 默认使用相对于工作目录的 `./seine-data`，并在其中的 `seine.config.json` 保存连接设置。启动目录不同，可能会查找另一套配置。
+
+示例使用 `C:\Users\YOUR_USER\Apps\seine`，请把整个路径替换为实际安装位置。现有数据保留在原处，也保存已验证的启动命令：显式指定的后端或调优选项可能仍然需要。创建此任务不需要钱包恢复短语或私钥。
+
+## 创建登录任务
+
+从开始菜单打开**任务计划程序**，选择**创建任务**，取一个容易识别的名称，如 **seine mining**。在**常规**中选择手动挖矿时的账户和**只在用户登录时运行**。本普通设置不勾选**使用最高权限运行**。在**触发器**中为指定用户添加**登录时**，并启用触发器。可参阅 [Microsoft 登录触发器说明](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on)。
+
+在**操作**中添加**启动程序**，分开填写：
+
+- **程序或脚本：**通过浏览选择 `C:\Users\YOUR_USER\Apps\seine\seine.exe`。
+- **添加参数：**输入指向现有数据目录的 `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"`，后接已验证命令的选项。
+- **起始于：**输入 `C:\Users\YOUR_USER\Apps\seine`，不加引号。
+
+[工作目录](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory)决定进程的起始文件夹。不要把选项放入程序栏，也不要把可执行文件名放入起始于栏。选择实际文件，不要原样保留示例路径。
+
+## 设置运行条件
+
+在**设置**中允许按需运行，以便测试。对于已运行的任务，选择**不启动新实例**。此[实例策略](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances)只适用于该计划任务，不会检测单独打开的矿工。测试前先关闭手动实例。一个明确启动的进程更容易核验，也可避免第二份程序使用相同配置。
+
+若要在登录期间持续挖矿，取消**如果任务运行时间超过以下时间，停止任务**；否则会有[运行时间限制](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit)。还要检查**条件**：要求空闲可能阻止立即试运行。笔记本保留交流电源条件，可将此流程限定为插电时使用。按自己的使用方式保存设置。
+
+## 如何确认自动挖矿有效？
+
+正常停止手动矿工，选择已保存的任务并点击**运行**。在窗口检查收款地址、矿池和机器名称，等待已接受的份额。在 bntpool.com 的 My Stats 查询该地址，确认预期机器正在提交工作。任务显示运行中只说明进程存在；已接受的份额才证明有效的矿池工作。
+
+测试真正的触发器时，先保存其他工作，注销并使用指定账户重新登录。锁定与解锁桌面是另一种操作。再次确认地址和最近的份额。[仪表盘指南](/zh-hans/blog/seine-dashboard-explained/)解释设备和连接信息。记下任务名称与文件夹，方便日后更新。
+
+## 没有启动时该检查什么？
+
+将程序路径、账户、参数和起始目录与有效的手动命令比较。再次要求初始设置时，先检查数据路径和访问权限；无法加载库时，检查是否完整解压。没有窗口时，先检查触发器已启用以及电源、空闲条件，再调整矿工设置。
+
+矿工运行却看不到份额时，检查地址、矿池连接和该机器最近的份额。两台电脑共用钱包时，按[多电脑指南](https://bntpool.com/blog/zh-hans/mine-multiple-computers-one-wallet/)设置不同名称。计划任务只负责打开已验证配置，连接或硬件问题在运行中的矿工里诊断。
+
+## 关闭自动启动或更新矿工
+
+要阻止今后的启动，选择任务并点击**禁用**。已经运行的矿工需在其窗口中正常停止，禁用任务不会结束该进程。需要恢复时再启用任务。这种选择清楚且可撤销，不改变 Windows 全局启动或睡眠设置。
+
+替换发行版前，禁用任务并停止矿工。按照[更新指南](/zh-hans/blog/update-seine-miner/)保留数据，程序路径变化时更新操作。先点击运行测试，再启用触发器。Linux 系统服务请使用独立的[服务器设置](/zh-hans/blog/mine-blocknet-on-servers/)，其流程与这里的 Windows 登录启动不同。
+
+<CTA target="seine" title="下载 Windows 版 seine" text="使用官方发行版，确认最初的已接受份额，再自动运行已验证的配置。" />

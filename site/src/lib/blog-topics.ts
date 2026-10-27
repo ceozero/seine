@@ -23,13 +23,23 @@ export const TOPICS = [
 ] as const;
 const groups: Record<string, readonly string[]> = {
   "getting-started": [
+    "configure-seine-miner",
+    "start-miner-automatically-windows",
+    "update-seine-miner",
     "how-to-mine-blocknet",
     "mine-blocknet-on-windows",
+    "mine-blocknet-on-linux",
     "mine-blocknet-on-mac",
     "blocknet-wallet-for-mining",
     "how-crypto-mining-works"
   ],
   "hardware": [
+    "mining-electricity-use",
+    "mine-while-using-pc",
+    "miner-cpu-usage",
+    "benchmark-seine-miner",
+    "seine-automatic-cpu-tuning",
+    "how-much-ram-to-mine-blocknet",
     "mine-blocknet-nvidia-gpu",
     "mine-blocknet-on-servers",
     "blocknet-mining-hardware-hashrate",
@@ -39,10 +49,15 @@ const groups: Record<string, readonly string[]> = {
     "argon2id-proof-of-work-explained"
   ],
   "troubleshooting": [
+    "mining-hashrate-dropping",
+    "miner-keeps-stopping",
     "antivirus-flags-crypto-miner",
     "seine-dashboard-explained"
   ],
   "blocknet": [
+    "blocknet-faraday-upgrade",
+    "run-blocknet-node",
+    "blocknet-transaction-fees",
     "dandelion-plus-plus-explained",
     "proof-of-work-vs-proof-of-stake",
     "blocknet-payment-links",

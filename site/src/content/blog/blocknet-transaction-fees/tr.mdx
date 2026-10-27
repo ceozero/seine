@@ -1,0 +1,68 @@
+---
+title: 'Blocknet işlem ücretleri nasıl çalışır?'
+description: 'Blocknet işlem ücretlerini, girdi seçimini ve para üstünü anlayın. Cüzdan önizlemesini kontrol edin; ağ ücretini madencilik ücretlerinden ayırın.'
+tags: ['Blocknet', 'Cüzdan', 'Ödemeler']
+faq:
+  - q: 'Blocknet işlem ücreti gönderilen tutarın yüzdesi midir?'
+    a: 'İncelenen cüzdan, ücreti ihtiyatlı bir işlem boyutu tahmini ve asgari ücret üzerinden hesaplar. Girdiler ve çıktılar tahmini etkiler. Tutar, seçilen girdileri etkileyebilir; ancak hesap, gönderdiğiniz BNT’nin sabit yüzdesi değildir.'
+  - q: 'Ödeme yayınlamadan ücreti kontrol edebilir miyim?'
+    a: 'Belgelenen komut satırı cüzdanı önizleme ister ve onaydan önce ücreti gösterir. Hedefi, tutarı ve para üstünü orada kontrol edin. Yalnızca incelemek istiyorsanız onay sorusunda iptal edin. Diğer istemciler inceleme ekranını farklı sunabilir.'
+  - q: 'İşlem para üstü ek ücret midir?'
+    a: 'Para üstü, seçilen girdilerden alıcı tutarı ve ağ ücreti düşüldükten kalan değerdir. Çıktı olarak cüzdanınıza döner. Para üstünü ücretten, toplam bakiyeyi de şu anda harcanabilir fonlardan ayırın.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Blocknet ödemenizin neleri kullanacağını onaylamadan önce kontrol edin. Bu rehber, incelenen cüzdanın ağ ücretini nasıl tahmin ettiğini, girdi seçiminin neden önemli olduğunu ve alıcı tutarı, ücret ile para üstünün ilişkisini açıklar. Belgelenen komut satırı cüzdanının önizlemeyi nerede gösterdiğini de anlatır; böylece ödeme yayınlamadan inceleyebilirsiniz.
+
+## Blocknet işlem ücretleri nasıl hesaplanır?
+
+<Answer>
+İncelenen cüzdan, ihtiyatlı işlem boyutu tahmini ve yapılandırılmış asgari değer üzerinden ücret seçer. Seçilen girdiler ve oluşturulan çıktılar tahmini etkiler. Ücret alıcı tutarından ayrıdır; kullanılmayan girdi değeri para üstü olur. Onaylamadan önce kendi ödemenizin güncel önizlemesini inceleyin.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Seçilen cüzdan girdileri alıcı tutarı, ağ ücreti ve cüzdana dönen para üstü olarak ayrılır." width="1200" height="675" loading="lazy" />
+
+## Cüzdan hesabını ve birimlerini anlayın
+
+[İncelenen daemon kodunda](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go) standart gönderim yolu en az 1.000 atomik birim ve tahmini bayt başına 10 atomik birim kullanır. Bir BNT, 100.000.000 atomik birim içerir; dolayısıyla değerler 0,00001 BNT ve tahmini bayt başına 0,0000001 BNT’dir. Bunlar 26 Ekim 2026’da kontrol edilmiş uygulama ayarlarıdır, her cüzdan sürümü için ücret teklifi değildir.
+
+Hesap, asgari ücret ile tahmini boyut çarpı birim ücretin büyük olanını alır. Açıkça örnek amaçlı varsayılan 5.000 baytta: 5.000 × 10 = 50.000 atomik birim, yani 0,0005 BNT. Bu, belirtilen asgari değeri aşar. Örnek varsayımsal boyutla aritmetiktir; ölçülmüş işlem veya sonraki transferiniz için ücret sözü değildir.
+
+## İki ödemenin ücreti neden farklı olabilir?
+
+Cüzdan, mevcut çıktıları işlem girdileri olarak harcar; alıcılara ve gerektiğinde para üstüne çıktılar oluşturur. [İşlem oluşturucu](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go), girdi ve çıktı sayısı ile halka boyutunu kullanarak, ispatlar için ihtiyatlı paylar dahil boyutu tahmin eder. Tahmini boyut, adresin, notun veya ödeme formunun karakter sayısından ibaret değildir.
+
+Birkaç küçük kullanılabilir çıktıdan oluşturulan ödeme, büyük bir çıktıyla finanse edilenden farklı girdi sayısı gerektirebilir. Cüzdan yeterli harcanabilir değer seçerken ücreti de hesaba katar; bu nedenle seçim ve tahmin birbirini etkiler. Aynı alıcı tutarı, iki farklı cüzdan durumunda aynı ücret demek değildir. İlgili gizlilik yapıları için [halka imzalarına](/tr/blog/ring-signatures-explained/) ve [aralık ispatlarına](/tr/blog/bulletproofs-explained/) bakın.
+
+## Alıcı tutarını, ücreti ve para üstünü ayırın
+
+Normal sabit tutarlı gönderimde seçilen girdi değeri, alıcı tutarı artı ücreti karşılar; kalan para üstü döner. Örnek: toplam 10 BNT girdi, 3 BNT alıcı tutarı ve varsayılan 0,0005 BNT ücret, 6,9995 BNT para üstü bırakır. Alıcı belirtilen 3 BNT’yi alır; para üstü başka bir ücret değildir.
+
+Örnek, mutlaka tüm cüzdan bakiyesini değil, seçilen girdileri anlatır. Diğer çıktılar dokunulmadan kalabilir. Tümünü gönder işleminin amacı farklıdır: incelenen uygulama, alıcıya ulaşacak miktar için seçilen harcanabilir toplamdan ücreti çıkarır. Görünen toplam bakiyenin değişmeden gönderilebileceğini varsaymak yerine o işlemde gösterilen tutarı okuyun.
+
+## Göndermeden önce ücreti nasıl kontrol edersiniz?
+
+[Belgelenen CLI istemcisinde](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) gönderim akışı deneme önizlemesi ister; `Confirm [y/N]:` öncesinde tutarı, hedefi, ücreti ve varsa para üstünü gösterir. Normal cüzdan akışında kendi alıcı bilgilerinizi ve istediğiniz tutarı kullanıp inceleme aşamasında durun. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/), hazırlık ve adres bulmayı açıklar.
+
+Önce hedef ve tutarı, sonra ücret ve para üstünü okuyun. Yalnızca hesabı kontrol etmek istiyorsanız onay sorusunda Enter’a basın veya hayır yanıtı verin; istemci gönderim isteği vermek yerine iptal eder. Bu rehber deneme ödemesi istemez. Grafik cüzdan farklı etiketler kullanabilir; CLI düzenini varsaymadan kendi inceleme ekranını kontrol edin.
+
+## Önizleme değişirse neyi kontrol etmelisiniz?
+
+CLI önizlemesi ve son gönderim ayrı isteklerdir. Gerçek gönderim o anki cüzdan durumundan oluşturulur; önizleme gösterilen ücretin kalıcı rezervasyonu değildir. Tutar, alıcılar, seçilen çıktılar veya harcanabilir fonlar değişirse sonuç da değişebilir. İncelerken eşzamanlı harcamadan kaçının; ödemeyi değiştirince yeni önizleme alın.
+
+Cüzdan tutar artı ücreti karşılayamıyorsa toplam bakiye yerine harcanabilir fonları kontrol edin. Hâlâ onaylanan fonlar ayrı kategoridir. Önizleme üretilemiyorsa cüzdan sürümünü ve tam mesajı kaydedin. Madencilik ödemelerini alırken [cüzdana ödeme rehberi](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/) işlemi ve cüzdan taramasını izler; bu, yeni giden ödemenin ücretini hesaplamaktan farklıdır.
+
+## Ağ ve madencilik ücretlerini ayırın
+
+Bu makaledeki ücret cüzdan işlemine aittir. Havuz ücreti havuz ödülü muhasebesini, madenci geliştirici ücreti ise yazılımın çalışma politikasını ilgilendirir. Temelleri ve aşamaları farklıdır. [Madencilik ücretleri rehberi](https://bntpool.com/blog/tr/mining-pool-fees-vs-miner-fees/) madencilik tarafını açıklar; oradaki yüzdeleri cüzdan işlem boyutu tahminine uygulamayın.
+
+Benzer şekilde havuzun asgari ödemesi bir bakiye eşiğidir, normal cüzdan gönderim ücreti değildir. Transfer planlarken her sayıyı etiketi ve kaynağıyla tutun. Hazırladığınız giden ödemenin inceleneceği yer cüzdan önizlemesidir; madencilik hesaplayıcısı veya havuz bakiye ekranı onun yerini tutmaz.
+
+## Açık bir ödeme kaydı tutun
+
+Amaçladığınız ödemeyi onaylamadan önce hedef, tutar, varsa not, ücret ve para üstünü birlikte inceleyin. [Ödeme bağlantısı](/tr/blog/blocknet-payment-links/) bilgileri doldurabilir, ancak yine cüzdanda doğrulamalısınız. Prosedür yazarken tahmini hangi cüzdan sürümünün verdiğini kaydedin; sonraki okuyucular tarihli örneği güncel arayüzlerinden ayırabilsin.
+
+Bilinçli onaylanan gönderimden sonra işlem kimliğini kendi ödeme kaydınızla saklayın ve durumunu cüzdandan izleyin. Ücreti açıklamak için kurtarma kelimelerini veya özel anahtarları asla paylaşmayın. Destek sorusunda sürüm, işlem türü ve gösterilen tutarlar, özel cüzdan verisini kopyalamaktan genellikle daha yararlı başlangıçtır. Her yeni ödemede önizlemeyi yeniden kontrol edin.
+
+<CTA target="seine" title="Blocknet’i seine ile keşfedin" text="Blocknet madenciliğinin nasıl çalıştığını öğrenin ve kendi kurulumunuzu seine ile ağa bağlayın." />

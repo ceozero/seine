@@ -1,0 +1,68 @@
+---
+title: 'Transactiekosten van Blocknet uitgelegd'
+description: 'Begrijp Blocknet-kosten, invoerselectie en wisselgeld. Controleer het walletvoorbeeld vóór bevestiging en onderscheid netwerkkosten van miningkosten.'
+tags: ['Blocknet', 'Wallet', 'Betalingen']
+faq:
+  - q: 'Zijn Blocknet-transactiekosten een percentage van het verzonden bedrag?'
+    a: 'De onderzochte wallet berekent de kosten op basis van een voorzichtige schatting van de transactiegrootte en een minimum. Invoer en uitvoer beïnvloeden die schatting. Het bedrag kan bepalen welke invoer wordt gekozen, maar de berekening is geen vast percentage van de verzonden BNT.'
+  - q: 'Kan ik kosten bekijken zonder een betaling te verspreiden?'
+    a: 'De gedocumenteerde opdrachtregelwallet vraagt een voorbeeld op en toont de kosten vóór de bevestiging. Controleer bestemming, bedrag en wisselgeld. Wil je alleen kijken, annuleer dan bij de vraag. Andere clients kunnen hun controlescherm anders vormgeven.'
+  - q: 'Is wisselgeld een extra kostenpost?'
+    a: 'Wisselgeld is wat van de gekozen invoer overblijft na het bedrag voor de ontvanger en de netwerkkosten. Het keert als uitvoer terug naar je wallet. Houd het apart van de kosten en onderscheid het totale saldo van geld dat nu besteedbaar is.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Controleer vóór bevestiging wat je Blocknet-betaling zal gebruiken. Deze gids legt uit hoe de onderzochte wallet netwerkkosten schat, waarom invoerselectie telt en hoe ontvangersbedrag, kosten en wisselgeld samenhangen. Ook zie je waar de gedocumenteerde opdrachtregelwallet het voorbeeld toont, zodat je een betaling kunt bekijken zonder haar te verspreiden.
+
+## Hoe worden Blocknet-transactiekosten berekend?
+
+<Answer>
+De onderzochte wallet bepaalt de kosten met een voorzichtige schatting van de transactiegrootte en een ingesteld minimum. Gekozen invoer en aangemaakte uitvoer beïnvloeden die schatting. Kosten staan los van het ontvangersbedrag; ongebruikte invoerwaarde wordt wisselgeld. Controleer vóór bevestiging het actuele voorbeeld voor jouw specifieke betaling.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Gekozen walletinvoer wordt verdeeld over het ontvangersbedrag, netwerkkosten en wisselgeld dat teruggaat naar de wallet." width="1200" height="675" loading="lazy" />
+
+## Begrijp de berekening en eenheden
+
+In de [onderzochte daemoncode](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go) gebruikt normaal verzenden minimaal 1.000 atomaire eenheden en 10 atomaire eenheden per geschatte byte. Eén BNT bevat 100.000.000 atomaire eenheden; dat komt overeen met 0,00001 BNT en 0,0000001 BNT per geschatte byte. Dit zijn implementatie-instellingen gecontroleerd op 26 oktober 2026, geen kostenopgave voor iedere walletversie.
+
+De berekening neemt het hoogste van het minimum en de geschatte grootte maal het tarief. Bij een uitdrukkelijk illustratieve aanname van 5.000 bytes: 5.000 × 10 = 50.000 atomaire eenheden, of 0,0005 BNT. Dat ligt boven het genoemde minimum. Het is rekenen met een aangenomen grootte, geen gemeten transactie of belofte over je volgende overboeking.
+
+## Waarom kunnen twee betalingen andere kosten hebben?
+
+Een wallet besteedt bestaande uitvoer als transactie-invoer en maakt uitvoer voor ontvangers en zo nodig wisselgeld. De [transactiebouwer](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) schat de grootte aan de hand van het aantal in- en uitvoeren en de ringgrootte, inclusief voorzichtige marges voor bewijzen. De schatting is niet simpelweg het aantal tekens in een adres, memo of betaalformulier.
+
+Een betaling uit meerdere kleine beschikbare uitvoeren kan een ander aantal invoeren nodig hebben dan één uit een grotere uitvoer. De wallet houdt ook rekening met kosten bij het kiezen van voldoende besteedbare waarde, dus selectie en schatting beïnvloeden elkaar. Hetzelfde ontvangersbedrag betekent daarom niet dezelfde kosten bij twee wallettoestanden. Lees over [ringhandtekeningen](/nl/blog/ring-signatures-explained/) en [bereikbewijzen](/nl/blog/bulletproofs-explained/) voor de gebruikte privacystructuren.
+
+## Houd bedrag, kosten en wisselgeld apart
+
+Bij een gewone verzending van een vast bedrag dekt de gekozen invoer het ontvangersbedrag plus kosten; de rest komt terug als wisselgeld. Rekenvoorbeeld: invoer van samen 10 BNT, ontvanger 3 BNT en aangenomen kosten van 0,0005 BNT laten 6,9995 BNT wisselgeld over. De ontvanger krijgt de opgegeven 3 BNT; wisselgeld is geen extra heffing.
+
+Dat voorbeeld beschrijft de gekozen invoer, niet noodzakelijk je hele walletsaldo. Andere uitvoeren kunnen onaangeroerd blijven. Alles verzenden heeft een ander doel: de onderzochte implementatie trekt kosten af van het gekozen besteedbare totaal om het ontvangersbedrag te bepalen. Lees het bedrag bij die handeling in plaats van aan te nemen dat het volledige getoonde saldo zonder aftrek verstuurd kan worden.
+
+## Hoe controleer je kosten vóór verzenden?
+
+In de [gedocumenteerde CLI-client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) vraagt de verzendstroom een proefvoorbeeld op en toont bedrag, bestemming, kosten en eventueel wisselgeld vóór `Confirm [y/N]:`. Gebruik je eigen ontvangstgegevens en gewenste bedrag in de normale walletstroom en stop bij de controle. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) behandelt voorbereiding en het vinden van een adres.
+
+Lees eerst bestemming en bedrag, daarna kosten en wisselgeld. Wilde je alleen de berekening bekijken, druk dan op Enter of antwoord nee bij de bevestiging; de client annuleert in plaats van het verzendverzoek te doen. Deze gids vraagt niet om een testbetaling. Een grafische wallet kan andere labels gebruiken: bekijk zijn controlescherm zonder de CLI-indeling te veronderstellen.
+
+## Wat controleer je als het voorbeeld verandert?
+
+Het CLI-voorbeeld en de uiteindelijke verzending zijn aparte verzoeken. De echte verzending gebruikt de dan beschikbare wallettoestand, dus het voorbeeld reserveert de getoonde kosten niet blijvend. Een ander bedrag, andere ontvangers, gekozen uitvoer of besteedbare middelen kunnen de uitkomst veranderen. Vermijd gelijktijdige uitgaven tijdens de controle en vraag na wijzigingen een nieuw voorbeeld op.
+
+Controleer besteedbare middelen in plaats van totaal saldo als bedrag plus kosten niet gedekt zijn. Geld dat nog wordt bevestigd is een aparte categorie. Bewaar walletversie en exacte melding als geen voorbeeld kan worden gemaakt. Voor miningbetalingen volgt de [gids voor ontvangst in de wallet](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) de transactie en walletsynchronisatie; dat is iets anders dan de kosten van een nieuwe uitgaande betaling bepalen.
+
+## Onderscheid netwerk- en miningkosten
+
+De kosten in dit artikel horen bij een wallettransactie. Poolkosten betreffen de verwerking van poolbeloningen; ontwikkelaarskosten van een miner betreffen het werkbeleid van de miningsoftware. Ze hebben verschillende grondslagen en stappen. De [gids voor miningkosten](https://bntpool.com/blog/nl/mining-pool-fees-vs-miner-fees/) beschrijft die kant; pas de percentages daaruit niet toe op de geschatte transactiegrootte.
+
+Ook de minimumuitbetaling van een pool is een saldodrempel, geen kostenopgave voor een gewone walletbetaling. Bewaar bij het plannen van een overboeking elk getal met label en bron. Het walletvoorbeeld is de juiste plaats om je voorbereide uitgaande betaling te controleren; een miningcalculator of poolsaldoscherm vervangt dit niet.
+
+## Houd een duidelijke betaalregistratie bij
+
+Controleer vóór een bedoelde bevestiging bestemming, bedrag, eventuele memo, kosten en wisselgeld samen. Een [betaallink](/nl/blog/blocknet-payment-links/) kan gegevens invullen, maar je controleert ze nog steeds in de wallet. Noteer bij documentatie de walletversie die de schatting gaf, zodat latere lezers het gedateerde voorbeeld van hun huidige interface kunnen onderscheiden.
+
+Bewaar na een bewust bevestigde verzending de transactie-ID bij je eigen betaalregistratie en volg de status in de wallet. Deel nooit herstelwoorden of privésleutels om kosten uit te leggen. Bij een ondersteuningsvraag zijn versie, soort handeling en getoonde bedragen meestal nuttiger dan gekopieerde privégegevens. Controleer het voorbeeld voor elke nieuwe betaling opnieuw.
+
+<CTA target="seine" title="Ontdek Blocknet met seine" text="Leer hoe Blocknet-mining werkt en verbind je eigen installatie met het netwerk via seine." />

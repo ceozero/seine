@@ -1,0 +1,62 @@
+---
+title: 'Hoe seine CPU-mining automatisch afstemt'
+description: 'Lees hoe seine CPU-threads afstemt tijdens Blocknet-mining, instellingen vergelijkt, opgeslagen resultaten hergebruikt en reageert op het beschikbare RAM.'
+tags: ['Mininggids', 'CPU-afstemming', 'seine']
+faq:
+  - q: 'Mint seine tijdens het afstemmen van CPU-threads?'
+    a: 'Ja. In v0.2.36 begint gewone CPU-mining met een passende opgeslagen instelling of een schatting op basis van de hardware. De tuner vergelijkt aantallen threads met echt miningwerk. Offline benchmarks gebruiken een apart proces; hun opstartvolgorde beschrijft dus geen normale miningsessie.'
+  - q: 'Waarom verandert het aantal CPU-threads?'
+    a: 'Automatische afstemming probeert naburige aantallen threads en reageert op beschikbaar geheugen. Een wijziging kan een prestatietest of een reactie op RAM-druk zijn. Bekijk het logboek naast het aantal threads en laat de vergelijking afronden voordat je een korte hashratemeting beoordeelt.'
+  - q: 'Waar bewaart seine CPU-afstemmingsresultaten?'
+    a: 'Threadresultaten staan standaard in seine.cpu-autotune.json in de datamap. Kernelkeuzes gebruiken het bijbehorende bestand dat eindigt op .kernels.json. Passende resultaten helpen bij volgende starts. Houd dezelfde datamap aan en laat de miner controleren of de instellingen nog passen bij de huidige omgeving.'
+sourceHash: '41f9cc188856'
+translation: draft
+---
+
+Begrijp wat seine doet wanneer het aantal CPU-threads tijdens mining verandert. Deze gids volgt de openbare versie v0.2.36 en behandelt productieve afstemming, opgeslagen keuzes en geheugenaanpassingen. Voor installatie is er de [mininggids](/nl/blog/how-to-mine-blocknet/); de panelen staan in de [dashboardrondleiding](/nl/blog/seine-dashboard-explained/).
+
+## Hoe werkt automatische CPU-afstemming?
+
+<Answer>
+Met CPU-afstemming ingeschakeld begint seine met een passend opgeslagen aantal of een hardwareschatting en vergelijkt daarna instellingen met echt miningwerk. Het meet een uitgangsinstelling, probeert een kandidaat en meet de uitgangsinstelling opnieuw. Beschikbaar RAM en ingestelde grenzen begrenzen de zoektocht naar geschikte instellingen.
+</Answer>
+
+<img src="/assets/blog/cpu-autotuning.svg" alt="Een herhaalde uitgangsinstelling–kandidaat–uitgangsinstelling-vergelijking leidt tot een opgeslagen keuze, met voortdurende geheugencontrole." width="1200" height="675" loading="lazy" />
+
+## Mining begint voordat de zoektocht klaar is
+
+Laat `--threads` weg voor automatische afstemming. Bij gewone mining kiest seine een beginaantal binnen het bronnenbudget en begint nuttig werk zonder voorafgaande offline threadscan. Een passende cache kan het startpunt leveren. Een nieuwe machine begint met een schatting die volgende vergelijkingen verbeteren.
+
+Elke proef meet voltooide hashes over verstreken tijd. Nieuwe geheugenarena's voltooien eerst één hash voordat hun meetvenster begint. De herhaalde uitgangsmeting helpt instellingseffecten van veranderende omstandigheden te scheiden. Sterke afwijking van de uitgangswaarde, gewijzigde geheugengrenzen of langdurig werkverlies kunnen de vergelijking ongeldig maken. Een korte dashboardpiek is dus één waarneming binnen een langere beslissing.
+
+## Waarom helpen extra threads niet altijd?
+
+Elke actieve CPU-thread gebruikt een grote geheugenarena; samen delen ze de geheugenbandbreedte. Extra threads geven meer gelijktijdig werk, maar het resultaat hangt van het hele systeem af. De tuner vergelijkt totale CPU-H/s en neemt niet aan dat het grootste aantal het snelst is. De [RAM-gids](/nl/blog/how-much-ram-to-mine-blocknet/) legt het geheugenbudget uit.
+
+Het standaardprofiel is `balanced`. Profielen bepalen afstemmingsbeleid en runtimewaarden; `efficiency` is een bewuste keuze die minder threads kan verkiezen. Houd hetzelfde profiel aan bij het beoordelen. Aantal threads, CPU-plaatsing en geheugenpagina's beïnvloeden elkaar. Een resultaat van een andere machine of configuratie is een referentie, geen instelling om automatisch over te nemen.
+
+## Wat gebeurt er als andere programma's RAM nodig hebben?
+
+Het automatische geheugenbudget volgt beschikbare bronnen. Bij geheugendruk kunnen threads hun huidige hash afronden, parkeren en arena's vrijgeven. Keert voldoende ruimte duurzaam terug, dan kan de miner beschikbare slots activeren en verder zoeken. Op een computer met andere toepassingen kan het actieve aantal zo binnen dezelfde sessie meebewegen.
+
+Een tijdelijke verlaging hoeft een eerder geleerd hoger aantal niet te wissen. Cache en actief aantal hebben andere doelen. Op Linux gaan vrijgegeven expliciete HugeTLB-arena's terug naar de gereserveerde hugepagepool; seine wijzigt de grootte van die OS-reservering niet. Gebruik de [hugepagegids](/nl/blog/huge-pages-blocknet-mining/) voor reserveringswijzigingen en onderscheid die van gewoon vrij RAM.
+
+## Stemt seine ook de CPU-kernel af?
+
+Geschikte CPU's kunnen ondersteunde hashingcodepaden en aantallen threads vergelijken. Kernel betekent hier de software-implementatie van de hashberekening. De miner controleert processorinstructies en vergelijkt geschikte paden met herhaalde miningmetingen. Kernel- en threadproeven wisselen af terwijl geheugenbeheer actief blijft. De [technische gids](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/autotuning.md) beschrijft de kandidaten van deze versie.
+
+Automatische CPU-wijzigingen behouden de poolverbinding en herstarten GPU-backends niet. Kernelwissels gebeuren tussen volledige hashes met behoud van arena's. Handmatig `+` of `-` indrukken doet iets anders: het herstart de backends, verbindt opnieuw met de pool en schakelt automatische CPU-aanpassing voor die run uit. Het logboek laat zien welk type wijziging plaatsvond.
+
+## Hoe worden opgeslagen resultaten hergebruikt?
+
+De standaard threadcache is `seine.cpu-autotune.json` onder `--data-dir`; de kernelcache is `seine.cpu-autotune.json.kernels.json`. Ze bewaren geleerde keuzes los van poolinstellingen. Gebruik bij elke start dezelfde datamap. De [updategids](/nl/blog/update-seine-miner/) legt uit hoe je deze bewaart bij het vervangen van de toepassing.
+
+Hergebruik hangt af van onder meer hardware- en buildidentiteit, plaatsing en pagina-instellingen. Huidige bronlimieten blijven het actieve beginaantal begrenzen. Na een belangrijke wijziging kan een cache niet meer passen; laat nieuwe metingen verzamelen. Kopieer geen cache van een andere rig en bewerk metingen niet handmatig. Lees opstart- en afstemmingsmeldingen voordat je een nieuwe zoektocht als probleem ziet.
+
+## Wanneer stel je een vast aantal threads in?
+
+Gebruik een vast aantal voor een bewust herhaalbare configuratie. `--threads 4` vraagt bijvoorbeeld vier threads en schakelt normaal thread- en kernelafstemming uit. `--cpu-autotune-threads` activeert afstemming ook met een opgegeven aantal; `--disable-cpu-autotune-threads` schakelt automatische aanpassing uit. De [vlagreferentie](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) beschrijft grenzen en interacties.
+
+Begin dagelijks met de standaardinstellingen en laat productieve vergelijkingen afronden. Bekijk CPU-regel, afstemmingsmeldingen en geaccepteerde shares samen. Vergelijk soortgelijke belasting en geheugencondities. Poolhashrate wordt uit binnenkomende shares geschat: gebruik lokale CPU-metingen om een proef te begrijpen en [poolstatistieken](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) voor bijgeschreven miningwerk.
+
+<CTA target="seine" title="Mine met automatische CPU-afstemming" text="Download seine, behoud de standaardafstemming en volg de beslissingen in het dashboard." />

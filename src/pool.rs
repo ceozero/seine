@@ -1372,6 +1372,7 @@ mod tests {
 
     #[test]
     fn refused_connection_retains_typed_cause_without_endpoint() {
+        let _test_lock = crate::diagnostics::TEST_LOCK.lock().unwrap();
         let guard = crate::diagnostics::install(crate::diagnostics::test_context());
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();

@@ -1,0 +1,68 @@
+---
+title: 'Pourquoi le hashrate de mon mineur baisse-t-il ?'
+description: 'Diagnostiquez une baisse du hashrate Blocknet : comparez les relevés, vérifiez appareils, réglage, mémoire, fréquences et shares, puis validez chaque changement.'
+tags: ['Dépannage', 'Hashrate', 'seine']
+faq:
+  - q: 'Pourquoi le pool affiche-t-il un hashrate inférieur au mineur ?'
+    a: 'Le mineur compte les calculs locaux ; le pool estime le travail à partir des shares sur sa propre fenêtre. Comparez la même machine sur un intervalle représentatif, puis vérifiez les shares acceptées et les messages de connexion. Un bref écart ne révèle pas à lui seul un ralentissement matériel.'
+  - q: 'Moins de threads CPU signifie-t-il un problème ?'
+    a: 'Pas à lui seul. Le réglage automatique compare nombres de threads et chemins de calcul, tandis que la mémoire disponible peut limiter le nombre actif. Examinez ensemble messages de réglage, mémoire et hashrate par appareil. Notez ce qui a changé avant de décider d’intervenir.'
+  - q: 'Faut-il modifier plusieurs réglages pour retrouver le hashrate ?'
+    a: 'Établissez une référence comparable et changez une condition pertinente à la fois. Notez version, appareils, charge et intervalle. Vérifiez ensuite le calcul soutenu et de nouvelles shares acceptées ; une seule valeur instantanée plus élevée ne démontre pas une amélioration.'
+sourceHash: 'b9dea9339977'
+translation: draft
+---
+
+Identifiez le relevé qui a changé avant de régler un mineur encore en fonctionnement. Ce guide distingue une différence de fenêtre de calcul d’un changement d’appareil, de charge ou de ressources, puis propose une comparaison reproductible pour examiner la cause probable. Conservez votre configuration de lancement fonctionnelle afin de garder un point de départ connu.
+
+## Pourquoi le hashrate peut-il baisser pendant une session ?
+
+<Answer>
+Le hashrate varie lorsque changent les appareils actifs, le nombre de threads CPU, la mémoire disponible, les tâches concurrentes ou les fréquences matérielles. Comparer des fenêtres différentes peut également donner une impression de baisse. Commencez par le même appareil et intervalle, vérifiez travail récent et journaux, puis modifiez une condition et observez le résultat.
+</Answer>
+
+<img src="/assets/blog/mining-hashrate-dropping.svg" alt="Deux courbes de hashrate conduisent à des vérifications des appareils, de la mémoire et des fréquences, puis à une comparaison équivalente avant et après." width="1200" height="675" loading="lazy" />
+
+## Identifiez d’abord le relevé concerné
+
+Notez où apparaît le changement : hashrate local actuel, moyenne de session, ligne d’un appareil ou estimation du pool. Ces observations diffèrent. Dans seine, valeurs actuelles et moyennes couvrent des horizons distincts ; certains appareils rapportent les calculs par lots. Le [guide du tableau de bord](/fr/blog/seine-dashboard-explained/) explique les champs. Comparez d’abord un champ à sa propre valeur antérieure.
+
+Associez unité et intervalle à chaque valeur. Convertissez H/s et kH/s avant comparaison. Notez un démarrage récent, un redémarrage de backend ou une reprise du calcul. Une nouvelle session n’a pas l’historique d’une moyenne de longue durée ; un pic initial constitue donc une mauvaise référence pour toute la soirée.
+
+## La baisse est-elle locale, côté pool ou limitée à un appareil ?
+
+Examinez les lignes par appareil et les messages récents de shares acceptées. Si un appareil contribue moins alors que les autres restent stables, commencez par lui. Si le travail local reste comparable mais que l’estimation du pool varie, examinez shares et connexion. Le [guide du hashrate](https://bntpool.com/blog/fr/what-is-hashrate/) explique l’écart entre estimation fondée sur les shares et calcul local.
+
+Vérifiez l’adresse de réception et le nom de la machine dans les statistiques du pool. Avec plusieurs machines sur une adresse, le total du compte peut être inadapté à une comparaison avec un seul ordinateur. Consultez le [guide de suivi](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/). Si le processus s’est fermé ou qu’un backend signale une panne, utilisez le [guide des arrêts](/fr/blog/miner-keeps-stopping/) ; ici, la session reste observable.
+
+## Replacez les changements de threads dans leur contexte
+
+seine compare nombres de threads CPU et kernels pendant le minage et peut réutiliser des résultats enregistrés compatibles. Ces essais peuvent modifier la configuration active. Lisez les messages de réglage proches et notez le nombre actif avant de diagnostiquer une baisse. Le [guide du réglage automatique](/fr/blog/seine-automatic-cpu-tuning/) décrit la recherche et les options ; un changement de nombre ne prouve pas une régression.
+
+Vérifiez que le lancement sélectionne les mêmes backends et paramètres qu’auparavant. Un autre raccourci, répertoire de travail ou fichier enregistré peut modifier la comparaison avant même d’examiner le matériel. Gardez le lancement fonctionnel et consultez le [guide de configuration](/fr/blog/configure-seine-miner/) pour identifier les valeurs effectives. Ne supprimez pas le cache de réglage à cause d’un seul relevé.
+
+## Examinez les tâches concurrentes et la mémoire disponible
+
+Consultez les processus et la mémoire du système pour repérer ce qui a changé au même moment. Jeu, vidéo, compilation ou autre calcul peuvent partager processeur, GPU ou mémoire. Comparez lorsque cette tâche facultative est en pause ou terminée, si cela convient. Conservez une charge de bureau comparable ; sinon, le relevé suivant répond à une autre question.
+
+La gestion automatique CPU de seine tient compte de la mémoire disponible et peut réduire les threads lorsque les ressources se resserrent. Certains systèmes fournissent aussi des signaux de pression. Examinez journal et mémoire ensemble plutôt que d’imposer aussitôt l’ancien nombre. Le [guide RAM](/fr/blog/how-much-ram-to-mine-blocknet/) traite des allocations. Si le rendement revient après une autre tâche, notez ce lien avant toute modification persistante.
+
+## La température ou l’alimentation peuvent-elles expliquer la baisse ?
+
+Température et fréquences peuvent expliquer un changement local durable lorsque charge et appareils restent comparables. Intel décrit la [régulation thermique](https://www.intel.com/content/www/us/en/support/articles/000088048.html) comme une réduction protectrice de la fréquence CPU. Suivez les indications du fabricant du processeur ou de l’ordinateur pour le modèle exact : aucun seuil unique ne diagnostique tous les ordinateurs de minage.
+
+Pour NVIDIA, la [documentation de surveillance](https://docs.nvidia.com/deploy/nvidia-smi/index.html) distingue les raisons de changement de fréquence, notamment thermiques et électriques, et signale les données indisponibles. Notez les mesures prises en charge avec le hashrate. Mentionnez aussi un passage batterie/secteur ou un changement de mode d’alimentation. Respectez les conseils de refroidissement et gardez les protections activées ; la procédure n’exige aucun changement de tension ou de limite de fréquence.
+
+## Faites une comparaison qui répond à votre question
+
+Choisissez une condition suspecte, par exemple une application concurrente, puis comparez des intervalles équivalents avant et après son changement. Notez version, backends, politique de threads, alimentation et activité au premier plan. Distinguez démarrage et réglage. Répétez l’observation si les fluctuations normales empêchent de conclure, sans attribuer une cause à un point isolé.
+
+Pour une expérience volontaire, utilisez le [guide de benchmark](/fr/blog/benchmark-seine-miner/) et ses charges comparables. Séparez les benchmarks des échantillons de récompenses, affectés par les arrivées de blocs et les variations de shares. Une consommation électrique moindre répond également à une autre question : le [guide d’électricité](/fr/blog/mining-electricity-use/) associe énergie et travail effectué pour ne pas confondre inactivité et amélioration utile.
+
+## Validez le résultat et conservez les éléments utiles
+
+Après le changement ciblé, confirmez les appareils prévus, un nombre de threads compris et de nouvelles shares acceptées. Comparez le même champ sur des périodes représentatives. Gardez même un résultat sans différence significative, pour éviter de répéter un réglage inutile. Annulez une modification sans rapport au lieu d’accumuler des paramètres inexpliqués.
+
+Si le comportement persiste, rassemblez version, système, matériel, lancement, heures des journaux et relevés comparés. Précisez constantes, changements et portée : un appareil ou tout le mineur. Retirez identifiants secrets et données personnelles avant partage. Une chronologie concise apporte davantage à une enquête de support qu’une capture d’une seule valeur basse.
+
+<CTA target="seine" title="Conservez une configuration seine reproductible" text="Utilisez le tableau de bord, des observations comparables et de nouvelles shares pour comprendre une variation avant de changer la configuration." />

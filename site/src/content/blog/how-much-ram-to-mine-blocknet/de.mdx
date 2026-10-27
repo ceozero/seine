@@ -1,0 +1,90 @@
+---
+title: 'Wie viel RAM braucht Blocknet-Mining?'
+description: 'Plane den RAM für Blocknet-Mining: 2 GiB pro CPU-Thread, Platz für Anwendungen, automatische Anpassung mit seine und Hilfe bei Fehlern der Speicherzuweisung.'
+tags: ['Mining-Anleitung', 'RAM', 'CPU']
+faq:
+  - q: 'Wie viel RAM benötigt ein Blocknet-Mining-Thread?'
+    a: 'Jeder CPU-Thread benötigt einen Argon2id-Speicherbereich von 2 GiB. Dieser Arbeitsbereich ist nicht der gesamte Speicherbedarf des Rechners. Betriebssystem, Anwendungen und Miner benötigen zusätzlichen RAM. Plane Threads anhand des verfügbaren Speichers, statt den installierten RAM einfach durch zwei zu teilen.'
+  - q: 'Kann ich Blocknet mit 8 GB RAM minen?'
+    a: 'CPU-Mining ist möglich, wenn genügend Speicher für mindestens einen 2-GiB-Bereich sowie System und Miner verfügbar ist. Die Angabe 8 GB allein bestimmt die Threadzahl nicht. Beginne mit der automatischen Auswahl und prüfe den tatsächlich verfügbaren Speicher und die gewählten Threads.'
+  - q: 'Senken Huge Pages den RAM-Bedarf pro Thread?'
+    a: 'Huge Pages ändern die Speicherabbildung durch das Betriebssystem. Sie verkleinern den 2-GiB-Bereich pro CPU-Thread nicht. Lege zuerst dein Speicherbudget fest und nutze danach die separate Huge-Pages-Anleitung, wenn du explizite große Seiten auf einem unterstützten System einrichten möchtest.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Diese Anleitung hilft dir, CPU-Threads passend zum verfügbaren Speicher auszuwählen. Sie behandelt 2-GiB-Zuweisungen, die automatische Auswahl in seine v0.2.26 und Prüfungen bei fehlgeschlagenen manuellen Einstellungen. Prozessorvergleiche und gemessene Hashraten stehen in der [Hardware-Anleitung](/de/blog/blocknet-mining-hardware-hashrate/). Hier geht es um Speicherrechnung, nicht um neue Leistungsmessungen.
+
+## Wie viel RAM benötigt jeder Mining-Thread?
+
+<Answer>
+Jeder CPU-Thread benötigt einen Argon2id-Speicherbereich von 2 GiB. Plane zusätzlich Platz für Betriebssystem, Anwendungen und Miner ein. Beginne mit der automatischen Auswahl von seine, die verfügbaren Speicher und CPU-Ressourcen berücksichtigt. Eine manuelle Threadzahl muss in den beim Start tatsächlich verfügbaren Speicher passen.
+</Answer>
+
+GiB ist eine binäre Einheit: 2 GiB entsprechen 2.147.483.648 Bytes. Der Bereich wird für weitere Hashes wiederverwendet; jeder fertige Hash verbraucht nicht dauerhaft weitere 2 GiB. Mehr gleichzeitige Threads benötigen mehr Bereiche. Die [Argon2id-Erklärung](/de/blog/argon2id-proof-of-work-explained/) erläutert diesen Arbeitsspeicherbedarf.
+
+<img src="/assets/blog/ram-budget.svg" alt="Vier separate Mining-Speicherbereiche mit jeweils 2 GiB neben zusätzlichem Speicher für System und Anwendungen" width="1200" height="675" loading="lazy" />
+
+## Wie berechnest du ein Threadbudget?
+
+Multipliziere die geplante CPU-Threadzahl mit 2 GiB. Die Tabelle enthält weder Systembedarf noch sonstigen Zusatzbedarf. Berechne damit die Bereiche; bestimme die tatsächliche Threadzahl anhand von verfügbarem Speicher und gemessenem Durchsatz.
+
+| CPU-Threads | Nur Mining-Speicherbereiche |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Vier Threads benötigen 8 GiB für ihre Bereiche. Für Prozess und System muss daher mehr als 8 GiB verfügbar sein. Reservierst du bewusst 4 GiB eines Rechners mit 16 GiB, passen rechnerisch sechs Bereiche in die übrigen 12 GiB. Das ist ein Budgetbeispiel und kein Versprechen, dass sechs Threads die höchste Hashrate liefern.
+
+Prüfe den verfügbaren Speicher bei geöffneten üblichen Anwendungen: im Windows-Task-Manager, der macOS-Aktivitätsanzeige oder Linux-Speicherwerkzeugen. Virtuelle Maschinen und Container können weniger Speicher als ihr Host nutzen dürfen. Plane mit diesem effektiven Limit; der beworbene Host-RAM steht einer beschränkten Umgebung nicht automatisch zur Verfügung.
+
+## Wie wählt seine Threads automatisch aus?
+
+Lass die Threadzahl beim ersten reinen CPU-Start offen. Führe diesen Befehl im entpackten Linux- oder macOS-Ordner aus. Unter Windows verwendest du dieselben Optionen mit der ausführbaren Datei in PowerShell. Die [Startanleitung](/de/blog/how-to-mine-blocknet/) erklärt Download und Empfangsadresse.
+
+```sh
+./seine --backend cpu
+```
+
+In v0.2.26 reservieren automatische Größenwahl und Tuning standardmäßig 5% des effektiven Gesamtspeichers zusätzlich zur Berücksichtigung bereits belegten Speichers. Auch die CPU-Ressourcen begrenzen die Zahl. Mit einer Obergrenze schränkst du den Suchbereich ein:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Vier ist eine beispielhafte Obergrenze, keine allgemeine Empfehlung. Das Tuning kann weniger Threads wählen. Beobachte Threadzahl und durchschnittliche Hashrate im [Dashboard](/de/blog/seine-dashboard-explained/). Das Tuning misst deine reale Konfiguration; lass es sich einpendeln, bevor du kurze Schwankungen bewertest.
+
+## Wann solltest du eine feste Threadzahl setzen?
+
+Nutze eine feste Zahl für ein bestimmtes Speicherbudget oder eine wiederholbare Konfiguration. Dieses Beispiel wählt zwei CPU-Threads: 4 GiB für ihre Bereiche plus weiterer Speicherbedarf.
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+Ein explizites `--threads` deaktiviert die gewöhnliche automatische Threadauswahl, sofern du Tuning nicht ebenfalls ausdrücklich aktivierst. Es überschreibt die automatische Reserve; plane selbst Spielraum ein. Die Speicherprüfungen bleiben aktiv. Eine Zahl, die zum installierten RAM passt, kann nach dem Start weiterer Anwendungen den verfügbaren Speicher übersteigen.
+
+Ändere jeweils nur eine Einstellung. Notiere Threads, verfügbaren RAM und mittlere Hashrate bei vergleichbarer Last. Entferne für automatische Auswahl den festen Parameter sowie gespeicherte Überschreibungen. Die [Konfigurationsreferenz für v0.2.26](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) erklärt Befehlszeilenparameter und gespeicherte Einstellungen.
+
+## Was prüfst du nach einem Speicherzuweisungsfehler?
+
+Unterscheide im Fehlertext zwischen effektivem Speicherlimit, aktuell verfügbarem Speicher und expliziter Zuweisung großer Seiten. Daraus ergeben sich verschiedene Prüfungen. Schließe unnötige Anwendungen, reduziere die Threads und starte mit genügend Platz für die normale Desktopnutzung erneut.
+
+Prüfe bei Containern und virtuellen Maschinen die zugewiesene Speichermenge zusätzlich zum Host. Ein Limit von 1 GiB fasst keinen 2-GiB-Bereich. Eine größere Auslagerungsdatei ändert diesen Bedarf nicht; plane ausreichend physischen Speicher für den Prozess ein.
+
+Bei `--cpu-page-mode large` oder `--cpu-page-mode large-1g` muss der angeforderte reservierte Seitenpool verfügbar sein. Diese Modi verlangen die gewählte Speicherunterlegung. Folge der [Huge-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) oder wähle zunächst Seiten automatisch, um eine funktionierende Ausgangskonfiguration zu erhalten. Ändere Seiteneinstellung und Threadzahl getrennt.
+
+## Zählt GPU-Speicher zum CPU-Budget?
+
+Auf einer dedizierten NVIDIA-Karte liegen GPU-Mining-Bereiche im VRAM. CPU-Threads belegen weiterhin System-RAM. Plane beide Ressourcen getrennt, wenn CPU und GPU zusammen minen; freier VRAM erweitert die CPU-Bereiche nicht. Die [NVIDIA-Anleitung](/de/blog/mine-blocknet-nvidia-gpu/) beschreibt Einrichtung und GPU-Lanes.
+
+Bei Apple Silicon teilen CPU und GPU den Unified Memory. Zähle diese Kapazität für weitere Lasten nicht doppelt. Die [Mac-Anleitung](/de/blog/mine-blocknet-on-mac/) beschreibt den unterstützten CPU-Betrieb. Kapazität bestimmt, was hineinpasst; gemessener Durchsatz zeigt, welche Konfiguration auf deinem Rechner am besten arbeitet.
+
+## Was prüfst du vor längerem Betrieb?
+
+Die Threads müssen ins Budget passen, Anwendungen ansprechbar bleiben und akzeptierte Pool-Shares eintreffen. Mehr zugewiesener Speicher belegt allein keine höhere Leistung. Behalte die passende Konfiguration und bestätige mit der [Pool-Tracking-Anleitung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/), dass für deine Empfangsadresse aktuelle Arbeit erfasst wird.
+
+<CTA target="seine" title="seine herunterladen" text="Beginne mit automatischer CPU-Auswahl und wähle anschließend ein passendes Speicherbudget." />

@@ -36,6 +36,7 @@ in their selected language; do not create parallel download or tuning articles.
 
 | Primary keyword cluster | URL | Search job | Supporting phrases |
 |---|---|---|---|
+| mine blocknet on linux, linux blocknet miner | `/blog/mine-blocknet-on-linux/` | Install the native Linux release: choose x86_64/ARM64, verify the archive, check glibc and NVIDIA runtime, extract and confirm first accepted shares | seine linux setup, glibc 2.39, Linux ARM64 CPU mining, Linux 下挖 Blocknet / Linux 下挖礦 |
 | how to mine blocknet | `/blog/how-to-mine-blocknet/` | Get a newcomer from zero to accepted shares on any OS, and set expectations for payouts and hashrate | blocknet mining guide, blocknet miner, mine Blocknet BNT, bntpool setup, Blocknet Argon2id miner, 如何挖 Blocknet |
 | what is blocknet | `/blog/what-is-blocknet/` | Explain what Blocknet is and does for someone new, then route to names, privacy and mining | Blocknet privacy coin, Blocknet cryptocurrency, Blocknet fair launch, Blocknet Faraday upgrade, Blocknet 是什么 |
 | blocknet privacy | `/blog/blocknet-privacy-features/` | Explain each layer of Blocknet's mandatory privacy and what it means when you pay | blocknet ring signatures, blocknet stealth address, blocknet ring size, Blocknet 隐私 |
@@ -105,3 +106,103 @@ The NVIDIA guide owns card selection, NVIDIA runtime diagnosis, accepted GPU-sha
 The hardware comparison guide also presents the dated RTX 5090 results with the original method and evidence, as part of its per-chip coverage. Its shared measurement section has 8.2% wording overlap with the NVIDIA guide; runtime setup, commands and troubleshooting remain in the NVIDIA guide, linked from the hardware article.
 
 The download-verification guide owns warning identification, archive integrity checks and detection reports. The Windows guide retains the normal installation flow and its brief checksum step; the NVIDIA guide owns runtime and device setup. Neither file integrity nor the software category is presented as an antivirus verdict. Both setup guides link to the new troubleshooting owner.
+
+Added 2026-10-26: the Linux guide owns native archive installation and first-run errors. The general guide remains the cross-platform overview; huge pages and server guides own detailed tuning, NUMA and headless operation. No URL is retargeted or redirected.
+
+## RAM planning (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job | Supporting phrases |
+|---|---|---|---|
+| how much RAM to mine Blocknet; RAM per mining thread | `/blog/how-much-ram-to-mine-blocknet/` | Budget available memory, choose automatic or fixed CPU threads, and diagnose allocation/page-pool errors | 2 GiB per thread, seine memory reserve, container memory limit |
+
+The hardware article owns chip selection and measured hashrates; Argon2id owns algorithm mechanics; the huge-pages guide owns page configuration. This article owns the cross-platform memory budget and allocation decision process. Examples are arithmetic, not new benchmarks.
+
+## Miner updates (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job | Supporting phrases |
+|---|---|---|---|
+| update seine miner; update Blocknet miner | `/blog/update-seine-miner/` | Replace an existing installation while preserving its working directory, saved settings and launch options, then verify the replacement | seine update notification, seine-data, 更新 Blocknet 矿工软件 |
+
+Installation guides own first setup; the antivirus guide owns archive verification and warnings; the server guide owns service configuration. This guide owns maintaining an existing installation and diagnosing a changed configuration path after replacement. No URL is retargeted.
+
+## Tuning and Stratum (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job | Supporting phrases |
+|---|---|---|---|
+| seine automatic CPU tuning; mining autotune | `/blog/seine-automatic-cpu-tuning/` | Understand productive CPU count/kernel comparisons, cache reuse and memory responses | Blocknet mining, seine, bntpool |
+
+Dashboard owns panel interpretation; RAM owns capacity planning; huge pages owns OS reservation. This article owns automatic tuning decisions and manual overrides. No URL is retargeted.
+
+## Benchmarks and confirmations (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job | Supporting phrases |
+|---|---|---|---|
+| benchmark Blocknet miner; seine benchmark | `/blog/benchmark-seine-miner/` | Run repeatable local measurements, save JSON reports and compare matched workloads | Blocknet mining, seine, bntpool |
+
+Hardware owns chip selection and measured rankings; autotuning owns runtime decisions; hashrate on bntpool owns units and pool estimation. This article owns the benchmark procedure and comparison record. No URL is retargeted.
+
+## CPU usage and mining fees (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job | Supporting phrases |
+|---|---|---|---|
+| miner not using 100% CPU; Blocknet CPU usage | `/blog/miner-cpu-usage/` | Interpret OS utilization alongside active mining threads, local work and jobs before changing settings | Blocknet mining, seine, bntpool |
+
+Autotuning owns the search algorithm, RAM owns capacity and benchmarks own repeatable testing. This guide owns the diagnostic sequence for a CPU-utilization observation. No URL is retargeted.
+
+## Windows startup and multiple miners (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| start miner automatically Windows; Blocknet Task Scheduler | `/blog/start-miner-automatically-windows/` | Configure and verify sign-in startup for an already working Windows miner |
+
+Windows setup owns installation; server setup owns Linux systemd; updating owns release replacement. No existing URL is retargeted.
+
+## Configuration and address changes (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| seine configuration file; saved mining settings; launch overrides | `/blog/configure-seine-miner/` | Choose the configuration file, edit persistent connection fields and distinguish them from runtime launch arguments |
+
+Updating owns binary replacement, Windows startup owns Task Scheduler, tuning owns performance decisions. This article owns configuration precedence and persistence. The pool guide owns address-transition accounting. No URL is retargeted.
+
+## Miner stops and wallet receipt (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| miner keeps stopping; Blocknet miner crash troubleshooting | `/blog/miner-keeps-stopping/` | Distinguish process exit, backend fault, startup failure and computer sleep using logs, then verify a targeted fix |
+
+Configuration owns saved settings; RAM and huge pages own resource setup; NVIDIA owns GPU installation. Pool tracking owns connection diagnosis. This guide owns the cross-stage stopping decision process. No existing URL is retargeted.
+
+## Desktop use and network quality (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| mine while using PC; mining desktop responsiveness | `/blog/mine-while-using-pc/` | Choose a repeatable mining configuration around a foreground desktop workload |
+
+CPU usage owns utilization interpretation; tuning owns automatic selection; RAM owns capacity planning. This guide owns the foreground-task comparison and daily-use launch routine. No existing URL is retargeted.
+
+## Electricity and part-time mining (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet mining electricity use; mining energy cost | `/blog/mining-electricity-use/` | Define measurement scope, convert energy and calculate total versus incremental electricity cost |
+
+Old-PC guidance owns suitability and brief cost arithmetic; desktop use owns responsiveness; benchmarks own hashrate testing. This article owns whole-PC versus component measurement, full versus incremental consumption and tariff interval budgeting. No existing URL is retargeted.
+
+## Falling hashrate and wallet fees (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| mining hashrate dropping; miner slower during session | `/blog/mining-hashrate-dropping/` | Locate a sustained change in a running session using matched readings, device scope and resource evidence |
+| Blocknet transaction fees; check wallet fee before sending | `/blog/blocknet-transaction-fees/` | Understand size-based fee estimation and review recipient amount, fee and change before confirming a payment |
+
+Hashrate units and pool estimation belong to bntpool; CPU usage owns utilization; stopping owns process/backend failure; benchmarks own the measurement harness. The new diagnostic guide owns the running-session before/after decision path. Wallet setup owns creating/restoring a wallet, payment links own URI fields, mining fees belong to bntpool. The fee article owns transaction-size estimation, input/change accounting and the CLI preview. The user explicitly selected this fee topic. Neither article retargets an existing URL.
+
+## Faraday and node operation (October 26, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet Faraday upgrade; Blocknet network upgrade | `/blog/blocknet-faraday-upgrade/` | Understand the announced transition and distinguish future wallet migration, node updates and miner preparation |
+| run Blocknet node; Blocknet node setup | `/blog/run-blocknet-node/` | Install a managed mainnet core and inspect peers, sync progress, logs and update policy |
+
+The coin overview and privacy articles own current fundamentals; Faraday owns the dated upgrade plan and role-specific preparation. Wallet setup owns keys and addresses; checkpoints owns sync acceleration details on bntpool. Node operation owns the background process, network health and lifecycle. Neither article retargets an existing URL.

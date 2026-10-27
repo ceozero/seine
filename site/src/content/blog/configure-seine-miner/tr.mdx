@@ -1,0 +1,76 @@
+---
+title: 'seine ayarları: kayıtlı değerler ve başlatma seçenekleri'
+description: 'seine yapılandırmasını bulun, havuz ve adresi kaydedin, başlatma argümanlarının önceliğini anlayın ve Blocknet madencisini yeniden başlatarak doğrulayın.'
+tags: ['Madencilik rehberi', 'Yapılandırma', 'seine']
+faq:
+  - q: 'seine yapılandırmayı nereye kaydeder?'
+    a: 'Varsayılan olarak başlangıçtaki çalışma dizinine göre seine-data/seine.config.json dosyasını okur. data-dir başka bir temel dizin seçer. Terminal, kısayol ve zamanlanmış görev farklı çalışma dizinleri kullanabilir. Tam yapılandırma yolunu başlatma komutuyla birlikte kaydedin.'
+  - q: 'Komut satırı argümanı dosyayı günceller mi?'
+    a: 'Mevcut yapılandırmada açık bağlantı argümanları o çalıştırmada önceliklidir; kayıtlı adresi, havuz URL’sini veya cihaz adını değiştirmez. Argümanı normal başlatıcıda tutun ya da madenciyi durdurup kayıtlı alanı düzenleyin. Ardından normal başlangıcı doğrulayın.'
+  - q: 'Tüm seçenekleri JSON’a koyabilir miyim?'
+    a: 'Kayıtlı dosya küçük bir bağlantı şeması kullanır. Backend ve iş parçacığı gibi donanım ve çalışma seçenekleri başlatma argümanlarıdır. Benzer isimli JSON alanları bunları ayarlamaz. Veri klasörüyle birlikte başlatıcıyı da yedekleyin.'
+sourceHash: '66e5ad9f2665'
+translation: draft
+---
+
+Blocknet madencinizi her defasında öngörülebilir ayarlarla başlatın. seine v0.2.37 için bu rehber kayıt konumunu, argüman önceliğini ve kalıcı değişiklikleri açıklar. Çalışan bir kurulumla başlayın; uygulamayı değiştirmek için [güncelleme rehberine](/tr/blog/update-seine-miner/) bakın.
+
+## seine ayarları nasıl seçer?
+
+<Answer>
+seine kayıtlı bağlantı değerlerini başlangıç argümanlarıyla birleştirir. Açık bağlantı argümanları ilgili kayıtlı değerlerden önce gelir. Veri dizini okunacak dosyayı belirler. Donanım ve çalışma seçenekleri başlatma argümanları olarak kalır; hem dosyayı hem de normal komutunuzu koruyun.
+</Answer>
+
+<img src="/assets/blog/configure-seine-miner.svg" alt="Kayıtlı dosya ve terminal komutu madenciye gider; yeniden başlatmanın ardından kontrol yapılır." width="1200" height="675" loading="lazy" />
+
+## Başlatıcının kullandığı dosyayı bulun
+
+Varsayılan `./seine-data/seine.config.json` yolu süreç çalışma dizinine göredir; bu dizin program klasöründen farklı olabilir. Düzenlemeden önce terminal, kısayol veya hizmet ayarlarını kontrol edin. İki başlatıcı aynı programı farklı veri klasörleriyle çalıştırabilir.
+
+`--data-dir` temel dizini seçer; dosya adı `seine.config.json` kalır. Farklı yerlerden başlatırken sabit mutlak yol kullanın. Programı, çalışma dizinini, veri yolunu ve tüm argümanları birlikte kaydedin. [Windows başlangıç rehberi](/tr/blog/start-miner-automatically-windows/), boşluklu yollar dahil Görev Zamanlayıcı ayarlarını gösterir.
+
+## Hangi ayarlar dosyaya aittir?
+
+Örnek ana bağlantı alanlarını gösterir. `@yourname` yerine kayıtlı Blocknet ID’nizi veya tam alıcı adresinizi yazın. Bu, komut değil dosya biçimi örneğidir. Mevcut kurulumda tüm dosyayı değiştirmek yerine ilgili alanları düzenleyin.
+
+```json
+{
+  "schema_version": 1,
+  "mode": "pool",
+  "address": "@yourname",
+  "pool_url": "stratum+tcp://bntpool.com:3333",
+  "pool_worker": "desktop-01"
+}
+```
+
+`mode`, `address`, `pool_url` ve `pool_worker`; modu, hedefi, havuzu ve cihaz adını seçer. `schema_version` ve varsa `dev_fee_pool_worker` alanını koruyun. Sonuncusu ayrı oluşturulan bir etikettir; kendi cihazınız için `pool_worker` kullanın. Kurtarma ifadesini ve özel anahtarları bu dosyaya koymayın.
+
+## Değişiklik nasıl kalıcı olur?
+
+Madenciyi durdurun ve dosyayı yedekleyin. Düz metin editörü, çift tırnaklı geçerli JSON ve ek uzantısız özgün dosya adı kullanın. Doğru klasörde yalnız gereken alanı değiştirin. Virgülleri kontrol edin; yorum ve sondaki virgüllerden kaçının. Varsa editörün JSON doğrulamasını kullanın. Yedek, eski değerleri tam karşılaştırmanızı sağlar.
+
+Başlatıcıda aynı değeri geçersiz kılan argüman arayın. Eski `--address`, yeni kayıtlı adresten önce gelir. Argümanı güncelleyin veya dosyayı kullanmak için kaldırın. Normal kısayol, betik veya görevle yeniden başlatıp etkin değerleri kontrol edin.
+
+## Geçici seçenekleri bilinçli kullanın
+
+Mevcut yapılandırmada aşağıdaki havuz seçeneği cihaz adını yalnız bu çalıştırma için seçer. Sonraki başlangıçta seçenek yoksa kayıtlı ad geri gelir. Kontrollü değişiklik için uygundur; sürekli kullanmak için normal başlatıcıya ekleyin.
+
+```text
+--pool-worker desktop-02
+```
+
+İlk başlangıçta dosya yoksa seine ilk bağlantı bilgileriyle oluşturur. Bu, mevcut ayarları geçici geçersiz kılmaktan farklıdır. Komutu başka bilgisayara kopyalarken onun ilk dosyasını oluşturabileceğini unutmayın. [Yapılandırma belgesi](https://github.com/zpalmtree/seine/blob/v0.2.37/docs/guides/configuration.md) başlangıç sorularını ve desteklenen seçenekleri açıklar.
+
+## Donanım ayarlarını başlatma komutunda tutun
+
+`--backend` ve `--threads` başlangıç argümanlarıdır. Bağlantı şeması tüm seçeneklerin listesi değildir. Benzer bir JSON alanı ilgili çalışma seçeneğini ayarlamaz. Donanım tercihlerini madenciyi başlatan betik, kısayol veya hizmette tutun.
+
+Paneldeki iş parçacığı kontrolleri oturumu değiştirir, yeni varsayılan kaydetmez. Otomatik ayarın ayrı önbellekleri vardır. Bunları bağlantı düzenlemelerinden ayrı koruyun ve her makinenin kendi donanımına uyarlanmasına izin verin. [Otomatik ayar rehberi](/tr/blog/seine-automatic-cpu-tuning/), önbellek ve açık iş parçacığı seçimlerini açıklar.
+
+## Ayarlar neden sıfırlanmış görünüyor?
+
+Veri yolunu ve argümanları son çalışan başlangıçla karşılaştırın. Yeni çıkarma klasörü, başka terminal dizini veya eski görev argümanı farkı açıklayabilir. Ayrıştırma hatasında önce dosya adını ve mesajı okuyun. Yedeği geri yükleyin veya JSON’u düzeltip amaçlanan yoldan bir kez başlatın.
+
+Hedefi, havuzu, cihaz adını ve kabul edilen payları kontrol edin. Kalıcılık için normal başlangıcı tekrarlayın; tek argümanlı çalıştırma yalnız o komutu doğrular. [Panel rehberini](/tr/blog/seine-dashboard-explained/) ve gelecekteki ödül hedefi için [adres değiştirme rehberini](https://bntpool.com/blog/tr/change-mining-wallet-address/) kullanın. Çalışan başlatıcıyı ve yedeği birlikte saklayın.
+
+<CTA target="seine" title="Güncel seine sürümünü indirin" text="Sabit veri klasörü kullanın ve sınanmış komutu kayıtlı bağlantıyla birlikte koruyun." />

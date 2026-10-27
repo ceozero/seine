@@ -9,7 +9,7 @@ faq:
     a: 'Pool bntpool.com membayar dengan PPLNS dalam jendela enam jam. Imbalan sebuah blok baru bisa dibayarkan setelah blok itu tertimbun 60 blok, sekitar lima jam dengan waktu blok lima menit, dan saldo dikirim setelah mencapai 0,1 BNT. Pembayaran pertama biasanya masuk beberapa jam setelah share pertama Anda diterima.'
   - q: 'Bisakah saya menambang Blocknet dengan CPU dan GPU sekaligus?'
     a: 'Bisa. Di Windows dan Linux, seine menambang dengan setiap core CPU dan setiap kartu grafis NVIDIA di komputer secara bersamaan, dan kedua hashrate-nya dijumlahkan. seine menyetel prosesor dan setiap kartu secara terpisah selama berjalan, sehingga Anda mendapatkan hasil maksimal dari seluruh perangkat keras tanpa mengubah satu pengaturan pun.'
-sourceHash: ad835df628e2
+sourceHash: 'c15449bd790a'
 translation: draft
 ---
 
@@ -26,7 +26,7 @@ Siapkan alamat Blocknet atau nama pendek Blocknet ID, unduh seine untuk sistem A
 - **Alamat Blocknet.** Pasang wallet Blocknet resmi, yaitu [wallet baris perintah](https://github.com/blocknetprivacy/blocknet/releases/latest) atau [wallet desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), lalu salin alamat Anda. [Panduan wallet](/id/blog/blocknet-wallet-for-mining/) menjelaskannya langkah demi langkah. Simpan wallet dan frasa pemulihannya di komputer Anda sendiri; jangan taruh di rig penambangan yang dipakai bersama.
 - **Atau nama pendek.** Jika Anda punya [nama pendek Blocknet ID](/id/blog/blocknet-id-pay-by-name/) dari [blocknet.id](https://blocknet.id), Anda bisa menambang ke `@name` alih-alih menempelkan alamat yang panjang.
 - **Sekitar 2 GB RAM per thread penambangan.** seine menyesuaikan diri dengan komputer Anda dan menyisakan ruang untuk sistem, jadi Anda tidak perlu menghitungnya lebih dulu.
-- **Windows, macOS, atau Linux.** Di Windows dan Linux, kartu grafis NVIDIA dipakai otomatis jika driver terbaru sudah terpasang.
+- **Windows, macOS, atau Linux.** NVIDIA — Windows: Driver tampilan NVIDIA; DLL runtime bawaan di samping berkas program; Linux: Driver NVIDIA dan pustaka runtime NVRTC yang kompatibel.
 
 ## Langkah 1: unduh seine
 
@@ -35,7 +35,7 @@ Ambil arsip untuk sistem Anda dari [bagian unduhan](/id/#download). Tidak ada ya
 | Sistem | Arsip | Kartu grafis |
 |---|---|---|
 | Windows (x86_64) | `seine-windows-x86_64.zip` | NVIDIA; runtime CUDA sudah disertakan |
-| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | NVIDIA, dengan driver terpasang |
+| Linux (x86_64) | `seine-linux-x86_64.tar.gz` | Driver NVIDIA dan pustaka runtime NVRTC yang kompatibel; glibc ≥ 2.39 |
 | Linux (ARM64) | `seine-linux-aarch64.tar.gz` | CPU (glibc 2.39 atau lebih baru) |
 | macOS (Apple Silicon) | `seine-macos-aarch64.tar.gz` | CPU |
 | macOS (Intel) | `seine-macos-x86_64.tar.gz` | CPU |
@@ -68,11 +68,13 @@ Hashrate terutama bergantung pada bandwidth memori dan jumlah thread yang muat d
 
 | Perangkat keras | Thread | Hashrate |
 |---|---|---|
-| AMD EPYC · Zen 5 (EPYC 9R45) | 32 | 49,4 H/s |
+| AMD EPYC · Zen 5 (EPYC 9355P) | 64 | 68,3 H/s |
 | Server Arm (AWS Graviton4) | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 (EPYC 9R14) | 32 | 38,2 H/s |
 | Apple M4 Max (MacBook Pro 48 GB) | 16 | 30,9 H/s |
 | Intel Xeon (Sapphire Rapids 8488C) | 32 | 26,0 H/s |
+
+Konfigurasi tercepat dalam pengukuran ini adalah AMD EPYC 9355P pada 68,3 H/s: 64 thread penambangan, RAM 192 GiB, dan huge pages 1 GiB yang disiapkan secara manual di Linux.
 
 Hasil untuk setiap CPU yang diuji ada di [halaman performa](https://github.com/zpalmtree/seine/blob/master/docs/PERFORMANCE.md), dan [panduan perangkat keras penambangan Blocknet](/id/blog/blocknet-mining-hardware-hashrate/) menjelaskan bagaimana RAM dan bandwidth memori menentukan angka-angka ini.
 

@@ -1,0 +1,68 @@
+---
+title: 'Cómo funcionan las comisiones de Blocknet'
+description: 'Entiende las comisiones de Blocknet, las entradas y el cambio. Revisa la vista previa de la cartera y distingue las comisiones de red de las de minería.'
+tags: ['Blocknet', 'Cartera', 'Pagos']
+faq:
+  - q: '¿La comisión de Blocknet es un porcentaje del importe enviado?'
+    a: 'La implementación revisada calcula la comisión a partir de una estimación conservadora del tamaño de la transacción y una comisión mínima. Las entradas y salidas afectan a la estimación. El importe puede influir en las entradas elegidas, pero no se calcula un porcentaje fijo de los BNT enviados.'
+  - q: '¿Puedo consultar la comisión sin difundir un pago?'
+    a: 'La cartera de línea de comandos documentada solicita una vista previa y muestra la comisión antes de pedir confirmación. Revisa destino, importe y cambio. Si solo querías inspeccionar el pago, cancela en la pregunta de confirmación. Otros clientes pueden presentar la revisión de otra forma.'
+  - q: '¿El cambio de una transacción es un cargo adicional?'
+    a: 'El cambio es lo que sobra de las entradas seleccionadas tras descontar el importe del destinatario y la comisión de red. Vuelve a tu cartera como una salida. Sepáralo de la comisión y distingue el saldo total de los fondos que puedes gastar ahora.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Comprueba qué utilizará tu pago de Blocknet antes de confirmarlo. Esta guía explica cómo la cartera revisada estima una comisión de red, por qué importa elegir las entradas y cómo encajan el importe del destinatario, la comisión y el cambio. También indica dónde muestra la vista previa el cliente de línea de comandos documentado, para inspeccionar un pago sin difundirlo.
+
+## ¿Cómo se calculan las comisiones de Blocknet?
+
+<Answer>
+La cartera revisada determina la comisión mediante una estimación conservadora del tamaño de la transacción y un mínimo configurado. Las entradas elegidas y las salidas creadas afectan a esa estimación. La comisión es independiente del importe del destinatario, y el valor sobrante de las entradas se devuelve como cambio. Revisa la vista previa actual de tu pago antes de confirmarlo.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Las entradas seleccionadas se reparten entre el importe del destinatario, la comisión de red y el cambio que vuelve a la cartera." width="1200" height="675" loading="lazy" />
+
+## Entiende el cálculo y sus unidades
+
+En el [código del daemon revisado](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), el envío estándar usa un mínimo de 1000 unidades atómicas y una tarifa de 10 unidades atómicas por byte estimado. Un BNT contiene 100.000.000 unidades atómicas, por lo que equivalen a 0,00001 BNT y 0,0000001 BNT por byte estimado. Son ajustes de implementación comprobados el 26 de octubre de 2026, no una cotización para todas las versiones de cartera.
+
+El cálculo toma el mayor valor entre el mínimo y el tamaño estimado multiplicado por la tarifa. Para un tamaño supuesto, explícitamente ilustrativo, de 5000 bytes: 5000 × 10 = 50.000 unidades atómicas, o 0,0005 BNT. Supera el mínimo indicado. Es aritmética con un tamaño supuesto, no una transacción medida ni una promesa sobre la comisión de tu próximo envío.
+
+## ¿Por qué pueden variar las comisiones entre pagos?
+
+Una cartera gasta salidas existentes como entradas de una transacción y crea salidas para los destinatarios y, si hace falta, el cambio. El [constructor de transacciones](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) estima el tamaño usando el número de entradas y salidas y el tamaño del anillo, con márgenes conservadores para las pruebas. No es simplemente el número de caracteres de la dirección, el memo o el formulario.
+
+Un pago financiado con varias salidas pequeñas disponibles puede necesitar un número de entradas distinto al de otro financiado con una salida mayor. La cartera también considera la comisión al elegir suficiente valor gastable, de modo que selección y estimación interactúan. Así, el mismo importe al destinatario no implica la misma comisión en dos estados de cartera. Consulta las [firmas de anillo](/es/blog/ring-signatures-explained/) y las [pruebas de rango](/es/blog/bulletproofs-explained/) para conocer las estructuras de privacidad implicadas.
+
+## Separa importe, comisión y cambio
+
+En un envío normal de importe fijo, las entradas seleccionadas cubren el importe del destinatario y la comisión; el resto vuelve como cambio. Ejemplo: entradas por 10 BNT, destinatario de 3 BNT y comisión supuesta de 0,0005 BNT dejan 6,9995 BNT de cambio. El destinatario recibe los 3 BNT indicados; el cambio no es otro cargo.
+
+El ejemplo describe las entradas seleccionadas, no necesariamente todo tu saldo. Otras salidas pueden quedar intactas. Enviar todo tiene otro objetivo: la implementación revisada resta la comisión del total gastable seleccionado para determinar lo que recibe el destinatario. Lee el importe mostrado para esa operación en lugar de asumir que todo el saldo total puede enviarse sin descontar nada.
+
+## ¿Cómo compruebas la comisión antes de enviar?
+
+En el [cliente CLI documentado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), el envío solicita una simulación previa y muestra importe, destino, comisión y posible cambio antes de `Confirm [y/N]:`. Usa los datos de recepción y el importe que deseas en el flujo habitual de la cartera, y detente en esa revisión. La [guía de la cartera](/es/blog/blocknet-wallet-for-mining/) explica cómo prepararla y encontrar una dirección.
+
+Lee primero el destino y el importe, después la comisión y el cambio. Si solo querías comprobar el cálculo, pulsa Intro o responde que no en la confirmación: el cliente cancela en vez de solicitar el envío. Esta guía no te pide hacer un pago de prueba. Una cartera gráfica puede usar otras etiquetas; revisa su pantalla sin dar por hecho que reproduce la disposición de la CLI.
+
+## ¿Qué revisar si cambia la vista previa?
+
+La vista previa de la CLI y el envío final son solicitudes separadas. El envío real se construye con el estado de la cartera disponible entonces; la vista previa no reserva permanentemente la comisión indicada. Cambiar importe, destinatarios, salidas seleccionadas o fondos gastables puede cambiar el resultado. Evita gastar simultáneamente durante la revisión y solicita otra vista previa tras modificar el pago.
+
+Si no se puede cubrir importe más comisión, comprueba los fondos gastables, no el saldo total. Los fondos aún pendientes de confirmación son otra categoría. Guarda la versión de cartera y el mensaje exacto si no puede generarse la vista previa. Para recibir pagos de minería, la [guía de pagos a la cartera](https://bntpool.com/blog/es/pool-payout-missing-from-wallet/) sigue la transacción y el escaneo; es distinto de calcular un nuevo pago saliente.
+
+## Distingue comisiones de red y de minería
+
+La comisión de este artículo pertenece a una transacción de cartera. Una comisión del pool afecta al cálculo de recompensas del pool, mientras que la del desarrollador del minero corresponde a la política de trabajo del programa. Tienen bases y etapas diferentes. La [guía de comisiones de minería](https://bntpool.com/blog/es/mining-pool-fees-vs-miner-fees/) explica esa parte; no apliques sus porcentajes al tamaño estimado de una transacción.
+
+Del mismo modo, el pago mínimo del pool es un umbral de saldo, no la comisión de un envío normal. Conserva la etiqueta y la fuente de cada cifra al planear una transferencia. La vista previa de la cartera es el lugar pertinente para revisar el pago saliente que preparas; una calculadora de minería o el saldo del pool no la sustituyen.
+
+## Mantén un registro claro del pago
+
+Antes de confirmar un pago previsto, revisa juntos destino, importe, memo si se usa, comisión y cambio. Un [enlace de pago](/es/blog/blocknet-payment-links/) ayuda a rellenar los datos, pero debes revisarlos en la cartera. Al documentar un procedimiento, registra qué versión produjo la estimación, para que futuros lectores distingan el ejemplo fechado de su interfaz actual.
+
+Después de confirmar deliberadamente un envío, guarda el identificador de transacción con tu registro y sigue su estado en la cartera. Nunca compartas palabras de recuperación ni claves privadas para explicar una comisión. En una consulta de soporte, la versión, el tipo de operación y los importes mostrados suelen ser un punto de partida más útil que copiar datos privados. Revisa la vista previa de cada pago nuevo.
+
+<CTA target="seine" title="Explora Blocknet con seine" text="Aprende cómo funciona la minería de Blocknet y conecta tu propio equipo a la red con seine." />

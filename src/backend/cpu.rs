@@ -21,8 +21,11 @@ use crate::config::{CpuAffinityMode, CpuPageMode};
 mod events;
 #[path = "cpu/kernel.rs"]
 mod kernel;
+#[path = "cpu/placement.rs"]
+mod placement;
 #[path = "cpu/sampling.rs"]
 mod sampling;
+pub(crate) use placement::{Placement, PlacementSampler};
 #[cfg(target_os = "linux")]
 #[path = "cpu/topology.rs"]
 mod topology;
@@ -1471,6 +1474,18 @@ fn wait_for_workers_ready(
 
         let now = Instant::now();
         if now >= deadline {
+            let mut detail = seine_telemetry::FailureDetail::new(
+                seine_telemetry::FailureReason::CpuStartupTimedOut,
+                seine_telemetry::DiagnosticOperation::BackendStartup,
+            );
+            detail.ready_workers = Some(ready.min(65536) as u32);
+            detail.expected_workers = Some(expected_workers.min(65536) as u32);
+            crate::diagnostics::record_failure(
+                seine_telemetry::DiagnosticCode::Warning,
+                seine_telemetry::DiagnosticKind::Timeout,
+                Some("cpu"),
+                detail,
+            );
             let timed_out_by = now.saturating_duration_since(deadline);
             return Err(anyhow!(
                 "CPU worker startup timed out by {}ms ({ready}/{expected_workers} ready)",
@@ -1708,8 +1723,8 @@ fn forward_event(shared: &Shared, event: BackendEvent) {
 mod tests {
     use super::{
         emit_error, forward_event, lane_quota_for_chunk, maybe_finalize_assignment,
-        order_core_ids_by_groups, should_flush_hashes, start_assignment, BackendEvent, CpuBackend,
-        DEFAULT_HASH_BATCH_SIZE,
+        order_core_ids_by_groups, should_flush_hashes, start_assignment, wait_for_workers_ready,
+        BackendEvent, CpuBackend, DEFAULT_HASH_BATCH_SIZE,
     };
     use crate::backend::{MiningSolution, NonceChunk, PowBackend, WorkAssignment, WorkTemplate};
     use crate::config::CpuAffinityMode;
@@ -1987,6 +2002,32 @@ mod tests {
             .capabilities()
             .preferred_hash_poll_interval
             .is_none());
+    }
+
+    #[test]
+    fn cpu_startup_timeout_records_readiness_without_allocating_workers() {
+        let _test_lock = crate::diagnostics::TEST_LOCK.lock().unwrap();
+        let guard = crate::diagnostics::install(crate::diagnostics::test_context());
+        let backend = CpuBackend::new(2, CpuAffinityMode::Off);
+        backend.shared.ready_workers.store(1, Ordering::Release);
+        assert!(wait_for_workers_ready(&backend.shared, 2, Duration::from_millis(1)).is_err());
+        let snapshot = guard.0.snapshot(false);
+        let event = snapshot
+            .events
+            .iter()
+            .find(|e| {
+                e.detail
+                    .as_ref()
+                    .is_some_and(|d| d.reason == seine_telemetry::FailureReason::CpuStartupTimedOut)
+            })
+            .unwrap();
+        let detail = event.detail.as_ref().unwrap();
+        assert_eq!(detail.ready_workers, Some(1));
+        assert_eq!(detail.expected_workers, Some(2));
+        assert_eq!(event.backend.as_deref(), Some("cpu"));
+        backend.shared.ready_workers.store(2, Ordering::Release);
+        assert!(wait_for_workers_ready(&backend.shared, 2, Duration::from_millis(1)).is_ok());
+        assert!(guard.0.snapshot(false).events.is_empty());
     }
 
     #[test]

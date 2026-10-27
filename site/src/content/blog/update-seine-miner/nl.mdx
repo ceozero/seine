@@ -1,0 +1,72 @@
+---
+title: 'Je Blocknet-miner bijwerken'
+description: 'Werk seine voor Blocknet bij, behoud je instellingen, controleer de officiële download en verifieer de versie, poolverbinding en geaccepteerde shares.'
+tags: ['Mininghandleiding', 'seine', 'Updates']
+faq:
+  - q: 'Installeert seine updates automatisch?'
+    a: 'De versiecontrole meldt nieuwe releases in het dashboard en logboek. Je kiest zelf wanneer je installeert. Download en controleer het officiële archief, stop de miner, vervang de programmabestanden en start opnieuw met dezelfde gegevensmap en startopties.'
+  - q: 'Welke bestanden bewaren mijn instellingen?'
+    a: 'Standaard staat de configuratie in seine-data/seine.config.json, relatief aan de startmap. data-dir verandert die locatie. Bewaar de gegevensmap en je startscript of serviceconfiguratie: backend- en threadopties staan los van de opgeslagen verbindingsgegevens.'
+  - q: 'Waarom vraagt seine opnieuw om mijn adres?'
+    a: 'Controleer de werkmap en data-dir. Starten vanuit een nieuwe map kan seine naar een andere configuratielocatie sturen. Stop die instantie, zoek de oorspronkelijke gegevensmap en start met het juiste pad. Controleer adres en pool voordat je verder minet.'
+sourceHash: '1d2a2deba793'
+translation: draft
+---
+
+Werk seine bij met behoud van je werkende poolverbinding en startopties. Deze handleiding volgt de openbare release v0.2.36 en behandelt voorbereiding, vervanging en controle. Gebruik voor de eerste installatie de handleiding voor [Windows](/nl/blog/mine-blocknet-on-windows/), [Linux](/nl/blog/mine-blocknet-on-linux/) of [Mac](/nl/blog/mine-blocknet-on-mac/).
+
+## Hoe werk je seine bij?
+
+<Answer>
+Download en controleer het officiële archief voor je systeem, stop de miner, bewaar de gegevensmap en vervang de programmabestanden. Start opnieuw met dezelfde werkmap en argumenten. Controleer versie, uitbetalingsadres, poolverbinding en geaccepteerde shares voordat je een andere machine bijwerkt.
+</Answer>
+
+<img src="/assets/blog/miner-update.svg" alt="Het programma wordt vervangen terwijl de configuratiemap behouden blijft, gevolgd door een verbindingscontrole." width="1200" height="675" loading="lazy" />
+
+## Hoe controleer je de huidige versie?
+
+Voer de versieopdracht uit op het werkelijk gebruikte programma. Een oude kopie kan afwijken van de versie die een snelkoppeling of service start. Noteer programmapad, werkmap en argumenten samen om de update herhaalbaar te maken. Open op Windows PowerShell in de huidige minermap:
+
+```powershell
+.\seine.exe --version
+```
+
+Open op Linux of macOS een terminal in die map:
+
+```sh
+./seine --version
+```
+
+Vergelijk met de [officiële releases](https://github.com/zpalmtree/seine/releases). seine controleert bij het starten en elke 12 uur en meldt updates in dashboard en logboek. De melding geeft een downloadlink; jij kiest de installatie. Lees de release-informatie over platform, runtime en startopties.
+
+## Welke instellingen moet je bewaren?
+
+Standaard leest seine `./seine-data/seine.config.json`. `./` verwijst naar de werkmap: het programma verplaatsen en elders starten kan de zoeklocatie veranderen. Blijf met `--data-dir` dezelfde map gebruiken. Een absoluut pad maakt de locatie duidelijk wanneer snelkoppelingen, scripts of services de werkmap bepalen.
+
+De configuratie bewaart miningmodus, uitbetalingsadres, pool-URL en machinenaam. Bewaar de hele gegevensmap, inclusief tuningbestanden. Bewaar ook de startopdracht, het script of de servicedefinitie: `--backend` en `--threads` staan los van de opgeslagen verbindingsvelden. Samen behouden ze je bedoelde instellingen bij de herstart.
+
+## Download en controleer de vervanging
+
+Kies via de [downloadpagina](/nl/#download) of officiële release het archief voor systeem en CPU-architectuur. Download ook het losse bestand `SHA256SUMS.txt` van dezelfde release. Vergelijk de checksum voordat je uitpakt in een aparte map. De [verificatiehandleiding](/nl/blog/antivirus-flags-crypto-miner/) behandelt Windows en downloadwaarschuwingen.
+
+Houd alle meegeleverde bestanden bij elkaar. Het Windows-pakket bevat NVIDIA-runtimebibliotheken naast `seine.exe`; alleen het programma kopiëren kan versies vermengen. De [NVIDIA-handleiding](/nl/blog/mine-blocknet-nvidia-gpu/) behandelt de runtime. De [configuratiereferentie voor v0.2.36](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/guides/configuration.md) documenteert de opgeslagen instellingen en het startgedrag.
+
+## Stop, maak een back-up en vervang
+
+Sluit af met `q` of `Ctrl+C` en wacht tot het proces stopt. Gebruik voor een service de servicemanager en houd rekening met automatisch herstarten voordat je bestanden vervangt. Maak bij gestopte miner een lokale back-up van programma- en gegevensmap. Houd die apart van de nieuwe uitpakmap zodat versies herkenbaar blijven.
+
+Plaats nieuwe bestanden in de installatiemap en behoud de oorspronkelijke gegevens. Bij mappen per versie wijzig je het programmapad in snelkoppeling of service en behoud je expliciet werkmap en gegevenspad. Start één instantie met dezelfde opties. Controleer bij meerdere machines eerst één volledig.
+
+## Hoe bevestig je dat de update werkt?
+
+Controleer opnieuw de versie van het geïnstalleerde programma tegenover je download. Start en controleer uitbetalingsdoel, pool, machinenaam en gewenste CPU- of GPU-backends. Compatibele tuninggegevens kunnen opnieuw worden gebruikt; wacht eventuele tuning bij de start af voordat je hashrate beoordeelt. De [dashboardhandleiding](/nl/blog/seine-dashboard-explained/) legt de panelen uit.
+
+Zoek geaccepteerde shares en open [My Stats](https://bntpool.com/stats) voor hetzelfde adres. Poolschattingen hebben shares en tijd nodig om te stabiliseren; een direct hashrateverschil bewijst geen updateprobleem. Een nieuw proces start ook een nieuwe lokale sessie. Vergelijk adres, machine en activiteit voordat je korte-termijntellers vergelijkt.
+
+## Wat als de eerste vragen terugkomen?
+
+Controleer werkmap en `--data-dir`. Een vers uitgepakte map mist vaak de configuratie op het standaard relatieve pad. Stop die instantie en wijs naar de oorspronkelijke gegevens. Noemt een fout een configuratiebestand, bewaar bestand en exacte melding voor onderzoek. Laat wallet-seeds, privésleutels en control-API-tokens weg uit openbare beelden en meldingen.
+
+Bij een startfout noteer je versie, systeem, programmapad en exacte fout en raadpleeg je de platformhandleiding. De back-up bewaart oude toepassing en instellingen samen. Controleer vóór herstel de compatibiliteitseisen in de nieuwe release-informatie. Hervat met bekende instellingen en controleer shares; alleen de miner vervangen vereist geen nieuwe wallet.
+
+<CTA target="seine" title="Download de huidige seine-release" text="Kies je platformarchief en behoud je configuratie tijdens de update." />

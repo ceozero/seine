@@ -1,0 +1,68 @@
+---
+title: 'Blocknet-Miner unter Windows automatisch starten'
+description: 'Starte seine bei der Windows-Anmeldung mit der Aufgabenplanung. Behalte deine Konfiguration, vermeide doppelte Starts und prüfe die angenommenen Shares.'
+tags: ['Mining-Anleitung', 'Windows', 'Einrichtung']
+faq:
+  - q: 'Startet der Miner schon vor der Anmeldung?'
+    a: 'Diese Einrichtung startet seine bei der Anmeldung des ausgewählten Windows-Benutzers in dessen Sitzung. Sie richtet keinen Windows-Hintergrunddienst ein. Melde dich nach einem Neustart mit diesem Konto an, um die Aufgabe auszulösen, und prüfe anschließend die angenommenen Shares.'
+  - q: 'Bleiben meine Mining-Einstellungen erhalten?'
+    a: 'Verwende dasselbe Windows-Konto, den vorhandenen Datenordner und die Optionen deines funktionierenden Befehls. Gib einen absoluten Datenpfad in den Argumenten und das richtige Arbeitsverzeichnis an. So findet seine die gespeicherte Adresse, den Pool und den Gerätenamen.'
+  - q: 'Wie schalte ich automatisches Mining aus?'
+    a: 'Deaktiviere die Aufgabe in der Aufgabenplanung, um weitere Starts zu verhindern, und beende den laufenden Miner regulär in seinem Fenster. Das Deaktivieren beendet keinen bereits laufenden Prozess. Aktiviere die Aufgabe wieder, wenn Mining bei der Anmeldung erneut starten soll.'
+sourceHash: '5fffcbfbecf8'
+translation: draft
+---
+
+Lass Windows deine funktionierende seine-Einrichtung bei der Anmeldung öffnen. Diese Anleitung nutzt die Aufgabenplanung in deiner Benutzersitzung und lässt sich einfach abschalten. Schließe zuerst die [Windows-Einrichtung](/de/blog/mine-blocknet-on-windows/) ab und prüfe, ob der Pool Shares annimmt. Ein bereits funktionierender Befehl lässt sich zuverlässig überprüfen.
+
+## Wie startet ein Blocknet-Miner automatisch?
+
+<Answer>
+Erstelle eine Aufgabe für dein Windows-Konto mit einem Auslöser bei der Anmeldung und dem entpackten seine-Programm als Aktion. Verwende den bestehenden Datenordner und das richtige Arbeitsverzeichnis, verhindere eine weitere Instanz derselben Aufgabe und prüfe angenommene Shares nach einem Teststart.
+</Answer>
+
+<img src="/assets/blog/start-miner-automatically-windows.svg" alt="Ein Windows-Benutzer meldet sich an, die Aufgabenplanung startet einen Miner und angenommene Shares erreichen den Pool." width="1200" height="675" loading="lazy" />
+
+## Welche Dateien und Einstellungen bleiben erhalten?
+
+Wähle einen festen Ordner für die entpackte Veröffentlichung. Halte alle Archivdateien einschließlich mitgelieferter Bibliotheken zusammen und verwende das Programm darin. Finde den Datenordner deines erfolgreichen manuellen Starts. Standardmäßig verwendet seine `./seine-data` relativ zum Arbeitsverzeichnis und speichert dort Verbindungseinstellungen in `seine.config.json`. Ein anderes Startverzeichnis kann eine andere Konfiguration bedeuten.
+
+Die Beispiele verwenden `C:\Users\YOUR_USER\Apps\seine`; ersetze den gesamten Pfad durch deinen Installationsordner. Lass den bestehenden Datenordner an seinem bisherigen Ort. Bewahre auch den funktionierenden Befehl auf: Explizite Backend- oder Tuning-Optionen können weiterhin nötig sein. Für die Startaufgabe brauchst du weder Wiederherstellungsphrase noch private Wallet-Schlüssel.
+
+## Erstelle die Anmeldeaufgabe
+
+Öffne **Aufgabenplanung** über Start und wähle **Aufgabe erstellen**. Vergib einen erkennbaren Namen, etwa **seine mining**. Wähle unter **Allgemein** dein bisheriges Konto und **Nur ausführen, wenn der Benutzer angemeldet ist**. Lass **Mit höchsten Privilegien ausführen** bei dieser normalen Einrichtung deaktiviert. Füge unter **Trigger** **Bei Anmeldung** für deinen bestimmten Benutzer hinzu und aktiviere den Trigger. Microsoft beschreibt diesen [Anmeldeauslöser](https://learn.microsoft.com/en-us/windows/win32/taskschd/starting-an-executable-when-a-user-logs-on).
+
+Füge unter **Aktionen** **Programm starten** hinzu und trenne die Felder:
+
+- **Programm/Skript:** Wähle `C:\Users\YOUR_USER\Apps\seine\seine.exe` über Durchsuchen.
+- **Argumente hinzufügen:** Trage `--data-dir "C:\Users\YOUR_USER\Apps\seine\seine-data"` mit deinem bestehenden Datenordner und danach die Optionen deines funktionierenden Befehls ein.
+- **Starten in:** Trage `C:\Users\YOUR_USER\Apps\seine` ohne Anführungszeichen ein.
+
+Das [Arbeitsverzeichnis](https://learn.microsoft.com/en-us/windows/win32/taskschd/execaction-workingdirectory) bestimmt den Startordner. Optionen gehören nicht in Programm/Skript, der Dateiname nicht in Starten in. Wähle die echte Datei, statt den Beispielpfad unverändert zu übernehmen.
+
+## Lege die Laufbedingungen fest
+
+Erlaube unter **Einstellungen** die Ausführung bei Bedarf für Tests. Wähle bei einer bereits laufenden Aufgabe **Keine neue Instanz starten**. Diese [Instanzrichtlinie](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-multipleinstances) gilt nur für die geplante Aufgabe und erkennt keinen separat gestarteten Miner. Beende vor dem Test die manuelle Instanz. Ein bewusst gestarteter Prozess ist leichter zu prüfen und vermeidet eine zweite Kopie mit derselben Konfiguration.
+
+Für durchgehendes Mining während der Anmeldung entferne **Aufgabe beenden, falls Ausführung länger als**; sonst gilt ein [Ausführungszeitlimit](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-executiontimelimit). Prüfe auch **Bedingungen**: Eine Leerlaufbedingung kann den sofortigen Teststart verhindern. Auf einem Laptop begrenzen beibehaltene Netzstrombedingungen den Ablauf auf den Betrieb am Stromnetz. Speichere die Aufgabe mit passenden Einstellungen.
+
+## Wie prüfst du den automatischen Start?
+
+Beende den manuellen Miner regulär, wähle die Aufgabe und **Ausführen**. Prüfe im Miner die Auszahlungsadresse, den Pool und den Gerätenamen und warte auf angenommene Shares. Rufe die Adresse unter My Stats auf bntpool.com auf und kontrolliere den erwarteten Rechner. Der Aufgabenstatus bestätigt nur einen laufenden Prozess; angenommene Shares bestätigen nutzbare Pool-Arbeit.
+
+Speichere für den echten Triggertest andere Arbeit, melde dich ab und mit dem ausgewählten Konto wieder an. Sperren und Entsperren ist ein anderer Vorgang. Prüfe erneut Adresse und aktuelle Shares. Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt Geräte- und Verbindungsdaten. Notiere Aufgabenname und Ordner für spätere Updates.
+
+## Was prüfst du, wenn der Start ausbleibt?
+
+Vergleiche Programmpfad, Konto, Argumente und Starten in mit dem funktionierenden manuellen Befehl. Bei erneuter Ersteinrichtung prüfe Datenpfad und Zugriffsrechte. Bei einer fehlenden Bibliothek prüfe das vollständig entpackte Archiv. Erscheint kein Fenster, kontrolliere zuerst den aktivierten Trigger sowie Strom- und Leerlaufbedingungen, bevor du Miner-Einstellungen änderst.
+
+Läuft der Miner ohne sichtbare Shares, prüfe Adresse, Pool-Verbindung und aktuelle Shares des Geräts. Bei zwei Rechnern mit derselben Wallet nutze unterschiedliche Namen gemäß der [Mehrrechner-Anleitung](https://bntpool.com/blog/de/mine-multiple-computers-one-wallet/). Die Aufgabe soll die getestete Konfiguration starten; Verbindung und Hardware diagnostizierst du im laufenden Miner.
+
+## Deaktiviere den Start oder aktualisiere den Miner
+
+Wähle die Aufgabe und **Deaktivieren**, um künftige Starts zu verhindern. Beende den bereits laufenden Miner regulär in seinem Fenster; die Deaktivierung beendet ihn nicht. Aktiviere die Aufgabe bei Bedarf wieder. So bleibt die Entscheidung sichtbar und umkehrbar, ohne Windows-weite Start- oder Energiespareinstellungen zu ändern.
+
+Deaktiviere vor einem Versionswechsel die Aufgabe und beende den Miner. Folge der [Update-Anleitung](/de/blog/update-seine-miner/), behalte den Datenordner und passe bei geändertem Programmpfad die Aktion an. Teste mit Ausführen, bevor du den Trigger aktivierst. Für Mining als Linux-Systemdienst nutze die gesonderte [Server-Einrichtung](/de/blog/mine-blocknet-on-servers/); sie unterscheidet sich von diesem Windows-Anmeldestart.
+
+<CTA target="seine" title="seine für Windows herunterladen" text="Nutze die offizielle Windows-Version, prüfe erste angenommene Shares und automatisiere deine funktionierende Einrichtung." />

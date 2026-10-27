@@ -1,0 +1,62 @@
+---
+title: 'Vì sao trình đào không dùng 100% CPU'
+description: 'Hiểu mức dùng CPU khi đào Blocknet bằng seine. Kiểm tra luồng hoạt động, bộ nhớ, backend và công việc được chấp nhận trước khi đổi cấu hình.'
+tags: ['Hướng dẫn đào', 'Sử dụng CPU', 'seine']
+faq:
+  - q: 'Trình đào có nên luôn dùng 100% CPU?'
+    a: 'Không. Phần trăm toàn hệ thống mô tả mức dùng các bộ xử lý khả dụng, còn seine đo số hash hoàn thành. Số luồng hữu ích phụ thuộc bộ nhớ và thông lượng đo được. Hãy xem luồng, hashrate và công việc được chấp nhận cùng nhau.'
+  - q: 'Vì sao seine chọn ít luồng hơn?'
+    a: 'Mỗi luồng đào CPU hoạt động cần vùng nhớ 2 GiB và các luồng chia sẻ băng thông. Chọn tự động xét bộ nhớ và thử thông lượng. Giới hạn đặt rõ, backend và môi trường chạy cũng ảnh hưởng.'
+  - q: 'Kiểm tra gì khi mức dùng và hashrate cùng giảm?'
+    a: 'Kiểm tra backend CPU, số luồng, thông báo tinh chỉnh và bộ nhớ, cùng job hiện tại. So sánh cùng thiết bị và khoảng thời gian, rồi tải nền và giới hạn. Với lỗi kết nối hoặc hashrate pool bằng không, theo hướng dẫn theo dõi.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Đọc mức dùng CPU cùng số luồng hoạt động, H/s cục bộ và share được chấp nhận khi đào Blocknet bằng seine v0.2.36. Thực hiện các bước này trước khi đổi cấu hình. Để cài đặt, xem [hướng dẫn đào](/vi/blog/how-to-mine-blocknet/).
+
+## CPU thấp có nghĩa ít công việc hữu ích hơn?
+
+<Answer>
+Một phần trăm CPU riêng lẻ không cho biết lượng công việc hữu ích hoàn thành. Kiểm tra backend CPU được chọn, luồng hoạt động, hashrate cục bộ và job đến. seine có thể chọn ít luồng đào hơn số bộ xử lý logic. So sánh công việc trong điều kiện nhất quán trước khi đổi số luồng.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Lưới hoạt động bộ xử lý và bộ đếm công việc hoàn thành là hai quan sát riêng, nối bằng kiểm tra luồng, bộ nhớ và job." width="1200" height="675" loading="lazy" />
+
+## Đọc phạm vi phần trăm trước
+
+Trên Windows, phân biệt tiến trình seine với toàn máy. Tìm seine trong Task Manager, rồi mở Performance và CPU. Biểu đồ bộ xử lý logic cho thấy phân bố tải; số tổng hợp bao gồm cả máy. [Hướng dẫn Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) mô tả các chế độ này. Ghi lại chế độ dùng.
+
+Trên Linux, phần trăm tiến trình trong `top` có thể khác thang với tổng hệ thống. Chế độ Irix cho phép tiến trình nhiều luồng vượt 100%; Solaris chia cho số bộ xử lý. Chế độ luồng đổi các hàng hiển thị. Đọc [tài liệu](https://man7.org/linux/man-pages/man1/top.1.html): đổi thang không phải đo được thay đổi tốc độ.
+
+## Kiểm tra thiết bị đang làm việc
+
+Đọc H/s và luồng tại hàng CPU trên [bảng điều khiển](/vi/blog/seine-dashboard-explained/). Tốc độ gộp CPU/GPU chứa cả hai; so sánh cùng thiết bị. Nếu lệnh chỉ chọn NVIDIA, tải đào CPU thấp là bình thường. Xem [hướng dẫn NVIDIA](/vi/blog/mine-blocknet-nvidia-gpu/).
+
+Số luồng đào khác số luồng tiến trình của hệ điều hành. seine còn có tác vụ mạng, điều khiển và báo cáo. Tiến trình có thể có nhiều luồng hơn hàng CPU. Cần xác định luồng băm đang hoạt động và hoàn thành công việc.
+
+## Vì sao bộ nhớ giới hạn số luồng?
+
+Mỗi luồng CPU hoạt động dùng vùng 2 GiB cho Argon2id. Cách chọn tự động xét bộ nhớ khả dụng và chừa chỗ cho hệ thống. Đọc số thực tế và thông báo, không lấy RAM lắp sẵn chia ra thành dung lượng được hứa hẹn. [Hướng dẫn RAM](/vi/blog/how-much-ram-to-mine-blocknet/) trình bày ngân sách, dự phòng và cấp phát.
+
+Dung lượng quyết định bao nhiêu vùng vừa; băng thông ảnh hưởng truyền dữ liệu đồng thời. Luồng có thể vẫn được tính là bận khi chờ bộ nhớ. Mức dùng thấp không chứng minh nghẽn băng thông; 100% cũng không chứng minh H/s tốt nhất. Xem [Argon2id](/vi/blog/argon2id-proof-of-work-explained/).
+
+## Đọc thay đổi tự động và cấu hình rõ ràng
+
+Tinh chỉnh CPU tự động so sánh số luồng và kernel bằng công việc đo được. Số thấp hơn có thể hợp lý; thay đổi bộ nhớ cũng ảnh hưởng. Đợi lượt thử ổn định và đọc thông báo. [Hướng dẫn tinh chỉnh](/vi/blog/seine-automatic-cpu-tuning/) giải thích quyết định và bộ nhớ đệm.
+
+Kiểm tra lệnh đã chạy. `--threads`, mức tối đa tinh chỉnh hoặc hồ sơ CPU có thể đổi phạm vi tìm kiếm hay số luồng; affinity đổi vị trí chạy. Container, máy ảo và giới hạn OS có thể cung cấp ít tài nguyên hơn máy chủ. Lưu cấu hình và xác định giới hạn trước khi tăng.
+
+## Nếu mức dùng và H/s cùng giảm?
+
+Kiểm tra backend CPU có hoạt động và có job không. Xem job hiện tại, kết nối, điều chỉnh bộ nhớ và lỗi backend trong nhật ký. Khởi động và lượt tinh chỉnh mới có ngữ cảnh mà đồng hồ OS không hiển thị. Nếu GPU tiếp tục, kiểm tra từng thiết bị riêng.
+
+So sánh khoảng ổn định với cùng phiên bản, backend và cấu hình. Ghi ứng dụng khác, bộ nhớ, điện năng và thời điểm. Để so sánh lặp lại, theo [hướng dẫn benchmark](/vi/blog/benchmark-seine-miner/) và giữ báo cáo. Đỉnh ngắn hoặc một phần trăm không phải kết quả phần cứng.
+
+## Kết thúc bằng công việc hoàn thành và được chấp nhận
+
+Khi đào bình thường, kiểm tra hash CPU tiến triển và phản hồi share được chấp nhận. Share đến cách quãng, không có đếm ngược cố định. Pool ước tính hashrate từ lượt gửi theo thời gian. [Hướng dẫn theo dõi](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) giải thích góc nhìn này và kết nối.
+
+Ghi phiên bản, lệnh, backend, luồng CPU, H/s CPU, công cụ và chế độ OS, bộ nhớ và khoảng quan sát pool. Khi công việc tiến triển, phần trăm hệ thống là ngữ cảnh. Nếu một bước dừng, theo hướng dẫn bước đó. Mỗi thay đổi sẽ có câu hỏi cụ thể và kết quả so sánh được.
+
+<CTA target="seine" title="Theo dõi đào CPU bằng seine" text="Tải seine và xem cùng lúc luồng hoạt động, hashrate và công việc được chấp nhận." />

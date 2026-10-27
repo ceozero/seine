@@ -1,0 +1,62 @@
+---
+title: '为什么矿工程序没有用满100% CPU'
+description: '理解seine挖掘Blocknet时的CPU使用率。调整设置前，检查活跃线程、内存、后端和已接受的工作。'
+tags: ['挖矿指南', 'CPU使用率', 'seine']
+faq:
+  - q: '矿工程序应该一直使用100% CPU吗？'
+    a: '不一定。系统总百分比描述可用处理器的使用情况，seine则测量完成的哈希。有效线程数取决于内存和实测吞吐量。请结合活跃线程、算力和已接受的工作判断。'
+  - q: '为什么seine选择更少的线程？'
+    a: '每个活跃CPU挖矿线程需要2 GiB内存区域，线程共享内存带宽。自动选择考虑内存并测试性能。显式限制、后端和运行环境也会影响数量。'
+  - q: '使用率和算力同时下降时查什么？'
+    a: '检查CPU后端、活跃线程、调优和内存消息，以及当前任务。比较同一设备和时段，再检查后台负载和运行限制。连接异常或矿池算力为零时，使用跟踪指南。'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+在seine v0.2.36中挖掘Blocknet时，将CPU使用率与活跃线程、本地H/s和已接受份额一起看。更改设置前按此顺序检查。首次安装请从[挖矿指南](/zh-hans/blog/how-to-mine-blocknet/)开始。
+
+## CPU使用率低是否意味着有效工作少？
+
+<Answer>
+单独的CPU百分比无法说明完成了多少有效工作。检查所选CPU后端、活跃线程数、本地算力和收到的任务。seine可能选择比逻辑处理器数量更少的挖矿线程。修改数量前，应在一致条件下比较完成的工作。
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="处理器活动网格和已完成工作计数器是不同的观察，由线程、内存和任务检查连接起来。" width="1200" height="675" loading="lazy" />
+
+## 先看百分比的统计范围
+
+在Windows中区分seine进程和整机。在任务管理器中找到seine，再查看性能和CPU。逻辑处理器图表显示负载分布，总数汇总整机活动。[Microsoft指南](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager)说明了这些视图。记录你使用的视图。
+
+Linux的`top`进程百分比可能与系统摘要使用不同尺度。Irix模式下多线程进程可以超过100%；Solaris模式按处理器数量相除。线程视图改变显示的行。请阅读[手册](https://man7.org/linux/man-pages/man1/top.1.html)：尺度变化不是实测的挖矿速度变化。
+
+## 检查哪个设备在工作
+
+在[seine仪表盘](/zh-hans/blog/seine-dashboard-explained/)的CPU行读取H/s和活跃线程。CPU/GPU合计包含两者，比较时应选择同一设备。如果启动命令只选NVIDIA，CPU挖矿负载低是预期行为。参见[NVIDIA指南](/zh-hans/blog/mine-blocknet-nvidia-gpu/)。
+
+活跃挖矿线程数不同于操作系统的进程线程数。seine还运行网络、控制和报告任务，因此进程线程可能多于CPU行显示的数量。要检查的是多少哈希线程正在运行，以及是否完成工作。
+
+## 为什么内存会限制线程数？
+
+每个活跃CPU线程为Argon2id使用2 GiB内存区域。自动选择考虑可用内存并为系统留余量。读取实际数量和消息，不要将安装RAM的除法结果视为保证容量。[RAM规划指南](/zh-hans/blog/how-much-ram-to-mine-blocknet/)说明预算、预留和分配。
+
+容量决定能容纳多少区域，带宽影响并发数据传输效率。线程等待内存时仍可能被计为忙碌。低使用率本身不能证明带宽瓶颈，100%也不能证明H/s最佳。参见[Argon2id指南](/zh-hans/blog/argon2id-proof-of-work-explained/)。
+
+## 读取自动变化和显式设置
+
+自动CPU调优通过实测工作比较线程数和计算内核。较少的数量可能是合理结果，可用内存变化也会影响数量。等待当前试验稳定并阅读消息。[自动调优指南](/zh-hans/blog/seine-automatic-cpu-tuning/)解释选择和缓存复用。
+
+检查实际启动命令。`--threads`、调优上限或CPU配置档会影响搜索或线程数；亲和性改变运行位置。容器、虚拟机和OS限制可能提供比宿主机更少的执行资源。保存配置，增加前先确定约束。
+
+## 如果使用率和H/s一起下降呢？
+
+先检查CPU后端是否活跃且有任务。在日志中查当前任务、连接、内存调整和后端错误。启动或新调优试验有OS表盘未显示的背景。如果GPU继续工作，应分别检查设备状态。
+
+比较使用同一版本、后端和设置的稳定时段。记录其他应用、内存、电源设置和时间。可重复的本地比较请遵循[基准测试指南](/zh-hans/blog/benchmark-seine-miner/)并保留报告。短暂峰值或一个百分比不是硬件测试结果。
+
+## 最后检查完成和接受的工作
+
+正常挖矿时确认CPU哈希在推进，并收到份额接受响应。份额间隔到达，不存在固定倒计时。矿池根据一段时间的提交估算算力。[跟踪指南](https://bntpool.com/blog/zh-hans/track-your-miner-on-bntpool/)解释这一视角和连接检查。
+
+记录版本、命令、后端、CPU线程、CPU H/s、OS工具和视图、内存状态及矿池观察窗口。如果工作推进，总使用率是背景信息。如果某阶段停滞，使用对应指南。这样每次调整都有具体问题和可比较结果。
+
+<CTA target="seine" title="使用seine跟踪CPU挖矿" text="下载seine，在仪表盘一起检查活跃线程、算力和已接受的工作。" />

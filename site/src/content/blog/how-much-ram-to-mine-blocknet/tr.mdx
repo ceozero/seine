@@ -1,0 +1,90 @@
+---
+title: 'Blocknet madenciliği için ne kadar RAM gerekir?'
+description: 'Blocknet için RAM planlayın: CPU iş parçacığı başına 2 GiB, uygulamalar için boşluk, seine ile otomatik ayarlama ve bellek ayırma hatalarına çözümler.'
+tags: ['Madencilik rehberi', 'RAM', 'CPU']
+faq:
+  - q: 'Bir Blocknet iş parçacığı ne kadar RAM kullanır?'
+    a: 'Her CPU iş parçacığı 2 GiB Argon2id bellek alanı gerektirir. Bu, bilgisayarın toplam gereksinimi değil, madencilik çalışma alanıdır. Sistem, uygulamalar ve madenci için ek RAM bırakın. Takılı RAM’i ikiye bölmek yerine kullanılabilir belleğe göre hesaplayın.'
+  - q: '8 GB RAM ile Blocknet kazabilir miyim?'
+    a: 'En az bir 2 GiB alan ile sistem ve madenciye yetecek kullanılabilir bellek varsa CPU madenciliği yapılabilir. Yalnızca 8 GB etiketi iş parçacığı sayısını belirlemez. Otomatik ayarlamayla başlayın; kullanılabilir belleği ve seçilen sayıyı kontrol edin.'
+  - q: 'Huge pages iş parçacığı başına RAM’i azaltır mı?'
+    a: 'Huge pages, işletim sisteminin belleği eşleme biçimini değiştirir. CPU iş parçacığı başına gereken 2 GiB alanı küçültmez. Önce bellek bütçesini belirleyin, sonra desteklenen sistemlerde büyük sayfaları açıkça yapılandırmak için ayrı rehberi izleyin.'
+sourceHash: 'e7a10b8e1c11'
+translation: draft
+---
+
+Kullanılabilir belleğe sığan CPU iş parçacıklarını seçin. Bu rehber 2 GiB alanları, seine v0.2.26 otomatik ayarını ve elle seçilen değer bellek ayıramadığında yapılacak kontrolleri anlatır. Çip karşılaştırmaları ve ölçülmüş hash gücü için [donanım rehberine](/tr/blog/blocknet-mining-hardware-hashrate/) bakın. Buradaki örnekler performans ölçümü değil, bellek hesabıdır.
+
+## Her iş parçacığı ne kadar RAM gerektirir?
+
+<Answer>
+Her CPU iş parçacığı 2 GiB Argon2id alanı gerektirir. Sistem, uygulamalar ve madenciye yer bırakın. Kullanılabilir bellek ve CPU kaynaklarını dikkate alan seine otomatik ayarıyla başlayın. Elle seçilen sayı, madencilik başlarken gerçekten kullanılabilir olan belleğe sığmalıdır.
+</Answer>
+
+GiB ikili birimdir: 2 GiB, 2.147.483.648 bayttır. Alan hash’ler arasında yeniden kullanılır; tamamlanan her hash kalıcı olarak 2 GiB daha tüketmez. Eşzamanlı iş parçacıkları arttıkça alan sayısı artar. [Argon2id açıklaması](/tr/blog/argon2id-proof-of-work-explained/) bu çalışma belleğini anlatır.
+
+<img src="/assets/blog/ram-budget.svg" alt="Sistem ve uygulama belleğinin yanında dört ayrı 2 GiB madencilik alanı" width="1200" height="675" loading="lazy" />
+
+## İş parçacığı bütçesi nasıl hesaplanır?
+
+Planlanan CPU iş parçacığı sayısını 2 GiB ile çarpın. Tablo sistem ve diğer bellek giderlerini içermez. Alanları bununla hesaplayın; gerçek sayıyı kullanılabilir bellek ve ölçülen işlem hızına göre seçin.
+
+| CPU iş parçacıkları | Yalnızca alan belleği |
+|---|---|
+| 1 | 2 GiB |
+| 2 | 4 GiB |
+| 4 | 8 GiB |
+| 8 | 16 GiB |
+| 16 | 32 GiB |
+
+Dört iş parçacığının alanları 8 GiB gerektirir; süreç ve sistem için 8 GiB’den fazla kullanılabilir bellek gerekir. 16 GiB bilgisayarda bilinçli olarak 4 GiB ayırırsanız kalan 12 GiB’ye hesap olarak altı alan sığar. Bu bir bütçe tercihidir; altı iş parçacığının en yüksek hash gücünü vereceği sözü değildir.
+
+Normal uygulamalarınız açıkken Windows Görev Yöneticisi, macOS Etkinlik Monitörü veya Linux araçlarından kullanılabilir belleği kontrol edin. Sanal makine veya konteynerin hakkı ana makineden düşük olabilir. Etkin sınırı kullanın; ana makinenin belirtilen RAM’i kısıtlı ortama otomatik olarak sunulmaz.
+
+## seine iş parçacıklarını nasıl otomatik seçer?
+
+İlk CPU-only çalıştırmada sayıyı belirtmeyin. Linux veya macOS’ta arşivden çıkarılan klasörde bu komutu çalıştırın. Windows’ta PowerShell’de çalıştırılabilir dosyayla aynı seçenekleri kullanın. [Başlangıç rehberi](/tr/blog/how-to-mine-blocknet/) indirmeyi ve alım adresini anlatır.
+
+```sh
+./seine --backend cpu
+```
+
+v0.2.26’da otomatik boyutlandırma ve ayarlama, kullanılan belleği hesaba katmanın yanında etkin toplam RAM’in varsayılan olarak %5’ini ayırır. CPU kaynakları da sayıyı sınırlar. Arama aralığını daraltmak için üst sınır koyun:
+
+```sh
+./seine --backend cpu --cpu-autotune-max-threads 4
+```
+
+Dört örnek bir tavandır, evrensel ayar değildir. Ayarlayıcı daha azını seçebilir. [Panoda](/tr/blog/seine-dashboard-explained/) seçilen sayıyı ve ortalama hash gücünü izleyin. Otomatik ayarlama gerçek yapılandırmayı ölçer; kısa dalgalanmalara göre karar vermeden önce dengelenmesini bekleyin.
+
+## Ne zaman sabit sayı belirlenmeli?
+
+Belirli bütçe veya tekrarlanabilir yapılandırma için sabit sayı kullanın. Bu örnek iki CPU iş parçacığı seçer: alanlar için 4 GiB ve diğer ihtiyaçlar için ek bellek.
+
+```sh
+./seine --backend cpu --threads 2
+```
+
+`--threads`, ayarlamayı ayrıca açıkça etkinleştirmedikçe normal otomatik seçimi kapatır. Otomatik rezerv politikasını geçersiz kılar; kendiniz pay bırakın. Bellek kontrolleri devam eder. Takılı RAM’e sığan sayı, başka uygulamalar açıldıktan sonra kullanılabilir belleği aşabilir.
+
+Bir seferde bir ayarı değiştirin. Benzer yüklerde sayı, kullanılabilir RAM ve ortalama hash gücünü kaydedin. Otomatiğe dönmek için sabit argümanı ve kayıtlı geçersiz kılmaları kaldırın. [v0.2.26 yapılandırma belgesi](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) komut satırı ve kayıtlı ayarları açıklar.
+
+## Bellek ayırma hatasından sonra ne kontrol edilir?
+
+Mesajın etkin sınır, kullanılabilir bellek veya açık büyük sayfa ayırması hakkında olduğunu ayırt edin. Kontroller farklıdır. Gereksiz uygulamaları kapatın, sayıyı azaltın ve normal masaüstü kullanımına yer bırakarak yeniden başlatın.
+
+Konteyner veya sanal makinenin ayrılan belleğini ana makineyle birlikte kontrol edin. 1 GiB sınırına 2 GiB alan sığmaz. Takas dosyasını büyütmek gereksinimi değiştirmez; sürece yeterli fiziksel bellek planlayın.
+
+`--cpu-page-mode large` veya `--cpu-page-mode large-1g` seçtiyseniz istenen ayrılmış sayfa havuzunun kullanılabilirliğini doğrulayın. Bu modlar belirtilen desteği gerektirir. [Huge pages rehberini](/tr/blog/huge-pages-blocknet-mining/) izleyin veya çalışan başlangıç yapılandırması için otomatik sayfa seçimine dönün. Sayfa ve iş parçacığı değişikliklerini ayrı yapın.
+
+## GPU belleği CPU bütçesine dahil mi?
+
+Ayrık NVIDIA kartında GPU alanları VRAM’dedir. CPU iş parçacıkları sistem RAM’ini kullanır. Birlikte madencilikte kaynakları ayrı boyutlandırın; boş VRAM CPU alanları için ek RAM değildir. [NVIDIA rehberi](/tr/blog/mine-blocknet-nvidia-gpu/) kurulum ve GPU lane seçimini anlatır.
+
+Apple Silicon’da CPU ve GPU birleşik belleği paylaşır. Diğer yükleri planlarken kapasiteyi iki kez saymayın. Desteklenen CPU kurulumu için [Mac rehberini](/tr/blog/mine-blocknet-on-mac/) izleyin. Kapasite neyin sığacağını, ölçülen hız ise en iyi yapılandırmayı belirler.
+
+## Madenciyi çalışır bırakmadan önce ne doğrulanmalı?
+
+İş parçacıkları bütçeye sığmalı, uygulamalar yanıt vermeli ve kabul edilen paylar gelmelidir. Daha fazla bellek tek başına daha iyi performans göstermez. Yükünüze uygun yapılandırmayı koruyun ve [havuz takip rehberiyle](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) alım adresinde yeni iş göründüğünü doğrulayın.
+
+<CTA target="seine" title="seine’yi indirin" text="Otomatik CPU boyutlandırmasıyla başlayın, ardından bilgisayarınıza uygun bellek bütçesini seçin." />

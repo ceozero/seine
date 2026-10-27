@@ -1,0 +1,106 @@
+---
+title: 'Blocknet düğümü nasıl çalıştırılır?'
+description: 'Resmî istemciyle Blocknet düğümü çalıştırın: core kurun, eşleri ve senkronizasyonu inceleyin, otomatik güncellemeleri anlayın ve mainnet kurulumunu doğrulayın.'
+tags: ['Blocknet', 'Düğüm', 'Kurulum']
+faq:
+  - q: 'Blocknet düğümü çalıştırmak için madencilik şart mı?'
+    a: 'Düğümü çalıştırmak ve madenciliği başlatmak ayrı işlemlerdir. Core zincir verilerini ve ağ bağlantılarını yönetir; madencilik ayrıca açılır. Madencilik yükü başlatmadan durumu ve eşleri inceleyebilirsiniz. seine ile havuz madenciliğinin de ayrı bağlantı akışı vardır ve kendi düğümünüzü gerektirmez.'
+  - q: 'Blocknet kabuğunu kapatmak düğümü durdurur mu?'
+    a: 'Etkileşimli attach oturumu arka plandaki core’a bağlanır. Kabuktan çıkınca core çalışmayı sürdürür. Yönetilen düğümü durdurmak istediğinizde açık durdurma komutunu kullanın, sonra durumunu kontrol edin. Kabuğu kapatmak ve alttaki süreci durdurmak farklı işlemlerdir.'
+  - q: 'Blocknet düğümümün senkronize olduğunu nasıl anlarım?'
+    a: 'Zincir yüksekliğini, eş sayısını ve senkronizasyon durumunu birlikte okuyup ilerlemeyi gözleyin. Aynı ağdan güncel bir referansla karşılaştırın. Cüzdan taraması ayrıdır; güncel düğüm, yeni yüklenen cüzdanın tüm çıktılarını bulduğunu tek başına kanıtlamaz.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Kendi Blocknet düğümünüzü çalıştırın; bağlı olduğunu ve zinciri izlediğini kontrol edin. Bu rehber resmî komut satırı istemcisiyle mainnet core yönetimini, eşleri, senkronizasyonu ve güncellemeleri ele alır. Komutlar 26 Ekim 2026 tarihinde v1.2.0 istemcisinde kontrol edildi. Kurduğunuz sürümün [resmî komut referansını](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) hazır tutun.
+
+## Blocknet düğümü çalıştırmak için ne gerekir?
+
+<Answer>
+İşletim sisteminize uygun resmî istemci, zincir verileri için alanı olan bilgisayar ve internet kullanın. İstemci arka plandaki core’u kurar ve yönetir. Çalışınca eşleri ve ilerlemeyi inceleyin. Cüzdan oluşturma ve madencilik, düğüm çalıştıktan sonra eklenebilecek ayrı işlerdir.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Yerel terminal, zinciri saklayan ve ağ eşleriyle blok alışverişi yapan arka plandaki Blocknet core’a bağlanır." width="1200" height="675" loading="lazy" />
+
+## Resmî istemciyi ve ağı seçin
+
+Sisteminiz ve işlemciniz için arşivi [resmî sürümlerden](https://github.com/blocknetprivacy/blocknet/releases/latest) indirin. Açın ve programın erişilebilir olduğu terminali başlatın. Örnekler `blocknet` kullanır; Windows’ta `blocknet.exe` kullanın. Komut arama yolunda değilse gerçek dosya yolunu, Linux veya macOS’ta örneğin `./blocknet`, belirtin.
+
+Normal Blocknet ağı için mainnet kullanın. Testnet kendi verisi ve yapılandırması olan ayrı ortamdır. Testnet yüksekliğini mainnet gezginiyle karşılaştırmamak için ağı not edin. Burada düğüm yönetilir; [cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) oluşturma, kurtarma ve alıcı adresini kapsar.
+
+## Core’u kurup arka planda başlatın
+
+İlk kurulumda sihirbazı etkileşimli terminalde çalıştırın:
+
+```sh
+blocknet setup
+```
+
+Her soruyu okuyun. İncelenen sihirbaz yapılandırmayı kaydeder, otomatik güncellemeleri zamanlar, gerekirse core indirmeyi ve başlatmayı önerir. Ağ ve yerel API ayarlarını da sunar. Bu bilgisayardan yönetilen düğüm için yerel bağlamayı koruyun.
+
+Belgelenmiş elle kurulum yolu:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` kararlı core sürümünü seçer. Mainnet yapılandırmada etkin olmalıdır. İstemci core’u arka planda çalıştırıp API’yi bekler. Başlangıcın bitmesine izin verin; veritabanını açmak ve zincire tamamen yetişmek farklı aşamalardır.
+
+## Eşler ve senkronizasyon nasıl incelenir?
+
+Çalışan mainnet core’a bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+Etkileşimli istemde ayrı ayrı girin:
+
+```text
+status
+peers
+```
+
+[Kabuk referansı](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) alanları açıklar. Yükseklik, son blok hash’i, eş sayısı ve senkronizasyon durumunu kaydedin. Eş listesi ağ bağlantılarını doğrulamaya yardımcı olur.
+
+Yüksekliği zaman içinde gözleyip [resmî gezgin](https://explorer.blocknetcrypto.com/) gibi güncel mainnet kaynağıyla karşılaştırın. Bloklar arasında yükseklik durabilir; gözlemler farklı zamanlardan olabilir. Tek sayıyla başarı ilan etmek yerine alanları birlikte değerlendirin. Yetişme sırasında ağ ve depolamayı kullanılabilir tutun.
+
+## Zincir senkronizasyonu ile cüzdan taramasını ayırın
+
+Zincir senkronizasyonu ağ bloklarını izler. Cüzdan taraması geçmişte yüklü cüzdana ait çıktıları arar. Geri yüklenen cüzdan, düğüm yetiştikten sonra taramaya devam edebilir. Kabuktaki cüzdan bilgisi düğüm yüksekliğinden ayrı gözlemdir. Belirli madencilik ödemesi için [ödeme alma rehberini](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/) kullanın.
+
+Mevcut istemci ilk senkronizasyonu hızlandıran checkpoint’leri de destekler. Kaynak ve doğrulama kapsamı için [checkpoint rehberine](https://bntpool.com/blog/tr/blocknet-checkpoints-fast-sync/) bakın; bütün hızlı yöntemler aynı değildir. Gösterge sakin diye zincir veritabanını rutin olarak silmeyin. Önce durum ve günlüklerle indirme, doğrulama ve taramayı ayırt edin.
+
+## Başlangıç sorununda nereye bakılır?
+
+Attach dışında yönetilen core günlüğünü izleyin:
+
+```sh
+blocknet logs mainnet
+```
+
+Son başlangıç ve bağlantı mesajlarını okuyun. Ctrl-C izlemeyi bitirir. Yapılandırma, yollar, kurulu sürümler ve bağlantı için:
+
+```sh
+blocknet doctor
+```
+
+Belgelenen doctor komutu kurulumu değiştirmeden bulguları bildirir. Çözüm seçmeden önce tam mesajı kaydedin.
+
+Beklenen core ve ağı, seçili programın kurulu olmasını ve yerel API adresini kontrol edin. Bildirilen durum için [resmî sorun giderme rehberine](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) bakın. Tanı paylaşırken API kimlik bilgilerini ve cüzdan verilerini gizli tutun. Sürüm, sistem ve ilgili hata genellikle tüm yapılandırma klasöründen daha yararlıdır.
+
+## Güncellemeleri ve bilinçli durdurmayı anlayın
+
+İncelenen istemcide zamanlayıcı ve bazı yönetim komutları güncelleme arar. Dış `blocknet status` kontrol başlatabilir; attach içindeki `status` ile farklıdır. Güncellemeler `latest` izleyen core’ları yeniden başlatabilir; sabitlenmiş sürümler korunur. Bağımlı hizmetler varsa [güncelleme referansını](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) okuyun.
+
+Bakımı düğüm API’sini kullananlara göre planlayın. Attach’tan `quit` ile çıkılır; core çalışır. O mainnet core’u bilerek durdurmak için sistem terminalinde `blocknet stop mainnet` çalıştırın. Güncelleme veya yeniden başlatma sonrası aktif sürümü, bağlantıyı ve ilerlemeyi doğrulayın. Cüzdan yedeğini core dosyalarından bağımsız tutun.
+
+## Düğümü amaçlanan görevde kullanın
+
+Bağlı düğüm, madencilik açmadan cüzdan ve yerel zincir sorgularını destekler. bntpool.com için [havuz rehberini](https://bntpool.com/blog/tr/mine-blocknet-on-bntpool/) ve seine’ın normal havuz bağlantısını kullanın. Kendi düğümünüzü çalıştırmak ayrı seçimdir. Doğrudan madencilik için daemon modu talimatlarını okuyup bağlantıdan önce API ayarını doğrulayın.
+
+Kısa kayıt tutun: ağ, istemci/core sürümleri, veri konumu, güncelleme politikası ve sağlıklı ilerleme kontrolleri. Bu, gelecekteki etkinleştirme talimatları resmî sürümden gelmesi gereken [Faraday](/tr/blog/blocknet-faraday-upgrade/) hazırlığında da yararlıdır. Planlanan değişiklikten sonra durumu tekrar kontrol edin; kayıt sadece indirilen yazılımı değil, çalışan düğümü anlatsın.
+
+<CTA target="seine" title="seine ile Blocknet madenciliği yapın" text="Havuz veya doğrudan madenciliği seçtikten sonra yapılandırmanızı bağlamak için rehberleri kullanın." />

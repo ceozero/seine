@@ -1,0 +1,62 @@
+---
+title: 'Por qué tu minero no usa el 100% de CPU'
+description: 'Interpreta el uso de CPU al minar Blocknet con seine. Comprueba hilos activos, memoria, backend y trabajo aceptado antes de modificar la configuración.'
+tags: ['Guía de minería', 'Uso de CPU', 'seine']
+faq:
+  - q: '¿Debe un minero Blocknet usar siempre el 100% de CPU?'
+    a: 'No. El porcentaje global describe el uso de los procesadores disponibles para el sistema, mientras seine mide hashes completados. El número útil de hilos depende de la memoria y del rendimiento medido. Comprueba hilos, hashrate y trabajo aceptado antes de cambiarlo.'
+  - q: '¿Por qué seine elige menos hilos que los que admite mi CPU?'
+    a: 'Cada hilo activo necesita un área de memoria de 2 GiB y los hilos comparten ancho de banda. La selección automática considera memoria y rendimiento, sin asignar necesariamente un hilo a cada procesador lógico. Los límites explícitos, el backend y el entorno también influyen.'
+  - q: '¿Qué reviso si bajan uso y hashrate?'
+    a: 'Comprueba el backend CPU, los hilos activos, los mensajes de ajuste y memoria y si hay un trabajo vigente. Compara el mismo dispositivo e intervalo; después revisa carga de fondo y límites. Para conexión o hashrate nulo en el pool, usa la guía de seguimiento.'
+sourceHash: 'cbaef230217c'
+translation: draft
+---
+
+Usa la utilización de CPU para entender tu equipo mientras seine mina Blocknet. Esta guía relaciona ese porcentaje con hilos activos, H/s locales y shares aceptados en v0.2.36. Sigue las comprobaciones antes de cambiar ajustes. Para instalar, empieza por la [guía de minería](/es/blog/how-to-mine-blocknet/).
+
+## ¿Menor uso de CPU significa menos trabajo útil?
+
+<Answer>
+El porcentaje por sí solo no indica cuánto trabajo útil se completa. Comprueba el backend CPU, hilos activos, hashrate local y trabajos recibidos. seine puede elegir menos hilos que procesadores lógicos. Compara trabajo terminado en condiciones constantes antes de cambiar la cantidad.
+</Answer>
+
+<img src="/assets/blog/miner-cpu-usage.svg" alt="Una cuadrícula de actividad y un contador de trabajo son observaciones distintas, unidas por comprobaciones de hilos, memoria y trabajos." width="1200" height="675" loading="lazy" />
+
+## Identifica primero qué mide el porcentaje
+
+En Windows, distingue el proceso seine del total del equipo. Busca seine en el Administrador de tareas y examina Rendimiento y CPU. Los gráficos por procesador lógico muestran la distribución; el total combina toda la máquina. La [guía de Microsoft](https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/support-tools-task-manager) explica las vistas. Anota cuál utilizaste.
+
+En Linux, el porcentaje del proceso en `top` puede tener otra escala que el resumen. En modo Irix un proceso multihilo puede superar el 100%; Solaris divide entre procesadores. La vista de hilos cambia las filas. Consulta el [manual de top](https://man7.org/linux/man-pages/man1/top.1.html) antes de comparar herramientas o modos. Cambiar de escala no mide un cambio de velocidad.
+
+## Comprueba qué dispositivo trabaja
+
+Lee H/s e hilos activos en la fila CPU del [panel de seine](/es/blog/seine-dashboard-explained/). La tasa CPU+GPU incluye más trabajo; compara el mismo dispositivo. Si seleccionaste solo NVIDIA, es normal una carga baja de minería CPU. La [guía NVIDIA](/es/blog/mine-blocknet-nvidia-gpu/) explica esa configuración.
+
+Distingue los hilos de minería activos del recuento de hilos del proceso en el sistema. seine también tiene tareas de red, control e informes, por lo que el proceso puede tener más hilos que la fila CPU. Comprueba cuántos calculan hashes y completan trabajo, no si todos permanecen ocupados.
+
+## ¿Por qué la memoria limita los hilos activos?
+
+Cada hilo CPU activo usa un área de 2 GiB para Argon2id. Importan tanto la memoria disponible como los procesadores, y el dimensionamiento automático deja espacio al sistema. Lee hilos reales y mensajes de memoria; la RAM instalada no garantiza una capacidad. La [guía de RAM](/es/blog/how-much-ram-to-mine-blocknet/) detalla presupuesto, reserva y asignación.
+
+Capacidad y ancho de banda responden preguntas distintas: cuántas áreas caben y cómo mueven datos los hilos simultáneos. Un hilo puede contarse ocupado mientras espera memoria; poco uso no demuestra un cuello de botella. Tampoco llenar el medidor demuestra los mejores H/s. La [guía Argon2id](/es/blog/argon2id-proof-of-work-explained/) explica el diseño.
+
+## Revisa cambios automáticos y opciones explícitas
+
+Con ajuste automático, seine compara hilos y kernels según trabajo medido. Un recuento menor puede ser un resultado válido, y cambios de memoria pueden modificarlo. Deja terminar la prueba y lee sus mensajes antes de interpretar una muestra. La [guía de ajuste](/es/blog/seine-automatic-cpu-tuning/) explica decisiones y caché.
+
+Examina el comando real. `--threads`, un máximo de ajuste o un perfil CPU pueden cambiar la búsqueda o selección; la afinidad cambia la ubicación. Contenedores, máquinas virtuales y límites del sistema pueden exponer menos capacidad que el equipo físico. Guarda la configuración e identifica el ajuste antes de aumentarlo.
+
+## ¿Y si bajan tanto el uso como los H/s?
+
+Comprueba que el backend CPU está activo y tiene trabajo. Busca un trabajo vigente, mensajes de conexión, ajustes de memoria y errores en el registro. Un cambio durante preparación o ajuste tiene contexto que el medidor no muestra. Si sigue la GPU, examina ambos estados por separado.
+
+Compara después un intervalo estable con la misma versión, backend y opciones. Anota aplicaciones, memoria, energía y hora. Para una comparación local repetible usa la [guía de benchmarks](/es/blog/benchmark-seine-miner/) y conserva todos los informes. Separa el procedimiento de la sesión del pool; un pico o porcentaje aislado no es un resultado de hardware.
+
+## Termina comprobando trabajo completado y aceptado
+
+En minería normal, verifica que avanzan los hashes CPU y llegan respuestas de shares aceptados. Los shares llegan a intervalos; un momento tranquilo no fija una cuenta atrás. El pool estima hashrate con envíos a lo largo del tiempo. La [guía de seguimiento](https://bntpool.com/blog/es/track-your-miner-on-bntpool/) explica esa vista y la conexión.
+
+Guarda versión, comando, backend, hilos CPU, H/s locales, herramienta y vista del sistema, memoria y ventana del pool. Si el trabajo avanza, el medidor global aporta contexto. Si una etapa no progresa, sigue su guía. Así cada cambio responde una pregunta concreta con un resultado comparable.
+
+<CTA target="seine" title="Sigue la minería CPU con seine" text="Descarga seine y consulta juntos hilos activos, hashrate y trabajo aceptado en el panel." />

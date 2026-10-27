@@ -1,0 +1,68 @@
+---
+title: 'Penjelasan biaya transaksi Blocknet'
+description: 'Pahami biaya transaksi Blocknet, pemilihan input, dan kembalian. Periksa pratinjau dompet sebelum konfirmasi, serta bedakan biaya jaringan dan penambangan.'
+tags: ['Blocknet', 'Dompet', 'Pembayaran']
+faq:
+  - q: 'Apakah biaya transaksi Blocknet berupa persentase jumlah kiriman?'
+    a: 'Implementasi dompet yang diperiksa menghitung biaya dari perkiraan konservatif ukuran transaksi dan biaya minimum. Input serta output memengaruhi perkiraan itu. Jumlah kiriman dapat memengaruhi input yang dipilih, tetapi perhitungannya bukan persentase tetap dari BNT yang dikirim.'
+  - q: 'Bisakah saya memeriksa biaya tanpa menyiarkan pembayaran?'
+    a: 'Dompet baris perintah yang didokumentasikan meminta pratinjau dan menampilkan biaya sebelum meminta konfirmasi. Periksa tujuan, jumlah, dan kembalian di sana. Jika hanya ingin memeriksa, batalkan pada prompt. Klien lain mungkin menampilkan layar tinjauan berbeda.'
+  - q: 'Apakah kembalian transaksi merupakan biaya tambahan?'
+    a: 'Kembalian adalah sisa input terpilih setelah jumlah penerima dan biaya jaringan diperhitungkan. Nilai itu kembali ke dompet sebagai output. Pisahkan kembalian dari biaya, serta bedakan saldo total dompet dari dana yang saat ini dapat dibelanjakan.'
+sourceHash: 'b0358dc83fbe'
+translation: draft
+---
+
+Periksa apa yang akan digunakan pembayaran Blocknet sebelum mengonfirmasinya. Panduan ini menjelaskan cara dompet yang diperiksa memperkirakan biaya jaringan, pentingnya pemilihan input, serta hubungan jumlah penerima, biaya, dan kembalian. Panduan juga menunjukkan letak pratinjau dalam dompet baris perintah yang didokumentasikan agar Anda dapat memeriksa pembayaran tanpa menyiarkannya.
+
+## Bagaimana biaya transaksi Blocknet dihitung?
+
+<Answer>
+Dompet yang diperiksa menentukan biaya dari perkiraan konservatif ukuran transaksi dan minimum yang dikonfigurasi. Input terpilih dan output yang dibuat memengaruhi perkiraan. Biaya terpisah dari jumlah penerima, sedangkan nilai input yang tidak terpakai menjadi kembalian. Tinjau pratinjau terkini dompet untuk pembayaran Anda sebelum konfirmasi.
+</Answer>
+
+<img src="/assets/blog/blocknet-transaction-fees.svg" alt="Input dompet terpilih dibagi menjadi jumlah penerima, biaya jaringan, dan kembalian ke dompet." width="1200" height="675" loading="lazy" />
+
+## Pahami perhitungan dompet dan satuannya
+
+Dalam [kode daemon yang diperiksa](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/api_handlers.go), alur kirim standar memakai minimum 1.000 unit atomik dan tarif 10 unit atomik per byte perkiraan. Satu BNT berisi 100.000.000 unit atomik, jadi nilainya setara dengan 0,00001 BNT dan 0,0000001 BNT per byte perkiraan. Ini pengaturan implementasi bertanggal yang diperiksa pada 26 Oktober 2026, bukan penawaran biaya untuk setiap versi dompet.
+
+Perhitungan mengambil nilai yang lebih besar antara minimum dan perkiraan ukuran dikalikan tarif. Untuk ukuran asumsi ilustratif 5.000 byte, 5.000 × 10 = 50.000 unit atomik, atau 0,0005 BNT. Itu melebihi minimum tersebut. Contoh ini hanya aritmetika dengan ukuran asumsi, bukan transaksi terukur atau janji biaya transfer berikutnya.
+
+## Mengapa dua pembayaran bisa berbeda biaya?
+
+Dompet membelanjakan output yang ada sebagai input transaksi, lalu membuat output untuk penerima dan kembalian jika diperlukan. [Pembuat transaksi](https://github.com/blocknetprivacy/core/blob/514a8cf4c686728147ac4756a9fc7bc9a48552b1/wallet/builder.go) memperkirakan ukuran memakai jumlah input, jumlah output, dan ukuran cincin, termasuk alokasi konservatif untuk bukti. Ukuran perkiraan bukan sekadar jumlah karakter alamat, memo, atau formulir pembayaran.
+
+Pembayaran yang dirangkai dari beberapa output kecil yang tersedia dapat memerlukan jumlah input berbeda dari pembayaran dengan satu output besar. Dompet juga memperhitungkan biaya ketika memilih nilai yang cukup untuk dibelanjakan, sehingga pemilihan dan perkiraan saling terkait. Karena itu, jumlah penerima yang sama tidak harus menghasilkan biaya sama dalam dua keadaan dompet. Untuk struktur privasinya, lihat [tanda tangan cincin](/id/blog/ring-signatures-explained/) dan [bukti rentang](/id/blog/bulletproofs-explained/).
+
+## Pisahkan jumlah penerima, biaya, dan kembalian
+
+Untuk kiriman biasa dengan jumlah tetap, nilai input terpilih menutup jumlah penerima ditambah biaya, dan sisanya menjadi kembalian. Contoh: input total 10 BNT, jumlah penerima 3 BNT, dan asumsi biaya 0,0005 BNT menyisakan kembalian 6,9995 BNT. Penerima memperoleh 3 BNT yang ditentukan; kembalian bukan biaya tambahan.
+
+Contoh itu menggambarkan input terpilih, belum tentu seluruh saldo dompet. Output lain dapat tetap tidak tersentuh. Kirim semua bertujuan berbeda: implementasi yang diperiksa mengurangi biaya dari total terpilih yang dapat dibelanjakan untuk menentukan jumlah penerima. Baca jumlah yang ditampilkan untuk operasi itu, jangan menganggap seluruh saldo total dapat dikirim tanpa pengurangan.
+
+## Bagaimana memeriksa biaya sebelum mengirim?
+
+Dalam [klien CLI yang didokumentasikan](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), alur kirim meminta pratinjau simulasi, lalu menampilkan jumlah, tujuan, biaya, dan kembalian sebelum `Confirm [y/N]:`. Masukkan rincian penerima dan jumlah yang Anda inginkan dalam alur dompet biasa, lalu berhenti pada tahap tinjauan. [Panduan dompet](/id/blog/blocknet-wallet-for-mining/) membahas persiapan dompet dan pencarian alamat.
+
+Baca tujuan dan jumlah dahulu, lalu biaya dan kembalian. Jika hanya ingin memeriksa perhitungan, tekan Enter atau jawab tidak pada prompt konfirmasi; klien membatalkan, bukan mengajukan permintaan kirim. Panduan ini tidak meminta pembayaran percobaan. Dompet grafis mungkin memakai label lain, jadi periksa layar tinjauannya dan jangan menganggap tata letak CLI berlaku.
+
+## Apa yang diperiksa jika pratinjau berubah?
+
+Pratinjau CLI dan pengiriman akhir adalah permintaan terpisah. Pengiriman sebenarnya dibangun dari keadaan dompet saat itu, jadi pratinjau bukan reservasi permanen atas biaya yang ditampilkan. Mengubah jumlah, penerima, output terpilih, atau dana yang dapat dibelanjakan dapat mengubah hasil. Hindari pengeluaran bersamaan saat meninjau dan minta pratinjau baru setelah mengubah pembayaran.
+
+Periksa dana yang dapat dibelanjakan, bukan saldo total, jika dompet tidak dapat menutup jumlah ditambah biaya. Dana yang masih menunggu konfirmasi merupakan kategori terpisah. Catat versi dompet dan pesan persisnya jika pratinjau gagal dibuat. Untuk menerima pembayaran penambangan, [panduan pembayaran ke dompet](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) mengikuti transaksi dan pemindaian dompet; itu tugas berbeda dari menghitung pembayaran keluar baru.
+
+## Bedakan biaya jaringan dari biaya penambangan
+
+Biaya dalam artikel ini adalah biaya transaksi dompet. Biaya pool berkaitan dengan pembukuan imbalan pool, sedangkan biaya pengembang penambang berkaitan dengan kebijakan kerja perangkat lunak penambangan. Dasar dan tahapnya berbeda. [Panduan biaya penambangan](https://bntpool.com/blog/id/mining-pool-fees-vs-miner-fees/) menjelaskan sisi penambangan; jangan menerapkan persentasenya pada perkiraan ukuran transaksi dompet.
+
+Demikian pula, pembayaran minimum pool adalah ambang saldo, bukan biaya yang ditampilkan untuk kiriman dompet biasa. Simpan setiap angka bersama label dan sumbernya saat merencanakan transfer. Pratinjau dompet adalah tempat memeriksa pembayaran keluar yang sedang disiapkan; kalkulator penambangan atau tampilan saldo pool tidak menggantikannya.
+
+## Simpan catatan pembayaran yang jelas
+
+Sebelum mengonfirmasi pembayaran yang memang diinginkan, tinjau tujuan, jumlah, memo jika ada, biaya, dan kembalian bersama-sama. [Tautan pembayaran](/id/blog/blocknet-payment-links/) dapat membantu mengisi rincian, tetapi tetap tinjau di dompet. Saat mendokumentasikan prosedur, catat versi dompet yang memberi perkiraan agar pembaca kelak dapat membedakan contoh bertanggal dari antarmuka mereka saat ini.
+
+Setelah kiriman sengaja dikonfirmasi, simpan pengenal transaksi dalam catatan pembayaran pribadi dan ikuti statusnya lewat dompet. Jangan pernah membagikan kata pemulihan atau kunci privat untuk menjelaskan biaya. Untuk pertanyaan dukungan, versi, jenis operasi, dan jumlah yang ditampilkan biasanya lebih berguna daripada menyalin data dompet privat. Periksa pratinjau lagi untuk setiap pembayaran baru.
+
+<CTA target="seine" title="Jelajahi Blocknet dengan seine" text="Pelajari cara kerja penambangan Blocknet dan hubungkan instalasi Anda sendiri ke jaringan dengan seine." />

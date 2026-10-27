@@ -1,0 +1,70 @@
+---
+title: 'So testest du deinen Blocknet-Miner mit Benchmarks'
+description: 'Teste seine mit wiederholbaren CPU-Läufen, Aufwärmrunden und JSON-Berichten. Vergleiche passende Messzeiten bei gleichen Speicher- und Lastbedingungen.'
+tags: ['Mining-Anleitung', 'Benchmarks', 'seine']
+faq:
+  - q: 'Sendet ein seine-Benchmark Shares an den Pool?'
+    a: 'Nein. --bench führt einen lokalen Test statt Live-Mining aus und benötigt weder Pool noch Daemon. Der Bericht misst die ausgewählte lokale Last. Starte anschließend normales Mining, um Verbindung und akzeptierte Shares separat zu prüfen.'
+  - q: 'Mit welchem Benchmark-Modus sollte ich beginnen?'
+    a: 'Beginne mit backend für einen praktischen Test der ausgewählten Mining-Backends. Behalte Modus, Version und Einstellungen bei. Kernel, kernel-effective und end-to-end messen unterschiedliche Bereiche; bewahre Modus und Zeitinformationen zusammen mit jeder Hashrate auf.'
+  - q: 'Wie werden zwei Läufe vergleichbar?'
+    a: 'Verwende dieselbe Maschine, Version, Backend-Auswahl, Speicherkonfiguration, Hintergrundlast und Cache-Regel. Ändere jeweils eine Einstellung, wiederhole beide Varianten in wechselnder Reihenfolge und behalte alle Berichte. Aufwärmen und Wiederholungen helfen, doch ein kurzer Lauf belegt keinen kleinen Leistungsunterschied.'
+sourceHash: '1fa8886f73c0'
+translation: draft
+---
+
+Miss deinen Rechner mit dem eingebauten Benchmark von seine und speichere einen nachvollziehbaren Vergleich. Diese Anleitung verwendet die öffentliche Version v0.2.36 und ein CPU-Beispiel; sie behauptet kein neues Hardware-Ergebnis. Installiere zuerst nach der [Mining-Anleitung](/de/blog/how-to-mine-blocknet/). Gemessene Systeme und ihre Bedingungen stehen im [Hardware-Leitfaden](/de/blog/blocknet-mining-hardware-hashrate/).
+
+## Wie führst du einen seine-Benchmark aus?
+
+<Answer>
+Starte seine mit `--bench`, wähle Backend und Messmodus, füge Aufwärmrunden hinzu und speichere einen JSON-Bericht. Wiederhole dieselbe Last unter vergleichbaren Bedingungen, bevor du eine Einstellung änderst. Der Test läuft lokal ohne Pool oder Daemon; akzeptierte Shares prüfst du danach im normalen Mining.
+</Answer>
+
+<img src="/assets/blog/miner-benchmark.svg" alt="Auf eine Aufwärmphase folgen drei Messrunden und ein gespeicherter Bericht; eine zweite Konfiguration durchläuft dieselbe Folge." width="1200" height="675" loading="lazy" />
+
+## Schaffe einen gleichbleibenden Ausgangspunkt
+
+Notiere Version, Betriebssystem, genauen Prozessor, nutzbaren RAM und Befehl. Bei NVIDIA gehören Modell und Treiber dazu. Wähle einen Zeitraum mit ähnlicher Hintergrundlast. Ein Spiel, eine Kompilierung oder ein weiterer Miner nur während eines Tests verändert die gemessenen Bedingungen.
+
+Lege zuerst die Frage fest: CPU-Ausgangswert, Thread-Vergleich oder Speicherseiten. Halte CPU-Platzierung, Energie- und Speichereinstellungen konstant, sofern sie nicht die Testvariable sind. Der [RAM-Leitfaden](/de/blog/how-much-ram-to-mine-blocknet/) erklärt Kapazität, der [Huge-Pages-Leitfaden](/de/blog/huge-pages-blocknet-mining/) die Vorbereitung. Dokumentiere neben dem angeforderten auch den tatsächlich verwendeten Seitenmodus.
+
+## Führe einen CPU-Test aus und speichere den Bericht
+
+Im entpackten Miner-Verzeichnis gilt der erste Befehl für Linux oder macOS, der zweite für Windows PowerShell. Beide wählen CPU-only im Modus `backend`, eine Aufwärmrunde und drei Messrunden mit angeforderten 20 Sekunden je Runde. Der Dateiname ist relativ zum Arbeitsverzeichnis. Verwende für jeden weiteren Lauf einen neuen Namen.
+
+```sh
+./seine --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+```powershell
+.\seine.exe --bench --bench-kind backend --backend cpu --bench-secs 20 --bench-rounds 3 --bench-warmup-rounds 1 --bench-output cpu-baseline.json
+```
+
+Die Befehle lassen Thread- und Kernel-Auswahl automatisch. Vorbereitung und Tuning können vor den Runden Zeit benötigen; laufende Arbeit kann nach dem gewünschten Intervall enden. Warte, bis `cpu-baseline.json` geschrieben ist. Die Aufwärmrunde zählt nicht zur Messzusammenfassung. Die Gesamtdauer kann daher die vier angeforderten Intervalle überschreiten; 20 Sekunden sind keine Zusage zur gesamten Befehlslaufzeit.
+
+## Was solltest du im Bericht lesen?
+
+Prüfe Modus, wirksame Einstellungen und einzelne Runden vor der zusammengefassten Rate. Das JSON enthält `avg_hps`, `median_hps`, `min_hps`, `max_hps` und `runs` sowie Konfiguration und Umgebung. Behalte die Originaldatei statt nur den Höchstwert. Die [Flag-Referenz](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/MINER_FLAGS.md) beschreibt Ausgabe und Baseline-Vergleich.
+
+Hashrate bezeichnet abgeschlossene Arbeit pro Sekunde. Vergleiche dieselbe Zählweise und Zeitdefinition. Betrachte tatsächliche Dauer und Streuung; ein Spitzenwert fasst den Test nicht zusammen. Bei großer Streuung wiederhole unter gleichmäßigeren Bedingungen oder verlängere die Runden. Beschreibe beim Teilen eines Ergebnisses die gemessene Konfiguration.
+
+## Vergleiche eine Änderung mit wiederholten Paaren
+
+Nenne die Ausgangskonfiguration A und die geänderte B. Führe A, dann B aus, wiederhole das Paar und wechsle zwischen Paaren die Startreihenfolge. Dauer und Aufwärmregel bleiben gleich. Speichere etwa `cpu-a-1.json` und `cpu-b-1.json`. So erkennst du Ergebnisse, die eher Reihenfolge oder Umgebung als der untersuchten Einstellung folgen.
+
+Wende dieselbe Cache-Regel auf beide Seiten an: ein Erststart mit frischen Tuning-Daten und ein Neustart mit gespeicherten Werten beantworten verschiedene Fragen. Bewahre dein Alltagsverzeichnis und trenne Testverzeichnisse für frische Zustände. Die [Autotuning-Anleitung](/de/blog/seine-automatic-cpu-tuning/) erklärt die Wiederverwendung. `--threads` verändert das Tuning bei einem Test mit fester Anzahl; dokumentiere das gegenüber einem automatischen Lauf.
+
+## Warum müssen die Benchmark-Modi übereinstimmen?
+
+`backend` testet die Mining-Backends, `kernel` den Hash-Berechnungspfad. `kernel-effective` berücksichtigt Lebenszykluszeiten und den Ziel-/Auswertungspfad des Backends. Das sind selbst auf derselben Maschine unterschiedliche Messbereiche. Kennzeichne Raten mit ihrem Modus; gleiche Einheiten machen Messungen nicht gleichwertig.
+
+`end-to-end` umfasst mehr vom Mining-Lebenszyklus. Halte auch Version und Zeitsemantik gleich. Die [Benchmark-Labordokumentation](https://github.com/zpalmtree/seine/blob/v0.2.36/docs/benchmarks.md) erklärt gepaarte Läufe, Umgebungsprotokolle und Kompatibilitätsprüfungen. Nutze diese Werkzeuge bei Entscheidungen über kleine Unterschiede und behalte sämtliche Läufe.
+
+## Kehre zum Mining zurück und prüfe die Arbeit
+
+Starte nach Testende deinen üblichen Mining-Befehl mit vorgesehener Adresse und Datenverzeichnis. Prüfe Gerätezeilen und akzeptierte Shares im [Dashboard](/de/blog/seine-dashboard-explained/). Der Benchmark misst lokale Leistung; Shares bestätigen Verbindung und Arbeitslieferung der normalen Sitzung. Dokumentiere beides für deine tägliche Einstellung.
+
+Die Pool-Hashrate wird über eingehende Shares über Zeit geschätzt und ist eine andere Beobachtung als ein kurzer lokaler Test. Verfolge gutgeschriebene Arbeit mit der [Pool-Anleitung](https://bntpool.com/blog/de/track-your-miner-on-bntpool/). Ein guter Datensatz enthält Version, Befehl, Maschine, Speicher-/Seiteneinstellungen, Cache-Regel, Hintergrundlast und alle JSON-Berichte. Damit lässt sich der nächste Vergleich reproduzieren und verstehen.
+
+<CTA target="seine" title="Benchmarks mit seine" text="Lade seine herunter, speichere eine wiederholbare Ausgangsmessung und beobachte anschließend das normale Mining im Dashboard." />

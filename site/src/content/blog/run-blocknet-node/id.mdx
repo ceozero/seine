@@ -1,0 +1,106 @@
+---
+title: 'Cara menjalankan node Blocknet'
+description: 'Jalankan node Blocknet dengan klien resmi: pasang core, periksa peer dan sinkronisasi, pahami pembaruan otomatis, lalu pastikan mainnet berjalan dengan baik.'
+tags: ['Blocknet', 'Node', 'Panduan penyiapan']
+faq:
+  - q: 'Apakah harus menambang untuk menjalankan node Blocknet?'
+    a: 'Menjalankan node dan memulai penambangan adalah operasi terpisah. Core mengelola data rantai dan koneksi; penambangan diaktifkan sendiri. Anda dapat memeriksa status dan peer tanpa beban penambangan. Penambangan pool dengan seine juga memiliki alur koneksi sendiri dan tidak memerlukan node pribadi.'
+  - q: 'Apakah menutup shell Blocknet menghentikan node?'
+    a: 'Sesi attach interaktif terhubung ke core di latar belakang. Keluar dari shell membiarkan core tetap berjalan. Gunakan perintah penghentian khusus saat ingin menghentikan node yang dikelola, lalu periksa statusnya. Menutup shell dan menghentikan proses dasarnya adalah tindakan berbeda.'
+  - q: 'Bagaimana mengetahui node Blocknet sedang sinkronisasi?'
+    a: 'Baca tinggi rantai, jumlah peer dan status sinkronisasi bersama, lalu amati kemajuan. Bandingkan dengan referensi baru dari jaringan yang sama. Pemindaian dompet terpisah; node yang sudah mengikuti jaringan tidak membuktikan dompet yang baru dimuat telah menemukan semua output-nya.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Jalankan node Blocknet sendiri dan periksa bahwa node terhubung serta mengikuti rantai. Panduan ini memakai klien baris perintah resmi untuk mengelola core mainnet dan memeriksa peer, sinkronisasi, serta pembaruan. Perintah diperiksa pada klien v1.2.0 tanggal 26 Oktober 2026. Sediakan [referensi perintah resmi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) untuk versi yang dipasang.
+
+## Apa yang diperlukan untuk menjalankan node Blocknet?
+
+<Answer>
+Gunakan klien resmi sesuai sistem operasi, komputer dengan ruang untuk data rantai, dan internet. Klien memasang serta mengelola core di latar belakang. Setelah berjalan, periksa peer dan kemajuan. Membuat dompet serta menambang adalah tugas terpisah yang dapat ditambahkan setelah node bekerja.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Terminal lokal terhubung ke core Blocknet di latar belakang yang menyimpan rantai dan bertukar blok dengan peer jaringan." width="1200" height="675" loading="lazy" />
+
+## Pilih klien resmi dan jaringan
+
+Unduh arsip sesuai sistem dan prosesor dari [rilis resmi](https://github.com/blocknetprivacy/blocknet/releases/latest). Ekstrak dan buka terminal yang dapat mengakses programnya. Contoh menggunakan `blocknet`; pada Windows gunakan `blocknet.exe`. Jika tidak ada dalam jalur pencarian perintah, gunakan jalur sebenarnya, misalnya `./blocknet` pada Linux atau macOS.
+
+Gunakan mainnet untuk jaringan Blocknet biasa. Testnet merupakan lingkungan terpisah dengan konfigurasi dan data sendiri. Catat jaringan agar tinggi testnet tidak dibandingkan dengan explorer mainnet. Panduan ini mengelola node; [panduan dompet](/id/blog/blocknet-wallet-for-mining/) membahas pembuatan, pemulihan, dan alamat penerimaan.
+
+## Pasang dan mulai core di latar belakang
+
+Untuk penyiapan pertama, jalankan wizard dalam terminal interaktif:
+
+```sh
+blocknet setup
+```
+
+Baca setiap pertanyaan. Wizard yang diperiksa menyimpan konfigurasi, menjadwalkan pembaruan otomatis, menawarkan unduhan core bila perlu dan memulainya. Pengaturan jaringan serta API lokal juga tersedia. Pertahankan pengikatan lokal untuk node yang dikelola di komputer ini.
+
+Jalur pemasangan manual yang didokumentasikan:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` memilih rilis core stabil. Mainnet harus diaktifkan dalam konfigurasi. Klien menjalankan core di latar belakang dan menunggu API-nya. Biarkan proses awal selesai; membuka basis data dan mengejar seluruh rantai merupakan tahapan berbeda.
+
+## Bagaimana memeriksa peer dan kemajuan sinkronisasi?
+
+Hubungkan ke core mainnet yang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Pada prompt interaktif, masukkan satu per satu:
+
+```text
+status
+peers
+```
+
+[Referensi shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) menjelaskan kolom node. Catat tinggi, hash blok terakhir, jumlah peer dan status sinkronisasi. Daftar peer membantu memastikan koneksi jaringan.
+
+Amati tinggi seiring waktu dan bandingkan dengan referensi mainnet baru seperti [explorer resmi](https://explorer.blocknetcrypto.com/). Tinggi dapat berhenti antarblok, dan pengamatan bisa dilakukan pada waktu berbeda. Gabungkan kolom alih-alih menyimpulkan dari satu angka. Saat mengejar rantai, pastikan jaringan dan penyimpanan tetap tersedia.
+
+## Pisahkan sinkronisasi rantai dari pemindaian dompet
+
+Sinkronisasi rantai mengikuti blok jaringan. Pemindaian dompet mencari output milik dompet yang dimuat dalam riwayat tersebut. Dompet yang dipulihkan mungkin masih memindai setelah node mengejar jaringan. Informasi dompet pada shell merupakan pengamatan terpisah dari tinggi node. Gunakan [panduan penerimaan payout](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) untuk melacak pembayaran penambangan tertentu.
+
+Klien saat ini juga mendukung checkpoint untuk sinkronisasi awal lebih cepat. Ikuti [panduan checkpoint](https://bntpool.com/blog/id/blocknet-checkpoints-fast-sync/) mengenai sumber dan lingkup verifikasi; metode sinkronisasi cepat tidak semuanya sama. Jangan rutin menghapus basis data ketika indikator diam. Bedakan dahulu unduhan aktif, verifikasi, dan pemindaian melalui status serta log.
+
+## Di mana memeriksa bila proses awal perlu perhatian?
+
+Di luar attach, ikuti log core yang dikelola:
+
+```sh
+blocknet logs mainnet
+```
+
+Baca pesan awal dan koneksi terbaru. Ctrl-C berhenti mengikuti log. Untuk konfigurasi, jalur, versi terpasang dan konektivitas:
+
+```sh
+blocknet doctor
+```
+
+Perintah doctor yang didokumentasikan melaporkan hasil tanpa mengubah penyiapan. Simpan pesan persisnya sebelum memilih perbaikan.
+
+Pastikan core dan jaringan sesuai, program yang dipilih sudah terpasang, dan alamat API lokal cocok. Lihat [pemecahan masalah resmi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) untuk kondisi yang dilaporkan. Jaga kerahasiaan kredensial API dan data dompet saat berbagi diagnosis. Versi, sistem dan galat terkait biasanya lebih berguna daripada seluruh direktori konfigurasi.
+
+## Pahami pembaruan dan penghentian yang disengaja
+
+Pada klien yang diperiksa, penjadwal dan sejumlah perintah pengelolaan memeriksa pembaruan. Perintah luar `blocknet status` dapat memicunya; ini berbeda dari `status` di attach. Pembaruan dapat memulai ulang core yang mengikuti `latest`, sementara versi yang dipatok dibiarkan. Baca [referensi pembaruan](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md) bila ada layanan bergantung pada node.
+
+Jadwalkan pemeliharaan sesuai pengguna API node. Masukkan `quit` untuk keluar attach; core terus berjalan. Untuk sengaja menghentikan core mainnet itu, jalankan `blocknet stop mainnet` di terminal sistem. Setelah pembaruan atau restart, pastikan versi aktif, koneksi dan kemajuan. Simpan cadangan dompet terpisah dari program core.
+
+## Gunakan node untuk tugas yang dimaksud
+
+Node terhubung dapat melayani dompet dan kueri rantai lokal tanpa menambang. Untuk bntpool.com, ikuti [panduan pool](https://bntpool.com/blog/id/mine-blocknet-on-bntpool/) dan koneksi pool normal seine. Menjalankan node sendiri adalah pilihan terpisah. Untuk penambangan langsung, baca instruksi mode daemon dan periksa konfigurasi API sebelum terhubung.
+
+Simpan catatan singkat: jaringan, versi klien/core, lokasi data, kebijakan pembaruan dan bukti kemajuan sehat. Ini juga membantu persiapan [Faraday](/id/blog/blocknet-faraday-upgrade/), dengan instruksi aktivasi mendatang dari rilis resmi. Periksa ulang status setelah perubahan terencana agar catatan menggambarkan node aktif, bukan sekadar perangkat lunak yang diunduh.
+
+<CTA target="seine" title="Tambang Blocknet dengan seine" text="Gunakan panduan penambangan untuk menghubungkan penyiapan setelah memilih pool atau penambangan langsung." />

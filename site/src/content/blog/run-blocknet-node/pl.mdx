@@ -1,0 +1,106 @@
+---
+title: 'Jak uruchomić węzeł Blocknet'
+description: 'Uruchom węzeł Blocknet oficjalnym klientem: zainstaluj core, sprawdź peery i synchronizację, poznaj aktualizacje oraz zweryfikuj działanie w sieci głównej.'
+tags: ['Blocknet', 'Węzeł', 'Konfiguracja']
+faq:
+  - q: 'Czy do uruchomienia węzła Blocknet trzeba kopać?'
+    a: 'Uruchomienie węzła i kopania to osobne działania. Core utrzymuje dane łańcucha i połączenia, a kopanie włącza się oddzielnie. Możesz sprawdzać stan i peery bez obciążenia wydobywaniem. Kopanie w puli przez seine też ma własną procedurę połączenia i nie wymaga własnego węzła.'
+  - q: 'Czy zamknięcie konsoli Blocknet zatrzymuje węzeł?'
+    a: 'Interaktywna sesja attach łączy się z core działającym w tle. Wyjście z konsoli pozostawia core uruchomione. Aby zatrzymać zarządzany węzeł, użyj jawnego polecenia zatrzymania, a następnie sprawdź stan. Zamknięcie konsoli i zatrzymanie procesu to różne czynności.'
+  - q: 'Jak sprawdzić, czy węzeł Blocknet się synchronizuje?'
+    a: 'Odczytaj łącznie wysokość, liczbę peerów i stan synchronizacji, potem obserwuj postęp. Porównaj z aktualnym punktem odniesienia tej samej sieci. Skanowanie portfela jest osobne: aktualny węzeł nie dowodzi, że świeżo wczytany portfel znalazł już wszystkie swoje wyjścia.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Uruchom własny węzeł Blocknet i sprawdź jego połączenie oraz śledzenie łańcucha. Przewodnik używa oficjalnego klienta wiersza poleceń do zarządzania core mainnet oraz kontroli peerów, synchronizacji i aktualizacji. Polecenia sprawdzono z klientem v1.2.0 dnia 26 października 2026 r. Miej pod ręką [oficjalną dokumentację](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) zainstalowanej wersji.
+
+## Co jest potrzebne do uruchomienia węzła Blocknet?
+
+<Answer>
+Użyj oficjalnego klienta dla swojego systemu, komputera z miejscem na dane łańcucha i internetu. Klient instaluje oraz zarządza core w tle. Po uruchomieniu sprawdź peery i postęp. Tworzenie portfela oraz kopanie to osobne zadania, które możesz dodać, gdy węzeł działa.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Lokalny terminal łączy się z core Blocknet w tle, które przechowuje łańcuch i wymienia bloki z peerami." width="1200" height="675" loading="lazy" />
+
+## Wybierz oficjalnego klienta i sieć
+
+Pobierz archiwum dla swojego systemu i procesora z [oficjalnych wydań](https://github.com/blocknetprivacy/blocknet/releases/latest). Rozpakuj i otwórz terminal z dostępem do programu. Przykłady używają `blocknet`; w Windows użyj `blocknet.exe`. Jeśli program nie leży w ścieżce wyszukiwania, podaj jego rzeczywistą ścieżkę, np. `./blocknet` w Linux lub macOS.
+
+Mainnet to zwykła sieć Blocknet. Testnet jest osobnym środowiskiem z własnymi danymi i ustawieniami. Zapisz wybraną sieć, aby nie porównywać wysokości testnet z eksploratorem mainnet. Tutaj zarządzamy węzłem; [poradnik portfela](/pl/blog/blocknet-wallet-for-mining/) obejmuje tworzenie, odzyskiwanie i adres odbiorczy.
+
+## Zainstaluj i uruchom core w tle
+
+Przy pierwszej konfiguracji uruchom kreator w interaktywnym terminalu:
+
+```sh
+blocknet setup
+```
+
+Czytaj każde pytanie. Sprawdzony kreator zapisuje konfigurację, planuje automatyczne aktualizacje oraz proponuje pobranie core w razie potrzeby i jego start. Udostępnia też ustawienia sieci i lokalnego API. Zachowaj lokalne powiązanie dla węzła zarządzanego na tym komputerze.
+
+Udokumentowana instalacja ręczna:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` wybiera stabilne wydanie core. Mainnet musi być włączony w konfiguracji. Klient uruchamia core w tle i czeka na API. Pozwól zakończyć start: uruchomienie bazy i pełne nadrobienie łańcucha to różne etapy.
+
+## Jak sprawdzić peery i postęp synchronizacji?
+
+Połącz się z działającym core mainnet:
+
+```sh
+blocknet attach mainnet
+```
+
+W interaktywnym wierszu wpisz osobno:
+
+```text
+status
+peers
+```
+
+[Dokumentacja konsoli](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) opisuje pola. Zapisz wysokość, hash ostatniego bloku, liczbę peerów i stan synchronizacji. Lista peerów pomaga potwierdzić połączenia sieciowe.
+
+Obserwuj wysokość w czasie i porównaj z aktualną referencją mainnet, np. [oficjalnym eksploratorem](https://explorer.blocknetcrypto.com/). Między blokami wysokość może stać, a obserwacje pochodzić z innych chwil. Oceniaj pola łącznie zamiast jednej liczby. Podczas nadrabiania pozostaw dostępne połączenie i magazyn danych.
+
+## Oddziel synchronizację łańcucha od skanowania portfela
+
+Synchronizacja śledzi bloki sieci. Skanowanie szuka w historii wyjść należących do załadowanego portfela. Odtworzony portfel może nadal skanować po nadrobieniu sieci przez węzeł. Informacja portfela w konsoli jest więc osobną obserwacją. Konkretną płatność z kopania prześledzisz z [poradnikiem odbioru](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/).
+
+Obecny klient obsługuje też checkpointy przyspieszające pierwszy sync. [Poradnik checkpointów](https://bntpool.com/blog/pl/blocknet-checkpoints-fast-sync/) opisuje źródło i zakres weryfikacji; szybkie metody nie są identyczne. Nie usuwaj rutynowo bazy przy nieruchomym wskaźniku. Najpierw rozróżnij pobieranie, weryfikację i skanowanie przez stan oraz logi.
+
+## Gdzie zajrzeć, gdy start wymaga uwagi?
+
+Poza attach śledź log zarządzanego core:
+
+```sh
+blocknet logs mainnet
+```
+
+Czytaj najnowsze komunikaty startu i połączenia. Ctrl-C kończy śledzenie. Konfigurację, ścieżki, wersje i łączność sprawdzisz przez:
+
+```sh
+blocknet doctor
+```
+
+Udokumentowany doctor raportuje wyniki bez zmiany ustawień. Zachowaj dokładny komunikat przed wybraniem poprawki.
+
+Sprawdź oczekiwany core i sieć, instalację wybranego programu oraz adres lokalnego API. Skorzystaj z [oficjalnej pomocy](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) dla zgłoszonego stanu. Nie ujawniaj danych dostępu API ani materiału portfela przy udostępnianiu diagnozy. Wersja, system i odpowiedni błąd zwykle pomagają bardziej niż cały katalog konfiguracji.
+
+## Zrozum aktualizacje i świadome zatrzymanie
+
+W sprawdzonym kliencie harmonogram i wybrane polecenia zarządzania szukają aktualizacji. Zewnętrzne `blocknet status` może uruchomić kontrolę; różni się od `status` wewnątrz attach. Aktualizacje mogą restartować core śledzące `latest`, a przypięte wersje pozostają. Przy zależnych usługach przeczytaj [dokumentację aktualizacji](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md).
+
+Zaplanuj konserwację wokół użytkowników API. Wpisz `quit`, aby wyjść z attach; core działa dalej. Świadomie zatrzymasz ten core mainnet przez `blocknet stop mainnet` w terminalu systemowym. Po aktualizacji lub restarcie sprawdź aktywną wersję, połączenie i postęp. Kopię portfela przechowuj niezależnie od plików core.
+
+## Używaj węzła do zamierzonego zadania
+
+Połączony węzeł obsługuje portfel i lokalne zapytania bez włączania kopania. Dla bntpool.com użyj [poradnika puli](https://bntpool.com/blog/pl/mine-blocknet-on-bntpool/) i zwykłego połączenia seine. Własny węzeł to osobny wybór. Dla kopania bezpośredniego przeczytaj tryb daemon i sprawdź API przed połączeniem.
+
+Prowadź krótki zapis: sieć, wersje klienta i core, miejsce danych, polityka aktualizacji oraz kontrole postępu. Przyda się też dla [Faraday](/pl/blog/blocknet-faraday-upgrade/), którego przyszłe instrukcje aktywacji powinny pochodzić z oficjalnego wydania. Po planowanej zmianie sprawdź stan, aby opis dotyczył działającego węzła, a nie tylko pobranego programu.
+
+<CTA target="seine" title="Kop Blocknet z seine" text="Użyj poradników do połączenia konfiguracji po wybraniu puli lub kopania bezpośredniego." />

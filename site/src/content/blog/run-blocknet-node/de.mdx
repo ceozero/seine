@@ -1,0 +1,106 @@
+---
+title: 'Einen Blocknet-Node betreiben'
+description: 'Betreibe einen Blocknet-Node mit dem offiziellen Client: Core installieren, Peers und Sync prüfen, automatische Updates verstehen und das Mainnet kontrollieren.'
+tags: ['Blocknet', 'Node', 'Einrichtung']
+faq:
+  - q: 'Muss ich für einen Blocknet-Node minen?'
+    a: 'Node-Betrieb und Mining werden getrennt gestartet. Der Core verwaltet Blockchain-Daten und Netzwerkverbindungen; Mining wird separat aktiviert. Status und Peers lassen sich ohne Mining-Last prüfen. Auch Pool-Mining mit seine hat einen eigenen Verbindungsablauf und erfordert keinen eigenen Node.'
+  - q: 'Stoppt das Schließen der Blocknet-Shell den Node?'
+    a: 'Die interaktive Attach-Sitzung verbindet sich mit einem Core im Hintergrund. Beim Verlassen läuft der Core weiter. Verwende den ausdrücklichen Stoppbefehl, wenn du einen verwalteten Node beenden möchtest, und prüfe anschließend seinen Zustand. Shell schließen und den zugrunde liegenden Prozess stoppen sind verschiedene Aktionen.'
+  - q: 'Woran erkenne ich die Synchronisierung meines Nodes?'
+    a: 'Lies Blockhöhe, Peer-Anzahl und Synchronisierungsstatus zusammen und beobachte den Verlauf. Vergleiche mit einer aktuellen Referenz desselben Netzwerks. Der Wallet-Scan ist separat: Ein aktueller Node beweist nicht, dass eine frisch geladene Wallet bereits alle ihre Outputs gefunden hat.'
+sourceHash: '215a7a104233'
+translation: draft
+---
+
+Betreibe deinen eigenen Blocknet-Node und prüfe, ob er verbunden ist und der Blockchain folgt. Diese Anleitung verwendet den offiziellen Kommandozeilenclient für einen Mainnet-Core und zeigt Peers, Synchronisierung und Updates. Die Befehle wurden am 26. Oktober 2026 mit Client v1.2.0 geprüft. Halte die [offizielle Befehlsreferenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-blocknet.md) deiner installierten Version bereit.
+
+## Was brauchst du für einen Blocknet-Node?
+
+<Answer>
+Nutze den offiziellen Client für dein Betriebssystem, einen Computer mit Platz für Blockchain-Daten und eine Internetverbindung. Der Client installiert und verwaltet den Core im Hintergrund. Prüfe danach Peers und Fortschritt. Wallet-Erstellung und Mining sind separate Aufgaben, die du ergänzen kannst, sobald der Node läuft.
+</Answer>
+
+<img src="/assets/blog/run-blocknet-node.svg" alt="Ein lokales Terminal verbindet sich mit einem Blocknet-Core im Hintergrund, der Blockchain-Daten speichert und Blöcke mit Netzwerk-Peers austauscht." width="1200" height="675" loading="lazy" />
+
+## Offiziellen Client und Netzwerk wählen
+
+Lade das Archiv für Betriebssystem und Prozessor aus den [offiziellen Releases](https://github.com/blocknetprivacy/blocknet/releases/latest). Entpacke es und öffne ein Terminal, in dem die Programmdatei erreichbar ist. Die Beispiele verwenden `blocknet`, unter Windows `blocknet.exe`. Liegt die Datei nicht im Suchpfad, verwende ihren tatsächlichen Pfad, etwa `./blocknet` unter Linux oder macOS.
+
+Mainnet ist das reguläre Blocknet-Netzwerk. Testnet ist eine getrennte Umgebung mit eigenen Daten und Einstellungen. Notiere das gewählte Netzwerk, damit du niemals eine Testnet-Höhe mit einem Mainnet-Explorer vergleichst. Hier geht es um den Node; der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) erklärt Erstellung, Wiederherstellung und Empfangsadresse.
+
+## Core installieren und im Hintergrund starten
+
+Starte zur ersten Einrichtung den Assistenten in einem interaktiven Terminal:
+
+```sh
+blocknet setup
+```
+
+Lies jede Abfrage. Der geprüfte Assistent speichert Einstellungen, plant automatische Updates, bietet bei Bedarf einen Core-Download und dessen Start an. Auch Netzwerk und lokale API werden eingestellt. Behalte für die Verwaltung auf diesem Computer die lokale Bindung bei.
+
+Der dokumentierte manuelle Installationsweg lautet:
+
+```sh
+blocknet install latest
+blocknet start mainnet
+```
+
+`latest` wählt das stabile Core-Release. Mainnet muss in der Konfiguration aktiviert sein. Der Client startet den Core im Hintergrund und wartet auf dessen API. Lass den Start abschließen: Datenbankstart und vollständig aufgeholte Blockchain sind unterschiedliche Meilensteine.
+
+## Wie prüfst du Peers und Sync-Fortschritt?
+
+Verbinde dich mit dem laufenden Mainnet-Core:
+
+```sh
+blocknet attach mainnet
+```
+
+Gib an der interaktiven Eingabe diese Befehle einzeln ein:
+
+```text
+status
+peers
+```
+
+Die [Shell-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) erklärt die Felder. Notiere Höhe, aktuellen Blockhash, Peer-Anzahl und Sync-Status. Die Peer-Liste hilft, Netzwerkverbindungen zu bestätigen.
+
+Beobachte die Höhe über Zeit und vergleiche sie mit einer aktuellen Mainnet-Referenz wie dem [offiziellen Explorer](https://explorer.blocknetcrypto.com/). Zwischen Blöcken kann sie unverändert bleiben; Beobachtungen können zu verschiedenen Zeitpunkten entstehen. Betrachte die Felder gemeinsam statt nur eine Zahl. Halte während des Aufholens Verbindung und Speicher verfügbar.
+
+## Blockchain-Sync und Wallet-Scan unterscheiden
+
+Die Blockchain-Synchronisierung folgt den Netzwerkblöcken. Der Wallet-Scan sucht darin nach Outputs der geladenen Wallet. Eine wiederhergestellte Wallet kann noch scannen, wenn der Node schon aufgeholt hat. Ihre Shell-Angaben sind deshalb getrennt von der Node-Höhe zu betrachten. Für eine bestimmte Mining-Zahlung hilft der [Auszahlungsleitfaden](https://bntpool.com/blog/de/pool-payout-missing-from-wallet/).
+
+Der aktuelle Client unterstützt Checkpoints für einen schnelleren Erstabgleich. Der [Checkpoint-Leitfaden](https://bntpool.com/blog/de/blocknet-checkpoints-fast-sync/) erklärt Quelle und Prüfungsumfang; schnelle Sync-Verfahren sind nicht alle gleich. Lösche die Blockchain-Datenbank nicht routinemäßig wegen einer ruhigen Fortschrittsanzeige. Unterscheide zuerst Download, Verifikation und Wallet-Scan anhand von Status und Logs.
+
+## Wo prüfst du Auffälligkeiten beim Start?
+
+Verfolge außerhalb der Attach-Shell das Core-Log:
+
+```sh
+blocknet logs mainnet
+```
+
+Lies aktuelle Start- und Verbindungsmeldungen. Ctrl-C beendet das Mitlesen. Für Einstellungen, Pfade, installierte Versionen und Verbindungen:
+
+```sh
+blocknet doctor
+```
+
+Der dokumentierte Doctor-Befehl berichtet Befunde, ohne die Einrichtung zu verändern. Bewahre die genaue Meldung auf, bevor du eine Korrektur auswählst.
+
+Prüfe den erwarteten Core und das Netzwerk, die installierte Programmdatei und die passende lokale API-Adresse. Nutze die [offizielle Fehlerhilfe](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) für den gemeldeten Zustand. Teile keine API-Zugangsdaten oder Wallet-Geheimnisse in Diagnosen. Version, Betriebssystem und relevante Fehlermeldung helfen meist mehr als ein vollständiges Konfigurationsverzeichnis.
+
+## Updates und bewusstes Abschalten verstehen
+
+Im geprüften Client prüfen der Zeitplaner und bestimmte Verwaltungsbefehle auf Updates. Das äußere `blocknet status` kann eine Updateprüfung auslösen; es unterscheidet sich von `status` in attach. Verfügbare Updates können verwaltete Cores mit `latest` neu starten; festgesetzte Versionen bleiben unberührt. Lies bei abhängigen Diensten die [Update-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-upgrade.md).
+
+Plane Wartung für alle Nutzer der Node-API. Mit `quit` verlässt du attach; der Core läuft weiter. Zum bewussten Stoppen dieses Mainnet-Cores dient `blocknet stop mainnet` im Betriebssystemterminal. Prüfe nach Update oder Neustart laufende Version, Verbindung und Blockchain-Fortschritt. Bewahre die Wallet-Sicherung unabhängig von Core-Programmdateien auf.
+
+## Den Node für die geplante Aufgabe nutzen
+
+Ein verbundener Node unterstützt Wallet und lokale Blockchain-Abfragen ohne Mining. Für bntpool.com nutze die [Pool-Anleitung](https://bntpool.com/blog/de/mine-blocknet-on-bntpool/) und seines normale Pool-Verbindung. Ein eigener Node ist eine separate Entscheidung. Lies für direktes Mining die Anleitung zum Daemon-Modus und prüfe die API-Konfiguration vor dem Verbinden.
+
+Notiere Netzwerk, Client- und Core-Version, Datenort, Update-Regelung und erfolgreiche Fortschrittsprüfungen. Das hilft auch bei [Faraday](/de/blog/blocknet-faraday-upgrade/), dessen künftige Aktivierungsanweisungen aus dem offiziellen Release stammen sollten. Prüfe nach geplanten Änderungen den Status, damit deine Notiz den laufenden Node beschreibt und nicht nur heruntergeladene Software.
+
+<CTA target="seine" title="Blocknet mit seine minen" text="Verbinde dein gewünschtes Setup mithilfe der Mining-Anleitungen, nachdem du Pool- oder direktes Mining gewählt hast." />
