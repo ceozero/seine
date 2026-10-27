@@ -1,0 +1,74 @@
+---
+title: 'Cara menggunakan penjelajah Blocknet'
+description: 'Gunakan penjelajah Blocknet untuk mencari transaksi atau blok, membaca konfirmasi dan biaya publik, serta memahami rincian pembayaran privat di dompet.'
+tags: ['Blocknet', 'Penjelajah', 'Transaksi']
+faq:
+  - q: 'Bisakah mencari berdasarkan alamat dompet?'
+    a: 'Pencarian publik menerima tinggi blok, hash blok, atau hash transaksi. Untuk pembayaran tertentu, gunakan ID transaksi lengkap. Output privat Blocknet tidak menyediakan halaman saldo alamat publik seperti buku besar transparan. Dompet mengenali output yang Anda terima dan menampilkan jumlahnya.'
+  - q: 'Apakah transaksi mempool memiliki konfirmasi?'
+    a: 'Transaksi mempool menunggu masuk ke blok dan memiliki nol konfirmasi. Setelah dimasukkan, blok yang memuatnya memberi konfirmasi pertama. Blok berikutnya menambah hitungan. Periksa halaman transaksi terkini dan keadaan dompet, jangan mengubah target waktu blok menjadi janji waktu tiba.'
+  - q: 'Mengapa biaya terlihat tetapi jumlah pembayaran tersembunyi?'
+    a: 'Biaya jaringan adalah bidang transaksi publik. Jumlah transfer biasa disembunyikan dengan komitmen dan bukti, sedangkan output menggunakan kunci sekali pakai. Penjelajah dapat menampilkan biaya dan struktur transaksi tanpa jumlah yang diterima penerima. Gunakan dompet untuk rincian privat pembayaran Anda.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Temukan transaksi Blocknet, buka blok yang memuatnya, dan pahami informasi halaman publiknya. Panduan mengikuti [penjelajah resmi](https://explorer.blocknetcrypto.com/), diperiksa pada 26 Oktober 2026. Tangkapan layar menunjukkan halaman publik nyata pada tanggal itu. Tinggi, konfirmasi, dan angka jaringannya adalah pengamatan historis; buka halaman langsung untuk keadaan terkini.
+
+## Bagaimana mencari transaksi Blocknet?
+
+<Answer>
+Salin ID transaksi lengkap dari dompet atau catatan pembayaran ke pencarian penjelajah resmi. Buka transaksi yang cocok dan periksa apakah masih di mempool atau sudah masuk blok. Baca konfirmasi dan bidang publik, lalu verifikasi rincian pembayaran privat di dompet.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="Pencarian mengarah ke catatan transaksi publik dan bloknya, sedangkan jumlah pembayaran diperiksa di dompet." width="1200" height="675" loading="lazy" />
+
+## Mulai dengan pengenal yang tepat
+
+Gunakan ID transaksi untuk menyelidiki satu pembayaran. Gunakan tinggi atau hash blok untuk memeriksa blok beserta daftar transaksinya. Pencarian menerima ketiganya. Salin pengenal lengkap dari sumber, bukan teks singkat dalam daftar ringkas. Pastikan dompet dan penjelajah merujuk jaringan yang sama.
+
+Beranda juga menampilkan blok terbaru, angka jaringan, dan bagian mempool. Mulai dari pencarian jika sudah punya pengenal; gunakan daftar untuk menjelajahi aktivitas jaringan. [Panduan kirim dan terima](/id/blog/send-receive-blocknet/) menjelaskan letak ID setelah pengiriman selesai.
+
+[![Beranda penjelajah resmi dengan pencarian, tinggi rantai, dan kartu jaringan, diambil pada 26 Oktober 2026.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## Apa yang ditampilkan halaman transaksi?
+
+Halaman transfer menunjukkan hash transaksi, kunci publik transaksi, status blok, biaya jaringan, serta jumlah input/output. Baca hash dahulu untuk memastikan transaksi yang benar. Kunci publik adalah bidang lain dengan fungsi sendiri, bukan pengganti hash transaksi yang Anda salin dari catatan pembayaran untuk pencarian.
+
+Contoh berikut adalah transfer publik nyata, bukan pembayaran yang dibuat untuk panduan ini. Biayanya milik transaksi tersebut dan jumlahnya tetap tersembunyi. [Artikel biaya](/id/blog/blocknet-transaction-fees/) menjelaskan perhitungan dompet; halaman ini mengajarkan membaca hasil yang tercatat di jaringan.
+
+[![Halaman transaksi Blocknet publik dengan hash, blok, biaya, input, output, dan jumlah tersembunyi.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Baca transaksi tertunda dan masuk blok dengan benar
+
+Transaksi dalam mempool menunggu masuk blok dan memiliki nol konfirmasi. Setelah masuk, halaman transaksi menautkan bloknya. Dalam [implementasi penjelajah yang diperiksa](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go), konfirmasi adalah tinggi rantai kini dikurangi tinggi blok pemuat, ditambah satu. Blok pemuat menjadi konfirmasi pertama.
+
+Contoh aritmetika: transaksi dalam blok 100 memiliki tiga konfirmasi ketika tinggi saat ini 102. Itu tinggi contoh, bukan angka jaringan terkini. Periksa hitungan langsung transaksi Anda. [Panduan konfirmasi](https://bntpool.com/blog/id/block-confirmations-mining-rewards/) menjelaskan hubungan masuk blok, pematangan imbalan, dan ketersediaan di dompet; hitungan penjelajah saja tidak menentukan output yang bisa Anda belanjakan.
+
+## Buka blok untuk melihat konteks
+
+Ikuti tautan blok untuk melihat tinggi, hash, referensi blok sebelumnya, waktu, kesulitan, imbalan, dan daftar transaksi. Halaman membedakan transaksi coinbase dari transfer biasa. Coinbase di sini berarti transaksi imbalan penambangan blok. Daftar transaksi memungkinkan membuka transfer tertentu dari blok dan memverifikasi pencantumannya.
+
+Gunakan tautan blok sebelumnya dan berikutnya untuk menelusuri rantai di sekitar catatan itu. Gambar berikut adalah contoh bertanggal; jumlah konfirmasi terus berubah di halaman langsung. Arti penerbitan imbalan dijelaskan dalam [jadwal imbalan Blocknet](https://bntpool.com/blog/id/blocknet-block-reward-schedule/).
+
+[![Blok 69.579 di penjelajah resmi, dengan properti blok serta daftar transaksi coinbase dan transfer.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Pahami rincian yang tetap privat
+
+Pada transfer biasa, biaya publik dan jumlah input/output menjelaskan struktur transaksi. Jumlah penerima disembunyikan oleh komitmen dan bukti, sedangkan kunci output merupakan tujuan sekali pakai. Kunci stealth yang ditampilkan bukan saldo alamat dompet publik. [Ikhtisar privasi](/id/blog/blocknet-privacy-features/) menghubungkan bidang ini dengan mekanisme privasi Blocknet saat ini.
+
+Gunakan riwayat dompet penerima untuk mengenali pembayaran dan jumlahnya sendiri. Data memo terenkripsi di penjelajah bukan catatan faktur yang bisa dibaca. Pencarian ini hanya perlu pengenal publik. Simpan kata pemulihan dan kunci privat di dompet; alat bukti terpisah penjelajah berada di luar langkah ini. Melihat pencantuman dan konfirmasi tidak memerlukan pengisian formulir bukti.
+
+## Baca angka jaringan bersama labelnya
+
+Hashrate, kesulitan, dan waktu blok rata-rata di beranda menjelaskan aktivitas jaringan. Itu konteks berguna untuk memahami kedatangan blok. Jumlah peer merujuk node penjelajah, bukan sensus seluruh peserta. Baca nilai bersama label dan waktu pengamatan, terutama saat membandingkan dengan node Anda.
+
+Target interval blok atau hitung mundur bukan janji waktu transaksi tertentu. Amati pencantuman sebenarnya pada halaman transaksi. Untuk angka penambang, [panduan hashrate](https://bntpool.com/blog/id/what-is-hashrate/) memisahkan hashing lokal dari perkiraan jaringan dan pool. Untuk kemajuan node sendiri, [panduan node](/id/blog/run-blocknet-node/) membahas koneksi peer dan sinkronisasi. Tugas-tugas itu menggunakan ukuran berbeda.
+
+## Bagaimana jika transaksi tidak ditemukan?
+
+Periksa pengenal lengkap dan jaringan terlebih dahulu. Bandingkan dengan catatan dompet pengirim atau ID transaksi pembayaran pool. Transaksi baru mungkin belum terlihat oleh node penjelajah; periksa lagi setelah memberi waktu penyebaran dan pengindeksan. Hasil pencarian kosong saja bukan alasan untuk mengirim pembayaran baru.
+
+Kembali ke dompet untuk memeriksa operasi awal dan riwayat terkini sebelum tindakan lain. Untuk hasil penambangan, ikuti [panduan pool ke dompet](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) agar membedakan saldo pool tercatat, pembayaran terkirim, dan penerimaan dompet yang sudah dipindai. Simpan ID bersama catatan agar setiap pemeriksaan mengikuti pembayaran yang sama melalui antarmuka yang tepat.
+
+<CTA target="seine" title="Hubungkan instalasi penambangan Blocknet Anda" text="Gunakan seine bersama panduan penambangan, lalu ikuti catatan pembayaran pool ke penjelajah dan dompet." />

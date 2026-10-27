@@ -1,0 +1,107 @@
+---
+title: 'Configure uma carteira Blocknet somente de visualização'
+description: 'Configure uma carteira Blocknet somente de visualização em outro computador: exporte o arquivo, abra com senha própria e confira os pagamentos recebidos.'
+tags: ['Blocknet', 'Carteira', 'Privacidade']
+faq:
+  - q: 'Uma carteira Blocknet somente de visualização pode enviar moedas?'
+    a: 'Uma carteira somente de visualização acompanha os fundos recebidos, mas não pode enviar pagamentos nem assinar mensagens. O core analisado rejeita essas operações nesse tipo de carteira. Mantenha a carteira completa para decidir o que gastar e autorizar pagamentos, usando a cópia de visualização para acompanhar as entradas desejadas.'
+  - q: 'Posso publicar minha chave privada de visualização do Blocknet?'
+    a: 'A chave privada de visualização dá acesso às informações dos pagamentos recebidos. Ela é privada mesmo sem conceder autorização de gasto. Compartilhe esse acesso apenas de forma deliberada, proteja os arquivos exportados e suas senhas e não inclua chaves em capturas públicas, pedidos de suporte, conversas ou formulários de prova do explorador.'
+  - q: 'A carteira de visualização precisa da senha da carteira principal?'
+    a: 'A exportação pede a senha da carteira completa para autorizar a criação e depois uma senha separada para o arquivo de visualização. Abra o arquivo exportado no segundo computador com a senha escolhida para ele. Esse computador não precisa da frase de recuperação nem das credenciais de gasto da carteira completa.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Acompanhe pagamentos Blocknet recebidos em um segundo computador, mantendo a autorização de pagamentos na carteira completa. Este guia usa o cliente CLI oficial v1.2.0 e o core público v0.22.0, verificados em 27 de outubro de 2026. Ele apresenta o fluxo de exportação do arquivo, explica o acesso concedido e mostra como verificar os recebimentos depois de carregá-lo.
+
+## Como criar uma carteira Blocknet somente de visualização?
+
+<Answer>
+Abra a carteira completa e use viewkeys para criar um arquivo de visualização criptografado com senha separada. Transfira o arquivo exportado ao computador desejado, carregue-o e confira o endereço e o tipo somente de visualização. Aguarde a varredura alcançar a cadeia e consulte os pagamentos recebidos, mantendo os gastos na carteira completa.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Uma carteira completa exporta uma cópia de visualização criptografada para outro computador, que consulta os recebimentos sem autorização para gastar." width="1200" height="675" loading="lazy" />
+
+## Escolha os recebimentos que deseja acompanhar
+
+Comece pela carteira completa cujas entradas você quer observar. O [guia de configuração da carteira](/pt-br/blog/blocknet-wallet-for-mining/) explica como criá-la ou restaurá-la. A cópia de visualização corresponde ao endereço dessa carteira; não cria outra identidade de recebimento nem move moedas para outra conta. Anote a carteira e a rede da cópia antes de lidar com qualquer arquivo exportado.
+
+Na mineração, você pode continuar usando o mesmo endereço de pagamento verificado. A carteira de visualização permite consultar os registros recebidos em outro computador confiável. O [guia de acompanhamento do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) tem outra função: mostra shares, saldo do pool e pagamentos sem chaves da carteira. Escolha a interface que responde à sua dúvida; o acesso de visualização serve quando você precisa do registro privado de recebimento.
+
+## Exporte o arquivo pela carteira completa
+
+No computador com a carteira completa, conecte-se ao core da mainnet em execução:
+
+```sh
+blocknet attach mainnet
+```
+
+Abra a carteira correta e confira seu endereço com estes comandos do shell:
+
+```text
+load
+address
+```
+
+Se estiver bloqueada, use o procedimento normal de desbloqueio. Mantenha essa sessão privada porque a próxima operação mostra material de chave de visualização.
+
+Inicie a exportação:
+
+```text
+viewkeys
+```
+
+O [cliente analisado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) explica que a chave privada de visualização revela os fundos recebidos e pede confirmação. Prossiga apenas se deseja conceder esse acesso. Ele pede a senha da carteira completa, uma nova senha para o arquivo somente de visualização e a confirmação dessa senha. Escolha e guarde a senha do arquivo para o computador de destino.
+
+## Qual arquivo você deve transferir?
+
+Depois de uma exportação bem-sucedida, o cliente mostra as chaves de visualização e o caminho do arquivo salvo. Use esse caminho real para identificar o arquivo exportado. Transfira-o ao computador que você controla por um método adequado para dados privados de carteira. Proteja a senha separadamente. Evite incluir a saída de chaves do terminal em capturas ou transcrições de diagnóstico.
+
+A [referência da carteira](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) informa a pasta padrão `~/.config/bnt/wallets/` e seu equivalente Windows `C:\Users\<you>\.config\bnt\wallets\`. Um caminho de carteira configurado pode mudar a pasta listada por load. Copie o arquivo exportado para a pasta de carteiras do destino para que o cliente o encontre. Mantenha a carteira completa original e seu backup de recuperação no armazenamento previsto.
+
+## Carregue e verifique a cópia no segundo computador
+
+Prepare um core em execução no destino com o [guia do nó](/pt-br/blog/run-blocknet-node/) e conecte-se à mesma rede. Abra o arquivo exportado com a senha escolhida para ele:
+
+```text
+load
+```
+
+Se outra carteira já estiver aberta, o shell oficial permite descarregá-la antes de carregar o arquivo desejado. Selecione pelo nome do arquivo exportado, sem presumir que a primeira carteira listada é a correta.
+
+Verifique a cópia no cliente:
+
+```text
+address
+status
+```
+
+Compare o endereço de recebimento completo com o da carteira completa. Confira o tipo somente de visualização mostrado pelo cliente. Essas verificações confirmam a identidade e o acesso pretendido. Não é preciso tentar enviar: o [core analisado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) rejeita envios e assinaturas de mensagens a partir de uma carteira somente de visualização.
+
+## Deixe a carteira localizar os pagamentos recebidos
+
+O nó de destino precisa dos blocos relevantes, e a carteira carregada precisa examiná-los. Use estes comandos para consultar seus registros:
+
+```text
+outputs
+history
+```
+
+Uma carteira recém-carregada ou importada pode ainda estar se atualizando mesmo quando o nó tem pares. Siga o [guia de sincronização da carteira](/pt-br/blog/blocknet-wallet-not-syncing/) para distinguir o download da cadeia da varredura da carteira e decidir se uma varredura é necessária.
+
+Associe um recebimento a um ID de transação já conhecido da carteira completa ou do registro de pagamentos. O [guia do explorador](/pt-br/blog/blocknet-explorer-guide/) ajuda a confirmar a inclusão pública, enquanto a carteira de visualização fornece os detalhes recebidos. Use a carteira completa para as decisões de gasto atuais e sua autorização. Trate a cópia como um monitor de entradas, sem presumir que reproduz todas as saídas ou decisões de saldo disponível.
+
+## Que acesso uma chave privada de visualização concede?
+
+A [referência oficial do shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) avisa que essa chave permite ao portador ver os fundos recebidos. Um arquivo de visualização criptografado protege o acesso com sua própria senha, mas abri-lo revela informações privadas de pagamento. Conceda acesso apenas à pessoa ou máquina desejada. Mudar a senha do arquivo não revoga uma chave de visualização que alguém já copiou.
+
+Mantenha os segredos de gasto e visualização fora de ferramentas públicas e mensagens de suporte. Um endereço de recebimento é compartilhado para receber pagamentos; uma chave privada de visualização tem outro propósito. O [guia de endereços stealth](/pt-br/blog/stealth-addresses-explained/) explica como a carteira reconhece suas saídas. Transfira apenas o acesso de visualização pretendido e mantenha o material de recuperação com a carteira completa.
+
+## Mantenha uma rotina de visualização repetível
+
+Ao voltar ao computador de acompanhamento, carregue o mesmo arquivo, verifique a rede e o endereço e confira o progresso antes de interpretar um registro ausente. Distinga um recebimento registrado de fundos cujo gasto você pode autorizar. Se criar outra carteira com um novo endereço, a cópia de visualização existente continuará correspondendo à antiga.
+
+Mantenha o backup de recuperação da carteira completa mesmo após configurar a visualização. Uma cópia de visualização não substitui o material de gasto necessário à recuperação. O [guia da frase seed](/pt-br/blog/seed-phrase-explained/) explica esse backup, enquanto [envio e recebimento](/pt-br/blog/send-receive-blocknet/) aborda o pagamento. Carteira completa, backup e cópia de visualização têm funções claras na sua rotina.
+
+<CTA target="seine" title="Receba pagamentos de mineração na sua carteira Blocknet" text="Use os guias de seine para minerar para seu endereço e acompanhe os pagamentos recebidos na visualização de carteira escolhida." />

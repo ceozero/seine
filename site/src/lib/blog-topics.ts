@@ -23,6 +23,9 @@ export const TOPICS = [
 ] as const;
 const groups: Record<string, readonly string[]> = {
   "getting-started": [
+    "get-first-blocknet",
+    "blocknet-wallet-node-miner",
+    "blocknet-desktop-wallet",
     "configure-seine-miner",
     "start-miner-automatically-windows",
     "update-seine-miner",
@@ -49,12 +52,19 @@ const groups: Record<string, readonly string[]> = {
     "argon2id-proof-of-work-explained"
   ],
   "troubleshooting": [
+    "blocknet-wallet-not-syncing",
     "mining-hashrate-dropping",
     "miner-keeps-stopping",
     "antivirus-flags-crypto-miner",
     "seine-dashboard-explained"
   ],
   "blocknet": [
+    "blocknet-wallet-backup-restore",
+    "blocknet-payment-proof",
+    "blocknet-sign-verify-message",
+    "blocknet-view-only-wallet",
+    "send-receive-blocknet",
+    "blocknet-explorer-guide",
     "blocknet-faraday-upgrade",
     "run-blocknet-node",
     "blocknet-transaction-fees",

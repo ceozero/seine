@@ -1,0 +1,96 @@
+---
+title: 'Cadangkan, pulihkan dan pindahkan dompet Blocknet'
+description: 'Cadangkan dompet Blocknet, pulihkan dari seed atau pindahkan berkasnya ke komputer baru. Periksa alamat dan pemindaian sebelum menonaktifkan salinan lama.'
+tags: ['Blocknet', 'Dompet', 'Pemulihan']
+faq:
+  - q: 'Bisakah dompet Blocknet dipulihkan jika kata sandinya lupa?'
+    a: 'Untuk dompet berbasis seed, gunakan seed pemulihan yang disimpan untuk mengimpor dompet dengan nama dan kata sandi baru. Berkas terenkripsi lama tetap memakai kata sandi sebelumnya. Bandingkan alamat hasil pemulihan dengan catatan Anda dan biarkan node serta pemindaian dompet menyusul sebelum memeriksa saldo.'
+  - q: 'Apakah memindahkan dompet mengubah alamat penerimaan?'
+    a: 'Memuat salinan berkas dompet yang sama atau mengimpor seed aslinya dengan benar mempertahankan alamat. Bandingkan alamat lengkap pada tujuan dengan catatan lama yang tepercaya. Membuat dompet baru adalah operasi berbeda dan memberikan alamat baru untuk pembayaran mendatang.'
+  - q: 'Apakah dompet hanya-lihat cukup untuk memulihkan akses belanja?'
+    a: 'Dompet hanya-lihat memberikan akses melihat, sehingga cocok untuk memantau pembayaran masuk di komputer lain. Untuk memulihkan akses membelanjakan, gunakan berkas dompet penuh beserta kata sandinya atau bahan pemulihan dompet penuh. Simpan cadangan dompet penuh asli dan periksa jenis dompet yang dimuat.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Cadangkan dompet Blocknet sebelum mengganti komputer, lalu pulihkan alamat yang sama melalui berkas dompet atau seed pemulihan. Panduan ini mengikuti CLI resmi v1.2.0 dan core v0.22.0, diperiksa pada 27 Oktober 2026. Tahap pencadangan, pembukaan di tempat lain, dan pemeriksaan pemulihan dibahas terpisah.
+
+## Bagaimana mencadangkan dan memulihkan dompet Blocknet?
+
+<Answer>
+Simpan seed pemulihan secara offline dan salinan terpisah berkas dompet penuh. Di komputer tujuan, muat berkas dengan kata sandinya atau impor seed asli ke berkas baru. Bandingkan alamat penerimaan lengkap, biarkan node dan pemindaian menyusul, lalu periksa catatan sebelum menonaktifkan salinan lama.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Dompet dan cadangan yang dilindungi dipindahkan ke komputer lain, lalu alamat hasil pemulihan dan kemajuan pemindaian diperiksa." width="1200" height="675" loading="lazy" />
+
+## Pilih jalur pemulihan yang tersedia
+
+Cadangan berkas dan seed memiliki kegunaan berbeda. Berkas `.wallet.dat` berisi kunci serta keadaan dompet tersimpan; membuka salinan terlindung kata sandi memerlukan kata sandinya. Seed dapat membuat ulang kunci dompet berbasis seed dalam berkas baru dengan kata sandi baru. Simpan keduanya bila tersedia, serta catatan pembayaran privat secara terpisah untuk dibandingkan setelah pemulihan.
+
+Prosedur ini untuk dompet penuh yang sudah ada. Untuk pembuatan awal, ikuti [panduan penyiapan dompet](/id/blog/blocknet-wallet-for-mining/). Untuk memantau pembayaran di komputer kedua tanpa akses belanja, gunakan [panduan hanya-lihat](/id/blog/blocknet-view-only-wallet/). Alamat penerimaan publik saja tidak dapat memulihkan dompet. Tentukan apakah Anda memiliki berkas penuh, kata sandinya, dan seed asli sebelum memilih langkah.
+
+## Siapkan dompet asli dan catatan pemulihan
+
+Hubungkan terminal ke core mainnet yang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Dalam shell interaktif, muat dompet yang dimaksud dan catat alamat publik lengkapnya:
+
+```text
+load
+address
+```
+
+Pilih entri dompet yang sudah ada. Jika dompet lain dimuat, gunakan `unload` sebelum memilih yang dimaksud. Simpan alamat dalam catatan migrasi privat bersama jaringan dan nama berkas.
+
+Untuk dompet berbasis seed, jalankan `seed` dalam shell, konfirmasi prompt dan masukkan kata sandi. Tulis kata-kata yang dikembalikan dalam urutan tepat dan simpan offline. Lakukan tanpa berbagi atau merekam layar; [panduan seed](/id/blog/seed-phrase-explained/) menjelaskan perlindungannya. Jika klien menyatakan seed tidak tersedia, simpan berkas penuh beserta kata sandi dan gunakan penyalinan berkas. Jangan menganggap semua dompet lama atau hasil impor kunci memiliki seed.
+
+## Buat salinan terpisah berkas dompet
+
+Temukan berkas yang benar-benar dipakai core. Direktori bawaan ialah `~/.config/bnt/wallets/`; di Windows ialah `C:\Users\<you>\.config\bnt\wallets\`. Folder yang berisi `wallet_file` terkonfigurasi dapat berbeda. Gunakan jalur yang ditampilkan klien resmi dan [referensi pengelolaan dompet](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), terutama jika nama beberapa berkas mirip. Pastikan berkas yang dimaksud sebelum menyalin apa pun.
+
+Setelah mencatat alamat, jalankan `unload` dan tunggu berhasil sebelum menyalin. Biarkan berkas asli di tempatnya dan simpan salinan bertanggal pada penyimpanan terpisah yang Anda kendalikan. Pertahankan ekstensi `.wallet.dat` dan lindungi cadangan serta kata sandinya. Klien dapat membuat cadangan lokal saat memuat dari direktori lain, tetapi tidak menimpa cadangan bernama sama yang sudah ada. Periksa salinan Anda sendiri, jangan menganggap salinan lokal itu mutakhir.
+
+## Bagaimana memindahkan dompet ke komputer baru?
+
+Pasang [klien resmi](https://github.com/blocknetprivacy/blocknet/releases/latest) dan siapkan core mainnet melalui [panduan node](/id/blog/run-blocknet-node/). Pindahkan salinan berkas penuh melalui penyimpanan yang Anda kendalikan ke folder dompet core tujuan. Pertahankan berkas lain di sana; pilih nama berbeda jika perlu. Pada klien yang diperiksa, `load` membaca dari folder itu, termasuk ketika jalur khusus dimasukkan.
+
+Hubungkan attach di tujuan dan jalankan `load`, pilih berkas salinan lalu masukkan kata sandi lama. Jika tidak muncul di menu, pastikan folder yang digunakan core dan tempat Anda menyalin. Pilih berkas yang ada, bukan opsi membuat dompet baru. Menyalin berkas yang sama mengembalikan akses ke kunci yang sama; tidak mengirim koin atau menciptakan saldo kedua.
+
+## Pulihkan dari seed asli
+
+Jika memulihkan karena berkas hilang atau kata sandi lupa, gunakan seed tersimpan pada klien resmi di komputer tujuan tepercaya. Hubungkan ke core mainnet yang dimaksud dan lepaskan dompet lain terlebih dahulu. Mulai prompt pemulihan di shell:
+
+```text
+import
+```
+
+Pilih opsi 1 untuk seed pemulihan 12 kata. Masukkan kata asli Anda berurutan; jangan gunakan kata contoh dari panduan atau menempelkan seed ke situs web.
+
+Pilih nama dompet baru yang belum dipakai, lalu buat dan konfirmasi kata sandi baru. [Implementasi impor yang diperiksa](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) membuat dompet dari masukan pemulihan dan melaporkan alamatnya. Berkas terenkripsi asli tetap memakai kata sandi lama. Simpan berkas lama dan cadangan selama memeriksa hasil impor, dan perlakukan berkas baru sebagai salinan lain yang perlu dilindungi.
+
+## Periksa alamat, rantai dan pemindaian
+
+Setelah memuat atau mengimpor, periksa dompet tujuan:
+
+```text
+address
+status
+balance
+history
+```
+
+Bandingkan seluruh alamat dengan catatan sebelumnya. Pemeriksaan alamat mengenali dompet sebelum Anda mengandalkan saldo. Jika berbeda, hentikan migrasi dan periksa berkas terpilih, kata pemulihan, serta jaringan. Jaga cadangan asli tetap utuh selama menyelesaikan perbedaan.
+
+Biarkan unduhan rantai node dan pemindaian output dompet menyusul. Dompet baru diimpor perlu menemukan output di rantai; saldo awal bukan pemeriksaan pemulihan akhir. Bandingkan saldo tersedia dan catatan masuk setelah selesai. Simpan catatan pembayaran terpisah dan berkas asli untuk detail historis. [Panduan sinkronisasi dompet](/id/blog/blocknet-wallet-not-syncing/) menjelaskan indikator kemajuan dan kapan pemindaian ulang sesuai.
+
+## Selesaikan perpindahan setelah verifikasi
+
+Simpan cadangan terlindung dari dompet tujuan yang telah diverifikasi dan pertahankan seed offline. Catat komputer yang kini memegang dompet penuh aktif dan salinan yang merupakan cadangan. Salinan lama tetap memiliki akses kunci yang sama; memindahkan berkas tidak mencabutnya. Saat menonaktifkan perangkat, tangani penyimpanannya menurut prosedur pembuangan aman Anda setelah memastikan cadangan berfungsi.
+
+Jika alamat hasil pemulihan cocok, tujuan pembayaran penambangan dapat tetap sama. Bandingkan [catatan pembayaran pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) dengan riwayat masuk saat memeriksa hasil penambangan. Jika sengaja membuat dompet berbeda, itu perubahan alamat, bukan pemulihan. Selesaikan verifikasi dompet pulihan sebelum mengubah konfigurasi penambang secara terpisah.
+
+<CTA target="seine" title="Tambang ke alamat Blocknet yang terverifikasi" text="Gunakan panduan seine untuk menghubungkan penambang dan simpan cadangan dompet pada penyimpanan yang Anda kendalikan." />

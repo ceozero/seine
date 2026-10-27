@@ -1,0 +1,112 @@
+---
+title: 'Ví Blocknet chưa đồng bộ hoặc hiển thị sai số dư'
+description: 'Kiểm tra ví Blocknet đang đồng bộ: tách tiến độ nút khỏi quét ví, theo dõi khoản nhận và kiểm tra lại số dư sau khi quét xong.'
+tags: ['Blocknet', 'Ví', 'Khắc phục sự cố']
+faq:
+  - q: 'Vì sao nút Blocknet đã đồng bộ nhưng ví còn chậm?'
+    a: 'Nút tải và xác thực chuỗi, còn ví quét các khối đã tải để tìm đầu ra của mình. Đây là hai giai đoạn riêng. Ví khôi phục có thể vẫn quét sau khi nút đã bắt kịp. So sánh chiều cao quét với chiều cao chuỗi cục bộ trước khi xem số dư hiển thị là đầy đủ.'
+  - q: 'Lệnh sync có tải khối còn thiếu không?'
+    a: 'Trong ứng dụng dòng lệnh đã kiểm tra, sync yêu cầu ví quét những khối đã có trong core. Đồng bộ mạng là nhiệm vụ riêng của nút. Nếu chuỗi cục bộ chậm và không có peer kết nối, hãy kiểm tra kết nối trước; quét ví không tìm được thanh toán trong khối nút chưa tải.'
+  - q: 'Có nên gửi lại khi số dư chưa có khoản thanh toán?'
+    a: 'Trước hết theo ID giao dịch hiện có, xác nhận ví nhận và mạng, rồi kiểm tra quét và xác nhận. Chỉ số dư hiển thị chưa cho biết kết quả gửi. Kiểm tra bản ghi ví gốc hoặc chi trả của pool trước khi chuẩn bị khoản khác, vì gửi lần nữa là chỉ thị thanh toán mới.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Xác định giai đoạn đang làm chậm số dư ví Blocknet: nút tải chuỗi, ví quét đầu ra hay khoản thanh toán chưa thể chi tiêu. Hướng dẫn dựa trên CLI chính thức v1.2.0 và core công khai v0.22.0, kiểm tra ngày 27 tháng 10 năm 2026. Bắt đầu với ví đã tạo hoặc khôi phục; [hướng dẫn thiết lập ví](/vi/blog/blocknet-wallet-for-mining/) trình bày phần chuẩn bị.
+
+## Vì sao ví Blocknet vẫn đồng bộ?
+
+<Answer>
+Kiểm tra tiến độ chuỗi và kết nối peer của nút, rồi tiến độ quét của ví đang mở. Nút thu thập khối; ví tìm khoản thanh toán của bạn trong đó. Xác minh địa chỉ và mạng, để lần quét đang tiến triển hoàn tất, rồi so sánh lịch sử với số dư khả dụng, đang chờ và chưa xác nhận trước khi quyết định cần xử lý gì.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Khối mạng đến nút cục bộ trước khi ví quét và cập nhật bản ghi thanh toán." width="1200" height="675" loading="lazy" />
+
+## Bắt đầu với đúng ví và mạng
+
+Mở phiên mainnet hiện có từ terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Trong shell tương tác, mở ví:
+
+```text
+load
+```
+
+Chọn đúng tệp ví. Nếu đã tải nhưng bị khóa, dùng mật khẩu mở khóa tại lời nhắc của ứng dụng. Thông báo ví khóa nói về quyền truy cập, không chứng minh nút đã ngừng tải khối.
+
+Chạy riêng các lệnh sau trong shell:
+
+```text
+address
+status
+```
+
+So sánh địa chỉ với bản ghi nhận của bạn. Mainnet và testnet dùng core và ví riêng. Kiểm tra tệp đã chọn: mở ví rỗng mới không khôi phục địa chỉ cũ. Theo [hướng dẫn nút](/vi/blog/run-blocknet-node/) nếu core không chạy hoặc attach không kết nối được.
+
+## Nút chậm hay trình quét ví chậm?
+
+Trạng thái nút mô tả tiến độ chuỗi và kết nối mạng. Ví có chiều cao quét riêng. Trong [ứng dụng đã kiểm tra](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), cảnh báo số dư so sánh vị trí quét với chuỗi hoặc mục tiêu đồng bộ. Vì vậy chuỗi cục bộ đã cập nhật vẫn có thể đi cùng số dư ví đang bắt kịp. Đọc cả hai giai đoạn thay vì dựa vào một từ trạng thái.
+
+Kiểm tra đầu ra của ví:
+
+```text
+outputs
+```
+
+Khi không có đầu ra khớp và quét còn chậm, ứng dụng báo chiều cao quét so với chiều cao chuỗi. So sánh lần đọc sau với trước. Chiều cao tăng cho thấy tiến triển; một danh sách rỗng chưa đủ kết luận mất thanh toán. Ghi chiều cao và thời điểm quan sát để so sánh hữu ích.
+
+## Kiểm tra kết nối khi chuỗi cục bộ chậm
+
+Nếu chính nút còn chậm, xem các peer kết nối:
+
+```text
+peers
+```
+
+Không có peer thì kiểm tra Internet của máy và tường lửa dành cho nút. Dùng [tài liệu khắc phục chính thức](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) cùng hướng dẫn nút. Theo dõi chiều cao chuỗi theo thời gian ngoài số peer: có kết nối và tải xong chuỗi trả lời hai câu hỏi khác nhau.
+
+Tách việc khởi động nút và quét ví trong ghi chú. Nếu nút mới đang tải lịch sử, để giai đoạn đó tiến triển trước khi đánh giá ví đã quét khoản thanh toán mới hơn chưa. [Hướng dẫn checkpoint](https://bntpool.com/blog/vi/blocknet-checkpoints-fast-sync/) giải thích cách đồng bộ nhanh hiện có. Liên tục tạo ví hoặc xóa dữ liệu chuỗi không giúp nhận ra giai đoạn đang tiến triển.
+
+## Khi nào nên chạy sync của ví?
+
+Dùng lệnh quét khi đúng ví đã mở và bản ghi đầu ra cần bắt kịp khối đã tải:
+
+```text
+sync
+```
+
+[Tài liệu shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) mô tả đây là quét khối cục bộ để tìm đầu ra thuộc ví. Đó là thao tác ví, riêng với lấy khối từ peer. Cho quét thời gian chạy trước khi kiểm tra lại cùng chỉ số.
+
+Lệnh báo chiều cao quét và đầu ra tìm thấy, hoặc ví đã cập nhật. Kiểm tra lại đầu ra và số dư sau khi xong. Nếu ứng dụng báo hết thời gian chờ, xem tiến độ hiện tại trước khi chạy lại; riêng timeout phía ứng dụng không nói lên vị trí cuối của trình quét. Giữ tệp ví gốc và bản sao khôi phục khi chẩn đoán.
+
+## Theo dõi một khoản thanh toán qua bản ghi
+
+Dùng ID đầy đủ từ lịch sử người gửi hoặc bản ghi chi trả đã gửi của pool. [Hướng dẫn trình khám phá](/vi/blog/blocknet-explorer-guide/) chỉ cách xem trạng thái mạng và khối chứa. Bản ghi công khai cho biết giao dịch nằm ở đâu; ví nhận xác định đầu ra riêng tư của mình. So sánh thông tin nhận với bản ghi của bạn thay vì mong có trang số dư địa chỉ công khai.
+
+Sau đó kiểm tra bản ghi của ví:
+
+```text
+history
+balance
+```
+
+Số tiền đang chờ hoặc chưa xác nhận khác tiền khả dụng. Nếu nằm trong một loại đó, theo dõi xác nhận thay vì coi là không có. Với tiền đào, [hướng dẫn từ pool tới ví](https://bntpool.com/blog/vi/pool-payout-missing-from-wallet/) phân biệt số dư pool chưa trả, khoản chi trả thực tế và khoản ví nhận.
+
+## Quét xong nhưng số tiền vẫn khác?
+
+Kiểm tra đồng thời tệp ví, địa chỉ nhận đầy đủ, mạng và ID. Xác nhận đang so cùng khoản thanh toán và loại số dư. Nếu là ví chỉ xem, dùng để theo dõi tiền vào và dùng ví đầy đủ để quyết định chi tiêu; [hướng dẫn ví chỉ xem](/vi/blog/blocknet-view-only-wallet/) giải thích phân chia này. Quét xong không thay đổi loại ví.
+
+Nếu đúng ví đầy đủ đã cập nhật nhưng bản ghi vẫn không khớp, giữ tệp và bản sao trước khi theo quy trình khôi phục chính thức. [Hướng dẫn seed](/vi/blog/seed-phrase-explained/) giải thích dữ liệu khôi phục; hướng dẫn thiết lập chứa bước nhập. Khôi phục được thực hiện trong phần mềm ví. Không bao giờ đưa seed, khóa riêng, tệp ví hay mật khẩu vào bài hỗ trợ công khai.
+
+## Ghi ngắn gọn những gì đã xác minh
+
+Để theo dõi tiếp, ghi phiên bản ứng dụng và core, mạng, chiều cao nút, chiều cao quét, số peer và nguyên văn lỗi. Ghi xem giá trị có tăng giữa các lần quan sát không. Nếu chia sẻ nhật ký, xóa đường dẫn riêng, thông tin thanh toán và thông tin đăng nhập không cần thiết. Bản ghi ngắn giúp mô tả giai đoạn cần xử lý mà không lộ quyền truy cập ví.
+
+Sau kiểm tra có mục tiêu, quay lại lịch sử và số dư cùng ví. Kết quả hữu ích là khoản thanh toán dự kiến hiện với trạng thái thực tế hiện tại và phần quét liên quan đã bắt kịp. [Hướng dẫn gửi và nhận](/vi/blog/send-receive-blocknet/) nối kiểm tra nhận cuối này với quy trình ban đầu. Giữ ID để các lần kiểm tra sau theo cùng thao tác.
+
+<CTA target="seine" title="Kết nối phần thưởng đào với ví" text="Dùng hướng dẫn seine để thiết lập đào, rồi theo chi trả của pool qua bản ghi nhận trong ví." />

@@ -1,0 +1,96 @@
+---
+title: 'Cómo respaldar, restaurar y trasladar una cartera Blocknet'
+description: 'Crea una copia de tu cartera Blocknet, recupérala con la semilla o traslada el archivo a otro equipo. Comprueba la dirección y el escaneo antes de retirar la copia anterior.'
+tags: ['Blocknet', 'Cartera', 'Recuperación']
+faq:
+  - q: '¿Puedo recuperar una cartera Blocknet si olvido la contraseña?'
+    a: 'Si la cartera se creó con una semilla, importa la semilla de recuperación guardada con un nombre nuevo y establece otra contraseña. El archivo cifrado anterior conserva su contraseña. Compara la dirección restaurada con tus registros y deja que el nodo y el escaneo de la cartera se actualicen antes de comprobar el saldo.'
+  - q: '¿Cambia la dirección de recepción al trasladar mi cartera Blocknet?'
+    a: 'Cargar una copia del mismo archivo de cartera o importar correctamente su semilla original conserva la dirección. Compara la dirección completa del destino con un registro anterior fiable. Crear una cartera completamente nueva es una operación diferente y proporciona una dirección nueva para futuros pagos.'
+  - q: '¿Basta una cartera de solo lectura para recuperar la capacidad de gastar?'
+    a: 'Una cartera de solo lectura permite consultar los pagos entrantes en otro equipo. Para recuperar la capacidad de gastar, utiliza el archivo de la cartera completa con su contraseña o el material de recuperación de esa cartera. Conserva la copia original de la cartera completa y comprueba qué tipo de cartera has cargado.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Haz una copia de tu cartera Blocknet antes de cambiar de equipo y restaura la misma dirección mediante el archivo de cartera o la semilla de recuperación. Esta guía sigue el CLI oficial v1.2.0 y core v0.22.0, comprobados el 27 de octubre de 2026. Separa la creación de la copia, su apertura en otro equipo y la verificación de que la recuperación ha terminado.
+
+## ¿Cómo se respalda y restaura una cartera Blocknet?
+
+<Answer>
+Guarda la semilla de recuperación sin conexión y una copia separada del archivo de la cartera completa. En el equipo de destino, carga ese archivo con su contraseña o importa la semilla original en un archivo nuevo. Compara la dirección de recepción completa, deja que el nodo y el escaneo se actualicen y verifica tus registros antes de retirar la copia anterior.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Una cartera y su copia protegida se trasladan a otro equipo, donde se comprueban la dirección restaurada y el progreso del escaneo." width="1200" height="675" loading="lazy" />
+
+## Elige la vía de recuperación para la que tienes los datos
+
+El archivo de respaldo y la semilla de recuperación cumplen funciones distintas. El archivo `.wallet.dat` contiene las claves y el estado guardado de la cartera; una copia protegida con contraseña necesita esa contraseña para abrirse. La semilla puede recrear las claves de una cartera basada en semilla en un archivo nuevo con otra contraseña. Conserva ambos elementos cuando estén disponibles y guarda por separado tus registros privados de pagos para compararlos después.
+
+Este procedimiento se refiere a una cartera completa existente. Para crearla por primera vez, consulta la [guía de configuración](/es/blog/blocknet-wallet-for-mining/). Para observar pagos en otro equipo sin capacidad de gastar, utiliza la [guía de solo lectura](/es/blog/blocknet-view-only-wallet/). Una dirección pública de recepción no basta para restaurar una cartera. Antes de elegir los pasos siguientes, identifica si tienes el archivo completo, su contraseña y la semilla original.
+
+## Prepara la cartera original y el registro de recuperación
+
+Conéctate desde un terminal a tu core de mainnet en ejecución:
+
+```sh
+blocknet attach mainnet
+```
+
+En la consola interactiva, carga la cartera prevista y anota su dirección pública completa:
+
+```text
+load
+address
+```
+
+Selecciona la entrada de la cartera existente en el menú. Si hay otra cargada, ejecuta `unload` antes de elegir la correcta. Guarda la dirección en tus notas privadas del traslado junto con la red y el nombre del archivo.
+
+En una cartera basada en semilla, ejecuta `seed` en la consola, confirma la solicitud e introduce la contraseña. Escribe las palabras devueltas en el orden exacto y guárdalas sin conexión. Hazlo sin compartir ni grabar la pantalla; la [guía de semillas](/es/blog/seed-phrase-explained/) explica cómo proteger ese registro. Si el cliente indica que no hay semilla disponible, conserva el archivo completo y la contraseña y sigue la vía de copia de archivo. No presupongas que todas las carteras antiguas o importadas mediante claves tienen semilla.
+
+## Crea una copia separada del archivo de cartera
+
+Localiza el archivo que realmente utiliza el core. La carpeta predeterminada es `~/.config/bnt/wallets/`; en Windows es `C:\Users\<you>\.config\bnt\wallets\`. La carpeta que contiene el `wallet_file` configurado puede ser diferente. Consulta la ruta que muestra el cliente oficial y la [referencia de gestión de carteras](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), especialmente si varios archivos tienen nombres similares. Confirma el archivo previsto antes de copiar nada.
+
+Tras anotar la dirección, ejecuta `unload` y espera a que termine correctamente antes de copiar el archivo. Deja el original donde está y guarda una copia fechada en otro soporte que controles. Mantén la extensión `.wallet.dat` y protege la copia y la contraseña. El cliente puede crear un respaldo local al cargar desde otra carpeta, pero no sobrescribe uno existente con el mismo nombre. Comprueba tu propia copia guardada en lugar de dar por hecho que el respaldo local está actualizado.
+
+## ¿Cómo se traslada la cartera a otro equipo?
+
+Instala el [cliente oficial](https://github.com/blocknetprivacy/blocknet/releases/latest) y prepara un core de mainnet siguiendo la [guía del nodo](/es/blog/run-blocknet-node/). Transfiere una copia del archivo completo mediante un soporte que controles a la carpeta de carteras del core de destino. Conserva los archivos ajenos que ya existan allí; utiliza un nombre distinto si es necesario. En el cliente revisado, `load` lee de esa carpeta, incluso cuando se introduce una ruta personalizada.
+
+Conéctate en el destino, ejecuta `load`, selecciona el archivo copiado e introduce su contraseña actual. Si no aparece en el menú, comprueba qué carpeta utiliza el core de destino y dónde lo copiaste. Elige el archivo existente en vez de la opción de crear una cartera nueva. Copiar el mismo archivo restaura el acceso a las mismas claves; no envía monedas ni crea un segundo saldo.
+
+## Restaura con la semilla de recuperación original
+
+Si recuperas una cartera porque perdiste el archivo u olvidaste la contraseña, utiliza la semilla guardada en el cliente oficial de tu equipo de destino de confianza. Conéctate al core de mainnet previsto y descarga antes cualquier otra cartera. Inicia la recuperación en la consola interactiva:
+
+```text
+import
+```
+
+Selecciona la opción 1 para la semilla de recuperación de 12 palabras. Introduce tus palabras originales en orden; nunca utilices palabras de ejemplo de una guía ni pegues la semilla en una web.
+
+Elige un nombre nuevo que no esté en uso y establece y confirma una contraseña nueva cuando se solicite. La [implementación de importación revisada](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) crea la cartera a partir de esos datos e informa de su dirección. El archivo cifrado original conserva su contraseña anterior. Mantén ese archivo y el respaldo mientras compruebas la cartera importada y protege también el archivo recién creado.
+
+## Comprueba la dirección, la cadena y el escaneo
+
+Después de cargar o importar, inspecciona la cartera de destino:
+
+```text
+address
+status
+balance
+history
+```
+
+Compara la dirección completa con el registro guardado. Esta comprobación identifica la cartera antes de que te fíes del saldo mostrado. Si es distinta, detén el traslado y revisa el archivo seleccionado, las palabras de recuperación y la red. Mantén intacto el respaldo original mientras resuelves la diferencia.
+
+Deja que se actualicen tanto la descarga de la cadena del nodo como el escaneo de salidas de la cartera. Una cartera recién importada debe encontrar sus salidas en la cadena; un saldo inicial no constituye la comprobación final. Compara el saldo disponible y los registros de entradas al terminar el escaneo. Conserva tus notas de pagos y el archivo original para los detalles históricos. La [guía de sincronización](/es/blog/blocknet-wallet-not-syncing/) explica qué indicadores consultar y cuándo corresponde volver a escanear.
+
+## Finaliza el traslado después de verificarlo
+
+Guarda una copia protegida de la cartera de destino verificada y conserva la semilla sin conexión. Anota qué equipo contiene ahora la cartera completa activa y qué copias son respaldos. Una copia antigua conserva el mismo acceso a las claves; trasladar un archivo no lo revoca. Al retirar un dispositivo, aplica tu procedimiento habitual de eliminación segura del almacenamiento después de confirmar que el respaldo funciona.
+
+Si la dirección restaurada coincide, puedes mantener el destino actual de los pagos de minería. Compara el [registro de pagos del pool](https://bntpool.com/blog/es/track-your-miner-on-bntpool/) con el historial de entradas de la cartera para verificar los ingresos mineros. Si decides crear una cartera diferente, se trata de un cambio de dirección y no de una restauración. Termina de verificar la cartera restaurada antes de modificar por separado la configuración del minero.
+
+<CTA target="seine" title="Mina hacia tu dirección Blocknet verificada" text="Sigue las guías de seine para conectar tu minero y guarda los respaldos de la cartera en un soporte que controles." />

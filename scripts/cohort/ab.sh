@@ -17,7 +17,10 @@ KEY=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['key'])" "
 PROVIDER=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('provider', 'cherry'))" "$LEASE")
 TOOL=$HERE/$PROVIDER.py
 mkdir -p "$OUT"
+# Delete on completion or error. A signal (e.g. an interrupted agent turn) keeps
+# the lease so the remote job can finish; its systemd timer still deletes it.
 trap 'python3 "$TOOL" down "$NAME" || echo "DELETE FAILED for $NAME" >&2' EXIT
+trap 'trap - EXIT; echo "interrupted: keeping $NAME for its timer" >&2; exit 130' INT TERM HUP
 
 IP=$(python3 "$TOOL" ip "$NAME")
 echo "$NAME at $IP"

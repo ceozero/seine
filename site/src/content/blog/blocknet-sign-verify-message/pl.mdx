@@ -1,0 +1,93 @@
+---
+title: 'Podpisywanie i weryfikacja wiadomości portfelem Blocknet'
+description: 'Podpisz wiadomość Blocknet, by wykazać kontrolę nad adresem. Sprawdź dokładny tekst i podpis, użyj świeżego wyzwania i poprawnie zinterpretuj wynik weryfikacji.'
+tags: ['Blocknet', 'Portfel', 'Podpisy']
+faq:
+  - q: 'Czy podpisanie wiadomości Blocknet wysyła monety?'
+    a: 'Sprawdzony endpoint podpisuje tekst kluczem wydawania portfela i zwraca podpis. Nie tworzy ani nie rozgłasza płatności. Weryfikujący potrzebuje adresu, dokładnej wiadomości i podpisu. Przeczytaj uważnie żądany tekst, ponieważ usługa może użyć podpisu do zatwierdzenia własnej operacji.'
+  - q: 'Czy mogę zweryfikować podpis bez otwierania portfela?'
+    a: 'Tak. Polecenie verify oficjalnej powłoki wywołuje publiczny endpoint weryfikacji, który nie wymaga załadowanego portfela. Potrzebne są działający zgodny core, pełny adres, dokładna wiadomość i podpis. Weryfikacja sprawdza tę kombinację bez pytania o seed, hasło czy klucze prywatne podpisującego.'
+  - q: 'Co dowodzi poprawny podpis wiadomości Blocknet?'
+    a: 'Potwierdza, że wiadomość weryfikuje się z publicznym kluczem wydawania w podanym adresie. Użyj uzgodnionego świeżego wyzwania, gdy potrzebujesz dowodu aktualnej kontroli. Nie potwierdza tożsamości prawnej, salda ani zakończonej płatności; stary poprawny podpis można przedstawić ponownie.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Użyj podpisu wiadomości Blocknet, by wykazać kontrolę nad adresem bez wykonywania płatności. Poradnik opiera się na oficjalnym CLI v1.2.0 i core v0.22.0, sprawdzonych 27 października 2026 r. Przygotujesz jednoznaczne wyzwanie, podpiszesz je we właściwym portfelu i sprawdzisz razem pełny adres, wiadomość oraz podpis.
+
+## Jak podpisać i zweryfikować wiadomość Blocknet?
+
+<Answer>
+Załaduj pełny portfel, potwierdź adres i podpisz uzgodniony tekst poleceniem sign. Przekaż adres, dokładną wiadomość i uzyskany podpis weryfikującemu. Użyje on verify do sprawdzenia trzech wartości, a następnie potwierdzi zgodność wiadomości z celem i świeżym wyzwaniem, o które poprosił.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Portfel podpisuje uzgodnioną wiadomość, a inna osoba sprawdza ją razem z adresem i podpisem." width="1200" height="675" loading="lazy" />
+
+## Uzgodnij znaczenie podpisywanej wiadomości
+
+Zacznij od konkretnej prośby: który adres ma wykazać kontrolę, wobec kogo i dla jakiej operacji? [Dowód płatności](/pl/blog/blocknet-payment-proof/) potwierdza szczegóły transakcji. Podpis wiadomości służy do wykazania kontroli nad kluczem podpisującym, na przykład przy potwierdzaniu adresu dla konta. [Poradnik portfela](/pl/blog/blocknet-wallet-for-mining/) opisuje tworzenie i otwieranie portfela, który podpisze tekst.
+
+Poproś weryfikującego o świeże, nieprzewidywalne wyzwanie dla tego żądania. Dodaj kontekst identyfikujący usługę lub odbiorcę i zamierzoną operację; uzgodnij termin ważności, jeśli proces go potrzebuje. To reguły aplikacji: sprawdzanie podpisu nie wymusza automatycznie świeżości, wygaśnięcia ani jednorazowości. Weryfikujący musi porównać wiadomość z żądaniem i zapisać wykorzystanie wyzwania.
+
+## Otwórz właściwy pełny portfel
+
+Połącz się z działającym core sieci mainnet z terminala:
+
+```sh
+blocknet attach mainnet
+```
+
+W interaktywnej powłoce załaduj portfel i sprawdź adres:
+
+```text
+load
+address
+```
+
+Wybierz właściwy plik i odblokuj portfel przez klienta, jeśli zostaniesz o to poproszony. Porównaj pełny adres z oczekiwanym przez weryfikującego, także gdy przechowujesz kilka plików portfela na jednym komputerze.
+
+[Sprawdzony core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) podpisuje wiadomości prywatnym kluczem wydawania portfela. [Portfel tylko do podglądu](/pl/blog/blocknet-view-only-wallet/) nie może tego zrobić. Zachowaj pełny portfel na przeznaczonym komputerze; weryfikujący potrzebuje tylko podpisu i danych publicznych. Podpisanie nie wymaga wysłania środków ani eksportowania pliku portfela.
+
+## Przygotuj dokładny tekst przed podpisaniem
+
+Przeczytaj całe żądanie i upewnij się, że akceptujesz jego cel. Oficjalny klient czyta jeden wiersz, usuwa białe znaki na początku i końcu oraz odrzuca pustą wiadomość lub tekst dłuższy niż 1024 bajty. Limit dotyczy bajtów, więc znaki spoza ASCII mogą zajmować kilka. Użyj krótkiego, jednoznacznego wiersza i zachowaj dokładnie wysłany tekst.
+
+Zachowaj wielkość liter, interpunkcję i wewnętrzne spacje podczas przekazywania tekstu. Edytor lub komunikator może zamienić cudzysłowy albo zmienić skopiowany tekst; porównaj rzeczywistą wiadomość, jeśli weryfikacja się nie powiedzie. Dla logowania lub operacji na koncie przestrzegaj formatu wyzwania udokumentowanego przez usługę. Nie przeredagowuj tekstu bez uzgodnienia, ponieważ sprawdzane ma być konkretne wydane wyzwanie.
+
+## Podpisz wiadomość w oficjalnej powłoce
+
+Uruchom polecenie w interaktywnej powłoce:
+
+```text
+sign
+```
+
+Klient poprosi o tekst. Wklej uzgodnioną wiadomość w jednym wierszu i naciśnij Enter. Po sukcesie wypisze podpis szesnastkowy. Skopiuj cały wynik, zachowując każdy znak. [Implementacja klienta](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) wysyła tekst do endpointu podpisywania portfela; operacja nie tworzy ani nie rozgłasza transakcji.
+
+Przekaż pełny adres, dokładną wiadomość i podpis jako osobne wartości. Wyraźnie je opisz, by nie pomylić podpisu z tekstem lub adresem. Zachowaj w tajemnicy frazę odzyskiwania, klucze prywatne i hasło portfela. [Poradnik frazy seed](/pl/blog/seed-phrase-explained/) wyjaśnia dane odzyskiwania; nie należą one do materiałów przekazywanych do sprawdzenia podpisu.
+
+## Jak druga osoba weryfikuje podpis?
+
+Używa polecenia weryfikacji oficjalnej powłoki z działającym zgodnym core:
+
+```text
+verify
+```
+
+Wprowadź najpierw pełny adres, potem dokładną wiadomość, następnie podpis szesnastkowy. [Dokumentacja powłoki](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) opisuje tę kolejność. Portfel nie musi być załadowany, więc można sprawdzić dowód bez importowania portfela podpisującego i bez obsługi kluczy prywatnych.
+
+Sprawdzony klient pokazuje `Signature is VALID`, gdy zestaw jest poprawny, lub `Signature is INVALID`, gdy nie jest. Błąd formatu danych to odrębny wynik: sprawdź wszystkie pola i zachowaj oryginalne materiały przed ponowną próbą. Jeżeli wiadomość lub adres różni się od oczekiwanego żądania, wyjaśnij różnicę nawet wtedy, gdy podpis jest matematycznie poprawny dla podanych wartości.
+
+## Interpretuj sukces w kontekście żądania
+
+Poprawny podpis weryfikuje wiadomość z publicznym kluczem wydawania zakodowanym w podanym adresie. Nie potwierdza tożsamości prawnej, nie pokazuje salda i nie dowodzi płatności. W sprawach płatności użyj [rejestru wysyłki](/pl/blog/send-receive-blocknet/), [wyszukiwania w eksploratorze](/pl/blog/blocknet-explorer-guide/) i dowodu konkretnej transakcji. Dobieraj dowody do rzeczywistego pytania zamiast traktować każdy poprawny podpis jako potwierdzenie zapłaty.
+
+Przed akceptacją sprawdź świeżość wyzwania i właściwego odbiorcę. Ktoś może skopiować poprawną wiadomość wraz z podpisem i ponownie przedstawić tę samą parę. Usługa potrzebująca jednorazowej autoryzacji musi sama wymusić tę zasadę. Termin ważności zapisany w tekście ma znaczenie tylko wtedy, gdy jest sprawdzany. Te kontrole łączą poprawność kryptograficzną z uzgodnioną operacją.
+
+## Zachowaj czytelny zapis weryfikacji
+
+Przechowuj razem adres, dokładną wiadomość, podpis, kontekst żądania i wynik, jeśli potrzebujesz śladu audytowego. Zapisuj czas kontroli osobno od daty wpisanej przez podpisującego. Unikaj niezwiązanych danych osobowych w wiadomości, bo każdy jej odbiorca może ją przeczytać i skopiować. Przekaż dowód właściwemu weryfikującemu uzgodnionym kanałem.
+
+Jeśli portfel odbiera wypłaty z kopania, [monitorowanie puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) nadal dostarcza rejestry udziałów i wypłat; podpis wiadomości ich nie zastępuje. [Poradnik węzła](/pl/blog/run-blocknet-node/) opisuje core potrzebny oficjalnej powłoce. Po uzgodnionej kontroli zachowaj możliwość podpisywania w pełnym portfelu i udostępniaj publiczną weryfikację osobom sprawdzającym wynik.
+
+<CTA target="seine" title="Używaj swojego adresu Blocknet z seine" text="Skorzystaj z poradników konfiguracji seine, aby kopać na swój adres i uporządkować zapisy podpisów oraz płatności." />

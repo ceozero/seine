@@ -1,0 +1,102 @@
+---
+title: 'Cách chứng minh và xác minh thanh toán Blocknet'
+description: 'Xác minh thanh toán Blocknet bằng khóa giao dịch và địa chỉ nhận. Tạo bằng chứng, kiểm tra đầu ra khớp và hiểu kết quả thực sự xác lập điều gì.'
+tags: ['Blocknet', 'Thanh toán', 'Ví']
+faq:
+  - q: 'Cần gì để xác minh bằng chứng thanh toán Blocknet?'
+    a: 'Bạn cần ID giao dịch đầy đủ, khóa giao dịch do ví gửi cung cấp và địa chỉ đầy đủ của người nhận. Gửi các trường này đến endpoint xác minh của nút tương thích. Kiểm tra cả kết quả xác thực khóa lẫn đầu ra khớp địa chỉ, rồi so sánh số tiền với bản ghi thanh toán.'
+  - q: 'Bằng chứng hợp lệ có nghĩa người nhận đã được trả không?'
+    a: 'Kết quả hợp lệ xác lập khóa cung cấp thuộc giao dịch. Bạn còn phải xem đầu ra khớp địa chỉ nhận. Khóa hợp lệ không có đầu ra khớp không chứng minh thanh toán cho địa chỉ đó. Kiểm tra số tiền, đồng thời kiểm tra riêng việc vào chuỗi và xác nhận.'
+  - q: 'Ví chỉ xem Blocknet có thể tạo bằng chứng không?'
+    a: 'Core đã kiểm tra suy ra bằng chứng bằng dữ liệu xem riêng tư của ví, nên ví chỉ xem tương ứng có thể tạo bằng chứng cho giao dịch ví đó đã gửi. Giao dịch phải có trên chuỗi cục bộ và khóa suy ra phải khớp. Điều này không cấp quyền chi tiêu cho ví chỉ xem.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Xác minh một khoản thanh toán Blocknet cụ thể bằng cách đối chiếu khóa giao dịch và địa chỉ nhận với giao dịch. Hướng dẫn dựa trên CLI chính thức v1.2.0 và core v0.22.0, kiểm tra ngày 27 tháng 10 năm 2026. Nội dung gồm tạo bằng chứng, chia sẻ đúng trường và đọc kết quả cùng trạng thái trên chuỗi.
+
+## Chứng minh thanh toán Blocknet thế nào?
+
+<Answer>
+Mở ví gửi, chạy prove với ID rồi cung cấp khóa giao dịch nhận được cho người xác minh dự kiến. Việc xác minh dùng khóa, ID và địa chỉ nhận. Xác nhận khóa hợp lệ rồi xem đầu ra khớp và số tiền cho địa chỉ đó.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Bản ghi và khóa giao dịch được kiểm tra theo địa chỉ nhận để tìm đầu ra thanh toán khớp." width="1200" height="675" loading="lazy" />
+
+## Bắt đầu với khoản thanh toán cần chứng minh
+
+Lưu ID đầy đủ từ bản ghi gửi. [Hướng dẫn gửi](/vi/blog/send-receive-blocknet/) chỉ nơi ứng dụng chính thức in ID, còn [hướng dẫn trình khám phá](/vi/blog/blocknet-explorer-guide/) chỉ cách tìm giao dịch và khối chứa. ID công khai định vị chuyển tiền, nhưng trang thông thường không tiết lộ số tiền riêng tư trả cho địa chỉ cụ thể.
+
+Thống nhất địa chỉ và bản ghi cần kiểm tra. Dùng địa chỉ đầy đủ gắn với thanh toán thay vì nhãn rút gọn hoặc ảnh. Nếu trả bằng tên, giữ địa chỉ thực tế đã dùng. Bằng chứng giúp kiểm tra một khoản nhận hoặc giải quyết thắc mắc với người nhận; nó không xác lập danh tính ngoài đời.
+
+## Tạo khóa giao dịch trong ví gửi
+
+Kết nối core mainnet đang chạy từ terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Mở ví gửi và xem bản ghi trong shell tương tác:
+
+```text
+load
+address
+history
+```
+
+Chọn đúng tệp và mở khóa qua ứng dụng nếu cần. Với thiết lập ban đầu, xem [hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/).
+
+Chạy trong shell, thay chỗ giữ bằng ID đầy đủ:
+
+```text
+prove <txid>
+```
+
+[Ứng dụng đã kiểm tra](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) nhận ID thập lục phân 64 ký tự và hiện khóa trả về. Core tìm giao dịch trên chuỗi cục bộ và kiểm tra khóa suy ra khớp khóa công khai. Dùng ví đã gửi; tạo bằng chứng không tạo thêm thanh toán.
+
+## Nên chia sẻ thông tin gì?
+
+Chia sẻ ID, khóa trả về và địa chỉ nhận qua kênh đã thống nhất. Khóa này chỉ dành cho giao dịch đó. Giữ riêng seed khôi phục, khóa chi tiêu, mật khẩu và khóa xem riêng tư toàn ví. Người xác minh cần các trường bằng chứng, không cần quyền vào ví đang mở hay dữ liệu khôi phục.
+
+Đây là chủ động tiết lộ thông tin thanh toán: khóa và địa chỉ giúp xác định đầu ra khớp, số tiền và mọi ghi chú có thể khôi phục trong giao dịch. Chia sẻ với người cần bằng chứng đó. [Hướng dẫn ghi chú](/vi/blog/blocknet-encrypted-memos/) giải thích ghi chú thanh toán; cân nhắc nội dung trước khi chia sẻ. Khóa đã chia sẻ có thể bị sao chép, nên dùng kênh riêng người nhận đồng ý.
+
+## Xác minh qua API core được tài liệu hóa
+
+[API chính thức](https://blocknetcrypto.com/api) có endpoint công khai không cần ví đã tải hay bearer token. Ưu tiên nút bạn kiểm soát. Lưu mẫu thành `proof.json` trong thư mục riêng, thay cả ba chuỗi giữ chỗ bằng trường thực tế. Giữ nguyên tên trường.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Từ thư mục đó, gửi tệp đến địa chỉ API nút:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Dùng cổng cục bộ đã cấu hình nếu khác; trong Windows PowerShell dùng `curl.exe`. [Hướng dẫn nút](/vi/blog/run-blocknet-node/) trình bày cách chạy core. Yêu cầu này kiểm tra bằng chứng, không gửi coin. Dùng máy chủ từ xa sẽ tiết lộ các trường cho đơn vị vận hành.
+
+## Đọc riêng khóa hợp lệ và khớp người nhận
+
+Trước tiên xem `valid`. true nghĩa là khóa khớp khóa công khai của giao dịch. Sau đó xem `outputs`: mục có `match` bằng true thuộc địa chỉ được cung cấp. `total_matched` cộng số tiền các mục đó. Khóa hợp lệ vẫn có thể cho không đầu ra khớp nếu địa chỉ không nhận giao dịch này.
+
+API báo số tiền bằng đơn vị nguyên tử: 100.000.000 đơn vị bằng 1 BNT. Đổi tổng trước khi so với hóa đơn BNT; giữ mọi chữ số nguyên thay vì làm tròn sớm. Kiểm tra ghi chú trả về với bản ghi dự kiến. Xác minh riêng việc vào khối và xác nhận qua nút hoặc trình khám phá. Chỉ kết quả bằng chứng không cho biết hóa đơn đã trả đủ hay tiền hiện có thể chi tiêu.
+
+## Giải quyết lệch bằng bản ghi gốc
+
+Khóa không hợp lệ thì so ID đầy đủ và khóa với kết quả gốc của người gửi. Khóa hợp lệ không có mục khớp thì kiểm tra lại địa chỉ đầy đủ đã dùng. Nếu không tìm thấy giao dịch khi tạo, kiểm tra mạng và tiến độ chuỗi: endpoint đã kiểm tra yêu cầu giao dịch trên chuỗi. Theo [hướng dẫn đồng bộ](/vi/blog/blocknet-wallet-not-syncing/) khi chuỗi cục bộ chậm.
+
+Với chi trả pool, ví nhận của bạn không phải ví gửi tạo giao dịch pool. Bắt đầu từ [bản ghi theo dõi pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) và lịch sử nhận; lấy bằng chứng từ người gửi thực tế. Phần thưởng đào coinbase cũng không có bằng chứng người gửi trong endpoint tạo đã kiểm tra. Phân biệt này giúp chọn bằng chứng phù hợp khoản thanh toán.
+
+## Lưu bằng chứng cùng mục đích và kết quả
+
+Lưu cùng ID, địa chỉ nhận, tham chiếu thanh toán và kết quả trong hồ sơ riêng. Ghi mạng, nút và thời điểm kiểm tra. Chỉ giữ thông tin cần cho mục đích đó. Người nhận bằng chứng có thể tự kiểm tra lại thay vì dựa vào ảnh kết quả người khác.
+
+[Thông điệp có chữ ký](/vi/blog/blocknet-sign-verify-message/) có mục đích khác: chứng minh kiểm soát khóa ký của địa chỉ cho thông điệp cụ thể. Dùng bằng chứng thanh toán cho giao dịch và quy trình thông điệp cho thử thách quyền sở hữu đã thống nhất. [Hướng dẫn ví chỉ xem](/vi/blog/blocknet-view-only-wallet/) giải thích vì sao quyền xem vẫn nhạy cảm dù không cho phép chi tiêu. Gắn từng loại bằng chứng với câu hỏi nó trả lời.
+
+<CTA target="seine" title="Nhận và theo dõi tiền đào Blocknet" text="Theo hướng dẫn đào của seine, lưu bản ghi chi trả và dùng bằng chứng ví phù hợp khi kiểm tra thanh toán." />

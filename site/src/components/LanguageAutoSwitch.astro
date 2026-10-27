@@ -1,0 +1,56 @@
+---
+// Opens English pages in the reader's language. A saved choice wins, otherwise the first
+// supported browser language decides; English or unsupported languages stay put. Choosing a
+// language in the language menu (English included) is remembered. The script runs where it's
+// placed (top of <body>), so the switch happens before the English page renders.
+import { LOCALES, localizePath } from '../i18n/locales';
+
+interface Props { path: string; english: boolean }
+const { path, english } = Astro.props;
+const targets = Object.fromEntries(
+    LOCALES.filter((l) => l.code !== 'en').map((l) => [l.code, localizePath(path, l.code)]),
+);
+---
+<script is:inline define:vars={{ targets, english }}>
+  (function () {
+    var KEY = "seine:language:preference:v1";
+    function remember(code) { try { localStorage.setItem(KEY, code); } catch (e) {} }
+    // Remember explicit picks from the language menu.
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest && e.target.closest(".langs a[hreflang]");
+      if (a) remember(a.getAttribute("hreflang"));
+      document.querySelectorAll(".langs[open]").forEach(function (menu) {
+        if (!menu.contains(e.target)) menu.open = false;
+      });
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      document.querySelectorAll(".langs[open]").forEach(function (menu) {
+        if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
+        menu.open = false;
+      });
+    });
+    if (!english) return; // Translated pages keep their language.
+    function preferred(languages) {
+      for (var i = 0; i < languages.length; i++) {
+        var n = String(languages[i]).toLowerCase();
+        for (var code in targets) if (code.toLowerCase() === n) return code;
+        var base = n.split("-")[0];
+        if (base === "en") return null;
+        if (base === "zh") return /(?:^|-)(?:hant|tw|hk|mo)(?:-|$)/.test(n) ? "zh-Hant" : "zh-Hans";
+        if (base === "pt") return "pt-BR";
+        if (targets[base]) return base;
+      }
+      return null;
+    }
+    var browser = navigator.languages || [navigator.language || ""];
+    var target = null;
+    try {
+      var saved = localStorage.getItem(KEY);
+      target = saved ? (targets[saved] ? saved : null) : preferred(browser);
+    } catch (e) {
+      target = preferred(browser); // Unreadable storage: the browser language still decides.
+    }
+    if (target && targets[target]) location.replace(targets[target] + location.search + location.hash);
+  })();
+</script>

@@ -1,0 +1,99 @@
+---
+title: 'Jak wysyłać i odbierać Blocknet'
+description: 'Wysyłaj i odbieraj Blocknet w oficjalnym portfelu: sprawdź odbiorcę i podgląd płatności, zapisz ID transakcji oraz potwierdź wpływ w historii portfela.'
+tags: ['Blocknet', 'Portfel', 'Płatności']
+faq:
+  - q: 'Co udostępnić, aby otrzymać Blocknet?'
+    a: 'Udostępnij adres odbiorczy z portfela lub swoją zweryfikowaną krótką nazwę Blocknet ID. Link płatniczy może zawierać kwotę i notatkę. Nadawca potrzebuje danych do odbioru; słowa odzyskiwania i klucze prywatne pozostają u ciebie. Potwierdź wpływ w historii własnego portfela.'
+  - q: 'Czy mogę anulować płatność Blocknet przed zatwierdzeniem?'
+    a: 'W sprawdzonym kliencie wiersza poleceń komenda wysyłania najpierw pobiera podgląd i pokazuje dane płatności. Naciśnięcie Enter lub odpowiedź przecząca na pytanie o potwierdzenie anuluje operację. Po zatwierdzonej wysyłce sprawdź zapis transakcji przed podjęciem następnej decyzji.'
+  - q: 'Dlaczego otrzymanego Blocknet nie można od razu wydać?'
+    a: 'Portfel rozróżnia środki dostępne, oczekujące i niepotwierdzone. Transakcja może pojawić się w sieci, zanim jej wyjścia będą dostępne do wydania. Sprawdź stan portfela i pozwól synchronizacji oraz skanowaniu postępować. Publiczny eksplorator pomaga sprawdzić włączenie do bloku, a portfel rozpoznaje twoje wyjścia.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Wyślij płatność Blocknet z przygotowanego portfela i prześledź ją od ekranu kontroli nadawcy do historii odbiorcy. Ten przewodnik korzysta z oficjalnego klienta wiersza poleceń v1.2.0, sprawdzonego 26 października 2026 r. Łączy adres, podgląd płatności i zapis transakcji w jedną procedurę. Jeśli musisz jeszcze utworzyć lub odtworzyć portfel, zacznij od [przewodnika konfiguracji](/pl/blog/blocknet-wallet-for-mining/).
+
+## Jak wysyłać i odbierać Blocknet?
+
+<Answer>
+Aby otrzymać Blocknet, udostępnij adres odbiorczy portfela lub zweryfikowaną krótką nazwę. Aby wysłać, wpisz odbiorcę i kwotę, sprawdź cel oraz opłatę, a następnie zatwierdź zamierzoną płatność. Zachowaj ID transakcji. Odbiorca sprawdza własną historię portfela i dostępne saldo w miarę postępu transakcji.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Nadawca sprawdza płatność, sieć zapisuje transakcję, a odbiorca przegląda historię portfela." width="1200" height="675" loading="lazy" />
+
+## Otwórz właściwy portfel przed przygotowaniem płatności
+
+Połącz się z uruchomionym core sieci mainnet przez oficjalnego klienta:
+
+```sh
+blocknet attach mainnet
+```
+
+W interaktywnym wierszu otwórz istniejący portfel poleceniem:
+
+```text
+load
+```
+
+Wybierz właściwy plik portfela i podaj hasło, gdy zostaniesz o nie poproszony. [Przewodnik węzła](/pl/blog/run-blocknet-node/) opisuje uruchamianie i sprawdzanie core działającego w tle.
+
+Sprawdź adres odbiorczy i saldo osobnymi poleceniami:
+
+```text
+address
+balance
+```
+
+Upewnij się, że używasz właściwego portfela i sieci. Przygotowując płatność wychodzącą, odczytaj kwotę dostępną do wydania. [Oficjalna dokumentacja powłoki](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) opisuje te polecenia; portfel graficzny może przedstawiać te same zadania za pomocą innych przycisków i etykiet.
+
+## Co przekazać nadawcy?
+
+Skopiuj pełny adres zwrócony przez polecenie adresu i prześlij uzgodnionym kanałem płatności. Jeśli korzystasz z [Blocknet ID](/pl/blog/blocknet-id-pay-by-name/), podaj właściwą krótką nazwę i poproś nadawcę o sprawdzenie rozpoznanego adresu. Przy nowej płatności potwierdź pisownię z odbiorcą. Rozpoznanie znajomej nazwy wyświetlanej nie zastępuje sprawdzenia rzeczywistych danych odbiorczych.
+
+[Link płatniczy](/pl/blog/blocknet-payment-links/) może zawierać żądaną kwotę i opcjonalną notatkę. Ogranicza ponowne wpisywanie, ale potem trzeba sprawdzić uzupełnione dane w portfelu. Słowa odzyskiwania i klucze prywatne nie są danymi odbiorczymi. Nie umieszczaj ich w wiadomościach, fakturach ani zrzutach ekranu. Ten krok wymaga adresu odbiorczego.
+
+## Wpisz odbiorcę i zamierzoną kwotę
+
+Poniżej znajduje się przykład składni wewnątrz attach. Zastąp symbol zapisany wielkimi literami rzeczywistym adresem odbiorcy, a przykładową kwotę — kwotą, którą chcesz zapłacić:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Symbol zastępczy nie jest adresem do wysyłania środków. Sprawdzony klient przyjmuje też krótką nazwę Blocknet ID w miejscu odbiorcy.
+
+Aby podać numer faktury lub zamówienia, dodaj notatkę według [przewodnika szyfrowanych notatek](/pl/blog/blocknet-encrypted-memos/). Najpierw sprawdź tekst wymagany przez odbiorcę. Ten pierwszy przykład dotyczy stałej kwoty; wysłanie całego salda jest osobną operacją z innym rozliczeniem opłaty. [Przewodnik opłat](/pl/blog/blocknet-transaction-fees/) wyjaśnia tę różnicę oraz powrót reszty do portfela.
+
+## Sprawdź podgląd przed zatwierdzeniem
+
+[Sprawdzony klient](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) przed wysyłką prosi o próbne wyliczenie. Pokazuje kwotę, cel, opłatę i ewentualną resztę. Przy rozpoznanej krótkiej nazwie podaje też jej adres. Jeśli wpisano notatkę, sprawdź również ją. Porównaj dane z żądaniem, które chcesz opłacić, zanim odpowiesz na pytanie.
+
+Przy `Confirm [y/N]:` wpisz `y` tylko dla płatności, którą zamierzasz wykonać. Enter lub odpowiedź przecząca anuluje podgląd. Przy zwykłym przelewie stałej kwoty suma dla odbiorcy i opłata sieciowa są odrębnymi elementami wyliczenia portfela. Używaj wartości bieżącego podglądu zamiast kopiować opłatę ze starego przykładu lub zrzutu ekranu.
+
+## Zachowaj ID transakcji po wysyłce
+
+Po udanej, zatwierdzonej wysyłce CLI pokazuje ID transakcji i link do eksploratora. Zapisz identyfikator wraz z dokumentacją płatności, aby odnaleźć tę samą transakcję. Do sprawdzania postępu jest użyteczniejszy niż przycięty zrzut komunikatu o powodzeniu. W razie potrzeby zachowaj odbiorcę, zamierzoną kwotę i numer faktury w prywatnych zapisach.
+
+Sprawdź aktywność poleceniem historii:
+
+```text
+history
+```
+
+Obecny klient łączy przychodzące wyjścia portfela z zapisanymi wysyłkami, także tymi wciąż w mempoolu. Jeśli wynik operacji jest niejasny, najpierw sprawdź istniejącą historię i identyfikator. Powtórzenie wysyłki jest nową dyspozycją płatniczą, więc ustal los pierwszej płatności przed przygotowaniem kolejnej.
+
+## Potwierdź wpływ w portfelu odbiorcy
+
+Odbiorca przegląda historię własnego załadowanego portfela i dopasowuje wpływ do omawianej transakcji. Skanowanie rozpoznaje wyjścia należące do tego portfela. Publiczna strona transakcji dostarcza danych sieciowych, a portfel odbiorczy — prywatnego obrazu płatności. [Przewodnik eksploratora](/pl/blog/blocknet-explorer-guide/) wyjaśnia odczytywanie publicznego zapisu obok tej kontroli.
+
+Ponownie sprawdzaj saldo w miarę postępu płatności. Dostępne, oczekujące i niepotwierdzone to różne stany. Odtworzony lub niedawno otwarty portfel może nadal skanować historię, mimo że węzeł jest połączony. Pozwól pracy postępować, a potem sprawdź ponownie. Dla płatności z kopania [przewodnik od puli do portfela](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/) obejmuje dodatkowy etap od zapisu wypłaty puli do wpływu.
+
+## Wypracuj powtarzalny sposób płacenia
+
+Każdą planowaną płatność zaczynaj od właściwego portfela i sieci, zweryfikuj dane odbiorcze, sprawdź aktualny podgląd i zachowaj otrzymany ID transakcji. Następnie odbiorca sprawdza historię i saldo. To obserwacje różnych etapów: zapisz etap faktycznie zweryfikowany, zamiast traktować każdy ekran powodzenia jako ostateczny odbiór.
+
+Gdy etykiety lub procedury się zmieniają, stosuj oficjalne instrukcje zainstalowanego klienta. Tutaj opisano sprawdzoną procedurę CLI; powiązane poradniki rozwijają temat nazw, notatek, opłat i skanowania. Jeśli kopiesz również na [bntpool.com](https://bntpool.com/blog/pl/mine-blocknet-on-bntpool/), używaj adresu wypłat powiązanego z portfelem, który możesz otworzyć i sprawdzić tym samym procesem odbioru.
+
+<CTA target="seine" title="Poznaj kopanie Blocknet z seine" text="Połącz seine według przewodników i odbieraj wypłaty puli w swoim portfelu Blocknet." />

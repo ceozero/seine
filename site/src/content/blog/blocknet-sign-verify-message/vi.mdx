@@ -1,0 +1,93 @@
+---
+title: 'Ký và xác minh thông điệp bằng ví Blocknet'
+description: 'Ký thông điệp Blocknet để chứng minh quyền kiểm soát địa chỉ. Kiểm tra đúng văn bản và chữ ký, dùng thử thách mới và hiểu ý nghĩa của kết quả xác minh.'
+tags: ['Blocknet', 'Ví', 'Chữ ký']
+faq:
+  - q: 'Ký thông điệp Blocknet có gửi coin không?'
+    a: 'Endpoint được kiểm tra ký văn bản bằng khóa chi tiêu của ví và trả về chữ ký. Nó không tạo hay phát giao dịch thanh toán. Người xác minh cần địa chỉ, thông điệp chính xác và chữ ký. Hãy đọc kỹ văn bản được yêu cầu vì dịch vụ có thể dùng chữ ký để cho phép hành động riêng của họ.'
+  - q: 'Tôi có thể xác minh chữ ký mà không mở ví không?'
+    a: 'Có. Lệnh verify của shell chính thức gọi endpoint xác minh công khai, không cần nạp ví. Nó cần core tương thích đang chạy, địa chỉ đầy đủ, thông điệp chính xác và chữ ký. Việc kiểm tra xác minh bộ giá trị đó mà không hỏi seed, mật khẩu hoặc khóa riêng của người ký.'
+  - q: 'Chữ ký thông điệp Blocknet hợp lệ chứng minh điều gì?'
+    a: 'Nó cho biết thông điệp xác minh được bằng khóa chi tiêu công khai trong địa chỉ đã cung cấp. Dùng thử thách mới đã thống nhất khi cần chứng minh quyền kiểm soát hiện tại. Nó không xác lập danh tính pháp lý, số dư hoặc khoản thanh toán đã hoàn tất; chữ ký cũ hợp lệ có thể được đưa ra lần nữa.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Dùng chữ ký thông điệp Blocknet để chứng minh quyền kiểm soát địa chỉ mà không thanh toán. Hướng dẫn dựa trên CLI chính thức v1.2.0 và core v0.22.0, được kiểm tra ngày 27 tháng 10 năm 2026. Bạn sẽ chuẩn bị thử thách rõ ràng, ký trong đúng ví và xác minh đồng thời địa chỉ đầy đủ, thông điệp cùng chữ ký.
+
+## Làm thế nào để ký và xác minh thông điệp Blocknet?
+
+<Answer>
+Nạp ví đầy đủ, xác nhận địa chỉ rồi dùng sign để ký văn bản đã thống nhất. Gửi địa chỉ, thông điệp chính xác và chữ ký cho người xác minh. Họ dùng verify để kiểm tra ba giá trị, sau đó xác nhận thông điệp đúng mục đích và thử thách mới mà họ đã yêu cầu.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Ví ký thông điệp đã thống nhất; một người xác minh khác kiểm tra nó cùng địa chỉ và chữ ký." width="1200" height="675" loading="lazy" />
+
+## Thống nhất ý nghĩa của thông điệp được ký
+
+Bắt đầu bằng yêu cầu cụ thể: địa chỉ nào cần chứng minh quyền kiểm soát, cho ai và để làm gì? [Bằng chứng thanh toán](/vi/blog/blocknet-payment-proof/) xác lập chi tiết của giao dịch. Chữ ký thông điệp hữu ích khi cần chứng minh quyền kiểm soát khóa ký, chẳng hạn xác nhận địa chỉ cho tài khoản. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) giải thích cách tạo và mở ví sẽ dùng để ký.
+
+Yêu cầu người xác minh cung cấp thử thách mới, khó đoán cho yêu cầu này. Thêm ngữ cảnh đủ để nhận diện dịch vụ hoặc người nhận và hành động dự kiến; thống nhất thời hạn nếu quy trình cần. Đây là quy tắc của ứng dụng: bộ kiểm tra chữ ký không tự bảo đảm tính mới, hết hạn hay chỉ dùng một lần. Người xác minh phải đối chiếu thông điệp với yêu cầu và ghi nhận lúc thử thách đã được sử dụng.
+
+## Mở đúng ví đầy đủ
+
+Kết nối từ terminal tới core mainnet đang chạy:
+
+```sh
+blocknet attach mainnet
+```
+
+Trong shell tương tác, nạp ví và kiểm tra địa chỉ:
+
+```text
+load
+address
+```
+
+Chọn đúng tệp ví và mở khóa qua ứng dụng nếu được yêu cầu. So sánh địa chỉ đầy đủ với địa chỉ người xác minh mong đợi, kể cả khi bạn giữ nhiều tệp ví trên cùng máy tính.
+
+[Core được kiểm tra](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) ký thông điệp bằng khóa chi tiêu riêng của ví. [Ví chỉ xem](/vi/blog/blocknet-view-only-wallet/) không thực hiện được thao tác này. Giữ ví đầy đủ trên máy tính dự kiến; người xác minh chỉ cần chữ ký được tạo và thông tin công khai. Bạn không cần gửi tiền hoặc xuất tệp ví để hoàn thành việc ký.
+
+## Chuẩn bị văn bản chính xác trước khi ký
+
+Đọc toàn bộ yêu cầu và chắc chắn bạn đồng ý với mục đích được nêu. Ứng dụng chính thức đọc một dòng, bỏ khoảng trắng đầu và cuối, rồi từ chối thông điệp rỗng hoặc dài hơn 1024 byte. Giới hạn tính bằng byte, nên ký tự ngoài ASCII có thể chiếm nhiều byte. Dùng dòng ngắn, rõ nghĩa và lưu đúng văn bản đã gửi.
+
+Giữ nguyên chữ hoa, dấu câu và khoảng trắng bên trong khi chuyển thông điệp. Trình soạn thảo hoặc ứng dụng chat có thể đổi dấu ngoặc kép hay sửa nội dung sao chép; hãy đối chiếu văn bản thật nếu xác minh thất bại. Với đăng nhập hoặc thao tác tài khoản, dùng định dạng thử thách được dịch vụ tài liệu hóa. Đừng tự ý viết lại văn bản vì người xác minh cần kiểm tra chính thử thách đã cấp.
+
+## Ký thông điệp trong shell chính thức
+
+Bắt đầu lời nhắc trong shell tương tác:
+
+```text
+sign
+```
+
+Ứng dụng yêu cầu nhập văn bản. Dán thông điệp một dòng đã thống nhất rồi nhấn Enter. Khi thành công, nó in chữ ký dạng thập lục phân. Sao chép toàn bộ kết quả và giữ từng ký tự. [Mã triển khai ứng dụng](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) gửi thông điệp tới endpoint ký của ví; thao tác này không tạo hay phát giao dịch.
+
+Cung cấp địa chỉ đầy đủ, thông điệp chính xác và chữ ký thành ba giá trị riêng. Gắn nhãn rõ để không nhầm chữ ký với văn bản hoặc địa chỉ. Giữ kín cụm từ khôi phục, khóa riêng và mật khẩu ví. [Hướng dẫn seed](/vi/blog/seed-phrase-explained/) giải thích dữ liệu khôi phục; không dữ liệu nào trong đó thuộc bằng chứng gửi cho người kiểm tra chữ ký.
+
+## Người khác xác minh chữ ký như thế nào?
+
+Họ dùng lời nhắc xác minh của shell chính thức với core tương thích đang chạy:
+
+```text
+verify
+```
+
+Nhập địa chỉ đầy đủ trước, rồi thông điệp chính xác, sau đó chữ ký thập lục phân. [Tài liệu shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) mô tả thứ tự này. Không cần nạp ví để xác minh, nên có thể kiểm tra mà không nhập ví của người ký hay xử lý khóa riêng.
+
+Ứng dụng được kiểm tra hiển thị `Signature is VALID` nếu bộ giá trị xác minh được và `Signature is INVALID` nếu không. Lỗi định dạng đầu vào là kết quả khác: kiểm tra lại mọi trường và giữ bằng chứng gốc trước khi thử lại. Nếu thông điệp hoặc địa chỉ khác yêu cầu dự kiến, hãy giải quyết khác biệt ngay cả khi chữ ký hợp lệ về toán học đối với các giá trị đã nhập.
+
+## Hiểu kết quả thành công trong ngữ cảnh yêu cầu
+
+Chữ ký hợp lệ xác minh thông điệp bằng khóa chi tiêu công khai được mã hóa trong địa chỉ cung cấp. Nó không xác lập danh tính pháp lý, hiển thị số dư hay chứng minh đã thanh toán. Với vấn đề thanh toán, dùng [bản ghi gửi](/vi/blog/send-receive-blocknet/), [tra cứu explorer](/vi/blog/blocknet-explorer-guide/) và bằng chứng riêng của giao dịch. Chọn bằng chứng trả lời đúng câu hỏi thay vì xem mọi chữ ký hợp lệ là biên nhận.
+
+Kiểm tra tính mới của thử thách và người nhận dự kiến trước khi chấp nhận. Ai đó có thể sao chép thông điệp cùng chữ ký hợp lệ và trình lại cặp đó. Dịch vụ cần cấp quyền một lần phải tự thực thi quy tắc này. Tương tự, thời hạn trong thông điệp chỉ có ý nghĩa nếu người xác minh kiểm tra nó. Các bước này nối tính hợp lệ mật mã với hành động đã thống nhất.
+
+## Giữ bản ghi xác minh rõ ràng
+
+Lưu cùng nhau địa chỉ, thông điệp chính xác, chữ ký, ngữ cảnh yêu cầu và kết quả nếu quy trình cần hồ sơ kiểm tra. Ghi thời điểm kiểm tra riêng với dấu thời gian do người ký viết. Tránh thông tin cá nhân không liên quan vì bất kỳ ai nhận văn bản có chữ ký đều có thể đọc và sao chép. Chia sẻ bằng chứng với đúng người xác minh qua kênh đã thống nhất.
+
+Nếu ví nhận tiền đào, [theo dõi pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) vẫn cung cấp bản ghi share và khoản chi trả; chữ ký thông điệp không thay thế chúng. [Hướng dẫn node](/vi/blog/run-blocknet-node/) trình bày core cần cho shell chính thức. Sau khi kiểm tra xong, giữ quyền ký trong ví đầy đủ và dùng xác minh công khai cho người kiểm tra kết quả.
+
+<CTA target="seine" title="Dùng địa chỉ Blocknet của bạn với seine" text="Làm theo hướng dẫn thiết lập seine để đào về địa chỉ ví và sắp xếp hồ sơ chữ ký cùng thanh toán." />

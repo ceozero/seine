@@ -1,5 +1,13 @@
 # Production collector
 
+The running collector now supports schema 7, deployed October 27 at 00:25 EDT
+from `f2d0217dbfd83e51c3b7eb2489806c0744d4acef`. See the
+[deployment receipt](../../docs/validation/collector-schema7-deployment-20261027.md).
+Its immutable build source is `/opt/seine-collector-releases/f2d0217`; the
+operational `/opt/seine` checkout and its existing alert-script modification were
+preserved. Use the retained image override recorded in that receipt for subsequent
+`up --no-build` operations. Schemas 1–6 remain accepted; no miner release was made.
+
 - Host: `root@2.31.36.180` (Hetzner, Falkenstein; 4 vCPU, 8 GB RAM, 80 GB disk).
 - OS: Ubuntu 26.04 LTS; distro Docker Engine and Compose packages.
 - Checkout: `/opt/seine`, canonical `master`.

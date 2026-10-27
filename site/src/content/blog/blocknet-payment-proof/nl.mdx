@@ -1,0 +1,102 @@
+---
+title: 'Een Blocknet-betaling bewijzen en controleren'
+description: 'Controleer een Blocknet-betaling met de transactiesleutel en het ontvangstadres. Maak het bewijs, bekijk overeenkomende uitgangen en begrijp het resultaat.'
+tags: ['Blocknet', 'Betalingen', 'Wallet']
+faq:
+  - q: 'Wat heb ik nodig om een Blocknet-betaalbewijs te controleren?'
+    a: 'Je hebt de volledige transactie-ID, de transactiesleutel van de verzendende wallet en het volledige ontvangstadres nodig. Dien die velden in bij het verificatie-eindpunt van een geschikte node. Controleer zowel de sleutelvalidatie als de uitgangen voor dat adres en vergelijk het bedrag met de betaalregistratie.'
+  - q: 'Betekent een geldig bewijs dat de ontvanger is betaald?'
+    a: 'Een geldig resultaat bewijst dat de opgegeven sleutel bij de transactie hoort. Je moet ook de overeenkomende uitgangen voor het ontvangstadres bekijken. Een geldige sleutel zonder passende uitgangen bewijst geen betaling aan dat adres. Controleer bedrag, opname in de keten en bevestigingen afzonderlijk.'
+  - q: 'Kan een alleen-lezenwallet betaalbewijzen maken?'
+    a: 'De bekeken core leidt het bewijs af met het privé-kijkmateriaal van de wallet. Een bijbehorende alleen-lezenwallet kan dus een bewijs maken voor een transactie die door die wallet is verstuurd. De transactie moet op de lokale keten staan en de afgeleide sleutel moet passen. Dit geeft de kijkwallet geen uitgavenbevoegdheid.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Controleer een specifieke Blocknet-betaling door transactiesleutel en ontvangstadres te vergelijken met de transactie. Deze handleiding volgt officiële CLI v1.2.0 en core v0.22.0, gecontroleerd op 27 oktober 2026. Ze behandelt het maken van bewijs, delen van de juiste velden en lezen van het resultaat naast de ketenstatus.
+
+## Hoe bewijs je een Blocknet-betaling?
+
+<Answer>
+Open de verzendende wallet, voer prove uit met de transactie-ID en geef de resulterende sleutel aan de bedoelde controleur. De controle gebruikt sleutel, ID en ontvangstadres. Bevestig de geldigheid van de sleutel en bekijk daarna de passende uitgangen en het bedrag voor dat adres.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Een transactierecord en transactiesleutel worden tegen een ontvangstadres gecontroleerd om passende betaaluitgangen te vinden." width="1200" height="675" loading="lazy" />
+
+## Begin bij de betaling die je wilt aantonen
+
+Bewaar de volledige ID uit je verzendregistratie. De [verzendhandleiding](/nl/blog/send-receive-blocknet/) toont waar de officiële client deze afdrukt; de [explorerhandleiding](/nl/blog/blocknet-explorer-guide/) beschrijft het vinden van de transactie en het blok. Een openbare ID lokaliseert de overboeking, maar de gewone explorerpagina onthult niet het privébedrag voor een bepaald adres.
+
+Spreek af welk ontvangstadres en welke registratie je controleert. Gebruik het volledige adres van die betaling, geen ingekort label of screenshot. Bewaar bij betalen op naam het daadwerkelijk gebruikte adres. Het bewijs helpt een specifieke ontvangst te controleren of een betaalvraag op te lossen met de ontvanger; het bewijst geen echte persoonsidentiteit.
+
+## Maak de sleutel in de verzendende wallet
+
+Verbind vanuit een terminal met je draaiende mainnetcore:
+
+```sh
+blocknet attach mainnet
+```
+
+Open de verzendende wallet en bekijk de registraties in de interactieve shell:
+
+```text
+load
+address
+history
+```
+
+Selecteer het juiste bestand en ontgrendel via de client indien nodig. Gebruik voor eerste installatie de [wallethandleiding](/nl/blog/blocknet-wallet-for-mining/).
+
+Voer dit in de shell uit en vervang de tijdelijke aanduiding door de volledige ID:
+
+```text
+prove <txid>
+```
+
+De [bekeken client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) accepteert een hexadecimale ID van 64 tekens en toont de teruggegeven sleutel. De core zoekt de transactie op zijn lokale keten en controleert of de afgeleide sleutel bij de openbare sleutel past. Gebruik de wallet die verzond; bewijs maken creëert geen nieuwe betaling.
+
+## Welke informatie deel je?
+
+Deel ID, teruggegeven sleutel en ontvangstadres via het afgesproken kanaal. De sleutel geldt specifiek voor deze transactie. Houd herstel-seed, uitgavesleutel, walletwachtwoord en de privé-kijksleutel van de hele wallet geheim. De controleur heeft bewijsvelden nodig, geen toegang tot je geladen wallet of herstelmateriaal.
+
+Zie dit als bewuste openbaarmaking van betaalinformatie: sleutel en ontvangstadres laten passende uitgangen, bedragen en eventuele herstelbare memo’s van de transactie zien. Deel met wie dit bewijs nodig heeft. De [memohandleiding](/nl/blog/blocknet-encrypted-memos/) beschrijft betaalnotities; overweeg de inhoud voordat je deelt. Een gedeelde sleutel kan worden gekopieerd, dus gebruik het afgesproken privékanaal van de ontvanger.
+
+## Controleer via de gedocumenteerde core-API
+
+De [officiële API](https://blocknetcrypto.com/api) heeft een openbaar verificatie-eindpunt zonder geladen wallet of bearertoken. Gebruik bij voorkeur een eigen node. Sla het sjabloon op als `proof.json` in een privéwerkmap en vervang alle drie tijdelijke tekenreeksen door de echte bewijsvelden. Behoud de veldnamen.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Verstuur vanuit die map het bestand naar het API-adres van je node:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Gebruik je ingestelde lokale poort als die afwijkt; gebruik in Windows PowerShell `curl.exe`. De [nodehandleiding](/nl/blog/run-blocknet-node/) behandelt het draaien van een core. Dit verzoek controleert bewijs en verstuurt geen munten. Een externe server gebruiken onthult de ingestuurde velden aan de beheerder.
+
+## Lees sleutelgeldigheid en adresmatches apart
+
+Bekijk eerst `valid`. true betekent dat de sleutel past bij de openbare transactiesleutel. Bekijk daarna `outputs`: regels met `match` op true behoren aan het opgegeven ontvangstadres. `total_matched` telt hun bedragen op. Een geldige sleutel kan nul passende uitgangen opleveren wanneer het adres deze transactie niet heeft ontvangen.
+
+De API meldt bedragen in atomaire eenheden: 100.000.000 eenheden zijn 1 BNT. Reken het totaal om voordat je vergelijkt met een BNT-factuur; behoud alle gehele cijfers zonder vroeg af te ronden. Vergelijk teruggegeven memo’s met de verwachte registratie. Controleer opname en bevestigingen apart via node of explorer. Alleen het bewijs zegt niet dat een factuur volledig betaald is of dat middelen nu besteedbaar zijn.
+
+## Los verschillen op met oorspronkelijke registraties
+
+Vergelijk bij een ongeldige sleutel volledige ID en sleutel met de oorspronkelijke uitvoer van de verzender. Controleer bij een geldige sleutel zonder matches het volledige gebruikte adres. Is de transactie tijdens bewijsgeneratie niet gevonden, controleer netwerk en ketenvoortgang: het bekeken eindpunt vereist een transactie op de keten. Volg de [synchronisatiehandleiding](/nl/blog/blocknet-wallet-not-syncing/) als de lokale keten achterloopt.
+
+Bij pooluitbetalingen is je ontvangende wallet niet de verzendende wallet van de pooltransactie. Begin met het [poolrecord](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) en je inkomende geschiedenis; vraag bewijs van de verzender aan de echte verzender. Coinbasebeloningen hebben evenmin verzenderbewijs in het bekeken generatie-eindpunt. Deze verschillen helpen passend bewijs voor de betaling te kiezen.
+
+## Bewaar het bewijs met doel en resultaat
+
+Bewaar ID, ontvangstadres, relevante betaalreferentie en verificatieresultaat samen privé. Noteer netwerk, node en controletijd. Houd alleen de betaalinformatie die voor dat doel nodig is. De ontvanger van het bewijs kan de controle zelfstandig herhalen in plaats van afgaan op een screenshot van andermans resultaat.
+
+Een [ondertekend bericht](/nl/blog/blocknet-sign-verify-message/) heeft een ander doel: controle over de ondertekeningssleutel van een adres voor een bepaald bericht aantonen. Gebruik betaalbewijs voor transacties en de berichtenprocedure voor een afgesproken eigendomstoets. De [alleen-lezenhandleiding](/nl/blog/blocknet-view-only-wallet/) legt uit waarom kijktoegang gevoelig blijft zonder uitgavenbevoegdheid. Koppel elk bewijs aan de vraag die het beantwoordt.
+
+<CTA target="seine" title="Ontvang en volg Blocknet-miningbetalingen" text="Volg de seine-mininghandleidingen, bewaar uitbetalingsregistraties en gebruik passend walletbewijs bij het controleren van een betaling." />

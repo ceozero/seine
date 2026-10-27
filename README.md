@@ -62,12 +62,13 @@ automatically. More options: [setup and configuration](docs/guides/configuration
 ## Performance
 
 <p align="center">
-  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 68.3 H/s, EPYC Zen 4 45.3, Arm server (AWS Graviton4) 39.3, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
+  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 77.1 H/s, EPYC 9554P Zen 4 75.0, Arm server (AWS Graviton4) 39.3, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
 </p>
 
-**68.3 H/s on the AMD EPYC 9355P**, measured with 64 threads and 1 GiB huge
-pages. A separate, opt-in 240 W power-cap configuration delivered **66.6 H/s at 213 W
-CPU-package power**. [AMD measurements and settings](docs/PERFORMANCE.md#amd-epyc-9355p-bare-metal).
+**77.1 H/s on the AMD EPYC 9355P** and **75.0 H/s on the EPYC 9554P**,
+measured on v0.2.39 with 64 mining threads and 1 GiB huge pages. Both results
+come from repeated runs including startup and shutdown.
+[Measurements and settings](docs/PERFORMANCE.md).
 
 Every number is a measured result from repeated runs. Results for every CPU tested,
 method and tuning: **[performance results](docs/PERFORMANCE.md)**.

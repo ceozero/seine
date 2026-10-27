@@ -1,0 +1,102 @@
+---
+title: 'Eine Blocknet-Zahlung nachweisen und prüfen'
+description: 'Prüfe eine Blocknet-Zahlung mit Transaktionsschlüssel und Empfängeradresse. Erstelle den Nachweis, prüfe passende Outputs und verstehe seine Aussage.'
+tags: ['Blocknet', 'Zahlungen', 'Wallet']
+faq:
+  - q: 'Was brauche ich zur Prüfung eines Blocknet-Zahlungsnachweises?'
+    a: 'Du brauchst die vollständige Transaktions-ID, den Transaktionsschlüssel der sendenden Wallet und die vollständige Empfängeradresse. Sende diese Felder an den Prüfendpunkt eines kompatiblen Nodes. Prüfe sowohl die Schlüsselvalidierung als auch die zur Adresse passenden Outputs und vergleiche den Betrag mit dem Zahlungsdatensatz.'
+  - q: 'Bedeutet ein gültiger Nachweis, dass der Empfänger bezahlt wurde?'
+    a: 'Ein gültiges Ergebnis belegt, dass der angegebene Schlüssel zur Transaktion gehört. Prüfe zusätzlich die passenden Outputs für die Empfängeradresse. Ein gültiger Schlüssel ohne passende Outputs belegt keine Zahlung an diese Adresse. Prüfe Betrag sowie Chain-Aufnahme und Bestätigungen getrennt.'
+  - q: 'Kann eine Blocknet-Wallet nur zur Ansicht Zahlungsnachweise erzeugen?'
+    a: 'Der geprüfte Core leitet den Nachweis aus dem privaten Ansichtsmaterial der Wallet ab. Eine entsprechende View-only-Wallet kann daher einen Nachweis für eine von dieser Wallet gesendete Transaktion erzeugen. Die Transaktion muss auf der lokalen Chain liegen und der abgeleitete Schlüssel passen. Das gibt der Ansichtswallet keine Ausgabeberechtigung.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Prüfe eine bestimmte Blocknet-Zahlung, indem du ihren Transaktionsschlüssel und die Empfängeradresse mit der Transaktion abgleichst. Diese Anleitung folgt offizieller CLI v1.2.0 und Core v0.22.0, geprüft am 27. Oktober 2026. Sie behandelt Erzeugung, Weitergabe der richtigen Felder und das Lesen des Ergebnisses zusammen mit dem Chain-Status.
+
+## Wie weist du eine Blocknet-Zahlung nach?
+
+<Answer>
+Öffne die sendende Wallet, führe prove mit der Transaktions-ID aus und gib den erhaltenen Transaktionsschlüssel an den vorgesehenen Prüfer. Die Prüfung verwendet Schlüssel, ID und Empfängeradresse. Prüfe zuerst die Gültigkeit des Schlüssels, danach passende Outputs und Betrag für diese Adresse.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Transaktionsdatensatz und Transaktionsschlüssel werden gegen eine Empfängeradresse geprüft, um passende Zahlungsausgänge zu erkennen." width="1200" height="675" loading="lazy" />
+
+## Beginne mit der nachzuweisenden Zahlung
+
+Speichere die vollständige ID aus deinem Sendedatensatz. Die [Sendeanleitung](/de/blog/send-receive-blocknet/) zeigt, wo der offizielle Client sie ausgibt; die [Explorer-Anleitung](/de/blog/blocknet-explorer-guide/) erklärt die Suche nach Transaktion und Block. Die öffentliche ID findet den Transfer, aber die gewöhnliche Explorer-Seite legt den privaten Betrag an eine bestimmte Adresse nicht offen.
+
+Vereinbart, welche Empfängeradresse und welchen Datensatz ihr prüft. Nutze die vollständige zugehörige Adresse statt eines gekürzten Labels oder Screenshots. Bei Zahlung über einen Namen behalte die tatsächlich verwendete Adresse. Der Nachweis hilft bei einer konkreten Quittung oder Zahlungsfrage mit dem Empfänger; er belegt keine reale Identität.
+
+## Transaktionsschlüssel in der sendenden Wallet erzeugen
+
+Verbinde dich im Terminal mit deinem laufenden Mainnet-Core:
+
+```sh
+blocknet attach mainnet
+```
+
+Öffne die sendende Wallet und prüfe ihre Aufzeichnungen in der interaktiven Shell:
+
+```text
+load
+address
+history
+```
+
+Wähle die richtige Datei und entsperre sie bei Bedarf über den Client. Für die Ersteinrichtung nutze die [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/).
+
+Führe den Befehl in der Shell aus und ersetze den Platzhalter durch die vollständige ID:
+
+```text
+prove <txid>
+```
+
+Der [geprüfte Client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) akzeptiert eine hexadezimale ID mit 64 Zeichen und zeigt den zurückgegebenen Transaktionsschlüssel. Der Core sucht die Transaktion auf seiner lokalen Chain und prüft, ob der abgeleitete Schlüssel zum öffentlichen Schlüssel passt. Nutze die Wallet, die gesendet hat; die Erzeugung erstellt keine weitere Zahlung.
+
+## Welche Informationen solltest du weitergeben?
+
+Teile ID, zurückgegebenen Transaktionsschlüssel und Empfängeradresse über den vereinbarten Kanal. Dieser Schlüssel gilt nur für diese Transaktion. Halte Wiederherstellungsseed, Ausgabeschlüssel, Wallet-Passwort und den privaten Ansichtsschlüssel der gesamten Wallet geheim. Der Prüfer braucht die Nachweisfelder, keinen Zugriff auf deine geladene Wallet oder ihr Wiederherstellungsmaterial.
+
+Verstehe dies als bewusste Offenlegung: Schlüssel und Empfängeradresse lassen passende Outputs, Beträge und etwaige wiederherstellbare Memos dieser Transaktion erkennen. Teile sie mit den Personen, die den Nachweis brauchen. Die [Memo-Anleitung](/de/blog/blocknet-encrypted-memos/) erklärt Zahlungsnotizen; bedenke deren Inhalt vor der Weitergabe. Ein geteilter Schlüssel kann kopiert werden, nutze daher den vereinbarten privaten Kanal des Empfängers.
+
+## Über die dokumentierte Core-API prüfen
+
+Die [offizielle API](https://blocknetcrypto.com/api) bietet einen öffentlichen Prüfendpunkt ohne geladene Wallet oder Bearer-Token. Bevorzuge einen eigenen Node. Speichere die Vorlage als `proof.json` in einem privaten Arbeitsordner und ersetze alle drei Platzhalterzeichenfolgen durch die tatsächlichen Nachweisfelder. Lass die Feldnamen unverändert.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Sende die Datei aus diesem Ordner an die API-Adresse deines Nodes:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Nutze gegebenenfalls deinen anders konfigurierten lokalen Port; verwende in Windows PowerShell `curl.exe`. Die [Node-Anleitung](/de/blog/run-blocknet-node/) erklärt den Core-Betrieb. Diese Anfrage prüft einen Nachweis und sendet keine Coins. Bei einem entfernten Server erhält dessen Betreiber die übermittelten Nachweisfelder.
+
+## Schlüsselgültigkeit und Empfängertreffer trennen
+
+Prüfe zuerst `valid`. true bedeutet, dass der Schlüssel zum öffentlichen Transaktionsschlüssel passt. Prüfe danach `outputs`: Einträge mit `match` auf true gehören zur angegebenen Empfängeradresse. `total_matched` summiert ihre Beträge. Auch ein gültiger Schlüssel kann null passende Outputs ergeben, wenn die Adresse diese Transaktion nicht empfangen hat.
+
+Die API meldet Beträge in atomaren Einheiten: 100.000.000 Einheiten entsprechen 1 BNT. Rechne die Summe vor dem Vergleich mit einer BNT-Rechnung um; behalte alle Ganzzahlziffern statt früh zu runden. Vergleiche zurückgegebene Memos mit dem erwarteten Datensatz. Prüfe Chain-Aufnahme und Bestätigungen separat über Node oder Explorer. Das Ergebnis allein sagt nicht, ob eine Rechnung vollständig bezahlt wurde oder Mittel aktuell ausgebbar sind.
+
+## Abweichungen anhand der Originaldaten klären
+
+Bei ungültigem Schlüssel vergleiche vollständige ID und Schlüssel mit der Originalausgabe des Senders. Bei gültigem Schlüssel ohne Empfängertreffer prüfe die vollständige Zahlungsadresse. Wird die Transaktion beim Erzeugen nicht gefunden, prüfe Netzwerk und Chain-Fortschritt: Der geprüfte Erzeugungsendpunkt verlangt eine On-Chain-Transaktion. Nutze die [Sync-Anleitung](/de/blog/blocknet-wallet-not-syncing/), wenn die lokale Chain zurückliegt.
+
+Bei Pool-Auszahlungen ist deine Empfangswallet nicht die sendende Wallet der Pool-Transaktion. Beginne mit dem [Pool-Datensatz](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) und deinem Eingangsverlauf; einen Sendernachweis erhältst du vom tatsächlichen Sender. Auch Coinbase-Miningbelohnungen haben im geprüften Erzeugungsendpunkt keinen Sendernachweis. Diese Unterschiede helfen, den richtigen Beleg zur Zahlung auszuwählen.
+
+## Nachweis mit Zweck und Ergebnis aufbewahren
+
+Speichere ID, Empfängeradresse, relevante Zahlungsreferenz und Prüfergebnis zusammen privat. Notiere Netzwerk, Node und Prüfzeit. Behalte nur die für diesen Zweck benötigten Zahlungsinformationen. Wer den Nachweis erhält, kann die Prüfung unabhängig wiederholen, statt einem Screenshot fremder Ergebnisse zu vertrauen.
+
+Eine [signierte Nachricht](/de/blog/blocknet-sign-verify-message/) hat einen anderen Zweck: Sie zeigt Kontrolle über den Signierschlüssel einer Adresse für eine bestimmte Nachricht. Verwende den Zahlungsnachweis für transaktionsbezogene Belege und den Nachrichtenablauf für eine vereinbarte Eigentumsprüfung. Die [View-only-Anleitung](/de/blog/blocknet-view-only-wallet/) erklärt, weshalb Ansichtszugriff trotz fehlender Ausgabeberechtigung sensibel bleibt. Ordne jeden Beleg der Frage zu, die er beantwortet.
+
+<CTA target="seine" title="Blocknet-Miningzahlungen empfangen und verfolgen" text="Folge den seine-Mininganleitungen, behalte Auszahlungsaufzeichnungen und nutze bei der Zahlungsprüfung die passenden Wallet-Nachweise." />

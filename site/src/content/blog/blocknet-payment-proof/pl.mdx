@@ -1,0 +1,102 @@
+---
+title: 'Jak udowodnić i zweryfikować płatność Blocknet'
+description: 'Zweryfikuj płatność Blocknet kluczem transakcji i adresem odbiorcy. Wygeneruj dowód, sprawdź pasujące wyjścia i poznaj znaczenie wyniku.'
+tags: ['Blocknet', 'Płatności', 'Portfel']
+faq:
+  - q: 'Czego potrzeba do weryfikacji dowodu płatności Blocknet?'
+    a: 'Potrzebujesz pełnego ID transakcji, jej klucza z portfela nadawcy i pełnego adresu odbiorcy. Prześlij te pola do endpointu weryfikacji zgodnego węzła. Sprawdź wynik walidacji klucza i wyjścia pasujące do adresu, a potem porównaj kwotę z zapisem płatności.'
+  - q: 'Czy poprawny dowód oznacza opłacenie odbiorcy?'
+    a: 'Poprawny wynik potwierdza, że podany klucz należy do transakcji. Trzeba również sprawdzić wyjścia pasujące do adresu odbiorcy. Poprawny klucz bez pasujących wyjść nie dowodzi płatności na ten adres. Sprawdź kwotę, a osobno włączenie do łańcucha i potwierdzenia.'
+  - q: 'Czy portfel Blocknet tylko do podglądu generuje dowody?'
+    a: 'Sprawdzony core wyprowadza dowód z prywatnych danych podglądu portfela, więc odpowiadający mu portfel podglądu może dowieść transakcji wysłanej przez ten portfel. Transakcja musi być w lokalnym łańcuchu, a wyprowadzony klucz musi pasować. Nie daje to portfelowi podglądu prawa wydawania.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Zweryfikuj konkretną płatność Blocknet, dopasowując klucz i adres odbiorcy do transakcji. Poradnik opiera się na oficjalnym CLI v1.2.0 i core v0.22.0, sprawdzonych 27 października 2026 r. Obejmuje generowanie dowodu, udostępnianie właściwych pól i odczyt wyniku wraz ze stanem w łańcuchu.
+
+## Jak udowodnić płatność Blocknet?
+
+<Answer>
+Otwórz portfel nadawcy, uruchom prove z ID i przekaż uzyskany klucz wybranemu weryfikatorowi. Weryfikacja używa klucza, ID i adresu odbiorcy. Potwierdź poprawność klucza, a następnie sprawdź pasujące wyjścia i kwotę dla tego adresu.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Zapis i klucz transakcji są sprawdzane względem adresu odbiorcy, aby rozpoznać pasujące wyjścia płatności." width="1200" height="675" loading="lazy" />
+
+## Zacznij od płatności do wykazania
+
+Zachowaj pełne ID z zapisu wysłania. [Poradnik wysyłania](/pl/blog/send-receive-blocknet/) pokazuje, gdzie drukuje je oficjalny klient, a [poradnik eksploratora](/pl/blog/blocknet-explorer-guide/) opisuje znalezienie transakcji i bloku. Publiczne ID lokalizuje przelew, ale zwykła strona nie ujawnia prywatnej kwoty zapłaconej konkretnemu adresowi.
+
+Uzgodnij adres i zapis, które sprawdzacie. Używaj pełnego adresu związanego z płatnością, nie skróconej etykiety ani zrzutu. Przy płatności po nazwie zachowaj faktycznie użyty adres. Dowód pomaga sprawdzić konkretny odbiór lub rozwiązać wątpliwość z odbiorcą; nie ustala rzeczywistej tożsamości osoby.
+
+## Wygeneruj klucz w portfelu nadawcy
+
+Połącz się z działającym mainnet core z terminala:
+
+```sh
+blocknet attach mainnet
+```
+
+Otwórz portfel nadawcy i sprawdź zapisy w interaktywnej powłoce:
+
+```text
+load
+address
+history
+```
+
+Wybierz właściwy plik i odblokuj go przez klienta, jeśli trzeba. Pierwszą konfigurację opisuje [poradnik portfela](/pl/blog/blocknet-wallet-for-mining/).
+
+Uruchom polecenie w powłoce, zastępując znacznik pełnym ID:
+
+```text
+prove <txid>
+```
+
+[Sprawdzony klient](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) przyjmuje szesnastkowe ID o długości 64 znaków i wyświetla zwrócony klucz. Core szuka transakcji w lokalnym łańcuchu i sprawdza zgodność klucza wyprowadzonego z publicznym. Użyj portfela, który wysłał transakcję; generowanie nie tworzy nowej płatności.
+
+## Jakie dane udostępnić?
+
+Przekaż ID, zwrócony klucz i adres odbiorcy uzgodnionym kanałem. Klucz dotyczy wyłącznie tej transakcji. Seed odzyskiwania, klucz wydawania, hasło i prywatny klucz podglądu całego portfela zachowaj w tajemnicy. Weryfikator potrzebuje pól dowodu, nie dostępu do otwartego portfela ani danych odzyskiwania.
+
+To celowe ujawnienie informacji: klucz i adres pozwalają znaleźć pasujące wyjścia, kwoty oraz możliwe do odzyskania memo transakcji. Udostępniaj osobom potrzebującym tego dowodu. [Poradnik memo](/pl/blog/blocknet-encrypted-memos/) opisuje notatki; rozważ ich treść przed udostępnieniem. Przekazany klucz można skopiować, więc używaj uzgodnionego prywatnego kanału odbiorcy.
+
+## Weryfikacja przez udokumentowane API core
+
+[Oficjalne API](https://blocknetcrypto.com/api) udostępnia publiczny endpoint bez załadowanego portfela i tokena bearer. Preferuj węzeł, który kontrolujesz. Zapisz szablon jako `proof.json` w prywatnym folderze i zastąp wszystkie trzy ciągi zastępcze rzeczywistymi polami. Nie zmieniaj nazw pól.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Z tego folderu prześlij plik na adres API węzła:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Jeśli lokalny port jest inny, użyj skonfigurowanego; w Windows PowerShell użyj `curl.exe`. [Poradnik węzła](/pl/blog/run-blocknet-node/) opisuje uruchamianie core. Żądanie sprawdza dowód, nie wysyła monet. Zdalny serwer ujawnia przesłane pola jego operatorowi.
+
+## Oddziel poprawność klucza od dopasowania odbiorcy
+
+Najpierw sprawdź `valid`. true oznacza zgodność z publicznym kluczem transakcji. Potem sprawdź `outputs`: wpisy z `match` ustawionym na true należą do podanego adresu. `total_matched` sumuje ich kwoty. Poprawny klucz może dać zero pasujących wyjść, jeśli adres nie otrzymał środków w tej transakcji.
+
+API podaje kwoty w jednostkach atomowych: 100 000 000 jednostek to 1 BNT. Przelicz sumę przed porównaniem z fakturą w BNT; zachowaj wszystkie cyfry całkowite bez przedwczesnego zaokrąglania. Porównaj zwrócone memo z oczekiwanym zapisem. Osobno sprawdź włączenie i potwierdzenia w węźle lub eksploratorze. Sam wynik nie stwierdza pełnego opłacenia faktury ani obecnej możliwości wydania środków.
+
+## Wyjaśnij rozbieżność na podstawie źródłowych zapisów
+
+Przy niepoprawnym kluczu porównaj pełne ID i klucz z oryginalnym wynikiem nadawcy. Przy poprawnym kluczu bez dopasowań sprawdź pełny adres płatności. Jeśli generowanie nie znajduje transakcji, sprawdź sieć i postęp łańcucha: badany endpoint wymaga transakcji w łańcuchu. Przy opóźnieniu skorzystaj z [poradnika synchronizacji](/pl/blog/blocknet-wallet-not-syncing/).
+
+Przy wypłatach puli Twój portfel odbiorczy nie jest nadawcą transakcji puli. Zacznij od [zapisu puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) i historii wpłat; dowód nadawcy uzyskaj od rzeczywistego nadawcy. Nagrody coinbase również nie mają dowodu nadawcy w sprawdzonym endpoincie generowania. Te różnice pomagają dobrać dowód do płatności.
+
+## Zachowaj dowód z celem i wynikiem
+
+Przechowuj razem ID, adres odbiorcy, odnośnik do płatności i wynik w prywatnych zapisach. Zanotuj sieć, węzeł i czas sprawdzenia. Zachowaj tylko dane potrzebne do tego celu. Odbiorca dowodu może samodzielnie powtórzyć kontrolę zamiast polegać na zrzucie cudzego wyniku.
+
+[Podpisana wiadomość](/pl/blog/blocknet-sign-verify-message/) ma inny cel: wykazuje kontrolę klucza podpisu adresu dla konkretnej wiadomości. Dowód płatności dotyczy transakcji, a procedura wiadomości — uzgodnionego wyzwania własności. [Poradnik podglądu](/pl/blog/blocknet-view-only-wallet/) wyjaśnia, dlaczego dostęp do odczytu pozostaje wrażliwy mimo braku prawa wydawania. Przypisz każdy dowód do pytania, na które odpowiada.
+
+<CTA target="seine" title="Odbieraj i śledź płatności za kopanie Blocknet" text="Korzystaj z poradników seine, zachowuj zapisy wypłat i używaj odpowiednich dowodów portfela przy sprawdzaniu płatności." />

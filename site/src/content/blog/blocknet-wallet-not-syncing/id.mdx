@@ -1,0 +1,112 @@
+---
+title: 'Dompet Blocknet belum sinkron atau saldonya keliru'
+description: 'Periksa dompet Blocknet yang masih sinkron: bedakan kemajuan node dan pemindaian dompet, telusuri pembayaran masuk, lalu periksa saldo setelah pemindaian.'
+tags: ['Blocknet', 'Dompet', 'Pemecahan masalah']
+faq:
+  - q: 'Mengapa node Blocknet sudah sinkron tetapi dompet tertinggal?'
+    a: 'Node mengunduh dan memvalidasi rantai, sedangkan dompet memindai blok yang telah diunduh untuk menemukan output miliknya. Keduanya tahap terpisah. Dompet yang dipulihkan dapat tetap memindai setelah node menyusul. Bandingkan tinggi pemindaian dompet dengan tinggi rantai lokal sebelum menganggap saldo yang ditampilkan lengkap.'
+  - q: 'Apakah perintah sync mengunduh blok yang belum ada?'
+    a: 'Pada klien baris perintah yang diperiksa, sync meminta dompet memindai blok yang sudah tersedia pada core-nya. Sinkronisasi jaringan adalah tugas node yang terpisah. Jika rantai lokal tertinggal dan tidak ada peer terhubung, periksa konektivitas terlebih dahulu; pemindaian dompet tidak dapat menemukan pembayaran dalam blok yang belum diunduh node.'
+  - q: 'Haruskah pembayaran dikirim ulang jika belum muncul dalam saldo?'
+    a: 'Telusuri dahulu ID transaksi yang ada, pastikan dompet penerima dan jaringan, lalu periksa pemindaian dan konfirmasinya. Saldo yang ditampilkan saja tidak menentukan hasil pengiriman. Periksa catatan dompet asal atau pembayaran pool sebelum menyiapkan pembayaran lain, karena pengiriman berikutnya merupakan instruksi baru.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Temukan tahap yang menahan pembaruan saldo dompet Blocknet: unduhan rantai node, pemindaian output dompet, atau pembayaran yang belum dapat dibelanjakan. Panduan ini mengikuti CLI resmi v1.2.0 dan core publik v0.22.0, diperiksa pada 27 Oktober 2026. Mulailah dengan dompet yang sudah dibuat atau dipulihkan; [panduan penyiapan dompet](/id/blog/blocknet-wallet-for-mining/) menjelaskan persiapannya.
+
+## Mengapa dompet Blocknet masih sinkron?
+
+<Answer>
+Periksa kemajuan rantai dan koneksi peer node, lalu kemajuan pemindaian dompet yang dimuat. Node mengumpulkan blok; dompet mencari pembayaran Anda di dalamnya. Pastikan alamat dan jaringan, biarkan pemindaian yang berjalan selesai, lalu bandingkan riwayat transaksi dengan saldo yang dapat dibelanjakan, tertunda, dan belum dikonfirmasi sebelum menentukan bagian yang perlu ditangani.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Blok jaringan tiba di node lokal sebelum dompet memindainya dan memperbarui catatan pembayaran." width="1200" height="675" loading="lazy" />
+
+## Mulai dari dompet dan jaringan yang dimaksud
+
+Buka sesi mainnet yang sudah ada melalui terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Di shell interaktif, buka dompet:
+
+```text
+load
+```
+
+Pilih berkas dompet yang diharapkan. Jika sudah dimuat tetapi terkunci, buka kuncinya dengan kata sandi melalui prompt klien. Pesan dompet terkunci menunjukkan status akses; bukan bukti bahwa node berhenti mengunduh blok.
+
+Jalankan perintah berikut secara terpisah di shell:
+
+```text
+address
+status
+```
+
+Bandingkan alamat dengan catatan penerimaan Anda. Mainnet dan testnet menggunakan core dan dompet terpisah. Periksa juga berkas yang dipilih: membuka dompet kosong baru tidak memulihkan alamat lama. Ikuti [panduan node](/id/blog/run-blocknet-node/) jika core tidak berjalan atau attach tidak dapat terhubung.
+
+## Node tertinggal atau pemindai dompet?
+
+Status node menjelaskan kemajuan rantai dan konektivitas jaringan. Dompet memiliki tinggi pemindaiannya sendiri. Pada [klien yang diperiksa](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), peringatan saldo membandingkan posisi pemindaian dengan rantai atau target sinkronisasi. Karena itu, rantai lokal yang sudah menyusul dapat berdampingan dengan saldo dompet yang masih tertinggal. Baca kedua tahap, jangan mengandalkan satu kata status.
+
+Periksa output dompet:
+
+```text
+outputs
+```
+
+Jika tidak ada output yang cocok dan pemindaian tertinggal, klien melaporkan tinggi pemindaian dibanding tinggi rantai. Bandingkan pembacaan berikutnya dengan sebelumnya. Tinggi pemindaian yang meningkat menunjukkan kemajuan; satu daftar kosong belum cukup untuk menyimpulkan pembayaran hilang. Catat tinggi dan waktu pengamatan agar perbandingan berguna.
+
+## Periksa koneksi jika rantai lokal tertinggal
+
+Jika node sendiri tertinggal, periksa peer yang terhubung:
+
+```text
+peers
+```
+
+Jika tidak ada peer, periksa koneksi internet komputer dan pengaturan firewall untuk node. Gunakan [referensi pemecahan masalah resmi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) bersama panduan node. Amati tinggi rantai sepanjang waktu serta jumlah peer: koneksi peer dan unduhan rantai yang selesai menjawab pertanyaan berbeda.
+
+Pisahkan catatan startup node dari pemindaian dompet. Jika node baru sedang mengunduh riwayat, biarkan tahap itu maju sebelum menilai apakah dompet sudah memindai pembayaran yang lebih baru. [Panduan checkpoint](https://bntpool.com/blog/id/blocknet-checkpoints-fast-sync/) menjelaskan jalur sinkronisasi cepat yang tersedia. Berulang kali membuat dompet atau menghapus data rantai tidak membantu mengenali tahap yang sedang maju.
+
+## Kapan menjalankan perintah sync dompet?
+
+Gunakan perintah pemindaian saat dompet yang dimaksud terbuka dan catatan output perlu menyusul blok yang telah diunduh:
+
+```text
+sync
+```
+
+[Referensi shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) menjelaskannya sebagai pemindaian blok lokal untuk output milik dompet. Ini operasi dompet, terpisah dari mengambil blok dari peer. Beri waktu pemindaian berjalan sebelum memeriksa pengamatan yang sama lagi.
+
+Perintah melaporkan tinggi pemindaian dan output yang ditemukan, atau bahwa dompet sudah mutakhir. Periksa kembali output dan saldo setelah selesai. Jika klien melaporkan batas waktu habis, periksa kemajuan saat ini sebelum mengulang operasi; timeout di sisi klien saja tidak memberi tahu posisi akhir pemindai. Simpan berkas dompet asli dan cadangan pemulihan selama mendiagnosis hasil.
+
+## Telusuri satu pembayaran melalui catatannya
+
+Gunakan ID transaksi lengkap dari riwayat pengirim atau catatan pembayaran terkirim pool. [Panduan explorer](/id/blog/blocknet-explorer-guide/) menunjukkan cara memeriksa status jaringan dan blok yang memuatnya. Catatan inklusi publik menunjukkan lokasi transaksi; dompet penerima mengenali output pribadinya. Bandingkan detail penerimaan dengan catatan Anda, jangan mengharapkan halaman saldo alamat pada explorer.
+
+Lalu periksa catatan dompet sendiri:
+
+```text
+history
+balance
+```
+
+Jumlah tertunda atau belum dikonfirmasi berbeda dari dana yang dapat dibelanjakan. Jika jumlah muncul di salah satu kategori itu, ikuti status konfirmasinya alih-alih menganggapnya tidak ada. Untuk hasil penambangan, [panduan pool ke dompet](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) membedakan saldo pool yang belum dibayar, pembayaran nyata, dan penerimaan dompet.
+
+## Pemindaian selesai tetapi jumlah masih berbeda?
+
+Periksa kembali berkas dompet, alamat penerima lengkap, jaringan, dan ID transaksi bersama-sama. Pastikan Anda membandingkan pembayaran dan kategori saldo yang sama. Jika ini dompet hanya-lihat, gunakan untuk memantau dana masuk dan gunakan dompet penuh untuk menentukan dana yang dapat dibelanjakan; [panduan hanya-lihat](/id/blog/blocknet-view-only-wallet/) menjelaskan pemisahannya. Pemindaian selesai tidak mengubah jenis dompet.
+
+Jika dompet penuh yang benar sudah mutakhir tetapi catatan tetap tidak cocok, simpan berkas dan cadangannya sebelum mengikuti prosedur pemulihan resmi. [Panduan seed](/id/blog/seed-phrase-explained/) menjelaskan bahan pemulihan; langkah impor ada pada panduan penyiapan. Pemulihan dilakukan dalam perangkat lunak dompet. Jangan pernah memasukkan seed, kunci privat, berkas dompet, atau kata sandi ke posting dukungan publik.
+
+## Catat singkat apa yang sudah diverifikasi
+
+Untuk tindak lanjut, catat versi klien dan core, jaringan yang dipilih, tinggi node, tinggi pemindaian, jumlah peer, dan teks kesalahan persis. Catat apakah nilai bergerak di antara pengamatan. Jika membagikan log, hapus jalur privat, detail pembayaran, dan kredensial yang tidak diperlukan. Catatan ringkas menjelaskan tahap yang perlu ditangani tanpa membuka akses dompet.
+
+Kembali ke riwayat dan saldo dompet yang sama setelah pemeriksaan terarah. Hasil yang berguna adalah pembayaran yang dimaksud terlihat dengan status aktual dan pemindaian terkait sudah menyusul. [Panduan mengirim dan menerima](/id/blog/send-receive-blocknet/) menghubungkan pemeriksaan penerimaan akhir dengan alur pembayaran awal. Simpan ID transaksi agar pemeriksaan berikutnya mengikuti operasi yang sama.
+
+<CTA target="seine" title="Hubungkan hasil penambangan ke dompet" text="Gunakan panduan seine untuk menyiapkan penambangan, lalu telusuri pembayaran pool melalui catatan penerimaan dompet." />

@@ -39,7 +39,32 @@ pub(crate) struct Recorder {
     failed: AtomicBool,
     previous_unclean: AtomicBool,
     phase: Mutex<RunPhase>,
+    shutdown_request: Mutex<Option<seine_telemetry::ShutdownRequest>>,
+    cleanup_stage: Mutex<Option<seine_telemetry::CleanupStage>>,
+    nvidia_software: Mutex<Option<seine_telemetry::NvidiaSoftware>>,
+    checkpoint_store: Mutex<Option<(Weak<Store>, String)>>,
     previous_run: Mutex<Option<PreviousRun>>,
+}
+
+/// Session-owned origin survives a stop arriving before the recorder is installed.
+#[derive(Debug, Default)]
+pub(crate) struct StopOrigin(Mutex<(Option<seine_telemetry::ShutdownRequest>, Weak<Recorder>)>);
+impl StopOrigin {
+    pub(crate) fn request(&self, reason: seine_telemetry::ShutdownRequest) {
+        let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let reason = *state.0.get_or_insert(reason);
+        if let Some(recorder) = state.1.upgrade() {
+            recorder.stop_requested(reason);
+        }
+    }
+
+    pub(crate) fn attach(&self, recorder: &Arc<Recorder>) {
+        let mut state = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        state.1 = Arc::downgrade(recorder);
+        if let Some(reason) = state.0 {
+            recorder.stop_requested(reason);
+        }
+    }
 }
 
 pub(crate) struct Guard(pub Arc<Recorder>);
@@ -66,6 +91,9 @@ pub(crate) fn context(cfg: &Config) -> Diagnostics {
     backends.sort();
     backends.dedup();
     Diagnostics {
+        shutdown_request: None,
+        cleanup_stage: None,
+        nvidia_software: None,
         phase: None,
         previous_run: None,
         build_commit: fingerprint(option_env!("SEINE_GIT_COMMIT").unwrap_or("unknown")),
@@ -105,6 +133,10 @@ pub(crate) fn install(context: Diagnostics) -> Guard {
         failed: AtomicBool::new(false),
         previous_unclean: AtomicBool::new(false),
         phase: Mutex::new(RunPhase::Starting),
+        shutdown_request: Mutex::new(None),
+        cleanup_stage: Mutex::new(None),
+        nvidia_software: Mutex::new(None),
+        checkpoint_store: Mutex::new(None),
         previous_run: Mutex::new(None),
     });
     if let Ok(mut active) = ACTIVE.lock() {
@@ -262,6 +294,42 @@ pub(crate) fn set_phase(phase: RunPhase) {
     };
     if let Some(recorder) = active.as_ref().and_then(Weak::upgrade) {
         *recorder.phase.lock().unwrap_or_else(|e| e.into_inner()) = phase;
+    }
+}
+
+// Take an owned reference before doing disk IO; never hold ACTIVE while writing.
+fn active_recorder() -> Option<Arc<Recorder>> {
+    ACTIVE.lock().ok()?.as_ref()?.upgrade()
+}
+
+pub(crate) fn stop_requested(reason: seine_telemetry::ShutdownRequest) {
+    if let Some(recorder) = active_recorder() {
+        recorder.stop_requested(reason);
+    }
+}
+
+pub(crate) fn cleanup_stage(stage: seine_telemetry::CleanupStage) {
+    if let Some(recorder) = active_recorder() {
+        *recorder
+            .cleanup_stage
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(stage);
+        *recorder.phase.lock().unwrap_or_else(|e| e.into_inner()) = RunPhase::ShuttingDown;
+        recorder.persist_checkpoint();
+    }
+}
+
+#[cfg(any(feature = "nvidia", test))]
+pub(crate) fn nvidia_software(software: seine_telemetry::NvidiaSoftware) {
+    if !software.validate() {
+        return;
+    }
+    if let Some(recorder) = active_recorder() {
+        *recorder
+            .nvidia_software
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(software);
+        recorder.persist_checkpoint();
     }
 }
 
@@ -462,9 +530,51 @@ impl Recorder {
         recent.0.push(event);
     }
 
+    pub(crate) fn attach_checkpoint_store(&self, store: &Arc<Store>, installation_id: &str) {
+        *self
+            .checkpoint_store
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) =
+            Some((Arc::downgrade(store), installation_id.to_owned()));
+        self.persist_checkpoint();
+    }
+
+    pub(crate) fn persist_checkpoint(&self) {
+        // Serialize transition snapshots so a delayed writer cannot overwrite a
+        // newer stage. Weak ownership preserves opt-out and stale-owner safety.
+        let destination = self
+            .checkpoint_store
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some((store, id)) = destination.as_ref() {
+            if let Some(store) = store.upgrade() {
+                store.checkpoint(id, self.checkpoint());
+            }
+        }
+    }
+
+    fn stop_requested(&self, reason: seine_telemetry::ShutdownRequest) {
+        self.shutdown_request
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get_or_insert_with(|| crate::shutdown::requested().unwrap_or(reason));
+        self.persist_checkpoint();
+    }
+
     pub(crate) fn checkpoint(&self) -> PreviousRun {
         let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
         PreviousRun {
+            shutdown_request: self
+                .shutdown_request
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .or_else(crate::shutdown::requested),
+            cleanup_stage: *self.cleanup_stage.lock().unwrap_or_else(|e| e.into_inner()),
+            nvidia_software: self
+                .nvidia_software
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
             phase: *self.phase.lock().unwrap_or_else(|e| e.into_inner()),
             uptime_secs: self.started.elapsed().as_secs(),
             build_commit: self.context.build_commit.clone(),
@@ -492,7 +602,11 @@ impl Recorder {
             "shutdown"
         }
         .into();
-        result.phase = Some(self.checkpoint().phase);
+        let checkpoint = self.checkpoint();
+        result.phase = Some(checkpoint.phase);
+        result.shutdown_request = checkpoint.shutdown_request;
+        result.cleanup_stage = checkpoint.cleanup_stage;
+        result.nvidia_software = checkpoint.nvidia_software;
         result.previous_run_unclean = self.previous_unclean.swap(false, Ordering::Relaxed);
         result.previous_run = self
             .previous_run
@@ -512,6 +626,7 @@ impl Recorder {
 /// sharing a data directory must not label each other as crashed or delete state.
 pub(crate) struct Store {
     _lock: File,
+    finished: Mutex<bool>,
     marker: PathBuf,
     pending: PathBuf,
     attempt: PathBuf,
@@ -575,6 +690,7 @@ impl Store {
         Some((
             Self {
                 _lock: lock,
+                finished: Mutex::new(false),
                 marker,
                 checkpoint_path,
                 previous_run,
@@ -630,10 +746,15 @@ impl Store {
         }
         fs::write(&self.attempt, installation_id).is_ok()
     }
-    pub(crate) fn heartbeat(&self, installation_id: &str) {
+    // Production callers hold `finished` across the complete checkpoint write.
+    fn heartbeat(&self, installation_id: &str) {
         let _ = fs::write(&self.marker, installation_id);
     }
     pub(crate) fn checkpoint(&self, installation_id: &str, run: PreviousRun) {
+        let finished = self.finished.lock().unwrap_or_else(|e| e.into_inner());
+        if *finished {
+            return;
+        }
         if !run.validate() {
             return;
         }
@@ -657,6 +778,10 @@ impl Store {
         }
     }
     pub(crate) fn finish(&self) {
+        // Completion may arrive from the mining thread while the uploader is
+        // checkpointing. No later checkpoint may recreate this run's marker.
+        let mut finished = self.finished.lock().unwrap_or_else(|e| e.into_inner());
+        *finished = true;
         let _ = fs::remove_file(&self.checkpoint_path);
         let _ = fs::remove_file(self.checkpoint_path.with_extension("tmp"));
         let _ = fs::remove_file(&self.marker);
@@ -696,6 +821,9 @@ pub(crate) fn clear_disabled(settings: &Path) {
 #[cfg(test)]
 pub(crate) fn test_context() -> Diagnostics {
     Diagnostics {
+        shutdown_request: None,
+        cleanup_stage: None,
+        nvidia_software: None,
         phase: None,
         previous_run: None,
         build_commit: "abcdef123456".into(),
@@ -728,8 +856,32 @@ mod tests {
             failed: AtomicBool::new(false),
             previous_unclean: AtomicBool::new(false),
             phase: Mutex::new(RunPhase::Starting),
+            shutdown_request: Mutex::new(None),
+            cleanup_stage: Mutex::new(None),
+            nvidia_software: Mutex::new(None),
+            checkpoint_store: Mutex::new(None),
             previous_run: Mutex::new(None),
         }
+    }
+
+    #[test]
+    fn stop_origins_survive_early_requests_and_do_not_leak_between_sessions() {
+        use seine_telemetry::ShutdownRequest::*;
+        let first = Arc::new(recorder());
+        let origin = StopOrigin::default();
+        origin.request(ApiRestart); // API stop arrived before worker startup.
+        origin.attach(&first);
+        origin.request(ApiStop); // Preserve the first request.
+        assert_eq!(first.checkpoint().shutdown_request, Some(ApiRestart));
+        assert_eq!(first.snapshot(true).shutdown_request, Some(ApiRestart));
+        let second = Arc::new(recorder());
+        let next = StopOrigin::default();
+        next.attach(&second);
+        assert_eq!(second.checkpoint().shutdown_request, None);
+        next.request(TuiThreadChange);
+        assert_eq!(second.checkpoint().shutdown_request, Some(TuiThreadChange));
+        origin.request(ApiStop);
+        assert_eq!(second.checkpoint().shutdown_request, Some(TuiThreadChange));
     }
 
     #[test]
@@ -819,16 +971,39 @@ mod tests {
             181,
         );
         let (store, _) = Store::open(&settings, id).unwrap();
-        store.checkpoint(id, recorder.checkpoint());
+        let mut checkpoint = recorder.checkpoint();
+        checkpoint.shutdown_request = Some(seine_telemetry::ShutdownRequest::ConsoleClose);
+        checkpoint.cleanup_stage = Some(seine_telemetry::CleanupStage::StoppingBackends);
+        checkpoint.nvidia_software = Some(seine_telemetry::NvidiaSoftware {
+            driver_cuda_version: Some(12080),
+            nvrtc_version: Some(12090),
+        });
+        store.checkpoint(id, checkpoint);
         drop(store);
         let (store, unclean) = Store::open(&settings, id).unwrap();
         assert!(unclean);
         let previous = store.previous_run.as_ref().unwrap();
         assert_eq!(
+            previous.shutdown_request,
+            Some(seine_telemetry::ShutdownRequest::ConsoleClose)
+        );
+        assert_eq!(
             previous.miner_version.as_deref(),
             Some(crate::version::RELEASE_VERSION)
         );
         assert_eq!(previous.recent_events[0].code, DiagnosticCode::RustPanic);
+        assert_eq!(
+            previous.cleanup_stage,
+            Some(seine_telemetry::CleanupStage::StoppingBackends)
+        );
+        assert_eq!(
+            previous
+                .nvidia_software
+                .as_ref()
+                .unwrap()
+                .driver_cuda_version,
+            Some(12080)
+        );
         store.finish();
         drop(store);
         let (store, unclean) = Store::open(&settings, id).unwrap();
@@ -1074,6 +1249,9 @@ mod tests {
         store.checkpoint(
             &report.installation_id,
             PreviousRun {
+                shutdown_request: None,
+                cleanup_stage: None,
+                nvidia_software: None,
                 phase: RunPhase::Tuning,
                 uptime_secs: 42,
                 build_commit: "abcdef".into(),
@@ -1125,6 +1303,9 @@ mod tests {
         store.checkpoint(
             id,
             PreviousRun {
+                shutdown_request: None,
+                cleanup_stage: None,
+                nvidia_software: None,
                 phase: RunPhase::Mining,
                 uptime_secs: 90,
                 build_commit: "abcdef".into(),
@@ -1147,6 +1328,9 @@ mod tests {
         store.checkpoint(
             id,
             PreviousRun {
+                shutdown_request: None,
+                cleanup_stage: None,
+                nvidia_software: None,
                 phase: RunPhase::Mining,
                 uptime_secs: 90,
                 build_commit: "abcdef".into(),

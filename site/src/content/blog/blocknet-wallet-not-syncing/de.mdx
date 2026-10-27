@@ -1,0 +1,112 @@
+---
+title: 'Blocknet-Wallet synchronisiert nicht oder zeigt falschen Saldo'
+description: 'Prüfe eine noch synchronisierende Blocknet-Wallet: Unterscheide Node-Fortschritt und Wallet-Scan, verfolge Zahlungen und prüfe danach den Saldo erneut.'
+tags: ['Blocknet', 'Wallet', 'Fehlerbehebung']
+faq:
+  - q: 'Warum kann mein Blocknet-Node aktuell sein, während die Wallet zurückliegt?'
+    a: 'Der Node lädt die Chain herunter und validiert sie. Die Wallet durchsucht heruntergeladene Blöcke nach eigenen Outputs. Das sind getrennte Schritte. Eine wiederhergestellte Wallet kann noch scannen, nachdem der Node aufgeholt hat. Vergleiche ihre Scan-Höhe mit der lokalen Chain-Höhe, bevor du den angezeigten Saldo als vollständig ansiehst.'
+  - q: 'Lädt sync fehlende Blöcke herunter?'
+    a: 'Im geprüften Kommandozeilenclient lässt sync die Wallet bereits beim Core vorhandene Blöcke scannen. Die Netzwerksynchronisierung ist eine eigene Node-Aufgabe. Liegt die lokale Chain zurück und sind keine Peers verbunden, prüfe zuerst die Verbindung. Ein Wallet-Scan findet keine Zahlungen in Blöcken, die der Node noch nicht heruntergeladen hat.'
+  - q: 'Soll ich erneut senden, wenn die Zahlung im Saldo fehlt?'
+    a: 'Verfolge zuerst die bestehende Transaktions-ID, prüfe Empfangswallet und Netzwerk sowie Scan- und Bestätigungsstand. Der angezeigte Saldo allein erklärt nicht den Ausgang eines Versands. Prüfe den ursprünglichen Wallet- oder Pool-Auszahlungsdatensatz vor einer weiteren Zahlung, denn ein weiterer Versand ist ein neuer Auftrag.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Finde heraus, welcher Schritt den Saldo deiner Blocknet-Wallet aufhält: der Chain-Download des Nodes, der Output-Scan der Wallet oder eine noch nicht verfügbare Zahlung. Diese Anleitung folgt der offiziellen CLI v1.2.0 und dem öffentlichen Core v0.22.0, geprüft am 27. Oktober 2026. Beginne mit einer bereits erstellten oder wiederhergestellten Wallet; die [Wallet-Einrichtung](/de/blog/blocknet-wallet-for-mining/) beschreibt diese Vorbereitung.
+
+## Warum synchronisiert meine Blocknet-Wallet noch?
+
+<Answer>
+Prüfe Chain-Fortschritt und Peer-Verbindungen des Nodes, danach den Scan-Fortschritt der geladenen Wallet. Der Node sammelt Blöcke; die Wallet sucht darin nach deinen Zahlungen. Prüfe Wallet-Adresse und Netzwerk, lass einen fortschreitenden Scan fertig werden und vergleiche den Verlauf mit verfügbaren, ausstehenden und unbestätigten Beträgen, bevor du den Handlungsbedarf bestimmst.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Netzwerkblöcke erreichen zuerst den lokalen Node; danach scannt die Wallet sie und aktualisiert ihre Zahlungsaufzeichnungen." width="1200" height="675" loading="lazy" />
+
+## Mit der richtigen Wallet und dem Netzwerk beginnen
+
+Öffne deine vorhandene Mainnet-Sitzung im Terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Öffne in der interaktiven Shell die Wallet:
+
+```text
+load
+```
+
+Wähle die erwartete Wallet-Datei. Ist sie bereits geladen, aber gesperrt, entsperre sie mit ihrem Passwort über die Client-Abfrage. Eine Sperrmeldung beschreibt den Zugriffszustand; sie beweist nicht, dass der Node keine Blöcke mehr lädt.
+
+Führe diese Befehle einzeln in der Shell aus:
+
+```text
+address
+status
+```
+
+Vergleiche die Adresse mit deinem Empfangsdatensatz. Mainnet und Testnet verwenden getrennte Cores und Wallets. Prüfe auch die ausgewählte Datei: Eine neue leere Wallet stellt keine frühere Adresse wieder her. Folge der [Node-Anleitung](/de/blog/run-blocknet-node/), wenn der Core nicht läuft oder attach ihn nicht erreicht.
+
+## Liegt der Node zurück oder der Wallet-Scan?
+
+Der Node-Status beschreibt Chain-Fortschritt und Netzwerkverbindungen. Die Wallet besitzt eine eigene Scan-Höhe. Im [geprüften Client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) vergleicht die Saldowarnung ihre Scan-Position mit der Chain oder dem Synchronisierungsziel. Eine aktuelle lokale Chain kann daher neben einer noch aufholenden Wallet bestehen. Lies beide Schritte, statt dich auf ein einzelnes Statuswort zu verlassen.
+
+Prüfe die Outputs der Wallet:
+
+```text
+outputs
+```
+
+Wenn keine passenden Outputs erscheinen und der Scan zurückliegt, zeigt der Client Scan-Höhe und Chain-Höhe. Vergleiche eine spätere Ablesung mit der früheren. Eine steigende Scan-Höhe zeigt Fortschritt; eine einzelne leere Liste belegt keine fehlende Zahlung. Notiere Höhen und Beobachtungszeiten für einen aussagekräftigen Vergleich.
+
+## Bei zurückliegender Chain die Verbindung prüfen
+
+Liegt der Node selbst zurück, prüfe seine verbundenen Peers:
+
+```text
+peers
+```
+
+Ohne Peers prüfst du Internetverbindung und Firewall-Einstellungen für den Node. Nutze die [offizielle Fehlerhilfe](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) zusammen mit der Node-Anleitung. Beobachte neben der Peer-Zahl auch die Chain-Höhe im Zeitverlauf: Eine Peer-Verbindung und ein abgeschlossener Download beantworten verschiedene Fragen.
+
+Trenne Node-Start und Wallet-Scan in deinen Notizen. Lädt ein neuer Node die Historie, lass diesen Schritt vorankommen, bevor du beurteilst, ob die Wallet eine spätere Zahlung gescannt hat. Die [Checkpoint-Anleitung](https://bntpool.com/blog/de/blocknet-checkpoints-fast-sync/) erläutert den vorhandenen schnellen Synchronisierungsweg. Wiederholtes Erstellen von Wallets oder Löschen von Chain-Daten hilft nicht, den fortschreitenden Schritt zu erkennen.
+
+## Wann solltest du sync ausführen?
+
+Nutze den Scan-Befehl, wenn die richtige Wallet geöffnet ist und ihre Output-Aufzeichnungen die heruntergeladenen Blöcke aufholen müssen:
+
+```text
+sync
+```
+
+Die [Shell-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) beschreibt dies als Durchsuchen lokaler Blöcke nach eigenen Outputs. Es ist eine Wallet-Operation, getrennt vom Abruf der Blöcke bei Peers. Gib dem Scan Zeit, bevor du denselben Wert erneut prüfst.
+
+Der Befehl meldet die Scan-Höhe und gefundene Outputs oder dass die Wallet bereits aktuell ist. Prüfe nach Abschluss Outputs und Saldo erneut. Meldet der Client eine Zeitüberschreitung, prüfe den aktuellen Fortschritt vor einer Wiederholung: Ein clientseitiger Timeout allein verrät nicht die Endposition des Scanners. Behalte während der Diagnose Originaldatei und Wiederherstellungsbackup.
+
+## Eine erwartete Zahlung anhand ihrer Aufzeichnungen verfolgen
+
+Nutze die vollständige Transaktions-ID aus dem Verlauf des Senders oder dem Datensatz einer gesendeten Pool-Auszahlung. Die [Explorer-Anleitung](/de/blog/blocknet-explorer-guide/) zeigt Netzwerkstatus und enthaltenen Block. Der öffentliche Inklusionsnachweis zeigt, wo die Transaktion liegt; die Empfangswallet erkennt ihre privaten Outputs. Vergleiche die Empfangsdaten mit deinem eigenen Zahlungsdatensatz, statt eine öffentliche Adresssaldo-Seite zu erwarten.
+
+Prüfe danach die Aufzeichnungen der Wallet:
+
+```text
+history
+balance
+```
+
+Ausstehende oder unbestätigte Beträge unterscheiden sich von verfügbarem Guthaben. Erscheint der Betrag in einer dieser Kategorien, verfolge seine Bestätigungen, statt ihn als fehlend anzusehen. Für Mining-Einnahmen unterscheidet die [Anleitung vom Pool zur Wallet](https://bntpool.com/blog/de/pool-payout-missing-from-wallet/) unbezahlten Poolsaldo, tatsächliche Auszahlung und Wallet-Eingang.
+
+## Scan fertig, Betrag trotzdem anders?
+
+Prüfe Wallet-Datei, vollständige Empfangsadresse, Netzwerk und Transaktions-ID gemeinsam. Vergleiche dieselbe Zahlung und dieselbe Saldokategorie. Nutze eine reine Beobachtungswallet für Zahlungseingänge und die vollständige Wallet für Entscheidungen über verfügbare Mittel; die [View-only-Anleitung](/de/blog/blocknet-view-only-wallet/) erklärt diese Trennung. Ein fertiger Scan ändert den Wallet-Typ nicht.
+
+Ist die richtige vollständige Wallet aktuell und lässt sich der Datensatz weiterhin nicht abgleichen, sichere Datei und Backup vor dem offiziellen Wiederherstellungsverfahren. Die [Seed-Anleitung](/de/blog/seed-phrase-explained/) erklärt das Wiederherstellungsmaterial; die Einrichtung beschreibt den Import. Die Wiederherstellung gehört in deine Wallet-Software. Veröffentliche niemals Seed, privaten Schlüssel, Wallet-Datei oder Passwort in einem Supportbeitrag.
+
+## Kurz festhalten, was du geprüft hast
+
+Notiere für weitere Schritte Client- und Core-Version, Netzwerk, Node-Höhe, Scan-Höhe, Peer-Zahl und genauen Fehlertext. Halte fest, ob die Werte zwischen Beobachtungen stiegen. Entferne vor dem Teilen von Logs private Pfade, Zahlungsdaten und Zugangsdaten, die für die Frage nicht nötig sind. Ein kurzer Datensatz beschreibt den betroffenen Schritt, ohne Wallet-Zugriff offenzulegen.
+
+Kehre nach der gezielten Prüfung zum Verlauf und Saldo derselben Wallet zurück. Das nützliche Ergebnis ist die erwartete Zahlung mit ihrem tatsächlichen aktuellen Status und ein aufgeholter zugehöriger Scan. Die [Senden-und-Empfangen-Anleitung](/de/blog/send-receive-blocknet/) verbindet diese abschließende Empfangsprüfung mit dem ursprünglichen Ablauf. Behalte die Transaktions-ID, damit spätere Prüfungen denselben Vorgang verfolgen.
+
+<CTA target="seine" title="Mining-Belohnungen mit deiner Wallet verbinden" text="Richte Mining mit den seine-Anleitungen ein und verfolge anschließend Pool-Auszahlungen in den Empfangsaufzeichnungen der Wallet." />

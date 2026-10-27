@@ -1667,6 +1667,10 @@ fn emit_windows_large_page_diagnostics(
         return;
     };
 
+    // Auto fallback is recoverable, but retain the actual OS cause before the
+    // backend event path turns it into a generic display warning.
+    crate::diagnostics::allocation_failure(true, block_bytes, Some(i64::from(error)));
+
     emit_warning(
         shared,
         format!(

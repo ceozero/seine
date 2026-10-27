@@ -1,0 +1,96 @@
+---
+title: 'Kopia, odzyskiwanie i przenoszenie portfela Blocknet'
+description: 'Zrób kopię portfela Blocknet, odtwórz go z seeda lub przenieś plik na nowy komputer. Sprawdź adres i skanowanie przed wycofaniem starej kopii.'
+tags: ['Blocknet', 'Portfel', 'Odzyskiwanie']
+faq:
+  - q: 'Czy odzyskam portfel Blocknet po zapomnieniu hasła?'
+    a: 'Portfel oparty na seedzie zaimportuj z zapisanej frazy pod nową nazwą i ustaw nowe hasło. Stary zaszyfrowany plik zachowuje dotychczasowe hasło. Porównaj odtworzony adres z zapisami i poczekaj na węzeł oraz skan portfela przed kontrolą salda.'
+  - q: 'Czy przenoszenie portfela zmienia adres odbiorczy?'
+    a: 'Wczytanie kopii tego samego pliku lub prawidłowy import oryginalnego seeda zachowuje adres. Porównaj pełny adres na urządzeniu docelowym z zaufanym wcześniejszym zapisem. Utworzenie zupełnie nowego portfela jest inną operacją i daje nowy adres przyszłych płatności.'
+  - q: 'Czy portfel podglądu wystarczy do odzyskania wydawania?'
+    a: 'Portfel podglądu daje dostęp do odczytu i nadaje się do monitorowania wpłat na innym komputerze. Do wydawania potrzebny jest plik pełnego portfela z hasłem lub jego materiały odzyskiwania. Zachowaj oryginalną pełną kopię i sprawdź typ załadowanego portfela.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Zrób kopię portfela Blocknet przed zmianą komputera, a następnie odtwórz ten sam adres z pliku lub seeda. Poradnik opiera się na oficjalnym CLI v1.2.0 i core v0.22.0, sprawdzonych 27 października 2026 r. Rozdziela wykonanie kopii, otwarcie gdzie indziej i potwierdzenie odzyskania.
+
+## Jak zrobić kopię i odtworzyć portfel Blocknet?
+
+<Answer>
+Przechowuj seed offline i osobną kopię pełnego pliku. Na komputerze docelowym wczytaj plik z hasłem albo zaimportuj oryginalny seed do nowego pliku. Porównaj pełny adres, pozwól węzłowi i skanowi nadrobić zaległości i zweryfikuj zapisy przed wycofaniem starej kopii.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Portfel i chroniona kopia trafiają na drugi komputer, gdzie sprawdza się odtworzony adres i postęp skanowania." width="1200" height="675" loading="lazy" />
+
+## Wybierz dostępną metodę odzyskania
+
+Kopia pliku i seed mają różne zadania. Plik `.wallet.dat` zawiera klucze i zapisany stan; chroniona hasłem kopia wymaga swojego hasła. Seed odtwarza klucze opartego na nim portfela w nowym pliku z nowym hasłem. Zachowaj oba, jeśli są dostępne, oraz osobno prywatne zapisy płatności do późniejszego porównania.
+
+Procedura dotyczy istniejącego pełnego portfela. Pierwsze utworzenie opisuje [poradnik konfiguracji](/pl/blog/blocknet-wallet-for-mining/). Do śledzenia wpłat na drugim komputerze bez prawa wydawania służy [poradnik podglądu](/pl/blog/blocknet-view-only-wallet/). Sam publiczny adres nie odzyskuje portfela. Ustal, czy masz pełny plik, hasło i oryginalny seed, zanim wybierzesz kroki.
+
+## Przygotuj oryginał i zapis odzyskiwania
+
+Połącz się z działającym mainnet core w terminalu:
+
+```sh
+blocknet attach mainnet
+```
+
+W interaktywnej powłoce wczytaj portfel i zapisz pełny publiczny adres:
+
+```text
+load
+address
+```
+
+Wybierz istniejący wpis portfela. Jeśli załadowany jest inny, użyj `unload` przed wyborem właściwego. Zachowaj adres, sieć i nazwę pliku w prywatnych notatkach migracji.
+
+Dla portfela opartego na seedzie uruchom `seed`, potwierdź monit i podaj hasło. Zapisz zwrócone słowa w dokładnej kolejności i przechowuj offline. Nie rób tego przy udostępnianiu lub nagrywaniu ekranu; [poradnik seeda](/pl/blog/seed-phrase-explained/) opisuje ochronę zapisu. Jeśli klient zgłosi brak seeda, zachowaj pełny plik z hasłem i użyj kopiowania. Nie zakładaj, że każdy starszy portfel lub portfel z importu klucza ma seed.
+
+## Wykonaj osobną kopię pliku
+
+Znajdź plik faktycznie używany przez core. Domyślny katalog to `~/.config/bnt/wallets/`, a w Windows `C:\Users\<you>\.config\bnt\wallets\`. Folder skonfigurowanego `wallet_file` może być inny. Korzystaj ze ścieżki podanej przez klienta i [dokumentacji zarządzania portfelem](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), zwłaszcza przy podobnych nazwach. Potwierdź plik przed kopiowaniem.
+
+Po zapisaniu adresu wykonaj `unload` i poczekaj na sukces przed kopiowaniem. Pozostaw oryginał i zapisz datowaną kopię na osobnym nośniku pod swoją kontrolą. Zachowaj rozszerzenie `.wallet.dat`, chroń kopię i hasło. Klient może utworzyć lokalny backup podczas ładowania z innego katalogu, ale nie nadpisuje istniejącego o tej samej nazwie. Sprawdź własną kopię zamiast zakładać aktualność lokalnej.
+
+## Jak przenieść portfel na nowy komputer?
+
+Zainstaluj [oficjalnego klienta](https://github.com/blocknetprivacy/blocknet/releases/latest) i przygotuj mainnet core według [poradnika węzła](/pl/blog/run-blocknet-node/). Przenieś kopię pełnego pliku przez kontrolowany nośnik do folderu portfeli docelowego core. Zachowaj inne istniejące pliki; w razie potrzeby wybierz odrębną nazwę. W sprawdzonym kliencie `load` czyta z tego folderu także po wpisaniu własnej ścieżki.
+
+Na miejscu połącz się przez attach i wykonaj `load`, wybierz kopię i wpisz dotychczasowe hasło. Jeśli pliku nie ma w menu, sprawdź folder core i miejsce kopiowania. Wybierz istniejący plik zamiast tworzenia nowego portfela. Kopiowanie tego samego pliku przywraca dostęp do tych samych kluczy, nie wysyła monet ani nie tworzy drugiego salda.
+
+## Odtwórz portfel z oryginalnego seeda
+
+Po utracie pliku lub hasła użyj zapisanej frazy w oficjalnym kliencie na zaufanym komputerze docelowym. Podłącz właściwy mainnet core i najpierw wyładuj inny portfel. W powłoce rozpocznij odzyskiwanie:
+
+```text
+import
+```
+
+Wybierz opcję 1 dla 12-wyrazowej frazy. Wprowadź własne oryginalne słowa w kolejności; nigdy nie używaj przykładów z poradnika ani nie wklejaj seeda do witryny.
+
+Wybierz nową, nieużywaną nazwę i ustaw oraz potwierdź nowe hasło. [Sprawdzony import](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) tworzy portfel z danych odzyskiwania i podaje adres. Oryginalny zaszyfrowany plik zachowuje stare hasło. Zostaw stary plik i kopię podczas weryfikacji, a nowy traktuj jak kolejną kopię wymagającą ochrony.
+
+## Sprawdź adres, łańcuch i skan
+
+Po wczytaniu lub imporcie sprawdź portfel docelowy:
+
+```text
+address
+status
+balance
+history
+```
+
+Porównaj cały adres z wcześniejszym zapisem. To identyfikuje portfel, zanim zaufasz saldu. Jeśli adres jest inny, wstrzymaj migrację i sprawdź plik, słowa i sieć. Zachowaj oryginalną kopię bez zmian podczas wyjaśniania.
+
+Pozwól zakończyć pobieranie łańcucha i skan wyjść. Nowo zaimportowany portfel musi znaleźć swoje wyjścia; początkowe saldo nie jest ostatecznym sprawdzeniem odzyskania. Po skanie porównaj dostępne saldo i wpłaty. Zachowaj osobne notatki płatności oraz oryginalny plik dla szczegółów historycznych. [Poradnik synchronizacji](/pl/blog/blocknet-wallet-not-syncing/) opisuje odczyty postępu i potrzebę ponownego skanowania.
+
+## Zakończ przenoszenie po weryfikacji
+
+Zachowaj chronioną kopię sprawdzonego portfela docelowego i seed offline. Zapisz, gdzie znajduje się aktywny pełny portfel, a które pliki są kopiami. Stara kopia nadal ma te same klucze; przeniesienie nie odbiera dostępu. Wycofując urządzenie, po sprawdzeniu działającego backupu zastosuj zwykłą procedurę bezpiecznej utylizacji nośnika.
+
+Jeśli adres się zgadza, dotychczasowy adres wypłat z kopania może zostać. Porównaj [zapis wypłaty puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) z historią wpłat. Celowe utworzenie innego portfela jest zmianą adresu, nie odzyskaniem. Zakończ weryfikację odtworzonego portfela przed osobnymi zmianami konfiguracji minera.
+
+<CTA target="seine" title="Kop na zweryfikowany adres Blocknet" text="Połącz miner według poradników seine i przechowuj kopie portfela na kontrolowanych nośnikach." />

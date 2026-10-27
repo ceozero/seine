@@ -1,0 +1,93 @@
+---
+title: 'Blocknet cüzdanıyla mesaj imzalama ve doğrulama'
+description: 'Bir adresi kontrol ettiğinizi göstermek için Blocknet mesajı imzalayın. Tam metni ve imzayı doğrulayın, yeni bir sınama kullanın ve sonucun anlamını öğrenin.'
+tags: ['Blocknet', 'Cüzdan', 'İmzalar']
+faq:
+  - q: 'Blocknet mesajı imzalamak coin gönderir mi?'
+    a: 'İncelenen uç nokta metni cüzdanın harcama anahtarıyla imzalar ve imzayı döndürür. Ödeme oluşturmaz veya yayınlamaz. Kontrol eden kişinin adrese, tam mesaja ve imzaya ihtiyacı vardır. İstenen metni dikkatle okuyun; bir hizmet bu imzayı kendi işlemini yetkilendirmek için kullanabilir.'
+  - q: 'Cüzdan açmadan imza doğrulayabilir miyim?'
+    a: 'Evet. Resmî kabuğun verify komutu, yüklü cüzdan gerektirmeyen herkese açık doğrulama uç noktasını çağırır. Çalışan uyumlu bir core, tam adres, tam mesaj ve imza gerekir. Doğrulama bu birleşimi kontrol eder; imzalayanın kurtarma ifadesini, parolasını veya özel anahtarlarını istemez.'
+  - q: 'Geçerli bir Blocknet mesaj imzası neyi kanıtlar?'
+    a: 'Mesajın verilen adresteki herkese açık harcama anahtarıyla doğrulandığını gösterir. Güncel kontrolü göstermek için üzerinde anlaşılan yeni bir sınama kullanın. Kişinin yasal kimliğini, cüzdan bakiyesini veya tamamlanmış ödemeyi kanıtlamaz; eski geçerli bir imza yeniden sunulabilir.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Ödeme yapmadan bir adresin kontrolünü göstermek için Blocknet mesaj imzası kullanın. Bu rehber, 27 Ekim 2026 tarihinde kontrol edilen resmî CLI v1.2.0 ve core v0.22.0 sürümlerini izler. Açık bir sınama hazırlayacak, hedef cüzdanda imzalayacak ve tam adresi, mesajı ve imzayı birlikte doğrulayacaksınız.
+
+## Blocknet mesajı nasıl imzalanır ve doğrulanır?
+
+<Answer>
+Tam cüzdanınızı yükleyin, adresini onaylayın ve anlaşılan metni sign komutuyla imzalayın. Adresi, tam mesajı ve oluşan imzayı doğrulayıcıya verin. Doğrulayıcı üç değeri verify ile kontrol eder, ardından mesajın istenen amaçla ve yeni sınamayla eşleştiğini onaylar.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Cüzdan anlaşılan mesajı imzalar; ayrı bir doğrulayıcı mesajı adres ve imzayla birlikte kontrol eder." width="1200" height="675" loading="lazy" />
+
+## İmzalı mesajın anlamını kararlaştırın
+
+Belirli bir istekle başlayın: hangi adres, kime ve hangi işlem için kontrol göstermeli? [Ödeme kanıtı](/tr/blog/blocknet-payment-proof/) bir işlemin ayrıntılarını ortaya koyar. Mesaj imzası, örneğin hesap için adres onaylarken, imzalama anahtarının kontrolü söz konusu olduğunda kullanışlıdır. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) imzalayacak cüzdanı oluşturmayı ve açmayı anlatır.
+
+Doğrulayıcıdan bu isteğe özel yeni ve öngörülemez bir sınama sağlamasını isteyin. Hizmeti veya alıcıyı ve amaçlanan işlemi belirleyecek bağlam ekleyin; gerekiyorsa son kullanma zamanı kararlaştırın. Bunlar uygulama kurallarıdır: imza kontrolü güncelliği, süre sonunu veya tek kullanımı otomatik uygulamaz. Doğrulayıcı mesajı istekle karşılaştırmalı ve sınamanın kullanıldığını kaydetmelidir.
+
+## İstenen tam cüzdanı açın
+
+Terminalden çalışan mainnet core’unuza bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+Etkileşimli kabukta cüzdanı yükleyin ve adresi kontrol edin:
+
+```text
+load
+address
+```
+
+Doğru cüzdan dosyasını seçin ve istenirse istemci üzerinden kilidini açın. Aynı bilgisayarda birden fazla cüzdan dosyası tuttuğunuzda da tam adresi doğrulayıcının beklediği adresle karşılaştırın.
+
+[İncelenen core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go), mesajları cüzdanın özel harcama anahtarıyla imzalar. [Yalnızca görüntüleme cüzdanı](/tr/blog/blocknet-view-only-wallet/) bunu yapamaz. Tam cüzdanı belirlenen bilgisayarda tutun; doğrulayıcı yalnızca oluşan imzaya ve herkese açık bilgilere ihtiyaç duyar. İmzalama için para göndermeniz veya cüzdan dosyası dışa aktarmanız gerekmez.
+
+## İmzalamadan önce tam metni hazırlayın
+
+İsteğin tamamını okuyun ve belirtilen amacı gerçekten istediğinizden emin olun. Resmî istemci bir satır okur, baştaki ve sondaki boşlukları kaldırır; boş veya 1024 bayttan uzun mesajı reddeder. Sınır bayt sayar, dolayısıyla ASCII dışı karakterler birden çok bayt kullanabilir. Kısa ve açık bir satır kullanın, gönderilen tam metni saklayın.
+
+Mesajı iletirken büyük harfleri, noktalama işaretlerini ve iç boşlukları koruyun. Düzenleyici veya sohbet uygulaması tırnakları değiştirebilir ya da kopyalanan metni düzenleyebilir; doğrulama başarısız olursa gerçek metni karşılaştırın. Giriş veya hesap iş akışında hizmetin belgelenmiş sınama biçimini izleyin. İstenen metni sessizce yeniden yazmayın; doğrulayıcı kendi verdiği belirli sınamayı kontrol etmelidir.
+
+## Mesajı resmî kabukta imzalayın
+
+Etkileşimli kabukta istemi başlatın:
+
+```text
+sign
+```
+
+İstemci metni sorar. Anlaşılan tek satırlık mesajı yapıştırıp Enter’a basın. Başarı durumunda onaltılık imza yazdırılır. Her karakteri koruyarak çıktının tamamını kopyalayın. [İstemci uygulaması](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) mesajı cüzdan imzalama uç noktasına yollar; bu işlem bir işlem oluşturmaz veya yayınlamaz.
+
+Tam adresi, tam mesajı ve imzayı ayrı değerler olarak iletin. İmza, mesaj ve adres karışmasın diye açıkça etiketleyin. Kurtarma ifadesini, özel anahtarları ve cüzdan parolasını gizli tutun. [Kurtarma ifadesi rehberi](/tr/blog/seed-phrase-explained/) kurtarma verilerini açıklar; bunların hiçbiri imza doğrulayan kişiye gönderilecek kanıta dahil değildir.
+
+## Diğer kişi imzayı nasıl doğrular?
+
+Çalışan uyumlu core ile resmî kabuğun doğrulama istemini kullanır:
+
+```text
+verify
+```
+
+Önce tam adresi, sonra tam mesajı, ardından onaltılık imzayı girin. [Kabuk başvurusu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) bu sırayı belgeler. Doğrulama için cüzdan yüklemek gerekmez; böylece imzalayanın cüzdanını içe aktarmadan veya özel anahtar kullanmadan kanıt kontrol edilebilir.
+
+İncelenen istemci birleşim doğrulanırsa `Signature is VALID`, doğrulanmazsa `Signature is INVALID` gösterir. Girdi biçimi hatası ayrı sonuçtur: yeniden denemeden önce tüm alanları kontrol edip özgün kanıtı saklayın. Mesaj veya adres beklenen istekten farklıysa, imza verilen değerlere göre matematiksel olarak geçerli olsa bile farkı çözün.
+
+## Başarıyı istek bağlamında yorumlayın
+
+Geçerli imza, mesajı verilen adreste kodlanan herkese açık harcama anahtarıyla doğrular. Yasal kimlik oluşturmaz, bakiye göstermez veya ödemenin gerçekleştiğini kanıtlamaz. Ödeme sorusu için [gönderim kaydını](/tr/blog/send-receive-blocknet/), [explorer sorgusunu](/tr/blog/blocknet-explorer-guide/) ve işleme özel kanıtı kullanın. Her geçerli imzayı makbuz saymak yerine gerçek soruyu yanıtlayan kanıtı seçin.
+
+Kabul etmeden önce sınamanın güncelliğini ve amaçlanan alıcıyı kontrol edin. Birisi geçerli mesaj ve imzayı kopyalayıp aynı çifti tekrar sunabilir. Tek kullanımlık yetkilendirme isteyen hizmet bu kuralı kendisi uygulamalıdır. Aynı şekilde, mesajdaki bitiş zamanı yalnızca doğrulayıcı onu kontrol ederse anlamlıdır. Bu kontroller kriptografik geçerliliği anlaşılan işleme bağlar.
+
+## Açık bir doğrulama kaydı tutun
+
+İş akışınız denetim kaydı gerektiriyorsa adresi, tam mesajı, imzayı, istek bağlamını ve doğrulama sonucunu birlikte tutun. Kontrol zamanını imzalayanın yazdığı zaman damgasından ayrı kaydedin. Metne ilgisiz kişisel bilgi eklemeyin; imzalı metni alan herkes okuyup kopyalayabilir. Kanıtı anlaşılan kanaldan hedef doğrulayıcıyla paylaşın.
+
+Cüzdan madencilik ödemeleri alıyorsa [havuz takibi](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) share ve ödeme kayıtlarını sağlamaya devam eder; mesaj imzası onların yerini almaz. [Node rehberi](/tr/blog/run-blocknet-node/), resmî kabuğun ihtiyaç duyduğu core’u anlatır. Anlaşılan kontrol bittikten sonra imzalama erişimini tam cüzdanda tutun ve sonucu kontrol edenler için herkese açık doğrulamayı kullanın.
+
+<CTA target="seine" title="Blocknet adresinizi seine ile kullanın" text="Cüzdan adresinize madencilik yapmak, imza ve ödeme kayıtlarını düzenlemek için seine kurulum rehberlerini izleyin." />

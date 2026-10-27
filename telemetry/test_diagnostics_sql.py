@@ -22,6 +22,44 @@ class DiagnosticSQLTests(unittest.TestCase):
     def diagnostics(self):
         return json.loads(self.query((Path(__file__).parent / 'diagnostics.sql').read_text()))
 
+    def test_schema8_context_groups_loaded_software_and_interrupted_cleanup(self):
+        fixture = json.loads((Path(__file__).parent / 'reliability-fixture.json').read_text())
+        fixture['schema_version'] = 8
+        fixture['diagnostics']['previous_run']['miner_version'] = fixture['miner_version']
+        for version, stage in ((12080, 'stopping_backends'), (12090, 'stopping_tui')):
+            value = copy.deepcopy(fixture)
+            d = value['diagnostics']
+            d['nvidia_software'] = {'driver_cuda_version': version, 'nvrtc_version': 12090}
+            d['shutdown_request'] = 'api_stop'
+            d['cleanup_stage'] = 'finalizing_telemetry'
+            d['previous_run']['shutdown_request'] = 'tui_quit'
+            d['previous_run']['cleanup_stage'] = stage
+            d['previous_run']['nvidia_software'] = {'driver_cuda_version': 12060}
+            self.insert_diagnostic(value)
+        report = self.diagnostics()
+        self.assertEqual({c['nvidia_software']['driver_cuda_version'] for c in report['issue_clusters']}, {12080, 12090})
+        self.assertEqual({c['last_cleanup_stage'] for c in report['unclean_run_clusters']}, {'stopping_backends', 'stopping_tui'})
+        for cluster in report['unclean_run_clusters']:
+            self.assertEqual(cluster['previous_nvidia_software'], {'driver_cuda_version': 12060})
+        self.assertEqual(report['shutdown_clusters'][0]['affected_installations'], 2)
+        self.assertEqual(report['shutdown_clusters'][0]['shutdown_request'], 'api_stop')
+        self.assertEqual(report['recent_unclean_versions'][0]['affected_installations'], 2)
+
+    def test_shutdown_request_is_context_not_proof_of_clean_exit(self):
+        fixture = json.loads((Path(__file__).parent / 'reliability-fixture.json').read_text())
+        fixture['schema_version'] = 7
+        fixture['diagnostics']['previous_run']['miner_version'] = fixture['miner_version']
+        for reason in (None, 'console_close', 'interrupt'):
+            value = copy.deepcopy(fixture)
+            if reason:
+                value['diagnostics']['previous_run']['shutdown_request'] = reason
+            self.insert_diagnostic(value)
+        result = self.diagnostics()
+        self.assertEqual({c['shutdown_request'] for c in result['unclean_run_clusters']},
+                         {None, 'console_close', 'interrupt'})
+        self.assertEqual(result['recent_unclean_versions'][0]['affected_installations'], 3)
+        self.assertEqual(result['status'], 'attention')
+
     def test_typed_causes_phases_and_legacy_fields_remain_distinct(self):
         fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
         fixture['diagnostics']['events'][0]['count'] = 100

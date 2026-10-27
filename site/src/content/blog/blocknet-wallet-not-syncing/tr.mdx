@@ -1,0 +1,112 @@
+---
+title: 'Blocknet cüzdanı eşitlenmiyor veya bakiye yanlış'
+description: 'Eşitlenmeye devam eden Blocknet cüzdanını kontrol edin: düğüm ilerlemesini taramadan ayırın, gelen ödemeyi izleyin ve tarama sonrası bakiyeyi yeniden okuyun.'
+tags: ['Blocknet', 'Cüzdan', 'Sorun giderme']
+faq:
+  - q: 'Blocknet düğümü güncelken cüzdan neden geride olabilir?'
+    a: 'Düğüm zinciri indirip doğrular; cüzdan indirilen bloklarda kendi çıktılarını tarar. Bunlar ayrı aşamalardır. Geri yüklenen cüzdan, düğüm yetiştikten sonra da tarayabilir. Gösterilen bakiyeyi tamamlanmış saymadan önce cüzdan tarama yüksekliğini yerel zincir yüksekliğiyle karşılaştırın.'
+  - q: 'sync eksik blokları indirir mi?'
+    a: 'İncelenen komut satırı istemcisinde sync, cüzdandan core üzerinde zaten bulunan blokları taramasını ister. Ağ eşitlemesi ayrı bir düğüm görevidir. Yerel zincir gerideyse ve bağlı eş yoksa önce bağlantıyı inceleyin; cüzdan taraması, düğümün indirmediği bloklardaki ödemeleri bulamaz.'
+  - q: 'Ödeme bakiyede yoksa yeniden göndermeli miyim?'
+    a: 'Önce mevcut işlem kimliğini izleyin, alıcı cüzdanı ve ağı doğrulayın, tarama ve onay durumuna bakın. Görünen bakiye tek başına gönderimin sonucunu açıklamaz. Yeni ödeme hazırlamadan önce ilk cüzdan veya havuz ödeme kaydını inceleyin; başka bir gönderim yeni bir talimattır.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Blocknet cüzdan bakiyesini hangi aşamanın geciktirdiğini bulun: düğümün zincir indirmesi, cüzdanın çıktı taraması veya henüz harcanabilir olmayan ödeme. Bu kılavuz 27 Ekim 2026 tarihinde kontrol edilen resmî CLI v1.2.0 ve herkese açık core v0.22.0 sürümlerini izler. Oluşturulmuş veya geri yüklenmiş bir cüzdanla başlayın; [cüzdan kurulum kılavuzu](/tr/blog/blocknet-wallet-for-mining/) hazırlığı anlatır.
+
+## Blocknet cüzdanım neden hâlâ eşitleniyor?
+
+<Answer>
+Düğümün zincir ilerlemesini ve eş bağlantılarını, ardından açık cüzdanın taramasını inceleyin. Düğüm blok toplar; cüzdan bu bloklarda ödemelerinizi arar. Adresi ve ağı doğrulayın, ilerleyen taramayı bitirin; müdahale gerektiren noktayı seçmeden geçmişi harcanabilir, bekleyen ve onaysız bakiyelerle karşılaştırın.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Ağ blokları yerel düğüme ulaşır, ardından cüzdan onları tarayıp ödeme kayıtlarını günceller." width="1200" height="675" loading="lazy" />
+
+## Doğru cüzdan ve ağla başlayın
+
+Terminalden mevcut mainnet oturumunu açın:
+
+```sh
+blocknet attach mainnet
+```
+
+Etkileşimli kabukta cüzdanı açın:
+
+```text
+load
+```
+
+Beklenen dosyayı seçin. Yüklenmiş ancak kilitliyse istemcinin isteminde parolayla açın. Kilitli cüzdan mesajı bir erişim durumudur; düğümün blok indirmeyi bıraktığını göstermez.
+
+Kabukta şu komutları ayrı ayrı çalıştırın:
+
+```text
+address
+status
+```
+
+Adresi kendi alım kaydınızla karşılaştırın. Mainnet ve testnet ayrı core ve cüzdan kullanır. Seçilen dosyayı da inceleyin: yeni boş cüzdan açmak eski adresi geri getirmez. Core çalışmıyorsa veya attach bağlanamıyorsa [düğüm kılavuzunu](/tr/blog/run-blocknet-node/) izleyin.
+
+## Düğüm mü, cüzdan taraması mı geride?
+
+Düğüm durumu zincir ilerlemesini ve ağ bağlantısını anlatır. Cüzdanın kendi taranmış yüksekliği vardır. [İncelenen istemcide](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) bakiye uyarısı bu konumu zincir veya eşitleme hedefiyle karşılaştırır. Yerel zincir güncelken cüzdan bakiyesi hâlâ yetişiyor olabilir. Tek durum sözcüğüne güvenmek yerine iki aşamayı da okuyun.
+
+Cüzdan çıktılarını inceleyin:
+
+```text
+outputs
+```
+
+Eşleşen çıktı yoksa ve tarama gerideyse istemci taranan yüksekliği zincir yüksekliğine göre bildirir. Sonraki okumayı öncekiyle karşılaştırın. Yükselen tarama yüksekliği ilerleme demektir; tek boş liste ödemenin kayıp olduğunu göstermez. Yararlı karşılaştırma için yükseklikleri ve gözlem zamanlarını kaydedin.
+
+## Yerel zincir gerideyse bağlantıya bakın
+
+Düğümün kendisi gerideyse bağlı eşlerini inceleyin:
+
+```text
+peers
+```
+
+Eş yoksa bilgisayarın internetini ve düğüm için güvenlik duvarı ayarlarını kontrol edin. Düğüm kılavuzuyla birlikte [resmî sorun giderme kaynağını](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) kullanın. Eş sayısı yanında zincir yüksekliğini zaman içinde izleyin: eş bağlantısı ve tamamlanmış indirme farklı sorulara cevap verir.
+
+Notlarda düğüm başlangıcını ve cüzdan taramasını ayırın. Yeni düğüm geçmişi indiriyorsa cüzdanın sonraki bir ödemeyi tarayıp taramadığını değerlendirmeden önce bu aşamanın ilerlemesini bekleyin. [Kontrol noktası kılavuzu](https://bntpool.com/blog/tr/blocknet-checkpoints-fast-sync/) mevcut hızlı eşitlemeyi açıklar. Sürekli cüzdan oluşturmak veya zincir verisi silmek hangi aşamanın ilerlediğini anlamaya yardımcı olmaz.
+
+## Cüzdan sync komutu ne zaman çalıştırılmalı?
+
+Doğru cüzdan açıkken çıktı kayıtları indirilen bloklara yetişmeliyse tarama komutunu kullanın:
+
+```text
+sync
+```
+
+[Kabuk başvurusu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md), bunu yerel bloklarda sahip olunan çıktıları taramak olarak açıklar. Eşlerden blok almaktan ayrı bir cüzdan işlemidir. Aynı gözlemi tekrar kontrol etmeden taramaya süre tanıyın.
+
+Komut taranan yüksekliği ve bulunan çıktıları veya cüzdanın güncel olduğunu bildirir. Bittiğinde çıktıları ve bakiyeyi yeniden kontrol edin. İstemci zaman aşımı bildirirse yinelemeden önce ilerlemeyi inceleyin; istemci tarafındaki zaman aşımı tek başına tarayıcının son konumunu göstermez. Tanı sırasında özgün cüzdan dosyasını ve kurtarma yedeğini saklayın.
+
+## Beklenen bir ödemeyi kayıtlarından izleyin
+
+Gönderenin geçmişindeki veya havuzun gönderilmiş ödeme kaydındaki tam işlem kimliğini kullanın. [Gezgin kılavuzu](/tr/blog/blocknet-explorer-guide/), ağ durumunu ve işlemi içeren bloğu kontrol etmeyi anlatır. Genel dahil edilme kaydı işlemin yerini söyler; alıcı cüzdan özel çıktılarını tanır. Gezginin adres bakiyesi sayfasını beklemek yerine alım bilgilerini kendi kaydınızla karşılaştırın.
+
+Ardından cüzdanın kendi kayıtlarına bakın:
+
+```text
+history
+balance
+```
+
+Bekleyen veya onaysız tutar harcanabilir fonlardan farklıdır. Tutar bu kategorilerden birindeyse yok saymak yerine onay durumunu izleyin. Madencilik gelirlerinde [havuzdan cüzdana kılavuzu](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/), ödenmemiş havuz bakiyesini, gerçek ödemeyi ve cüzdan alımını ayırır.
+
+## Tarama bitti ama tutar hâlâ farklı mı?
+
+Dosyayı, tam alıcı adresini, ağı ve işlem kimliğini birlikte yeniden kontrol edin. Aynı ödeme ve bakiye kategorisini karşılaştırdığınızdan emin olun. Salt görüntüleme cüzdanını gelen fonları izlemek, tam cüzdanı harcama kararları için kullanın; [görüntüleme kurulum kılavuzu](/tr/blog/blocknet-view-only-wallet/) ayrımı açıklar. Tamamlanan tarama cüzdan türünü değiştirmez.
+
+Doğru tam cüzdan güncelse ve kayıt hâlâ uyuşmuyorsa resmî kurtarma işleminden önce dosyayı ve yedeği koruyun. [Seed kılavuzu](/tr/blog/seed-phrase-explained/) kurtarma malzemesini, kurulum kılavuzu içe aktarmayı anlatır. Kurtarma cüzdan yazılımında yapılır. Seed, özel anahtar, cüzdan dosyası veya parolayı asla herkese açık destek gönderisine koymayın.
+
+## Doğruladıklarınızı kısaca kaydedin
+
+Takip için istemci ve core sürümlerini, ağı, düğüm yüksekliğini, tarama yüksekliğini, eş sayısını ve tam hata metnini kaydedin. Değerlerin gözlemler arasında ilerleyip ilerlemediğini belirtin. Günlük paylaşırken gereksiz özel yolları, ödeme bilgilerini ve kimlik bilgilerini çıkarın. Kısa kayıt, cüzdan erişimini açığa çıkarmadan ilgili aşamayı anlatır.
+
+Hedefli kontrolden sonra aynı cüzdan geçmişine ve bakiyesine dönün. Yararlı sonuç, amaçlanan ödemenin gerçek güncel durumuyla görünmesi ve ilgili taramanın yetişmesidir. [Gönderme ve alma kılavuzu](/tr/blog/send-receive-blocknet/) son alım kontrolünü ilk ödeme sürecine bağlar. Sonraki kontroller aynı işlemi izlesin diye kimliği saklayın.
+
+<CTA target="seine" title="Madencilik ödüllerini cüzdanınıza bağlayın" text="seine kılavuzlarıyla madenciliği kurun, sonra havuz ödemelerini cüzdanın alım kayıtlarında izleyin." />

@@ -1,0 +1,74 @@
+---
+title: 'Blocknet gezgini nasıl kullanılır?'
+description: 'Blocknet gezgininde işlem ve blok bulun, onayları ve açık ücretleri okuyun; özel ödeme ayrıntılarının cüzdanda nasıl doğrulandığını öğrenin.'
+tags: ['Blocknet', 'Gezgin', 'İşlemler']
+faq:
+  - q: 'Cüzdan adresiyle arama yapabilir miyim?'
+    a: 'Açık arama blok yüksekliği, blok hash’i veya işlem hash’i kabul eder. Belirli ödeme için tam işlem kimliğini kullanın. Blocknet’in özel çıktıları, şeffaf defterlerdeki gibi açık adres-bakiye sayfası sunmaz. Cüzdanınız aldığı çıktıları tanır ve tutarlarını gösterir.'
+  - q: 'Mempool işleminde onay var mı?'
+    a: 'Mempool işlemi bloğa alınmayı bekler ve sıfır onaya sahiptir. İçeren blok ilk onayı verir, sonraki bloklar sayıyı artırır. Hedef blok süresini garantili varış saatine çevirmek yerine güncel işlem sayfasını ve cüzdan durumunu kontrol edin.'
+  - q: 'Gezgin neden ücreti gösterip ödeme tutarını gizler?'
+    a: 'Ağ ücreti açık işlem alanıdır. Normal aktarım tutarları taahhütler ve ispatlarla gizlenir; çıktılar tek kullanımlık anahtar kullanır. Gezgin, alıcının tutarı olmadan ücret ve yapıyı gösterebilir. Sizin ödemelerinizin özel ayrıntıları için cüzdanı kullanın.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Blocknet işlemini bulun, içeren bloğu açın ve açık sayfanın ne söylediğini anlayın. Rehber, 26 Ekim 2026’da incelenen [resmî gezgini](https://explorer.blocknetcrypto.com/) izler. Ekran görüntüleri o günün gerçek açık sayfalarıdır. Yükseklikler, onaylar ve ağ değerleri tarihsel gözlemlerdir; güncel durum için canlı sayfayı açın.
+
+## Blocknet işlemi nasıl aranır?
+
+<Answer>
+Tam işlem kimliğini cüzdan veya ödeme kaydından resmî aramaya kopyalayın. Eşleşen işlemi açıp mempool’da mı, blokta mı kontrol edin. Onayları ve açık alanları orada okuyun; özel ödeme ayrıntılarını cüzdanda doğrulayın.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="Arama açık işlem kaydına ve içeren bloğa gider; ödeme tutarları cüzdanda kontrol edilir." width="1200" height="675" loading="lazy" />
+
+## Sorunuz için doğru kimlikle başlayın
+
+Tek ödeme için işlem kimliği, blok ve işlem listesi için blok yüksekliği veya hash kullanın. Arama üçünü de kabul eder. Kısa listedeki kısaltmayı değil kaynaktaki tam kimliği kopyalayın. Cüzdan ve gezginin aynı ağda olduğunu doğrulayın.
+
+Ana sayfada son bloklar, ağ değerleri ve mempool da bulunur. Kimlik varsa aramayla başlayın; ağ etkinliğini dolaşırken listeleri kullanın. [Gönderme ve alma rehberi](/tr/blog/send-receive-blocknet/), tamamlanan gönderimin kimliği nerede verdiğini açıklar.
+
+[![26 Ekim 2026’da alınmış resmî gezgin ana sayfası: arama, zincir yüksekliği ve ağ kartları.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## İşlem sayfası ne gösterir?
+
+Aktarım sayfasında işlem hash’i, işlem açık anahtarı, blok durumu, ağ ücreti ve girdi/çıktı sayıları vardır. Doğru işlemi açtığınızdan emin olmak için önce hash’i okuyun. Açık anahtar ayrı amaçlı başka bir alandır; ödeme kaydından aldığınız işlem hash’inin yerine arama kimliği değildir.
+
+Aşağıdaki örnek gerçek açık aktarımdır, rehber için yapılan ödeme değildir. Ücret o işleme aittir, tutarları gizli kalır. [Ücret makalesi](/tr/blog/blocknet-transaction-fees/) cüzdan hesabını açıklar; bu sayfa ağda kaydedilen sonucu okumayı öğretir.
+
+[![Hash, içeren blok, ücret, girdiler, çıktılar ve gizli tutarları gösteren açık Blocknet işlemi.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Bekleyen ve dahil edilen işlemleri doğru okuyun
+
+Mempool işlemi dahil edilmeyi bekler ve sıfır onaya sahiptir. Bir blok içerdiğinde işlem sayfası o bloğa bağlanır. [İncelenen uygulamada](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go) onay sayısı mevcut yükseklik eksi içeren yükseklik artı birdir. Dolayısıyla içeren blok ilk onaydır.
+
+Örnek hesap: blok 100’deki işlem, güncel yükseklik 102 olduğunda üç onaya sahiptir. Bunlar örnek yüksekliklerdir, güncel ağ değerleri değildir. Kendi işleminizin canlı sayısını kontrol edin. [Onay rehberi](https://bntpool.com/blog/tr/block-confirmations-mining-rewards/) dahil edilme, ödül olgunluğu ve cüzdanda kullanılabilirliği bağlar; gezgin sayısı tek başına harcanabilir çıktılarınızı belirlemez.
+
+## Bağlam için içeren bloğu açın
+
+Blok bağlantısından yükseklik, hash, önceki blok referansı, zaman, zorluk, ödül ve işlem listesini inceleyin. Sayfa coinbase’i normal aktarımlardan ayırır. Burada coinbase bloğun madencilik ödülü işlemidir. Liste, bloktan tek aktarıma dönüp dahil edilmeyi doğrulamanızı sağlar.
+
+Önceki ve sonraki blok bağlantılarıyla çevredeki zinciri izleyin. Görüntü tarihli örnektir; onay sayısı canlı sayfada değişmeye devam eder. Ödül üretimi için [Blocknet ödül takvimine](https://bntpool.com/blog/tr/blocknet-block-reward-schedule/) bakın.
+
+[![Resmî gezginde 69.579 numaralı blok, özellikleri ve coinbase ile aktarım işlem listesi.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Hangi ayrıntıların gizli kaldığını anlayın
+
+Normal aktarımlarda açık ücret ve girdi/çıktı sayısı yapıyı anlatır. Alıcı tutarı taahhütler ve ispatlarla gizlenir; çıktı anahtarları tek kullanımlık hedeflerdir. Gösterilen gizli adres anahtarı, açık cüzdan-adresi bakiyesi değildir. [Gizlilik özeti](/tr/blog/blocknet-privacy-features/) alanları güncel mekanizmalara bağlar.
+
+Alıcı cüzdanın geçmişiyle kendi ödeme ve tutarını belirleyin. Gezgindeki şifreli not, okunabilir fatura açıklaması değildir. Bu arama akışı yalnızca açık kimliklere ihtiyaç duyar. Kurtarma kelimeleri ve özel anahtarları cüzdanda tutun; gezginin ayrı ispat araçları bu adımların dışındadır. Dahil edilme ve onayları görmek ispat formu doldurmayı gerektirmez.
+
+## Ağ sayılarını etiketleriyle okuyun
+
+Ana sayfa hashrate’i, zorluk ve ortalama blok süresi ağ etkinliğini anlatır; blokların gelişini anlamak için yararlı bağlamdır. Eş sayısı tüm katılımcıların sayımı değil gezgin düğümünün sayısıdır. Özellikle kendi düğümünüzle kıyaslarken değeri etiketi ve gözlem zamanı ile okuyun.
+
+Hedef blok aralığı veya geri sayım, belirli işleme randevu değildir. İşlem sayfasında gerçek dahil edilmeyi gözleyin. [Hashrate rehberi](https://bntpool.com/blog/tr/what-is-hashrate/) yerel hesaplamayı ağ ve havuz tahminlerinden ayırır. Kendi düğümünüz için [düğüm rehberi](/tr/blog/run-blocknet-node/) eş bağlantılarını ve eşitlemeyi kapsar. Bunlar farklı ölçümler kullanır.
+
+## İşlem bulunamazsa ne yapılır?
+
+Önce tam kimliği ve ağı kontrol edin. Gönderen cüzdan kaydı veya havuz ödeme kimliğiyle karşılaştırın. Yeni işlem gezgin düğümüne henüz görünmeyebilir; yayılma ve dizinleme için süre tanıyıp yeniden bakın. Sonucun eksikliği tek başına yeni ödeme gerektiğini göstermez.
+
+Başka işlem yapmadan cüzdana dönüp ilk işlemi ve mevcut geçmişi inceleyin. Madencilik geliri için [havuzdan cüzdana rehberi](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/), hesaba yazılan bakiye, gönderilen ödeme ve taranan alımı ayırır. Kimliği kayıtla saklayın; böylece her kontrol aynı ödemeyi uygun arayüzden izler.
+
+<CTA target="seine" title="Blocknet madencilik kurulumunuzu bağlayın" text="seine’ı madencilik rehberleriyle kullanın, sonra havuz ödemelerini gezgin ve cüzdanda takip edin." />

@@ -1,0 +1,96 @@
+---
+title: 'Blocknet-Wallet sichern, wiederherstellen und umziehen'
+description: 'Sichere deine Blocknet-Wallet, stelle sie aus dem Seed wieder her oder ziehe mit der Datei um. Prüfe Adresse und Scan, bevor du die alte Kopie ausmusterst.'
+tags: ['Blocknet', 'Wallet', 'Wiederherstellung']
+faq:
+  - q: 'Kann ich eine Blocknet-Wallet bei vergessenem Passwort wiederherstellen?'
+    a: 'Bei einer Seed-basierten Wallet importierst du den gesicherten Wiederherstellungs-Seed unter einem neuen Namen und vergibst ein neues Passwort. Die alte verschlüsselte Datei behält ihr bisheriges Passwort. Vergleiche die wiederhergestellte Adresse mit deinen Unterlagen und lasse Node und Wallet-Scan aufholen, bevor du das Guthaben prüfst.'
+  - q: 'Ändert sich beim Umzug meiner Blocknet-Wallet die Empfangsadresse?'
+    a: 'Das Laden einer Kopie derselben Wallet-Datei oder der korrekte Import ihres ursprünglichen Seeds erhält die Adresse. Vergleiche die vollständige Adresse auf dem Zielrechner mit einem vertrauenswürdigen früheren Eintrag. Eine ganz neue Wallet anzulegen ist ein anderer Vorgang und ergibt eine neue Adresse für künftige Zahlungen.'
+  - q: 'Reicht eine Nur-Lese-Wallet, um wieder ausgeben zu können?'
+    a: 'Eine Nur-Lese-Wallet bietet Einsicht und eignet sich zur Beobachtung eingehender Zahlungen auf einem anderen Rechner. Für den Zugriff zum Ausgeben brauchst du die vollständige Wallet-Datei mit Passwort oder das Wiederherstellungsmaterial der vollständigen Wallet. Bewahre deren ursprüngliche Sicherung auf und prüfe, welche Art Wallet du geladen hast.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Sichere deine Blocknet-Wallet vor einem Rechnerwechsel und stelle anschließend dieselbe Adresse mit der Wallet-Datei oder dem Wiederherstellungs-Seed wieder her. Diese Anleitung folgt dem offiziellen CLI v1.2.0 und core v0.22.0, geprüft am 27. Oktober 2026. Sie trennt das Erstellen der Sicherung, das Öffnen auf einem anderen Rechner und die abschließende Prüfung der Wiederherstellung.
+
+## Wie sicherst du eine Blocknet-Wallet und stellst sie wieder her?
+
+<Answer>
+Bewahre deinen Wiederherstellungs-Seed offline und eine getrennte Kopie der vollständigen Wallet-Datei auf. Lade diese Datei auf dem Zielrechner mit ihrem Passwort oder importiere den ursprünglichen Seed in eine neue Datei. Vergleiche die gesamte Empfangsadresse, lasse Node und Wallet-Scan aufholen und prüfe deine Unterlagen, bevor du die alte Kopie ausmusterst.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Eine Wallet und ihre geschützte Sicherung werden auf einen anderen Rechner übertragen, wo die wiederhergestellte Adresse und der Scan-Fortschritt geprüft werden." width="1200" height="675" loading="lazy" />
+
+## Wähle den Weg passend zu deinen Unterlagen
+
+Eine Sicherung der Wallet-Datei und ein Wiederherstellungs-Seed haben unterschiedliche Aufgaben. Die Datei `.wallet.dat` enthält Wallet-Schlüssel und gespeicherten Wallet-Zustand; eine passwortgeschützte Kopie benötigt zum Öffnen ihr Passwort. Der Seed kann die Schlüssel einer Seed-basierten Wallet in einer neuen Datei mit neuem Passwort wiederherstellen. Bewahre nach Möglichkeit beides auf und sichere private Zahlungsunterlagen separat, damit du sie nach der Wiederherstellung vergleichen kannst.
+
+Dieses Verfahren gilt für eine vorhandene vollständige Wallet. Für die erste Erstellung nutze die [Wallet-Einrichtung](/de/blog/blocknet-wallet-for-mining/). Um Zahlungen auf einem zweiten Rechner ohne Ausgabeberechtigung zu beobachten, folge der [Nur-Lese-Anleitung](/de/blog/blocknet-view-only-wallet/). Eine öffentliche Empfangsadresse allein kann keine Wallet wiederherstellen. Kläre vor den folgenden Schritten, ob du die vollständige Datei, ihr Passwort und den ursprünglichen Seed hast.
+
+## Bereite die ursprüngliche Wallet und deine Unterlagen vor
+
+Verbinde dich im Terminal mit deinem laufenden Mainnet-Core:
+
+```sh
+blocknet attach mainnet
+```
+
+Lade in der interaktiven Shell die richtige Wallet und notiere ihre vollständige öffentliche Adresse:
+
+```text
+load
+address
+```
+
+Wähle den Menüeintrag der vorhandenen Wallet. Ist eine andere geladen, verwende `unload`, bevor du die gewünschte auswählst. Bewahre die Adresse zusammen mit Netzwerk und Dateiname in deinen privaten Umzugsnotizen auf.
+
+Bei einer Seed-basierten Wallet führst du `seed` in der Shell aus, bestätigst die Abfrage und gibst das Wallet-Passwort ein. Schreibe die angezeigten Wörter in genau dieser Reihenfolge auf und bewahre sie offline auf. Teile oder zeichne dabei deinen Bildschirm nicht auf; die [Seed-Anleitung](/de/blog/seed-phrase-explained/) erklärt den Schutz dieser Aufzeichnung. Meldet der Client, dass kein Seed verfügbar ist, bewahre die vollständige Datei und ihr Passwort auf und nutze die Dateikopie. Nicht jede ältere oder aus Schlüsseln importierte Wallet hat einen Seed.
+
+## Erstelle eine getrennte Kopie der Wallet-Datei
+
+Finde die Datei, die der Core tatsächlich verwendet. Das Standardverzeichnis ist `~/.config/bnt/wallets/`; unter Windows lautet es `C:\Users\<you>\.config\bnt\wallets\`. Der Ordner der konfigurierten `wallet_file` kann abweichen. Nutze den vom offiziellen Client angezeigten Pfad und die [Referenz zur Wallet-Verwaltung](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), besonders bei mehreren ähnlich benannten Dateien. Prüfe vor dem Kopieren, dass es die richtige Datei ist.
+
+Führe nach dem Notieren der Adresse `unload` aus und warte auf Erfolg, bevor du die Datei kopierst. Lasse das Original an seinem Platz und sichere eine datierte Kopie auf einem getrennten Datenträger unter deiner Kontrolle. Behalte die Endung `.wallet.dat` bei und schütze Sicherung und Passwort. Beim Laden aus einem anderen Verzeichnis kann der Client eine lokale Sicherung erstellen; eine gleichnamige vorhandene Sicherung überschreibt er jedoch nicht. Prüfe deine eigene Kopie, statt eine aktuelle lokale Sicherung vorauszusetzen.
+
+## Wie ziehst du mit der Wallet auf einen neuen Rechner um?
+
+Installiere den [offiziellen Client](https://github.com/blocknetprivacy/blocknet/releases/latest) und richte mit der [Node-Anleitung](/de/blog/run-blocknet-node/) einen Mainnet-Core ein. Übertrage eine Kopie der vollständigen Wallet-Datei über einen Datenträger unter deiner Kontrolle in den Wallet-Ordner des Ziel-Cores. Bewahre dort vorhandene andere Dateien; wähle bei Bedarf einen anderen Dateinamen. Im geprüften Client liest `load` aus diesem Wallet-Ordner, auch bei Eingabe eines benutzerdefinierten Pfads.
+
+Verbinde dich auf dem Zielrechner, führe `load` aus, wähle die kopierte Datei und gib ihr bisheriges Passwort ein. Fehlt die Datei im Menü, prüfe den vom Ziel-Core verwendeten Ordner und das Kopierziel. Wähle die vorhandene Datei statt der Option zum Erstellen einer neuen Wallet. Das Kopieren derselben Datei stellt den Zugriff auf dieselben Schlüssel wieder her; es sendet keine Coins und erzeugt kein zweites Guthaben.
+
+## Stelle die Wallet aus dem ursprünglichen Seed wieder her
+
+Bei verlorener Datei oder vergessenem Passwort verwendest du den gesicherten Seed im offiziellen Client auf deinem vertrauenswürdigen Zielrechner. Verbinde dich mit dem vorgesehenen Mainnet-Core und entlade zunächst jede andere Wallet. Starte die Wiederherstellung in der interaktiven Shell:
+
+```text
+import
+```
+
+Wähle Option 1 für den Wiederherstellungs-Seed mit 12 Wörtern. Gib deine eigenen ursprünglichen Wörter in der richtigen Reihenfolge ein; nutze niemals Beispielwörter aus einer Anleitung und füge den Seed nie auf einer Website ein.
+
+Wähle einen neuen, unbenutzten Wallet-Namen und vergib und bestätige auf Aufforderung ein neues Passwort. Die [geprüfte Importimplementierung](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) erstellt aus diesen Angaben eine Wallet und zeigt ihre Adresse an. Die ursprüngliche verschlüsselte Datei behält ihr altes Passwort. Bewahre die alte Datei und die Sicherung während der Prüfung auf und behandle die neue Datei als weitere zu schützende Kopie.
+
+## Prüfe Adresse, Chain und Wallet-Scan
+
+Prüfe nach dem Laden oder Importieren die Wallet auf dem Zielrechner:
+
+```text
+address
+status
+balance
+history
+```
+
+Vergleiche die gesamte Adresse mit deinem zuvor gespeicherten Eintrag. Diese Prüfung identifiziert die Wallet, bevor du dich auf das angezeigte Guthaben verlässt. Weicht sie ab, halte den Umzug an und prüfe gewählte Datei, Wiederherstellungswörter und Netzwerk. Bewahre die ursprüngliche Sicherung unverändert, während du die Abweichung klärst.
+
+Lasse sowohl den Chain-Download des Nodes als auch den Output-Scan der Wallet aufholen. Eine frisch importierte Wallet muss ihre Outputs erst in der Chain finden; ein früh angezeigtes Guthaben ist keine abschließende Wiederherstellungsprüfung. Vergleiche nach dem Scan verfügbares Guthaben und Zahlungseingänge. Bewahre getrennte Zahlungsnotizen und die Originaldatei für historische Details auf. Die [Anleitung zur Wallet-Synchronisierung](/de/blog/blocknet-wallet-not-syncing/) erklärt die relevanten Fortschrittsanzeigen und wann ein erneuter Scan sinnvoll ist.
+
+## Schließe den Umzug nach der Prüfung ab
+
+Bewahre eine geschützte Sicherung der geprüften Ziel-Wallet und den Offline-Seed auf. Notiere, welcher Rechner nun die aktive vollständige Wallet enthält und welche Kopien Sicherungen sind. Eine alte Kopie behält denselben Schlüsselzugriff; ein Dateiumzug widerruft ihn nicht. Behandle beim Ausmustern eines Geräts dessen Speicher nach deinem üblichen sicheren Entsorgungsverfahren, nachdem du die funktionierende Sicherung bestätigt hast.
+
+Stimmt die wiederhergestellte Adresse überein, kann dein bisheriges Ziel für Mining-Auszahlungen gleich bleiben. Vergleiche zur Prüfung von Mining-Eingängen den [Auszahlungsnachweis des Pools](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) mit den eingehenden Transaktionen deiner Wallet. Erstellst du bewusst eine andere Wallet, ist das ein Adresswechsel statt einer Wiederherstellung. Schließe die Prüfung der wiederhergestellten Wallet ab, bevor du getrennte Änderungen an der Miner-Konfiguration vornimmst.
+
+<CTA target="seine" title="Mine auf deine geprüfte Blocknet-Adresse" text="Verbinde deinen Miner mithilfe der seine-Anleitungen und bewahre Wallet-Sicherungen auf Datenträgern unter deiner Kontrolle auf." />

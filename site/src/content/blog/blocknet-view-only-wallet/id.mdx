@@ -1,0 +1,107 @@
+---
+title: 'Menyiapkan dompet Blocknet hanya-baca'
+description: 'Siapkan dompet Blocknet hanya-baca di komputer lain: ekspor berkas tampilan, buka dengan kata sandinya sendiri, periksa dana masuk, dan lindungi aksesnya.'
+tags: ['Blocknet', 'Dompet', 'Privasi']
+faq:
+  - q: 'Bisakah dompet Blocknet hanya-baca mengirim koin?'
+    a: 'Dompet hanya-baca dapat memantau dana masuk, tetapi tidak dapat mengirim pembayaran atau menandatangani pesan. Core yang ditinjau menolak operasi tersebut untuk jenis dompet ini. Gunakan dompet lengkap untuk keputusan pengeluaran dan persetujuan pembayaran, serta salinan tampilan untuk catatan penerimaan yang ingin Anda pantau.'
+  - q: 'Bolehkah saya memublikasikan kunci privat tampilan Blocknet?'
+    a: 'Kunci privat tampilan memberi akses ke informasi pembayaran masuk. Kunci ini tetap bersifat privat meskipun tidak memberikan kewenangan membelanjakan dana. Bagikan akses tampilan hanya dengan sengaja, lindungi berkas ekspor dan kata sandinya, serta jangan sertakan kunci dalam tangkapan layar publik, permintaan bantuan, percakapan, atau formulir bukti explorer.'
+  - q: 'Apakah dompet hanya-baca memerlukan kata sandi dompet utama?'
+    a: 'Proses ekspor meminta kata sandi dompet lengkap untuk mengizinkan pembuatan, lalu meminta kata sandi terpisah bagi berkas tampilan. Muat berkas ekspor di komputer kedua dengan kata sandi berkas yang Anda pilih. Komputer kedua tidak memerlukan frasa pemulihan atau kredensial pengeluaran dompet lengkap.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Pantau pembayaran Blocknet masuk di komputer kedua sambil mempertahankan persetujuan pembayaran di dompet lengkap. Panduan ini menggunakan CLI resmi v1.2.0 dan core publik v0.22.0, diperiksa pada 27 Oktober 2026. Panduan mengikuti alur berkas ekspor, menjelaskan akses yang diberikan, dan menunjukkan cara memeriksa catatan penerimaan setelah berkas dimuat.
+
+## Bagaimana cara membuat dompet Blocknet hanya-baca?
+
+<Answer>
+Buka dompet lengkap dan gunakan perintah viewkeys untuk membuat berkas tampilan terenkripsi dengan kata sandi terpisah. Pindahkan berkas ekspor ke komputer yang dituju, muat di sana, dan periksa alamat serta jenis hanya-bacanya. Biarkan pemindaian menyusul, lalu periksa pembayaran masuk sambil tetap menggunakan dompet lengkap untuk membelanjakan dana.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Dompet lengkap mengekspor salinan tampilan terenkripsi ke komputer kedua yang dapat memeriksa pembayaran masuk tanpa kewenangan membelanjakan dana." width="1200" height="675" loading="lazy" />
+
+## Pilih catatan penerimaan yang ingin dipantau
+
+Mulailah dari dompet lengkap yang dana masuknya ingin Anda pantau. [Panduan penyiapan dompet](/id/blog/blocknet-wallet-for-mining/) membahas pembuatan atau pemulihannya. Salinan tampilan terkait dengan alamat dompet tersebut; salinan ini tidak membuat identitas penerima baru atau memindahkan koin ke akun lain. Catat dompet dan jaringan yang terkait sebelum menangani berkas ekspor.
+
+Untuk penambangan, Anda dapat tetap memakai alamat pembayaran terverifikasi yang sama. Dompet tampilan membantu memeriksa catatan masuk di komputer tepercaya lainnya. [Panduan pemantauan pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) memiliki tugas berbeda: menampilkan share, saldo pool, dan aktivitas pembayaran tanpa kunci dompet. Pilih antarmuka sesuai pertanyaan Anda; akses tampilan berguna saat Anda membutuhkan catatan penerimaan privat.
+
+## Ekspor berkas tampilan dari dompet lengkap
+
+Di komputer yang menyimpan dompet lengkap, hubungkan ke core mainnet yang sedang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Buka dompet yang dimaksud dan periksa alamatnya dengan perintah shell berikut:
+
+```text
+load
+address
+```
+
+Jika dompet terkunci, gunakan permintaan buka kunci biasa. Jaga sesi ini tetap privat karena operasi berikutnya menampilkan materi kunci tampilan.
+
+Mulai ekspor:
+
+```text
+viewkeys
+```
+
+[Klien yang ditinjau](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) menjelaskan bahwa kunci privat tampilan memperlihatkan dana masuk dan meminta konfirmasi. Lanjutkan hanya jika Anda ingin memberikan akses itu. Klien kemudian meminta kata sandi dompet lengkap, kata sandi baru untuk berkas hanya-baca, dan konfirmasi kata sandi baru. Pilih dan simpan kata sandi berkas untuk komputer penerima.
+
+## Berkas mana yang perlu dipindahkan?
+
+Setelah ekspor berhasil, klien menampilkan kunci tampilan dan lokasi berkas yang disimpan. Gunakan lokasi sebenarnya itu untuk mengenali berkas ekspor. Pindahkan ke komputer yang Anda kendalikan dengan metode yang sesuai untuk data privat dompet. Lindungi kata sandi berkas secara terpisah. Hindari memasukkan keluaran kunci terminal ke tangkapan layar atau transkrip pemecahan masalah.
+
+[Referensi dompet](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) menyebut folder bawaan `~/.config/bnt/wallets/` dan padanan Windows `C:\Users\<you>\.config\bnt\wallets\`. Lokasi dompet yang dikonfigurasi dapat mengubah folder yang ditampilkan load. Salin berkas ekspor ke folder dompet di tujuan agar dapat ditemukan klien. Pertahankan dompet lengkap asli dan cadangan pemulihannya di penyimpanan yang ditentukan.
+
+## Muat dan verifikasi salinan di komputer kedua
+
+Siapkan core yang berjalan di tujuan dengan [panduan node](/id/blog/run-blocknet-node/), lalu hubungkan ke jaringan yang sama. Buka berkas ekspor dengan kata sandi yang dipilih untuk berkas tersebut:
+
+```text
+load
+```
+
+Jika dompet lain sudah terbuka, shell resmi dapat melepasnya sebelum memuat berkas yang diinginkan. Pilih berdasarkan nama berkas ekspor, bukan dengan menganggap dompet pertama dalam daftar adalah yang benar.
+
+Verifikasi salinan melalui klien:
+
+```text
+address
+status
+```
+
+Bandingkan alamat penerima lengkap dengan alamat dompet lengkap. Periksa jenis hanya-baca yang ditampilkan klien. Pemeriksaan ini memastikan identitas dan akses yang dimaksud. Anda tidak perlu mencoba mengirim untuk mengujinya: [core yang ditinjau](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) menolak pengiriman dan penandatanganan pesan dari dompet hanya-baca.
+
+## Biarkan dompet tampilan menemukan pembayaran masuk
+
+Node tujuan memerlukan blok terkait, dan dompet yang dimuat harus memindainya. Gunakan perintah shell ini untuk memeriksa catatannya:
+
+```text
+outputs
+history
+```
+
+Dompet yang baru dimuat atau diimpor mungkin masih mengejar ketertinggalan meskipun node memiliki peer. Ikuti [panduan sinkronisasi dompet](/id/blog/blocknet-wallet-not-syncing/) untuk membedakan pengunduhan rantai dari pemindaian dompet serta menentukan apakah pemindaian diperlukan.
+
+Cocokkan catatan masuk dengan ID transaksi yang sudah Anda miliki dari dompet lengkap atau catatan pembayaran. [Panduan explorer](/id/blog/blocknet-explorer-guide/) membantu memastikan pencantuman publik, sedangkan dompet tampilan menyediakan rincian pembayaran masuk. Gunakan dompet lengkap untuk keputusan dan persetujuan pengeluaran saat ini. Perlakukan salinan sebagai pemantau penerimaan, tanpa menganggapnya menyalin setiap catatan keluar atau keputusan saldo yang dapat dibelanjakan.
+
+## Akses apa yang diberikan kunci privat tampilan?
+
+[Referensi shell resmi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) memperingatkan bahwa pemilik kunci privat tampilan dapat melihat dana masuk. Berkas tampilan terenkripsi melindungi akses dengan kata sandinya sendiri, tetapi membukanya tetap memperlihatkan informasi pembayaran privat. Berikan akses hanya kepada orang atau mesin yang dimaksud. Mengganti kata sandi berkas tidak mencabut kunci tampilan yang sudah disalin orang lain.
+
+Jauhkan rahasia pengeluaran maupun tampilan dari alat publik dan pesan dukungan. Alamat penerima memang dibagikan untuk pembayaran; kunci privat tampilan mempunyai tujuan berbeda. [Panduan alamat stealth](/id/blog/stealth-addresses-explained/) menjelaskan cara dompet mengenali output miliknya. Dalam penyiapan ini, pindahkan hanya akses tampilan yang dimaksud dan simpan materi pemulihan bersama dompet lengkap.
+
+## Pertahankan rutinitas pemantauan yang dapat diulang
+
+Saat kembali ke komputer pemantauan, muat berkas tampilan yang sama, periksa jaringan dan alamat, lalu periksa kemajuan sebelum menafsirkan entri yang belum muncul. Bedakan catatan penerimaan dari dana yang dapat Anda izinkan untuk dibelanjakan. Jika Anda membuat dompet lain dengan alamat baru, salinan tampilan yang sudah ada tetap terkait dengan dompet lama.
+
+Simpan cadangan pemulihan dompet lengkap meskipun penyiapan tampilan sudah berhasil. Salinan tampilan tidak menggantikan materi pengeluaran yang diperlukan untuk pemulihan. [Panduan frasa seed](/id/blog/seed-phrase-explained/) menjelaskan cadangan tersebut, sedangkan [mengirim dan menerima](/id/blog/send-receive-blocknet/) membahas alur pembayaran. Dompet lengkap, cadangan, dan salinan tampilan masing-masing memiliki tugas yang jelas dalam rutinitas Anda.
+
+<CTA target="seine" title="Terima pembayaran penambangan di dompet Blocknet Anda" text="Gunakan panduan seine untuk menambang ke alamat Anda, lalu pantau pembayaran masuk melalui tampilan dompet pilihan Anda." />

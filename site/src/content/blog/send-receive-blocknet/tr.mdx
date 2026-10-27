@@ -1,0 +1,99 @@
+---
+title: 'Blocknet nasıl gönderilir ve alınır?'
+description: 'Resmî cüzdanla Blocknet gönderip alın: alıcıyı ve ödeme önizlemesini kontrol edin, işlem kimliğini saklayın ve cüzdan geçmişinden alındığını doğrulayın.'
+tags: ['Blocknet', 'Cüzdan', 'Ödemeler']
+faq:
+  - q: 'Blocknet almak için ne paylaşmalıyım?'
+    a: 'Cüzdanın gösterdiği alım adresini veya doğrulanmış Blocknet ID kısa adınızı paylaşın. Ödeme bağlantısı tutarı ve notu içerebilir. Gönderenin alım bilgilerinize ihtiyacı vardır; kurtarma sözcükleri ve özel anahtarlar sizde kalır. Alındığını kendi cüzdan geçmişinizden doğrulayın.'
+  - q: 'Blocknet ödemesini onaylamadan iptal edebilir miyim?'
+    a: 'İncelenen komut satırı istemcisinde gönderme komutu önce önizleme ister ve ödeme bilgilerini gösterir. Onay isteminde Enter tuşuna basmak veya hayır yanıtı vermek işlemi iptal eder. Onaylanmış bir gönderimden sonra başka bir eyleme karar vermeden önce işlem kaydını inceleyin.'
+  - q: 'Aldığım Blocknet neden hemen harcanabilir değil?'
+    a: 'Cüzdan harcanabilir, bekleyen ve onaylanmamış fonları ayırır. Bir işlem, çıktıları harcanabilir olmadan önce ağda görünebilir. Güncel cüzdan durumunu okuyup eşitleme ve taramanın ilerlemesine izin verin. Açık gezgin bloğa dahil edilmeyi kontrol etmeye yardımcı olur; kendi çıktılarınızı cüzdan belirler.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Hazır bir cüzdandan Blocknet ödemesi gönderin; gönderenin kontrol ekranından alıcının geçmişine kadar izleyin. Bu anlatım, 26 Ekim 2026 tarihinde kontrol edilen resmî komut satırı istemcisi v1.2.0’ı kullanır. Adres, ödeme önizlemesi ve işlem kaydını tek bir süreçte birleştirir. Henüz cüzdan oluşturmanız veya geri yüklemeniz gerekiyorsa önce [cüzdan kurulum rehberini](/tr/blog/blocknet-wallet-for-mining/) okuyun.
+
+## Blocknet nasıl gönderilir ve alınır?
+
+<Answer>
+Blocknet almak için cüzdanın alım adresini veya doğrulanmış kısa adınızı paylaşın. Göndermek için alıcıyı ve tutarı girin, hedefi ve ücreti inceleyip amaçlanan ödemeyi onaylayın. Ardından işlem kimliğini saklayın. Alıcı, işlem ilerlerken kendi cüzdan geçmişini ve harcanabilir bakiyesini kontrol eder.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Gönderen ödemeyi inceler, ağ işlemi kaydeder ve alıcı cüzdan geçmişini kontrol eder." width="1200" height="675" loading="lazy" />
+
+## Ödemeyi hazırlamadan önce doğru cüzdanı açın
+
+Resmî istemciyle çalışan mainnet core’a bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+Etkileşimli istemde mevcut cüzdanı şu komutla açın:
+
+```text
+load
+```
+
+İstenen cüzdan dosyasını seçin ve sorulduğunda parolasını girin. [Düğüm rehberi](/tr/blog/run-blocknet-node/), arka plandaki core’u başlatmayı ve incelemeyi anlatır.
+
+Alım adresini ve bakiyeyi ayrı ayrı şu komutlarla kontrol edin:
+
+```text
+address
+balance
+```
+
+Doğru cüzdanı ve ağı kullandığınızdan emin olun. Giden ödeme hazırlarken harcanabilir tutarı okuyun. [Resmî kabuk başvurusu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) bu komutları açıklar; grafik cüzdan aynı görevleri farklı kontroller ve etiketlerle sunabilir.
+
+## Gönderenle ne paylaşmalısınız?
+
+Adres komutunun verdiği tam adresi kopyalayıp kararlaştırdığınız ödeme kanalından iletin. [Blocknet ID](/tr/blog/blocknet-id-pay-by-name/) kullanıyorsanız doğru kısa adı paylaşın ve gönderenden çözümlenen adresi incelemesini isteyin. Yeni ödeme hazırlarken yazımı alıcıyla doğrulayın. Tanıdık bir görünen ad, gerçek alım bilgilerini kontrol etmekle aynı şey değildir.
+
+Bir [ödeme bağlantısı](/tr/blog/blocknet-payment-links/), istenen tutarı ve isteğe bağlı notu taşıyabilir. Yeniden yazmayı azaltmak için kullanın, ardından cüzdana doldurulan bilgileri inceleyin. Kurtarma sözcükleri ve özel anahtarlar alım bilgisi değildir. Bunları mesajlara, faturalara ve ekran görüntülerine koymayın. Bu adımda gereken bilgi alım adresidir.
+
+## Alıcıyı ve amaçlanan tutarı girin
+
+Aşağıdaki, attach içindeki bir söz dizimi örneğidir. Büyük harfli yer tutucuyu gerçek alıcı adresiyle, örnek tutarı ise ödemek istediğiniz tutarla değiştirin:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Yer tutucu ödeme yapılacak bir adres değildir. İncelenen istemci, alıcı konumunda Blocknet ID kısa adını da kabul eder.
+
+Fatura veya sipariş referansı için [şifreli not rehberine](/tr/blog/blocknet-encrypted-memos/) göre not ekleyin. Hazırlamadan önce alıcının istediği metni kontrol edin. Bu ilk anlatım sabit tutara odaklanır; tüm bakiyeyi gönderme, ücreti farklı hesaplayan ayrı bir işlemdir. [Ücret rehberi](/tr/blog/blocknet-transaction-fees/), bu ayrımı ve para üstünün cüzdana nasıl döndüğünü açıklar.
+
+## Onaylamadan önce önizlemeyi inceleyin
+
+[İncelenen istemci](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), göndermeden önce deneme hesaplaması ister. Tutarı, hedefi, ücreti ve varsa para üstünü gösterir. Çözümlenen kısa adın adresi de incelemeye dahil edilir. Not eklediyseniz onu da kontrol edin. İstemde karar vermeden önce bu bilgileri karşılamak istediğiniz ödeme talebiyle karşılaştırın.
+
+`Confirm [y/N]:` isteminde yalnızca yapmak istediğiniz ödeme için `y` girin. Önizlemeyi iptal etmek için Enter’a basın veya hayır yanıtı verin. Normal sabit tutarlı gönderimde alıcı tutarı ile ağ ücreti hesaplamanın ayrı parçalarıdır. Eski örnek veya ekran görüntüsünden ücret kopyalamak yerine güncel önizlemedeki değerleri kullanın.
+
+## Gönderdikten sonra işlem kimliğini saklayın
+
+Başarılı ve onaylanmış gönderimin ardından CLI bir işlem kimliği ve gezgin bağlantısı gösterir. Aynı işlemi tekrar bulmak için kimliği ödeme kaydınızla saklayın. İlerlemeyi kontrol etmekte, başarı mesajının kırpılmış görüntüsünden daha kullanışlıdır. Gerektiğinde alıcıyı, amaçlanan tutarı ve fatura referansını özel kayıtlarınızda tutun.
+
+Etkinliği geçmiş komutuyla inceleyin:
+
+```text
+history
+```
+
+Güncel istemci, cüzdanın gelen çıktılarını kayıtlı giden gönderimlerle birleştirir; mempool’da bekleyen giden kayıtlar da dahildir. Bir işlemin sonucu belirsizse başka ödeme hazırlamadan mevcut geçmişi ve kimliği kontrol edin. Gönderimi tekrarlamak yeni bir ödeme talimatıdır; önce ilkine ne olduğunu belirleyin.
+
+## Alıcının cüzdanından alındığını doğrulayın
+
+Alıcı kendi yüklü cüzdanındaki geçmişi kontrol eder ve gelen kaydı konuşulan işlemle eşleştirir. Cüzdan taraması o cüzdana ait çıktıları belirler. Açık işlem sayfası ağ bilgilerini gösterirken alıcı cüzdanı özel ödeme görünümünü sağlar. [Gezgin rehberi](/tr/blog/blocknet-explorer-guide/), açık kaydın bu kontrolle birlikte nasıl okunacağını açıklar.
+
+Ödeme ilerledikçe cüzdan bakiyesini tekrar inceleyin. Harcanabilir, bekleyen ve onaylanmamış farklı durumlardır. Geri yüklenen veya yeni açılan cüzdan, düğümü bağlı olsa bile geçmişi tarıyor olabilir. Çalışmanın ilerlemesine izin verip yeniden kontrol edin. Madencilik ödemelerinde [havuzdan cüzdana rehberi](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/), havuz ödeme kaydından cüzdanda alıma uzanan ek adımı izler.
+
+## Tekrarlanabilir bir ödeme rutini oluşturun
+
+Her amaçlanan ödemede doğru cüzdan ve ağla başlayın, alım bilgilerini doğrulayın, güncel önizlemeyi inceleyip çıkan işlem kimliğini saklayın. Alıcı daha sonra geçmişi ve bakiyeyi kontrol eder. Bunlar farklı aşamaları anlatır; her başarı ekranını nihai alım saymak yerine gerçekten doğruladığınız aşamayı kaydedin.
+
+Etiketler veya süreçler değiştiğinde kurulu istemcinizin resmî talimatlarını izleyin. Bu rehber incelenen CLI sürecini anlatır; bağlantılı rehberler ad, not, ücret ve taramayı ayrıntılandırır. [bntpool.com](https://bntpool.com/blog/tr/mine-blocknet-on-bntpool/) üzerinde de madencilik yapıyorsanız ödeme adresini, açıp aynı alım süreciyle kontrol edebildiğiniz bir cüzdana bağlayın.
+
+<CTA target="seine" title="seine ile Blocknet madenciliğini keşfedin" text="Madencilik rehberleriyle seine’ı bağlayın ve havuz ödemelerini Blocknet cüzdanınıza alın." />

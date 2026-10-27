@@ -1,0 +1,107 @@
+---
+title: 'Configurare un wallet Blocknet di sola lettura'
+description: 'Configura un wallet Blocknet di sola lettura su un altro computer: esporta il file, aprilo con una password dedicata e controlla i pagamenti in entrata.'
+tags: ['Blocknet', 'Wallet', 'Privacy']
+faq:
+  - q: 'Un wallet Blocknet di sola lettura può inviare monete?'
+    a: 'Un wallet di sola lettura permette di osservare i fondi in entrata, ma non di inviare pagamenti o firmare messaggi. Il core esaminato rifiuta queste operazioni per questo tipo di wallet. Conserva il wallet completo per decidere cosa spendere e autorizzare i pagamenti, usando la copia di consultazione per gli accrediti da monitorare.'
+  - q: 'Posso pubblicare la mia chiave privata di visualizzazione Blocknet?'
+    a: 'La chiave privata di visualizzazione consente di accedere alle informazioni sui pagamenti in entrata. È un dato privato anche se non conferisce autorità di spesa. Condividi tale accesso solo intenzionalmente, proteggi file esportati e password e non inserire chiavi in schermate pubbliche, richieste di assistenza, chat o moduli di prova dell’explorer.'
+  - q: 'Il wallet di sola lettura richiede la password del wallet principale?'
+    a: 'L’esportazione chiede la password del wallet completo per autorizzare la creazione, quindi una password separata per il file di consultazione. Carica il file esportato sul secondo computer con la password scelta per quel file. Il secondo computer non necessita della frase di recupero o delle credenziali di spesa del wallet completo.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Controlla i pagamenti Blocknet in entrata da un secondo computer, mantenendo l’autorizzazione dei pagamenti nel wallet completo. Questa guida usa il client CLI ufficiale v1.2.0 e il core pubblico v0.22.0, verificati il 27 ottobre 2026. Segue il flusso di esportazione del file, spiega l’accesso concesso e mostra come verificare gli accrediti dopo il caricamento.
+
+## Come si crea un wallet Blocknet di sola lettura?
+
+<Answer>
+Apri il wallet completo e usa il comando viewkeys per creare un file di consultazione cifrato con una password separata. Trasferisci il file esportato al computer previsto, caricalo e verifica indirizzo e tipo di sola lettura. Lascia completare la scansione e consulta i pagamenti in entrata, mantenendo la spesa nel wallet completo.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Un wallet completo esporta una copia di consultazione cifrata su un secondo computer, che può esaminare gli accrediti senza autorità di spesa." width="1200" height="675" loading="lazy" />
+
+## Scegli i pagamenti in entrata da monitorare
+
+Parti dal wallet completo di cui vuoi osservare gli accrediti. La [guida alla configurazione del wallet](/it/blog/blocknet-wallet-for-mining/) spiega come crearlo o ripristinarlo. La copia di consultazione corrisponde al suo indirizzo; non crea una nuova identità di ricezione e non sposta monete su un altro conto. Annota il wallet e la rete della copia prima di gestire un file esportato.
+
+Per il mining puoi continuare a usare lo stesso indirizzo di pagamento verificato. Il wallet di consultazione permette di esaminare gli accrediti su un altro computer fidato. La [guida al monitoraggio del pool](https://bntpool.com/blog/it/track-your-miner-on-bntpool/) ha uno scopo diverso: mostra share, saldo del pool e pagamenti senza chiavi del wallet. Scegli l’interfaccia adatta alla domanda; l’accesso di visualizzazione serve quando vuoi consultare il registro privato di ricezione.
+
+## Esporta il file dal wallet completo
+
+Sul computer con il wallet completo, collegati al suo core mainnet in esecuzione:
+
+```sh
+blocknet attach mainnet
+```
+
+Apri il wallet corretto e verifica il suo indirizzo con questi comandi della shell:
+
+```text
+load
+address
+```
+
+Se il wallet è bloccato, usa la normale richiesta di sblocco. Mantieni privata questa sessione, perché l’operazione successiva mostra le chiavi di visualizzazione.
+
+Avvia l’esportazione:
+
+```text
+viewkeys
+```
+
+Il [client esaminato](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) spiega che la chiave privata di visualizzazione rivela i fondi in entrata e chiede conferma. Continua solo se intendi concedere tale accesso. Richiede poi la password del wallet completo, una nuova password per il file di sola lettura e la sua conferma. Scegli e conserva la password del file per il computer di destinazione.
+
+## Quale file devi trasferire?
+
+Dopo un’esportazione riuscita, il client mostra le chiavi di visualizzazione e il percorso del file salvato. Usa quel percorso effettivo per identificare il file esportato. Trasferiscilo al computer che controlli con un metodo adatto a dati privati del wallet. Proteggi separatamente la password. Evita di includere le chiavi mostrate nel terminale in schermate o trascrizioni diagnostiche.
+
+Il [riferimento del wallet](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) indica `~/.config/bnt/wallets/` come cartella predefinita e `C:\Users\<you>\.config\bnt\wallets\` come equivalente Windows. Un percorso configurato può cambiare la cartella elencata da load. Copia il file esportato nella cartella dei wallet della destinazione, in modo che il client lo trovi. Conserva il wallet completo originale e il backup di recupero nelle posizioni previste.
+
+## Carica e verifica la copia sul secondo computer
+
+Prepara un core attivo sulla destinazione con la [guida al nodo](/it/blog/run-blocknet-node/), quindi collegati alla stessa rete. Apri il file esportato con la password scelta per quel file:
+
+```text
+load
+```
+
+Se è già aperto un altro wallet, la shell ufficiale permette di scaricarlo prima di caricare quello desiderato. Seleziona in base al nome del file esportato, senza presumere che il primo wallet elencato sia quello corretto.
+
+Verifica la copia nel client:
+
+```text
+address
+status
+```
+
+Confronta l’indirizzo di ricezione completo con quello del wallet completo. Controlla il tipo di sola lettura mostrato dal client. Queste verifiche confermano identità e accesso previsto. Non occorre tentare un invio: il [core esaminato](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) rifiuta invii e firme di messaggi da un wallet di sola lettura.
+
+## Lascia che il wallet trovi i pagamenti in entrata
+
+Il nodo di destinazione deve avere i blocchi pertinenti e il wallet caricato deve esaminarli. Usa questi comandi per consultarne i registri:
+
+```text
+outputs
+history
+```
+
+Un wallet appena caricato o importato può essere ancora in recupero anche se il nodo ha peer. La [guida alla sincronizzazione del wallet](/it/blog/blocknet-wallet-not-syncing/) distingue il download della catena dalla scansione del wallet e aiuta a capire se occorre una scansione.
+
+Abbina un accredito a un ID di transazione già disponibile nel wallet completo o nel registro dei pagamenti. La [guida all’explorer](/it/blog/blocknet-explorer-guide/) permette di confermare l’inclusione pubblica, mentre il wallet di consultazione mostra i dettagli degli accrediti. Usa il wallet completo per le decisioni di spesa attuali e l’autorizzazione. Considera la copia un monitor degli ingressi, senza presumere che rispecchi ogni uscita o decisione sul saldo spendibile.
+
+## Quale accesso concede una chiave privata di visualizzazione?
+
+Il [riferimento ufficiale della shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) avverte che questa chiave permette al possessore di vedere i fondi in entrata. Un file di consultazione cifrato protegge l’accesso con la propria password, ma aprirlo rivela comunque informazioni private sui pagamenti. Concedi accesso solo alla persona o macchina prevista. Cambiare la password del file non revoca una chiave già copiata.
+
+Tieni i segreti di spesa e visualizzazione fuori dagli strumenti pubblici e dai messaggi di assistenza. Un indirizzo di ricezione si condivide per ricevere un pagamento; una chiave privata di visualizzazione ha un’altra funzione. La [guida agli indirizzi stealth](/it/blog/stealth-addresses-explained/) spiega come il wallet riconosce i suoi output. Per questa configurazione, trasferisci solo l’accesso di consultazione previsto e conserva il materiale di recupero con il wallet completo.
+
+## Mantieni una routine di consultazione ripetibile
+
+Quando torni al computer di monitoraggio, carica lo stesso file, verifica rete e indirizzo e controlla l’avanzamento prima di interpretare una voce mancante. Distingui un accredito registrato dai fondi di cui puoi autorizzare la spesa. Se crei un wallet diverso con un nuovo indirizzo, la copia di consultazione esistente continuerà a corrispondere al vecchio wallet.
+
+Conserva il backup di recupero del wallet completo anche dopo aver configurato la consultazione. Una copia di sola lettura non sostituisce il materiale di spesa necessario al recupero. La [guida alla frase seed](/it/blog/seed-phrase-explained/) spiega quel backup, mentre [invio e ricezione](/it/blog/send-receive-blocknet/) descrive il pagamento. Wallet completo, backup e copia di consultazione hanno ciascuno un compito preciso.
+
+<CTA target="seine" title="Ricevi i pagamenti del mining nel tuo wallet Blocknet" text="Usa le guide di seine per minare verso il tuo indirizzo, poi segui i pagamenti in entrata nella vista del wallet scelta." />

@@ -90,6 +90,13 @@ def main():
         'the restarting clients. Previous-run event clusters are checkpoint context, may duplicate '
         'earlier uploads, and do not establish a termination cause. Hardware in those clusters is '
         'observed after restart. Dependency source IDs come from a fixed allowlist.'
+        ' shutdown_request records an observed OS, API or TUI stop request; it does not prove cleanup '
+        'completed or establish why a process terminated. Null includes older clients.'
+        ' last_cleanup_stage is the last entered step, not a completed step. Shutdown clusters '
+        'include live checkpoints and final reports; they are not clean-exit counts. '
+        'driver_cuda_version describes CUDA driver compatibility, not the display-driver release. '
+        'nvrtc_version describes the loaded compiler. Both use major*1000 + minor*10. '
+        'Previous NVIDIA versions belong to the interrupted run, not the restarting process.'
     )
     if diagnostics.get('status') == 'attention':
         failed = True

@@ -225,6 +225,7 @@ impl TuiStateInner {
         if key.code == KeyCode::Char('q')
             || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
         {
+            crate::diagnostics::stop_requested(seine_telemetry::ShutdownRequest::TuiQuit);
             if let Some(control) = &self.thread_control {
                 control.quit_requested.store(true, Ordering::SeqCst);
             }

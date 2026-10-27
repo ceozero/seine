@@ -1,0 +1,99 @@
+---
+title: 'Blocknet senden und empfangen'
+description: 'Blocknet mit der offiziellen Wallet senden und empfangen: Empfänger prüfen, Zahlung kontrollieren, Transaktions-ID sichern und Eingang im Verlauf bestätigen.'
+tags: ['Blocknet', 'Wallet', 'Zahlungen']
+faq:
+  - q: 'Was gebe ich weiter, um Blocknet zu empfangen?'
+    a: 'Gib die Empfangsadresse deiner Wallet oder deinen verifizierten Blocknet-ID-Kurznamen weiter. Ein Zahlungslink kann Betrag und Memo enthalten. Der Absender benötigt die Empfangsdaten; Wiederherstellungswörter und private Schlüssel bleiben bei dir. Bestätige den Eingang im Verlauf deiner eigenen Wallet.'
+  - q: 'Kann ich eine Blocknet-Zahlung vor der Bestätigung abbrechen?'
+    a: 'Im geprüften Kommandozeilenclient fordert der Sendebefehl zunächst eine Vorschau an und zeigt die Zahlungsdaten. Bei der Bestätigungsfrage brichst du den Vorgang mit Enter oder einer verneinenden Antwort ab. Prüfe nach einem bestätigten Versand den Transaktionseintrag, bevor du weitere Schritte entscheidest.'
+  - q: 'Warum kann ich empfangenes Blocknet nicht sofort ausgeben?'
+    a: 'Die Wallet unterscheidet verfügbare, ausstehende und unbestätigte Mittel. Eine Transaktion kann im Netzwerk sichtbar sein, bevor ihre Outputs ausgebbar sind. Lies den aktuellen Wallet-Status und lass Synchronisierung und Scan weiterlaufen. Der öffentliche Explorer hilft beim Prüfen der Aufnahme in einen Block; die Wallet erkennt deine eigenen Outputs.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Sende eine Blocknet-Zahlung aus einer vorbereiteten Wallet und verfolge sie von der Prüfmaske des Absenders bis zum Verlauf des Empfängers. Diese Anleitung verwendet den offiziellen Kommandozeilenclient v1.2.0, geprüft am 26. Oktober 2026. Sie verbindet Adresse, Zahlungsvorschau und Transaktionseintrag zu einem Ablauf. Wenn du noch eine Wallet erstellen oder wiederherstellen musst, beginne mit der [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/).
+
+## Wie sendet und empfängt man Blocknet?
+
+<Answer>
+Zum Empfangen von Blocknet teilst du die Empfangsadresse deiner Wallet oder deinen verifizierten Kurznamen. Zum Senden gibst du Empfänger und Betrag ein, prüfst Ziel und Gebühr und bestätigst die beabsichtigte Zahlung. Bewahre anschließend die Transaktions-ID auf. Der Empfänger prüft seinen Wallet-Verlauf und den verfügbaren Betrag, während die Transaktion fortschreitet.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Ein Absender prüft eine Zahlung, das Netzwerk erfasst die Transaktion und der Empfänger kontrolliert seinen Wallet-Verlauf." width="1200" height="675" loading="lazy" />
+
+## Öffne vor der Zahlung die richtige Wallet
+
+Verbinde dich mit dem laufenden Mainnet-Core über den offiziellen Client:
+
+```sh
+blocknet attach mainnet
+```
+
+Öffne an der interaktiven Eingabeaufforderung deine bestehende Wallet:
+
+```text
+load
+```
+
+Wähle die vorgesehene Wallet-Datei und gib bei Aufforderung ihr Passwort ein. Die [Node-Anleitung](/de/blog/run-blocknet-node/) erklärt das Starten und Prüfen des Core im Hintergrund.
+
+Prüfe Empfangsadresse und Guthaben mit diesen einzeln eingegebenen Befehlen:
+
+```text
+address
+balance
+```
+
+Vergewissere dich, dass Wallet und Netzwerk stimmen. Beachte beim Vorbereiten einer ausgehenden Zahlung den verfügbaren Betrag. Die [offizielle Shell-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) dokumentiert diese Befehle; eine grafische Wallet kann dieselben Aufgaben mit anderen Bedienelementen und Bezeichnungen darstellen.
+
+## Was solltest du dem Absender mitteilen?
+
+Kopiere die vollständige Adresse aus dem Adressbefehl und übermittle sie über den vereinbarten Zahlungskanal. Bei [Blocknet ID](/de/blog/blocknet-id-pay-by-name/) teilst du den richtigen Kurznamen; der Absender prüft die aufgelöste Adresse. Gleiche die Schreibweise für eine neue Zahlung mit dem Empfänger ab. Ein vertrauter Anzeigename ersetzt nicht die Prüfung der tatsächlichen Empfangsdaten.
+
+Ein [Zahlungslink](/de/blog/blocknet-payment-links/) kann den angeforderten Betrag und ein optionales Memo enthalten. Er spart erneutes Eintippen; kontrolliere danach die ausgefüllten Angaben in der Wallet. Wiederherstellungswörter und private Schlüssel sind keine Empfangsdaten. Halte sie aus Nachrichten, Rechnungen und Screenshots heraus. Für diesen Schritt wird die Empfangsadresse benötigt.
+
+## Gib Empfänger und gewünschten Betrag ein
+
+Dies ist ein Syntaxbeispiel innerhalb von attach. Ersetze den großgeschriebenen Platzhalter durch die echte Empfängeradresse und den Beispielbetrag durch den Betrag, den du zahlen willst:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Der Platzhalter ist keine Adresse, an die du zahlen sollst. Der geprüfte Client akzeptiert an der Empfängerposition auch einen Blocknet-ID-Kurznamen.
+
+Für eine Rechnungs- oder Bestellreferenz ergänzt du ein Memo nach der [Anleitung für verschlüsselte Memos](/de/blog/blocknet-encrypted-memos/). Prüfe zuvor den vom Empfänger gewünschten Text. Diese Einführung bleibt bei einem festen Betrag; das Senden des gesamten verfügbaren Guthabens ist ein eigener Vorgang mit anderer Gebührenverrechnung. Die [Gebührenanleitung](/de/blog/blocknet-transaction-fees/) erklärt diesen Unterschied und wie Wechselgeld in deine Wallet zurückkehrt.
+
+## Kontrolliere die Vorschau vor der Bestätigung
+
+Der [geprüfte Client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) fordert vor dem Senden einen Probelauf an. Er zeigt Betrag, Ziel, Gebühr und gegebenenfalls Wechselgeld. Bei einem aufgelösten Kurznamen enthält die Prüfung auch dessen Adresse. Kontrolliere ebenso ein angegebenes Memo. Vergleiche die Angaben mit der beabsichtigten Zahlungsanforderung, bevor du die Frage beantwortest.
+
+Gib bei `Confirm [y/N]:` nur für die beabsichtigte Zahlung `y` ein. Enter oder eine verneinende Antwort bricht die Vorschau ab. Bei einer normalen Zahlung mit festem Betrag sind Empfängerbetrag und Netzwerkgebühr getrennte Bestandteile der Wallet-Berechnung. Verwende die Werte der aktuellen Vorschau, statt eine Gebühr aus einem älteren Beispiel oder Screenshot zu übernehmen.
+
+## Bewahre nach dem Senden die Transaktions-ID auf
+
+Nach einem erfolgreich bestätigten Versand zeigt die CLI eine Transaktions-ID und einen Explorer-Link. Speichere die Kennung bei deinen Zahlungsunterlagen, damit du dieselbe Transaktion wiederfindest. Zur Fortschrittsprüfung ist sie nützlicher als ein zugeschnittener Screenshot der Erfolgsmeldung. Bewahre Empfänger, vorgesehenen Betrag und Rechnungsreferenz nach Bedarf in deinen privaten Unterlagen auf.
+
+Prüfe die Aktivität mit dem Verlaufsbefehl:
+
+```text
+history
+```
+
+Der aktuelle Client kombiniert eingehende Wallet-Outputs mit aufgezeichneten ausgehenden Zahlungen, einschließlich solcher in der Mempool. Meldet ein Vorgang ein unklares Ergebnis, prüfe zunächst den vorhandenen Verlauf und die Kennung. Ein erneut ausgeführter Sendebefehl ist ein neuer Zahlungsauftrag. Kläre deshalb, was mit dem ersten geschehen ist, bevor du eine weitere Zahlung vorbereitest.
+
+## Bestätige den Eingang in der Empfänger-Wallet
+
+Der Empfänger prüft den Verlauf seiner eigenen geladenen Wallet und ordnet den Eingang der besprochenen Transaktion zu. Der Wallet-Scan erkennt die Outputs, die dieser Wallet gehören. Eine öffentliche Transaktionsseite liefert Netzwerkinformationen; die Empfänger-Wallet liefert die private Zahlungssicht. Die [Explorer-Anleitung](/de/blog/blocknet-explorer-guide/) erklärt, wie du den öffentlichen Eintrag ergänzend liest.
+
+Prüfe den Wallet-Saldo erneut, während die Zahlung fortschreitet. Verfügbar, ausstehend und unbestätigt sind verschiedene Zustände. Eine wiederhergestellte oder gerade geöffnete Wallet kann den Verlauf noch scannen, obwohl ihr Node verbunden ist. Lass diesen Vorgang weiterlaufen und prüfe erneut. Bei Mining-Zahlungen verfolgt die [Pool-zur-Wallet-Anleitung](https://bntpool.com/blog/de/pool-payout-missing-from-wallet/) zusätzlich den Weg vom Auszahlungseintrag des Pools zum Wallet-Eingang.
+
+## Nutze einen wiederholbaren Zahlungsablauf
+
+Beginne jede beabsichtigte Zahlung mit der richtigen Wallet und dem richtigen Netzwerk, prüfe Empfangsdaten und aktuelle Vorschau und speichere die resultierende Transaktions-ID. Danach prüft der Empfänger Verlauf und Saldo. Diese Beobachtungen betreffen unterschiedliche Phasen. Halte daher fest, welche du tatsächlich überprüft hast, statt jede Erfolgsmeldung als abschließenden Empfang zu betrachten.
+
+Folge bei geänderten Bezeichnungen oder Abläufen den offiziellen Anweisungen für deinen installierten Client. Diese Anleitung beschreibt den geprüften CLI-Ablauf; die verlinkten Artikel vertiefen Namen, Memos, Gebühren und Scans. Wenn du auch bei [bntpool.com](https://bntpool.com/blog/de/mine-blocknet-on-bntpool/) minest, verwende eine Auszahlungsadresse einer Wallet, die du öffnen und mit demselben Empfangsablauf prüfen kannst.
+
+<CTA target="seine" title="Entdecke Blocknet-Mining mit seine" text="Verbinde seine mithilfe der Mining-Anleitungen und empfange Pool-Auszahlungen in deiner Blocknet-Wallet." />

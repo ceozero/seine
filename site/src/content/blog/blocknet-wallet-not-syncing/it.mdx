@@ -1,0 +1,112 @@
+---
+title: 'Wallet Blocknet non sincronizzato o con saldo errato'
+description: 'Controlla un wallet Blocknet ancora in sincronizzazione: distingui nodo e scansione, segui i pagamenti in entrata e ricontrolla il saldo dopo la scansione.'
+tags: ['Blocknet', 'Wallet', 'Risoluzione problemi']
+faq:
+  - q: 'Perché il nodo Blocknet è sincronizzato ma il wallet è indietro?'
+    a: 'Il nodo scarica e convalida la catena, mentre il wallet esamina i blocchi scaricati per trovare i propri output. Sono fasi separate. Un wallet ripristinato può continuare la scansione dopo che il nodo ha recuperato. Confronta altezza scansionata e altezza locale della catena prima di considerare completo il saldo.'
+  - q: 'Il comando sync scarica i blocchi mancanti?'
+    a: 'Nel client da riga di comando verificato, sync chiede al wallet di scansionare blocchi già disponibili nel core. La sincronizzazione di rete è un compito distinto del nodo. Se la catena locale è indietro e non ci sono peer, controlla prima la connessione: la scansione non trova pagamenti in blocchi non ancora scaricati.'
+  - q: 'Devo inviare di nuovo se il pagamento non compare nel saldo?'
+    a: 'Segui prima l’ID esistente, verifica wallet destinatario e rete, poi scansione e conferme. Il solo saldo non stabilisce cosa sia successo a un invio. Controlla il registro originale del wallet o del pagamento del pool prima di prepararne un altro: un nuovo invio è una nuova istruzione.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Individua la fase che ritarda il saldo Blocknet: download della catena del nodo, scansione degli output del wallet o pagamento non ancora spendibile. Questa guida segue la CLI ufficiale v1.2.0 e il core pubblico v0.22.0, verificati il 27 ottobre 2026. Parti da un wallet già creato o ripristinato; la [guida alla configurazione](/it/blog/blocknet-wallet-for-mining/) spiega quella preparazione.
+
+## Perché il mio wallet Blocknet si sta ancora sincronizzando?
+
+<Answer>
+Controlla avanzamento della catena e connessioni del nodo, poi la scansione del wallet caricato. Il nodo raccoglie blocchi; il wallet vi cerca i tuoi pagamenti. Verifica indirizzo e rete, lascia terminare una scansione che avanza e confronta la cronologia con saldi spendibili, in sospeso e non confermati prima di decidere cosa richiede attenzione.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="I blocchi raggiungono il nodo locale prima che il wallet li esamini e aggiorni i registri dei pagamenti." width="1200" height="675" loading="lazy" />
+
+## Parti dal wallet e dalla rete corretti
+
+Apri la sessione mainnet esistente dal terminale:
+
+```sh
+blocknet attach mainnet
+```
+
+Nella shell interattiva apri il wallet:
+
+```text
+load
+```
+
+Seleziona il file previsto. Se è già caricato ma bloccato, sbloccalo con la password al prompt del client. Un messaggio di wallet bloccato descrive l’accesso; non dimostra che il nodo abbia smesso di scaricare blocchi.
+
+Esegui separatamente questi comandi nella shell:
+
+```text
+address
+status
+```
+
+Confronta l’indirizzo con il tuo registro di ricezione. Mainnet e testnet usano core e wallet separati. Controlla anche il file scelto: aprire un nuovo wallet vuoto non ripristina un vecchio indirizzo. Segui la [guida al nodo](/it/blog/run-blocknet-node/) se il core non è avviato o attach non si collega.
+
+## È indietro il nodo o la scansione?
+
+Lo stato del nodo descrive avanzamento della catena e connettività. Il wallet ha una propria altezza scansionata. Nel [client verificato](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), l’avviso sul saldo confronta questa posizione con la catena o l’obiettivo di sincronizzazione. Una catena locale aggiornata può quindi coesistere con un saldo ancora in recupero. Leggi entrambe le fasi, non una sola parola di stato.
+
+Esamina gli output del wallet:
+
+```text
+outputs
+```
+
+Quando non compaiono output corrispondenti e la scansione è indietro, il client mostra altezza scansionata e altezza della catena. Confronta una lettura successiva con quella precedente. Un’altezza crescente indica avanzamento; una singola lista vuota non basta a concludere che manchi un pagamento. Annota altezze e orari per un confronto utile.
+
+## Controlla la connessione se la catena è indietro
+
+Se è il nodo stesso a essere indietro, controlla i peer collegati:
+
+```text
+peers
+```
+
+Senza peer, verifica la connessione Internet e le impostazioni firewall del nodo. Usa il [riferimento ufficiale per i problemi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) insieme alla guida al nodo. Osserva nel tempo anche l’altezza della catena: un peer collegato e un download completato rispondono a domande diverse.
+
+Tieni separati nelle note avvio del nodo e scansione del wallet. Se un nodo nuovo scarica lo storico, lascia avanzare questa fase prima di valutare se il wallet abbia esaminato un pagamento successivo. La [guida ai checkpoint](https://bntpool.com/blog/it/blocknet-checkpoints-fast-sync/) spiega il percorso di sincronizzazione rapida esistente. Creare ripetutamente wallet o cancellare dati della catena non aiuta a capire quale fase avanza.
+
+## Quando eseguire sync nel wallet?
+
+Usa il comando di scansione quando il wallet giusto è aperto e i suoi registri degli output devono raggiungere i blocchi scaricati:
+
+```text
+sync
+```
+
+Il [riferimento della shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) descrive la scansione dei blocchi locali per trovare output propri. È un’operazione del wallet, separata dal recupero dei blocchi dai peer. Lasciala lavorare prima di ripetere la stessa osservazione.
+
+Il comando riporta altezza scansionata e output trovati, oppure che il wallet è già aggiornato. Ricontrolla output e saldo alla fine. Se il client segnala un timeout, verifica l’avanzamento prima di ripetere: un timeout lato client non rivela da solo la posizione finale dello scanner. Conserva file originale e backup di ripristino durante la diagnosi.
+
+## Segui un pagamento atteso nei registri
+
+Usa l’ID completo dalla cronologia del mittente o dal registro dei pagamenti inviati dal pool. La [guida all’explorer](/it/blog/blocknet-explorer-guide/) mostra come verificare stato di rete e blocco contenente. L’inclusione pubblica indica dove si trova la transazione; il wallet ricevente identifica i propri output privati. Confronta i dati di ricezione con il tuo registro, senza aspettarti una pagina pubblica del saldo per indirizzo.
+
+Poi controlla i registri del wallet:
+
+```text
+history
+balance
+```
+
+Un importo in sospeso o non confermato è diverso dai fondi spendibili. Se compare in una di queste categorie, segui le conferme anziché considerarlo assente. Per il mining, il [percorso dal pool al wallet](https://bntpool.com/blog/it/pool-payout-missing-from-wallet/) distingue saldo del pool non pagato, pagamento effettivo e ricezione nel wallet.
+
+## Scansione completa ma importo ancora diverso?
+
+Ricontrolla insieme file del wallet, indirizzo completo, rete e ID della transazione. Confronta lo stesso pagamento e la stessa categoria di saldo. Se è un wallet di sola visualizzazione, usalo per monitorare entrate e usa quello completo per decidere cosa spendere; la [guida alla sola visualizzazione](/it/blog/blocknet-view-only-wallet/) spiega la distinzione. Una scansione completata non cambia il tipo del wallet.
+
+Se il wallet completo corretto è aggiornato e i registri non coincidono ancora, conserva file e backup prima della procedura ufficiale di ripristino. La [guida al seed](/it/blog/seed-phrase-explained/) spiega il materiale necessario; la guida alla configurazione copre l’importazione. Il ripristino va eseguito nel software del wallet. Non pubblicare mai seed, chiave privata, file del wallet o password in un messaggio di assistenza pubblico.
+
+## Annota brevemente le verifiche
+
+Per proseguire, annota versioni di client e core, rete, altezza del nodo, altezza scansionata, numero di peer ed errore esatto. Indica se i valori sono avanzati tra osservazioni. Se condividi log, rimuovi percorsi privati, dettagli dei pagamenti e credenziali non necessari. Una nota concisa descrive la fase da esaminare senza esporre l’accesso al wallet.
+
+Torna a cronologia e saldo dello stesso wallet dopo il controllo mirato. Il risultato utile è vedere il pagamento previsto con il suo stato reale attuale e la relativa scansione aggiornata. La [guida a invio e ricezione](/it/blog/send-receive-blocknet/) collega questo controllo finale al flusso iniziale. Conserva l’ID per seguire la stessa operazione nelle verifiche future.
+
+<CTA target="seine" title="Collega le ricompense di mining al wallet" text="Usa le guide seine per configurare il mining, poi segui i pagamenti del pool nei registri di ricezione del wallet." />

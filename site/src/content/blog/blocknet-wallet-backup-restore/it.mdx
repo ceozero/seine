@@ -1,0 +1,96 @@
+---
+title: 'Backup, ripristino e trasferimento di un wallet Blocknet'
+description: 'Salva un backup del wallet Blocknet, ripristinalo dal seed o trasferisci il file. Verifica indirizzo e scansione prima di ritirare la vecchia copia.'
+tags: ['Blocknet', 'Wallet', 'Recupero']
+faq:
+  - q: 'Posso recuperare un wallet Blocknet se dimentico la password?'
+    a: 'Per un wallet basato su seed, importa il seed di recupero salvato con un nuovo nome e imposta una nuova password. Il vecchio file cifrato mantiene la propria password. Confronta l’indirizzo ripristinato con i tuoi appunti e lascia aggiornare il nodo e la scansione del wallet prima di controllare il saldo.'
+  - q: 'Trasferire il wallet Blocknet cambia l’indirizzo di ricezione?'
+    a: 'Caricare una copia dello stesso file o importare correttamente il seed originale conserva l’indirizzo del wallet. Confronta l’indirizzo completo sulla destinazione con una registrazione precedente affidabile. Creare un wallet completamente nuovo è un’operazione diversa e fornisce un nuovo indirizzo per i pagamenti futuri.'
+  - q: 'Un wallet di sola lettura basta per ripristinare la possibilità di spendere?'
+    a: 'Un wallet di sola lettura permette di osservare i pagamenti in entrata su un altro computer. Per ripristinare la possibilità di spendere, usa il file del wallet completo con la sua password oppure il materiale di recupero del wallet completo. Conserva il backup originale e verifica quale tipo di wallet hai caricato.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Esegui un backup del wallet Blocknet prima di cambiare computer, poi ripristina lo stesso indirizzo con il file del wallet o il seed di recupero. Questa guida segue il CLI ufficiale v1.2.0 e core v0.22.0, verificati il 27 ottobre 2026. Distingue la creazione del backup, la sua apertura altrove e la verifica del completamento del recupero.
+
+## Come si salva e si ripristina un wallet Blocknet?
+
+<Answer>
+Conserva il seed di recupero offline e una copia separata del file del wallet completo. Sul computer di destinazione, carica il file con la sua password oppure importa il seed originale in un nuovo file. Confronta l’intero indirizzo di ricezione, lascia aggiornare il nodo e la scansione e verifica i tuoi registri prima di ritirare la vecchia copia.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Un wallet e il suo backup protetto vengono trasferiti su un altro computer, dove si verificano l’indirizzo ripristinato e l’avanzamento della scansione." width="1200" height="675" loading="lazy" />
+
+## Scegli il percorso compatibile con ciò che possiedi
+
+Un backup del file e un seed di recupero hanno funzioni diverse. Il file `.wallet.dat` contiene le chiavi e lo stato salvato del wallet; aprire una copia protetta da password richiede quella password. Il seed può ricreare le chiavi di un wallet basato su seed in un file nuovo con una nuova password. Conserva entrambi quando disponibili e tieni separati i registri privati dei pagamenti per confrontarli dopo il recupero.
+
+Questa procedura riguarda un wallet completo già esistente. Per la prima creazione, segui la [guida alla configurazione](/it/blog/blocknet-wallet-for-mining/). Per osservare i pagamenti su un secondo computer senza poter spendere, usa la [guida alla sola lettura](/it/blog/blocknet-view-only-wallet/). Il solo indirizzo pubblico di ricezione non può ripristinare un wallet. Prima di scegliere i passaggi seguenti, identifica se possiedi il file completo, la password e il seed originale.
+
+## Prepara il wallet originale e gli appunti per il recupero
+
+Collegati dal terminale al core mainnet in esecuzione:
+
+```sh
+blocknet attach mainnet
+```
+
+Nella shell interattiva, carica il wallet previsto e annota l’indirizzo pubblico completo:
+
+```text
+load
+address
+```
+
+Usa la voce del wallet esistente nel menu. Se è caricato un altro wallet, usa `unload` prima di selezionare quello corretto. Conserva l’indirizzo negli appunti privati del trasferimento insieme alla rete e al nome del file.
+
+Per un wallet basato su seed, esegui `seed` nella shell, conferma la richiesta e inserisci la password. Scrivi le parole restituite nell’ordine esatto e conservale offline. Fallo senza condividere o registrare lo schermo; la [guida al seed](/it/blog/seed-phrase-explained/) spiega come proteggere questi appunti. Se il client segnala che non è disponibile un seed, conserva il file completo e la password e segui il percorso di copia del file. Non presumere che ogni wallet meno recente o importato tramite chiavi abbia un seed.
+
+## Crea una copia separata del file del wallet
+
+Individua il file effettivamente usato dal core. La cartella predefinita è `~/.config/bnt/wallets/`; su Windows è `C:\Users\<you>\.config\bnt\wallets\`. La cartella contenente il `wallet_file` configurato può essere diversa. Usa il percorso mostrato dal client ufficiale e il [riferimento sulla gestione dei wallet](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), soprattutto se più file hanno nomi simili. Conferma il file corretto prima di copiare.
+
+Dopo aver annotato l’indirizzo, esegui `unload` e attendi il completamento prima di copiare il file. Lascia l’originale dov’è e salva una copia datata su un supporto separato sotto il tuo controllo. Mantieni l’estensione `.wallet.dat` e proteggi backup e password. Il client può creare un backup locale quando carica da un’altra cartella, ma non sovrascrive un backup omonimo esistente. Controlla la tua copia salvata invece di presumere che quella locale sia aggiornata.
+
+## Come si trasferisce il wallet su un nuovo computer?
+
+Installa il [client ufficiale](https://github.com/blocknetprivacy/blocknet/releases/latest) e prepara un core mainnet seguendo la [guida al nodo](/it/blog/run-blocknet-node/). Trasferisci una copia del file completo tramite un supporto sotto il tuo controllo nella cartella dei wallet del core di destinazione. Conserva eventuali altri file già presenti; scegli un nome diverso se necessario. Nel client esaminato, `load` legge da quella cartella anche quando si inserisce un percorso personalizzato.
+
+Collegati sulla destinazione, esegui `load`, seleziona il file copiato e inserisci la sua password esistente. Se non compare nel menu, verifica quale cartella usa il core di destinazione e dove hai copiato il file. Scegli il file esistente anziché l’opzione per creare un nuovo wallet. Copiare lo stesso file ripristina l’accesso alle stesse chiavi; non invia monete e non crea un secondo saldo.
+
+## Ripristina dal seed di recupero originale
+
+Se recuperi dopo la perdita del file o della password, usa il seed salvato nel client ufficiale sul computer di destinazione fidato. Collegati al core mainnet previsto e scarica prima qualsiasi altro wallet. Avvia il recupero nella shell interattiva:
+
+```text
+import
+```
+
+Seleziona l’opzione 1 per il seed di recupero di 12 parole. Inserisci le tue parole originali nell’ordine corretto; non usare mai parole di esempio di una guida e non incollare il seed in un sito web.
+
+Scegli un nuovo nome di wallet non ancora usato e imposta e conferma una nuova password quando richiesto. L’[implementazione di importazione esaminata](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) crea un wallet da questi dati e ne mostra l’indirizzo. Il file cifrato originale conserva la vecchia password. Mantieni il vecchio file e il backup mentre controlli il wallet importato e tratta il nuovo file come un’altra copia da proteggere.
+
+## Controlla indirizzo, catena e scansione del wallet
+
+Dopo il caricamento o l’importazione, esamina il wallet di destinazione:
+
+```text
+address
+status
+balance
+history
+```
+
+Confronta l’intero indirizzo con quello annotato prima. Questo identifica il wallet prima di affidarti al saldo mostrato. Se è diverso, interrompi il trasferimento e ricontrolla il file selezionato, le parole di recupero e la rete. Mantieni intatto il backup originale mentre risolvi la differenza.
+
+Lascia completare sia il download della catena del nodo sia la scansione delle uscite del wallet. Un wallet appena importato deve trovare le proprie uscite sulla catena; un saldo iniziale non è la verifica finale del recupero. Confronta saldo disponibile e registri in entrata dopo la scansione. Conserva gli appunti separati dei pagamenti e il file originale per i dettagli storici. La [guida alla sincronizzazione](/it/blog/blocknet-wallet-not-syncing/) spiega quali indicatori controllare e quando è opportuno ripetere la scansione.
+
+## Completa il trasferimento dopo la verifica
+
+Conserva un backup protetto del wallet di destinazione verificato e mantieni il seed offline. Annota quale computer ospita ora il wallet completo attivo e quali copie sono backup. Una vecchia copia mantiene lo stesso accesso alle chiavi; spostare un file non lo revoca. Quando dismetti un dispositivo, tratta il suo supporto secondo la tua consueta procedura di smaltimento sicuro dopo aver confermato che il backup funziona.
+
+Se l’indirizzo ripristinato coincide, la destinazione attuale dei pagamenti di mining può restare invariata. Confronta il [registro dei pagamenti del pool](https://bntpool.com/blog/it/track-your-miner-on-bntpool/) con la cronologia in entrata del wallet per verificare gli accrediti di mining. Se crei intenzionalmente un wallet diverso, si tratta di un cambio di indirizzo e non di un ripristino. Completa la verifica del wallet ripristinato prima di modificare separatamente la configurazione del miner.
+
+<CTA target="seine" title="Esegui mining verso il tuo indirizzo Blocknet verificato" text="Segui le guide di seine per collegare il miner e conserva i backup del wallet su supporti sotto il tuo controllo." />

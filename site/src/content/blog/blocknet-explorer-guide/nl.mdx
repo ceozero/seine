@@ -1,0 +1,74 @@
+---
+title: 'De Blocknet-explorer gebruiken'
+description: 'Vind een transactie of blok met de Blocknet-explorer, lees bevestigingen en openbare kosten en controleer privégegevens van betalingen in je wallet.'
+tags: ['Blocknet', 'Explorer', 'Transacties']
+faq:
+  - q: 'Kan ik in de Blocknet-explorer op walletadres zoeken?'
+    a: 'De openbare zoekfunctie accepteert een blokhoogte, blokhash of transactiehash. Gebruik voor een specifieke betaling de volledige transactie-ID. De privé-uitgangen van Blocknet leveren geen openbare pagina met een adressaldo op zoals bij een transparant grootboek. Je wallet herkent ontvangen uitgangen en toont de bijbehorende bedragen.'
+  - q: 'Heeft een transactie in de mempool bevestigingen?'
+    a: 'Een mempooltransactie wacht op opname in een blok en heeft nul bevestigingen. Na opname levert het bevattende blok de eerste bevestiging. Latere blokken verhogen dat aantal. Controleer de actuele transactiepagina en je walletstatus; maak van de beoogde bloktijd geen gegarandeerde aankomsttijd.'
+  - q: 'Waarom toont de explorer kosten maar verbergt hij het betaalbedrag?'
+    a: 'De netwerkkosten zijn een openbaar transactieveld. Gewone overboekingsbedragen zijn verborgen met commitments en bewijzen, en uitgangen gebruiken eenmalige sleutels. De explorer kan dus de kosten en transactiestructuur tonen zonder het bedrag voor de ontvanger te tonen. Gebruik je wallet voor de privégegevens van betalingen waarbij je betrokken bent.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Zoek een Blocknet-transactie, open het blok waarin deze is opgenomen en begrijp wat de openbare pagina je vertelt. Deze handleiding volgt de [officiële explorer](https://explorer.blocknetcrypto.com/), bekeken op 26 oktober 2026. De screenshots tonen echte openbare pagina’s van die datum. Hoogtes, bevestigingen en netwerkwaarden zijn historische waarnemingen; open de livepagina voor de actuele toestand.
+
+## Hoe zoek je een Blocknet-transactie op?
+
+<Answer>
+Kopieer de volledige transactie-ID uit je wallet of uitbetalingsregistratie naar het zoekveld van de officiële explorer. Open de overeenkomstige transactie en controleer of deze in de mempool staat of in een blok is opgenomen. Lees daar bevestigingen en openbare velden en controleer daarna de privégegevens van de betaling in je wallet.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="Een zoekopdracht leidt naar het openbare transactierecord en het bevattende blok; betaalbedragen controleer je in de wallet." width="1200" height="675" loading="lazy" />
+
+## Begin met de juiste identificatie
+
+Gebruik een transactie-ID om één betaling te onderzoeken. Gebruik een blokhoogte of blokhash om een blok en zijn transactielijst te bekijken. De explorer accepteert alle drie in de zoekfunctie. Kopieer de volledige identificatie uit de bron, niet de ingekorte tekst in een compacte lijst. Controleer dat wallet en explorer hetzelfde netwerk gebruiken.
+
+De startpagina toont ook recente blokken, netwerkwaarden en een mempoolgedeelte. Begin met zoeken als je al een identificatie hebt; gebruik de lijsten om netwerkactiviteit te bekijken. De [handleiding voor verzenden en ontvangen](/nl/blog/send-receive-blocknet/) legt uit waar je na een voltooide verzending de transactie-ID vindt.
+
+[![De startpagina van de officiële explorer met zoekveld, ketenhoogte en netwerkkaarten, vastgelegd op 26 oktober 2026.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## Wat toont de transactiepagina?
+
+Een overboekingspagina vermeldt de transactiehash, openbare transactiesleutel, blokstatus, netwerkkosten en aantallen ingangen en uitgangen. Lees eerst de hash om te controleren of je de juiste transactie hebt geopend. De openbare sleutel is een ander veld met een eigen doel; hij vervangt niet de transactiehash die je uit je betaalregistratie hebt gekopieerd om te zoeken.
+
+Het voorbeeld hieronder is een echte openbare overboeking, geen betaling voor deze handleiding. De kosten horen bij die transactie en de bedragen blijven verborgen. Het [artikel over kosten](/nl/blog/blocknet-transaction-fees/) legt de berekening van de wallet uit; deze pagina leert je het resultaat te lezen dat op het netwerk staat.
+
+[![Een openbare Blocknet-transactiepagina met hash, bevattend blok, kosten, ingangen, uitgangen en verborgen bedragen.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Lees wachtende en opgenomen transacties goed
+
+Een transactie in de mempool wacht op opname en heeft nul bevestigingen. Zodra een blok haar bevat, verwijst de transactiepagina naar dat blok. In de [bekeken explorerimplementatie](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go) zijn bevestigingen de huidige ketenhoogte min de hoogte van het bevattende blok, plus één. Het bevattende blok telt dus als de eerste bevestiging.
+
+Als rekenvoorbeeld heeft een transactie in blok 100 drie bevestigingen wanneer de huidige hoogte 102 is. Dit zijn voorbeeldhoogtes, geen actuele netwerkwaarden. Bekijk het actuele aantal voor je echte transactie. De [handleiding over bevestigingen](https://bntpool.com/blog/nl/block-confirmations-mining-rewards/) legt de relatie uit tussen opname, rijping van beloningen en beschikbaarheid in de wallet; het aantal in de explorer vertelt op zichzelf niet welke uitgangen je wallet kan uitgeven.
+
+## Open het blok voor meer context
+
+Volg de bloklink om hoogte, hash, verwijzing naar het vorige blok, tijdstempel, moeilijkheid, beloning en transactielijst te bekijken. De pagina onderscheidt de coinbasetransactie van gewone overboekingen. Coinbase betekent hier de transactie met de miningbeloning van het blok. Via de transactielijst kun je van een blok naar een afzonderlijke overboeking gaan en de opname controleren.
+
+Gebruik de links naar het vorige en volgende blok om de keten rond dat record te volgen. De screenshot hieronder is een gedateerd voorbeeld; het getoonde aantal bevestigingen blijft veranderen op de livepagina. Zie het [Blocknet-beloningsschema](https://bntpool.com/blog/nl/blocknet-block-reward-schedule/) voor de betekenis van de uitgifte van beloningen.
+
+[![Blok 69.579 in de officiële explorer, met blokeigenschappen en een lijst met coinbase- en overboekingstransacties.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Welke betaalgegevens blijven privé?
+
+Bij gewone overboekingen beschrijven de openbare kosten en aantallen ingangen en uitgangen de transactiestructuur. Het bedrag voor de ontvanger is verborgen met commitments en bewijzen, en uitgangssleutels zijn eenmalige bestemmingen. De getoonde stealthsleutel van een uitgang is geen openbaar saldo van een walletadres. Het [privacyoverzicht](/nl/blog/blocknet-privacy-features/) koppelt deze velden aan de huidige privacymechanismen van Blocknet.
+
+Gebruik de geschiedenis van de ontvangende wallet om haar eigen betaling en bedrag te herkennen. Versleutelde memogegevens in de explorer zijn geen leesbare factuurnotitie. Voor deze zoekprocedure zijn alleen openbare identificaties nodig. Bewaar herstelwoorden en privésleutels in je wallet; de afzonderlijke bewijstools van de explorer vallen buiten deze stappen. Voor het bekijken van opname en bevestigingen hoef je geen bewijsformulier in te vullen.
+
+## Lees netwerkwaarden met hun labels
+
+Hashrate, moeilijkheid en gemiddelde bloktijd op de startpagina beschrijven netwerkactiviteit. Ze geven nuttige context om te begrijpen hoe blokken verschijnen. Het aantal peers heeft betrekking op de node van de explorer, niet op alle deelnemers. Lees een waarde samen met het label en het waarnemingstijdstip, vooral wanneer je vergelijkt met de status van je eigen node.
+
+Een beoogd blokinterval of afteller is geen afspraak voor een bepaalde transactie. Bekijk de werkelijke opname op de transactiepagina. Voor minerwaarden onderscheidt de [hashratehandleiding](https://bntpool.com/blog/nl/what-is-hashrate/) lokaal hashen van netwerk- en poolschattingen. Voor de voortgang van je eigen node bespreekt de [nodehandleiding](/nl/blog/run-blocknet-node/) peerverbindingen en synchronisatiecontroles. Deze taken gebruiken verschillende metingen.
+
+## Wat als de transactie niet wordt gevonden?
+
+Controleer eerst de volledige identificatie en het gekozen netwerk. Vergelijk deze met de walletregistratie van de verzender of de uitbetalingstransactie-ID van de pool. Een nieuwe transactie is mogelijk nog niet zichtbaar voor de explorernode; controleer opnieuw nadat verspreiding en indexering tijd hebben gehad. Een ontbrekend zoekresultaat bewijst op zichzelf niet dat er een nieuwe betaling moet worden verstuurd.
+
+Ga terug naar de wallet en bekijk de oorspronkelijke handeling en actuele geschiedenis voordat je iets anders doet. Volg bij miningopbrengsten de [handleiding van pool naar wallet](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) om bijgeschreven poolsaldo, een verstuurde uitbetaling en een gescande ontvangst in de wallet te onderscheiden. Bewaar de transactie-ID bij dat record, zodat elke controle dezelfde betaling via de juiste interface volgt.
+
+<CTA target="seine" title="Verbind je Blocknet-miningopstelling" text="Gebruik seine met de mininghandleidingen en volg daarna je pooluitbetalingen in de explorer en wallet." />

@@ -92,9 +92,11 @@ fn candidates_for(
 /// Zen 3 (family 19h without AVX-512) and Zen 2 (family 17h, model 30h and up)
 /// use the AVX2 path: native EPYC 7443P +48% and EPYC 7R32 +67% over AVX2.
 /// Zen 1/Zen+ (17h below 30h) is unmeasured, and so is the AVX2 path outside
-/// Linux. Callers always intersect with runtime-detected kernels, so ISA
+/// Linux and Windows. Callers always intersect with runtime-detected kernels, so ISA
 /// support is never assumed.
-const AVX2_STREAM_OS: bool = cfg!(any(target_os = "linux", test));
+// Native Linux and Windows evidence: EPYC 7R13 on Windows Server 2025 measured
+// avx2-stream +39%/+50% over avx2 at 16/24 workers with full 2 GiB parity.
+const AVX2_STREAM_OS: bool = cfg!(any(target_os = "linux", target_os = "windows", test));
 
 fn cohort_stream_kernel(
     identity: &crate::runtime_identity::CpuIdentity,
@@ -394,6 +396,33 @@ struct Cache {
     host: CpuAutotuneHostFingerprint,
     configuration: String,
     winners: Vec<Winner>,
+    // Challengers that lost decisively; skipped at nearby worker counts.
+    #[serde(default)]
+    decisive: Vec<DecisiveLoss>,
+}
+
+// A challenger at or below this share of the incumbent's rate in a stable A/B/A
+// is not retried at nearby counts. Native Zen 5 mining re-ran plain AVX-512/AVX2
+// trials (~75% of streaming) at every count probe, costing ~5% over 23 minutes.
+const DECISIVE_LOSS_RATIO: f64 = 0.85;
+
+#[derive(Clone, Serialize, Deserialize)]
+struct DecisiveLoss {
+    base: String,
+    loser: String,
+    workers: usize,
+    timestamp: u64,
+}
+
+impl DecisiveLoss {
+    fn applies(&self, base: CpuKernel, loser: CpuKernel, workers: usize, wall_now: u64) -> bool {
+        self.base == base.as_str()
+            && self.loser == loser.as_str()
+            && workers <= self.workers.saturating_mul(2)
+            && workers.saturating_mul(2) >= self.workers
+            && self.timestamp <= wall_now
+            && wall_now - self.timestamp < CPU_AUTOTUNE_RECORD_MAX_AGE_SECS
+    }
 }
 
 impl Cache {
@@ -814,6 +843,7 @@ impl Tuner {
                 host,
                 configuration,
                 winners: Vec::new(),
+                decisive: Vec::new(),
             });
         Self {
             cache,
@@ -1141,11 +1171,15 @@ impl Tuner {
                         genoa_frontier_context(&context)
                     }
                     && !self.cache.winners.iter().any(|w| w.context == context);
+                let workers: usize = context.workers.iter().sum();
+                let decisive = &self.cache.decisive;
+                let wall = unix_secs(); // decisive timestamps are wall-clock, like winners
                 self.pending = self
                     .candidates
                     .iter()
                     .copied()
                     .filter(|&k| k != base)
+                    .filter(|&k| !decisive.iter().any(|d| d.applies(base, k, workers, wall)))
                     .filter(|&k| {
                         !frontier
                             || matches!(
@@ -1299,6 +1333,20 @@ impl Tuner {
             }
             if stable {
                 let base = trial.base;
+                let [before, candidate, after] =
+                    [trial.samples[0], trial.samples[1], trial.samples[2]];
+                if candidate.hps() <= before.hps().min(after.hps()) * DECISIVE_LOSS_RATIO {
+                    let workers = trial.context.workers.iter().sum();
+                    self.cache.decisive.retain(|d| {
+                        !(d.base == base.as_str() && d.loser == trial.candidate.as_str())
+                    });
+                    self.cache.decisive.push(DecisiveLoss {
+                        base: base.to_string(),
+                        loser: trial.candidate.to_string(),
+                        workers,
+                        timestamp: unix_secs(),
+                    });
+                }
                 self.finish_comparison(trial, base, now);
             } else {
                 self.pending.clear();
@@ -2310,6 +2358,7 @@ mod tests {
                 samples: vec![sample(100); 3],
                 timestamp: 100,
             }],
+            decisive: Vec::new(),
         };
         assert!(cache.compatible(&host, "test"));
         cache.schema = 1;
@@ -2561,6 +2610,52 @@ mod tests {
     }
 
     #[test]
+    fn decisive_losers_are_not_retried_at_nearby_counts() {
+        let mut t = three_path_tuner();
+        let mut s = snapshot();
+        s.kernel = CpuKernel::Avx512256Stream;
+        let mut now = 0;
+        // AVX-512 loses decisively (75%); AVX2 only mildly (95%).
+        run_comparison(&mut t, &mut s, &mut now, &[100, 75, 100]);
+        run_comparison(&mut t, &mut s, &mut now, &[100, 95, 100]);
+        assert_eq!(s.kernel, CpuKernel::Avx512256Stream);
+        assert_eq!(t.cache.decisive.len(), 1);
+        assert_eq!(t.cache.decisive[0].loser, CpuKernel::Avx512.as_str());
+
+        // A nearby count only re-checks the mild loser.
+        s.threads = 2;
+        s.backing_bytes = [0, 0, 0, 2 * CPU_LANE_MEMORY_BYTES, 0];
+        s.committed_bytes = 2 * CPU_LANE_MEMORY_BYTES;
+        s.resident_bytes = 2 * CPU_LANE_MEMORY_BYTES;
+        t.next_check = 0;
+        now += 1;
+        t.tick(now, &[s], true, true);
+        let trial = t.trial.as_ref().expect("the mild loser is still compared");
+        assert_eq!(trial.candidate, CpuKernel::Avx2);
+        assert!(
+            t.pending.is_empty(),
+            "decisive loser skipped: {:?}",
+            t.pending
+        );
+
+        // A far count (more than double) gets the full sweep again.
+        let wall = unix_secs();
+        assert!(t.cache.decisive[0].applies(
+            CpuKernel::Avx512256Stream,
+            CpuKernel::Avx512,
+            2,
+            wall
+        ));
+        assert!(!t.cache.decisive[0].applies(
+            CpuKernel::Avx512256Stream,
+            CpuKernel::Avx512,
+            3,
+            wall
+        ));
+        let _ = fs::remove_file(&t.path);
+    }
+
+    #[test]
     fn turin_streaming_first_still_confirms_twice_and_checks_avx2_before_caching() {
         let mut t = three_path_tuner();
         t.candidates = candidates_for(
@@ -2770,6 +2865,7 @@ mod tests {
                 candidate: "avx2".into(),
                 samples: vec![sample(100); 3],
             }],
+            decisive: Vec::new(),
         };
         assert_ne!(prior.configuration, fresh.cache.configuration);
         fs::write(&fresh.path, serde_json::to_vec(&prior).unwrap()).unwrap();
@@ -3085,6 +3181,7 @@ mod tests {
                 candidate: "avx2".into(),
                 samples: vec![sample(100); 3],
             }],
+            decisive: Vec::new(),
         };
         for valid in [true, false] {
             if !valid {
@@ -3361,6 +3458,7 @@ mod tests {
                 candidate: "avx2".into(),
                 samples: vec![sample(100); 3],
             }],
+            decisive: Vec::new(),
         };
         assert_ne!(old.configuration, fresh.cache.configuration);
         fs::write(&fresh.path, serde_json::to_vec(&old).unwrap()).unwrap();
@@ -3453,6 +3551,7 @@ mod tests {
                         3
                     ],
                 }],
+                decisive: Vec::new(),
             };
             assert_ne!(old.configuration, fresh.cache.configuration);
             fs::write(&fresh.path, serde_json::to_vec(&old).unwrap()).unwrap();
@@ -4239,6 +4338,7 @@ mod tests {
                 samples: vec![sample(100); 3],
                 timestamp: 100,
             }],
+            decisive: Vec::new(),
         };
         assert!(cache.compatible(&host, "test"));
         cache.schema = 1;

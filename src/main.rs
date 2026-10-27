@@ -11,12 +11,13 @@ mod miner;
 mod pool;
 mod runtime_identity;
 mod shortname;
+mod shutdown;
 mod types;
 mod update_check;
 mod user_config;
 mod version;
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -38,15 +39,7 @@ fn run() -> Result<()> {
     }
 
     let shutdown = Arc::new(AtomicBool::new(false));
-    {
-        let shutdown = Arc::clone(&shutdown);
-        ctrlc::set_handler(move || {
-            if shutdown.swap(true, Ordering::SeqCst) {
-                // Second Ctrl+C — force exit immediately (e.g. stuck in FFI).
-                std::process::exit(130);
-            }
-        })?;
-    }
+    let _shutdown_guard = shutdown::install(Arc::clone(&shutdown))?;
 
     if cfg.api_server_enabled || cfg.service_mode {
         return control_api::run(cfg, shutdown);

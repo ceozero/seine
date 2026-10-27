@@ -68,19 +68,46 @@ def cmd_up(args):
     save(receipt)
     aws('ec2', 'authorize-security-group-ingress', '--group-id', group,
         '--protocol', 'tcp', '--port', '22', '--cidr', f'{my_ip}/32')
-    ami = aws('ssm', 'get-parameter', '--name', AMI_PARAM)['Parameter']['Value']
     minutes = max(5, int(args.hours * 60) - 5)
+    if args.windows:
+        images = aws('ec2', 'describe-images', '--owners', 'amazon', '--filters',
+                     'Name=name,Values=Windows_Server-2025-English-Full-Base-*', 'Name=state,Values=available')
+        ami = max(images['Images'], key=lambda i: i['CreationDate'])['ImageId']
+        receipt.update(os='windows', user='Administrator')
+    else:
+        ami = aws('ssm', 'get-parameter', '--name', AMI_PARAM)['Parameter']['Value']
     # The SSO role cannot import key pairs; cloud-init installs the task key for
     # ubuntu and (with disable_root false) for root, which the cohort scripts use.
-    user_data = ('#cloud-config\ndisable_root: false\nssh_authorized_keys:\n  - '
-                 + key.with_suffix('.pub').read_text().strip()
-                 + f'\nruncmd:\n  - [shutdown, -P, "+{minutes}"]\n')
+    public_key = key.with_suffix('.pub').read_text().strip()
+    if args.windows:
+        # OpenSSH for Administrator with the task key; guest shutdown at expiry.
+        user_data = f"""<powershell>
+New-Item -ItemType Directory -Force C:\\cohort | Out-Null
+Start-Transcript -Path C:\\cohort\\bootstrap.log
+$expiry = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '/s /f /t 0'
+$when = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes({minutes})
+Register-ScheduledTask -TaskName SeineExpiry -Action $expiry -Trigger $when -User SYSTEM -RunLevel Highest -Force | Out-Null
+if (!(Get-Service sshd -ErrorAction SilentlyContinue)) {{ Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null }}
+Set-Service sshd -StartupType Automatic
+Start-Service sshd
+Set-Content -Path C:\\ProgramData\\ssh\\administrators_authorized_keys -Value '{public_key}' -Encoding ASCII
+& icacls.exe C:\\ProgramData\\ssh\\administrators_authorized_keys /inheritance:r /grant:r 'Administrators:F' 'SYSTEM:F' | Out-Null
+New-Item -Path HKLM:\\SOFTWARE\\OpenSSH -Force | Out-Null
+New-ItemProperty -Path HKLM:\\SOFTWARE\\OpenSSH -Name DefaultShell -Value 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' -PropertyType String -Force | Out-Null
+Restart-Service sshd
+New-NetFirewallRule -Name seine-ssh -DisplayName seine-ssh -Enabled True -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow | Out-Null
+Stop-Transcript
+</powershell>"""
+    else:
+        user_data = ('#cloud-config\ndisable_root: false\nssh_authorized_keys:\n  - ' + public_key
+                     + f'\nruncmd:\n  - [shutdown, -P, "+{minutes}"]\n')
     launch = ['ec2', 'run-instances', '--image-id', ami, '--instance-type', args.type,
               '--security-group-ids', group, '--subnet-id', SUBNET,
               '--metadata-options', 'HttpTokens=required',
               '--instance-initiated-shutdown-behavior', 'terminate',
               '--user-data', user_data,
-              '--block-device-mappings', '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":16,"VolumeType":"gp3","DeleteOnTermination":true}}]',
+              '--block-device-mappings', json.dumps([{'DeviceName': '/dev/sda1', 'Ebs': {
+            'VolumeSize': 40 if args.windows else 16, 'VolumeType': 'gp3', 'DeleteOnTermination': True}}]),
               '--tag-specifications', json.dumps([{'ResourceType': r, 'Tags': tags} for r in ('instance', 'volume')])]
     if not args.on_demand:
         launch += ['--instance-market-options',
@@ -151,6 +178,7 @@ def main():
     up.add_argument('--hours', type=float, default=1.5)
     up.add_argument('--on-demand', action='store_true')
     up.add_argument('--max-price', type=float)
+    up.add_argument('--windows', action='store_true', help='Windows Server 2025 with OpenSSH (user Administrator)')
     ip = sub.add_parser('ip')
     ip.add_argument('name')
     ip.add_argument('--wait', type=int, default=900)

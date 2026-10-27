@@ -219,6 +219,7 @@ fn current_hashrate_window_secs_for_backend(backend_name: &str) -> Option<f64> {
 
 impl Drop for TuiDisplay {
     fn drop(&mut self) {
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingTui);
         self.render_stop.store(true, Ordering::SeqCst);
         let _ = self.render_signal.try_send(RenderSignal::RenderNow);
         if let Some(handle) = self.render_worker.take() {

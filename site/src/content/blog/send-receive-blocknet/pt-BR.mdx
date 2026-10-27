@@ -1,0 +1,99 @@
+---
+title: 'Como enviar e receber Blocknet'
+description: 'Envie e receba Blocknet com a carteira oficial: confira o destinatário, revise o pagamento, guarde o ID e confirme o recebimento no histórico da carteira.'
+tags: ['Blocknet', 'Carteira', 'Pagamentos']
+faq:
+  - q: 'O que devo compartilhar para receber Blocknet?'
+    a: 'Compartilhe o endereço de recebimento mostrado na carteira ou seu nome curto verificado do Blocknet ID. Um link de pagamento pode incluir valor e memo. O remetente precisa dos dados de recebimento; suas palavras de recuperação e chaves privadas ficam com você. Confirme o recebimento no histórico da própria carteira.'
+  - q: 'Posso cancelar um pagamento Blocknet antes de confirmar?'
+    a: 'No cliente de linha de comando analisado, o comando de envio primeiro solicita uma prévia e mostra os detalhes do pagamento. Na confirmação, pressionar Enter ou responder não cancela a operação. Após um envio confirmado, confira o registro da transação antes de decidir qualquer outra ação.'
+  - q: 'Por que o Blocknet recebido não está disponível para gastar imediatamente?'
+    a: 'A carteira distingue fundos disponíveis, pendentes e não confirmados. Uma transação pode aparecer na rede antes de suas saídas poderem ser gastas. Confira o estado atual e deixe a sincronização e a varredura avançarem. O explorador ajuda a verificar a inclusão; a carteira identifica suas próprias saídas.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Envie um pagamento Blocknet de uma carteira preparada e acompanhe-o desde a revisão do remetente até o histórico do destinatário. Este passo a passo usa o cliente oficial de linha de comando v1.2.0, verificado em 26 de outubro de 2026. Ele reúne endereço, prévia e registro da transação em um só procedimento. Se ainda precisa criar ou restaurar uma carteira, comece pelo [guia de configuração](/pt-br/blog/blocknet-wallet-for-mining/).
+
+## Como enviar e receber Blocknet?
+
+<Answer>
+Para receber Blocknet, compartilhe o endereço de recebimento da carteira ou seu nome curto verificado. Para enviar, informe destinatário e valor, confira destino e taxa e confirme o pagamento desejado. Guarde o ID da transação. O destinatário consulta o próprio histórico e saldo disponível conforme a transação avança.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Um remetente revisa o pagamento, a rede registra a transação e o destinatário consulta o histórico da carteira." width="1200" height="675" loading="lazy" />
+
+## Abra a carteira correta antes de preparar o pagamento
+
+Conecte-se ao core mainnet em execução pelo cliente oficial:
+
+```sh
+blocknet attach mainnet
+```
+
+No prompt interativo, abra a carteira existente com este comando:
+
+```text
+load
+```
+
+Selecione o arquivo da carteira desejada e informe a senha quando solicitado. O [guia do nó](/pt-br/blog/run-blocknet-node/) explica como iniciar e inspecionar o core em segundo plano.
+
+Confira o endereço de recebimento e o saldo com estes comandos separados:
+
+```text
+address
+balance
+```
+
+Verifique se está usando a carteira e a rede pretendidas. Ao preparar um pagamento de saída, observe o valor disponível para gastar. A [referência oficial do shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documenta esses comandos; uma carteira gráfica pode apresentar as mesmas tarefas com controles e rótulos diferentes.
+
+## O que compartilhar com o remetente?
+
+Copie o endereço completo produzido pelo comando de endereço e envie-o pelo canal combinado para o pagamento. Se usa [Blocknet ID](/pt-br/blog/blocknet-id-pay-by-name/), compartilhe o nome curto correto e peça ao remetente que confira o endereço resolvido. Ao preparar um novo pagamento, confirme a grafia com o destinatário. Reconhecer um nome exibido não substitui a verificação dos dados reais de recebimento.
+
+Um [link de pagamento](/pt-br/blog/blocknet-payment-links/) pode conter o valor solicitado e um memo opcional. Use-o para reduzir a digitação e depois revise os dados preenchidos na carteira. Palavras de recuperação e chaves privadas não são dados de recebimento. Não as inclua em mensagens, faturas ou capturas de tela. Esta etapa precisa do endereço de recebimento.
+
+## Informe o destinatário e o valor desejado
+
+Este é um exemplo de sintaxe dentro de attach. Substitua o marcador em maiúsculas pelo endereço real do destinatário e o valor ilustrativo pelo valor que pretende pagar:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+O marcador não é um endereço para receber fundos. O cliente analisado também aceita um nome curto do Blocknet ID na posição do destinatário.
+
+Para uma referência de fatura ou pedido, acrescente um memo seguindo o [guia de memos criptografados](/pt-br/blog/blocknet-encrypted-memos/). Confira antes o texto solicitado pelo destinatário. Este primeiro passo a passo trata de um valor fixo; enviar todo o saldo é uma operação separada, que considera a taxa de outra forma. O [guia de taxas](/pt-br/blog/blocknet-transaction-fees/) explica essa diferença e como o troco volta à carteira.
+
+## Revise a prévia antes de confirmar
+
+O [cliente analisado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) solicita uma simulação antes do envio. Ele mostra valor, destino, taxa e eventual troco. Quando resolve um nome curto, inclui o endereço na revisão. Se você adicionou um memo, confira-o também. Compare os dados com a solicitação que pretendia atender antes de decidir no prompt.
+
+Em `Confirm [y/N]:`, digite `y` apenas para o pagamento que pretende realizar. Pressione Enter ou responda não para cancelar a prévia. Em um envio comum de valor fixo, o valor do destinatário e a taxa de rede são partes separadas do cálculo. Use os valores da prévia atual, sem copiar uma taxa de um exemplo ou captura antigos.
+
+## Guarde o ID da transação após o envio
+
+Após um envio confirmado com sucesso, a CLI mostra um ID de transação e um link do explorador. Salve esse identificador junto ao registro do pagamento para encontrar a mesma transação novamente. Ele é mais útil para acompanhar o progresso do que uma captura recortada da mensagem de sucesso. Guarde destinatário, valor previsto e referência da fatura nos seus registros privados, conforme necessário.
+
+Consulte a atividade pelo comando de histórico:
+
+```text
+history
+```
+
+O cliente atual combina as saídas recebidas pela carteira com os envios registrados, inclusive aqueles ainda na mempool. Se uma operação der um resultado pouco claro, confira o histórico e o identificador existentes antes de preparar outro pagamento. Repetir um envio é uma nova instrução de pagamento; primeiro estabeleça o que aconteceu com o anterior.
+
+## Confirme o recebimento na carteira do destinatário
+
+O destinatário consulta o histórico da própria carteira carregada e associa o registro de entrada à transação em questão. A varredura identifica as saídas que pertencem àquela carteira. Uma página pública estabelece informações de rede; a carteira receptora fornece a visão privada do pagamento. O [guia do explorador](/pt-br/blog/blocknet-explorer-guide/) explica como ler o registro público junto dessa verificação.
+
+Confira novamente o saldo conforme o pagamento avança. Disponível, pendente e não confirmado são estados diferentes. Uma carteira restaurada ou recém-aberta pode ainda estar varrendo o histórico mesmo com o nó conectado. Deixe o trabalho avançar e verifique de novo. Para um pagamento de mineração, o [guia do pool à carteira](https://bntpool.com/blog/pt-br/pool-payout-missing-from-wallet/) acompanha a etapa adicional entre o registro de pagamento do pool e o recebimento.
+
+## Crie uma rotina de pagamento repetível
+
+Para cada pagamento pretendido, comece com a carteira e a rede corretas, verifique os dados de recebimento, revise a prévia atual e guarde o ID resultante. O destinatário confere depois o histórico e o saldo. Essas observações descrevem etapas diferentes: registre a etapa realmente verificada, sem tratar toda tela de sucesso como recebimento final.
+
+Continue seguindo as instruções oficiais do cliente instalado quando rótulos ou procedimentos mudarem. Este guia descreve a CLI analisada; os artigos vinculados detalham nomes, memos, taxas e varredura. Se também minera no [bntpool.com](https://bntpool.com/blog/pt-br/mine-blocknet-on-bntpool/), use para os pagamentos um endereço ligado a uma carteira que você possa abrir e verificar pelo mesmo processo de recebimento.
+
+<CTA target="seine" title="Explore a mineração de Blocknet com seine" text="Use os guias de mineração para conectar seine e receber pagamentos do pool na sua carteira Blocknet." />

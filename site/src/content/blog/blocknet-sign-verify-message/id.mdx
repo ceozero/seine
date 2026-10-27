@@ -1,0 +1,93 @@
+---
+title: 'Tandatangani dan verifikasi pesan dengan dompet Blocknet'
+description: 'Tandatangani pesan Blocknet untuk membuktikan kendali alamat. Periksa teks dan tanda tangan persis, gunakan tantangan baru, lalu pahami hasil verifikasinya.'
+tags: ['Blocknet', 'Dompet', 'Tanda tangan']
+faq:
+  - q: 'Apakah menandatangani pesan Blocknet mengirim koin?'
+    a: 'Endpoint yang ditinjau menandatangani teks dengan kunci pembelanjaan dompet dan mengembalikan tanda tangan. Proses ini tidak membuat atau menyiarkan pembayaran. Pemeriksa memerlukan alamat, pesan persis, dan tanda tangan. Baca teks permintaan dengan teliti karena layanan dapat menggunakannya untuk mengotorisasi tindakannya sendiri.'
+  - q: 'Bisakah saya memverifikasi tanda tangan tanpa membuka dompet?'
+    a: 'Ya. Perintah verify pada shell resmi memanggil endpoint verifikasi publik yang tidak memerlukan dompet dimuat. Dibutuhkan core kompatibel yang berjalan, alamat lengkap, pesan persis, dan tanda tangan. Pemeriksaan menguji kombinasi itu tanpa meminta seed, kata sandi, atau kunci pribadi penanda tangan.'
+  - q: 'Apa yang dibuktikan tanda tangan pesan Blocknet yang valid?'
+    a: 'Hasil itu membuktikan bahwa pesan dapat diverifikasi dengan kunci publik pembelanjaan pada alamat yang diberikan. Gunakan tantangan baru yang disepakati untuk membuktikan kendali saat ini. Hasil tersebut tidak menetapkan identitas hukum, saldo, atau pembayaran selesai; tanda tangan lama yang valid dapat diajukan kembali.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Gunakan tanda tangan pesan Blocknet untuk menunjukkan kendali atas alamat tanpa melakukan pembayaran. Panduan ini mengikuti CLI resmi v1.2.0 dan core v0.22.0, diperiksa pada 27 Oktober 2026. Anda akan menyiapkan tantangan yang jelas, menandatanganinya dalam dompet yang dituju, lalu memverifikasi alamat lengkap, pesan, dan tanda tangan bersama-sama.
+
+## Bagaimana cara menandatangani dan memverifikasi pesan Blocknet?
+
+<Answer>
+Muat dompet lengkap Anda, konfirmasi alamatnya, lalu gunakan sign untuk menandatangani teks yang disepakati. Bagikan alamat, pesan persis, dan tanda tangan hasilnya kepada pemeriksa. Mereka menggunakan verify untuk memeriksa ketiga nilai bersama, lalu memastikan pesan sesuai dengan tujuan dan tantangan baru yang diminta.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Dompet menandatangani pesan yang disepakati, lalu pemeriksa terpisah memeriksanya bersama alamat dan tanda tangan." width="1200" height="675" loading="lazy" />
+
+## Sepakati arti pesan yang ditandatangani
+
+Mulai dengan permintaan khusus: alamat mana yang harus menunjukkan kendali, kepada siapa, dan untuk tindakan apa? [Bukti pembayaran](/id/blog/blocknet-payment-proof/) menetapkan rincian transaksi. Tanda tangan pesan berguna untuk menunjukkan kendali kunci penandatanganan, misalnya mengonfirmasi alamat untuk akun. [Panduan dompet](/id/blog/blocknet-wallet-for-mining/) membahas pembuatan dan pembukaan dompet yang akan menandatangani.
+
+Minta pemeriksa menyediakan tantangan baru yang tidak dapat diprediksi untuk permintaan ini. Sertakan konteks yang cukup untuk mengidentifikasi layanan atau penerima serta tindakan yang dimaksud, dan sepakati waktu kedaluwarsa bila diperlukan. Ini aturan aplikasi: pemeriksa tanda tangan tidak otomatis menegakkan kebaruan, kedaluwarsa, atau penggunaan sekali. Pemeriksa harus membandingkan pesan dengan permintaan dan mencatat kapan tantangan digunakan.
+
+## Buka dompet lengkap yang dituju
+
+Hubungkan terminal ke core mainnet Anda yang sedang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Dalam shell interaktif, muat dompet dan periksa alamatnya:
+
+```text
+load
+address
+```
+
+Pilih berkas dompet yang tepat dan buka kuncinya melalui klien jika diminta. Bandingkan alamat lengkap dengan yang diharapkan pemeriksa, termasuk jika Anda menyimpan beberapa berkas dompet pada komputer yang sama.
+
+[Core yang ditinjau](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) menandatangani pesan dengan kunci pribadi pembelanjaan dompet. [Dompet hanya-lihat](/id/blog/blocknet-view-only-wallet/) tidak dapat melakukannya. Simpan dompet lengkap pada komputer yang ditentukan; pemeriksa hanya memerlukan tanda tangan hasilnya dan informasi publik. Anda tidak perlu mengirim dana atau mengekspor berkas dompet untuk menyelesaikan penandatanganan.
+
+## Siapkan teks persis sebelum menandatangani
+
+Baca seluruh permintaan dan pastikan Anda menyetujui tujuan yang dinyatakan. Klien resmi membaca satu baris, menghapus spasi di awal dan akhir, serta menolak pesan kosong atau lebih dari 1024 byte. Batas ini menghitung byte sehingga karakter non-ASCII dapat memakai lebih dari satu. Gunakan baris singkat yang tidak ambigu dan simpan teks persis yang dikirim.
+
+Pertahankan huruf besar, tanda baca, dan spasi internal saat meneruskan pesan. Editor atau aplikasi obrolan dapat mengganti tanda kutip atau mengubah teks salinan; bandingkan pesan sebenarnya jika verifikasi gagal. Untuk login atau alur akun, ikuti format tantangan yang didokumentasikan layanan. Jangan diam-diam menulis ulang permintaan karena pemeriksa harus memeriksa tantangan khusus yang diterbitkannya.
+
+## Tandatangani pesan dalam shell resmi
+
+Mulai prompt dalam shell interaktif:
+
+```text
+sign
+```
+
+Klien meminta teks. Tempelkan pesan satu baris yang disepakati dan tekan Enter. Jika berhasil, klien mencetak tanda tangan heksadesimal. Salin seluruh keluaran dengan setiap karakter tetap utuh. [Implementasi klien](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) mengirim pesan ke endpoint penandatanganan dompet; operasi ini tidak membuat atau menyiarkan transaksi.
+
+Berikan alamat lengkap, pesan persis, dan tanda tangan sebagai nilai terpisah. Beri label jelas agar tanda tangan tidak tertukar dengan pesan atau alamat. Rahasiakan frasa pemulihan, kunci pribadi, dan kata sandi dompet. [Panduan seed](/id/blog/seed-phrase-explained/) menjelaskan bahan pemulihan; tidak satu pun termasuk bukti yang dikirim kepada pemeriksa tanda tangan.
+
+## Bagaimana orang lain memverifikasi tanda tangan?
+
+Mereka menggunakan prompt verifikasi pada shell resmi dengan core kompatibel yang berjalan:
+
+```text
+verify
+```
+
+Masukkan alamat lengkap terlebih dahulu, lalu pesan persis, lalu tanda tangan heksadesimal. [Referensi shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) mendokumentasikan urutan ini. Verifikasi tidak memerlukan dompet dimuat, sehingga bukti dapat diperiksa tanpa mengimpor dompet penanda tangan atau menangani kunci pribadi.
+
+Klien yang ditinjau menampilkan `Signature is VALID` jika kombinasinya valid dan `Signature is INVALID` jika tidak. Kesalahan format masukan adalah hasil terpisah: periksa ulang semua kolom dan simpan bukti asli sebelum mencoba lagi. Jika pesan atau alamat berbeda dari permintaan yang diharapkan, selesaikan perbedaan itu meskipun tanda tangan secara matematis valid untuk nilai yang diberikan.
+
+## Tafsirkan keberhasilan sesuai konteks permintaan
+
+Tanda tangan valid memverifikasi pesan dengan kunci publik pembelanjaan yang dikodekan dalam alamat. Itu tidak menetapkan identitas hukum, menunjukkan saldo, atau membuktikan pembayaran terjadi. Untuk pertanyaan pembayaran, gunakan [catatan pengiriman](/id/blog/send-receive-blocknet/), [pencarian explorer](/id/blog/blocknet-explorer-guide/), dan bukti khusus transaksi. Pilih bukti yang menjawab pertanyaan sebenarnya, bukan menganggap setiap tanda tangan valid sebagai tanda terima.
+
+Periksa kebaruan tantangan dan penerima yang dimaksud sebelum menerima. Seseorang dapat menyalin pesan dan tanda tangan valid lalu mengajukan pasangan yang sama lagi. Layanan yang memerlukan otorisasi sekali pakai harus menerapkan aturan tersebut sendiri. Begitu pula, kedaluwarsa tertulis hanya berarti jika pemeriksa memeriksanya. Pemeriksaan ini menghubungkan validitas kriptografis dengan tindakan yang disepakati.
+
+## Simpan catatan verifikasi yang jelas
+
+Simpan alamat, pesan persis, tanda tangan, konteks permintaan, dan hasil verifikasi bersama jika alur Anda memerlukan catatan audit. Catat waktu pemeriksaan terpisah dari waktu apa pun yang ditulis penanda tangan. Hindari informasi pribadi yang tidak terkait karena siapa pun yang menerima teks bertanda tangan dapat membaca dan menyalinnya. Bagikan bukti kepada pemeriksa yang dituju melalui saluran yang disepakati.
+
+Jika dompet menerima pembayaran penambangan, [pelacakan pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) tetap menyediakan catatan share dan pembayaran; tanda tangan pesan tidak menggantikannya. [Panduan node](/id/blog/run-blocknet-node/) membahas core yang diperlukan shell resmi. Setelah pemeriksaan selesai, pertahankan akses penandatanganan dalam dompet lengkap dan gunakan verifikasi publik bagi orang yang memeriksa hasilnya.
+
+<CTA target="seine" title="Gunakan alamat Blocknet Anda dengan seine" text="Ikuti panduan penyiapan seine untuk menambang ke alamat dompet Anda dan mengatur catatan tanda tangan serta pembayaran." />

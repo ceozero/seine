@@ -1,0 +1,112 @@
+---
+title: 'Portefeuille Blocknet non synchronisé ou solde incorrect'
+description: 'Vérifiez un portefeuille Blocknet en cours de synchronisation : distinguez nœud et analyse, suivez les paiements entrants et revérifiez ensuite le solde.'
+tags: ['Blocknet', 'Portefeuille', 'Dépannage']
+faq:
+  - q: 'Pourquoi mon nœud Blocknet est-il synchronisé alors que le portefeuille est en retard ?'
+    a: 'Le nœud télécharge et valide la chaîne, tandis que le portefeuille analyse les blocs téléchargés pour trouver ses sorties. Ce sont deux étapes distinctes. Un portefeuille restauré peut encore analyser après le rattrapage du nœud. Comparez sa hauteur analysée avec celle de la chaîne locale avant de considérer le solde affiché comme complet.'
+  - q: 'La commande sync télécharge-t-elle les blocs manquants ?'
+    a: 'Dans le client en ligne de commande examiné, sync demande au portefeuille d’analyser les blocs déjà disponibles dans son core. La synchronisation réseau est une tâche distincte du nœud. Si la chaîne locale est en retard et qu’aucun pair n’est connecté, vérifiez d’abord la connexion : l’analyse ne peut trouver des paiements dans des blocs non téléchargés.'
+  - q: 'Dois-je renvoyer le paiement s’il manque au solde ?'
+    a: 'Suivez d’abord l’identifiant existant, vérifiez le portefeuille destinataire et le réseau, puis l’analyse et les confirmations. Le seul solde affiché ne permet pas de savoir ce qu’est devenu un envoi. Consultez le registre initial du portefeuille ou du versement du pool avant un autre paiement, car un nouvel envoi est une nouvelle instruction.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Identifiez l’étape qui retarde le solde Blocknet : téléchargement de la chaîne par le nœud, analyse des sorties par le portefeuille, ou paiement pas encore disponible. Ce guide suit la CLI officielle v1.2.0 et le core public v0.22.0, vérifiés le 27 octobre 2026. Partez d’un portefeuille déjà créé ou restauré ; le [guide de configuration](/fr/blog/blocknet-wallet-for-mining/) couvre cette préparation.
+
+## Pourquoi mon portefeuille Blocknet se synchronise-t-il encore ?
+
+<Answer>
+Vérifiez la progression de la chaîne et les connexions du nœud, puis l’analyse du portefeuille chargé. Le nœud rassemble les blocs ; le portefeuille y cherche vos paiements. Vérifiez adresse et réseau, laissez finir une analyse qui avance et comparez l’historique aux soldes disponibles, en attente et non confirmés avant de décider quoi examiner.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Les blocs du réseau arrivent au nœud local avant que le portefeuille les analyse et actualise ses paiements." width="1200" height="675" loading="lazy" />
+
+## Commencez par le bon portefeuille et le bon réseau
+
+Ouvrez votre session mainnet existante depuis un terminal :
+
+```sh
+blocknet attach mainnet
+```
+
+Dans le shell interactif, ouvrez le portefeuille :
+
+```text
+load
+```
+
+Choisissez le fichier attendu. S’il est déjà chargé mais verrouillé, déverrouillez-le avec son mot de passe à l’invite du client. Un message de verrouillage décrit un état d’accès ; il ne prouve pas que le nœud a cessé de télécharger des blocs.
+
+Exécutez séparément ces commandes dans le shell :
+
+```text
+address
+status
+```
+
+Comparez l’adresse à votre registre de réception. Mainnet et testnet utilisent des cores et portefeuilles distincts. Vérifiez aussi le fichier choisi : ouvrir un portefeuille neuf et vide ne restaure pas une ancienne adresse. Suivez le [guide du nœud](/fr/blog/run-blocknet-node/) si le core ne tourne pas ou si attach ne peut s’y connecter.
+
+## Le nœud ou l’analyse du portefeuille est-il en retard ?
+
+L’état du nœud décrit la progression de la chaîne et la connectivité. Le portefeuille a sa propre hauteur analysée. Dans le [client examiné](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), l’avertissement de solde compare cette position à la chaîne ou à la cible de synchronisation. Une chaîne locale à jour peut donc coexister avec un solde encore en rattrapage. Lisez les deux étapes plutôt qu’un seul mot d’état.
+
+Examinez les sorties du portefeuille :
+
+```text
+outputs
+```
+
+Si aucune sortie correspondante n’apparaît et que l’analyse est en retard, le client indique la hauteur analysée par rapport à celle de la chaîne. Comparez une lecture ultérieure à la précédente. Une hauteur croissante indique une progression ; une seule liste vide ne suffit pas à conclure qu’un paiement manque. Notez hauteurs et heures d’observation pour comparer utilement.
+
+## Vérifiez la connexion si la chaîne est en retard
+
+Si le nœud lui-même est en retard, examinez ses pairs connectés :
+
+```text
+peers
+```
+
+Sans pair, vérifiez la connexion Internet et les réglages du pare-feu pour le nœud. Utilisez la [référence officielle de dépannage](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) avec le guide du nœud. Observez aussi la hauteur de chaîne dans le temps : une connexion à un pair et un téléchargement achevé répondent à des questions différentes.
+
+Séparez le démarrage du nœud et l’analyse du portefeuille dans vos notes. Si un nœud neuf télécharge l’historique, laissez avancer cette étape avant de juger si le portefeuille a analysé un paiement ultérieur. Le [guide des checkpoints](https://bntpool.com/blog/fr/blocknet-checkpoints-fast-sync/) explique la synchronisation rapide existante. Créer sans cesse des portefeuilles ou supprimer les données de chaîne n’aide pas à déterminer quelle étape progresse.
+
+## Quand lancer la commande sync du portefeuille ?
+
+Utilisez la commande d’analyse lorsque le bon portefeuille est ouvert et que ses sorties doivent rattraper les blocs téléchargés :
+
+```text
+sync
+```
+
+La [référence du shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) décrit une analyse des blocs locaux à la recherche de sorties possédées. C’est une opération du portefeuille, distincte de l’obtention de blocs auprès des pairs. Laissez-lui du temps avant de refaire la même observation.
+
+La commande indique la hauteur analysée et les sorties trouvées, ou précise que le portefeuille est déjà à jour. Revérifiez sorties et solde à la fin. Si le client signale un délai dépassé, examinez la progression actuelle avant de relancer : un timeout côté client ne révèle pas à lui seul la position finale de l’analyse. Gardez le fichier original et la sauvegarde de récupération pendant le diagnostic.
+
+## Suivez un paiement attendu dans ses registres
+
+Utilisez l’identifiant complet issu de l’historique de l’expéditeur ou d’un versement envoyé par le pool. Le [guide de l’explorateur](/fr/blog/blocknet-explorer-guide/) montre comment lire son état réseau et son bloc. L’inclusion publique indique où se trouve la transaction ; le portefeuille destinataire reconnaît ses sorties privées. Comparez les données de réception à votre registre plutôt que d’attendre une page publique de solde par adresse.
+
+Examinez ensuite les registres du portefeuille :
+
+```text
+history
+balance
+```
+
+Un montant en attente ou non confirmé diffère des fonds disponibles. S’il figure dans une de ces catégories, suivez ses confirmations au lieu de le considérer absent. Pour le minage, le [parcours du pool au portefeuille](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/) distingue solde impayé du pool, versement réel et réception dans le portefeuille.
+
+## Analyse terminée, mais montant toujours différent ?
+
+Revérifiez ensemble fichier, adresse de réception complète, réseau et identifiant de transaction. Comparez le même paiement et la même catégorie de solde. Si le portefeuille est en lecture seule, utilisez-le pour surveiller les entrées et le portefeuille complet pour décider quoi dépenser ; le [guide de lecture seule](/fr/blog/blocknet-view-only-wallet/) explique cette séparation. Une analyse terminée ne change pas le type du portefeuille.
+
+Si le bon portefeuille complet est à jour et que le registre reste incohérent, conservez son fichier et sa sauvegarde avant la procédure officielle de récupération. Le [guide de la phrase de récupération](/fr/blog/seed-phrase-explained/) explique les éléments nécessaires ; le guide de configuration couvre l’import. La récupération se fait dans votre logiciel de portefeuille. Ne publiez jamais graine, clé privée, fichier de portefeuille ou mot de passe dans une demande d’aide publique.
+
+## Gardez une courte trace de vos vérifications
+
+Pour le suivi, notez versions du client et du core, réseau, hauteur du nœud, hauteur analysée, nombre de pairs et erreur exacte. Indiquez si les valeurs ont progressé entre observations. Avant de partager des journaux, retirez chemins privés, détails de paiement et identifiants inutiles. Une note concise décrit l’étape concernée sans exposer l’accès au portefeuille.
+
+Revenez à l’historique et au solde du même portefeuille après la vérification ciblée. Le résultat utile est que le paiement attendu apparaisse avec son état actuel réel et que l’analyse correspondante soit à jour. Le [guide d’envoi et de réception](/fr/blog/send-receive-blocknet/) relie ce dernier contrôle au parcours de paiement initial. Gardez l’identifiant pour suivre la même opération lors des contrôles suivants.
+
+<CTA target="seine" title="Reliez les récompenses de minage à votre portefeuille" text="Utilisez les guides seine pour configurer le minage, puis suivez les versements du pool dans les registres de réception du portefeuille." />

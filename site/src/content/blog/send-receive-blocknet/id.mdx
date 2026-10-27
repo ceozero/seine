@@ -1,0 +1,99 @@
+---
+title: 'Cara mengirim dan menerima Blocknet'
+description: 'Kirim dan terima Blocknet dengan dompet resmi: periksa penerima, tinjau pembayaran, simpan ID transaksi, dan konfirmasi penerimaan melalui riwayat dompet.'
+tags: ['Blocknet', 'Dompet', 'Pembayaran']
+faq:
+  - q: 'Apa yang dibagikan untuk menerima Blocknet?'
+    a: 'Bagikan alamat penerimaan yang ditampilkan dompet atau nama singkat Blocknet ID Anda yang telah diverifikasi. Tautan pembayaran dapat memuat jumlah dan memo. Pengirim membutuhkan detail penerimaan, sementara kata pemulihan dan kunci privat tetap Anda simpan sendiri. Konfirmasikan penerimaan melalui riwayat dompet Anda.'
+  - q: 'Bisakah pembayaran Blocknet dibatalkan sebelum dikonfirmasi?'
+    a: 'Pada klien baris perintah yang diperiksa, perintah kirim terlebih dahulu meminta pratinjau dan menampilkan detail pembayaran. Menekan Enter atau menjawab tidak pada pertanyaan konfirmasi membatalkan operasi itu. Setelah pengiriman dikonfirmasi, periksa catatan transaksi sebelum memutuskan tindakan berikutnya.'
+  - q: 'Mengapa Blocknet yang diterima belum langsung bisa dibelanjakan?'
+    a: 'Dompet membedakan dana yang dapat dibelanjakan, tertunda, dan belum dikonfirmasi. Transaksi bisa terlihat di jaringan sebelum output-nya dapat dibelanjakan. Baca status dompet dan biarkan sinkronisasi serta pemindaian berlanjut. Penjelajah publik membantu memeriksa penyertaan transaksi, sementara dompet mengenali output milik Anda.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Kirim pembayaran Blocknet dari dompet yang sudah disiapkan, lalu ikuti prosesnya dari layar peninjauan pengirim hingga riwayat penerima. Panduan ini memakai klien baris perintah resmi v1.2.0, diperiksa pada 26 Oktober 2026. Alamat, pratinjau pembayaran, dan catatan transaksi disatukan dalam satu prosedur. Mulai dari [panduan penyiapan dompet](/id/blog/blocknet-wallet-for-mining/) jika Anda masih perlu membuat atau memulihkan dompet.
+
+## Bagaimana cara mengirim dan menerima Blocknet?
+
+<Answer>
+Untuk menerima Blocknet, bagikan alamat penerimaan dompet atau nama singkat yang telah diverifikasi. Untuk mengirim, masukkan penerima dan jumlah, periksa tujuan serta biaya, lalu konfirmasikan pembayaran yang dimaksud. Simpan ID transaksi setelahnya. Penerima memeriksa riwayat dompet sendiri dan saldo yang dapat dibelanjakan saat transaksi berproses.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Pengirim meninjau pembayaran, jaringan mencatat transaksinya, dan penerima memeriksa riwayat dompet." width="1200" height="675" loading="lazy" />
+
+## Buka dompet yang benar sebelum menyiapkan pembayaran
+
+Hubungkan klien resmi ke core mainnet yang sedang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Pada prompt interaktif, buka dompet yang sudah ada dengan perintah ini:
+
+```text
+load
+```
+
+Pilih berkas dompet yang dimaksud dan masukkan kata sandinya saat diminta. [Panduan node](/id/blog/run-blocknet-node/) menjelaskan cara memulai dan memeriksa core di latar belakang.
+
+Periksa alamat penerimaan dan saldo dengan perintah-perintah terpisah berikut:
+
+```text
+address
+balance
+```
+
+Pastikan dompet dan jaringan sesuai tujuan. Saat menyiapkan pembayaran keluar, baca jumlah yang dapat dibelanjakan. [Referensi shell resmi](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) mendokumentasikan perintah ini; dompet grafis dapat menyajikan tugas yang sama dengan kontrol dan label berbeda.
+
+## Apa yang perlu dibagikan kepada pengirim?
+
+Salin alamat lengkap dari perintah alamat dan kirimkan melalui saluran pembayaran yang disepakati. Jika memakai [Blocknet ID](/id/blog/blocknet-id-pay-by-name/), bagikan nama singkat yang benar dan minta pengirim memeriksa alamat hasil resolusinya. Saat menyiapkan pembayaran baru, pastikan ejaannya bersama penerima. Mengenali nama tampilan tidak sama dengan memeriksa detail penerimaan yang sebenarnya.
+
+[Tautan pembayaran](/id/blog/blocknet-payment-links/) dapat memuat jumlah yang diminta serta memo opsional. Gunakan untuk mengurangi pengetikan ulang, lalu periksa detail yang terisi di dompet. Kata pemulihan dan kunci privat bukan detail penerimaan. Jangan memasukkannya ke pesan, faktur, atau tangkapan layar. Langkah ini membutuhkan alamat penerimaan.
+
+## Masukkan penerima dan jumlah yang dimaksud
+
+Berikut contoh sintaks di dalam attach. Ganti penanda berhuruf besar dengan alamat penerima sebenarnya, dan ganti jumlah ilustratif dengan jumlah yang hendak dibayar:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Penanda tersebut bukan alamat untuk dikirimi dana. Klien yang diperiksa juga menerima nama singkat Blocknet ID pada posisi penerima.
+
+Untuk referensi faktur atau pesanan, tambahkan memo mengikuti [panduan memo terenkripsi](/id/blog/blocknet-encrypted-memos/). Periksa dahulu teks yang diminta penerima. Panduan awal ini berfokus pada jumlah tetap; mengirim seluruh saldo adalah operasi terpisah dengan perhitungan biaya yang berbeda. [Panduan biaya](/id/blog/blocknet-transaction-fees/) menjelaskan perbedaannya dan cara kembalian masuk lagi ke dompet.
+
+## Tinjau pratinjau sebelum mengonfirmasi
+
+[Klien yang diperiksa](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) meminta simulasi sebelum mengirim. Klien menampilkan jumlah, tujuan, biaya, dan kembalian jika ada. Nama singkat yang berhasil diresolusikan disertai alamatnya pada peninjauan. Jika menambahkan memo, periksa juga isinya. Bandingkan detail ini dengan permintaan pembayaran yang hendak dipenuhi sebelum memutuskan pada prompt.
+
+Pada `Confirm [y/N]:`, masukkan `y` hanya untuk pembayaran yang memang hendak dilakukan. Tekan Enter atau jawab tidak untuk membatalkan pratinjau. Pada pengiriman biasa dengan jumlah tetap, jumlah untuk penerima dan biaya jaringan merupakan bagian terpisah dari perhitungan dompet. Gunakan nilai pratinjau saat ini, bukan menyalin biaya dari contoh atau tangkapan layar lama.
+
+## Simpan ID transaksi setelah mengirim
+
+Setelah pengiriman yang dikonfirmasi berhasil, CLI menampilkan ID transaksi dan tautan penjelajah. Simpan pengenal itu bersama catatan pembayaran agar transaksi yang sama dapat ditemukan lagi. Pengenal tersebut lebih berguna untuk memeriksa kemajuan dibanding potongan tangkapan layar pesan berhasil. Simpan penerima, jumlah yang dimaksud, dan referensi faktur dalam catatan pribadi sesuai kebutuhan.
+
+Periksa aktivitas dengan perintah riwayat:
+
+```text
+history
+```
+
+Klien saat ini menggabungkan output dompet yang masuk dengan catatan pengiriman keluar, termasuk yang masih berada di mempool. Jika suatu operasi memberi hasil yang tidak jelas, periksa riwayat dan pengenal yang sudah ada sebelum menyiapkan pembayaran lain. Mengulangi pengiriman merupakan instruksi pembayaran baru, jadi pastikan dahulu apa yang terjadi pada pembayaran pertama.
+
+## Konfirmasikan penerimaan di dompet penerima
+
+Penerima memeriksa riwayat di dompet miliknya yang telah dimuat dan mencocokkan catatan masuk dengan transaksi yang sedang dibahas. Pemindaian dompet mengenali output yang menjadi milik dompet tersebut. Halaman transaksi publik memberikan informasi jaringan, sedangkan dompet penerima memberikan tampilan pembayaran privat. [Panduan penjelajah](/id/blog/blocknet-explorer-guide/) menjelaskan cara membaca catatan publik bersama pemeriksaan ini.
+
+Periksa kembali saldo dompet saat pembayaran berproses. Dapat dibelanjakan, tertunda, dan belum dikonfirmasi merupakan status berbeda. Dompet yang dipulihkan atau baru dibuka mungkin masih memindai riwayat walaupun node sudah terhubung. Biarkan pekerjaan itu berlanjut lalu periksa lagi. Untuk pembayaran penambangan, [panduan pool ke dompet](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) mengikuti langkah tambahan dari catatan pembayaran pool hingga penerimaan di dompet.
+
+## Buat rutinitas pembayaran yang dapat diulang
+
+Untuk setiap pembayaran yang dimaksud, mulai dari dompet dan jaringan yang benar, verifikasi detail penerimaan, tinjau pratinjau saat ini, dan simpan ID transaksi yang dihasilkan. Penerima kemudian memeriksa riwayat dan saldo. Pengamatan ini menggambarkan tahap berbeda; catat tahap yang benar-benar sudah diperiksa, bukan menganggap setiap layar berhasil sebagai penerimaan akhir.
+
+Tetap ikuti petunjuk resmi untuk klien yang terpasang ketika label atau alurnya berubah. Panduan ini menjelaskan prosedur CLI yang diperiksa; panduan tertaut menguraikan nama, memo, biaya, dan pemindaian. Jika juga menambang di [bntpool.com](https://bntpool.com/blog/id/mine-blocknet-on-bntpool/), gunakan alamat pembayaran yang terhubung ke dompet yang dapat dibuka dan diperiksa melalui proses penerimaan yang sama.
+
+<CTA target="seine" title="Jelajahi penambangan Blocknet dengan seine" text="Gunakan panduan penambangan untuk menghubungkan seine dan menerima pembayaran pool di dompet Blocknet Anda." />

@@ -1,0 +1,93 @@
+---
+title: 'Signer et vérifier des messages avec un portefeuille Blocknet'
+description: 'Signez un message Blocknet pour démontrer le contrôle d’une adresse. Vérifiez le texte et la signature exacts, utilisez un défi neuf et interprétez le résultat.'
+tags: ['Blocknet', 'Portefeuille', 'Signatures']
+faq:
+  - q: 'Signer un message Blocknet envoie-t-il des fonds ?'
+    a: 'Le point d’accès étudié signe du texte avec la clé de dépense du portefeuille et renvoie une signature. Il ne construit ni ne diffuse de paiement. Le vérificateur reçoit l’adresse, le message exact et la signature. Lisez attentivement le texte demandé : un service peut utiliser cette signature pour autoriser sa propre action.'
+  - q: 'Puis-je vérifier une signature sans ouvrir de portefeuille ?'
+    a: 'Oui. La commande verify du client officiel appelle le point d’accès public de vérification, sans portefeuille chargé. Elle nécessite un core compatible en fonctionnement, l’adresse complète, le message exact et la signature. Elle vérifie cet ensemble sans demander la phrase de récupération, le mot de passe ou les clés privées du signataire.'
+  - q: 'Que prouve une signature de message Blocknet valide ?'
+    a: 'Elle établit que le message se vérifie avec la clé publique de dépense contenue dans l’adresse fournie. Utilisez un nouveau défi convenu pour démontrer un contrôle actuel. Elle ne prouve ni identité légale, ni solde, ni paiement effectué ; une ancienne signature valide peut être présentée à nouveau.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Utilisez une signature de message Blocknet pour démontrer le contrôle d’une adresse sans effectuer de paiement. Ce guide suit le CLI officiel v1.2.0 et core v0.22.0, vérifiés le 27 octobre 2026. Vous préparerez un défi clair, le signerez dans le portefeuille voulu et vérifierez ensemble l’adresse complète, le message et la signature.
+
+## Comment signer et vérifier un message Blocknet ?
+
+<Answer>
+Chargez votre portefeuille complet, confirmez son adresse et utilisez sign pour signer le texte convenu. Transmettez l’adresse, le message exact et la signature obtenue au vérificateur. Celui-ci utilise verify pour contrôler les trois valeurs, puis confirme que le message correspond à l’objectif et au nouveau défi qu’il a demandés.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Un portefeuille signe un message convenu ; un vérificateur distinct le contrôle avec l’adresse et la signature." width="1200" height="675" loading="lazy" />
+
+## Convenez du sens du message signé
+
+Commencez par une demande précise : quelle adresse doit démontrer son contrôle, à qui et pour quelle action ? Une [preuve de paiement](/fr/blog/blocknet-payment-proof/) établit les détails d’une transaction. Une signature de message est utile pour démontrer le contrôle d’une clé de signature, par exemple pour confirmer une adresse liée à un compte. Le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/) explique comment créer et ouvrir celui qui signera.
+
+Demandez au vérificateur un défi nouveau et imprévisible pour cette requête. Incluez assez de contexte pour identifier le service ou destinataire et l’action prévue ; convenez d’une expiration si nécessaire. Ce sont des règles applicatives : la vérification de signature n’impose pas automatiquement fraîcheur, expiration ou usage unique. Le vérificateur doit comparer le message à la demande et noter quand le défi a été utilisé.
+
+## Ouvrez le portefeuille complet prévu
+
+Depuis un terminal, connectez-vous à votre core mainnet en fonctionnement :
+
+```sh
+blocknet attach mainnet
+```
+
+Dans le shell interactif, chargez le portefeuille et contrôlez son adresse :
+
+```text
+load
+address
+```
+
+Sélectionnez le bon fichier et déverrouillez-le dans le client si demandé. Comparez l’adresse complète à celle attendue, notamment si plusieurs fichiers de portefeuille sont conservés sur le même ordinateur.
+
+Le [core étudié](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) signe les messages avec la clé privée de dépense du portefeuille. Un [portefeuille en lecture seule](/fr/blog/blocknet-view-only-wallet/) ne peut pas effectuer cette opération. Gardez le portefeuille complet sur l’ordinateur prévu ; le vérificateur n’a besoin que de la signature obtenue et des informations publiques. Vous n’avez pas à envoyer de fonds ni à exporter le fichier du portefeuille.
+
+## Préparez le texte exact avant de signer
+
+Lisez toute la demande et assurez-vous de vouloir son objectif déclaré. Le client officiel lit une ligne, supprime les espaces en début et fin et refuse un message vide ou dépassant 1024 octets. Cette limite porte sur les octets : les caractères non ASCII peuvent en utiliser plusieurs. Choisissez une ligne courte et sans ambiguïté et conservez exactement le texte envoyé.
+
+Préservez les majuscules, la ponctuation et les espaces internes lors de la transmission. Un éditeur ou une messagerie peut remplacer les guillemets ou modifier le texte copié ; comparez le message réel si la vérification échoue. Pour une connexion ou une opération sur un compte, respectez le format de défi documenté par le service. Ne reformulez pas discrètement la demande : le vérificateur doit contrôler le défi précis qu’il a émis.
+
+## Signez dans le shell officiel
+
+Lancez la saisie dans le shell interactif :
+
+```text
+sign
+```
+
+Le client demande le texte. Collez le message convenu sur une seule ligne et appuyez sur Entrée. En cas de réussite, il affiche une signature hexadécimale. Copiez-la intégralement, sans perdre de caractère. L’[implémentation du client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) envoie le message au point d’accès de signature du portefeuille ; cette opération ne crée ni ne diffuse de transaction.
+
+Transmettez séparément l’adresse complète, le message exact et la signature. Nommez clairement ces valeurs pour éviter toute confusion. Gardez secrets phrase de récupération, clés privées et mot de passe. Le [guide de la phrase de récupération](/fr/blog/seed-phrase-explained/) explique ces données ; aucune ne fait partie des éléments à transmettre pour vérifier une signature.
+
+## Comment l’autre personne vérifie-t-elle la signature ?
+
+Elle utilise la commande de vérification du shell officiel avec un core compatible en fonctionnement :
+
+```text
+verify
+```
+
+Saisissez d’abord l’adresse complète, puis le message exact, puis la signature hexadécimale. La [référence du shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documente cet ordre. Aucun portefeuille chargé n’est requis : la vérification peut se faire sans importer le portefeuille du signataire ni manipuler de clé privée.
+
+Le client étudié affiche `Signature is VALID` si la combinaison est valide, et `Signature is INVALID` sinon. Une erreur de format est un résultat distinct : vérifiez tous les champs et préservez les éléments d’origine avant de recommencer. Si le message ou l’adresse diffère de la demande attendue, clarifiez cette différence même si la signature est mathématiquement valide pour les valeurs fournies.
+
+## Interprétez la réussite dans son contexte
+
+Une signature valide vérifie le message avec la clé publique de dépense encodée dans l’adresse fournie. Elle n’établit pas d’identité légale, n’affiche pas de solde et ne prouve pas de paiement. Pour un paiement, utilisez le [relevé d’envoi](/fr/blog/send-receive-blocknet/), la [consultation de l’explorateur](/fr/blog/blocknet-explorer-guide/) et la preuve propre à la transaction. Choisissez les éléments répondant à la question réelle plutôt que de considérer toute signature valide comme un reçu.
+
+Contrôlez la fraîcheur du défi et son destinataire avant de l’accepter. Une personne peut copier un message et sa signature valides et représenter cet ensemble. Un service nécessitant une autorisation à usage unique doit faire appliquer cette règle lui-même. De même, une expiration inscrite dans le texte n’a d’effet que si elle est vérifiée. Ces contrôles relient validité cryptographique et action convenue.
+
+## Conservez un dossier de vérification clair
+
+Gardez ensemble adresse, message exact, signature, contexte de la demande et résultat si votre processus exige une piste d’audit. Notez l’heure du contrôle séparément de tout horodatage écrit par le signataire. Évitez les informations personnelles sans rapport avec le but : toute personne recevant le texte signé peut le lire et le copier. Transmettez les éléments au vérificateur prévu par le canal convenu.
+
+Si ce portefeuille reçoit des paiements de minage, le [suivi du pool](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) fournit toujours les relevés de shares et de paiements ; une signature de message ne les remplace pas. Le [guide du nœud](/fr/blog/run-blocknet-node/) couvre le core utilisé par le shell officiel. Après le contrôle convenu, conservez l’accès de signature dans votre portefeuille complet et utilisez la vérification publique pour les personnes contrôlant le résultat.
+
+<CTA target="seine" title="Utilisez votre adresse Blocknet avec seine" text="Suivez les guides de configuration de seine pour miner vers votre adresse et organiser vos signatures et paiements." />

@@ -1,0 +1,107 @@
+---
+title: 'Een Blocknet-wallet met alleen leesrechten instellen'
+description: 'Stel een Blocknet-wallet met alleen leesrechten in op een andere computer: exporteer het bestand, open het met een eigen wachtwoord en bekijk ontvangsten.'
+tags: ['Blocknet', 'Wallet', 'Privacy']
+faq:
+  - q: 'Kan een Blocknet-wallet met alleen leesrechten munten versturen?'
+    a: 'Een wallet met alleen leesrechten kan inkomende bedragen volgen, maar geen betalingen versturen of berichten ondertekenen. De onderzochte core weigert deze handelingen voor dit wallettype. Gebruik de volledige wallet voor beslissingen over uitgaven en het goedkeuren van betalingen, en de leeskopie voor de ontvangsten die je wilt volgen.'
+  - q: 'Kan ik mijn private Blocknet-kijksleutel publiceren?'
+    a: 'De private kijksleutel geeft toegang tot informatie over inkomende betalingen. Het blijft privé-informatie, ook zonder bestedingsbevoegdheid. Deel kijktoegang alleen bewust, bescherm geëxporteerde bestanden en wachtwoorden en houd sleutels uit openbare screenshots, hulpvragen, chatberichten en bewijsformulieren van de explorer.'
+  - q: 'Heeft de leeswallet het wachtwoord van de hoofdwallet nodig?'
+    a: 'Bij het exporteren geef je het wachtwoord van de volledige wallet om het maken te autoriseren. Vervolgens kies je een apart wachtwoord voor het leesbestand. Open het geëxporteerde bestand op de tweede computer met dat wachtwoord. Die computer heeft de herstelzin of bestedingsgegevens van de volledige wallet niet nodig.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Volg inkomende Blocknet-betalingen op een tweede computer en houd de toestemming voor betalingen in je volledige wallet. Deze handleiding gebruikt de officiële CLI v1.2.0 en publieke core v0.22.0, gecontroleerd op 27 oktober 2026. Ze behandelt het exportbestand, legt uit welke toegang het geeft en laat zien hoe je ontvangsten controleert nadat je het hebt geladen.
+
+## Hoe maak je een Blocknet-wallet met alleen leesrechten?
+
+<Answer>
+Open de volledige wallet en maak met viewkeys een versleuteld leesbestand met een eigen wachtwoord. Zet het geëxporteerde bestand op de bedoelde computer, laad het daar en controleer adres en het type alleen-lezen. Laat de walletscan bijwerken en bekijk inkomende betalingen terwijl je de volledige wallet voor uitgaven blijft gebruiken.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Een volledige wallet exporteert een versleutelde leeskopie naar een tweede computer, die inkomende betalingen kan bekijken zonder bestedingsbevoegdheid." width="1200" height="675" loading="lazy" />
+
+## Kies welke ontvangsten je wilt volgen
+
+Begin bij de volledige wallet waarvan je de ontvangsten wilt zien. De [handleiding voor walletinstelling](/nl/blog/blocknet-wallet-for-mining/) beschrijft maken en herstellen. Een leeskopie hoort bij het adres van die wallet; ze maakt geen nieuwe ontvangstidentiteit en verplaatst geen munten naar een andere rekening. Noteer de wallet en het netwerk waarvoor de kopie is voordat je exportbestanden verwerkt.
+
+Voor mining kun je hetzelfde gecontroleerde uitbetalingsadres blijven gebruiken. Met de leeswallet bekijk je inkomende walletgegevens op een andere vertrouwde computer. De [handleiding voor pooltracking](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) heeft een andere taak: shares, poolsaldo en uitbetalingen tonen zonder walletsleutels. Kies de interface die je vraag beantwoordt; kijktoegang is nuttig als je het private ontvangstrecord nodig hebt.
+
+## Exporteer het leesbestand vanuit de volledige wallet
+
+Maak op de computer met de volledige wallet verbinding met de draaiende mainnet-core:
+
+```sh
+blocknet attach mainnet
+```
+
+Open de bedoelde wallet en controleer het adres met deze shellopdrachten:
+
+```text
+load
+address
+```
+
+Is de wallet vergrendeld, gebruik dan de gewone ontgrendelprompt. Houd deze sessie privé, omdat de volgende handeling kijksleutels toont.
+
+Start de export:
+
+```text
+viewkeys
+```
+
+De [onderzochte client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) legt uit dat de private kijksleutel inkomende bedragen zichtbaar maakt en vraagt of je wilt doorgaan. Ga alleen verder als je die toegang wilt geven. Daarna vraagt hij het wachtwoord van de volledige wallet, een nieuw wachtwoord voor het leesbestand en de bevestiging daarvan. Kies en bewaar het bestandswachtwoord voor de ontvangende computer.
+
+## Welk bestand moet je overzetten?
+
+Na een geslaagde export toont de client de kijksleutels en het pad van het opgeslagen bestand. Gebruik dat werkelijke pad om het geëxporteerde leesbestand te herkennen. Zet het via een geschikte methode voor private walletgegevens over naar de computer die je beheert. Bescherm het wachtwoord apart. Neem de getoonde sleutels niet op in screenshots of diagnostische transcripties.
+
+De [walletreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) noemt `~/.config/bnt/wallets/` als standaardmap en `C:\Users\<you>\.config\bnt\wallets\` als Windows-equivalent. Een ingesteld walletpad kan veranderen welke map load toont. Kopieer het exportbestand naar de walletmap op de bestemming zodat de client het vindt. Bewaar de oorspronkelijke volledige wallet en haar herstelback-up op de daarvoor bedoelde opslag.
+
+## Laad en controleer de kopie op de tweede computer
+
+Bereid op de bestemming een draaiende core voor met de [nodehandleiding](/nl/blog/run-blocknet-node/) en verbind met hetzelfde netwerk. Open het exportbestand met het daarvoor gekozen wachtwoord:
+
+```text
+load
+```
+
+Als er al een andere wallet open is, kun je die met de officiële shell ontladen voordat je het gewenste bestand laadt. Selecteer op de geëxporteerde bestandsnaam; ga niet ervan uit dat de eerste wallet in de lijst de juiste is.
+
+Controleer de kopie met de client:
+
+```text
+address
+status
+```
+
+Vergelijk het volledige ontvangstadres met dat van de volledige wallet. Controleer of de client het type alleen-lezen toont. Zo bevestig je zowel de identiteit als de bedoelde toegang. Je hoeft geen verzending te proberen: de [onderzochte core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) weigert verzenden en berichten ondertekenen vanuit een wallet met alleen leesrechten.
+
+## Laat de leeswallet inkomende betalingen vinden
+
+De bestemmingsnode heeft de relevante blokken nodig en de geladen wallet moet ze scannen. Gebruik deze opdrachten om de walletgegevens te bekijken:
+
+```text
+outputs
+history
+```
+
+Een pas geladen of geïmporteerde wallet kan nog bijwerken terwijl de node al peers heeft. De [handleiding voor walletsynchronisatie](/nl/blog/blocknet-wallet-not-syncing/) onderscheidt het downloaden van de keten van het scannen door de wallet en helpt bepalen of een scan nodig is.
+
+Koppel een ontvangst aan een transactie-ID die je al uit de volledige wallet of uitbetalingsgegevens hebt. De [explorerhandleiding](/nl/blog/blocknet-explorer-guide/) helpt openbare opname te bevestigen; de leeswallet geeft de inkomende betalingsdetails. Gebruik de volledige wallet voor actuele uitgavenbeslissingen en toestemming. Zie de kopie als ontvangstmonitor, zonder aan te nemen dat ze alle uitgaande records of beslissingen over besteedbaar saldo weerspiegelt.
+
+## Welke toegang geeft een private kijksleutel?
+
+De [officiële shellreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) waarschuwt dat de houder van deze sleutel inkomende bedragen kan zien. Een versleuteld leesbestand beschermt die toegang met een eigen wachtwoord, maar bij het openen worden private betalingsgegevens zichtbaar. Geef alleen de bedoelde persoon of computer toegang. Het veranderen van het bestandswachtwoord trekt een al gekopieerde kijksleutel niet in.
+
+Houd zowel bestedings- als kijkgeheimen buiten openbare hulpmiddelen en supportberichten. Een ontvangstadres deel je voor betalingen; een private kijksleutel heeft een ander doel. De [handleiding over stealth-adressen](/nl/blog/stealth-addresses-explained/) legt uit hoe de wallet haar outputs herkent. Geef alleen de kijktoegang die je bedoelt en houd herstelmateriaal bij de volledige wallet.
+
+## Houd een herhaalbare kijkroutine aan
+
+Laad bij terugkomst op de monitoringcomputer hetzelfde leesbestand, controleer netwerk en adres en bekijk de voortgang voordat je een ontbrekend record interpreteert. Maak onderscheid tussen een geregistreerde ontvangst en geld waarvan je de besteding kunt autoriseren. Als je een andere wallet met een nieuw adres maakt, blijft de bestaande leeskopie bij de oude horen.
+
+Bewaar de herstelback-up van de volledige wallet ook nadat de leesomgeving werkt. Een leeskopie vervangt niet het bestedingsmateriaal dat nodig is voor herstel. De [handleiding over seedzinnen](/nl/blog/seed-phrase-explained/) legt die back-up uit; [versturen en ontvangen](/nl/blog/send-receive-blocknet/) behandelt het betalingsproces. De volledige wallet, haar back-up en de leeskopie hebben elk een duidelijke taak.
+
+<CTA target="seine" title="Ontvang mininguitbetalingen in je Blocknet-wallet" text="Gebruik de seine-handleidingen om naar je adres te minen en volg daarna inkomende uitbetalingen in je gekozen walletweergave." />

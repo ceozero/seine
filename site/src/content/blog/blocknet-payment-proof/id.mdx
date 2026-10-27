@@ -1,0 +1,102 @@
+---
+title: 'Cara membuktikan dan memverifikasi pembayaran Blocknet'
+description: 'Verifikasi pembayaran Blocknet dengan kunci transaksi dan alamat penerima. Buat bukti, periksa output yang cocok, dan pahami apa yang dibuktikan hasilnya.'
+tags: ['Blocknet', 'Pembayaran', 'Dompet']
+faq:
+  - q: 'Apa yang diperlukan untuk memverifikasi bukti pembayaran Blocknet?'
+    a: 'Anda memerlukan ID transaksi lengkap, kunci transaksi dari dompet pengirim, dan alamat lengkap penerima yang dituju. Kirim bidang itu ke endpoint verifikasi bukti node yang kompatibel. Periksa hasil validasi kunci serta output yang cocok dengan alamat, lalu bandingkan jumlahnya dengan catatan pembayaran.'
+  - q: 'Apakah bukti Blocknet valid berarti penerima sudah dibayar?'
+    a: 'Hasil valid menetapkan bahwa kunci yang diberikan milik transaksi tersebut. Anda juga harus memeriksa output yang cocok dengan alamat penerima. Kunci valid tanpa output cocok tidak membuktikan pembayaran ke alamat itu. Periksa jumlah dan, secara terpisah, inklusi rantai serta konfirmasi.'
+  - q: 'Bisakah dompet Blocknet hanya-lihat membuat bukti pembayaran?'
+    a: 'Core yang diperiksa menurunkan bukti transaksi menggunakan bahan kunci lihat privat dompet, sehingga dompet hanya-lihat yang sesuai dapat membuat bukti untuk transaksi yang dikirim dompet tersebut. Transaksi harus ada pada rantai lokal dan kunci turunannya harus cocok. Ini tidak memberikan wewenang membelanjakan kepada dompet hanya-lihat.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Verifikasi satu pembayaran Blocknet dengan mencocokkan kunci transaksi dan alamat penerimanya terhadap transaksi. Panduan ini mengikuti CLI resmi v1.2.0 dan core v0.22.0, diperiksa pada 27 Oktober 2026. Isinya mencakup pembuatan bukti, berbagi bidang yang tepat, dan membaca hasil bersama status transaksi di rantai.
+
+## Bagaimana membuktikan pembayaran Blocknet?
+
+<Answer>
+Buka dompet pengirim, jalankan perintah prove dengan ID transaksi, lalu berikan kunci transaksi yang dihasilkan kepada pemeriksa yang dituju. Verifikasi memakai kunci itu, ID transaksi, dan alamat penerima. Pastikan kunci valid, lalu periksa output yang cocok dan jumlah untuk alamat tersebut.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Catatan dan kunci transaksi diperiksa terhadap alamat penerima untuk mengenali output pembayaran yang cocok." width="1200" height="675" loading="lazy" />
+
+## Mulai dari pembayaran yang ingin dibuktikan
+
+Simpan ID transaksi lengkap dari catatan pengiriman. [Panduan mengirim](/id/blog/send-receive-blocknet/) menjelaskan tempat klien resmi mencetaknya, sedangkan [panduan explorer](/id/blog/blocknet-explorer-guide/) menjelaskan pencarian transaksi dan bloknya. ID publik menemukan transfer, tetapi halaman explorer biasa tidak mengungkap jumlah privat yang dibayarkan ke alamat tertentu.
+
+Sepakati alamat penerima dan catatan pembayaran yang diperiksa. Gunakan alamat lengkap yang terkait, bukan label singkat atau tangkapan layar. Jika membayar melalui nama, simpan alamat yang digunakan. Bukti membantu memeriksa tanda terima tertentu atau menyelesaikan pertanyaan pembayaran bersama penerima; bukti tidak menetapkan identitas seseorang di dunia nyata.
+
+## Buat kunci transaksi di dompet pengirim
+
+Hubungkan terminal ke core mainnet yang sedang berjalan:
+
+```sh
+blocknet attach mainnet
+```
+
+Buka dompet pengirim dan periksa catatannya dalam shell interaktif:
+
+```text
+load
+address
+history
+```
+
+Pilih berkas yang dimaksud dan buka kunci melalui klien jika perlu. Untuk penyiapan awal, gunakan [panduan dompet](/id/blog/blocknet-wallet-for-mining/).
+
+Jalankan di shell, mengganti placeholder dengan ID transaksi lengkap:
+
+```text
+prove <txid>
+```
+
+[Klien yang diperiksa](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) menerima ID heksadesimal 64 karakter dan menampilkan kunci transaksi yang dikembalikan. Core mencari transaksi pada rantai lokal dan memeriksa kunci turunan cocok dengan kunci publiknya. Gunakan dompet yang mengirimnya; membuat bukti tidak membuat pembayaran lain.
+
+## Informasi apa yang perlu dibagikan?
+
+Bagikan ID transaksi, kunci transaksi yang dikembalikan, dan alamat penerima melalui saluran yang disepakati. Kunci ini khusus untuk transaksi tersebut. Rahasiakan seed pemulihan, kunci belanja, kata sandi, dan kunci lihat privat untuk seluruh dompet. Pemeriksa membutuhkan bidang bukti transaksi, bukan akses ke dompet yang dimuat atau bahan pemulihannya.
+
+Anggap ini pengungkapan informasi pembayaran yang disengaja: kunci dan alamat penerima memungkinkan pemeriksa mengenali output cocok, jumlah, dan memo yang dapat dipulihkan pada transaksi itu. Bagikan kepada orang yang memerlukan bukti tersebut. [Panduan memo](/id/blog/blocknet-encrypted-memos/) menjelaskan catatan pembayaran; pertimbangkan isinya sebelum berbagi bukti. Kunci yang telah dibagikan dapat disalin, jadi gunakan saluran privat yang disepakati penerima.
+
+## Verifikasi melalui API core yang terdokumentasi
+
+[API resmi](https://blocknetcrypto.com/api) menyediakan endpoint verifikasi bukti publik yang tidak memerlukan dompet dimuat atau token bearer. Utamakan node yang Anda kendalikan. Simpan templat berikut sebagai `proof.json` dalam folder kerja privat, lalu ganti ketiga string placeholder dengan bidang bukti sebenarnya. Jangan ubah nama bidang.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Dari folder itu, kirim berkas ke alamat API node:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Gunakan port lokal yang Anda konfigurasi jika berbeda; di Windows PowerShell, gunakan `curl.exe` untuk perintah ini. [Panduan node](/id/blog/run-blocknet-node/) menjelaskan menjalankan core. Permintaan ini memeriksa bukti dan tidak mengirim koin. Menggunakan server jarak jauh mengungkap bidang bukti yang dikirim kepada operatornya.
+
+## Pisahkan validitas kunci dan kecocokan penerima
+
+Pertama periksa `valid`. Nilai true berarti kunci transaksi cocok dengan kunci publik transaksi. Lalu periksa `outputs`: entri dengan `match` bernilai true milik alamat penerima yang diberikan. Bidang `total_matched` menjumlahkan jumlahnya. Kunci valid tetap dapat menghasilkan nol output cocok jika alamat tersebut tidak menerima transaksi itu.
+
+API melaporkan jumlah dalam unit atomik: 100.000.000 unit setara 1 BNT. Konversi total sebelum membandingkan dengan faktur BNT; pertahankan semua digit bilangan bulat dan jangan membulatkan terlalu awal. Periksa memo yang dikembalikan terhadap catatan yang diharapkan. Verifikasi inklusi dan konfirmasi secara terpisah melalui node atau explorer. Hasil bukti saja tidak menyatakan faktur telah dibayar penuh atau dana saat ini dapat dibelanjakan.
+
+## Atasi ketidakcocokan dengan catatan asli
+
+Untuk kunci tidak valid, bandingkan ID lengkap dan kunci transaksi dengan keluaran asli pengirim. Untuk kunci valid tanpa kecocokan penerima, periksa ulang alamat lengkap pembayaran. Jika transaksi tidak ditemukan saat pembuatan bukti, periksa jaringan dan kemajuan rantai node: endpoint pembuatan yang diperiksa memerlukan transaksi dalam rantai. Ikuti [panduan sinkronisasi](/id/blog/blocknet-wallet-not-syncing/) bila rantai lokal tertinggal.
+
+Untuk pembayaran pool, dompet penerima Anda bukan dompet pengirim transaksi pool. Mulai dari [catatan pelacakan pool](https://bntpool.com/blog/id/track-your-miner-on-bntpool/) dan riwayat masuk dompet; dapatkan bukti pengirim dari pengirim sebenarnya. Hadiah penambangan coinbase juga tidak memiliki bukti pengirim dalam endpoint pembuatan yang diperiksa. Perbedaan ini membantu memilih bukti yang sesuai dengan pembayaran.
+
+## Simpan bukti bersama tujuan dan hasilnya
+
+Simpan ID transaksi, alamat penerima, referensi pembayaran terkait, dan hasil verifikasi bersama dalam catatan privat. Catat jaringan dan node yang diperiksa serta waktunya. Simpan hanya informasi pembayaran yang diperlukan untuk tujuan itu. Penerima bukti dapat mengulang pemeriksaan sendiri, alih-alih mengandalkan tangkapan layar hasil orang lain.
+
+[Pesan bertanda tangan](/id/blog/blocknet-sign-verify-message/) memiliki tujuan berbeda: menunjukkan kendali atas kunci penandatanganan untuk alamat dan pesan tertentu. Gunakan bukti pembayaran untuk bukti transaksi spesifik dan alur pesan untuk tantangan kepemilikan yang disepakati. [Panduan hanya-lihat](/id/blog/blocknet-view-only-wallet/) menjelaskan mengapa akses melihat tetap sensitif meskipun tidak dapat mengizinkan pengeluaran. Hubungkan setiap jenis bukti dengan pertanyaan yang dijawabnya.
+
+<CTA target="seine" title="Terima dan lacak pembayaran penambangan Blocknet" text="Ikuti panduan penambangan seine, simpan catatan pembayaran, dan gunakan bukti dompet yang sesuai saat memeriksa pembayaran." />

@@ -749,6 +749,7 @@ impl<'a> MiningControlPlane<'a> {
     }
 
     fn finish(mut self, stats: &Stats, tui: &mut Option<TuiDisplay>) -> Vec<SubmitResult> {
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingNetworkWorkers);
         if self.shutdown.load(Ordering::Relaxed) {
             let dropped = self.submit_backlog.len() as u64;
             stats.add_dropped(dropped);
@@ -1495,11 +1496,13 @@ pub(super) fn run_mining_loop(
 
     if !backends.is_empty() {
         let final_submit_template = SubmitTemplate::from_template(&template);
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::QuiescingBackends);
         info("MINER", "shutting down: quiescing backends...");
         match quiesce_backend_slots(backends, RuntimeMode::Mining, backend_executor) {
             Ok(_) => {}
             Err(err) => warn("BACKEND", format!("final backend quiesce failed: {err:#}")),
         }
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::DrainingEvents);
         info("MINER", "shutting down: draining final events...");
         let mut final_pending_solution = None;
         {

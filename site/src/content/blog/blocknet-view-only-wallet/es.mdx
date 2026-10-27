@@ -1,0 +1,107 @@
+---
+title: 'Configura una cartera de Blocknet de solo lectura'
+description: 'Configura una cartera de Blocknet de solo lectura en otro equipo: exporta el archivo, ábrelo con su propia contraseña y consulta los pagos recibidos.'
+tags: ['Blocknet', 'Cartera', 'Privacidad']
+faq:
+  - q: '¿Puede enviar monedas una cartera de Blocknet de solo lectura?'
+    a: 'Una cartera de solo lectura permite observar los fondos entrantes, pero no enviar pagos ni firmar mensajes. El núcleo revisado rechaza esas operaciones para este tipo de cartera. Conserva la cartera completa para decidir qué gastar y autorizar pagos, y usa la copia de consulta para los ingresos que quieras observar.'
+  - q: '¿Puedo publicar mi clave privada de visualización de Blocknet?'
+    a: 'La clave privada de visualización da acceso a la información de los pagos entrantes. Es un dato privado aunque no otorgue permiso para gastar. Comparte ese acceso solo de forma deliberada, protege los archivos exportados y sus contraseñas, y no incluyas claves en capturas públicas, solicitudes de ayuda, chats ni formularios de prueba del explorador.'
+  - q: '¿Necesita la cartera de solo lectura la contraseña de la cartera principal?'
+    a: 'La exportación solicita la contraseña de la cartera completa para autorizar la creación y después una contraseña independiente para el archivo de consulta. En el segundo equipo, abre el archivo exportado con esa nueva contraseña. Ese equipo no necesita la frase de recuperación ni las credenciales de gasto de la cartera completa.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Consulta los pagos de Blocknet que recibes desde un segundo equipo y conserva la autorización de pagos en tu cartera completa. Esta guía utiliza el cliente oficial CLI v1.2.0 y el núcleo público v0.22.0, comprobados el 27 de octubre de 2026. Explica cómo exportar el archivo, qué acceso concede y cómo verificar los registros de recepción después de abrirlo.
+
+## ¿Cómo se crea una cartera de Blocknet de solo lectura?
+
+<Answer>
+Abre la cartera completa y usa su comando viewkeys para crear un archivo de consulta cifrado con una contraseña independiente. Transfiere ese archivo al equipo elegido, ábrelo allí y comprueba su dirección y tipo de solo lectura. Deja que termine el escaneo y consulta los ingresos mientras mantienes el gasto en la cartera completa.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Una cartera completa exporta una copia de consulta cifrada a un segundo equipo, donde se pueden ver pagos entrantes sin autorización para gastar." width="1200" height="675" loading="lazy" />
+
+## Elige los registros de recepción que quieres consultar
+
+Empieza por la cartera completa cuyos ingresos quieres observar. La [guía de configuración de la cartera](/es/blog/blocknet-wallet-for-mining/) explica cómo crearla o restaurarla. La copia de consulta corresponde a la dirección de esa cartera; no crea una identidad receptora distinta ni mueve monedas a otra cuenta. Anota a qué cartera y red pertenece antes de manipular archivos exportados.
+
+Para minar puedes seguir usando la misma dirección de pago verificada. La cartera de consulta permite revisar registros entrantes en otro equipo de confianza. La [guía de seguimiento del pool](https://bntpool.com/blog/es/track-your-miner-on-bntpool/) responde a otra necesidad: muestra shares, saldo del pool y pagos sin claves de cartera. Elige la interfaz según tu pregunta; el acceso de consulta sirve cuando necesitas el registro privado de recepción.
+
+## Exporta el archivo de consulta desde la cartera completa
+
+En el equipo que contiene la cartera completa, conecta con su núcleo de mainnet en ejecución:
+
+```sh
+blocknet attach mainnet
+```
+
+Abre la cartera correcta y comprueba su dirección con estos comandos de la consola:
+
+```text
+load
+address
+```
+
+Si está bloqueada, utiliza el procedimiento habitual de desbloqueo. Mantén esta sesión privada, porque la siguiente operación muestra claves de visualización.
+
+Inicia la exportación:
+
+```text
+viewkeys
+```
+
+El [cliente revisado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) explica que la clave privada de visualización revela los ingresos y pide confirmar. Continúa solo si quieres conceder ese acceso. Después solicita la contraseña de la cartera completa, una nueva contraseña para el archivo de solo lectura y su confirmación. Elige y guarda la contraseña del archivo que usarás en el otro equipo.
+
+## ¿Qué archivo debes transferir?
+
+Cuando la exportación termina correctamente, el cliente muestra las claves de visualización y la ruta del archivo guardado. Usa esa ruta real para identificar el archivo exportado. Transfiérelo al equipo que controlas mediante un método adecuado para datos privados de cartera. Protege la contraseña por separado. Evita incluir las claves de la terminal en capturas o transcripciones de diagnóstico.
+
+La [referencia de la cartera](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) indica que la carpeta predeterminada es `~/.config/bnt/wallets/`, y su equivalente en Windows es `C:\Users\<you>\.config\bnt\wallets\`. La ruta de cartera configurada puede cambiar qué carpeta enumera load. Copia el archivo exportado en la carpeta de carteras del destino para que el cliente lo encuentre. Conserva la cartera completa original y su copia de recuperación en el almacenamiento previsto.
+
+## Abre y verifica la copia en el segundo equipo
+
+Prepara un núcleo en ejecución en el destino siguiendo la [guía del nodo](/es/blog/run-blocknet-node/), y conecta a la misma red. Abre el archivo exportado con la contraseña elegida para él:
+
+```text
+load
+```
+
+Si ya hay otra cartera abierta, la consola oficial permite descargarla antes de abrir la que deseas. Selecciona por el nombre del archivo exportado, sin asumir que la primera cartera de la lista es la correcta.
+
+Verifica la copia con el cliente:
+
+```text
+address
+status
+```
+
+Compara la dirección receptora completa con la de la cartera completa. Comprueba que el cliente indique el tipo de solo lectura. Así verificas tanto la identidad como el acceso previsto. No hace falta intentar un envío: el [núcleo revisado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) rechaza los envíos y la firma de mensajes desde una cartera de solo lectura.
+
+## Deja que la cartera de consulta encuentre los pagos entrantes
+
+El nodo de destino necesita los bloques correspondientes y la cartera cargada debe escanearlos. Usa estos comandos para consultar sus registros:
+
+```text
+outputs
+history
+```
+
+Una cartera recién cargada o importada puede seguir poniéndose al día aunque el nodo tenga pares. Sigue la [guía de sincronización de la cartera](/es/blog/blocknet-wallet-not-syncing/) para distinguir descarga de cadena y escaneo, y decidir si hace falta escanear.
+
+Relaciona un registro entrante con un ID de transacción que ya tengas de la cartera completa o del registro de pagos. La [guía del explorador](/es/blog/blocknet-explorer-guide/) permite confirmar la inclusión pública, mientras la cartera de consulta aporta los detalles del ingreso. Usa la cartera completa para decidir qué gastar y autorizarlo. Trata la copia como un monitor de ingresos, sin asumir que reproduce todos los registros salientes o las decisiones sobre saldo disponible.
+
+## ¿Qué acceso concede una clave privada de visualización?
+
+La [referencia oficial de la consola](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) advierte de que esa clave permite ver los fondos entrantes. Un archivo de consulta cifrado protege ese acceso con su propia contraseña, pero abrirlo revela información privada de pagos. Concede acceso solo a la persona o máquina prevista. Cambiar la contraseña del archivo no revoca una clave de visualización que alguien ya haya copiado.
+
+Mantén los secretos de gasto y de visualización fuera de herramientas públicas y mensajes de soporte. La dirección receptora se comparte para cobrar; una clave privada de visualización tiene otro propósito. La [guía de direcciones sigilosas](/es/blog/stealth-addresses-explained/) explica cómo reconoce la cartera sus salidas. Para esta configuración, transfiere únicamente el acceso de consulta previsto y conserva el material de recuperación con la cartera completa.
+
+## Mantén una rutina de consulta repetible
+
+Cuando vuelvas al equipo de consulta, abre el mismo archivo, verifica la red y la dirección, y comprueba el progreso antes de interpretar una entrada ausente. Distingue entre un ingreso registrado y fondos cuyo gasto puedes autorizar. Si la cartera original tiene otra dirección porque creaste una cartera diferente, la copia de consulta existente seguirá correspondiendo a la anterior.
+
+Conserva la copia de recuperación de la cartera completa incluso después de configurar la consulta. Una copia de consulta no sustituye el material de gasto necesario para recuperar la cartera. La [guía de frases semilla](/es/blog/seed-phrase-explained/) explica esa copia y la de [envío y recepción](/es/blog/send-receive-blocknet/) explica los pagos. La cartera completa, su respaldo y la copia de consulta tienen cada una una función concreta.
+
+<CTA target="seine" title="Recibe pagos de minería en tu cartera de Blocknet" text="Usa las guías de seine para minar a tu dirección y consulta después los pagos entrantes desde la vista de cartera elegida." />

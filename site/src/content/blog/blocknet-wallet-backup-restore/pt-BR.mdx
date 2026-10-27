@@ -1,0 +1,96 @@
+---
+title: 'Faça backup, restaure e transfira uma carteira Blocknet'
+description: 'Faça backup da carteira Blocknet, restaure pela seed ou transfira o arquivo. Confira o endereço e a varredura antes de deixar de usar a cópia antiga.'
+tags: ['Blocknet', 'Carteira', 'Recuperação']
+faq:
+  - q: 'Posso recuperar uma carteira Blocknet se esquecer a senha?'
+    a: 'Para uma carteira baseada em seed, importe a seed de recuperação guardada com um nome novo e defina outra senha. O arquivo criptografado antigo mantém sua senha. Compare o endereço restaurado com seus registros e deixe o nó e a varredura da carteira se atualizarem antes de conferir o saldo.'
+  - q: 'Transferir minha carteira Blocknet muda o endereço de recebimento?'
+    a: 'Carregar uma cópia do mesmo arquivo de carteira ou importar corretamente sua seed original preserva o endereço. Compare o endereço completo no destino com um registro anterior confiável. Criar uma carteira totalmente nova é outra operação e fornece um endereço novo para pagamentos futuros.'
+  - q: 'Uma carteira somente leitura basta para recuperar o acesso para gastar?'
+    a: 'Uma carteira somente leitura permite acompanhar pagamentos recebidos em outro computador. Para recuperar o acesso para gastar, use o arquivo da carteira completa com sua senha ou o material de recuperação da carteira completa. Guarde o backup original da carteira completa e confira qual tipo de carteira foi carregado.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Faça backup da carteira Blocknet antes de trocar de computador e restaure o mesmo endereço usando o arquivo da carteira ou a seed de recuperação. Este guia segue o CLI oficial v1.2.0 e core v0.22.0, verificados em 27 de outubro de 2026. Ele separa a criação do backup, sua abertura em outro local e a verificação de que a recuperação terminou.
+
+## Como fazer backup e restaurar uma carteira Blocknet?
+
+<Answer>
+Guarde a seed de recuperação offline e uma cópia separada do arquivo da carteira completa. No computador de destino, carregue esse arquivo com sua senha ou importe a seed original em um arquivo novo. Compare o endereço de recebimento completo, deixe o nó e a varredura se atualizarem e confira seus registros antes de deixar de usar a cópia antiga.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Uma carteira e seu backup protegido são transferidos para outro computador, onde são conferidos o endereço restaurado e o progresso da varredura." width="1200" height="675" loading="lazy" />
+
+## Escolha o caminho de recuperação conforme o que você tem
+
+O backup do arquivo e a seed de recuperação têm finalidades diferentes. O arquivo `.wallet.dat` contém as chaves e o estado salvo da carteira; abrir uma cópia protegida por senha exige essa senha. A seed pode recriar as chaves de uma carteira baseada em seed em um arquivo novo com outra senha. Guarde ambos quando disponíveis e mantenha registros privados de pagamentos separados para compará-los após a recuperação.
+
+Este procedimento trata de uma carteira completa existente. Para criá-la pela primeira vez, siga o [guia de configuração](/pt-br/blog/blocknet-wallet-for-mining/). Para acompanhar pagamentos em um segundo computador sem poder gastar, use o [guia de somente leitura](/pt-br/blog/blocknet-view-only-wallet/). Apenas um endereço público de recebimento não restaura uma carteira. Identifique se você tem o arquivo completo, sua senha e a seed original antes de escolher os passos abaixo.
+
+## Prepare a carteira original e seu registro de recuperação
+
+Conecte-se pelo terminal ao core mainnet em execução:
+
+```sh
+blocknet attach mainnet
+```
+
+No shell interativo, carregue a carteira desejada e anote seu endereço público completo:
+
+```text
+load
+address
+```
+
+Escolha a entrada da carteira existente no menu. Se outra carteira estiver carregada, use `unload` antes de selecionar a correta. Guarde o endereço nas notas privadas da migração, junto com a rede e o nome do arquivo.
+
+Para uma carteira baseada em seed, execute `seed` no shell, confirme a solicitação e informe a senha. Anote as palavras retornadas na ordem exata e guarde-as offline. Faça isso sem compartilhar nem gravar a tela; o [guia de seed](/pt-br/blog/seed-phrase-explained/) explica como proteger esse registro. Se o cliente informar que não há seed disponível, preserve o arquivo completo e a senha e siga o caminho de cópia do arquivo. Não suponha que toda carteira antiga ou importada por chaves tenha uma seed.
+
+## Faça uma cópia separada do arquivo da carteira
+
+Localize o arquivo realmente usado pelo core. A pasta padrão é `~/.config/bnt/wallets/`; no Windows, é `C:\Users\<you>\.config\bnt\wallets\`. A pasta que contém o `wallet_file` configurado pode ser diferente. Use o caminho mostrado pelo cliente oficial e a [referência de gerenciamento de carteiras](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), principalmente se vários arquivos tiverem nomes parecidos. Confirme o arquivo certo antes de copiar qualquer coisa.
+
+Depois de anotar o endereço, execute `unload` e espere a conclusão com sucesso antes de copiar o arquivo. Mantenha o original onde está e salve uma cópia datada em outro dispositivo de armazenamento sob seu controle. Preserve a extensão `.wallet.dat` e proteja o backup e a senha. O cliente pode criar um backup local ao carregar de outra pasta, mas não sobrescreve um backup existente com o mesmo nome. Verifique sua própria cópia salva em vez de presumir que a cópia local está atualizada.
+
+## Como transferir a carteira para um computador novo?
+
+Instale o [cliente oficial](https://github.com/blocknetprivacy/blocknet/releases/latest) e prepare um core mainnet seguindo o [guia do nó](/pt-br/blog/run-blocknet-node/). Transfira uma cópia do arquivo completo, por um dispositivo de armazenamento que você controla, para a pasta de carteiras do core de destino. Preserve arquivos não relacionados já existentes; escolha outro nome de arquivo se necessário. No cliente analisado, `load` lê dessa pasta, mesmo quando um caminho personalizado é informado.
+
+Conecte-se no destino, execute `load`, selecione o arquivo copiado e informe a senha existente. Se ele não aparecer no menu, confira a pasta usada pelo core de destino e onde você o copiou. Escolha o arquivo existente em vez da opção de criar uma carteira nova. Copiar o mesmo arquivo restaura o acesso às mesmas chaves; não envia moedas nem cria um segundo saldo.
+
+## Restaure pela seed de recuperação original
+
+Se estiver recuperando uma carteira por perda do arquivo ou esquecimento da senha, use a seed guardada no cliente oficial do computador de destino confiável. Conecte-se ao core mainnet desejado e descarregue qualquer outra carteira primeiro. Inicie a recuperação no shell interativo:
+
+```text
+import
+```
+
+Selecione a opção 1 para a seed de recuperação de 12 palavras. Informe suas próprias palavras originais na ordem correta; nunca use palavras de exemplo de um guia nem cole a seed em um site.
+
+Escolha um nome de carteira novo e ainda não usado e defina e confirme uma nova senha quando solicitado. A [implementação de importação analisada](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) cria uma carteira a partir desses dados e mostra seu endereço. O arquivo criptografado original mantém a senha antiga. Guarde o arquivo antigo e o backup enquanto verifica a carteira importada e trate o arquivo novo como outra cópia que precisa de proteção.
+
+## Confira o endereço, a cadeia e a varredura da carteira
+
+Depois de carregar ou importar, examine a carteira de destino:
+
+```text
+address
+status
+balance
+history
+```
+
+Compare o endereço inteiro com o registro salvo anteriormente. Essa conferência identifica a carteira antes de você confiar no saldo exibido. Se for diferente, interrompa a migração e revise o arquivo escolhido, as palavras de recuperação e a rede. Mantenha o backup original intacto enquanto resolve a diferença.
+
+Deixe tanto o download da cadeia pelo nó quanto a varredura das saídas da carteira se atualizarem. Uma carteira recém-importada precisa encontrar suas saídas na cadeia; um saldo inicial não é a verificação final da recuperação. Compare o saldo disponível e os registros de entrada após o fim da varredura. Preserve suas notas separadas de pagamentos e o arquivo original para detalhes históricos. O [guia de sincronização](/pt-br/blog/blocknet-wallet-not-syncing/) explica quais indicadores observar e quando uma nova varredura é apropriada.
+
+## Conclua a migração depois de verificar
+
+Mantenha um backup protegido da carteira de destino verificada e guarde a seed offline. Registre qual computador agora contém a carteira completa ativa e quais cópias são backups. Uma cópia antiga mantém o mesmo acesso às chaves; mover o arquivo não revoga esse acesso. Ao aposentar um dispositivo, siga seu procedimento normal de descarte seguro do armazenamento depois de confirmar que o backup funciona.
+
+Se o endereço restaurado for igual, o destino atual dos pagamentos de mineração pode continuar o mesmo. Compare o [registro de pagamentos do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) com o histórico de entradas da carteira para verificar recebimentos da mineração. Se criar uma carteira diferente de propósito, isso será uma mudança de endereço em vez de uma restauração. Termine de verificar a carteira restaurada antes de fazer mudanças separadas na configuração do minerador.
+
+<CTA target="seine" title="Minere para seu endereço Blocknet verificado" text="Siga os guias de seine para conectar o minerador e mantenha os backups da carteira em dispositivos de armazenamento sob seu controle." />

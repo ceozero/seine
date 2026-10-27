@@ -1,0 +1,102 @@
+---
+title: 'Blocknet ödemesi nasıl kanıtlanır ve doğrulanır?'
+description: 'İşlem anahtarı ve alıcı adresiyle Blocknet ödemesini doğrulayın. Kanıt oluşturun, eşleşen çıktıları inceleyin ve sonucun neyi gösterdiğini anlayın.'
+tags: ['Blocknet', 'Ödemeler', 'Cüzdan']
+faq:
+  - q: 'Blocknet ödeme kanıtını doğrulamak için ne gerekir?'
+    a: 'Tam işlem kimliği, gönderen cüzdanın sağladığı işlem anahtarı ve alıcının tam adresi gerekir. Alanları uyumlu düğümün kanıt doğrulama uç noktasına gönderin. Anahtar doğrulamasını ve adresle eşleşen çıktıları birlikte kontrol edip tutarı ödeme kaydıyla karşılaştırın.'
+  - q: 'Geçerli kanıt alıcıya ödeme yapıldığını gösterir mi?'
+    a: 'Geçerli sonuç, verilen anahtarın işleme ait olduğunu gösterir. Alıcı adresiyle eşleşen çıktıları da incelemelisiniz. Eşleşen çıktı olmadan geçerli anahtar, o adrese ödeme yapıldığını kanıtlamaz. Tutarı, zincire dahil edilmeyi ve onayları ayrı kontrol edin.'
+  - q: 'Salt görüntüleme cüzdanı ödeme kanıtı üretebilir mi?'
+    a: 'İncelenen core kanıtı cüzdanın özel görüntüleme malzemesinden türetir; dolayısıyla karşılık gelen görüntüleme cüzdanı, o cüzdanın gönderdiği işlem için kanıt üretebilir. İşlem yerel zincirde olmalı ve türetilen anahtar eşleşmelidir. Bu, görüntüleme cüzdanına harcama yetkisi vermez.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Belirli bir Blocknet ödemesini işlem anahtarı ve alıcı adresini işlemle eşleştirerek doğrulayın. Kılavuz, 27 Ekim 2026 tarihinde kontrol edilen resmî CLI v1.2.0 ve core v0.22.0 sürümlerini izler. Kanıt üretimini, doğru alanları paylaşmayı ve sonucu zincir durumuyla birlikte okumayı kapsar.
+
+## Blocknet ödemesini nasıl kanıtlarsınız?
+
+<Answer>
+Gönderen cüzdanı açın, işlem kimliğiyle prove çalıştırın ve çıkan anahtarı amaçlanan doğrulayıcıya verin. Doğrulama anahtarı, kimliği ve alıcı adresini kullanır. Anahtarın geçerli olduğunu doğrulayın, sonra o adrese eşleşen çıktıları ve tutarı inceleyin.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="İşlem kaydı ve anahtarı alıcı adresine göre kontrol edilerek eşleşen ödeme çıktıları belirlenir." width="1200" height="675" loading="lazy" />
+
+## Kanıtlamak istediğiniz ödemeyle başlayın
+
+Gönderim kaydındaki tam kimliği saklayın. [Gönderme kılavuzu](/tr/blog/send-receive-blocknet/) resmî istemcinin bunu nerede yazdırdığını, [gezgin kılavuzu](/tr/blog/blocknet-explorer-guide/) işlem ve bloğun nasıl bulunduğunu açıklar. Genel kimlik transferi bulur ama normal gezgin sayfası belirli adrese ödenen özel tutarı açıklamaz.
+
+Hangi alıcı adresini ve ödeme kaydını kontrol edeceğinizi kararlaştırın. Kısa etiket veya ekran görüntüsü yerine ödeme ile ilişkili tam adresi kullanın. Adla ödeme yaptıysanız kullanılan adresi saklayın. Kanıt belirli bir alımı kontrol etmeye veya alıcıyla ödeme sorusunu çözmeye yarar; kişinin gerçek dünyadaki kimliğini belirlemez.
+
+## Gönderen cüzdanda işlem anahtarı üretin
+
+Terminalden çalışan mainnet core sistemine bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+Gönderen cüzdanı açıp etkileşimli kabukta kayıtları inceleyin:
+
+```text
+load
+address
+history
+```
+
+Doğru dosyayı seçip gerekirse istemci üzerinden kilidi açın. İlk kurulum için [cüzdan kılavuzunu](/tr/blog/blocknet-wallet-for-mining/) kullanın.
+
+Yer tutucuyu tam kimlikle değiştirip kabukta çalıştırın:
+
+```text
+prove <txid>
+```
+
+[İncelenen istemci](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), 64 karakterli onaltılık kimlik kabul eder ve dönen işlem anahtarını gösterir. Core işlemi yerel zincirde arar, türetilen anahtarın açık anahtarla eşleşmesini kontrol eder. Gönderen cüzdanı kullanın; kanıt üretmek başka ödeme oluşturmaz.
+
+## Hangi bilgiler paylaşılmalı?
+
+Kimliği, dönen işlem anahtarını ve alıcı adresini anlaşılan kanaldan paylaşın. Anahtar yalnızca bu işleme özeldir. Kurtarma seed bilgisi, harcama anahtarı, parola ve tüm cüzdanın özel görüntüleme anahtarı gizli kalsın. Doğrulayıcıya kanıt alanları gerekir; açık cüzdana veya kurtarma malzemesine erişim gerekmez.
+
+Bunu bilinçli bilgi açıklama olarak değerlendirin: anahtar ve adres eşleşen çıktıları, tutarları ve işlemde kurtarılabilir notları gösterir. Kanıta ihtiyacı olanlarla paylaşın. [Not kılavuzu](/tr/blog/blocknet-encrypted-memos/) ödeme notlarını açıklar; paylaşmadan içeriklerini düşünün. Paylaşılan anahtar kopyalanabilir, bu yüzden alıcının kabul ettiği özel kanalı kullanın.
+
+## Belgelenmiş core API ile doğrulayın
+
+[Resmî API](https://blocknetcrypto.com/api), yüklü cüzdan veya bearer belirteci gerektirmeyen genel doğrulama uç noktası sunar. Kontrol ettiğiniz düğümü tercih edin. Şablonu özel klasörde `proof.json` olarak kaydedin, üç yer tutucu dizgesini gerçek alanlarla değiştirin. Alan adlarını değiştirmeyin.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+O klasörden dosyayı düğüm API adresine gönderin:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Farklıysa yapılandırılmış yerel portu kullanın; Windows PowerShell üzerinde `curl.exe` kullanın. [Düğüm kılavuzu](/tr/blog/run-blocknet-node/) core çalıştırmayı anlatır. İstek kanıt kontrol eder, coin göndermez. Uzak sunucu kullanmak gönderilen alanları işletmecisine açıklar.
+
+## Anahtar geçerliliğini alıcı eşleşmesinden ayırın
+
+Önce `valid` alanına bakın. true, anahtarın işlemin açık anahtarıyla eşleştiğini gösterir. Sonra `outputs` alanına bakın: `match` değeri true olan girdiler belirtilen adrese aittir. `total_matched` bunların tutarlarını toplar. Geçerli anahtar, adres işlemi almadıysa sıfır eşleşen çıktı üretebilir.
+
+API tutarları atomik birimde verir: 100.000.000 birim 1 BNT eder. BNT faturasıyla karşılaştırmadan toplamı dönüştürün; erken yuvarlamadan tüm tam sayı basamaklarını koruyun. Dönen notu beklenen kayıtla karşılaştırın. Zincire dahil edilmeyi ve onayları düğüm veya gezginden ayrı kontrol edin. Kanıt sonucu tek başına faturanın tamamen ödendiğini ya da fonların şimdi harcanabilir olduğunu söylemez.
+
+## Uyuşmazlığı özgün kayıtlarla çözün
+
+Geçersiz anahtarda tam kimliği ve anahtarı gönderenin özgün çıktısıyla karşılaştırın. Geçerli anahtarda alıcı eşleşmesi yoksa tam adresi tekrar kontrol edin. Üretimde işlem bulunamazsa düğüm ağına ve zincir ilerlemesine bakın: incelenen uç nokta zincirde işlem gerektirir. Yerel zincir gerideyse [eşitleme kılavuzunu](/tr/blog/blocknet-wallet-not-syncing/) izleyin.
+
+Havuz ödemesinde alıcı cüzdanınız, havuz işlemini gönderen cüzdan değildir. [Havuz takip kaydı](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) ve gelen geçmişiyle başlayın; gönderen kanıtını gerçek gönderenden alın. Coinbase madencilik ödüllerinin de incelenen üretim uç noktasında gönderen kanıtı yoktur. Ayrımlar ödeme için doğru kanıtı seçmenize yardım eder.
+
+## Kanıtı amacı ve sonucuyla saklayın
+
+Kimlik, alıcı adresi, ilgili ödeme referansı ve sonucu özel kayıtlarda birlikte tutun. Hangi ağ ve düğümü ne zaman kontrol ettiğinizi yazın. Yalnızca o amaca gereken bilgiyi saklayın. Kanıtı alan kişi, başka kişinin sonuç ekranına güvenmek yerine kontrolü bağımsız tekrarlayabilir.
+
+[İmzalı mesaj](/tr/blog/blocknet-sign-verify-message/) farklı amaç taşır: bir adresin imzalama anahtarının belirli mesaj için kontrol edildiğini gösterir. İşleme özgü delil için ödeme kanıtını, anlaşılan sahiplik sınaması için mesaj akışını kullanın. [Salt görüntüleme kılavuzu](/tr/blog/blocknet-view-only-wallet/), harcama yetkisi olmasa da görüntüleme erişiminin neden hassas olduğunu açıklar. Her kanıtı cevapladığı soruyla ilişkilendirin.
+
+<CTA target="seine" title="Blocknet madencilik ödemelerini alın ve izleyin" text="seine madencilik kılavuzlarını izleyin, ödeme kayıtlarını saklayın ve kontrol ederken uygun cüzdan kanıtını kullanın." />

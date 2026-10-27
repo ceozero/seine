@@ -1,0 +1,99 @@
+---
+title: 'Come inviare e ricevere Blocknet'
+description: 'Invia e ricevi Blocknet con il wallet ufficiale: verifica il destinatario, controlla il pagamento, salva l’ID e conferma la ricezione nella cronologia.'
+tags: ['Blocknet', 'Wallet', 'Pagamenti']
+faq:
+  - q: 'Cosa devo condividere per ricevere Blocknet?'
+    a: 'Condividi l’indirizzo di ricezione mostrato dal wallet o il tuo nome breve Blocknet ID verificato. Un link di pagamento può includere importo e memo. Al mittente servono i dati di ricezione; parole di recupero e chiavi private restano con te. Conferma la ricezione nella cronologia del tuo wallet.'
+  - q: 'Posso annullare un pagamento Blocknet prima di confermarlo?'
+    a: 'Nel client a riga di comando esaminato, il comando di invio richiede prima un’anteprima e mostra i dettagli. Alla richiesta di conferma, premere Invio o rispondere no annulla l’operazione. Dopo un invio confermato, esamina la registrazione della transazione prima di decidere qualsiasi altra azione.'
+  - q: 'Perché i Blocknet ricevuti non sono subito spendibili?'
+    a: 'Il wallet distingue i fondi spendibili da quelli in attesa o non confermati. Una transazione può comparire sulla rete prima che i suoi output siano spendibili. Leggi lo stato attuale e lascia proseguire sincronizzazione e scansione. L’explorer aiuta a verificare l’inclusione; il wallet identifica i tuoi output.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Invia un pagamento Blocknet da un wallet già preparato, poi seguilo dalla schermata di verifica del mittente alla cronologia del destinatario. Questa guida usa il client ufficiale a riga di comando v1.2.0, verificato il 26 ottobre 2026. Riunisce indirizzo, anteprima e registrazione della transazione in un’unica procedura. Se devi ancora creare o ripristinare un wallet, inizia dalla [guida alla configurazione](/it/blog/blocknet-wallet-for-mining/).
+
+## Come si invia e si riceve Blocknet?
+
+<Answer>
+Per ricevere Blocknet, condividi l’indirizzo del wallet o il tuo nome breve verificato. Per inviare, inserisci destinatario e importo, controlla destinazione e commissione, quindi conferma il pagamento desiderato. Conserva l’ID della transazione. Il destinatario controlla la propria cronologia e il saldo spendibile mentre la transazione procede.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Il mittente controlla un pagamento, la rete registra la transazione e il destinatario verifica la cronologia del wallet." width="1200" height="675" loading="lazy" />
+
+## Apri il wallet corretto prima di preparare un pagamento
+
+Collegati al core mainnet in esecuzione tramite il client ufficiale:
+
+```sh
+blocknet attach mainnet
+```
+
+Al prompt interattivo, apri il wallet esistente con questo comando:
+
+```text
+load
+```
+
+Seleziona il file del wallet desiderato e inserisci la password quando richiesto. La [guida al nodo](/it/blog/run-blocknet-node/) spiega come avviare e controllare il core in background.
+
+Controlla indirizzo di ricezione e saldo con questi comandi separati:
+
+```text
+address
+balance
+```
+
+Verifica di usare il wallet e la rete desiderati. Per preparare un pagamento in uscita, leggi l’importo spendibile. Il [riferimento ufficiale della shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documenta questi comandi; un wallet grafico può presentare le stesse attività con controlli ed etichette differenti.
+
+## Cosa condividere con il mittente?
+
+Copia l’indirizzo completo prodotto dal comando dell’indirizzo e invialo tramite il canale concordato per il pagamento. Se usi [Blocknet ID](/it/blog/blocknet-id-pay-by-name/), condividi il nome breve corretto e chiedi al mittente di controllare l’indirizzo risolto. Per un nuovo pagamento, verifica la scrittura con il destinatario. Riconoscere un nome visualizzato non equivale a verificare i dati reali di ricezione.
+
+Un [link di pagamento](/it/blog/blocknet-payment-links/) può contenere l’importo richiesto e un memo facoltativo. Usalo per ridurre la digitazione, poi controlla i dettagli compilati nel wallet. Le parole di recupero e le chiavi private non sono dati di ricezione. Tienile fuori da messaggi, fatture e screenshot. Per questo passaggio serve l’indirizzo di ricezione.
+
+## Inserisci il destinatario e l’importo previsto
+
+Questo è un esempio di sintassi all’interno di attach. Sostituisci il segnaposto maiuscolo con l’indirizzo effettivo del destinatario e l’importo illustrativo con quello che vuoi pagare:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Il segnaposto non è un indirizzo a cui inviare fondi. Il client esaminato accetta anche un nome breve Blocknet ID nella posizione del destinatario.
+
+Per una fattura o un riferimento d’ordine, aggiungi un memo seguendo la [guida ai memo cifrati](/it/blog/blocknet-encrypted-memos/). Prima di prepararlo, verifica il testo richiesto dal destinatario. Questo primo percorso riguarda un importo fisso; l’invio dell’intero saldo è un’operazione distinta che considera la commissione diversamente. La [guida alle commissioni](/it/blog/blocknet-transaction-fees/) spiega la differenza e come il resto torna al wallet.
+
+## Controlla l’anteprima prima di confermare
+
+Il [client esaminato](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) richiede una simulazione prima dell’invio. Mostra importo, destinazione, commissione ed eventuale resto. Quando risolve un nome breve, include il relativo indirizzo nella verifica. Se hai inserito un memo, controlla anche quello. Confronta i dettagli con la richiesta che volevi soddisfare prima di rispondere al prompt.
+
+Al prompt `Confirm [y/N]:`, inserisci `y` solo per il pagamento che intendi effettuare. Premi Invio o rispondi no per annullare. In un normale invio a importo fisso, la somma destinata al beneficiario e la commissione di rete sono parti separate del calcolo. Usa i valori dell’anteprima attuale, senza copiare una commissione da un vecchio esempio o screenshot.
+
+## Conserva l’ID della transazione dopo l’invio
+
+Dopo un invio confermato riuscito, la CLI mostra un ID di transazione e un link all’explorer. Salva l’identificatore con la documentazione del pagamento per ritrovare la stessa transazione. Per seguirne l’avanzamento è più utile di uno screenshot ritagliato del messaggio di successo. Conserva destinatario, importo previsto e riferimento della fattura nei tuoi documenti privati, secondo necessità.
+
+Controlla l’attività con il comando della cronologia:
+
+```text
+history
+```
+
+Il client attuale combina gli output in entrata del wallet con gli invii in uscita registrati, compresi quelli ancora nella mempool. Se un’operazione restituisce un risultato poco chiaro, controlla cronologia e identificatore esistenti prima di preparare un altro pagamento. Ripetere un invio è una nuova istruzione di pagamento: accerta prima cosa è successo al precedente.
+
+## Conferma la ricezione nel wallet del destinatario
+
+Il destinatario consulta la cronologia del proprio wallet caricato e associa la voce in entrata alla transazione di cui si parla. La scansione identifica gli output appartenenti a quel wallet. Una pagina pubblica mostra informazioni di rete; il wallet ricevente fornisce la vista privata del pagamento. La [guida all’explorer](/it/blog/blocknet-explorer-guide/) spiega come leggere il record pubblico insieme a questa verifica.
+
+Controlla di nuovo il saldo mentre il pagamento procede. Spendibile, in attesa e non confermato sono stati diversi. Un wallet ripristinato o appena aperto può ancora analizzare la cronologia anche se il nodo è connesso. Lascia proseguire il lavoro e ricontrolla. Per un pagamento di mining, la [guida dal pool al wallet](https://bntpool.com/blog/it/pool-payout-missing-from-wallet/) segue il passaggio aggiuntivo dalla registrazione del pagamento del pool alla ricezione.
+
+## Crea una procedura di pagamento ripetibile
+
+Per ogni pagamento previsto, parti dal wallet e dalla rete corretti, verifica i dati di ricezione, controlla l’anteprima attuale e conserva l’ID risultante. Il destinatario verifica poi cronologia e saldo. Queste osservazioni descrivono fasi diverse: registra quella effettivamente verificata, senza considerare ogni schermata di successo come ricezione definitiva.
+
+Continua a seguire le istruzioni ufficiali del client installato quando cambiano etichette o procedure. Questa guida descrive la CLI esaminata; i collegamenti approfondiscono nomi, memo, commissioni e scansione. Se fai mining anche su [bntpool.com](https://bntpool.com/blog/it/mine-blocknet-on-bntpool/), usa un indirizzo di pagamento collegato a un wallet che puoi aprire e verificare con lo stesso percorso di ricezione.
+
+<CTA target="seine" title="Scopri il mining Blocknet con seine" text="Segui le guide per collegare seine e ricevere i pagamenti del pool nel tuo wallet Blocknet." />

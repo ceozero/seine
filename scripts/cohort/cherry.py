@@ -87,7 +87,7 @@ def cmd_up(args):
         subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', args.name, '-f', str(key)], check=True)
     _, ssh_key = call('POST', '/ssh-keys', {'label': args.name, 'key': key.with_suffix('.pub').read_text().strip()})
     receipt = {'name': args.name, 'project': project, 'ssh_key_id': ssh_key['id'], 'key': str(key),
-               'plan': args.plan, 'region': args.region, 'hours': args.hours,
+               'plan': int(args.plan) if args.plan.isdigit() else args.plan, 'region': args.region, 'hours': args.hours,
                'created_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
     path.write_text(json.dumps(receipt, indent=2))
     # Arm deletion before ordering, so a crash between order and receipt still cleans up by hostname.
@@ -97,7 +97,7 @@ def cmd_up(args):
                    capture_output=True)
     try:
         _, server = call('POST', f'/projects/{project}/servers', {
-            'plan': args.plan, 'region': args.region, 'image': args.image, 'hostname': args.name,
+            'plan': int(args.plan) if args.plan.isdigit() else args.plan, 'region': args.region, 'image': args.image, 'hostname': args.name,
             'ssh_keys': [ssh_key['id']]})
     except SystemExit:
         cmd_down(args)  # out of stock or rejected: remove the key and timer
@@ -158,7 +158,7 @@ def main():
     sub.add_parser('stock')
     up = sub.add_parser('up')
     up.add_argument('name')
-    up.add_argument('--plan', type=int, required=True)
+    up.add_argument('--plan', required=True, help='plan id or slug (some plans only order by slug)')
     up.add_argument('--region', required=True)
     up.add_argument('--image', default='ubuntu_24_04_64bit')
     up.add_argument('--hours', type=float, default=2.0, help='hard lease; local timer deletes the server')

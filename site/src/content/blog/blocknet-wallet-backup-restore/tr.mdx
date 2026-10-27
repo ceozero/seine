@@ -1,0 +1,96 @@
+---
+title: 'Blocknet cüzdanını yedekleme, kurtarma ve taşıma'
+description: 'Blocknet cüzdanını yedekleyin, seed ile kurtarın veya dosyasını yeni bilgisayara taşıyın. Eski kopyayı bırakmadan önce adresi ve taramayı kontrol edin.'
+tags: ['Blocknet', 'Cüzdan', 'Kurtarma']
+faq:
+  - q: 'Parolayı unutursam Blocknet cüzdanını kurtarabilir miyim?'
+    a: 'Seed tabanlı cüzdanı, saklanan kurtarma seed bilgisiyle yeni ad altında içe aktarın ve yeni parola belirleyin. Eski şifreli dosya mevcut parolasını korur. Kurtarılan adresi kayıtlarla karşılaştırın; bakiyeyi okumadan düğümün ve cüzdan taramasının yetişmesini bekleyin.'
+  - q: 'Cüzdanı taşımak alıcı adresini değiştirir mi?'
+    a: 'Aynı dosyanın kopyasını yüklemek veya özgün seedi doğru içe aktarmak adresi korur. Hedefteki tam adresi güvenilen eski kayıtla karşılaştırın. Yepyeni cüzdan oluşturmak farklı işlemdir ve gelecekteki ödemeler için yeni adres verir.'
+  - q: 'Salt görüntüleme cüzdanı harcamayı kurtarmaya yeter mi?'
+    a: 'Görüntüleme cüzdanı okuma erişimi sağlar; başka bilgisayarda gelen ödemeleri izlemeye uygundur. Harcama erişimini kurtarmak için tam cüzdan dosyası ve parolası veya tam cüzdanın kurtarma malzemesi gerekir. Özgün tam yedeği saklayın ve yüklenen türü doğrulayın.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Bilgisayar değiştirmeden Blocknet cüzdanını yedekleyin, sonra dosya veya kurtarma seediyle aynı adresi geri yükleyin. Kılavuz 27 Ekim 2026 tarihinde kontrol edilen resmî CLI v1.2.0 ve core v0.22.0 sürümlerini izler. Yedekleme, başka yerde açma ve kurtarmayı doğrulama aşamalarını ayırır.
+
+## Blocknet cüzdanı nasıl yedeklenir ve kurtarılır?
+
+<Answer>
+Seedi çevrimdışı ve tam dosyanın ayrı kopyasını saklayın. Hedef bilgisayarda dosyayı parolasıyla yükleyin veya özgün seedi yeni dosyaya aktarın. Tam alıcı adresini karşılaştırın, düğüm ve taramanın yetişmesini bekleyin, eski kopyayı devreden çıkarmadan kayıtları doğrulayın.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Cüzdan ve korunan yedeği başka bilgisayara taşınır; kurtarılan adres ve tarama ilerlemesi orada kontrol edilir." width="1200" height="675" loading="lazy" />
+
+## Elinizdeki kurtarma yolunu seçin
+
+Dosya yedeği ve seed farklı amaçlar taşır. `.wallet.dat` dosyası anahtarları ve kayıtlı durumu içerir; parola korumalı kopya parolasını ister. Seed, seed tabanlı cüzdanın anahtarlarını yeni parola ile yeni dosyada oluşturabilir. Varsa ikisini de saklayın; kurtarma sonrası karşılaştırma için özel ödeme kayıtlarını ayrı tutun.
+
+Bu işlem mevcut tam cüzdan içindir. İlk oluşturma için [kurulum kılavuzunu](/tr/blog/blocknet-wallet-for-mining/) izleyin. İkinci bilgisayarda harcama yetkisiz izleme için [görüntüleme kılavuzunu](/tr/blog/blocknet-view-only-wallet/) kullanın. Genel alıcı adresi tek başına cüzdanı kurtarmaz. Adımları seçmeden tam dosya, parola ve özgün seed olup olmadığını belirleyin.
+
+## Özgün cüzdanı ve kurtarma kaydını hazırlayın
+
+Terminalden çalışan mainnet core sistemine bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+Etkileşimli kabukta doğru cüzdanı yükleyip tam açık adresini kaydedin:
+
+```text
+load
+address
+```
+
+Mevcut cüzdanın menü girdisini kullanın. Başka cüzdan açıksa önce `unload` kullanın. Adresi ağ ve dosya adıyla birlikte özel taşıma notlarına kaydedin.
+
+Seed tabanlı cüzdanda kabukta `seed` çalıştırın, istemi onaylayıp parolayı girin. Dönen sözcükleri tam sırayla yazın ve çevrimdışı saklayın. Ekran paylaşımı veya kaydı sırasında yapmayın; [seed kılavuzu](/tr/blog/seed-phrase-explained/) korumayı anlatır. Seed yok denirse tam dosyayı ve parolayı koruyup dosya kopyalama yolunu kullanın. Eski veya anahtar içe aktarmalı her cüzdanın seedi olduğunu varsaymayın.
+
+## Cüzdan dosyasının ayrı kopyasını alın
+
+Core tarafından gerçekten kullanılan dosyayı bulun. Varsayılan dizin `~/.config/bnt/wallets/`, Windows karşılığı `C:\Users\<you>\.config\bnt\wallets\` olur. Yapılandırılmış `wallet_file` içeren klasör farklı olabilir. Özellikle benzer adlı dosyalarda istemcinin gösterdiği yolu ve [cüzdan yönetim başvurusunu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) kullanın. Kopyalamadan doğru dosyayı doğrulayın.
+
+Adresi kaydettikten sonra `unload` çalıştırıp başarıyı bekleyin. Özgün dosyayı yerinde bırakın, tarihli kopyayı kontrolünüzdeki ayrı depolamaya kaydedin. `.wallet.dat` uzantısını koruyup yedeği ve parolayı güvenceye alın. İstemci başka dizinden yüklerken yerel yedek oluşturabilir ama mevcut aynı adlı yedeğin üzerine yazmaz. Yerel kopyayı güncel varsaymak yerine kendi kopyanızı kontrol edin.
+
+## Yeni bilgisayara nasıl taşınır?
+
+[Resmî istemciyi](https://github.com/blocknetprivacy/blocknet/releases/latest) kurup [düğüm kılavuzuyla](/tr/blog/run-blocknet-node/) mainnet core hazırlayın. Tam dosyanın kopyasını kontrol ettiğiniz depolama üzerinden hedef core cüzdan klasörüne taşıyın. Oradaki ilgisiz dosyaları koruyun; gerekirse farklı ad seçin. İncelenen istemcide `load`, özel yol girilse de bu klasörden okur.
+
+Hedefte attach ile bağlanıp `load` çalıştırın, kopyayı seçerek mevcut parolayı girin. Menüde yoksa hedef core klasörünü ve kopyaladığınız yeri kontrol edin. Yeni cüzdan oluşturma yerine mevcut dosyayı seçin. Aynı dosyayı kopyalamak aynı anahtarlara erişimi geri getirir; coin göndermez veya ikinci bakiye yaratmaz.
+
+## Özgün kurtarma seedinden geri yükleyin
+
+Dosya kaybı veya unutulan parolada, güvenilen hedef bilgisayardaki resmî istemcide kayıtlı seedi kullanın. Amaçlanan mainnet core sistemine bağlanıp önce diğer cüzdanı kaldırın. Etkileşimli kabukta kurtarmayı başlatın:
+
+```text
+import
+```
+
+12 sözcüklü seed için seçenek 1’i seçin. Kendi özgün sözcüklerinizi sırayla girin; kılavuzdaki örnekleri kullanmayın veya seedi web sitesine yapıştırmayın.
+
+Yeni ve kullanılmamış ad seçin, yeni parolayı belirleyip doğrulayın. [İncelenen içe aktarma uygulaması](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), girdilerden cüzdan oluşturur ve adresi bildirir. Özgün şifreli dosya eski parolayı korur. İçe aktarılan cüzdanı kontrol ederken eski dosya ve yedeği saklayın; yeni dosyayı da korunacak başka kopya sayın.
+
+## Adresi, zinciri ve taramayı kontrol edin
+
+Yükleme veya içe aktarmadan sonra hedef cüzdanı inceleyin:
+
+```text
+address
+status
+balance
+history
+```
+
+Tam adresi eski kayıtla karşılaştırın. Adres kontrolü, bakiyeye güvenmeden cüzdanı belirler. Farklıysa taşımayı durdurup seçilen dosya, kurtarma sözcükleri ve ağı kontrol edin. Farkı çözerken özgün yedeği sağlam tutun.
+
+Düğüm zincir indirmesi ve cüzdan çıktı taraması yetişsin. Yeni aktarılan cüzdan çıktılarını zincirde bulmalıdır; ilk bakiye son kurtarma kontrolü değildir. Tarama bitince kullanılabilir bakiye ve gelen kayıtları karşılaştırın. Tarihsel ayrıntılar için ayrı ödeme notlarını ve özgün dosyayı koruyun. [Cüzdan eşitleme kılavuzu](/tr/blog/blocknet-wallet-not-syncing/) ilerleme okumalarını ve yeniden taramanın uygun olduğu zamanı açıklar.
+
+## Doğrulama sonrası taşımayı bitirin
+
+Doğrulanmış hedef cüzdanın korunan yedeğini ve çevrimdışı seedi saklayın. Aktif tam cüzdanın hangi bilgisayarda, yedeklerin nerede olduğunu kaydedin. Eski kopya aynı anahtarlara erişir; taşıma erişimi iptal etmez. Cihazı emekliye ayırırken çalışan yedeği doğruladıktan sonra depolamayı normal güvenli imha sürecinizle ele alın.
+
+Adres eşleşirse mevcut madencilik ödeme hedefi aynı kalabilir. Alımları doğrularken [havuz ödeme kaydını](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) gelen geçmişiyle karşılaştırın. Bilerek başka cüzdan oluşturmak kurtarma değil adres değişikliğidir. Madenci ayarlarını ayrıca değiştirmeden kurtarılan cüzdanı doğrulamayı bitirin.
+
+<CTA target="seine" title="Doğrulanmış Blocknet adresinize kazın" text="seine kurulum kılavuzlarıyla madenciyi bağlayın ve cüzdan yedeklerini kontrol ettiğiniz depolamada tutun." />

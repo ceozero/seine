@@ -1,0 +1,96 @@
+---
+title: 'Sao lưu, khôi phục và chuyển ví Blocknet'
+description: 'Sao lưu ví Blocknet, khôi phục từ seed hoặc chuyển tệp sang máy mới. Kiểm tra địa chỉ và tiến độ quét trước khi ngừng dùng bản cũ.'
+tags: ['Blocknet', 'Ví', 'Khôi phục']
+faq:
+  - q: 'Quên mật khẩu có khôi phục ví Blocknet được không?'
+    a: 'Với ví dựa trên seed, dùng seed khôi phục đã lưu để nhập ví dưới tên mới và đặt mật khẩu mới. Tệp mã hóa cũ giữ mật khẩu hiện có. So địa chỉ khôi phục với bản ghi rồi để nút và quét ví bắt kịp trước khi kiểm tra số dư.'
+  - q: 'Chuyển ví có đổi địa chỉ nhận không?'
+    a: 'Tải bản sao cùng tệp hoặc nhập đúng seed gốc giữ nguyên địa chỉ. So địa chỉ đầy đủ ở máy đích với bản ghi cũ đáng tin. Tạo ví hoàn toàn mới là thao tác khác và tạo địa chỉ mới cho các khoản sau này.'
+  - q: 'Ví chỉ xem có đủ để khôi phục quyền chi tiêu không?'
+    a: 'Ví chỉ xem cấp quyền xem, phù hợp theo dõi tiền vào trên máy khác. Để khôi phục chi tiêu, dùng tệp ví đầy đủ kèm mật khẩu hoặc dữ liệu khôi phục của ví đầy đủ. Giữ bản sao đầy đủ gốc và kiểm tra loại ví đã tải.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Sao lưu ví Blocknet trước khi đổi máy, rồi khôi phục cùng địa chỉ bằng tệp ví hoặc seed. Hướng dẫn theo CLI chính thức v1.2.0 và core v0.22.0, kiểm tra ngày 27 tháng 10 năm 2026. Các bước sao lưu, mở ở nơi khác và xác minh khôi phục hoàn tất được tách riêng.
+
+## Sao lưu và khôi phục ví Blocknet thế nào?
+
+<Answer>
+Giữ seed ngoại tuyến và một bản sao riêng của tệp ví đầy đủ. Trên máy đích, tải tệp với mật khẩu hoặc nhập seed gốc vào tệp mới. So địa chỉ nhận đầy đủ, để nút và quét ví bắt kịp, xác minh bản ghi trước khi ngừng dùng bản cũ.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Ví và bản sao được bảo vệ chuyển sang máy khác, nơi địa chỉ khôi phục và tiến độ quét được kiểm tra." width="1200" height="675" loading="lazy" />
+
+## Chọn cách khôi phục bạn thực sự có
+
+Bản sao tệp và seed có mục đích khác nhau. Tệp `.wallet.dat` chứa khóa và trạng thái ví đã lưu; mở bản có mật khẩu cần đúng mật khẩu. Seed tạo lại khóa ví dựa trên seed trong tệp mới với mật khẩu mới. Giữ cả hai khi có, và giữ riêng bản ghi thanh toán để so sau khôi phục.
+
+Quy trình này cho ví đầy đủ hiện có. Tạo ban đầu theo [hướng dẫn thiết lập ví](/vi/blog/blocknet-wallet-for-mining/). Muốn theo dõi trên máy thứ hai mà không có quyền chi, dùng [hướng dẫn chỉ xem](/vi/blog/blocknet-view-only-wallet/). Chỉ địa chỉ nhận công khai không khôi phục được ví. Xác định có tệp đầy đủ, mật khẩu và seed gốc trước khi chọn bước.
+
+## Chuẩn bị ví gốc và bản ghi khôi phục
+
+Kết nối core mainnet đang chạy từ terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Trong shell tương tác, tải ví cần dùng và ghi địa chỉ công khai đầy đủ:
+
+```text
+load
+address
+```
+
+Chọn mục ví hiện có. Nếu ví khác đã tải, dùng `unload` trước khi chọn ví cần. Giữ địa chỉ, mạng và tên tệp trong ghi chú chuyển máy riêng tư.
+
+Với ví dựa trên seed, chạy `seed`, xác nhận lời nhắc và nhập mật khẩu. Ghi từ trả về đúng thứ tự rồi cất ngoại tuyến. Không làm khi chia sẻ hoặc ghi màn hình; [hướng dẫn seed](/vi/blog/seed-phrase-explained/) giải thích bảo vệ bản ghi. Nếu ứng dụng báo không có seed, giữ tệp đầy đủ và mật khẩu rồi dùng cách sao chép. Đừng cho rằng mọi ví cũ hoặc nhập khóa đều có seed.
+
+## Tạo bản sao riêng của tệp ví
+
+Tìm tệp core thực sự dùng. Thư mục mặc định là `~/.config/bnt/wallets/`; trên Windows là `C:\Users\<you>\.config\bnt\wallets\`. Thư mục chứa `wallet_file` cấu hình có thể khác. Dùng đường dẫn ứng dụng chính thức hiển thị và [tài liệu quản lý ví](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), nhất là khi nhiều tên giống nhau. Xác nhận tệp đúng trước khi sao chép.
+
+Sau khi ghi địa chỉ, chạy `unload` và đợi thành công rồi mới chép. Giữ bản gốc tại chỗ, lưu bản có ngày trên nơi lưu trữ riêng bạn kiểm soát. Giữ phần mở rộng `.wallet.dat`, bảo vệ bản sao và mật khẩu. Ứng dụng có thể tạo bản sao cục bộ khi tải từ thư mục khác nhưng không ghi đè bản cùng tên đã có. Kiểm tra bản bạn lưu thay vì mặc định bản cục bộ đã mới.
+
+## Chuyển ví sang máy mới thế nào?
+
+Cài [ứng dụng chính thức](https://github.com/blocknetprivacy/blocknet/releases/latest) và chuẩn bị core mainnet theo [hướng dẫn nút](/vi/blog/run-blocknet-node/). Chuyển bản sao tệp đầy đủ qua nơi lưu trữ bạn kiểm soát vào thư mục ví của core đích. Giữ các tệp không liên quan đang có; chọn tên khác nếu cần. Trong ứng dụng đã kiểm tra, `load` đọc từ thư mục này kể cả khi nhập đường dẫn tùy chỉnh.
+
+Kết nối attach trên máy đích, chạy `load`, chọn bản sao và nhập mật khẩu hiện có. Không thấy trong menu thì kiểm tra thư mục core dùng và nơi đã chép. Chọn tệp có sẵn, không chọn tạo ví mới. Chép cùng tệp khôi phục quyền với cùng khóa, không gửi coin hay tạo số dư thứ hai.
+
+## Khôi phục từ seed gốc
+
+Nếu mất tệp hoặc quên mật khẩu, dùng seed đã lưu trong ứng dụng chính thức trên máy đích đáng tin. Kết nối đúng core mainnet và bỏ tải ví khác trước. Bắt đầu lời nhắc khôi phục trong shell:
+
+```text
+import
+```
+
+Chọn mục 1 cho seed 12 từ. Nhập từ gốc của chính bạn theo thứ tự; không dùng từ ví dụ hay dán seed vào trang web.
+
+Chọn tên ví mới chưa dùng, đặt và xác nhận mật khẩu mới. [Mã nhập đã kiểm tra](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) tạo ví từ dữ liệu khôi phục và báo địa chỉ. Tệp mã hóa gốc giữ mật khẩu cũ. Giữ tệp cũ và bản sao khi kiểm tra ví nhập, coi tệp mới là bản sao khác cần bảo vệ.
+
+## Kiểm tra địa chỉ, chuỗi và quét ví
+
+Sau tải hoặc nhập, xem ví đích:
+
+```text
+address
+status
+balance
+history
+```
+
+So toàn bộ địa chỉ với bản ghi trước. Kiểm tra địa chỉ nhận diện ví trước khi tin số dư. Nếu khác, dừng chuyển và kiểm tra tệp, từ khôi phục, mạng. Giữ nguyên bản sao gốc khi giải quyết khác biệt.
+
+Để cả tải chuỗi của nút lẫn quét đầu ra của ví bắt kịp. Ví mới nhập cần tìm đầu ra trên chuỗi; số dư ban đầu chưa là kiểm tra cuối. So số dư khả dụng và khoản nhận khi quét xong. Giữ ghi chú thanh toán riêng và tệp gốc cho chi tiết lịch sử. [Hướng dẫn đồng bộ ví](/vi/blog/blocknet-wallet-not-syncing/) giải thích chỉ số cần xem và lúc nên quét lại.
+
+## Hoàn tất chuyển sau khi xác minh
+
+Giữ bản sao được bảo vệ của ví đích đã xác minh và seed ngoại tuyến. Ghi máy nào có ví đầy đủ đang dùng, bản nào là dự phòng. Bản cũ có cùng quyền khóa; chuyển tệp không thu hồi quyền. Khi ngừng dùng thiết bị, xác nhận bản sao hoạt động rồi xử lý bộ nhớ theo quy trình thải bỏ an toàn thường dùng.
+
+Nếu địa chỉ khôi phục khớp, đích nhận tiền đào có thể giữ nguyên. So [bản ghi chi trả pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) với lịch sử nhận khi xác minh thu nhập đào. Cố ý tạo ví khác là đổi địa chỉ, không phải khôi phục. Hoàn tất kiểm tra ví trước các thay đổi riêng trong cấu hình phần mềm đào.
+
+<CTA target="seine" title="Đào về địa chỉ Blocknet đã xác minh" text="Dùng hướng dẫn seine để kết nối phần mềm đào và giữ sao lưu ví trên nơi lưu trữ bạn kiểm soát." />

@@ -1,0 +1,74 @@
+---
+title: 'Comment utiliser l’explorateur Blocknet'
+description: 'Cherchez transactions et blocs dans l’explorateur Blocknet, lisez confirmations et frais publics, et vérifiez les détails privés dans votre portefeuille.'
+tags: ['Blocknet', 'Explorateur', 'Transactions']
+faq:
+  - q: 'Peut-on chercher par adresse de portefeuille ?'
+    a: 'La recherche publique accepte hauteur de bloc, hash de bloc ou hash de transaction. Pour un paiement précis, utilisez son identifiant complet. Les sorties privées de Blocknet n’offrent pas de page publique de solde par adresse comme un registre transparent. Votre portefeuille identifie les sorties reçues et leurs montants.'
+  - q: 'Une transaction du mempool a-t-elle des confirmations ?'
+    a: 'Elle attend son inclusion dans un bloc et compte zéro confirmation. Le bloc qui l’inclut donne la première ; les suivants augmentent le compte. Consultez la page actuelle et l’état du portefeuille sans transformer un intervalle cible en heure d’arrivée garantie.'
+  - q: 'Pourquoi les frais sont-ils visibles mais pas le montant ?'
+    a: 'Les frais réseau sont un champ public. Les montants des transferts ordinaires sont cachés par des engagements et preuves, et les sorties utilisent des clés à usage unique. L’explorateur montre frais et structure sans afficher le montant reçu. Consultez votre portefeuille pour les détails privés de vos paiements.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Trouvez une transaction Blocknet, ouvrez son bloc et comprenez sa page publique. Ce guide suit l’[explorateur officiel](https://explorer.blocknetcrypto.com/), examiné le 26 octobre 2026. Les captures montrent de vraies pages publiques de cette date. Hauteurs, confirmations et données réseau sont historiques ; ouvrez la page en direct pour l’état actuel.
+
+## Comment rechercher une transaction Blocknet ?
+
+<Answer>
+Copiez l’identifiant complet depuis votre portefeuille ou relevé de versement dans la recherche officielle. Ouvrez le résultat et vérifiez s’il est dans le mempool ou inclus dans un bloc. Lisez confirmations et champs publics, puis vérifiez les détails privés du paiement dans votre portefeuille.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="La recherche mène au relevé public et à son bloc, tandis que le montant se vérifie dans le portefeuille." width="1200" height="675" loading="lazy" />
+
+## Commencez par le bon identifiant
+
+Utilisez l’identifiant de transaction pour examiner un paiement, ou la hauteur et le hash de bloc pour un bloc et sa liste. La recherche accepte les trois. Copiez l’identifiant complet à la source, pas son texte raccourci dans une liste compacte. Vérifiez que portefeuille et explorateur concernent le même réseau.
+
+L’accueil affiche aussi blocs récents, données réseau et mempool. Cherchez directement si vous avez un identifiant ; utilisez les listes pour parcourir l’activité. Le [guide d’envoi et de réception](/fr/blog/send-receive-blocknet/) indique où récupérer l’identifiant après un envoi réussi.
+
+[![Accueil officiel avec recherche, hauteur de chaîne et cartes réseau, capturé le 26 octobre 2026.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## Que montre la page de transaction ?
+
+Une page de transfert indique hash, clé publique de transaction, état du bloc, frais réseau et nombres d’entrées/sorties. Lisez d’abord le hash pour confirmer la bonne transaction. La clé publique est un autre champ avec un rôle distinct ; elle ne remplace pas comme identifiant de recherche le hash copié de votre relevé.
+
+L’exemple est un véritable transfert public, pas un paiement effectué pour ce guide. Ses frais lui appartiennent et ses montants restent cachés. L’[article sur les frais](/fr/blog/blocknet-transaction-fees/) explique le calcul du portefeuille ; cette page apprend à lire le résultat inscrit sur le réseau.
+
+[![Transaction publique Blocknet avec hash, bloc contenant, frais, entrées, sorties et montants cachés.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Lire correctement attente et inclusion
+
+Une transaction du mempool attend son inclusion et compte zéro confirmation. Une fois incluse, sa page renvoie vers son bloc. Dans l’[implémentation examinée](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go), le nombre vaut hauteur actuelle moins hauteur du bloc contenant, plus un. Ce bloc représente donc la première confirmation.
+
+Exemple arithmétique : une transaction du bloc 100 a trois confirmations à la hauteur 102. Ce sont des exemples, pas les valeurs actuelles. Vérifiez le compte réel de votre transaction. Le [guide des confirmations](https://bntpool.com/blog/fr/block-confirmations-mining-rewards/) relie inclusion, maturité des récompenses et disponibilité dans le portefeuille ; le compteur ne désigne pas à lui seul les sorties que vous pouvez dépenser.
+
+## Ouvrir le bloc pour le contexte
+
+Suivez le lien du bloc pour consulter hauteur, hash, référence au précédent, horodatage, difficulté, récompense et transactions. La page distingue coinbase et transferts ordinaires. Coinbase désigne ici la transaction de récompense minière du bloc. La liste permet de revenir à un transfert individuel et d’en vérifier l’inclusion.
+
+Les liens précédent et suivant permettent de parcourir la chaîne autour de ce relevé. La capture est datée ; son compteur continue d’évoluer sur la page en direct. Pour l’émission des récompenses, voir le [calendrier Blocknet](https://bntpool.com/blog/fr/blocknet-block-reward-schedule/).
+
+[![Bloc 69 579 dans l’explorateur officiel, avec propriétés et liste de transactions coinbase et de transfert.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Comprendre les détails qui restent privés
+
+Pour les transferts ordinaires, frais publics et nombres d’entrées/sorties décrivent la structure. Engagements et preuves cachent le montant du destinataire, et les clés de sortie sont des destinations uniques. La clé furtive affichée n’est pas un solde public d’adresse. La [présentation de la confidentialité](/fr/blog/blocknet-privacy-features/) relie ces champs aux mécanismes actuels.
+
+L’historique du portefeuille destinataire identifie son paiement et son montant. Le mémo chiffré de l’explorateur n’est pas la note lisible d’une facture. Cette recherche ne nécessite que des identifiants publics. Gardez mots de récupération et clés privées dans le portefeuille ; les outils de preuve distincts sont hors de cette procédure. Voir inclusion et confirmations ne demande aucun formulaire de preuve.
+
+## Lire les données réseau avec leurs libellés
+
+Hashrate, difficulté et temps moyen de bloc sur l’accueil décrivent l’activité. Ils donnent du contexte pour comprendre l’arrivée des blocs. Le nombre de pairs est celui du nœud de l’explorateur, pas un recensement de tous les participants. Lisez valeur, libellé et heure d’observation ensemble, surtout face aux données de votre nœud.
+
+Un intervalle cible ou compte à rebours n’est pas un rendez-vous pour une transaction. Observez son inclusion réelle sur sa page. Le [guide du hashrate](https://bntpool.com/blog/fr/what-is-hashrate/) sépare calcul local et estimations du réseau et du pool. Le [guide du nœud](/fr/blog/run-blocknet-node/) couvre connexions et synchronisation de votre nœud. Ces tâches emploient des mesures différentes.
+
+## Et si la transaction est introuvable ?
+
+Vérifiez d’abord identifiant complet et réseau. Comparez au relevé du portefeuille expéditeur ou à l’identifiant du versement du pool. Une nouvelle transaction peut ne pas encore être visible par le nœud explorateur ; réessayez après propagation et indexation. L’absence de résultat ne signifie pas à elle seule qu’il faut envoyer un nouveau paiement.
+
+Revenez au portefeuille examiner l’opération d’origine et l’historique actuel avant toute autre action. Pour les revenus miniers, le [guide du pool au portefeuille](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/) distingue solde crédité, versement envoyé et réception détectée par analyse. Gardez l’identifiant avec le relevé pour suivre le même paiement dans l’interface appropriée à chaque étape.
+
+<CTA target="seine" title="Connectez votre installation de minage Blocknet" text="Utilisez seine avec les guides de minage, puis suivez les versements du pool dans l’explorateur et le portefeuille." />

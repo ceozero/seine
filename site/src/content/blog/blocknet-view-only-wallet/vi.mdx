@@ -1,0 +1,107 @@
+---
+title: 'Thiết lập ví Blocknet chỉ xem'
+description: 'Thiết lập ví Blocknet chỉ xem trên máy tính khác: xuất tệp xem, mở bằng mật khẩu riêng, kiểm tra khoản tiền nhận được và bảo vệ quyền truy cập.'
+tags: ['Blocknet', 'Ví', 'Quyền riêng tư']
+faq:
+  - q: 'Ví Blocknet chỉ xem có thể gửi coin không?'
+    a: 'Ví chỉ xem có thể theo dõi tiền nhận được, nhưng không thể gửi thanh toán hay ký thông điệp. Core được kiểm tra từ chối những thao tác đó với loại ví này. Giữ ví đầy đủ để quyết định chi tiêu và phê duyệt thanh toán, còn bản sao chỉ xem dùng để theo dõi các bản ghi tiền vào mong muốn.'
+  - q: 'Tôi có thể công khai khóa xem riêng tư của Blocknet không?'
+    a: 'Khóa xem riêng tư cho phép truy cập thông tin về các khoản thanh toán nhận được. Đây vẫn là dữ liệu riêng tư dù không cấp quyền chi tiêu. Chỉ chia sẻ quyền xem một cách có chủ đích, bảo vệ tệp xuất và mật khẩu, đồng thời không đưa khóa vào ảnh chụp công khai, bài hỗ trợ, trò chuyện hay biểu mẫu bằng chứng của trình khám phá.'
+  - q: 'Ví chỉ xem có cần mật khẩu của ví chính không?'
+    a: 'Quy trình xuất yêu cầu mật khẩu của ví đầy đủ để cho phép tạo tệp, sau đó yêu cầu chọn mật khẩu riêng cho tệp xem. Mở tệp đã xuất trên máy tính thứ hai bằng mật khẩu đã chọn cho tệp đó. Máy tính thứ hai không cần cụm từ khôi phục hoặc thông tin cấp quyền chi tiêu của ví đầy đủ.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Theo dõi các khoản thanh toán Blocknet nhận được trên máy tính thứ hai trong khi giữ quyền phê duyệt thanh toán ở ví đầy đủ. Hướng dẫn dùng CLI chính thức v1.2.0 và core công khai v0.22.0, được kiểm tra ngày 27 tháng 10 năm 2026. Nội dung theo quy trình xuất tệp, giải thích quyền truy cập được cấp và cách kiểm tra bản ghi nhận tiền sau khi tải ví.
+
+## Tạo ví Blocknet chỉ xem như thế nào?
+
+<Answer>
+Mở ví đầy đủ và dùng lệnh viewkeys để tạo tệp xem được mã hóa với mật khẩu riêng. Chuyển tệp đã xuất sang máy tính mong muốn, tải tệp rồi kiểm tra địa chỉ và loại ví chỉ xem. Chờ quá trình quét bắt kịp, sau đó xem tiền nhận được trong khi tiếp tục chi tiêu bằng ví đầy đủ.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Ví đầy đủ xuất một bản sao xem được mã hóa sang máy tính thứ hai để kiểm tra tiền nhận được mà không có quyền chi tiêu." width="1200" height="675" loading="lazy" />
+
+## Chọn các bản ghi nhận tiền cần theo dõi
+
+Bắt đầu từ ví đầy đủ có tiền vào mà bạn muốn theo dõi. [Hướng dẫn thiết lập ví](/vi/blog/blocknet-wallet-for-mining/) trình bày cách tạo hoặc khôi phục ví. Bản sao chỉ xem tương ứng với địa chỉ của ví đó; nó không tạo danh tính nhận tiền mới hay chuyển coin sang tài khoản khác. Ghi rõ ví và mạng của bản sao trước khi xử lý tệp xuất.
+
+Khi đào coin, bạn có thể tiếp tục dùng cùng địa chỉ nhận thanh toán đã xác minh. Ví chỉ xem giúp kiểm tra các bản ghi tiền vào trên một máy tính đáng tin cậy khác. [Hướng dẫn theo dõi pool](https://bntpool.com/blog/vi/track-your-miner-on-bntpool/) có nhiệm vụ khác: hiển thị share, số dư pool và hoạt động thanh toán mà không cần khóa ví. Chọn giao diện phù hợp với câu hỏi; quyền xem hữu ích khi bạn cần bản ghi nhận tiền riêng tư.
+
+## Xuất tệp xem từ ví đầy đủ
+
+Trên máy tính có ví đầy đủ, kết nối tới core mainnet đang chạy:
+
+```sh
+blocknet attach mainnet
+```
+
+Mở đúng ví và kiểm tra địa chỉ bằng các lệnh shell sau:
+
+```text
+load
+address
+```
+
+Nếu ví đang khóa, dùng lời nhắc mở khóa thông thường. Giữ phiên này riêng tư vì thao tác tiếp theo hiển thị thông tin khóa xem.
+
+Bắt đầu xuất:
+
+```text
+viewkeys
+```
+
+[Client đã kiểm tra](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) giải thích rằng khóa xem riêng tư tiết lộ các khoản tiền nhận được và yêu cầu xác nhận tiếp tục. Chỉ tiếp tục nếu bạn muốn cấp quyền này. Sau đó, client yêu cầu mật khẩu ví đầy đủ, mật khẩu mới cho tệp chỉ xem và xác nhận mật khẩu mới. Chọn và giữ mật khẩu tệp để dùng trên máy tính nhận.
+
+## Bạn nên chuyển tệp nào?
+
+Sau khi xuất thành công, client hiển thị các khóa xem và đường dẫn tệp đã lưu. Dùng đường dẫn thực tế đó để xác định tệp xem đã xuất. Chuyển tệp sang máy tính do bạn kiểm soát bằng phương thức phù hợp với dữ liệu ví riêng tư. Bảo vệ mật khẩu tệp riêng biệt. Tránh đưa phần khóa hiển thị trong terminal vào ảnh chụp hoặc bản ghi xử lý sự cố.
+
+[Tài liệu tham khảo ví](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) ghi thư mục mặc định là `~/.config/bnt/wallets/`, tương đương trên Windows là `C:\Users\<you>\.config\bnt\wallets\`. Đường dẫn ví được cấu hình có thể thay đổi thư mục mà load liệt kê. Sao chép tệp xuất vào thư mục ví của máy đích để client tìm thấy. Giữ ví đầy đủ gốc và bản sao lưu khôi phục ở nơi lưu trữ đã định.
+
+## Tải và xác minh bản sao trên máy tính thứ hai
+
+Chuẩn bị core đang chạy ở máy đích theo [hướng dẫn node](/vi/blog/run-blocknet-node/), rồi kết nối cùng mạng. Mở tệp xuất bằng mật khẩu đã chọn riêng cho tệp:
+
+```text
+load
+```
+
+Nếu một ví khác đã mở, shell chính thức cho phép dỡ ví đó trước khi tải tệp mong muốn. Chọn theo tên tệp đã xuất thay vì mặc định ví đầu tiên trong danh sách là đúng.
+
+Xác minh bản sao qua client:
+
+```text
+address
+status
+```
+
+So sánh toàn bộ địa chỉ nhận tiền với địa chỉ của ví đầy đủ. Kiểm tra loại chỉ xem được client hiển thị. Những kiểm tra này xác nhận cả danh tính và quyền truy cập mong muốn. Không cần thử gửi: [core đã kiểm tra](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) từ chối gửi tiền và ký thông điệp từ ví chỉ xem.
+
+## Để ví chỉ xem tìm các khoản tiền nhận được
+
+Node đích cần có các khối liên quan và ví được tải cần quét chúng. Dùng các lệnh shell sau để xem bản ghi của ví:
+
+```text
+outputs
+history
+```
+
+Ví vừa tải hoặc nhập có thể vẫn đang bắt kịp dù node đã có peer. Theo [hướng dẫn đồng bộ ví](/vi/blog/blocknet-wallet-not-syncing/) để phân biệt tải chuỗi với quét ví và xác định có cần quét hay không.
+
+Đối chiếu một bản ghi tiền vào với ID giao dịch đã có từ ví đầy đủ hoặc bản ghi thanh toán. [Hướng dẫn trình khám phá](/vi/blog/blocknet-explorer-guide/) giúp xác nhận việc được đưa vào khối công khai, còn ví chỉ xem cung cấp chi tiết khoản tiền nhận. Dùng ví đầy đủ cho quyết định chi tiêu hiện tại và phê duyệt. Xem bản sao như công cụ theo dõi tiền vào, không mặc định nó phản ánh mọi bản ghi tiền ra hay quyết định về số dư có thể chi tiêu.
+
+## Khóa xem riêng tư cấp quyền truy cập gì?
+
+[Tài liệu shell chính thức](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) cảnh báo rằng người giữ khóa này có thể thấy các khoản tiền nhận được. Tệp xem được mã hóa bảo vệ quyền truy cập bằng mật khẩu riêng, nhưng khi mở vẫn tiết lộ thông tin thanh toán riêng tư. Chỉ cấp quyền cho đúng người hoặc máy tính dự định. Đổi mật khẩu tệp không thu hồi khóa xem mà người khác đã sao chép.
+
+Giữ bí mật chi tiêu và xem ngoài các công cụ công khai và tin nhắn hỗ trợ. Địa chỉ nhận tiền được chia sẻ để thanh toán; khóa xem riêng tư có mục đích khác. [Hướng dẫn địa chỉ stealth](/vi/blog/stealth-addresses-explained/) giải thích cách ví nhận ra đầu ra của mình. Trong thiết lập này, chỉ chuyển quyền xem bạn muốn cấp và giữ thông tin khôi phục cùng ví đầy đủ.
+
+## Duy trì quy trình xem có thể lặp lại
+
+Khi trở lại máy theo dõi, tải cùng tệp xem, xác minh mạng và địa chỉ, rồi kiểm tra tiến độ trước khi diễn giải bản ghi chưa xuất hiện. Phân biệt bản ghi nhận tiền với số tiền bạn có quyền cho phép chi tiêu. Nếu tạo ví khác với địa chỉ mới, bản sao chỉ xem hiện có vẫn tương ứng với ví cũ.
+
+Giữ bản sao lưu khôi phục của ví đầy đủ ngay cả khi thiết lập xem đã hoạt động. Bản sao chỉ xem không thay thế thông tin chi tiêu cần thiết để khôi phục. [Hướng dẫn cụm từ seed](/vi/blog/seed-phrase-explained/) giải thích bản sao lưu đó, còn [gửi và nhận](/vi/blog/send-receive-blocknet/) trình bày quy trình thanh toán. Ví đầy đủ, bản sao lưu và bản sao chỉ xem đều có nhiệm vụ rõ ràng trong thói quen của bạn.
+
+<CTA target="seine" title="Nhận thanh toán đào coin trong ví Blocknet" text="Dùng hướng dẫn seine để đào về địa chỉ của bạn, rồi theo dõi các khoản thanh toán nhận được bằng chế độ xem ví đã chọn." />

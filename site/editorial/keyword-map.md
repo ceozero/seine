@@ -206,3 +206,66 @@ Hashrate units and pool estimation belong to bntpool; CPU usage owns utilization
 | run Blocknet node; Blocknet node setup | `/blog/run-blocknet-node/` | Install a managed mainnet core and inspect peers, sync progress, logs and update policy |
 
 The coin overview and privacy articles own current fundamentals; Faraday owns the dated upgrade plan and role-specific preparation. Wallet setup owns keys and addresses; checkpoints owns sync acceleration details on bntpool. Node operation owns the background process, network health and lifecycle. Neither article retargets an existing URL.
+
+## Payments and explorer (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| send and receive Blocknet; how to send BNT | `/blog/send-receive-blocknet/` | Complete a fixed-amount wallet payment and follow its ID into the receiving wallet's history |
+| Blocknet explorer; look up Blocknet transaction | `/blog/blocknet-explorer-guide/` | Search public identifiers and interpret a transaction, containing block and network readings |
+
+Wallet setup owns creation and recovery, fees owns calculation, payment links owns request construction, and memos owns memo syntax. Sending owns the end-to-end payment procedure. Confirmations on bntpool owns maturity; privacy owns cryptographic mechanisms; node operation owns a local core. The explorer guide owns public-page navigation with dated real screenshots and the boundary between public inclusion and wallet receipt. No existing URL is retargeted.
+
+## Wallet diagnosis and viewing access (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet wallet not syncing; wrong Blocknet wallet balance | `/blog/blocknet-wallet-not-syncing/` | Locate a balance discrepancy in wallet selection, node download, output scanning or payment state and verify progress |
+| Blocknet view-only wallet; watch incoming Blocknet payments | `/blog/blocknet-view-only-wallet/` | Export, transfer and load an encrypted viewing file on a second computer, verify its identity and understand the access granted |
+
+Node operation owns installation and lifecycle; checkpoints on bntpool owns accelerated chain sync; wallet setup owns creation and recovery. The diagnostic guide owns the sequence from symptom to the stage needing attention. Stealth addresses owns the key/scan explanation, while the viewing guide owns the exported-file workflow and private access handling. Explorer owns public lookup, and pool tracking owns pool records. Existing URLs retain their intent.
+
+## Payment proofs and signed messages (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet payment proof; verify Blocknet payment | `/blog/blocknet-payment-proof/` | Generate a transaction key and verify recipient outputs and amounts while keeping chain status separate |
+| sign Blocknet message; verify Blocknet signature | `/blog/blocknet-sign-verify-message/` | Sign an agreed challenge and check the address, exact message and signature with application-level freshness checks |
+
+Sending owns payment creation; explorer owns public lookup; privacy and stealth addresses own the mechanisms. Payment proofs own deliberate transaction-specific disclosure and output verification. Message signatures own address-control challenges, not transaction receipts. Existing wallet creation, recovery and viewing guides retain their intent.
+
+## Wallet backup, recovery and migration (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet wallet backup; restore Blocknet wallet; move Blocknet wallet | `/blog/blocknet-wallet-backup-restore/` | Make a separate backup, choose file loading or seed import, and verify the same wallet on a destination computer |
+
+Wallet setup owns initial creation and seed phrases owns recovery-material concepts. Sync troubleshooting owns diagnosing scan progress. This guide owns the complete migration/recovery procedure and its verification before retiring the original. Existing articles retain their intent.
+
+## Faraday explanation refresh (October 27, 2026)
+
+The existing `/blog/blocknet-faraday-upgrade/` owns Faraday migration, recovery-word changes, post-quantum addresses and proposed timing. Preserve its original publication date and URL; record the refresh with `updated`. The backup guide owns recovery on currently released wallets; the reward schedule owns current-chain issuance. Link to these rather than duplicating operational instructions. Update all 20 language versions together from the official October 27 post.
+
+## Wallet, node and miner roles (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet wallet vs node vs miner; do I need a node to mine Blocknet; keep wallet open for mining | `/blog/blocknet-wallet-node-miner/` | Choose the applications needed for receiving, pool mining or direct mining; understand what must stay running |
+
+This guide owns the software-role decision before setup. `blocknet-wallet-for-mining` owns initial wallet creation, `run-blocknet-node` owns node operation, and `how-to-mine-blocknet` owns the mining setup procedure. Link to those procedures rather than reproduce commands. Demand is inferred from the documented user journey, not measured Search Console volume.
+
+## Desktop wallet walkthrough (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| Blocknet desktop wallet; how to use Blocknet wallet; Blocknet wallet screenshots | `/blog/blocknet-desktop-wallet/` | Follow the desktop interface from create/open and recovery backup through synchronization, receiving, send review and transaction history |
+
+This page owns the visual desktop procedure, using the released interface with labeled demo data. `blocknet-wallet-for-mining` owns initial wallet/payout setup and CLI commands, `send-receive-blocknet` owns general payment mechanics and its CLI procedure, and `blocknet-wallet-node-miner` owns software selection. Keep detailed recovery, fee calculations and synchronization troubleshooting at their existing URLs. Demand is inferred from the normal newcomer journey, not measured search volume.
+
+## First Blocknet receipt (October 27, 2026)
+
+| Primary keyword cluster | URL | Search job |
+|---|---|---|
+| how to get Blocknet; get first BNT; receive or mine Blocknet | `/blog/get-first-blocknet/` | Choose receiving a transfer or mining with an existing computer, then identify the first incoming wallet payment and spendable balance |
+
+This is the acquisition starting-point guide. Desktop wallet owns interface setup, sending/receiving owns the payment procedure, and mining owns installation and accepted shares. The new article routes to those owners, adds a simple first-receipt checklist and follows a single labeled demo payment through History and Dashboard. Pool payout rules and troubleshooting remain on bntpool.com. No existing URL is retargeted. Demand is inferred from the newcomer journey; no measured query-volume claim is made.

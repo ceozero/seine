@@ -22,6 +22,7 @@ cleanup() {
   if [ "$KEEP" != --keep ]; then python3 "$TOOL" down "$NAME" || echo "DELETE FAILED for $NAME" >&2; fi
 }
 trap cleanup EXIT
+trap 'trap - EXIT; echo "interrupted: keeping $NAME for its timer" >&2; exit 130' INT TERM HUP
 
 IP=$(python3 "$TOOL" ip "$NAME")
 echo "$NAME at $IP"

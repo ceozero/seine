@@ -1,0 +1,99 @@
+---
+title: 'Blocknet versturen en ontvangen'
+description: 'Verstuur en ontvang Blocknet met de officiële wallet: controleer de ontvanger, bekijk de betaling, bewaar de transactie-ID en bevestig ontvangst in je historie.'
+tags: ['Blocknet', 'Wallet', 'Betalingen']
+faq:
+  - q: 'Wat deel ik om Blocknet te ontvangen?'
+    a: 'Deel het ontvangstadres uit je wallet of je geverifieerde korte Blocknet-ID-naam. Een betaallink kan het bedrag en een memo bevatten. De verzender heeft je ontvangstgegevens nodig; je herstelwoorden en privésleutels blijven bij jou. Bevestig de ontvangst via de geschiedenis van je eigen wallet.'
+  - q: 'Kan ik een Blocknet-betaling vóór bevestiging annuleren?'
+    a: 'In de onderzochte opdrachtregelclient vraagt het verzendcommando eerst een voorvertoning op en toont het de betalingsgegevens. Druk bij de bevestigingsvraag op Enter of antwoord nee om de handeling te annuleren. Controleer na een bevestigde verzending de transactieregistratie voordat je over een volgende actie beslist.'
+  - q: 'Waarom kan ik ontvangen Blocknet niet meteen uitgeven?'
+    a: 'De wallet onderscheidt besteedbare, wachtende en onbevestigde middelen. Een transactie kan al op het netwerk verschijnen voordat de outputs besteedbaar zijn. Lees de huidige walletstatus en laat synchronisatie en scannen voortgaan. De openbare explorer helpt de opname in een blok te controleren; de wallet herkent je eigen outputs.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Verstuur een Blocknet-betaling vanuit een voorbereide wallet en volg deze van het controlescherm van de verzender naar de geschiedenis van de ontvanger. Deze uitleg gebruikt de officiële opdrachtregelclient v1.2.0, gecontroleerd op 26 oktober 2026. Adres, betalingsvoorbeeld en transactieregistratie vormen samen één procedure. Begin met de [walletinstructies](/nl/blog/blocknet-wallet-for-mining/) als je nog een wallet moet aanmaken of herstellen.
+
+## Hoe verstuur en ontvang je Blocknet?
+
+<Answer>
+Om Blocknet te ontvangen deel je het ontvangstadres van je wallet of je geverifieerde korte naam. Om te versturen voer je ontvanger en bedrag in, controleer je bestemming en kosten en bevestig je de bedoelde betaling. Bewaar de transactie-ID. De ontvanger controleert de eigen walletgeschiedenis en het besteedbare saldo terwijl de transactie vordert.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Een verzender controleert de betaling, het netwerk registreert de transactie en de ontvanger bekijkt de walletgeschiedenis." width="1200" height="675" loading="lazy" />
+
+## Open de juiste wallet voordat je een betaling voorbereidt
+
+Verbind met je draaiende mainnet-core via de officiële client:
+
+```sh
+blocknet attach mainnet
+```
+
+Open je bestaande wallet bij de interactieve prompt met deze opdracht:
+
+```text
+load
+```
+
+Selecteer het bedoelde walletbestand en geef het wachtwoord op wanneer daarom wordt gevraagd. De [nodehandleiding](/nl/blog/run-blocknet-node/) beschrijft het starten en controleren van de core op de achtergrond.
+
+Bekijk het ontvangstadres en saldo met deze afzonderlijke opdrachten:
+
+```text
+address
+balance
+```
+
+Controleer of wallet en netwerk kloppen. Kijk bij een uitgaande betaling naar het besteedbare bedrag. De [officiële shellreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) beschrijft deze opdrachten; een grafische wallet kan dezelfde taken met andere knoppen en labels tonen.
+
+## Wat deel je met de verzender?
+
+Kopieer het volledige adres dat de adresopdracht geeft en stuur het via het afgesproken betalingskanaal. Gebruik je [Blocknet ID](/nl/blog/blocknet-id-pay-by-name/), deel dan de juiste korte naam en laat de verzender het opgezochte adres controleren. Controleer de spelling met de ontvanger wanneer je een nieuwe betaling voorbereidt. Een bekende weergavenaam herkennen is niet hetzelfde als de werkelijke ontvangstgegevens controleren.
+
+Een [betaallink](/nl/blog/blocknet-payment-links/) kan het gevraagde bedrag en een optionele memo bevatten. Daarmee hoef je minder over te typen; controleer daarna de ingevulde gegevens in de wallet. Herstelwoorden en privésleutels zijn geen ontvangstgegevens. Houd ze buiten berichten, facturen en schermafbeeldingen. Voor deze stap is het ontvangstadres nodig.
+
+## Voer ontvanger en bedoeld bedrag in
+
+Hieronder staat een syntaxisvoorbeeld binnen attach. Vervang de hoofdletterplaceholder door het echte ontvangstadres en het voorbeeldbedrag door het bedrag dat je wilt betalen:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+De placeholder is geen adres om naartoe te betalen. De onderzochte client accepteert op de ontvangerpositie ook een korte Blocknet-ID-naam.
+
+Voeg voor een factuur- of bestelreferentie een memo toe volgens de [handleiding voor versleutelde memo’s](/nl/blog/blocknet-encrypted-memos/). Controleer vooraf welke tekst de ontvanger vraagt. Deze eerste uitleg gaat over een vast bedrag; het hele saldo versturen is een aparte handeling waarbij kosten anders worden verwerkt. De [kostenhandleiding](/nl/blog/blocknet-transaction-fees/) legt dat verschil uit en beschrijft hoe wisselgeld terugkeert naar je wallet.
+
+## Controleer het voorbeeld voordat je bevestigt
+
+De [onderzochte client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) vraagt vóór verzending een proefberekening op. Hij toont bedrag, bestemming, kosten en eventueel wisselgeld. Bij een opgezochte korte naam staat ook het adres in de controle. Controleer een ingevulde memo eveneens. Vergelijk de gegevens met het verzoek dat je wilde betalen voordat je bij de prompt een keuze maakt.
+
+Voer bij `Confirm [y/N]:` alleen `y` in voor de betaling die je wilt doen. Druk op Enter of antwoord nee om te annuleren. Bij een gewone betaling met een vast bedrag zijn het bedrag voor de ontvanger en de netwerkkosten aparte onderdelen van de berekening. Gebruik de huidige voorvertoning in plaats van kosten over te nemen uit een oud voorbeeld of screenshot.
+
+## Bewaar de transactie-ID na verzending
+
+Na een geslaagde bevestigde verzending toont de CLI een transactie-ID en een explorerlink. Bewaar de identificatie bij je betalingsgegevens zodat je dezelfde transactie terugvindt. Voor voortgangscontrole is die nuttiger dan een bijgesneden screenshot van een succesmelding. Bewaar ontvanger, bedoeld bedrag en factuurreferentie waar nodig in je eigen privéadministratie.
+
+Bekijk de activiteit met de geschiedenisopdracht:
+
+```text
+history
+```
+
+De huidige client combineert inkomende walletoutputs met geregistreerde uitgaande verzendingen, inclusief die nog in de mempool staan. Geeft een handeling een onduidelijk resultaat, controleer dan de bestaande geschiedenis en identificatie voordat je nog een betaling voorbereidt. Opnieuw versturen is een nieuwe betalingsinstructie. Stel daarom eerst vast wat met de eerste is gebeurd.
+
+## Bevestig de ontvangst in de wallet van de ontvanger
+
+De ontvanger bekijkt de geschiedenis in de eigen geladen wallet en koppelt de inkomende registratie aan de besproken transactie. De walletscan identificeert outputs die bij die wallet horen. Een openbare transactiepagina geeft netwerkinformatie; de ontvangende wallet geeft het private betalingsbeeld. De [explorerhandleiding](/nl/blog/blocknet-explorer-guide/) legt uit hoe je het openbare record naast deze controle leest.
+
+Controleer het saldo opnieuw terwijl de betaling vordert. Besteedbaar, in afwachting en onbevestigd zijn verschillende toestanden. Een herstelde of pas geopende wallet kan de geschiedenis nog scannen terwijl de node al verbonden is. Laat dat werk doorgaan en controleer opnieuw. Bij miningbetalingen volgt de [pool-naar-wallethandleiding](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) de extra stap van het uitbetalingsrecord van de pool naar ontvangst.
+
+## Maak een herhaalbare betalingsroutine
+
+Begin iedere bedoelde betaling met de juiste wallet en het juiste netwerk, verifieer de ontvangstgegevens, controleer de actuele voorvertoning en bewaar de resulterende transactie-ID. Daarna controleert de ontvanger geschiedenis en saldo. Deze waarnemingen beschrijven verschillende fasen. Noteer welke je werkelijk hebt gecontroleerd, in plaats van elk successcherm als definitieve ontvangst te behandelen.
+
+Blijf de officiële instructies van je geïnstalleerde client volgen wanneer labels of procedures veranderen. Deze handleiding beschrijft de onderzochte CLI; de gekoppelde artikelen behandelen namen, memo’s, kosten en scannen uitgebreider. Mine je ook bij [bntpool.com](https://bntpool.com/blog/nl/mine-blocknet-on-bntpool/), koppel het uitbetalingsadres dan aan een wallet die je kunt openen en via hetzelfde ontvangstproces kunt controleren.
+
+<CTA target="seine" title="Ontdek Blocknet-mining met seine" text="Gebruik de mininghandleidingen om seine te verbinden en pooluitbetalingen in je Blocknet-wallet te ontvangen." />

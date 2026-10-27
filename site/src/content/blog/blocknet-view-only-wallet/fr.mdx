@@ -1,0 +1,107 @@
+---
+title: 'Configurer un portefeuille Blocknet en lecture seule'
+description: 'Configurez un portefeuille Blocknet en lecture seule sur un autre ordinateur : exportez le fichier, ouvrez-le et consultez les paiements entrants.'
+tags: ['Blocknet', 'Portefeuille', 'Confidentialité']
+faq:
+  - q: 'Un portefeuille Blocknet en lecture seule peut-il envoyer des fonds ?'
+    a: 'Un portefeuille en lecture seule permet de suivre les fonds entrants, mais ne peut ni envoyer de paiements ni signer de messages. Le cœur examiné refuse ces opérations pour ce type de portefeuille. Gardez le portefeuille complet pour décider des dépenses et autoriser les paiements, et utilisez la copie de consultation pour surveiller les recettes souhaitées.'
+  - q: 'Puis-je publier ma clé privée de visualisation Blocknet ?'
+    a: 'La clé privée de visualisation donne accès aux informations sur les paiements entrants. Elle reste privée même sans pouvoir de dépense. Ne partagez cet accès que délibérément, protégez les fichiers exportés et leurs mots de passe, et excluez les clés des captures publiques, demandes d’assistance, messages et formulaires de preuve de l’explorateur.'
+  - q: 'Le portefeuille en lecture seule nécessite-t-il le mot de passe principal ?'
+    a: 'L’exportation demande le mot de passe du portefeuille complet pour autoriser la création, puis un mot de passe distinct pour le fichier de consultation. Ouvrez ce fichier sur le second ordinateur avec le mot de passe choisi. Cet ordinateur n’a besoin ni de la phrase de récupération ni des identifiants de dépense du portefeuille complet.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Suivez vos paiements Blocknet entrants sur un second ordinateur tout en conservant l’autorisation des paiements dans votre portefeuille complet. Ce guide utilise le client officiel CLI v1.2.0 et le cœur public v0.22.0, vérifiés le 27 octobre 2026. Il décrit l’exportation du fichier, l’accès qu’il confère et la vérification des réceptions après son chargement.
+
+## Comment créer un portefeuille Blocknet en lecture seule ?
+
+<Answer>
+Ouvrez le portefeuille complet et utilisez sa commande viewkeys pour créer un fichier de consultation chiffré avec un mot de passe distinct. Transférez-le vers l’ordinateur voulu, chargez-le et vérifiez son adresse et son type en lecture seule. Laissez son analyse rattraper la chaîne, puis consultez les paiements entrants en gardant les dépenses dans le portefeuille complet.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Un portefeuille complet exporte une copie de consultation chiffrée vers un second ordinateur, qui peut examiner les paiements entrants sans pouvoir dépenser." width="1200" height="675" loading="lazy" />
+
+## Choisir les réceptions à surveiller
+
+Partez du portefeuille complet dont vous souhaitez suivre les recettes. Le [guide de configuration du portefeuille](/fr/blog/blocknet-wallet-for-mining/) explique sa création ou sa restauration. La copie de consultation correspond à son adresse ; elle ne crée pas une autre identité de réception et ne déplace pas les fonds vers un autre compte. Notez le portefeuille et le réseau concernés avant de manipuler un fichier exporté.
+
+Pour le minage, vous pouvez conserver la même adresse de paiement vérifiée. Le portefeuille de consultation permet de lire les réceptions sur un autre ordinateur de confiance. Le [guide de suivi du pool](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) répond à une autre question : il affiche les shares, le solde du pool et les versements sans clés de portefeuille. Choisissez l’interface selon votre besoin ; l’accès de consultation sert à lire le relevé privé de réception.
+
+## Exporter le fichier depuis le portefeuille complet
+
+Sur l’ordinateur contenant le portefeuille complet, connectez-vous à son cœur mainnet en cours d’exécution :
+
+```sh
+blocknet attach mainnet
+```
+
+Ouvrez le bon portefeuille et vérifiez son adresse avec ces commandes du shell :
+
+```text
+load
+address
+```
+
+S’il est verrouillé, utilisez la demande de déverrouillage habituelle. Gardez cette session privée, car l’opération suivante affiche les clés de visualisation.
+
+Lancez l’exportation :
+
+```text
+viewkeys
+```
+
+Le [client examiné](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) explique que la clé privée de visualisation révèle les fonds entrants et demande votre confirmation. Continuez seulement si vous souhaitez accorder cet accès. Il demande ensuite le mot de passe du portefeuille complet, un nouveau mot de passe pour le fichier en lecture seule et sa confirmation. Choisissez et conservez ce mot de passe pour l’ordinateur destinataire.
+
+## Quel fichier faut-il transférer ?
+
+Après une exportation réussie, le client affiche les clés de visualisation et le chemin du fichier enregistré. Utilisez ce chemin réel pour identifier le fichier exporté. Transférez-le vers l’ordinateur que vous contrôlez par un moyen adapté à des données privées de portefeuille. Protégez séparément le mot de passe. Évitez de reproduire les clés affichées dans des captures ou des transcriptions de diagnostic.
+
+La [référence du portefeuille](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) indique le dossier par défaut `~/.config/bnt/wallets/`, dont l’équivalent Windows est `C:\Users\<you>\.config\bnt\wallets\`. Un chemin de portefeuille configuré peut modifier le dossier listé par load. Copiez le fichier exporté dans le dossier des portefeuilles de destination pour que le client le trouve. Conservez le portefeuille complet d’origine et sa sauvegarde de récupération sur leur stockage prévu.
+
+## Charger et vérifier la copie sur le second ordinateur
+
+Préparez un cœur actif sur la destination avec le [guide du nœud](/fr/blog/run-blocknet-node/), puis connectez-vous au même réseau. Ouvrez le fichier exporté avec le mot de passe choisi pour celui-ci :
+
+```text
+load
+```
+
+Si un autre portefeuille est déjà ouvert, le shell officiel permet de le décharger avant de charger le fichier voulu. Choisissez le nom du fichier exporté, sans supposer que le premier portefeuille affiché est le bon.
+
+Vérifiez la copie dans le client :
+
+```text
+address
+status
+```
+
+Comparez l’adresse de réception complète avec celle du portefeuille complet. Vérifiez le type en lecture seule affiché par le client. Ces contrôles confirment l’identité et l’accès prévus. Aucun essai d’envoi n’est nécessaire : le [cœur examiné](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) refuse l’envoi et la signature de messages depuis un portefeuille en lecture seule.
+
+## Laisser le portefeuille trouver les paiements entrants
+
+Le nœud de destination doit disposer des blocs concernés, puis le portefeuille chargé doit les analyser. Consultez ses données avec ces commandes :
+
+```text
+outputs
+history
+```
+
+Un portefeuille récemment chargé ou importé peut encore rattraper son retard même si le nœud a des pairs. Suivez le [guide de synchronisation du portefeuille](/fr/blog/blocknet-wallet-not-syncing/) pour distinguer le téléchargement de la chaîne et l’analyse du portefeuille, puis déterminer si une analyse est nécessaire.
+
+Rapprochez une réception d’un identifiant de transaction déjà connu dans le portefeuille complet ou le relevé de versements. Le [guide de l’explorateur](/fr/blog/blocknet-explorer-guide/) permet de confirmer l’inclusion publique ; le portefeuille de consultation donne les détails privés de réception. Utilisez le portefeuille complet pour décider et autoriser les dépenses. Considérez la copie comme un suivi des entrées, sans supposer qu’elle reproduit toutes les sorties ou décisions de solde disponible.
+
+## Quel accès donne une clé privée de visualisation ?
+
+La [référence officielle du shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) avertit que cette clé permet à son détenteur de voir les fonds entrants. Un fichier de consultation chiffré protège cet accès par son propre mot de passe, mais son ouverture révèle des informations privées sur les paiements. Réservez cet accès à la personne ou machine prévue. Changer le mot de passe du fichier ne révoque pas une clé déjà copiée.
+
+Gardez les secrets de dépense et de visualisation hors des outils publics et des messages d’assistance. Une adresse de réception se partage pour recevoir un paiement ; la clé privée de visualisation a un autre rôle. Le [guide des adresses furtives](/fr/blog/stealth-addresses-explained/) explique comment le portefeuille reconnaît ses sorties. Transférez seulement l’accès de consultation voulu et conservez les éléments de récupération avec le portefeuille complet.
+
+## Conserver une routine de consultation reproductible
+
+À votre retour sur l’ordinateur de suivi, chargez le même fichier, vérifiez le réseau et l’adresse, puis examinez la progression avant d’interpréter une entrée manquante. Distinguez un paiement entrant enregistré de fonds dont vous pouvez autoriser la dépense. Si la création d’un autre portefeuille vous donne une nouvelle adresse, la copie de consultation existante correspond toujours à l’ancienne.
+
+Gardez la sauvegarde de récupération du portefeuille complet même après la mise en place du suivi. Une copie de consultation ne remplace pas les éléments de dépense nécessaires à la récupération. Le [guide de la phrase de récupération](/fr/blog/seed-phrase-explained/) explique cette sauvegarde ; celui de l’[envoi et de la réception](/fr/blog/send-receive-blocknet/) décrit le paiement. Le portefeuille complet, sa sauvegarde et la copie de consultation ont chacun un rôle précis.
+
+<CTA target="seine" title="Recevoir les versements de minage dans votre portefeuille Blocknet" text="Utilisez les guides de seine pour miner vers votre adresse, puis suivez les versements entrants dans la vue de portefeuille choisie." />

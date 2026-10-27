@@ -1,0 +1,96 @@
+---
+title: 'Sauvegarder, restaurer et déplacer un portefeuille Blocknet'
+description: 'Sauvegardez votre portefeuille Blocknet et restaurez-le avec sa phrase ou son fichier. Vérifiez l’adresse et l’analyse avant de retirer l’ancienne copie.'
+tags: ['Blocknet', 'Portefeuille', 'Récupération']
+faq:
+  - q: 'Puis-je récupérer un portefeuille Blocknet si j’oublie son mot de passe ?'
+    a: 'Pour un portefeuille créé à partir d’une phrase de récupération, importez la phrase sauvegardée sous un nouveau nom et définissez un nouveau mot de passe. L’ancien fichier chiffré conserve son mot de passe. Comparez l’adresse restaurée à vos archives et laissez le nœud et l’analyse du portefeuille se mettre à jour avant de vérifier le solde.'
+  - q: 'Déplacer mon portefeuille Blocknet change-t-il son adresse de réception ?'
+    a: 'Charger une copie du même fichier ou importer correctement sa phrase d’origine conserve l’adresse du portefeuille. Comparez l’adresse complète sur l’ordinateur de destination à un ancien relevé fiable. Créer un portefeuille entièrement neuf est une autre opération, qui fournit une nouvelle adresse pour les paiements futurs.'
+  - q: 'Un portefeuille en lecture seule suffit-il à rétablir la capacité de dépenser ?'
+    a: 'Un portefeuille en lecture seule permet de consulter les paiements entrants sur un autre ordinateur. Pour rétablir la capacité de dépenser, utilisez le fichier du portefeuille complet avec son mot de passe ou ses éléments de récupération. Conservez la sauvegarde du portefeuille complet d’origine et vérifiez le type de portefeuille chargé.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Sauvegardez votre portefeuille Blocknet avant de changer d’ordinateur, puis restaurez la même adresse avec son fichier ou sa phrase de récupération. Ce guide suit le CLI officiel v1.2.0 et core v0.22.0, vérifiés le 27 octobre 2026. Il distingue la création d’une sauvegarde, son ouverture ailleurs et la vérification que la récupération est terminée.
+
+## Comment sauvegarder et restaurer un portefeuille Blocknet ?
+
+<Answer>
+Conservez votre phrase de récupération hors ligne et une copie séparée du fichier du portefeuille complet. Sur l’ordinateur de destination, chargez ce fichier avec son mot de passe ou importez la phrase d’origine dans un nouveau fichier. Comparez l’adresse complète, laissez le nœud et l’analyse rattraper leur retard et vérifiez vos archives avant de retirer l’ancienne copie.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Un portefeuille et sa sauvegarde protégée sont transférés sur un autre ordinateur, où l’adresse restaurée et la progression de l’analyse sont vérifiées." width="1200" height="675" loading="lazy" />
+
+## Choisissez la méthode adaptée aux éléments disponibles
+
+Une sauvegarde du fichier et une phrase de récupération ont des fonctions différentes. Le fichier `.wallet.dat` contient les clés et l’état enregistré du portefeuille ; ouvrir une copie protégée par mot de passe nécessite ce mot de passe. La phrase permet de recréer les clés d’un portefeuille fondé sur une phrase dans un nouveau fichier avec un nouveau mot de passe. Conservez les deux si possible, ainsi que vos relevés de paiements privés séparément pour les comparer après récupération.
+
+Cette procédure concerne un portefeuille complet existant. Pour une première création, suivez le [guide de configuration](/fr/blog/blocknet-wallet-for-mining/). Pour observer les paiements sur un second ordinateur sans capacité de dépenser, utilisez le [guide de lecture seule](/fr/blog/blocknet-view-only-wallet/). Une adresse publique de réception ne suffit pas à restaurer un portefeuille. Déterminez si vous possédez le fichier complet, son mot de passe et la phrase d’origine avant de choisir la suite.
+
+## Préparez le portefeuille d’origine et vos notes de récupération
+
+Depuis un terminal, connectez-vous à votre core mainnet en cours d’exécution :
+
+```sh
+blocknet attach mainnet
+```
+
+Dans le shell interactif, chargez le portefeuille voulu et relevez son adresse publique complète :
+
+```text
+load
+address
+```
+
+Sélectionnez l’entrée du portefeuille existant dans le menu. Si un autre est chargé, utilisez `unload` avant de choisir le bon. Conservez l’adresse dans vos notes privées de migration, avec le réseau et le nom du fichier.
+
+Pour un portefeuille fondé sur une phrase, exécutez `seed` dans le shell, confirmez la demande et saisissez le mot de passe. Notez les mots renvoyés dans leur ordre exact et conservez-les hors ligne. Faites-le sans partage ni enregistrement d’écran ; le [guide des phrases de récupération](/fr/blog/seed-phrase-explained/) explique comment protéger ces notes. Si le client signale qu’aucune phrase n’est disponible, conservez le fichier complet et son mot de passe et utilisez la copie de fichier. Ne supposez pas que tous les anciens portefeuilles ou ceux importés par clés possèdent une phrase.
+
+## Créez une copie séparée du fichier du portefeuille
+
+Repérez le fichier réellement utilisé par le core. Le dossier par défaut est `~/.config/bnt/wallets/` ; sous Windows, c’est `C:\Users\<you>\.config\bnt\wallets\`. Le dossier contenant le `wallet_file` configuré peut être différent. Consultez le chemin affiché par le client officiel et la [référence de gestion des portefeuilles](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), surtout si plusieurs fichiers portent des noms proches. Confirmez le fichier voulu avant toute copie.
+
+Après avoir noté l’adresse, exécutez `unload` et attendez sa réussite avant de copier le fichier. Laissez l’original en place et enregistrez une copie datée sur un support distinct que vous contrôlez. Gardez l’extension `.wallet.dat` et protégez la sauvegarde et le mot de passe. Le client peut créer une sauvegarde locale lors d’un chargement depuis un autre dossier, mais il n’écrase pas une sauvegarde existante du même nom. Vérifiez votre propre copie plutôt que de supposer cette copie locale à jour.
+
+## Comment déplacer le portefeuille sur un nouvel ordinateur ?
+
+Installez le [client officiel](https://github.com/blocknetprivacy/blocknet/releases/latest) et préparez un core mainnet avec le [guide du nœud](/fr/blog/run-blocknet-node/). Transférez une copie du fichier complet, via un support que vous contrôlez, dans le dossier des portefeuilles du core de destination. Préservez tout autre fichier déjà présent et choisissez un nom distinct si nécessaire. Dans le client examiné, `load` lit dans ce dossier, même lorsqu’un chemin personnalisé est saisi.
+
+Connectez-vous sur la destination, exécutez `load`, sélectionnez le fichier copié et saisissez son mot de passe actuel. S’il n’apparaît pas dans le menu, vérifiez le dossier utilisé par le core de destination et l’endroit où vous l’avez copié. Choisissez le fichier existant plutôt que l’option de création. Copier le même fichier rétablit l’accès aux mêmes clés ; cela n’envoie pas de fonds et ne crée pas un second solde.
+
+## Restaurez avec la phrase de récupération d’origine
+
+Pour récupérer après la perte du fichier ou l’oubli du mot de passe, utilisez la phrase sauvegardée dans le client officiel sur votre ordinateur de destination de confiance. Connectez-vous au core mainnet voulu et déchargez d’abord tout autre portefeuille. Lancez la récupération dans le shell interactif :
+
+```text
+import
+```
+
+Sélectionnez l’option 1 pour la phrase de récupération de 12 mots. Saisissez vos propres mots d’origine dans l’ordre ; n’utilisez jamais les mots d’exemple d’un guide et ne collez jamais la phrase sur un site web.
+
+Choisissez un nouveau nom de portefeuille inutilisé, puis définissez et confirmez un nouveau mot de passe à l’invite. L’[implémentation d’import examinée](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) crée un portefeuille à partir de ces éléments et affiche son adresse. Le fichier chiffré d’origine conserve son ancien mot de passe. Gardez l’ancien fichier et la sauvegarde pendant la vérification du portefeuille importé et protégez aussi le nouveau fichier.
+
+## Vérifiez l’adresse, la chaîne et l’analyse du portefeuille
+
+Après le chargement ou l’import, inspectez le portefeuille de destination :
+
+```text
+address
+status
+balance
+history
+```
+
+Comparez l’adresse entière au relevé sauvegardé. Cette vérification identifie le portefeuille avant de vous fier au solde affiché. Si elle diffère, interrompez la migration et vérifiez le fichier sélectionné, les mots de récupération et le réseau. Gardez votre sauvegarde d’origine intacte pendant la résolution de l’écart.
+
+Laissez le téléchargement de la chaîne par le nœud et l’analyse des sorties du portefeuille se mettre à jour. Un portefeuille fraîchement importé doit retrouver ses sorties sur la chaîne ; un solde affiché tôt ne valide pas définitivement la récupération. Comparez le solde disponible et les entrées une fois l’analyse terminée. Conservez vos notes de paiements séparées et le fichier original pour les détails historiques. Le [guide de synchronisation](/fr/blog/blocknet-wallet-not-syncing/) explique les indicateurs à consulter et quand relancer une analyse.
+
+## Terminez la migration après vérification
+
+Gardez une sauvegarde protégée du portefeuille de destination vérifié et conservez la phrase hors ligne. Notez quel ordinateur héberge désormais le portefeuille complet actif et quelles copies servent de sauvegardes. Une ancienne copie conserve le même accès aux clés ; déplacer un fichier ne le révoque pas. Pour retirer un appareil, appliquez votre procédure habituelle d’effacement ou de mise au rebut sécurisée du stockage après avoir confirmé que la sauvegarde fonctionne.
+
+Si l’adresse restaurée correspond, votre destination actuelle des paiements de minage peut rester identique. Comparez le [relevé des paiements du pool](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) à l’historique entrant du portefeuille pour vérifier les recettes de minage. Si vous créez volontairement un portefeuille différent, il s’agit d’un changement d’adresse plutôt que d’une restauration. Terminez la vérification du portefeuille restauré avant de modifier séparément la configuration du mineur.
+
+<CTA target="seine" title="Minez vers votre adresse Blocknet vérifiée" text="Suivez les guides de seine pour connecter votre mineur et conservez vos sauvegardes sur un support que vous contrôlez." />

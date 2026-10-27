@@ -196,12 +196,30 @@ fn initial_threads(
     available: usize,
     memory_capacity: usize,
     full_count: bool,
+    cohort_start: Option<usize>,
 ) -> usize {
-    if record.is_none() && full_count {
-        max.min(memory_capacity).min(available)
-    } else {
-        seed_threads(record, min, max, available, memory_capacity)
+    match (record, full_count, cohort_start) {
+        (None, true, _) => max.min(memory_capacity).min(available),
+        (None, false, Some(start)) if available > 0 => {
+            start.clamp(min.min(available), max.min(memory_capacity).min(available))
+        }
+        _ => seed_threads(record, min, max, available, memory_capacity),
     }
+}
+
+// Cold start for CPUs whose cohort mines on a streaming kernel (AMD Zen 2-5).
+// Native hosts reach or plateau near their peak by the physical core count
+// (Ryzen 7 9700X, EPYC 7443P/7R32/9R14), while the generic midpoint estimate
+// started a 32-core Zen 5 host at 14 of 28 workers and took ~16 minutes and
+// ~20% of early hashrate to climb. Repeated count trials still decide.
+fn cohort_cold_start(cfg: &Config, host: &CpuAutotuneHostFingerprint) -> Option<usize> {
+    // Unit tests stay host-independent; `initial_threads` covers the policy.
+    (!cfg!(test)
+        && cfg.cpu_profile != CpuPerformanceProfile::Efficiency
+        && super::adaptive_kernel::cohort_kernel().is_some())
+    .then_some(host.physical_cores)
+    .flatten()
+    .filter(|&cores| cores > 0)
 }
 
 // Threads already running (including the API's Tokio worker pool) are charged
@@ -308,6 +326,10 @@ fn prepare_with_resources(
             max,
             memory_capacity,
         ));
+    let cohort_start = seed
+        .is_none()
+        .then(|| cohort_cold_start(cfg, &cpu_autotune_host_fingerprint()))
+        .flatten();
     let threads = initial_threads(
         seed.as_ref(),
         min,
@@ -315,6 +337,7 @@ fn prepare_with_resources(
         available,
         memory_capacity,
         full_count,
+        cohort_start,
     );
     // Zero is intentional here. A parked CPU backend stays connected and can
     // recover when a whole arena plus the configured reserve fits again.
@@ -334,6 +357,8 @@ fn prepare_with_resources(
         "waiting for RAM"
     } else if seed.is_some() {
         "cached starting point"
+    } else if cohort_start.is_some() && !full_count {
+        "physical cores for this CPU family"
     } else {
         "initial estimate"
     };
@@ -631,7 +656,21 @@ impl Policy {
             .restoring
             .is_some_and(|(_, start)| now.saturating_sub(start) >= SWITCH_TIMEOUT_SECS);
         if self.joint.is_some() && (safety_change || joint_invalid || switch_timeout) {
-            return self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited);
+            // Capacity that shrinks once a larger count actually allocates (a
+            // 64 GiB host fits 27 arenas plus reserve, but estimates 28 at 21)
+            // must back off like an allocation limit; a 30 s retry re-allocated
+            // and tore down 14 GiB about every 33 s on a 32-core Zen 5 host.
+            let cap_shrank = self
+                .joint
+                .as_ref()
+                .is_some_and(|j| j.base.max(j.candidate) > cap && j.base <= cap);
+            let result =
+                self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited);
+            if cap_shrank && !allocation_limited {
+                self.allocation_retry_at = now.saturating_add(RETRY_SECS);
+                self.next_trial = self.next_trial.max(now.saturating_add(RETRY_SECS));
+            }
+            return result;
         }
         if safety_change || switch_timeout {
             self.restoring = None;
@@ -1018,7 +1057,11 @@ impl Policy {
                         candidate_sample.hps
                             >= self.peak_hps * cpu_autotune_peak_floor_frac(self.profile)
                     } else {
-                        candidate_sample.hps > baseline.hps * 1.02 + quantization
+                        // Highest hashrate is the default objective: a higher
+                        // count wins on any measured gain over a stable baseline.
+                        // A 2% step margin stalled at the foot of flat plateaus
+                        // (Ryzen 7 9700X stayed at 8 of 16 workers, ~1.5% short).
+                        candidate_sample.hps > baseline.hps
                             // Discover the peak initially, then retain fewer
                             // workers when they already satisfy the profile.
                             // Probes still update the peak before this choice.
@@ -1733,6 +1776,22 @@ mod tests {
     }
 
     #[test]
+    fn higher_count_wins_on_small_stable_gain() {
+        for (candidate_hps, expected) in [(100.5, 9), (99.5, 8)] {
+            let mut p = policy(8);
+            p.phase = Phase::Confirm {
+                base: 8,
+                before: sample(100.0),
+                candidate: 9,
+                candidate_sample: sample(candidate_hps),
+            };
+            p.tick(0, 0, true, 16, false, 8);
+            let d = p.tick(30, 3000, true, 16, false, 8).unwrap();
+            assert_eq!(d.threads, expected, "candidate {candidate_hps} H/s");
+        }
+    }
+
+    #[test]
     fn changed_load_discards_aba_result() {
         let mut p = policy(4);
         p.phase = Phase::Confirm {
@@ -2020,6 +2079,29 @@ mod tests {
             }
         }
         assert!(recovered);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn capacity_shrinking_under_a_probe_backs_off_like_an_allocation_limit() {
+        let (path, mut kernels, mut policy, s) = recovery_fixture("shrink");
+        policy.joint = Some(JointComparison {
+            base: 1,
+            candidate: 2,
+            base_kernel: s.kernel,
+            candidate_kernel: None,
+            base_backing: vec![s.backing_bytes],
+            candidate_backing: None,
+            started: 0,
+            confirmed_peak: 0.0,
+            repeat: false,
+        });
+        // The estimate allowed two workers; it reads one once the probe allocates.
+        let (_, decision) = policy.tick_joint(&mut kernels, 10, &[s], 1, false);
+        assert_eq!(decision.expect("probe cancelled").threads, 1);
+        assert!(policy.joint.is_none());
+        assert!(policy.allocation_retry_at >= 10 + RETRY_SECS);
+        assert!(policy.next_trial >= 10 + RETRY_SECS);
         let _ = fs::remove_file(path);
     }
 
@@ -2632,13 +2714,27 @@ mod tests {
     fn full_count_seed_preserves_cache_and_transient_resource_limits() {
         let cfg = super::super::tests::test_config();
         let cached = record(&cfg, 24);
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, true), 32);
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, false), 16);
-        assert_eq!(initial_threads(Some(&cached), 1, 32, 32, 32, true), 24);
-        assert_eq!(initial_threads(Some(&cached), 1, 32, 8, 32, true), 8);
-        assert_eq!(initial_threads(None, 1, 32, 8, 32, true), 8);
-        assert_eq!(initial_threads(None, 1, 32, 32, 8, true), 8);
-        assert_eq!(initial_threads(None, 1, 32, 0, 32, true), 0);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, true, None), 32);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, false, None), 16);
+        assert_eq!(
+            initial_threads(Some(&cached), 1, 32, 32, 32, true, None),
+            24
+        );
+        assert_eq!(initial_threads(Some(&cached), 1, 32, 8, 32, true, None), 8);
+        assert_eq!(initial_threads(None, 1, 32, 8, 32, true, None), 8);
+        assert_eq!(initial_threads(None, 1, 32, 32, 8, true, None), 8);
+        assert_eq!(initial_threads(None, 1, 32, 0, 32, true, None), 0);
+        // Streaming cohorts start at the physical core count, bounded by RAM;
+        // cached results and the validated full-count contexts still take precedence.
+        assert_eq!(initial_threads(None, 1, 32, 28, 28, false, Some(32)), 28);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, false, Some(8)), 8);
+        assert_eq!(initial_threads(None, 1, 32, 6, 32, false, Some(8)), 6);
+        assert_eq!(initial_threads(None, 1, 32, 0, 32, false, Some(8)), 0);
+        assert_eq!(
+            initial_threads(Some(&cached), 1, 32, 32, 32, false, Some(8)),
+            24
+        );
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, true, Some(8)), 32);
     }
 
     fn record(cfg: &Config, selected_threads: usize) -> CpuAutotuneRecord {

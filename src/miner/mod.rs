@@ -252,6 +252,7 @@ pub fn run(cfg: &Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         shutdown,
         None,
         Arc::new(session::SessionHistory::new()),
+        Arc::default(),
     )
 }
 
@@ -260,6 +261,7 @@ pub(crate) fn run_with_thread_control(
     shutdown: Arc<AtomicBool>,
     thread_control: Option<thread_control::ThreadControl>,
     history: Arc<session::SessionHistory>,
+    stop_origin: Arc<crate::diagnostics::StopOrigin>,
 ) -> Result<()> {
     if cfg.bench {
         return bench::run_benchmark(cfg, shutdown.as_ref());
@@ -270,8 +272,17 @@ pub(crate) fn run_with_thread_control(
         .hardware_telemetry
         .as_ref()
         .and_then(|options| crate::hardware_telemetry::start(options, cfg).ok());
+    if let Some((_, worker)) = &telemetry {
+        worker.attach_stop_origin(&stop_origin);
+    }
     let recorder = telemetry.as_ref().map(|(recorder, _)| recorder.clone());
-    let result = run_with_thread_control_inner(cfg, shutdown, thread_control, history, recorder);
+    let result = normalize_startup_cancellation(run_with_thread_control_inner(
+        cfg,
+        shutdown,
+        thread_control,
+        history,
+        recorder,
+    ));
     if let Err(error) = &result {
         crate::diagnostics::record(
             seine_telemetry::DiagnosticCode::RunFailed,
@@ -280,8 +291,109 @@ pub(crate) fn run_with_thread_control(
         );
     }
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::ShuttingDown);
+    crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::FinalizingTelemetry);
     drop(telemetry);
     result
+}
+
+// Cancellation is control flow, not evidence of a broken backend. Keep it typed
+// through anyhow contexts so unrelated failures are never hidden by a stop flag.
+#[derive(Debug)]
+struct StartupCancelled;
+
+impl std::fmt::Display for StartupCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("startup cancelled by shutdown request")
+    }
+}
+
+impl std::error::Error for StartupCancelled {}
+
+fn normalize_startup_cancellation(result: Result<()>) -> Result<()> {
+    match result {
+        Err(error) if error.is::<StartupCancelled>() => Ok(()),
+        other => other,
+    }
+}
+
+fn check_startup_shutdown(shutdown: &AtomicBool) -> Result<()> {
+    if shutdown.load(Ordering::Relaxed) {
+        return Err(StartupCancelled.into());
+    }
+    Ok(())
+}
+
+fn wait_for_startup<T>(
+    receiver: &Receiver<T>,
+    shutdown: &AtomicBool,
+    disconnected: &str,
+) -> Result<T> {
+    loop {
+        match receiver.recv_timeout(Duration::from_millis(100)) {
+            Ok(result) => return Ok(result),
+            Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                check_startup_shutdown(shutdown)?;
+            }
+            Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                check_startup_shutdown(shutdown)?;
+                bail!("{disconnected}");
+            }
+        }
+    }
+}
+
+fn start_backend_interruptibly(
+    backend: &Arc<dyn PowBackend>,
+    backend_id: BackendInstanceId,
+    shutdown: &AtomicBool,
+) -> Result<()> {
+    check_startup_shutdown(shutdown)?;
+    let backend_name = backend.name();
+    let backend_ref = Arc::clone(backend);
+    let (tx, rx) = bounded::<Result<()>>(0);
+    // Rendezvous delivery ensures a cancelled receiver cannot strand a
+    // successful startup result in a buffer without an owner to stop it.
+    // Native driver/compiler calls can block. Once cancelled, the startup
+    // thread owns cleanup if it eventually returns; never stop concurrently
+    // with start() on the waiting thread.
+    std::thread::Builder::new()
+        .name(format!("{backend_name}-{backend_id}-start"))
+        .spawn(move || {
+            if tx.send(backend_ref.start()).is_err() {
+                backend_ref.stop();
+            }
+        })
+        .map_err(|err| {
+            anyhow::Error::new(err).context(format!("failed to spawn {backend_name} init thread"))
+        })?;
+    wait_for_startup(
+        &rx,
+        shutdown,
+        &format!("{backend_name} init thread panicked"),
+    )
+    .and_then(|result| result)
+}
+
+fn backend_start_failure_detail(error: &anyhow::Error) -> seine_telemetry::FailureDetail {
+    let mut detail = seine_telemetry::FailureDetail::new(
+        seine_telemetry::FailureReason::BackendStartFailed,
+        seine_telemetry::DiagnosticOperation::BackendStartup,
+    );
+    detail.os_error = error
+        .chain()
+        .find_map(|e| e.downcast_ref::<std::io::Error>())
+        .and_then(std::io::Error::raw_os_error)
+        .map(i64::from);
+    detail
+}
+
+fn record_backend_start_failure(error: &anyhow::Error, kind: BackendKind) {
+    crate::diagnostics::record_failure(
+        seine_telemetry::DiagnosticCode::Warning,
+        crate::diagnostics::classify(&format!("{error:#}")),
+        Some(crate::diagnostics::backend_name(kind)),
+        backend_start_failure_detail(error),
+    );
 }
 
 fn run_with_thread_control_inner(
@@ -291,6 +403,7 @@ fn run_with_thread_control_inner(
     history: Arc<session::SessionHistory>,
     telemetry: Option<crate::hardware_telemetry::Recorder>,
 ) -> Result<()> {
+    check_startup_shutdown(shutdown.as_ref())?;
     if cfg!(debug_assertions) {
         warn(
             "MINER",
@@ -403,30 +516,11 @@ fn run_with_thread_control_inner(
                         );
                         let start_t = Instant::now();
 
-                        // Poll for shutdown during start()
-                        let start_result = {
-                            let backend_ref = Arc::clone(&backend);
-                            let (tx, rx) = bounded::<Result<()>>(1);
-                            std::thread::Builder::new()
-                                .name(format!("{backend_name}-{backend_id}-start"))
-                                .spawn(move || {
-                                    let _ = tx.send(backend_ref.start());
-                                })
-                                .expect("failed to spawn backend start thread");
-                            loop {
-                                match rx.recv_timeout(Duration::from_millis(100)) {
-                                    Ok(result) => break result,
-                                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                                        if shutdown_clone.load(Ordering::Relaxed) {
-                                            break Err(anyhow!("interrupted by user"));
-                                        }
-                                    }
-                                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                                        break Err(anyhow!("{backend_name} init thread panicked"));
-                                    }
-                                }
-                            }
-                        };
+                        let start_result = start_backend_interruptibly(
+                            &backend,
+                            backend_id,
+                            shutdown_clone.as_ref(),
+                        );
 
                         match start_result {
                             Ok(()) => {
@@ -491,6 +585,10 @@ fn run_with_thread_control_inner(
                                 let _ = deferred_tx.send(slot);
                             }
                             Err(err) => {
+                                if err.is::<StartupCancelled>() {
+                                    return;
+                                }
+                                record_backend_start_failure(&err, spec.kind);
                                 warn(
                                     "BACKEND",
                                     format!(
@@ -623,6 +721,7 @@ fn run_with_thread_control_inner(
     // If we have no non-NVIDIA backends and no NVIDIA ready yet, we need to wait
     // for at least one NVIDIA to finish (or we'd start with zero backends).
     if !has_non_nvidia && !has_nvidia_ready {
+        check_startup_shutdown(shutdown.as_ref())?;
         if nvidia_index == 0 {
             crate::diagnostics::record_failure(
                 seine_telemetry::DiagnosticCode::Error,
@@ -639,10 +738,11 @@ fn run_with_thread_control_inner(
             "MINER",
             "no CPU/Metal backends; waiting for NVIDIA compilation to complete...",
         );
-        match deferred_rx.recv() {
-            Ok(slot) => early_nvidia_backends.push(slot),
-            Err(_) => bail!("all NVIDIA backends failed to start"),
-        }
+        early_nvidia_backends.push(wait_for_startup(
+            &deferred_rx,
+            shutdown.as_ref(),
+            "all NVIDIA backends failed to start",
+        )?);
         // Also grab any others that finished
         while let Ok(slot) = deferred_rx.try_recv() {
             early_nvidia_backends.push(slot);
@@ -1014,6 +1114,7 @@ fn run_with_thread_control_inner(
     };
 
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::ShuttingDown);
+    crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingAutotune);
     adaptive_controller.stop();
     let shutdown_requested = shutdown.load(Ordering::SeqCst);
     info("MINER", "shutting down: stopping backends...");
@@ -1029,6 +1130,7 @@ fn run_with_thread_control_inner(
         format!("backends stopped in {:.1}s", stop_t.elapsed().as_secs_f64()),
     );
     shutdown.store(true, Ordering::SeqCst);
+    crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingTipListener);
     if let Some(listener) = tip_listener {
         if shutdown_requested {
             listener.detach();
@@ -2337,6 +2439,7 @@ fn activate_single_backend(
     cfg: &Config,
     shutdown: &AtomicBool,
 ) -> Result<ActivatedBackend> {
+    check_startup_shutdown(shutdown)?;
     let backend_name = backend.name();
     backend.set_instance_id(backend_id);
     let (backend_event_tx, backend_event_rx) = bounded::<BackendEvent>(event_capacity);
@@ -2361,31 +2464,7 @@ fn activate_single_backend(
     info("BACKEND", &backend_start_detail);
     let start_t = Instant::now();
 
-    // Run backend.start() on a separate thread so we can poll the
-    // shutdown flag while FFI calls (e.g. NVRTC compilation) block.
-    let start_result = {
-        let backend_ref = Arc::clone(&backend);
-        let (tx, rx) = bounded::<Result<()>>(1);
-        std::thread::Builder::new()
-            .name(format!("{backend_name}-init"))
-            .spawn(move || {
-                let _ = tx.send(backend_ref.start());
-            })
-            .map_err(|err| anyhow!("failed to spawn {backend_name} init thread: {err}"))?;
-        loop {
-            match rx.recv_timeout(Duration::from_millis(100)) {
-                Ok(result) => break result,
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
-                    if shutdown.load(Ordering::Relaxed) {
-                        break Err(anyhow!("interrupted by user"));
-                    }
-                }
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                    break Err(anyhow!("{backend_name} init thread panicked"));
-                }
-            }
-        }
-    };
+    let start_result = start_backend_interruptibly(&backend, backend_id, shutdown);
     match start_result {
         Ok(()) => {
             info(
@@ -2446,6 +2525,9 @@ fn activate_single_backend(
             })
         }
         Err(err) => {
+            if err.is::<StartupCancelled>() {
+                return Err(err);
+            }
             if backend_name == "nvidia" {
                 warn(
                     "BACKEND",
@@ -2461,7 +2543,7 @@ fn activate_single_backend(
                 );
             }
             backend.stop();
-            Err(anyhow!("{backend_name}#{backend_id} unavailable: {err:#}"))
+            Err(err.context(format!("{backend_name}#{backend_id} unavailable")))
         }
     }
 }
@@ -2516,24 +2598,23 @@ fn activate_backends_with_start_id(
                 backend_event_sources.push(activated.event_rx);
             }
             Err(err) => {
-                let mut detail = seine_telemetry::FailureDetail::new(
-                    seine_telemetry::FailureReason::BackendStartFailed,
-                    seine_telemetry::DiagnosticOperation::BackendStartup,
-                );
-                detail.os_error = err
-                    .chain()
-                    .find_map(|e| e.downcast_ref::<std::io::Error>())
-                    .and_then(std::io::Error::raw_os_error)
-                    .map(i64::from);
-                crate::diagnostics::record_failure(
-                    seine_telemetry::DiagnosticCode::Warning,
-                    crate::diagnostics::classify(&format!("{err:#}")),
-                    Some(crate::diagnostics::backend_name(backend_spec.kind)),
-                    detail,
-                );
+                if err.is::<StartupCancelled>() {
+                    for slot in &active {
+                        slot.backend.stop();
+                    }
+                    return Err(err);
+                }
+                record_backend_start_failure(&err, backend_spec.kind);
                 warn("BACKEND", format!("{err:#}"));
             }
         }
+    }
+
+    if let Err(cancelled) = check_startup_shutdown(shutdown) {
+        for slot in &active {
+            slot.backend.stop();
+        }
+        return Err(cancelled);
     }
 
     if active.is_empty() && extra_event_sources.is_empty() {
@@ -2643,6 +2724,7 @@ fn stop_backend_slots(
     stop_timeout: Duration,
     log_tag: &'static str,
 ) {
+    crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingBackends);
     for slot in backends.iter() {
         backend_executor.quarantine_backend(slot.id, Arc::clone(&slot.backend));
     }
@@ -3481,6 +3563,7 @@ pub(crate) mod tests {
 
     #[derive(Default)]
     struct MockState {
+        start_calls: AtomicUsize,
         fail_start: AtomicBool,
         fail_next_assign: AtomicBool,
         panic_next_assign: AtomicBool,
@@ -3494,6 +3577,9 @@ pub(crate) mod tests {
     }
 
     struct MockBackend {
+        start_gate: Option<(Sender<()>, Receiver<()>)>,
+        start_os_error: Option<i32>,
+        shutdown_on_start: Option<Arc<AtomicBool>>,
         name: &'static str,
         lanes: usize,
         state: Arc<MockState>,
@@ -3513,6 +3599,9 @@ pub(crate) mod tests {
     impl MockBackend {
         fn new(name: &'static str, lanes: usize, state: Arc<MockState>) -> Self {
             Self {
+                start_gate: None,
+                start_os_error: None,
+                shutdown_on_start: None,
                 name,
                 lanes,
                 state,
@@ -3615,6 +3704,17 @@ pub(crate) mod tests {
         fn set_event_sink(&self, _sink: Sender<BackendEvent>) {}
 
         fn start(&self) -> Result<()> {
+            self.state.start_calls.fetch_add(1, Ordering::Relaxed);
+            if let Some((entered, release)) = &self.start_gate {
+                entered.send(()).unwrap();
+                release.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            if let Some(shutdown) = &self.shutdown_on_start {
+                shutdown.store(true, Ordering::Relaxed);
+            }
+            if let Some(code) = self.start_os_error {
+                return Err(std::io::Error::from_raw_os_error(code).into());
+            }
             if self.state.fail_start.load(Ordering::Acquire) {
                 return Err(anyhow!("injected start failure"));
             }
@@ -4767,6 +4867,135 @@ pub(crate) mod tests {
         assert!(
             wait_for_stop_call(&panic_state, Duration::from_millis(250)),
             "panicking backend should be quarantined"
+        );
+    }
+
+    fn startup_test_spec() -> BackendSpec {
+        BackendSpec {
+            kind: BackendKind::Cpu,
+            device_index: None,
+            cpu_threads: Some(1),
+            cpu_affinity: Some(crate::config::CpuAffinityMode::Off),
+            assign_timeout_override: None,
+            control_timeout_override: None,
+            assign_timeout_strikes_override: None,
+        }
+    }
+
+    #[test]
+    fn startup_cancel_before_activation_starts_no_backend() {
+        let state = Arc::new(MockState::default());
+        let backend: Arc<dyn PowBackend> = Arc::new(MockBackend::new("cpu", 1, state.clone()));
+        let error = activate_backends(
+            vec![(startup_test_spec(), backend)],
+            16,
+            &test_config(),
+            &AtomicBool::new(true),
+            Vec::new(),
+        )
+        .err()
+        .expect("cancelled activation");
+        assert!(error.is::<StartupCancelled>());
+        assert_eq!(state.start_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn startup_cancel_during_native_init_stops_ready_and_late_backends() {
+        let healthy = Arc::new(MockState::default());
+        let blocked = Arc::new(MockState::default());
+        let (entered_tx, entered_rx) = bounded(1);
+        let (release_tx, release_rx) = bounded(1);
+        let mut backend = MockBackend::new("cpu", 1, blocked.clone());
+        backend.start_gate = Some((entered_tx, release_rx));
+        let instances: Vec<(BackendSpec, Arc<dyn PowBackend>)> = vec![
+            (
+                startup_test_spec(),
+                Arc::new(MockBackend::new("cpu", 1, healthy.clone())),
+            ),
+            (startup_test_spec(), Arc::new(backend)),
+        ];
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let worker_shutdown = shutdown.clone();
+        let worker = std::thread::spawn(move || {
+            activate_backends(instances, 16, &test_config(), &worker_shutdown, Vec::new())
+                .map(|(active, _)| active.len())
+        });
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("startup entered");
+        let start = Instant::now();
+        shutdown.store(true, Ordering::Relaxed);
+        let error = worker.join().unwrap().expect_err("startup cancelled");
+        assert!(error.is::<StartupCancelled>());
+        assert!(start.elapsed() < Duration::from_secs(2));
+        assert_eq!(healthy.stop_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            blocked.stop_calls.load(Ordering::Relaxed),
+            0,
+            "must not call stop concurrently with native startup"
+        );
+        release_tx.send(()).unwrap();
+        assert!(
+            wait_for_stop_call(&blocked, Duration::from_secs(2)),
+            "a backend finishing after cancellation must be stopped"
+        );
+    }
+
+    #[test]
+    fn startup_failure_preserves_os_error_even_with_concurrent_shutdown() {
+        let state = Arc::new(MockState::default());
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let mut backend = MockBackend::new("cpu", 1, state.clone());
+        backend.start_os_error = Some(12);
+        backend.shutdown_on_start = Some(shutdown.clone());
+        let error = activate_single_backend(
+            startup_test_spec(),
+            Arc::new(backend),
+            1,
+            16,
+            &test_config(),
+            &shutdown,
+        )
+        .err()
+        .expect("real startup error");
+        assert!(!error.is::<StartupCancelled>());
+        assert_eq!(backend_start_failure_detail(&error).os_error, Some(12));
+        assert!(format!("{error:#}").contains("cpu#1 unavailable"));
+        assert!(normalize_startup_cancellation(Err(error)).is_err());
+        assert_eq!(state.stop_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn startup_cancel_exits_run_successfully_before_address_resolution() {
+        run(&test_config(), Arc::new(AtomicBool::new(true)))
+            .expect("requested stop is a successful exit");
+        let contextual = anyhow::Error::new(StartupCancelled).context("backend init");
+        assert!(normalize_startup_cancellation(Err(contextual)).is_ok());
+        assert!(normalize_startup_cancellation(Err(anyhow!("interrupted by user"))).is_err());
+    }
+
+    #[test]
+    fn startup_wait_cancels_while_deferred_sender_is_still_alive() {
+        let (_sender, receiver) = bounded::<()>(1);
+        let start = Instant::now();
+        let error = wait_for_startup(&receiver, &AtomicBool::new(true), "failed")
+            .expect_err("shutdown must not wait for sender disconnect");
+        assert!(error.is::<StartupCancelled>());
+        assert!(start.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn startup_wait_distinguishes_failed_and_cancelled_disconnects() {
+        let (sender, receiver) = bounded::<()>(1);
+        drop(sender);
+        let error = wait_for_startup(&receiver, &AtomicBool::new(false), "all backends failed")
+            .expect_err("real startup failure");
+        assert!(!error.is::<StartupCancelled>());
+        assert_eq!(error.to_string(), "all backends failed");
+        assert!(
+            wait_for_startup(&receiver, &AtomicBool::new(true), "all backends failed")
+                .unwrap_err()
+                .is::<StartupCancelled>()
         );
     }
 

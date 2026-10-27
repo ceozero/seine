@@ -1,0 +1,99 @@
+---
+title: 'Cách gửi và nhận Blocknet'
+description: 'Gửi và nhận Blocknet bằng ví chính thức: kiểm tra người nhận, xem trước khoản thanh toán, lưu mã giao dịch và xác nhận tiền đến trong lịch sử ví.'
+tags: ['Blocknet', 'Ví', 'Thanh toán']
+faq:
+  - q: 'Cần chia sẻ gì để nhận Blocknet?'
+    a: 'Chia sẻ địa chỉ nhận hiển thị trong ví hoặc tên ngắn Blocknet ID đã xác minh của bạn. Liên kết thanh toán có thể kèm số tiền và ghi chú. Người gửi cần thông tin nhận tiền; các từ khôi phục và khóa riêng vẫn do bạn giữ. Xác nhận tiền đến qua lịch sử ví của chính mình.'
+  - q: 'Có thể hủy khoản thanh toán Blocknet trước khi xác nhận không?'
+    a: 'Trong ứng dụng dòng lệnh đã kiểm tra, lệnh gửi trước hết yêu cầu bản xem trước và hiển thị chi tiết thanh toán. Nhấn Enter hoặc trả lời không tại lời nhắc xác nhận sẽ hủy thao tác. Sau khi xác nhận gửi, hãy xem bản ghi giao dịch trước khi quyết định hành động tiếp theo.'
+  - q: 'Tại sao Blocknet đã nhận chưa thể chi tiêu ngay?'
+    a: 'Ví phân biệt tiền có thể chi tiêu, đang chờ và chưa xác nhận. Giao dịch có thể xuất hiện trên mạng trước khi các đầu ra có thể chi tiêu. Đọc trạng thái hiện tại và để đồng bộ cùng quét ví tiếp tục. Trình khám phá giúp kiểm tra việc vào khối; ví nhận diện các đầu ra của bạn.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Gửi khoản thanh toán Blocknet từ ví đã chuẩn bị rồi theo dõi từ màn hình kiểm tra của người gửi đến lịch sử của người nhận. Hướng dẫn này dùng ứng dụng dòng lệnh chính thức v1.2.0, được kiểm tra ngày 26 tháng 10 năm 2026. Địa chỉ, bản xem trước và bản ghi giao dịch được kết nối thành một quy trình. Nếu còn cần tạo hoặc khôi phục ví, hãy bắt đầu với [hướng dẫn thiết lập ví](/vi/blog/blocknet-wallet-for-mining/).
+
+## Gửi và nhận Blocknet như thế nào?
+
+<Answer>
+Để nhận Blocknet, chia sẻ địa chỉ nhận của ví hoặc tên ngắn đã xác minh. Để gửi, nhập người nhận và số tiền, kiểm tra đích đến cùng phí rồi xác nhận khoản thanh toán mong muốn. Giữ lại mã giao dịch. Người nhận kiểm tra lịch sử ví riêng và số dư có thể chi tiêu khi giao dịch tiến triển.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="Người gửi kiểm tra khoản thanh toán, mạng ghi lại giao dịch và người nhận kiểm tra lịch sử ví." width="1200" height="675" loading="lazy" />
+
+## Mở đúng ví trước khi chuẩn bị thanh toán
+
+Dùng ứng dụng chính thức để kết nối core mainnet đang chạy:
+
+```sh
+blocknet attach mainnet
+```
+
+Tại dấu nhắc tương tác, mở ví hiện có bằng lệnh sau:
+
+```text
+load
+```
+
+Chọn đúng tệp ví và nhập mật khẩu khi được hỏi. [Hướng dẫn nút](/vi/blog/run-blocknet-node/) trình bày cách khởi động và kiểm tra core chạy nền.
+
+Kiểm tra địa chỉ nhận và số dư bằng từng lệnh riêng:
+
+```text
+address
+balance
+```
+
+Xác nhận rằng bạn dùng đúng ví và mạng. Khi chuẩn bị khoản gửi đi, xem số tiền có thể chi tiêu. [Tài liệu shell chính thức](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) mô tả các lệnh; ví đồ họa có thể trình bày cùng tác vụ bằng điều khiển và nhãn khác.
+
+## Nên chia sẻ gì với người gửi?
+
+Sao chép toàn bộ địa chỉ do lệnh địa chỉ cung cấp và gửi qua kênh thanh toán đã thống nhất. Nếu dùng [Blocknet ID](/vi/blog/blocknet-id-pay-by-name/), chia sẻ đúng tên ngắn và yêu cầu người gửi kiểm tra địa chỉ đã phân giải. Khi chuẩn bị khoản thanh toán mới, xác nhận cách viết với người nhận. Nhận ra một tên hiển thị quen thuộc không thay thế việc kiểm tra thông tin nhận tiền thực tế.
+
+[Liên kết thanh toán](/vi/blog/blocknet-payment-links/) có thể chứa số tiền yêu cầu và ghi chú tùy chọn. Dùng nó để giảm việc nhập lại, rồi kiểm tra các chi tiết đã điền trong ví. Từ khôi phục và khóa riêng không phải thông tin nhận tiền. Không đưa chúng vào tin nhắn, hóa đơn hay ảnh chụp màn hình. Bước này cần địa chỉ nhận.
+
+## Nhập người nhận và số tiền dự định
+
+Dưới đây là ví dụ cú pháp bên trong attach. Thay phần giữ chỗ viết hoa bằng địa chỉ người nhận thực tế, và thay số tiền minh họa bằng số bạn định trả:
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Phần giữ chỗ không phải địa chỉ để gửi tiền. Ứng dụng đã kiểm tra cũng chấp nhận tên ngắn Blocknet ID ở vị trí người nhận.
+
+Để ghi tham chiếu hóa đơn hoặc đơn hàng, thêm ghi chú theo [hướng dẫn ghi chú mã hóa](/vi/blog/blocknet-encrypted-memos/). Trước khi chuẩn bị, kiểm tra nội dung người nhận yêu cầu. Quy trình đầu tiên này tập trung vào số tiền cố định; gửi toàn bộ số dư là thao tác riêng với cách tính phí khác. [Hướng dẫn phí](/vi/blog/blocknet-transaction-fees/) giải thích khác biệt và cách tiền thừa trở về ví.
+
+## Kiểm tra bản xem trước trước khi xác nhận
+
+[Ứng dụng đã kiểm tra](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) yêu cầu mô phỏng trước khi gửi. Nó hiển thị số tiền, đích đến, phí và tiền thừa nếu có. Tên ngắn được phân giải kèm địa chỉ trong phần kiểm tra. Nếu có ghi chú, hãy kiểm tra cả ghi chú. So sánh chi tiết với yêu cầu bạn định thanh toán trước khi quyết định tại dấu nhắc.
+
+Tại `Confirm [y/N]:`, chỉ nhập `y` cho khoản thanh toán bạn muốn thực hiện. Nhấn Enter hoặc trả lời không để hủy bản xem trước. Với khoản gửi thông thường có số tiền cố định, số tiền người nhận và phí mạng là các phần riêng trong phép tính của ví. Dùng giá trị hiện tại thay vì sao chép phí từ ví dụ hay ảnh chụp cũ.
+
+## Lưu mã giao dịch sau khi gửi
+
+Sau khi xác nhận gửi thành công, CLI hiển thị mã giao dịch và liên kết trình khám phá. Lưu mã cùng hồ sơ thanh toán để tìm lại đúng giao dịch. Mã này hữu ích hơn ảnh cắt của thông báo thành công khi kiểm tra tiến độ. Lưu người nhận, số tiền dự định và tham chiếu hóa đơn trong hồ sơ riêng theo nhu cầu.
+
+Xem hoạt động bằng lệnh lịch sử:
+
+```text
+history
+```
+
+Ứng dụng hiện tại kết hợp các đầu ra đến ví với những lần gửi đi đã ghi nhận, gồm cả mục gửi vẫn còn trong mempool. Nếu thao tác trả về kết quả không rõ, kiểm tra lịch sử và mã hiện có trước khi chuẩn bị khoản khác. Lặp lại lệnh gửi là một chỉ thị thanh toán mới; trước hết xác định điều gì đã xảy ra với lần đầu.
+
+## Xác nhận tiền đến trong ví người nhận
+
+Người nhận xem lịch sử trong ví của chính mình đã được nạp và đối chiếu mục nhận với giao dịch đang trao đổi. Quét ví xác định các đầu ra thuộc ví đó. Trang giao dịch công khai cung cấp thông tin mạng; ví nhận cung cấp góc nhìn riêng tư về khoản thanh toán. [Hướng dẫn trình khám phá](/vi/blog/blocknet-explorer-guide/) giải thích cách đọc bản ghi công khai cùng bước kiểm tra này.
+
+Kiểm tra lại số dư khi khoản thanh toán tiến triển. Có thể chi tiêu, đang chờ và chưa xác nhận là các trạng thái khác nhau. Ví vừa khôi phục hoặc vừa mở có thể còn quét lịch sử dù nút đã kết nối. Để công việc tiếp tục rồi kiểm tra lại. Với khoản trả từ đào coin, [hướng dẫn từ pool đến ví](https://bntpool.com/blog/vi/pool-payout-missing-from-wallet/) theo dõi bước bổ sung từ bản ghi trả tiền của pool đến khoản nhận trong ví.
+
+## Xây dựng quy trình thanh toán có thể lặp lại
+
+Với mỗi khoản thanh toán dự định, bắt đầu bằng đúng ví và mạng, xác minh thông tin nhận, kiểm tra bản xem trước hiện tại và giữ mã giao dịch được tạo. Sau đó người nhận kiểm tra lịch sử và số dư. Những quan sát này mô tả các giai đoạn khác nhau; ghi lại giai đoạn thực sự đã xác minh thay vì xem mọi màn hình thành công là đã nhận tiền cuối cùng.
+
+Tiếp tục theo hướng dẫn chính thức của ứng dụng đang cài khi nhãn hoặc quy trình thay đổi. Bài này mô tả quy trình CLI đã kiểm tra; các bài liên kết đi sâu về tên, ghi chú, phí và quét ví. Nếu cũng đào trên [bntpool.com](https://bntpool.com/blog/vi/mine-blocknet-on-bntpool/), dùng địa chỉ trả tiền gắn với ví bạn có thể mở và kiểm tra qua cùng quy trình nhận.
+
+<CTA target="seine" title="Khám phá đào Blocknet với seine" text="Dùng các hướng dẫn đào coin để kết nối seine và nhận khoản trả từ pool vào ví Blocknet của bạn." />

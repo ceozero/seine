@@ -1,0 +1,93 @@
+---
+title: 'Nachrichten mit einer Blocknet-Wallet signieren und prüfen'
+description: 'Signiere eine Blocknet-Nachricht als Nachweis der Adresskontrolle. Prüfe Text und Signatur exakt, nutze eine frische Challenge und ordne das Ergebnis richtig ein.'
+tags: ['Blocknet', 'Wallet', 'Signaturen']
+faq:
+  - q: 'Werden beim Signieren einer Blocknet-Nachricht Coins gesendet?'
+    a: 'Der geprüfte Endpunkt signiert Text mit dem Ausgabeschlüssel der Wallet und gibt eine Signatur zurück. Er erstellt oder überträgt keine Zahlung. Zur Prüfung werden Adresse, exakte Nachricht und Signatur benötigt. Lies den angeforderten Text sorgfältig: Ein Dienst kann die Signatur zur Autorisierung einer eigenen Aktion verwenden.'
+  - q: 'Kann ich eine Signatur ohne geöffnete Wallet prüfen?'
+    a: 'Ja. Der verify-Befehl der offiziellen Shell ruft den öffentlichen Prüfendpunkt auf, der keine geladene Wallet benötigt. Er braucht einen laufenden kompatiblen Core, die vollständige Adresse, die exakte Nachricht und die Signatur. Geprüft wird diese Kombination, ohne Seed, Passwort oder private Schlüssel des Unterzeichners abzufragen.'
+  - q: 'Was beweist eine gültige Blocknet-Nachrichtensignatur?'
+    a: 'Sie bestätigt, dass sich die Nachricht mit dem öffentlichen Ausgabeschlüssel der angegebenen Adresse verifizieren lässt. Nutze eine vereinbarte frische Challenge für einen Nachweis aktueller Kontrolle. Sie belegt weder die rechtliche Identität noch Guthaben oder eine abgeschlossene Zahlung. Eine alte gültige Signatur kann erneut vorgelegt werden.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Mit einer Blocknet-Nachrichtensignatur weist du die Kontrolle über eine Adresse nach, ohne eine Zahlung auszuführen. Diese Anleitung folgt der offiziellen CLI v1.2.0 und Core v0.22.0, geprüft am 27. Oktober 2026. Du bereitest eine klare Challenge vor, signierst sie in der vorgesehenen Wallet und prüfst vollständige Adresse, Nachricht und Signatur gemeinsam.
+
+## Wie signierst und prüfst du eine Blocknet-Nachricht?
+
+<Answer>
+Lade deine vollständige Wallet, bestätige ihre Adresse und signiere den vereinbarten Text mit sign. Gib Adresse, exakte Nachricht und entstandene Signatur an den Prüfer weiter. Dieser prüft die drei Werte mit verify und bestätigt anschließend, dass die Nachricht zum Zweck und zur angeforderten frischen Challenge passt.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Eine Wallet signiert eine vereinbarte Nachricht; ein unabhängiger Prüfer kontrolliert sie zusammen mit Adresse und Signatur." width="1200" height="675" loading="lazy" />
+
+## Vereinbare die Bedeutung der signierten Nachricht
+
+Beginne mit einer konkreten Anfrage: Welche Adresse soll wem und für welche Aktion Kontrolle nachweisen? Ein [Zahlungsnachweis](/de/blog/blocknet-payment-proof/) belegt Einzelheiten einer Transaktion. Eine Nachrichtensignatur eignet sich für Fragen zur Kontrolle eines Signaturschlüssels, etwa zur Bestätigung einer Adresse für ein Konto. Die [Wallet-Anleitung](/de/blog/blocknet-wallet-for-mining/) erklärt das Erstellen und Öffnen der signierenden Wallet.
+
+Lass den Prüfer eine frische, unvorhersehbare Challenge für diese Anfrage vorgeben. Nenne genügend Kontext, um Dienst oder Empfänger und die gewünschte Aktion zu erkennen, und vereinbare bei Bedarf eine Ablaufzeit. Das sind Anwendungsregeln: Die Signaturprüfung erzwingt weder Aktualität noch Ablauf oder Einmalnutzung automatisch. Der Prüfer muss die Nachricht mit der Anfrage vergleichen und die Nutzung der Challenge erfassen.
+
+## Öffne die vorgesehene vollständige Wallet
+
+Verbinde dich im Terminal mit deinem laufenden Mainnet-Core:
+
+```sh
+blocknet attach mainnet
+```
+
+Lade in der interaktiven Shell die Wallet und prüfe ihre Adresse:
+
+```text
+load
+address
+```
+
+Wähle die vorgesehene Wallet-Datei und entsperre sie auf Aufforderung im Client. Vergleiche die vollständige Adresse mit der erwarteten, insbesondere wenn du mehrere Wallet-Dateien auf demselben Rechner verwahrst.
+
+Der [geprüfte Core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) signiert Nachrichten mit dem privaten Ausgabeschlüssel der Wallet. Eine [View-only-Wallet](/de/blog/blocknet-view-only-wallet/) kann das nicht. Bewahre die vollständige Wallet auf dem vorgesehenen Rechner auf; der Prüfer braucht nur die erzeugte Signatur und öffentliche Informationen. Für die Signatur musst du weder Guthaben senden noch eine Wallet-Datei exportieren.
+
+## Bereite vor dem Signieren den exakten Text vor
+
+Lies die gesamte Anfrage und prüfe, ob du ihren erklärten Zweck beabsichtigst. Der offizielle Client liest eine Zeile, entfernt Leerraum am Anfang und Ende und lehnt leere Nachrichten oder mehr als 1024 Bytes ab. Das Limit zählt Bytes; Nicht-ASCII-Zeichen können mehrere benötigen. Nutze eine kurze, eindeutige Zeile und bewahre genau den übermittelten Text auf.
+
+Bewahre Großschreibung, Satzzeichen und innere Leerzeichen bei der Weitergabe. Ein Editor oder Chat kann Anführungszeichen ersetzen oder kopierten Text verändern; vergleiche bei einer fehlgeschlagenen Prüfung die tatsächliche Nachricht. Befolge bei Anmeldung oder Kontovorgängen das dokumentierte Challenge-Format des Dienstes. Formuliere die Anfrage nicht unbemerkt um, denn geprüft werden soll die konkret ausgestellte Challenge.
+
+## Signiere in der offiziellen Shell
+
+Starte die Eingabe in der interaktiven Shell:
+
+```text
+sign
+```
+
+Der Client fragt nach dem Text. Füge die vereinbarte einzeilige Nachricht ein und drücke Enter. Bei Erfolg erscheint eine hexadezimale Signatur. Kopiere die gesamte Ausgabe mit allen Zeichen. Die [Client-Implementierung](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) sendet die Nachricht an den Wallet-Signaturendpunkt; dieser Vorgang erstellt oder überträgt keine Transaktion.
+
+Übermittle vollständige Adresse, exakte Nachricht und Signatur als getrennte Werte. Beschrifte sie eindeutig, damit die Signatur nicht mit Text oder Adresse verwechselt wird. Halte Wiederherstellungsphrase, private Schlüssel und Wallet-Passwort geheim. Die [Seed-Anleitung](/de/blog/seed-phrase-explained/) erklärt Wiederherstellungsmaterial; es gehört nicht zu den Daten für eine Signaturprüfung.
+
+## Wie prüft die andere Person die Signatur?
+
+Sie nutzt die Prüfaufforderung der offiziellen Shell mit einem laufenden kompatiblen Core:
+
+```text
+verify
+```
+
+Gib zunächst die vollständige Adresse, dann die exakte Nachricht und schließlich die hexadezimale Signatur ein. Die [Shell-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) dokumentiert diese Reihenfolge. Eine geladene Wallet ist nicht erforderlich; die Prüfung funktioniert ohne Import der Wallet des Unterzeichners und ohne Umgang mit privaten Schlüsseln.
+
+Der geprüfte Client zeigt `Signature is VALID`, wenn die Kombination gültig ist, sonst `Signature is INVALID`. Ein Formatfehler ist ein anderes Ergebnis: Prüfe alle Felder und bewahre die Originaldaten vor einem erneuten Versuch. Weichen Nachricht oder Adresse von der erwarteten Anfrage ab, kläre diese Abweichung auch dann, wenn die Signatur mathematisch zu den eingegebenen Werten passt.
+
+## Ordne den Erfolg in den Kontext der Anfrage ein
+
+Eine gültige Signatur verifiziert die Nachricht anhand des in der angegebenen Adresse codierten öffentlichen Ausgabeschlüssels. Sie belegt keine rechtliche Identität, kein Guthaben und keine Zahlung. Nutze bei Zahlungsfragen den [Sendenachweis](/de/blog/send-receive-blocknet/), die [Explorer-Abfrage](/de/blog/blocknet-explorer-guide/) und den transaktionsspezifischen Nachweis. Wähle Belege passend zur tatsächlichen Frage, statt jede gültige Signatur als Quittung zu behandeln.
+
+Prüfe vor der Annahme die Aktualität der Challenge und den vorgesehenen Empfänger. Jemand kann eine gültige Nachricht samt Signatur kopieren und erneut vorlegen. Ein Dienst muss eine benötigte Einmalautorisierung selbst durchsetzen. Ebenso wirkt eine im Text genannte Ablaufzeit nur, wenn sie geprüft wird. Diese Kontrollen verbinden kryptografische Gültigkeit mit der vereinbarten Aktion.
+
+## Bewahre einen klaren Prüfdatensatz auf
+
+Halte Adresse, exakte Nachricht, Signatur, Anfragekontext und Prüfergebnis zusammen fest, wenn dein Ablauf einen Prüfverlauf benötigt. Notiere die Prüfzeit getrennt von einem Zeitstempel des Unterzeichners. Vermeide sachfremde persönliche Angaben im Text, denn jeder Empfänger kann ihn lesen und kopieren. Teile die Nachweise über den vereinbarten Kanal mit dem vorgesehenen Prüfer.
+
+Empfängt die Wallet Mining-Auszahlungen, liefert weiterhin die [Pool-Übersicht](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) die Share- und Auszahlungsdaten; eine Nachrichtensignatur ersetzt diese nicht. Die [Node-Anleitung](/de/blog/run-blocknet-node/) erklärt den Core für die offizielle Shell. Bewahre nach der vereinbarten Prüfung den Signaturzugriff in deiner vollständigen Wallet auf und nutze die öffentliche Prüfung für diejenigen, die das Ergebnis kontrollieren.
+
+<CTA target="seine" title="Nutze deine Blocknet-Adresse mit seine" text="Folge den seine-Anleitungen, um an deine Wallet-Adresse zu minen und Signaturen sowie Zahlungsunterlagen zu ordnen." />

@@ -1,0 +1,107 @@
+---
+title: 'Salt görüntüleme amaçlı Blocknet cüzdanı kurun'
+description: 'Başka bir bilgisayarda salt görüntüleme amaçlı Blocknet cüzdanı kurun: dosyayı dışa aktarın, ayrı parolayla açın ve gelen ödemeleri güvenle inceleyin.'
+tags: ['Blocknet', 'Cüzdan', 'Gizlilik']
+faq:
+  - q: 'Salt görüntüleme amaçlı Blocknet cüzdanı coin gönderebilir mi?'
+    a: 'Salt görüntüleme amaçlı cüzdan gelen fonları izleyebilir, ancak ödeme gönderemez veya mesaj imzalayamaz. İncelenen çekirdek bu cüzdan türü için bu işlemleri reddeder. Harcama kararları ve ödeme onayı için tam cüzdanı, izlemek istediğiniz gelen kayıtlar içinse görüntüleme kopyasını kullanın.'
+  - q: 'Blocknet özel görüntüleme anahtarımı yayımlayabilir miyim?'
+    a: 'Özel görüntüleme anahtarı gelen ödemelerin bilgilerine erişim sağlar. Harcama yetkisi vermese bile özel veridir. Görüntüleme erişimini yalnızca bilinçli olarak paylaşın, dışa aktarılan dosyaları ve parolaları koruyun; anahtarları herkese açık ekran görüntülerine, destek taleplerine, sohbetlere veya gezginin kanıt formlarına eklemeyin.'
+  - q: 'Görüntüleme cüzdanı ana cüzdanın parolasına ihtiyaç duyar mı?'
+    a: 'Dışa aktarma işlemi oluşturmayı yetkilendirmek için tam cüzdanın parolasını, ardından görüntüleme dosyası için ayrı bir parola ister. İkinci bilgisayarda dışa aktarılan dosyayı dosya için seçtiğiniz parolayla yükleyin. İkinci bilgisayar tam cüzdanın kurtarma ifadesine veya harcama kimlik bilgilerine ihtiyaç duymaz.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Ödeme onayını tam cüzdanınızda tutarken gelen Blocknet ödemelerini ikinci bir bilgisayarda izleyin. Bu rehber, 27 Ekim 2026 tarihinde kontrol edilen resmî CLI v1.2.0 ve herkese açık çekirdek v0.22.0 sürümlerini kullanır. Dışa aktarılan dosya akışını izler, dosyanın verdiği erişimi açıklar ve yükledikten sonra alım kayıtlarının nasıl doğrulanacağını gösterir.
+
+## Salt görüntüleme amaçlı Blocknet cüzdanı nasıl oluşturulur?
+
+<Answer>
+Tam cüzdanı açıp viewkeys komutuyla ayrı parolası olan şifreli bir görüntüleme dosyası oluşturun. Dışa aktarılan dosyayı hedef bilgisayara taşıyıp yükleyin, adresini ve salt görüntüleme türünü doğrulayın. Cüzdan taramasının yetişmesini bekleyin; ardından harcamayı tam cüzdanda tutarak gelen ödemeleri inceleyin.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Tam cüzdan şifreli bir görüntüleme kopyasını ikinci bilgisayara aktarır; bu bilgisayar harcama yetkisi olmadan gelen ödemeleri inceleyebilir." width="1200" height="675" loading="lazy" />
+
+## İzlemek istediğiniz alım kayıtlarını seçin
+
+Gelen fonlarını izlemek istediğiniz tam cüzdanla başlayın. [Cüzdan kurulum rehberi](/tr/blog/blocknet-wallet-for-mining/) oluşturmayı ve geri yüklemeyi anlatır. Görüntüleme kopyası bu cüzdanın adresine karşılık gelir; ayrı bir alıcı kimliği oluşturmaz veya coinleri başka hesaba taşımaz. Dışa aktarılan dosyalarla çalışmadan önce kopyanın hangi cüzdan ve ağ için olduğunu not edin.
+
+Madencilikte aynı doğrulanmış ödeme adresini kullanmaya devam edebilirsiniz. Görüntüleme cüzdanı gelen cüzdan kayıtlarını başka bir güvenilir bilgisayarda incelemeye yardımcı olur. [Havuz izleme rehberi](https://bntpool.com/blog/tr/track-your-miner-on-bntpool/) farklı bir işe yarar: cüzdan anahtarları olmadan payları, havuz bakiyesini ve ödemeleri gösterir. Sorunuza uygun arayüzü seçin; özel alım kaydı gerektiğinde görüntüleme erişimi faydalıdır.
+
+## Görüntüleme dosyasını tam cüzdandan dışa aktarın
+
+Tam cüzdanın bulunduğu bilgisayarda çalışan mainnet çekirdeğine bağlanın:
+
+```sh
+blocknet attach mainnet
+```
+
+İlgili cüzdanı açıp bu kabuk komutlarıyla adresini kontrol edin:
+
+```text
+load
+address
+```
+
+Cüzdan kilitliyse normal kilit açma istemini kullanın. Sonraki işlem görüntüleme anahtarlarını göstereceği için bu oturumu gizli tutun.
+
+Dışa aktarmayı başlatın:
+
+```text
+viewkeys
+```
+
+[İncelenen istemci](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), özel görüntüleme anahtarının gelen fonları gösterdiğini açıklar ve devam onayı ister. Yalnızca bu erişimi vermek istiyorsanız ilerleyin. Ardından tam cüzdan parolasını, görüntüleme dosyası için yeni bir parolayı ve yeni parolanın onayını ister. Hedef bilgisayar için dosya parolasını seçin ve saklayın.
+
+## Hangi dosyayı aktarmalısınız?
+
+Başarılı dışa aktarmadan sonra istemci görüntüleme anahtarlarını ve kaydedilen dosyanın yolunu gösterir. Dışa aktarılan dosyayı belirlemek için bu gerçek yolu kullanın. Dosyayı özel cüzdan verilerine uygun bir yöntemle kontrolünüzdeki bilgisayara taşıyın. Parolayı ayrı koruyun. Terminaldeki anahtar çıktısını ekran görüntülerine veya sorun giderme dökümlerine eklemeyin.
+
+[Cüzdan başvurusu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), varsayılan klasörü `~/.config/bnt/wallets/` ve Windows karşılığını `C:\Users\<you>\.config\bnt\wallets\` olarak belirtir. Yapılandırılmış cüzdan yolu, load komutunun listelediği klasörü değiştirebilir. İstemcinin bulması için dışa aktarılan dosyayı hedefin cüzdan klasörüne kopyalayın. Asıl tam cüzdanı ve kurtarma yedeğini amaçlanan depolama alanında tutun.
+
+## Kopyayı ikinci bilgisayarda yükleyip doğrulayın
+
+Hedefte [düğüm rehberi](/tr/blog/run-blocknet-node/) ile çalışan bir çekirdek hazırlayıp aynı ağa bağlanın. Dışa aktarılan dosyayı kendisi için seçilen parolayla açın:
+
+```text
+load
+```
+
+Başka bir cüzdan zaten açıksa resmî kabuk, istediğiniz dosyayı yüklemeden önce onu bellekten çıkarmayı destekler. Listedeki ilk cüzdanın doğru olduğunu varsaymak yerine dışa aktarılan dosyanın adına göre seçin.
+
+Kopyayı istemci üzerinden doğrulayın:
+
+```text
+address
+status
+```
+
+Tam alıcı adresini tam cüzdanın adresiyle karşılaştırın. İstemcinin gösterdiği salt görüntüleme türünü kontrol edin. Bu kontroller kimliği ve amaçlanan erişimi doğrular. Ayrımı sınamak için gönderim denemesi gerekmez: [incelenen çekirdek](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go), salt görüntüleme cüzdanından gönderim ve mesaj imzalamayı reddeder.
+
+## Görüntüleme cüzdanının gelen ödemeleri bulmasını bekleyin
+
+Hedef düğüm ilgili bloklara sahip olmalı, yüklü cüzdan da onları taramalıdır. Kayıtlarını bu kabuk komutlarıyla inceleyin:
+
+```text
+outputs
+history
+```
+
+Yeni yüklenen veya içe aktarılan bir cüzdan, düğümün eşleri olsa bile hâlâ geçmişi tarıyor olabilir. Zincir indirmeyi cüzdan taramasından ayırmak ve tarama gerekip gerekmediğine karar vermek için [cüzdan eşitleme rehberini](/tr/blog/blocknet-wallet-not-syncing/) izleyin.
+
+Gelen kaydı, tam cüzdan veya ödeme kaydından zaten bildiğiniz işlem kimliğiyle eşleştirin. [Gezgin rehberi](/tr/blog/blocknet-explorer-guide/) herkese açık blok dahil edilmesini doğrulamaya yardımcı olurken görüntüleme cüzdanı gelen ödemenin ayrıntılarını sağlar. Güncel harcama kararları ve yetkilendirme için tam cüzdanı kullanın. Kopyayı, her giden kaydı veya harcanabilir bakiye kararını yansıttığını varsaymadan bir gelen ödeme izleyicisi olarak değerlendirin.
+
+## Özel görüntüleme anahtarı hangi erişimi sağlar?
+
+[Resmî kabuk başvurusu](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md), anahtar sahibinin gelen fonları görebileceği konusunda uyarır. Şifreli görüntüleme dosyası erişimi kendi parolasıyla korur, ancak açılması yine de özel ödeme bilgilerini gösterir. Erişimi yalnızca amaçlanan kişi veya makineye verin. Dosya parolasını değiştirmek, daha önce kopyalanmış bir görüntüleme anahtarını iptal etmez.
+
+Harcama ve görüntüleme sırlarını herkese açık araçlardan ve destek mesajlarından uzak tutun. Alıcı adresi ödeme almak için paylaşılır; özel görüntüleme anahtarının amacı farklıdır. [Gizli adres rehberi](/tr/blog/stealth-addresses-explained/) cüzdanın kendi çıktılarını nasıl tanıdığını açıklar. Bu kurulumda yalnızca amaçladığınız görüntüleme erişimini aktarın, kurtarma malzemesini tam cüzdanla tutun.
+
+## Tekrarlanabilir bir görüntüleme rutini sürdürün
+
+İzleme bilgisayarına döndüğünüzde aynı dosyayı yükleyin, ağ ve adresi doğrulayın, eksik bir kaydı yorumlamadan önce ilerlemeyi kontrol edin. Gelen kayıt ile harcanmasına yetki verebildiğiniz fonları ayırın. Başka bir cüzdan oluşturduğunuz için yeni adresiniz varsa mevcut görüntüleme kopyası eski cüzdana karşılık gelmeye devam eder.
+
+Görüntüleme kurulumu çalıştıktan sonra da tam cüzdanın kurtarma yedeğini saklayın. Görüntüleme kopyası, kurtarma için gerekli harcama malzemesinin yerine geçmez. [Seed ifadesi rehberi](/tr/blog/seed-phrase-explained/) yedeği, [gönderme ve alma rehberi](/tr/blog/send-receive-blocknet/) ise ödeme akışını anlatır. Tam cüzdan, yedeği ve görüntüleme kopyasının rutininizde ayrı ve açık görevleri vardır.
+
+<CTA target="seine" title="Madencilik ödemelerini Blocknet cüzdanınızda alın" text="Adresinize madencilik yapmak için seine kurulum rehberlerini kullanın, ardından gelen ödemeleri seçtiğiniz cüzdan görünümünden izleyin." />

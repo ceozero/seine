@@ -1,0 +1,107 @@
+---
+title: 'Eine Blocknet-Wallet mit Lesezugriff einrichten'
+description: 'Richte eine Blocknet-Wallet mit Lesezugriff auf einem zweiten Computer ein: Datei exportieren, mit eigenem Passwort öffnen und eingehende Zahlungen prüfen.'
+tags: ['Blocknet', 'Wallet', 'Datenschutz']
+faq:
+  - q: 'Kann eine Blocknet-Wallet mit Lesezugriff Coins senden?'
+    a: 'Eine Wallet mit Lesezugriff kann eingehende Beträge beobachten, aber weder Zahlungen senden noch Nachrichten signieren. Der geprüfte Core lehnt diese Vorgänge für diesen Wallet-Typ ab. Verwende die vollständige Wallet für Ausgabenentscheidungen und Zahlungsfreigaben und die Lesekopie für die Zahlungseingänge, die du beobachten möchtest.'
+  - q: 'Darf ich meinen privaten Blocknet-View-Key veröffentlichen?'
+    a: 'Der private View-Key ermöglicht den Zugriff auf Informationen über eingehende Zahlungen. Er bleibt vertraulich, auch wenn er keine Ausgaben erlaubt. Gib den Lesezugriff nur bewusst weiter, schütze exportierte Dateien und Passwörter und halte Schlüssel aus öffentlichen Screenshots, Supportbeiträgen, Chats und Nachweisformularen des Explorers heraus.'
+  - q: 'Braucht die Wallet mit Lesezugriff das Passwort der Haupt-Wallet?'
+    a: 'Der Export verlangt das Passwort der vollständigen Wallet, um die Erstellung zu autorisieren. Danach wählst du ein separates Passwort für die Lesedatei. Öffne diese Datei auf dem zweiten Computer mit dem dafür gewählten Passwort. Der zweite Computer benötigt weder die Wiederherstellungsphrase noch die Ausgaben-Zugangsdaten der vollständigen Wallet.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Beobachte eingehende Blocknet-Zahlungen auf einem zweiten Computer und behalte die Zahlungsfreigabe in deiner vollständigen Wallet. Diese Anleitung verwendet den offiziellen CLI-Client v1.2.0 und den öffentlichen Core v0.22.0, geprüft am 27. Oktober 2026. Sie beschreibt den Dateiexport, den damit gewährten Zugriff und die Prüfung der Zahlungseingänge nach dem Laden.
+
+## Wie erstellt man eine Blocknet-Wallet mit Lesezugriff?
+
+<Answer>
+Öffne die vollständige Wallet und erstelle mit viewkeys eine verschlüsselte Lesedatei mit separatem Passwort. Übertrage die exportierte Datei auf den gewünschten Computer, lade sie dort und prüfe Adresse und Wallet-Typ. Lass den Wallet-Scan aufholen und kontrolliere dann Zahlungseingänge, während Ausgaben weiterhin über die vollständige Wallet erfolgen.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Eine vollständige Wallet exportiert eine verschlüsselte Lesekopie auf einen zweiten Computer, der eingehende Zahlungen ohne Ausgabenberechtigung prüfen kann." width="1200" height="675" loading="lazy" />
+
+## Wähle die Zahlungseingänge für die Beobachtung
+
+Beginne mit der vollständigen Wallet, deren Eingänge du sehen möchtest. Die [Wallet-Einrichtung](/de/blog/blocknet-wallet-for-mining/) erklärt Erstellung und Wiederherstellung. Eine Lesekopie gehört zur Adresse dieser Wallet; sie erzeugt keine neue Empfangsidentität und überträgt keine Coins auf ein anderes Konto. Notiere vor dem Umgang mit Exportdateien, zu welcher Wallet und welchem Netzwerk die Kopie gehört.
+
+Beim Mining kannst du dieselbe geprüfte Auszahlungsadresse weiterverwenden. Die Lesewallet zeigt dir eingehende Wallet-Einträge auf einem weiteren vertrauenswürdigen Computer. Die [Anleitung zum Pool-Tracking](https://bntpool.com/blog/de/track-your-miner-on-bntpool/) hat eine andere Aufgabe: Sie zeigt Shares, Poolguthaben und Auszahlungen ohne Wallet-Schlüssel. Wähle die Oberfläche passend zur Frage; Lesezugriff ist sinnvoll, wenn du den privaten Empfangseintrag benötigst.
+
+## Exportiere die Lesedatei aus der vollständigen Wallet
+
+Verbinde dich auf dem Computer mit der vollständigen Wallet mit dem laufenden Mainnet-Core:
+
+```sh
+blocknet attach mainnet
+```
+
+Öffne die gewünschte Wallet und prüfe ihre Adresse mit diesen Shell-Befehlen:
+
+```text
+load
+address
+```
+
+Ist die Wallet gesperrt, verwende ihre normale Entsperr-Abfrage. Halte diese Sitzung privat, weil der nächste Vorgang View-Schlüssel anzeigt.
+
+Starte den Export:
+
+```text
+viewkeys
+```
+
+Der [geprüfte Client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) erklärt, dass der private View-Key eingehende Beträge sichtbar macht, und fragt nach einer Bestätigung. Fahre nur fort, wenn du diesen Zugriff gewähren möchtest. Danach fragt er nach dem Passwort der vollständigen Wallet, einem neuen Passwort für die Lesedatei und dessen Bestätigung. Wähle und bewahre das Dateipasswort für den Zielcomputer auf.
+
+## Welche Datei solltest du übertragen?
+
+Nach erfolgreichem Export zeigt der Client die View-Schlüssel und den Speicherpfad der Datei. Identifiziere die exportierte Lesedatei anhand dieses tatsächlichen Pfads. Übertrage sie mit einem für private Wallet-Daten geeigneten Verfahren auf den von dir kontrollierten Computer. Schütze das Dateipasswort separat. Nimm die Schlüsselausgabe im Terminal nicht in Screenshots oder Diagnoseprotokolle auf.
+
+Die [Wallet-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) nennt `~/.config/bnt/wallets/` als Standardordner und `C:\Users\<you>\.config\bnt\wallets\` als Windows-Entsprechung. Ein konfigurierter Wallet-Pfad kann ändern, welchen Ordner load auflistet. Kopiere die exportierte Datei in den Wallet-Ordner des Zielsystems, damit der Client sie findet. Bewahre die ursprüngliche vollständige Wallet und ihre Wiederherstellungssicherung am vorgesehenen Speicherort auf.
+
+## Lade und prüfe die Kopie auf dem zweiten Computer
+
+Richte am Ziel mithilfe der [Node-Anleitung](/de/blog/run-blocknet-node/) einen laufenden Core ein und verbinde dich mit demselben Netzwerk. Öffne die exportierte Datei mit ihrem eigenen Passwort:
+
+```text
+load
+```
+
+Ist bereits eine andere Wallet geöffnet, kann die offizielle Shell diese entladen, bevor du die gewünschte Datei lädst. Wähle anhand des exportierten Dateinamens; die erste Wallet in der Liste muss nicht die richtige sein.
+
+Prüfe die Kopie im Client:
+
+```text
+address
+status
+```
+
+Vergleiche die vollständige Empfangsadresse mit der Adresse der vollständigen Wallet. Prüfe den angezeigten View-only-Typ. So bestätigst du Identität und vorgesehenen Zugriff. Ein Sendeversuch ist dafür nicht nötig: Der [geprüfte Core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) lehnt Senden und Nachrichtensignaturen aus einer Wallet mit Lesezugriff ab.
+
+## Lass die Lesewallet eingehende Zahlungen finden
+
+Der Zielnode braucht die relevanten Blöcke, und die geladene Wallet muss sie scannen. Prüfe ihre Einträge mit diesen Shell-Befehlen:
+
+```text
+outputs
+history
+```
+
+Eine neu geladene oder importierte Wallet kann noch aufholen, obwohl ihr Node bereits Peers hat. Die [Wallet-Sync-Anleitung](/de/blog/blocknet-wallet-not-syncing/) trennt Chain-Download und Wallet-Scan und hilft dir zu entscheiden, ob ein Scan erforderlich ist.
+
+Ordne einen Eingang einer bereits bekannten Transaktions-ID aus der vollständigen Wallet oder dem Auszahlungsnachweis zu. Die [Explorer-Anleitung](/de/blog/blocknet-explorer-guide/) hilft bei der öffentlichen Aufnahmebestätigung; die Lesewallet liefert die privaten Eingangsdetails. Nutze die vollständige Wallet für aktuelle Ausgabenentscheidungen und Freigaben. Betrachte die Kopie als Eingangsmonitor, ohne anzunehmen, dass sie sämtliche ausgehenden Einträge oder Entscheidungen über verfügbares Guthaben widerspiegelt.
+
+## Welchen Zugriff gewährt ein privater View-Key?
+
+Die [offizielle Shell-Referenz](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) weist darauf hin, dass der private View-Key seinem Inhaber Einblick in eingehende Beträge gibt. Eine verschlüsselte Lesedatei schützt diesen Zugriff mit eigenem Passwort, doch beim Öffnen werden private Zahlungsinformationen sichtbar. Gewähre nur der vorgesehenen Person oder Maschine Zugriff. Ein neues Dateipasswort widerruft keinen bereits kopierten View-Key.
+
+Halte sowohl Ausgaben- als auch Leseschlüssel aus öffentlichen Werkzeugen und Supportnachrichten heraus. Eine Empfangsadresse wird für Zahlungen weitergegeben; ein privater View-Key dient einem anderen Zweck. Die [Anleitung zu Stealth-Adressen](/de/blog/stealth-addresses-explained/) erklärt, wie die Wallet ihre Outputs erkennt. Übertrage hier nur den beabsichtigten Lesezugriff und behalte Wiederherstellungsmaterial bei der vollständigen Wallet.
+
+## Pflege eine wiederholbare Leseroutine
+
+Lade am Beobachtungscomputer jedes Mal dieselbe Lesedatei, prüfe Netzwerk und Adresse und kontrolliere den Fortschritt, bevor du einen fehlenden Eintrag deutest. Unterscheide einen verbuchten Eingang von Geld, dessen Ausgabe du freigeben kannst. Wenn du eine andere Wallet mit neuer Adresse erstellst, gehört die vorhandene Lesekopie weiterhin zur alten Wallet.
+
+Behalte die Wiederherstellungssicherung der vollständigen Wallet auch nach erfolgreicher Einrichtung des Lesezugriffs. Eine Lesekopie ersetzt nicht das für die Wiederherstellung der Ausgabenberechtigung nötige Material. Die [Seed-Anleitung](/de/blog/seed-phrase-explained/) erklärt das Backup; [Senden und Empfangen](/de/blog/send-receive-blocknet/) beschreibt den Zahlungsvorgang. Vollständige Wallet, Backup und Lesekopie haben jeweils eine klare Aufgabe.
+
+<CTA target="seine" title="Mining-Auszahlungen in deiner Blocknet-Wallet empfangen" text="Verwende die seine-Anleitungen zum Mining an deine Adresse und verfolge eingehende Auszahlungen anschließend in deiner gewählten Wallet-Ansicht." />

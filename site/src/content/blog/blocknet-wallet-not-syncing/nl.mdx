@@ -1,0 +1,112 @@
+---
+title: 'Blocknet-wallet synchroniseert niet of toont een ander saldo'
+description: 'Controleer een Blocknet-wallet die nog synchroniseert: onderscheid nodevoortgang en walletscan, volg betalingen en controleer het saldo na de scan.'
+tags: ['Blocknet', 'Wallet', 'Problemen oplossen']
+faq:
+  - q: 'Waarom kan mijn Blocknet-node bijgewerkt zijn terwijl mijn wallet achterloopt?'
+    a: 'De node downloadt en valideert de keten; de wallet scant gedownloade blokken op eigen uitgangen. Dat zijn afzonderlijke stappen. Een herstelde wallet kan nog scannen nadat de node is bijgewerkt. Vergelijk de scanhoogte met de lokale ketenhoogte voordat je het getoonde saldo als volledig beschouwt.'
+  - q: 'Downloadt sync ontbrekende blokken?'
+    a: 'In de bekeken opdrachtregelclient vraagt sync de wallet om blokken te scannen die al bij de core beschikbaar zijn. Netwerksynchronisatie is een afzonderlijke nodetaak. Loopt de lokale keten achter zonder verbonden peers, controleer dan eerst de verbinding. Een walletscan kan geen betalingen vinden in blokken die de node nog niet heeft gedownload.'
+  - q: 'Moet ik opnieuw betalen als het bedrag niet in mijn saldo staat?'
+    a: 'Volg eerst de bestaande transactie-ID, controleer ontvangende wallet en netwerk en bekijk scan- en bevestigingsstatus. Alleen het getoonde saldo zegt niet wat er met een verzending is gebeurd. Bekijk de oorspronkelijke wallet- of poolregistratie voordat je een andere betaling voorbereidt: een nieuwe verzending is een nieuwe opdracht.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Zoek welke stap het saldo van je Blocknet-wallet ophoudt: het downloaden van de keten, de scan van walletuitgangen of een betaling die nog niet besteedbaar is. Deze handleiding volgt de officiële CLI v1.2.0 en openbare core v0.22.0, gecontroleerd op 27 oktober 2026. Begin met een al gemaakte of herstelde wallet; de [installatiehandleiding](/nl/blog/blocknet-wallet-for-mining/) behandelt die voorbereiding.
+
+## Waarom synchroniseert mijn Blocknet-wallet nog?
+
+<Answer>
+Controleer ketenvoortgang en peerverbindingen van de node en daarna de scanvoortgang van de geladen wallet. De node verzamelt blokken; de wallet zoekt daarin je betalingen. Verifieer adres en netwerk, laat een voortgaande scan aflopen en vergelijk de geschiedenis met besteedbaar, wachtend en onbevestigd saldo voordat je bepaalt wat aandacht nodig heeft.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Netwerkblokken bereiken eerst de lokale node; daarna scant de wallet ze en werkt de betaalregistratie bij." width="1200" height="675" loading="lazy" />
+
+## Begin met de juiste wallet en het juiste netwerk
+
+Open je bestaande mainnetsessie vanuit een terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Open de wallet in de interactieve shell:
+
+```text
+load
+```
+
+Selecteer het verwachte walletbestand. Is de wallet al geladen maar vergrendeld, ontgrendel die met het wachtwoord via de clientprompt. Een vergrendelingsmelding beschrijft toegang; ze bewijst niet dat de node geen blokken meer downloadt.
+
+Voer deze opdrachten afzonderlijk uit in de shell:
+
+```text
+address
+status
+```
+
+Vergelijk het adres met je eigen ontvangstregistratie. Mainnet en testnet gebruiken aparte cores en wallets. Controleer ook het gekozen bestand: een nieuwe lege wallet openen herstelt geen oud adres. Volg de [nodehandleiding](/nl/blog/run-blocknet-node/) als de core niet draait of attach geen verbinding maakt.
+
+## Loopt de node of de walletscan achter?
+
+De nodestatus beschrijft ketenvoortgang en verbindingen. De wallet heeft een eigen gescande hoogte. In de [bekeken client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) vergelijkt de saldowaarschuwing die positie met de keten of het synchronisatiedoel. Een bijgewerkte lokale keten kan dus samengaan met een walletsaldo dat nog achterloopt. Lees beide stappen in plaats van één statuswoord te vertrouwen.
+
+Bekijk de walletuitgangen:
+
+```text
+outputs
+```
+
+Wanneer passende uitgangen ontbreken en de scan achterloopt, meldt de client de scanhoogte naast de ketenhoogte. Vergelijk een latere meting met de eerdere. Een stijgende scanhoogte toont voortgang; één lege lijst bewijst niet dat een betaling ontbreekt. Noteer hoogtes en tijdstippen voor een nuttige vergelijking.
+
+## Controleer de verbinding als de keten achterloopt
+
+Loopt de node zelf achter, bekijk dan de verbonden peers:
+
+```text
+peers
+```
+
+Zonder peers controleer je de internetverbinding en firewallinstellingen voor de node. Gebruik de [officiële probleemreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) naast de nodehandleiding. Volg ook de ketenhoogte door de tijd: een peerverbinding en een voltooide download beantwoorden verschillende vragen.
+
+Houd het starten van de node en de walletscan apart in je notities. Downloadt een nieuwe node de geschiedenis, laat die stap dan voortgaan voordat je beoordeelt of de wallet een latere betaling heeft gescand. De [checkpointhandleiding](https://bntpool.com/blog/nl/blocknet-checkpoints-fast-sync/) beschrijft de bestaande snelle synchronisatie. Steeds wallets maken of ketendata wissen helpt niet vaststellen welke stap vordert.
+
+## Wanneer voer je sync uit?
+
+Gebruik de scanopdracht wanneer de juiste wallet open is en haar uitgangsregistratie de gedownloade blokken moet bijhalen:
+
+```text
+sync
+```
+
+De [shellreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) beschrijft dit als lokale blokken scannen op eigen uitgangen. Het is een walletbewerking, los van blokken ophalen bij peers. Geef de scan tijd voordat je dezelfde waarneming herhaalt.
+
+De opdracht meldt scanhoogte en gevonden uitgangen, of dat de wallet al bijgewerkt is. Controleer uitgangen en saldo na afloop opnieuw. Meldt de client een timeout, bekijk dan de voortgang voordat je herhaalt; een timeout aan clientzijde zegt op zichzelf niets over de eindpositie van de scanner. Bewaar het oorspronkelijke bestand en herstelbackup tijdens de diagnose.
+
+## Volg één verwachte betaling in de registraties
+
+Gebruik de volledige transactie-ID uit de geschiedenis van de verzender of het verzonden uitbetalingsrecord van de pool. De [explorerhandleiding](/nl/blog/blocknet-explorer-guide/) toont hoe je netwerkstatus en bevattend blok controleert. Publieke opname vertelt waar de transactie is; de ontvangende wallet herkent de privé-uitgangen. Vergelijk ontvangstdetails met je eigen registratie, verwacht geen openbare adressaldopagina.
+
+Bekijk vervolgens de eigen walletregistraties:
+
+```text
+history
+balance
+```
+
+Een wachtend of onbevestigd bedrag verschilt van besteedbare middelen. Staat het bedrag in zo’n categorie, volg dan de bevestigingen in plaats van het als afwezig te zien. Voor mining onderscheidt de [handleiding van pool naar wallet](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) onbetaald poolsaldo, echte uitbetaling en ontvangst in de wallet.
+
+## Scan klaar, maar bedrag nog verschillend?
+
+Controleer walletbestand, volledig ontvangstadres, netwerk en transactie-ID samen. Vergelijk dezelfde betaling en saldocategorie. Gebruik een alleen-lezenwallet voor binnenkomende middelen en de volledige wallet om te bepalen wat je kunt uitgeven; de [handleiding voor alleen-lezen](/nl/blog/blocknet-view-only-wallet/) legt dit uit. Een voltooide scan verandert het wallettype niet.
+
+Is de juiste volledige wallet bijgewerkt maar kloppen de records nog niet, bewaar bestand en backup voordat je de officiële herstelprocedure volgt. De [seedhandleiding](/nl/blog/seed-phrase-explained/) beschrijft herstelmateriaal; de installatiehandleiding behandelt import. Herstel hoort in je walletsoftware. Zet nooit een seed, privésleutel, walletbestand of wachtwoord in een openbaar supportbericht.
+
+## Noteer kort wat je hebt geverifieerd
+
+Noteer voor vervolgonderzoek client- en coreversies, netwerk, nodehoogte, scanhoogte, aantal peers en exacte fouttekst. Vermeld of waarden tussen waarnemingen stegen. Verwijder voor het delen van logs privépaths, betaalgegevens en inloggegevens die niet nodig zijn. Een korte registratie beschrijft de betrokken stap zonder wallettoegang bloot te geven.
+
+Ga na de gerichte controle terug naar geschiedenis en saldo van dezelfde wallet. Het nuttige resultaat is de bedoelde betaling met de echte actuele status en een bijgewerkte bijbehorende scan. De [handleiding voor verzenden en ontvangen](/nl/blog/send-receive-blocknet/) verbindt die laatste ontvangstcontrole met de oorspronkelijke betaalprocedure. Bewaar de ID zodat latere controles dezelfde bewerking volgen.
+
+<CTA target="seine" title="Verbind miningbeloningen met je wallet" text="Gebruik de seine-handleidingen om mining in te stellen en volg daarna pooluitbetalingen in de ontvangstregistratie van de wallet." />

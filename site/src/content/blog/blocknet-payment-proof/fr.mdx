@@ -1,0 +1,102 @@
+---
+title: 'Prouver et vérifier un paiement Blocknet'
+description: 'Vérifiez un paiement Blocknet avec sa clé de transaction et l’adresse destinataire. Générez la preuve, examinez les sorties correspondantes et le résultat.'
+tags: ['Blocknet', 'Paiements', 'Portefeuille']
+faq:
+  - q: 'Que faut-il pour vérifier une preuve de paiement Blocknet ?'
+    a: 'Il faut l’identifiant complet, la clé de transaction fournie par le portefeuille expéditeur et l’adresse complète du destinataire. Envoyez ces champs au point de vérification d’un nœud compatible. Vérifiez la validation de la clé et les sorties correspondant à l’adresse, puis comparez le montant au registre du paiement.'
+  - q: 'Une preuve valide signifie-t-elle que le destinataire a été payé ?'
+    a: 'Un résultat valide établit que la clé fournie appartient à la transaction. Il faut aussi examiner les sorties correspondant à l’adresse destinataire. Une clé valide sans sortie correspondante ne prouve pas un paiement à cette adresse. Vérifiez montant, inclusion dans la chaîne et confirmations séparément.'
+  - q: 'Un portefeuille Blocknet en lecture seule peut-il générer des preuves ?'
+    a: 'Le core examiné dérive la preuve à partir du matériel privé de visualisation du portefeuille. Le portefeuille en lecture seule correspondant peut donc prouver une transaction envoyée par ce portefeuille. La transaction doit figurer dans la chaîne locale et la clé dérivée doit correspondre. Cela ne lui confère pas le droit de dépenser.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Vérifiez un paiement Blocknet précis en reliant sa clé de transaction et l’adresse destinataire à la transaction. Ce guide suit la CLI officielle v1.2.0 et le core v0.22.0, vérifiés le 27 octobre 2026. Il couvre génération, partage des bons champs et lecture du résultat avec l’état dans la chaîne.
+
+## Comment prouver un paiement Blocknet ?
+
+<Answer>
+Ouvrez le portefeuille expéditeur, lancez prove avec l’identifiant et transmettez la clé obtenue au vérificateur prévu. La vérification utilise cette clé, l’identifiant et l’adresse destinataire. Confirmez la validité de la clé, puis examinez les sorties correspondantes et le montant pour cette adresse.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Un registre et une clé de transaction sont comparés à une adresse destinataire pour identifier les sorties de paiement correspondantes." width="1200" height="675" loading="lazy" />
+
+## Commencez par le paiement à établir
+
+Gardez l’identifiant complet du registre d’envoi. Le [guide d’envoi](/fr/blog/send-receive-blocknet/) explique où le client officiel l’affiche ; le [guide de l’explorateur](/fr/blog/blocknet-explorer-guide/) couvre la recherche de la transaction et de son bloc. L’identifiant public localise le transfert, mais la page ordinaire ne divulgue pas le montant privé versé à une adresse donnée.
+
+Convenez de l’adresse et du registre à vérifier. Utilisez l’adresse complète associée au paiement, pas une étiquette abrégée ou une capture. Pour un paiement par nom, conservez l’adresse utilisée. La preuve aide à vérifier un reçu précis ou résoudre une question avec le destinataire ; elle n’établit pas l’identité réelle d’une personne.
+
+## Générez la clé dans le portefeuille expéditeur
+
+Connectez-vous au core mainnet en cours d’exécution depuis un terminal :
+
+```sh
+blocknet attach mainnet
+```
+
+Ouvrez le portefeuille expéditeur et examinez ses registres dans le shell interactif :
+
+```text
+load
+address
+history
+```
+
+Choisissez le bon fichier et déverrouillez-le via le client si nécessaire. Pour la préparation initiale, utilisez le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/).
+
+Lancez ceci dans le shell en remplaçant le marqueur par l’identifiant complet :
+
+```text
+prove <txid>
+```
+
+Le [client examiné](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) accepte un identifiant hexadécimal de 64 caractères et affiche la clé renvoyée. Le core cherche la transaction dans sa chaîne locale et vérifie la correspondance entre clé dérivée et clé publique. Utilisez le portefeuille qui l’a envoyée ; générer la preuve ne crée pas un autre paiement.
+
+## Quelles informations partager ?
+
+Partagez identifiant, clé renvoyée et adresse destinataire par le canal convenu. Cette clé est propre à cette transaction. Gardez privés graine de récupération, clé de dépense, mot de passe et clé privée de visualisation de tout le portefeuille. Le vérificateur a besoin des champs de preuve, pas d’accès au portefeuille chargé ni à ses éléments de récupération.
+
+Il s’agit d’une divulgation volontaire : la clé et une adresse permettent d’identifier sorties correspondantes, montants et tout mémo récupérable de cette transaction. Partagez-la avec les personnes qui ont besoin de ces éléments. Le [guide des mémos](/fr/blog/blocknet-encrypted-memos/) explique les notes ; considérez leur contenu avant le partage. Une clé partagée peut être copiée : utilisez le canal privé convenu avec le destinataire.
+
+## Vérifiez avec l’API documentée du core
+
+L’[API officielle](https://blocknetcrypto.com/api) propose un point public de vérification sans portefeuille chargé ni jeton bearer. Préférez un nœud sous votre contrôle. Enregistrez ce modèle sous `proof.json` dans un dossier privé et remplacez les trois chaînes de substitution par les champs réels. Conservez les noms des champs.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Depuis ce dossier, envoyez le fichier à l’adresse API du nœud :
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Utilisez votre port local configuré s’il diffère ; dans Windows PowerShell, utilisez `curl.exe`. Le [guide du nœud](/fr/blog/run-blocknet-node/) explique l’exécution du core. Cette requête vérifie une preuve et n’envoie pas de pièces. Avec un serveur distant, vous divulguez les champs soumis à son opérateur.
+
+## Séparez validité de clé et correspondances du destinataire
+
+Examinez d’abord `valid`. true signifie que la clé correspond à la clé publique de la transaction. Puis examinez `outputs` : les entrées dont `match` vaut true appartiennent à l’adresse fournie. `total_matched` additionne leurs montants. Une clé valide peut produire zéro correspondance si cette adresse n’a rien reçu dans cette transaction.
+
+L’API exprime les montants en unités atomiques : 100 000 000 unités valent 1 BNT. Convertissez le total avant comparaison avec une facture en BNT ; conservez tous les chiffres entiers sans arrondir trop tôt. Comparez tout mémo renvoyé au registre attendu. Vérifiez inclusion et confirmations séparément via nœud ou explorateur. Le résultat seul ne dit pas qu’une facture est intégralement payée ou que les fonds sont actuellement disponibles.
+
+## Résolvez un écart avec les registres originaux
+
+Pour une clé invalide, comparez identifiant complet et clé à la sortie originale de l’expéditeur. Pour une clé valide sans correspondance, revérifiez l’adresse complète utilisée. Si la transaction est introuvable pendant la génération, vérifiez réseau et progression de chaîne : le point de génération examiné exige une transaction en chaîne. Suivez le [guide de synchronisation](/fr/blog/blocknet-wallet-not-syncing/) si la chaîne locale est en retard.
+
+Pour les versements du pool, votre portefeuille destinataire n’est pas celui qui a envoyé la transaction. Commencez par le [registre de suivi du pool](https://bntpool.com/blog/fr/track-your-miner-on-bntpool/) et votre historique entrant ; demandez une preuve à l’expéditeur réel. Les récompenses coinbase n’ont pas non plus de preuve d’expéditeur dans le point de génération examiné. Ces distinctions aident à choisir les éléments correspondant au paiement.
+
+## Conservez la preuve avec son objet et son résultat
+
+Gardez ensemble identifiant, adresse destinataire, référence pertinente et résultat dans vos archives privées. Notez réseau, nœud et date du contrôle. Ne conservez que les informations nécessaires à cet objectif. Le destinataire de la preuve peut refaire le contrôle indépendamment plutôt que se fier à une capture du résultat d’un tiers.
+
+Un [message signé](/fr/blog/blocknet-sign-verify-message/) a une autre fonction : montrer le contrôle de la clé de signature d’une adresse pour un message précis. Utilisez la preuve pour une transaction et le parcours des messages pour un défi de propriété convenu. Le [guide de lecture seule](/fr/blog/blocknet-view-only-wallet/) explique pourquoi la visualisation reste sensible sans autoriser la dépense. Associez chaque preuve à la question à laquelle elle répond.
+
+<CTA target="seine" title="Recevez et suivez les paiements de minage Blocknet" text="Suivez les guides de minage seine, conservez vos versements et utilisez les preuves de portefeuille adaptées pour vérifier un paiement." />

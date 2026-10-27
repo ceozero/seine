@@ -1383,6 +1383,7 @@ pub(super) fn run_pool_mining_loop(
     }
 
     if !backends.is_empty() {
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::QuiescingBackends);
         info("MINER", "shutting down: cancelling pool work...");
         if let Err(err) =
             super::cancel_backend_slots(backends, RuntimeMode::Mining, backend_executor)

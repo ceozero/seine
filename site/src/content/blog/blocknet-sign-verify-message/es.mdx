@@ -1,0 +1,93 @@
+---
+title: 'Firma y verifica mensajes con una cartera Blocknet'
+description: 'Firma un mensaje Blocknet para demostrar el control de una dirección. Verifica el texto y la firma exactos, usa un reto nuevo e interpreta el resultado.'
+tags: ['Blocknet', 'Cartera', 'Firmas']
+faq:
+  - q: '¿Firmar un mensaje Blocknet envía monedas?'
+    a: 'El endpoint revisado firma texto con la clave de gasto de la cartera y devuelve una firma. No construye ni transmite un pago. Quien comprueba la firma necesita la dirección, el mensaje exacto y la firma. Lee el texto solicitado: un servicio puede usarlo para autorizar una acción propia.'
+  - q: '¿Puedo verificar una firma sin abrir una cartera?'
+    a: 'Sí. El comando verify del cliente oficial llama al endpoint público de verificación, que no exige una cartera cargada. Necesita un core compatible en ejecución, la dirección completa, el mensaje exacto y la firma. Comprueba esa combinación sin pedir la semilla, contraseña ni claves privadas del firmante.'
+  - q: '¿Qué demuestra una firma de mensaje Blocknet válida?'
+    a: 'Demuestra que el mensaje verifica con la clave pública de gasto de la dirección indicada. Usa un reto nuevo acordado cuando necesites comprobar el control actual. No establece la identidad legal de una persona, su saldo ni un pago completado; una firma antigua válida puede volver a presentarse.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Usa una firma de mensaje Blocknet para demostrar el control de una dirección sin realizar un pago. Esta guía sigue el CLI oficial v1.2.0 y core v0.22.0, comprobados el 27 de octubre de 2026. Prepararás un reto claro, lo firmarás en la cartera elegida y verificarás juntos la dirección completa, el mensaje y la firma.
+
+## ¿Cómo se firma y verifica un mensaje Blocknet?
+
+<Answer>
+Carga tu cartera completa, confirma su dirección y usa el comando sign para firmar el texto acordado. Comparte la dirección, el mensaje exacto y la firma resultante. La otra persona usa verify para comprobar los tres valores y confirma que el mensaje corresponde al propósito y al reto nuevo que solicitó.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Una cartera firma un mensaje acordado y otra persona lo comprueba junto con la dirección y la firma." width="1200" height="675" loading="lazy" />
+
+## Acuerda qué significará el mensaje firmado
+
+Empieza con una petición concreta: ¿qué dirección debe demostrar control, ante quién y para qué acción? Una [prueba de pago](/es/blog/blocknet-payment-proof/) establece detalles de una transacción. Una firma de mensaje sirve cuando la cuestión es el control de una clave de firma, por ejemplo para confirmar una dirección asociada a una cuenta. La [guía de carteras](/es/blog/blocknet-wallet-for-mining/) explica cómo crear y abrir la cartera que firmará.
+
+Pide al verificador un reto nuevo e impredecible para esta solicitud. Incluye contexto suficiente para identificar el servicio o destinatario y la acción prevista, y acuerda una caducidad si el proceso la necesita. Son reglas de la aplicación: el verificador de firmas no impone automáticamente novedad, caducidad ni uso único. Quien verifica debe comparar el mensaje con la petición y registrar cuándo se ha utilizado el reto.
+
+## Abre la cartera completa prevista
+
+Conéctate a tu core de mainnet en ejecución desde una terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Dentro del intérprete interactivo, carga la cartera y comprueba su dirección:
+
+```text
+load
+address
+```
+
+Selecciona el archivo correcto y desbloquéalo mediante el cliente si se solicita. Compara la dirección completa con la esperada por el verificador, especialmente si guardas varios archivos de cartera en el mismo equipo.
+
+El [core revisado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) firma mensajes con la clave privada de gasto de la cartera. Una [cartera de solo lectura](/es/blog/blocknet-view-only-wallet/) no puede realizar esta operación. Mantén la cartera completa en el equipo previsto; quien verifica solo necesita la firma resultante e información pública. No necesitas enviar fondos ni exportar un archivo de cartera para completar la firma.
+
+## Prepara el texto exacto antes de firmar
+
+Lee toda la solicitud y confirma que aceptas su propósito. El cliente oficial lee una línea, elimina espacios al principio y al final y rechaza mensajes vacíos o de más de 1024 bytes. El límite cuenta bytes, por lo que los caracteres no ASCII pueden ocupar varios. Usa una línea breve e inequívoca y conserva el texto exacto enviado.
+
+Mantén mayúsculas, puntuación y espacios internos al pasar el mensaje al verificador. Un editor o aplicación de chat puede sustituir comillas o modificar el texto copiado; compara el mensaje real si falla la verificación. Para iniciar sesión o gestionar una cuenta, sigue el formato de reto documentado por el servicio. No reescribas silenciosamente el texto solicitado: debe comprobarse el reto concreto emitido.
+
+## Firma el mensaje en el intérprete oficial
+
+Inicia la solicitud dentro del intérprete interactivo:
+
+```text
+sign
+```
+
+El cliente pide el texto. Pega el mensaje de una sola línea acordado y pulsa Intro. Si termina correctamente, imprime una firma hexadecimal. Copia la salida completa conservando todos sus caracteres. La [implementación del cliente](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) envía el mensaje al endpoint de firma de la cartera; esta operación no crea ni transmite una transacción.
+
+Entrega la dirección completa, el mensaje exacto y la firma como valores separados. Etiquétalos claramente para no confundir la firma con el texto o una dirección. Mantén privados la semilla de recuperación, las claves privadas y la contraseña. La [guía de semillas](/es/blog/seed-phrase-explained/) explica el material de recuperación; nada de ello forma parte de las pruebas que envías a quien comprueba una firma.
+
+## ¿Cómo verifica la firma la otra persona?
+
+Usa la solicitud de verificación del intérprete oficial con un core compatible en ejecución:
+
+```text
+verify
+```
+
+Introduce primero la dirección completa, después el mensaje exacto y finalmente la firma hexadecimal. La [referencia del intérprete](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documenta esta secuencia. La verificación no necesita una cartera cargada, así que puede comprobar las pruebas sin importar la cartera del firmante ni manejar claves privadas.
+
+El cliente revisado muestra `Signature is VALID` si la combinación verifica y `Signature is INVALID` si no. Un error de formato es un resultado distinto: revisa todos los campos y conserva las pruebas originales antes de repetir. Si el mensaje o la dirección difieren de la solicitud esperada, resuelve la diferencia incluso cuando la firma sea matemáticamente válida para los valores suministrados.
+
+## Interpreta el resultado en el contexto de la solicitud
+
+Una firma válida verifica el mensaje con la clave pública de gasto codificada en la dirección suministrada. No establece una identidad legal, muestra un saldo ni demuestra un pago. Para cuestiones de pagos, usa el [registro de envío](/es/blog/send-receive-blocknet/), la [consulta del explorador](/es/blog/blocknet-explorer-guide/) y la prueba específica de la transacción. Elige la evidencia que responda a la pregunta real, sin tratar cualquier firma válida como un recibo.
+
+Comprueba que el reto sea nuevo y esté dirigido al destinatario previsto antes de aceptarlo. Alguien puede copiar un mensaje y firma válidos y presentarlos de nuevo. Un servicio que necesita autorización de un solo uso debe aplicar esa regla. Igualmente, una caducidad escrita en el mensaje solo tiene efecto si el verificador la comprueba. Estas comprobaciones vinculan la validez criptográfica con la acción acordada.
+
+## Conserva un registro de verificación claro
+
+Guarda juntos la dirección, el mensaje exacto, la firma, el contexto de la solicitud y el resultado cuando tu proceso necesite un registro de auditoría. Anota la hora de comprobación aparte de cualquier fecha escrita por el firmante. Evita información personal ajena al propósito: cualquiera que reciba el texto firmado puede leerlo y copiarlo. Comparte las pruebas con el verificador previsto por el canal acordado.
+
+Si recibes pagos de minería en esa cartera, el [seguimiento del pool](https://bntpool.com/blog/es/track-your-miner-on-bntpool/) sigue proporcionando los registros de shares y pagos; una firma de mensaje no los sustituye. La [guía de nodos](/es/blog/run-blocknet-node/) cubre el core necesario para el intérprete oficial. Tras completar la comprobación acordada, conserva el acceso de firma en tu cartera completa y deja la verificación pública a quienes comprueben el resultado.
+
+<CTA target="seine" title="Usa tu dirección Blocknet con seine" text="Sigue las guías de configuración de seine para minar hacia tu dirección y organizar tus registros de firmas y pagos." />

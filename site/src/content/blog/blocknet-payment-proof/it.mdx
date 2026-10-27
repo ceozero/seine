@@ -1,0 +1,102 @@
+---
+title: 'Come provare e verificare un pagamento Blocknet'
+description: 'Verifica un pagamento Blocknet con la chiave della transazione e l’indirizzo destinatario. Genera la prova, controlla gli output corrispondenti e il risultato.'
+tags: ['Blocknet', 'Pagamenti', 'Wallet']
+faq:
+  - q: 'Cosa serve per verificare una prova di pagamento Blocknet?'
+    a: 'Servono ID completo, chiave della transazione fornita dal wallet mittente e indirizzo completo del destinatario. Invia questi campi all’endpoint di verifica di un nodo compatibile. Controlla sia la validazione della chiave sia gli output corrispondenti all’indirizzo, poi confronta l’importo con il registro del pagamento.'
+  - q: 'Una prova valida significa che il destinatario è stato pagato?'
+    a: 'Un risultato valido stabilisce che la chiave fornita appartiene alla transazione. Devi anche esaminare gli output corrispondenti al destinatario. Una chiave valida senza output corrispondenti non dimostra un pagamento a quell’indirizzo. Controlla importo, inclusione nella catena e conferme separatamente.'
+  - q: 'Un wallet Blocknet di sola visualizzazione può generare prove?'
+    a: 'Il core verificato deriva la prova dal materiale privato di visualizzazione del wallet, quindi il corrispondente wallet di sola visualizzazione può provare una transazione inviata da quel wallet. La transazione deve essere nella catena locale e la chiave derivata deve corrispondere. Ciò non concede autorità di spesa al wallet di visualizzazione.'
+sourceHash: 'c15c545f0bd0'
+translation: draft
+---
+
+Verifica un pagamento Blocknet specifico confrontando chiave e indirizzo destinatario con la transazione. La guida segue CLI ufficiale v1.2.0 e core v0.22.0, verificati il 27 ottobre 2026. Spiega generazione della prova, condivisione dei campi corretti e lettura del risultato insieme allo stato nella catena.
+
+## Come dimostrare un pagamento Blocknet?
+
+<Answer>
+Apri il wallet mittente, esegui prove con l’ID e fornisci la chiave risultante al verificatore previsto. La verifica usa chiave, ID e indirizzo destinatario. Conferma la validità della chiave, poi esamina output corrispondenti e importo per quell’indirizzo.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="Il registro e la chiave della transazione vengono controllati rispetto all’indirizzo destinatario per identificare gli output corrispondenti." width="1200" height="675" loading="lazy" />
+
+## Parti dal pagamento che vuoi dimostrare
+
+Conserva l’ID completo del registro di invio. La [guida all’invio](/it/blog/send-receive-blocknet/) spiega dove il client ufficiale lo stampa; la [guida all’explorer](/it/blog/blocknet-explorer-guide/) come trovare transazione e blocco. L’ID pubblico localizza il trasferimento, ma la pagina ordinaria non rivela l’importo privato pagato a uno specifico indirizzo.
+
+Concordate quale indirizzo e registro controllare. Usa l’indirizzo completo associato al pagamento, non un’etichetta abbreviata o una schermata. Se hai pagato tramite nome, conserva l’indirizzo usato. La prova aiuta a controllare una ricevuta o risolvere un dubbio con il destinatario; non stabilisce l’identità reale di una persona.
+
+## Genera la chiave nel wallet mittente
+
+Collegati dal terminale al core mainnet in esecuzione:
+
+```sh
+blocknet attach mainnet
+```
+
+Apri il wallet mittente e controlla i registri nella shell interattiva:
+
+```text
+load
+address
+history
+```
+
+Seleziona il file giusto e sbloccalo tramite il client se necessario. Per la preparazione iniziale usa la [guida al wallet](/it/blog/blocknet-wallet-for-mining/).
+
+Esegui nella shell sostituendo il segnaposto con l’ID completo:
+
+```text
+prove <txid>
+```
+
+Il [client verificato](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) accetta un ID esadecimale di 64 caratteri e mostra la chiave restituita. Il core cerca la transazione nella catena locale e verifica che la chiave derivata corrisponda alla pubblica. Usa il wallet che l’ha inviata; la generazione non crea un altro pagamento.
+
+## Quali informazioni condividere?
+
+Condividi ID, chiave restituita e indirizzo destinatario tramite il canale concordato. La chiave è specifica di questa transazione. Mantieni privati seed di recupero, chiave di spesa, password e chiave privata di visualizzazione dell’intero wallet. Il verificatore necessita dei campi della prova, non dell’accesso al wallet aperto o al materiale di recupero.
+
+Considerala una divulgazione deliberata: chiave e indirizzo permettono di identificare output corrispondenti, importi ed eventuali memo recuperabili della transazione. Condividi con chi necessita della prova. La [guida ai memo](/it/blog/blocknet-encrypted-memos/) spiega le note; considera il loro contenuto prima di condividere. Una chiave già condivisa può essere copiata: usa il canale privato concordato col destinatario.
+
+## Verifica tramite l’API documentata del core
+
+L’[API ufficiale](https://blocknetcrypto.com/api) offre un endpoint pubblico senza richiedere wallet caricato o token bearer. Preferisci un nodo che controlli. Salva il modello come `proof.json` in una cartella privata e sostituisci tutte e tre le stringhe segnaposto con i campi reali. Mantieni i nomi dei campi.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+Dalla cartella invia il file all’indirizzo API del nodo:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Usa la porta locale configurata se diversa; in Windows PowerShell usa `curl.exe`. La [guida al nodo](/it/blog/run-blocknet-node/) copre l’avvio del core. La richiesta verifica prove e non invia monete. Un server remoto rivela i campi trasmessi al suo operatore.
+
+## Separa validità della chiave e corrispondenze
+
+Controlla prima `valid`: true indica corrispondenza con la chiave pubblica della transazione. Poi esamina `outputs`: le voci con `match` a true appartengono all’indirizzo fornito. `total_matched` somma i loro importi. Una chiave valida può comunque produrre zero corrispondenze se l’indirizzo non ha ricevuto quella transazione.
+
+L’API esprime importi in unità atomiche: 100.000.000 unità equivalgono a 1 BNT. Converti il totale prima del confronto con una fattura in BNT; conserva tutte le cifre intere senza arrotondare troppo presto. Confronta i memo restituiti con il registro atteso. Verifica inclusione e conferme separatamente nel nodo o explorer. Il risultato da solo non dice che una fattura sia pagata interamente o che i fondi siano ora spendibili.
+
+## Risolvi differenze con i registri originali
+
+Per una chiave non valida confronta ID completo e chiave con l’output originale del mittente. Per chiave valida senza corrispondenze, ricontrolla l’indirizzo completo usato. Se la transazione non viene trovata durante la generazione, verifica rete e progresso della catena: l’endpoint esaminato richiede una transazione in catena. Segui la [guida alla sincronizzazione](/it/blog/blocknet-wallet-not-syncing/) se la catena locale è indietro.
+
+Per i pagamenti del pool, il tuo wallet ricevente non è il wallet mittente della transazione. Parti dal [registro del pool](https://bntpool.com/blog/it/track-your-miner-on-bntpool/) e dalla cronologia in entrata; chiedi eventuale prova al mittente effettivo. Anche le ricompense coinbase non hanno prova del mittente nell’endpoint di generazione verificato. Queste distinzioni aiutano a scegliere evidenza coerente con il pagamento.
+
+## Conserva prova, scopo e risultato insieme
+
+Archivia insieme ID, indirizzo destinatario, riferimento pertinente e risultato nei registri privati. Annota rete, nodo e momento della verifica. Conserva solo le informazioni necessarie allo scopo. Chi riceve la prova può ripetere il controllo autonomamente senza affidarsi alla schermata del risultato altrui.
+
+Un [messaggio firmato](/it/blog/blocknet-sign-verify-message/) ha un altro scopo: dimostra il controllo della chiave di firma di un indirizzo per un messaggio specifico. Usa la prova di pagamento per la transazione e il flusso dei messaggi per una verifica di proprietà concordata. La [guida alla sola visualizzazione](/it/blog/blocknet-view-only-wallet/) spiega perché l’accesso resta sensibile pur senza autorizzare spese. Associa ogni prova alla domanda cui risponde.
+
+<CTA target="seine" title="Ricevi e segui pagamenti di mining Blocknet" text="Segui le guide di mining seine, conserva i registri dei pagamenti e usa le prove appropriate del wallet quando controlli un pagamento." />

@@ -40,7 +40,7 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
 - **Impact on writing:** everything below about Argon2id, 2 GB per thread, the H/s benchmarks, memory-hardness and the CPU vs GPU balance describes the network **before Faraday**.
   - The PoW is planned to change about 4 months after this sheet's date.
   - Undated "evergreen" mining articles will go stale. Date posts, or add a "before the Faraday upgrade" qualifier.
-  - Only publish Faraday details that blocknetcrypto.com states publicly. Unannounced parameters (PoW, block time, reward changes) stay out of posts until upstream publishes them.
+  - Only publish Faraday details that blocknetcrypto.com states publicly. Unannounced parameters stay out of posts. The October 27 post now publicly proposes block-time and reward changes; mining details are reserved for a separate future post.
 
 ---
 
@@ -478,7 +478,7 @@ Added by this sheet from the evidence:
 - **Ticker on exchanges:** is BNT the official listed ticker anywhere? Are there any exchange listings? The site states neither. No price or market data was checked.
 - **Pre-relaunch chain:** code calls the 2026-02-15 genesis a "relaunch". History of the first launch (~2026-02-05 to 02-15), and whether any coins carried over, is unverified. Genesis has no coinbase, so nothing carried over on-chain.
 - **Fees burned?** Coinbase must equal the subsidy exactly (`block.go:663-680`). Fees seem unclaimed, but no doc states this. Confirm with the maintainer before writing "fees are burned".
-- **Faraday effect on emission and block time:** not stated publicly yet. Don't speculate in posts; the 4-year / ~100M schedule framing may change.
+- **Faraday effect on emission and block time:** the October 27 official post proposes 10-minute target blocks and a doubled block reward, preserving the planned daily issuance rate. These remain proposed rules, not live-chain behavior; see the dated update below.
 - **Faraday miner support:** when seine ships Faraday support, and whether fees stay the same, is not public yet.
 - **Other Stratum miners on bntpool:** login requires protocol v2 + `submit_claimed_hash`. Whether any non-seine miner works is unknown.
 - **bntpool payout interval** in production. Also, are there regional endpoints? `eu.bntpool.com` appears only in a unit test (`seine@master:src/dev_fee.rs:279`). Do not advertise it.
@@ -651,3 +651,54 @@ A running miner's current/session/device/pool measurements have different scopes
 ## Faraday plan and node lifecycle (October 26, 2026)
 
 The official Faraday page describes a future network upgrade, with tentative activation around February 16, 2027 and a proposed one-year wallet migration period ending around February 16, 2028. Old-format coins would become unspendable after that window. Do not describe planned cryptography, mining rules or speedups as shipped behavior. CLI v1.2.0 manages a background core separately from attach; setup schedules updates, and outer status can trigger automatic update checks that restart unpinned managed cores. Attach status is distinct. Pinned sources and scope are recorded in `research/faraday-and-node-2026-10-26.md`.
+
+## Payment and explorer workflow (October 27, 2026)
+
+CLI v1.2.0 at `948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b` previews fixed-amount sends before explicit confirmation, then prints the transaction ID and explorer link. History combines incoming outputs and recorded outgoing sends. The public explorer searches block height/hash or transaction hash, shows public fees and transaction structure, and leaves ordinary transfer amounts private. Mempool means zero confirmations; included count is current height minus containing height plus one. Private receipt is checked in the wallet. These are dated source/UI observations; details, screenshots and source locations are in [payments-and-explorer-2026-10-27.md](research/payments-and-explorer-2026-10-27.md).
+
+## Wallet scanning and viewing access (October 27, 2026)
+
+CLI v1.2.0 distinguishes core download from wallet output scanning: `sync` scans downloaded blocks; `outputs` can report scan progress, and `balance` warns about lag using the wallet's scanned height. `viewkeys` authorizes with the full wallet password and creates an encrypted viewing file with a separately chosen password. That file watches incoming funds and cannot send or sign; its private viewing material remains sensitive and is not a spending backup. Details, source lines and intent boundaries: [wallet sync and viewing research](research/wallet-sync-and-view-only-2026-10-27.md).
+
+## Payment proofs and message signatures (October 27, 2026)
+
+CLI v1.2.0 and core v0.22.0 provide distinct workflows: transaction proof generation returns a transaction key; public verification separately checks key validity and recipient output matches. Message signing uses the full wallet's spending key, accepts up to 1024 bytes, and returns a signature without broadcasting a payment. Public signature verification checks address/message/signature; challenge freshness and intended authorization remain application rules. Source pins, line references and the explorer UI observation are recorded in [payment proofs and messages research](research/payment-proofs-and-messages-2026-10-27.md).
+
+## Wallet backup and recovery (October 27, 2026)
+
+- Released CLI v1.2.0 supports loading a full wallet-file copy with its existing password or importing the original recovery seed into a newly named file with a new password. It lists files in the configured core wallet directory and does not overwrite same-name local backups. Seed display is not available for every wallet; file recovery and seed recovery are separate paths. Source: `blocknetprivacy/blocknet@948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b:attach_wallet.go:98-337,1072-1268`.
+- Core v0.22.0 imports into a new file, refuses existing-file overwrite and starts wallet catch-up scanning. Verify the full address and scan state after recovery; no universal restoration of local payment annotations or outgoing-history records is claimed. Source: `blocknetprivacy/core@5a0a5b510c1dce46f4eeb12c33a291052e44e7b3:api_handlers.go:1980-2087`; CLI `attach_wallet.go:757-882`. See `research/wallet-backup-restore-2026-10-27.md`.
+
+## Release guard refresh (October 27, 2026)
+
+v0.2.39 is the latest published seine release. Its fee implementation, NVIDIA setup guide, configuration guide and release workflow are byte-identical to the reviewed v0.2.38 sources; all five platform archives remain available. The mining, NVIDIA, antivirus and Linux setup articles still describe supported behavior. Existing version-labelled benchmark and feature history remains historical. The pool calculator’s flat 2% miner-fee assumption remains valid; no pool deployment is needed for this verification. Source: GitHub latest-release API and `git diff v0.2.38..v0.2.39` for the four paths pinned in `release-facts.json`.
+
+## Faraday official explanation (October 27, 2026)
+
+Source: https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/ (retrieved October 27, 2026 EDT). This supersedes the earlier overview where more specific. The post explicitly says Faraday is still being built and tested and its numbers, dates and design can change.
+
+- Planned February 2027 activation at block 103,680; homepage approximate February 16 remains a tentative calendar estimate.
+- Hash-based spend proofs built with Plonky3 and ML-KEM payment detection. The privacy set is the set of **Faraday coins**, growing as coins enter the format, not every old-format coin immediately.
+- One year after activation to migrate; unmigrated coins become permanently unspendable. Migrated coins wait about one week before spending. Exact migration steps remain forthcoming; current wallet backups do not migrate coins.
+- Existing 12-word recovery phrases continue; new wallets receive 24 words. Key-imported wallets without recovery words need a new wallet and a coin transfer. Proposed addresses are about 1,700 characters, with copy/paste, QR codes and Blocknet ID for usability.
+- Proposed target block time doubles from 5 to 10 minutes while block reward doubles, preserving planned daily issuance. No invented live reward or hardware-performance claim.
+- Maximum reorg depth becomes 60 blocks; newly mined coins wait 60 blocks (about 10 hours at target). Payment safety remains 10 confirmations (about 100 minutes at target). These are timing estimates, not guarantees.
+- Individual spend proofs are combined into a block proof and discarded after finality. The post describes development testing; do not turn its results into an independent audit, our own benchmark or released-mainnet performance.
+- Mining changes get a separate post; no future seine flags or hardware ranking are announced. Node auto-update statements must be read alongside actual version-pinning policy.
+
+See `research/faraday-official-post-2026-10-27.md` for the refresh scope.
+
+## Wallet, node and miner roles — October 27, 2026
+
+- The official core combines node, wallet and mining functionality; the attached CLI shell is a client and closing it leaves the background core running. Mining is separately controlled. Source: CLI v1.2.0 `948af4d`, `docs/reference-core.md:21–23,700–735,962–969`.
+- Saving `wallet_file` remembers a path, not an unlocked wallet session. After starting the core, attach and use `load` with the wallet password. Source: same pin, `docs/reference-wallet.md:90–94`.
+- The wallet can scan previously downloaded blocks to find its outputs. Receipt does not require the receiving wallet application to be online; its later displayed balance depends on chain and wallet scan progress. Derived from same pin, `docs/reference-core.md:588–616`, and current-chain output/scanner behavior.
+- seine defaults to pool mode; the mining node connection belongs to the pool in that workflow. Its separate daemon mode needs the user's running, authenticated core. Source: seine v0.2.39 `8a822f7`, `docs/guides/solo-mining.md`, `src/config.rs`. Detailed evidence and scope: `batches/2026-10-wallet-node-miner/research.md`.
+
+## Desktop wallet interface reference
+
+The visual guide uses GUI v0.22.0 (`661fff98e047f395489a0d2eba88f572c2a89935`), verified October 27, 2026 (EDT). Its Send action first requests a dry-run fee preview; Confirm Send authorizes the payment separately. Dashboard distinguishes node sync, wallet scan and spendable/pending balances. The new-wallet flow requests backup and confirmation of 12 recovery words. These are versioned interface facts, not promises about future releases. See [desktop-wallet research](batches/2026-10-desktop-wallet/research.md) for pinned source locations and screenshot methodology.
+
+## First-receipt visual reference
+
+The first-BNT guide uses the same pinned GUI v0.22.0 as the desktop walkthrough. History opens a transaction detail with its hash, status, block, confirmations and the wallet-owned received amount; Dashboard supplies the spendable reading after sync and scanning. The 1.25 BNT receipt, fee, hash and chain readings in the captures are labeled local demo data. No new payout constants or receipt timing guarantees are introduced. See [first-BNT research](batches/2026-10-first-blocknet/research.md).

@@ -1,0 +1,103 @@
+---
+title: 'How to prove and verify a Blocknet payment'
+description: 'Verify a Blocknet payment with its transaction key and recipient address. Generate the proof, check matched outputs and understand what the result establishes.'
+date: 2026-10-27
+tags: ['Blocknet', 'Payments', 'Wallet']
+faq:
+  - q: 'What do I need to verify a Blocknet payment proof?'
+    a: 'You need the complete transaction ID, the transaction key supplied by the sending wallet, and the intended recipient’s full address. Submit those fields to a compatible node’s proof-verification endpoint. Check both the key-validation result and the outputs matched to that address, then compare the amount with the payment record.'
+  - q: 'Does a valid Blocknet proof mean the recipient was paid?'
+    a: 'A valid result establishes that the supplied transaction key belongs to the transaction. You must also inspect the matched outputs for the recipient address. A valid key with no matching outputs does not establish payment to that address. Review the amount and check chain inclusion and confirmations separately.'
+  - q: 'Can a view-only Blocknet wallet generate payment proofs?'
+    a: 'The reviewed core derives the transaction proof using the wallet’s private viewing material, so a corresponding view-only wallet can generate a proof for a transaction sent by that wallet. The transaction must be on the local chain, and its derived key must match. This does not grant the viewing wallet spending authority.'
+related: [send-receive-blocknet, blocknet-explorer-guide, blocknet-sign-verify-message, blocknet-view-only-wallet]
+image: /assets/blog/blocknet-payment-proof.svg
+---
+
+Verify a specific Blocknet payment by matching its transaction key and recipient address to the transaction. This guide follows official CLI v1.2.0 and core v0.22.0, checked on October 27, 2026. It covers generating the proof, sharing the right fields and reading the result alongside the payment’s chain status.
+
+## How do you prove a Blocknet payment?
+
+<Answer>
+Open the sending wallet, run its prove command with the transaction ID, and give the resulting transaction key to the intended verifier. Verification uses that key, the transaction ID and the recipient address. Confirm that the key is valid, then inspect the matched outputs and amount for that address.
+</Answer>
+
+<img src="/assets/blog/blocknet-payment-proof.svg" alt="A transaction record and transaction key are checked against a recipient address to identify matching payment outputs." width="1200" height="675" loading="lazy" />
+
+## Start with the payment you want to establish
+
+Save the full transaction ID from your sending record. The [sending guide](/blog/send-receive-blocknet/) explains where the official client prints it, while the [explorer guide](/blog/blocknet-explorer-guide/) covers finding the transaction and its containing block. A public transaction ID locates the transfer, but the ordinary explorer page does not disclose the private amount paid to a particular address.
+
+Agree which recipient address and payment record you are checking. Use the complete address associated with that payment rather than a shortened label or screenshot. If you paid by name, retain the address used for the transaction. The proof is useful for checking a specific receipt or resolving a payment question with the recipient; it does not establish someone’s real-world identity.
+
+## Generate the transaction key in the sending wallet
+
+Attach to your running mainnet core from a terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Open the sending wallet and inspect its records inside the interactive shell:
+
+```text
+load
+address
+history
+```
+
+Select the intended wallet file and unlock it through the client if needed. If you need initial setup, use the [wallet guide](/blog/blocknet-wallet-for-mining/).
+
+Run this command inside the shell, replacing the placeholder with the complete transaction ID:
+
+```text
+prove <txid>
+```
+
+The [reviewed client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) accepts a 64-character hexadecimal transaction ID and displays the returned transaction key. The core looks for the transaction on its local chain and checks that the derived key matches its public key. Use the wallet that sent it; generation does not create another payment.
+
+## Which information should you share?
+
+Share the transaction ID, returned transaction key and intended recipient address through the agreed channel. The transaction key is specific to this transaction. Keep your recovery seed, spending key, wallet password and wallet-wide private viewing key private. The verifier needs the transaction proof fields, not access to your loaded wallet or its recovery material.
+
+Treat this as deliberate disclosure of payment information: the key and a recipient address let a verifier identify matching outputs, amounts and any recoverable memo in that transaction. Share it with the people who need that evidence. The [memo guide](/blog/blocknet-encrypted-memos/) explains payment notes; consider their contents before sharing a proof. A key already shared can be copied, so use the recipient’s agreed private channel.
+
+## Verify through the documented core API
+
+The [official API](https://blocknetcrypto.com/api) provides a public proof-verification endpoint that does not require a loaded wallet or bearer token. Prefer a node you control for this procedure. Save the following template as `proof.json` in a private working folder and replace all three placeholder strings with the actual proof fields. Keep the field names unchanged.
+
+```json
+{
+  "txid": "REPLACE_WITH_TRANSACTION_ID",
+  "tx_key": "REPLACE_WITH_TRANSACTION_KEY",
+  "address": "REPLACE_WITH_RECIPIENT_ADDRESS"
+}
+```
+
+From that folder, submit the file to your node’s API address:
+
+```sh
+curl -H "Content-Type: application/json" --data-binary @proof.json http://127.0.0.1:8332/api/verify-proof
+```
+
+Use your configured local port if different; in Windows PowerShell, use `curl.exe` for this command. The [node guide](/blog/run-blocknet-node/) covers running a core. This request checks evidence and does not send coins. Using a remote server instead discloses the submitted proof fields to that operator.
+
+## Read key validity and recipient matches separately
+
+First inspect `valid`. A true value means the transaction key matches the transaction’s public key. Then inspect `outputs`: entries with `match` set to true belong to the supplied recipient address. The `total_matched` field is the sum of their amounts. A valid key can still produce zero matching outputs when the supplied address did not receive that transaction.
+
+The API reports amounts in atomic units: 100,000,000 units equal 1 BNT. Convert the total before comparing it with a BNT-denominated invoice; keep all integer digits rather than rounding early. Check any returned memo against the expected record. Verify the transaction’s inclusion and confirmations separately through your node or explorer. A proof result alone does not tell you that an invoice was fully paid or that funds are currently spendable.
+
+## Resolve a mismatch using the original records
+
+For an invalid key, compare the complete transaction ID and transaction key with the sender’s original output. For a valid key with no recipient matches, recheck the full address used for that payment. If the transaction is not found during proof generation, check the node’s network and chain progress: the reviewed generation endpoint requires an on-chain transaction. Follow the [sync guide](/blog/blocknet-wallet-not-syncing/) when the local chain is behind.
+
+For pool payouts, your receiving wallet is not the sending wallet that generated the pool transaction. Start with the [pool tracking record](https://bntpool.com/blog/track-your-miner-on-bntpool/) and your wallet’s incoming history; obtain any sender proof from the actual sender. Coinbase mining rewards also have no sender proof in the reviewed generation endpoint. These distinctions help you select evidence that corresponds to the payment you are checking.
+
+## Keep the proof with its purpose and result
+
+Store the transaction ID, recipient address, relevant payment reference and verification result together in your private records. Record which network and node you checked and when you checked it. Retain only the payment information needed for that purpose. Someone receiving the proof can independently repeat the check rather than relying on a screenshot of another person’s result.
+
+A [signed message](/blog/blocknet-sign-verify-message/) serves a different purpose: it demonstrates control of the signing key for an address and a particular message. Use the payment proof for transaction-specific evidence and the message workflow for an agreed ownership challenge. The [view-only guide](/blog/blocknet-view-only-wallet/) explains why viewing access remains sensitive even though it cannot authorize spending. Keep each kind of evidence associated with the question it answers.
+
+<CTA target="seine" title="Receive and track Blocknet mining payments" text="Follow seine’s mining guides, keep your payout records, and use the appropriate wallet evidence when checking a payment." />

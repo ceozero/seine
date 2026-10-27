@@ -1,0 +1,112 @@
+---
+title: 'Carteira Blocknet sem sincronizar ou com saldo incorreto'
+description: 'Verifique uma carteira Blocknet ainda sincronizando: separe o progresso do nó da varredura, confira pagamentos e consulte o saldo depois da varredura.'
+tags: ['Blocknet', 'Carteira', 'Solução de problemas']
+faq:
+  - q: 'Por que meu nó Blocknet está sincronizado, mas a carteira está atrasada?'
+    a: 'O nó baixa e valida a cadeia, enquanto a carteira procura suas próprias saídas nos blocos baixados. São etapas separadas. Uma carteira restaurada pode continuar a varredura depois que o nó se atualiza. Compare a altura da varredura com a altura local da cadeia antes de considerar completo o saldo exibido.'
+  - q: 'O comando sync baixa blocos ausentes?'
+    a: 'No cliente de linha de comando verificado, sync pede que a carteira examine blocos já disponíveis no core. A sincronização de rede é outra tarefa do nó. Se a cadeia local está atrasada e não há pares conectados, verifique primeiro a conectividade; a varredura não encontra pagamentos em blocos que o nó não baixou.'
+  - q: 'Devo enviar de novo se o pagamento não aparece no saldo?'
+    a: 'Primeiro acompanhe o ID da transação existente, confirme a carteira receptora e a rede e verifique varredura e confirmações. O saldo exibido sozinho não determina o resultado de um envio. Consulte o registro original da carteira ou do pagamento do pool antes de preparar outro pagamento, pois outro envio é uma nova instrução.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Identifique qual etapa atrasa o saldo Blocknet: o download da cadeia pelo nó, a varredura das saídas pela carteira ou um pagamento ainda indisponível para gastar. Este guia segue a CLI oficial v1.2.0 e o core público v0.22.0, verificados em 27 de outubro de 2026. Comece com uma carteira já criada ou restaurada; o [guia de configuração](/pt-br/blog/blocknet-wallet-for-mining/) cobre essa preparação.
+
+## Por que minha carteira Blocknet ainda sincroniza?
+
+<Answer>
+Confira o progresso da cadeia e as conexões do nó, depois a varredura da carteira carregada. O nó reúne blocos; a carteira procura seus pagamentos neles. Verifique endereço e rede, deixe terminar uma varredura que avança e compare o histórico com saldos disponíveis, pendentes e não confirmados antes de decidir o que precisa de atenção.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Os blocos chegam ao nó local antes que a carteira os examine e atualize seus registros de pagamentos." width="1200" height="675" loading="lazy" />
+
+## Comece pela carteira e rede desejadas
+
+Abra sua sessão mainnet existente no terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+No shell interativo, abra a carteira:
+
+```text
+load
+```
+
+Selecione o arquivo esperado. Se já estiver carregada, mas bloqueada, desbloqueie com a senha no prompt do cliente. Uma mensagem de carteira bloqueada indica um estado de acesso; não demonstra que o nó parou de baixar blocos.
+
+Execute separadamente estes comandos no shell:
+
+```text
+address
+status
+```
+
+Compare o endereço com seu registro de recebimento. Mainnet e testnet usam cores e carteiras separados. Confira também o arquivo selecionado: abrir uma carteira nova vazia não restaura um endereço antigo. Siga o [guia do nó](/pt-br/blog/run-blocknet-node/) se o core não estiver rodando ou attach não conseguir conectar.
+
+## O nó ou a varredura está atrasado?
+
+O status do nó descreve o progresso da cadeia e a conectividade. A carteira possui sua própria altura de varredura. No [cliente verificado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), o aviso de saldo compara essa posição com a cadeia ou a meta de sincronização. Assim, uma cadeia local atualizada pode coexistir com um saldo ainda atrasado. Leia as duas etapas em vez de confiar em uma única palavra de status.
+
+Examine as saídas da carteira:
+
+```text
+outputs
+```
+
+Quando não há saídas correspondentes e a varredura está atrasada, o cliente informa a altura examinada em relação à altura da cadeia. Compare uma leitura posterior com a anterior. Uma altura crescente indica avanço; uma lista vazia isolada não basta para concluir que falta um pagamento. Anote alturas e horários para uma comparação útil.
+
+## Confira a conexão se a cadeia está atrasada
+
+Se o próprio nó está atrasado, examine os pares conectados:
+
+```text
+peers
+```
+
+Sem pares, confira a internet do computador e as regras de firewall para o nó. Use a [referência oficial de solução de problemas](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) junto ao guia do nó. Observe a altura da cadeia ao longo do tempo, além da quantidade de pares: conexão e download concluído respondem a perguntas diferentes.
+
+Separe nas anotações a inicialização do nó e a varredura da carteira. Se um nó novo está baixando o histórico, deixe essa etapa avançar antes de avaliar se a carteira examinou um pagamento posterior. O [guia de checkpoints](https://bntpool.com/blog/pt-br/blocknet-checkpoints-fast-sync/) explica o caminho de sincronização rápida existente. Criar carteiras ou apagar dados da cadeia repetidamente não ajuda a identificar a etapa que avança.
+
+## Quando executar sync na carteira?
+
+Use o comando de varredura quando a carteira desejada estiver aberta e seus registros de saídas precisarem alcançar os blocos baixados:
+
+```text
+sync
+```
+
+A [referência do shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) descreve a busca de saídas próprias em blocos locais. É uma operação da carteira, separada da obtenção de blocos dos pares. Dê tempo à varredura antes de verificar a mesma observação novamente.
+
+O comando informa altura examinada e saídas encontradas, ou que a carteira já está atualizada. Confira saídas e saldo ao terminar. Se o cliente informar timeout, examine o progresso antes de repetir; um timeout do cliente sozinho não revela a posição final do scanner. Preserve o arquivo original e o backup de recuperação durante o diagnóstico.
+
+## Acompanhe um pagamento pelos registros
+
+Use o ID completo do histórico do remetente ou do registro de pagamento enviado pelo pool. O [guia do explorador](/pt-br/blog/blocknet-explorer-guide/) mostra como verificar status de rede e bloco que contém a transação. O registro público de inclusão informa onde ela está; a carteira receptora identifica suas saídas privadas. Compare os dados de recebimento com seu registro, em vez de esperar uma página pública de saldo por endereço.
+
+Depois examine os registros da própria carteira:
+
+```text
+history
+balance
+```
+
+Um valor pendente ou não confirmado é diferente de fundos disponíveis. Se aparece em uma dessas categorias, acompanhe as confirmações em vez de tratá-lo como ausente. Para mineração, o [passo a passo do pool à carteira](https://bntpool.com/blog/pt-br/pool-payout-missing-from-wallet/) distingue saldo não pago do pool, pagamento efetivo e recebimento na carteira.
+
+## A varredura terminou, mas o valor difere?
+
+Confira juntos arquivo da carteira, endereço receptor completo, rede e ID da transação. Confirme que compara o mesmo pagamento e a mesma categoria de saldo. Se for uma carteira somente de visualização, monitore entradas nela e use a carteira completa para decidir o que gastar; o [guia de visualização](/pt-br/blog/blocknet-view-only-wallet/) explica a separação. Concluir a varredura não muda o tipo da carteira.
+
+Se a carteira completa correta está atualizada e os registros ainda não conferem, preserve o arquivo e o backup antes de seguir a recuperação oficial. O [guia da seed](/pt-br/blog/seed-phrase-explained/) explica o material de recuperação; o guia de configuração cobre a importação. A recuperação deve acontecer no software da carteira. Nunca coloque seed, chave privada, arquivo de carteira ou senha em publicação pública de suporte.
+
+## Anote brevemente o que verificou
+
+Para continuar, anote versões do cliente e core, rede, altura do nó, altura da varredura, quantidade de pares e erro exato. Registre se os valores avançaram entre observações. Ao compartilhar logs, remova caminhos privados, detalhes de pagamentos e credenciais desnecessárias. Um registro conciso descreve a etapa que precisa de atenção sem expor acesso à carteira.
+
+Volte ao histórico e saldo da mesma carteira após a verificação específica. O resultado útil é o pagamento desejado aparecer com seu status atual real e a varredura correspondente estar atualizada. O [guia de envio e recebimento](/pt-br/blog/send-receive-blocknet/) conecta essa conferência final ao fluxo original. Guarde o ID para que futuras verificações acompanhem a mesma operação.
+
+<CTA target="seine" title="Conecte recompensas de mineração à carteira" text="Use os guias do seine para configurar a mineração e acompanhe os pagamentos do pool nos registros de recebimento da carteira." />

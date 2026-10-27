@@ -9,7 +9,17 @@ supported hardware only.
 
 ## Unreleased
 
+- **About 40-50% faster CPU hashing on Windows with AMD Zen 2 and Zen 3 processors** (measured on EPYC 7R13): the memory-streaming kernel is now used on Windows too.
+
+## v0.2.39
+
+- **About 23% more hashes in the first 20 minutes of mining on a 32-core AMD Zen 5 server** (measured on EPYC 9R45): automatic tuning now starts AMD Zen 2 to Zen 5 CPUs at their physical core count, settles on higher worker counts when they are faster, and stops re-testing slower kernels. Steady mining there rose about 17%.
 - **Up to about 6% faster CPU hashing on Linux with AMD Zen 3 processors** (measured on EPYC 7R13).
+- Closing a Windows console now allows brief cleanup, and slow telemetry uploads no longer leave completed runs marked as interrupted.
+- NVIDIA startup avoids panics from unused driver functions and reports missing driver or CUDA compiler libraries clearly.
+- Reliability reports now include stop origins, cleanup progress and loaded CUDA software versions to help diagnose interruptions.
+- Stopping during backend initialization now exits cleanly instead of reporting a startup failure.
+- Fixed shutdown hangs when a dashboard keeps the control API event stream open.
 
 ## v0.2.38
 

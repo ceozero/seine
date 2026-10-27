@@ -207,17 +207,17 @@ def main():
     if data.get("servers"):
         hbar_chart(data["servers"], "Servers",
                    "Best measured hashrate per CPU generation on AWS, seine v0.2.22+",
-                   "AWS guests; Genoa/Turin use THP, others 2 MiB huge pages. Method: docs/PERFORMANCE.md",
+                   "AWS guests; huge-page backing and measurement windows vary. Method: docs/PERFORMANCE.md",
                    args.out / "servers.svg", fonts)
     if data.get("bare_metal"):
         hbar_chart(data["bare_metal"], "AMD EPYC bare metal",
                    "Whole-invocation hashrate, fixed manual configuration",
-                   "9355P: 192 GiB DDR5-4800, 12 channels, 280 W cap. Four runs. Method: docs/PERFORMANCE.md",
+                   "9355P: 192 GiB DDR5-4800, 12 channels. v0.2.39, two runs. Method: docs/PERFORMANCE.md",
                    args.out / "bare-metal.svg", fonts, groups=False)
     if data.get("best"):
         hbar_chart(data["best"], "Best by generation",
                    "Peak measured hashrate in the stated configurations",
-                   "Fixed configurations; bare-metal 9355P and AWS guests. Full settings: docs/PERFORMANCE.md",
+                   "Fixed configurations; bare-metal EPYC and AWS guests. Full settings: docs/PERFORMANCE.md",
                    args.out / "best.svg", fonts, groups=False, big=True)
     hbar_chart(data["desktop"], "Desktops and laptops",
                "Whole-machine CPU hashrate, seine v0.2.22+",

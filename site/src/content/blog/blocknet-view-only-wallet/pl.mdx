@@ -1,0 +1,107 @@
+---
+title: 'Jak skonfigurować portfel Blocknet tylko do podglądu'
+description: 'Skonfiguruj portfel Blocknet tylko do podglądu na innym komputerze: wyeksportuj plik, otwórz go osobnym hasłem i sprawdzaj otrzymane płatności.'
+tags: ['Blocknet', 'Portfel', 'Prywatność']
+faq:
+  - q: 'Czy portfel Blocknet tylko do podglądu może wysyłać monety?'
+    a: 'Portfel tylko do podglądu pozwala śledzić wpływy, lecz nie może wysyłać płatności ani podpisywać wiadomości. Sprawdzony rdzeń odrzuca te operacje dla tego typu portfela. Pełnego portfela używaj do decyzji o wydatkach i zatwierdzania płatności, a kopii do podglądu — do obserwowania wybranych wpływów.'
+  - q: 'Czy mogę opublikować prywatny klucz podglądu Blocknet?'
+    a: 'Prywatny klucz podglądu zapewnia dostęp do informacji o przychodzących płatnościach. To prywatne dane, nawet jeśli nie dają prawa wydawania środków. Udostępniaj podgląd świadomie, chroń eksportowane pliki i hasła, a kluczy nie umieszczaj w publicznych zrzutach ekranu, zgłoszeniach, czatach ani formularzach dowodu w eksploratorze.'
+  - q: 'Czy portfel do podglądu potrzebuje hasła głównego portfela?'
+    a: 'Eksport wymaga hasła pełnego portfela w celu autoryzacji tworzenia, a następnie osobnego hasła do pliku podglądu. Na drugim komputerze otwórz eksportowany plik hasłem wybranym dla tego pliku. Drugi komputer nie potrzebuje frazy odzyskiwania ani danych pozwalających wydawać środki z pełnego portfela.'
+sourceHash: '097052372c00'
+translation: draft
+---
+
+Obserwuj przychodzące płatności Blocknet na drugim komputerze, pozostawiając zatwierdzanie płatności w pełnym portfelu. Poradnik opiera się na oficjalnym CLI v1.2.0 i publicznym rdzeniu v0.22.0, sprawdzonych 27 października 2026 r. Opisuje eksport pliku, wyjaśnia zakres dostępu i pokazuje, jak zweryfikować wpływy po jego wczytaniu.
+
+## Jak utworzyć portfel Blocknet tylko do podglądu?
+
+<Answer>
+Otwórz pełny portfel i użyj viewkeys, aby utworzyć zaszyfrowany plik podglądu z osobnym hasłem. Przenieś eksportowany plik na docelowy komputer, wczytaj go i sprawdź adres oraz typ tylko do podglądu. Poczekaj na nadrobienie skanowania, a potem sprawdzaj wpływy, nadal używając pełnego portfela do wydawania środków.
+</Answer>
+
+<img src="/assets/blog/blocknet-view-only-wallet.svg" alt="Pełny portfel eksportuje zaszyfrowaną kopię do podglądu na drugi komputer, który może sprawdzać wpływy bez uprawnienia do wydawania środków." width="1200" height="675" loading="lazy" />
+
+## Wybierz wpływy, które chcesz obserwować
+
+Zacznij od pełnego portfela, którego wpływy chcesz śledzić. [Poradnik konfiguracji portfela](/pl/blog/blocknet-wallet-for-mining/) opisuje tworzenie i odzyskiwanie. Kopia do podglądu odpowiada adresowi tego portfela; nie tworzy nowej tożsamości odbiorcy i nie przenosi monet na inne konto. Przed pracą z eksportowanym plikiem zanotuj, do którego portfela i sieci należy kopia.
+
+Podczas kopania możesz nadal używać tego samego zweryfikowanego adresu wypłat. Portfel do podglądu pozwala sprawdzać zapisy wpływów na innym zaufanym komputerze. [Poradnik śledzenia puli](https://bntpool.com/blog/pl/track-your-miner-on-bntpool/) pełni inną funkcję: pokazuje udziały, saldo puli i wypłaty bez kluczy portfela. Wybierz interfejs odpowiadający na twoje pytanie; podgląd przydaje się, gdy potrzebujesz prywatnego zapisu odbioru.
+
+## Wyeksportuj plik podglądu z pełnego portfela
+
+Na komputerze z pełnym portfelem połącz się z działającym rdzeniem mainnet:
+
+```sh
+blocknet attach mainnet
+```
+
+Otwórz właściwy portfel i sprawdź jego adres tymi poleceniami powłoki:
+
+```text
+load
+address
+```
+
+Jeśli portfel jest zablokowany, użyj zwykłego monitu odblokowania. Zachowaj prywatność sesji, ponieważ następna operacja pokazuje klucze podglądu.
+
+Rozpocznij eksport:
+
+```text
+viewkeys
+```
+
+[Sprawdzony klient](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) wyjaśnia, że prywatny klucz podglądu ujawnia wpływy, i prosi o potwierdzenie. Kontynuuj tylko wtedy, gdy chcesz udzielić takiego dostępu. Następnie pyta o hasło pełnego portfela, nowe hasło pliku podglądu i jego potwierdzenie. Wybierz i zachowaj hasło pliku dla docelowego komputera.
+
+## Który plik należy przenieść?
+
+Po udanym eksporcie klient wyświetla klucze podglądu i ścieżkę zapisanego pliku. Rozpoznaj eksportowany plik na podstawie tej rzeczywistej ścieżki. Przenieś go na kontrolowany przez siebie komputer metodą odpowiednią dla prywatnych danych portfela. Chroń hasło osobno. Nie umieszczaj kluczy z terminala na zrzutach ekranu ani w zapisach diagnostycznych.
+
+[Dokumentacja portfela](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md) podaje domyślny folder `~/.config/bnt/wallets/` i jego odpowiednik Windows `C:\Users\<you>\.config\bnt\wallets\`. Skonfigurowana ścieżka portfela może zmienić folder wyświetlany przez load. Skopiuj eksportowany plik do folderu portfeli na komputerze docelowym, aby klient go znalazł. Oryginalny pełny portfel i kopię odzyskiwania przechowuj w przeznaczonym do tego miejscu.
+
+## Wczytaj i sprawdź kopię na drugim komputerze
+
+Przygotuj działający rdzeń na docelowym komputerze według [poradnika węzła](/pl/blog/run-blocknet-node/), a następnie połącz się z tą samą siecią. Otwórz eksportowany plik wybranym dla niego hasłem:
+
+```text
+load
+```
+
+Jeśli inny portfel jest już otwarty, oficjalna powłoka pozwala go wyładować przed wczytaniem właściwego. Wybieraj według nazwy eksportowanego pliku, nie zakładając, że pierwszy portfel na liście jest poprawny.
+
+Zweryfikuj kopię w kliencie:
+
+```text
+address
+status
+```
+
+Porównaj pełny adres odbiorczy z adresem pełnego portfela. Sprawdź wyświetlany typ tylko do podglądu. Te kontrole potwierdzają tożsamość i zamierzony dostęp. Nie trzeba próbować wysyłki: [sprawdzony rdzeń](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) odrzuca wysyłanie i podpisywanie wiadomości z portfela tylko do podglądu.
+
+## Pozwól portfelowi odnaleźć przychodzące płatności
+
+Docelowy węzeł potrzebuje odpowiednich bloków, a wczytany portfel musi je przeskanować. Sprawdź jego zapisy tymi poleceniami:
+
+```text
+outputs
+history
+```
+
+Nowo wczytany lub zaimportowany portfel może jeszcze nadrabiać zaległości, nawet gdy węzeł ma połączenia z innymi węzłami. [Poradnik synchronizacji portfela](/pl/blog/blocknet-wallet-not-syncing/) pomaga odróżnić pobieranie łańcucha od skanowania portfela i ustalić, czy potrzebny jest skan.
+
+Dopasuj wpływ do znanego już ID transakcji z pełnego portfela lub zapisu wypłaty. [Poradnik eksploratora](/pl/blog/blocknet-explorer-guide/) pomaga potwierdzić publiczne włączenie do bloku, a portfel do podglądu dostarcza szczegóły wpływu. Do bieżących decyzji o wydatkach i ich zatwierdzania używaj pełnego portfela. Traktuj kopię jako monitor wpływów, nie zakładając, że odzwierciedla wszystkie zapisy wychodzące lub decyzje o saldzie do wydania.
+
+## Jaki dostęp daje prywatny klucz podglądu?
+
+[Oficjalna dokumentacja powłoki](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) ostrzega, że posiadacz tego klucza widzi wpływy. Zaszyfrowany plik podglądu chroni dostęp własnym hasłem, ale jego otwarcie ujawnia prywatne informacje o płatnościach. Udzielaj dostępu tylko zamierzonej osobie lub maszynie. Zmiana hasła pliku nie unieważnia klucza podglądu, który ktoś już skopiował.
+
+Nie umieszczaj sekretów wydawania ani podglądu w publicznych narzędziach i wiadomościach do wsparcia. Adres odbiorczy udostępnia się do płatności; prywatny klucz podglądu ma inną rolę. [Poradnik adresów stealth](/pl/blog/stealth-addresses-explained/) wyjaśnia, jak portfel rozpoznaje swoje wyjścia. Przenoś tylko zamierzony dostęp podglądu, a materiały odzyskiwania zachowaj przy pełnym portfelu.
+
+## Utrzymuj powtarzalną rutynę podglądu
+
+Po powrocie do komputera monitorującego wczytaj ten sam plik, sprawdź sieć i adres oraz postęp przed interpretacją brakującego wpisu. Odróżniaj zapis wpływu od środków, których wydanie możesz zatwierdzić. Jeśli utworzysz inny portfel z nowym adresem, istniejąca kopia do podglądu nadal będzie odpowiadać staremu.
+
+Zachowaj kopię odzyskiwania pełnego portfela również po uruchomieniu podglądu. Kopia do podglądu nie zastępuje materiału wydawania potrzebnego do odzyskania dostępu. [Poradnik frazy seed](/pl/blog/seed-phrase-explained/) wyjaśnia tę kopię, a [wysyłanie i odbieranie](/pl/blog/send-receive-blocknet/) opisuje proces płatności. Pełny portfel, kopia odzyskiwania i kopia do podglądu mają własne, jasno określone zadania.
+
+<CTA target="seine" title="Odbieraj wypłaty z kopania w portfelu Blocknet" text="Skorzystaj z poradników seine, aby kopać na swój adres, a potem obserwuj wpływy w wybranym widoku portfela." />

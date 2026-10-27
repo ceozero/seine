@@ -1,0 +1,112 @@
+---
+title: 'La cartera Blocknet no se sincroniza o muestra otro saldo'
+description: 'Revisa una cartera Blocknet que sigue sincronizándose: distingue el avance del nodo del escaneo, rastrea los pagos y comprueba el saldo al terminar.'
+tags: ['Blocknet', 'Cartera', 'Solución de problemas']
+faq:
+  - q: '¿Por qué el nodo Blocknet está sincronizado pero la cartera va por detrás?'
+    a: 'El nodo descarga y valida la cadena, mientras la cartera escanea los bloques descargados en busca de sus salidas. Son etapas distintas. Una cartera restaurada puede seguir escaneando cuando el nodo ya está al día. Compara la altura escaneada con la altura local de la cadena antes de considerar completo el saldo mostrado.'
+  - q: '¿El comando sync descarga los bloques que faltan?'
+    a: 'En el cliente de consola revisado, sync pide a la cartera que escanee bloques ya disponibles en su core. La sincronización de red es otra tarea del nodo. Si la cadena local está atrasada y no hay pares conectados, revisa primero la conexión: el escaneo no encuentra pagos en bloques que el nodo aún no ha descargado.'
+  - q: '¿Debo repetir el pago si no aparece en el saldo?'
+    a: 'Primero rastrea el ID de la transacción existente, verifica la cartera receptora y la red, y comprueba el escaneo y las confirmaciones. El saldo mostrado por sí solo no determina qué ocurrió con un envío. Revisa el registro original de la cartera o del pago del pool antes de preparar otro pago, porque otro envío es una nueva instrucción.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Identifica qué etapa retrasa el saldo de una cartera Blocknet: la descarga de la cadena del nodo, el escaneo de salidas o un pago que aún no se puede gastar. Esta guía sigue la CLI oficial v1.2.0 y el core público v0.22.0, revisados el 27 de octubre de 2026. Empieza con una cartera ya creada o restaurada; la [guía de configuración](/es/blog/blocknet-wallet-for-mining/) explica esa preparación.
+
+## ¿Por qué mi cartera Blocknet sigue sincronizándose?
+
+<Answer>
+Revisa el avance de la cadena y las conexiones del nodo; después, el escaneo de la cartera cargada. El nodo reúne bloques y la cartera busca tus pagos en ellos. Verifica la dirección y la red, deja terminar un escaneo que avanza y compara el historial con los saldos disponibles, pendientes y sin confirmar antes de decidir qué atender.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Los bloques llegan al nodo local antes de que la cartera los escanee y actualice sus registros de pagos." width="1200" height="675" loading="lazy" />
+
+## Empieza por la cartera y la red correctas
+
+Abre tu sesión mainnet existente desde un terminal:
+
+```sh
+blocknet attach mainnet
+```
+
+Dentro de la consola interactiva, abre la cartera:
+
+```text
+load
+```
+
+Selecciona el archivo esperado. Si ya está cargada pero bloqueada, desbloquéala con su contraseña mediante el aviso del cliente. Un mensaje de cartera bloqueada indica un estado de acceso; no demuestra que el nodo haya dejado de descargar bloques.
+
+Comprueba estos comandos por separado en la consola:
+
+```text
+address
+status
+```
+
+Compara la dirección con tu registro de recepción. Mainnet y testnet usan cores y carteras separados. Comprueba también el archivo seleccionado: abrir una cartera nueva vacía no restaura una dirección anterior. Sigue la [guía del nodo](/es/blog/run-blocknet-node/) si el core no está ejecutándose o attach no conecta.
+
+## ¿Se retrasa el nodo o el escaneo?
+
+El estado del nodo describe el avance de la cadena y la conectividad. La cartera tiene su propia altura escaneada. En el [cliente revisado](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go), el aviso de saldo compara la posición escaneada con la cadena o el objetivo de sincronización. Por eso una cadena local actualizada puede coexistir con un saldo de cartera todavía atrasado. Lee ambas etapas en vez de depender de una sola palabra de estado.
+
+Inspecciona las salidas de la cartera:
+
+```text
+outputs
+```
+
+Si no aparecen salidas coincidentes y el escaneo va atrasado, el cliente informa de la altura escaneada frente a la de la cadena. Compara una lectura posterior con la anterior. Una altura escaneada creciente indica avance; una lista vacía aislada no basta para concluir que falta un pago. Anota alturas y horas de observación para compararlas.
+
+## Revisa la conexión si la cadena se retrasa
+
+Si el propio nodo va atrasado, revisa sus pares conectados:
+
+```text
+peers
+```
+
+Sin pares, comprueba la conexión a internet del equipo y el cortafuegos del nodo. Usa la [referencia oficial de problemas](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) junto a la guía del nodo. Observa la altura de la cadena a lo largo del tiempo además del número de pares: estar conectado y haber terminado la descarga responden a preguntas distintas.
+
+Separa en tus notas el inicio del nodo y el escaneo de la cartera. Si un nodo nuevo descarga el historial, deja avanzar esa etapa antes de juzgar si la cartera escaneó un pago posterior. La [guía de checkpoints](https://bntpool.com/blog/es/blocknet-checkpoints-fast-sync/) explica la vía de sincronización rápida existente. Crear carteras o borrar datos de la cadena repetidamente no ayuda a identificar qué etapa avanza.
+
+## ¿Cuándo ejecutar sync en la cartera?
+
+Usa el comando de escaneo cuando la cartera correcta esté abierta y sus registros de salidas deban alcanzar los bloques descargados:
+
+```text
+sync
+```
+
+La [referencia de consola](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) lo describe como escanear bloques locales buscando salidas propias. Es una operación de cartera, distinta de obtener bloques de los pares. Dale tiempo antes de repetir la misma comprobación.
+
+El comando informa de la altura escaneada y las salidas encontradas, o de que la cartera ya está al día. Revisa salidas y saldo al terminar. Si aparece un tiempo de espera agotado, inspecciona el avance actual antes de repetir: un timeout del cliente no indica por sí solo la posición final del escáner. Conserva el archivo original y la copia de recuperación mientras diagnosticas.
+
+## Rastrea un pago esperado en sus registros
+
+Usa el ID completo del historial del remitente o del registro de pagos enviados del pool. La [guía del explorador](/es/blog/blocknet-explorer-guide/) muestra cómo revisar su estado de red y el bloque que lo contiene. El registro público de inclusión indica dónde está la transacción; la cartera receptora identifica sus salidas privadas. Compara los datos de recepción con tu registro, sin esperar una página pública de saldo por dirección.
+
+Después revisa los registros de la propia cartera:
+
+```text
+history
+balance
+```
+
+Un importe pendiente o sin confirmar es distinto de los fondos disponibles. Si aparece en una de esas categorías, sigue sus confirmaciones en lugar de tratarlo como ausente. Para ingresos de minería, la [guía del pool a la cartera](https://bntpool.com/blog/es/pool-payout-missing-from-wallet/) distingue saldo del pool sin pagar, pago real y recepción en la cartera.
+
+## ¿Terminó el escaneo pero el importe difiere?
+
+Revisa juntos el archivo, la dirección receptora completa, la red y el ID de transacción. Confirma que comparas el mismo pago y la misma categoría de saldo. Si es una cartera de solo lectura, úsala para vigilar entradas y consulta la cartera completa al decidir qué gastar; la [guía de solo lectura](/es/blog/blocknet-view-only-wallet/) explica esa separación. Terminar el escaneo no cambia el tipo de cartera.
+
+Si la cartera completa correcta está al día y el registro sigue sin cuadrar, conserva su archivo y copia antes de seguir el procedimiento oficial de recuperación. La [guía de la semilla](/es/blog/seed-phrase-explained/) explica el material de recuperación; la guía de configuración contiene la importación. La recuperación se hace en el software de la cartera. Nunca publiques una semilla, clave privada, archivo de cartera o contraseña en un mensaje público de soporte.
+
+## Anota brevemente lo que verificaste
+
+Para el seguimiento, anota versiones del cliente y core, red, altura del nodo, altura escaneada, número de pares y error exacto. Indica si los valores avanzaron entre observaciones. Si compartes registros, elimina rutas privadas, datos de pagos y credenciales innecesarios para la consulta. Un registro breve permite explicar qué etapa requiere atención sin exponer el acceso.
+
+Vuelve al historial y saldo de la misma cartera tras la comprobación específica. El resultado útil es que el pago esperado aparezca con su estado real actual y el escaneo correspondiente esté al día. La [guía de envío y recepción](/es/blog/send-receive-blocknet/) conecta esa comprobación final con el flujo original. Conserva su ID para que las próximas revisiones sigan la misma operación.
+
+<CTA target="seine" title="Conecta las recompensas con tu cartera" text="Usa las guías de seine para configurar la minería y sigue los pagos del pool en los registros de recepción de tu cartera." />

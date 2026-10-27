@@ -1,0 +1,93 @@
+---
+title: 'Firma e verifica messaggi con un wallet Blocknet'
+description: 'Firma un messaggio Blocknet per dimostrare il controllo di un indirizzo. Verifica testo e firma esatti, usa una nuova sfida e interpreta correttamente il risultato.'
+tags: ['Blocknet', 'Wallet', 'Firme']
+faq:
+  - q: 'Firmare un messaggio Blocknet invia monete?'
+    a: 'L’endpoint esaminato firma il testo con la chiave di spesa del wallet e restituisce una firma. Non crea né trasmette un pagamento. Chi verifica deve avere indirizzo, messaggio esatto e firma. Leggi attentamente il testo richiesto: un servizio potrebbe usarlo per autorizzare una propria azione.'
+  - q: 'Posso verificare una firma senza aprire un wallet?'
+    a: 'Sì. Il comando verify della shell ufficiale chiama l’endpoint pubblico di verifica, che non richiede un wallet caricato. Servono un core compatibile in esecuzione, l’indirizzo completo, il messaggio esatto e la firma. La verifica controlla questa combinazione senza chiedere seed, password o chiavi private del firmatario.'
+  - q: 'Che cosa dimostra una firma Blocknet valida?'
+    a: 'Dimostra che il messaggio è verificabile con la chiave pubblica di spesa contenuta nell’indirizzo fornito. Usa una nuova sfida concordata per dimostrare il controllo attuale. Non stabilisce identità legale, saldo o avvenuto pagamento; una vecchia firma valida può essere presentata di nuovo.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Usa una firma di messaggio Blocknet per dimostrare il controllo di un indirizzo senza effettuare un pagamento. Questa guida segue CLI ufficiale v1.2.0 e core v0.22.0, verificati il 27 ottobre 2026. Preparerai una sfida chiara, la firmerai nel wallet previsto e verificherai insieme indirizzo completo, messaggio e firma.
+
+## Come si firma e verifica un messaggio Blocknet?
+
+<Answer>
+Carica il wallet completo, conferma il suo indirizzo e usa sign per firmare il testo concordato. Condividi indirizzo, messaggio esatto e firma con chi verifica. Questa persona usa verify per controllare i tre valori insieme, poi conferma che il messaggio corrisponda allo scopo e alla nuova sfida richiesta.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Un wallet firma un messaggio concordato e un verificatore distinto lo controlla insieme a indirizzo e firma." width="1200" height="675" loading="lazy" />
+
+## Concorda il significato del messaggio firmato
+
+Parti da una richiesta precisa: quale indirizzo deve dimostrare il controllo, a chi e per quale azione? Una [prova di pagamento](/it/blog/blocknet-payment-proof/) stabilisce i dettagli di una transazione. Una firma di messaggio serve a dimostrare il controllo della chiave di firma, per esempio confermando un indirizzo per un account. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) spiega come creare e aprire quello che firmerà.
+
+Chiedi al verificatore una sfida nuova e imprevedibile per questa richiesta. Includi contesto sufficiente a identificare servizio o destinatario e azione prevista; concorda una scadenza se necessaria. Sono regole applicative: il controllo della firma non impone automaticamente novità, scadenza o uso singolo. Il verificatore deve confrontare il messaggio con la richiesta e registrare quando la sfida è stata usata.
+
+## Apri il wallet completo previsto
+
+Collegati dal terminale al tuo core mainnet in esecuzione:
+
+```sh
+blocknet attach mainnet
+```
+
+Nella shell interattiva carica il wallet e controlla l’indirizzo:
+
+```text
+load
+address
+```
+
+Seleziona il file corretto e sbloccalo tramite il client se richiesto. Confronta l’indirizzo completo con quello atteso dal verificatore, soprattutto se conservi più file wallet sullo stesso computer.
+
+Il [core esaminato](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) firma i messaggi con la chiave privata di spesa del wallet. Un [wallet di sola visualizzazione](/it/blog/blocknet-view-only-wallet/) non può farlo. Mantieni il wallet completo sul computer previsto; al verificatore bastano firma e informazioni pubbliche. Non devi inviare fondi né esportare il file del wallet per completare la firma.
+
+## Prepara il testo esatto prima di firmare
+
+Leggi tutta la richiesta e assicurati di volerne lo scopo dichiarato. Il client ufficiale legge una riga, elimina gli spazi iniziali e finali e rifiuta messaggi vuoti o superiori a 1024 byte. Il limite conta byte: i caratteri non ASCII possono occuparne più di uno. Usa una riga breve e non ambigua e conserva il testo esatto inviato.
+
+Mantieni maiuscole, punteggiatura e spazi interni quando passi il messaggio al verificatore. Un editor o una chat può sostituire le virgolette o modificare il testo copiato; confronta il messaggio reale se la verifica fallisce. Per accessi e operazioni su account, segui il formato di sfida documentato dal servizio. Non riscrivere silenziosamente il testo: deve essere verificata la specifica sfida emessa.
+
+## Firma il messaggio nella shell ufficiale
+
+Avvia la richiesta nella shell interattiva:
+
+```text
+sign
+```
+
+Il client chiede il testo. Incolla il messaggio concordato su una riga e premi Invio. In caso di successo stampa una firma esadecimale. Copia l’intero risultato mantenendo ogni carattere. L’[implementazione del client](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) invia il messaggio all’endpoint di firma del wallet; questa operazione non crea né trasmette una transazione.
+
+Fornisci indirizzo completo, messaggio esatto e firma come valori separati. Etichettali chiaramente per evitare di confondere firma, messaggio e indirizzo. Mantieni privati frase di recupero, chiavi private e password. La [guida al seed](/it/blog/seed-phrase-explained/) spiega il materiale di recupero; nessuno di questi dati appartiene alle prove da inviare per controllare una firma.
+
+## Come verifica la firma l’altra persona?
+
+Usa il comando di verifica della shell ufficiale con un core compatibile in esecuzione:
+
+```text
+verify
+```
+
+Inserisci prima l’indirizzo completo, poi il messaggio esatto e infine la firma esadecimale. Il [riferimento della shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documenta questa sequenza. Non occorre un wallet caricato: la prova si controlla senza importare il wallet del firmatario né gestire chiavi private.
+
+Il client esaminato mostra `Signature is VALID` se la combinazione verifica e `Signature is INVALID` altrimenti. Un errore di formato è un esito diverso: ricontrolla tutti i campi e conserva la prova originale prima di riprovare. Se messaggio o indirizzo differiscono dalla richiesta attesa, chiarisci la differenza anche quando la firma è matematicamente valida per i valori forniti.
+
+## Interpreta il successo nel contesto della richiesta
+
+Una firma valida verifica il messaggio con la chiave pubblica di spesa codificata nell’indirizzo fornito. Non stabilisce identità legale, saldo o avvenuto pagamento. Per una domanda sui pagamenti usa il [registro di invio](/it/blog/send-receive-blocknet/), la [ricerca nell’explorer](/it/blog/blocknet-explorer-guide/) e la prova specifica della transazione. Scegli le informazioni che rispondono alla domanda reale anziché considerare qualsiasi firma valida una ricevuta.
+
+Prima di accettarla, controlla che la sfida sia nuova e rivolta al destinatario previsto. Qualcuno può copiare un messaggio e una firma validi e ripresentarli. Un servizio che richiede autorizzazione monouso deve applicare questa regola. Anche una scadenza scritta nel testo conta solo se viene controllata. Questi controlli collegano la validità crittografica all’azione concordata.
+
+## Conserva un registro chiaro della verifica
+
+Conserva insieme indirizzo, messaggio esatto, firma, contesto della richiesta e risultato quando il processo richiede un registro di controllo. Annota l’ora della verifica separatamente da eventuali date scritte dal firmatario. Evita informazioni personali estranee allo scopo: chi riceve il testo firmato può leggerlo e copiarlo. Condividi la prova con il verificatore previsto tramite il canale concordato.
+
+Se il wallet riceve pagamenti di mining, il [monitoraggio del pool](https://bntpool.com/blog/it/track-your-miner-on-bntpool/) continua a fornire i registri di share e pagamenti; una firma di messaggio non li sostituisce. La [guida al nodo](/it/blog/run-blocknet-node/) copre il core necessario alla shell ufficiale. Completato il controllo, mantieni l’accesso alla firma nel wallet completo e usa la verifica pubblica per chi controlla il risultato.
+
+<CTA target="seine" title="Usa il tuo indirizzo Blocknet con seine" text="Segui le guide di configurazione di seine per minare verso il tuo indirizzo e organizzare firme e pagamenti." />

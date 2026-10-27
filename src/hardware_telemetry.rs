@@ -356,14 +356,57 @@ impl Recorder {
     }
 }
 
+#[derive(Default)]
+enum RunCompletion {
+    #[default]
+    Starting,
+    Running(std::sync::Weak<crate::diagnostics::Store>),
+    Finished,
+}
+
+impl RunCompletion {
+    fn attach(&mut self, store: &Arc<crate::diagnostics::Store>) {
+        if matches!(self, Self::Finished) {
+            // Mining can end before the background worker opens its store.
+            store.finish();
+        } else {
+            // An uploader that exits after opt-out must release its file lock
+            // even while the mining-side Worker remains alive.
+            *self = Self::Running(Arc::downgrade(store));
+        }
+    }
+
+    fn finish(&mut self) {
+        if let Self::Running(store) = self {
+            if let Some(store) = store.upgrade() {
+                store.finish();
+            }
+        }
+        *self = Self::Finished;
+    }
+}
+
 pub(crate) struct Worker {
     stop: Sender<()>,
     thread: Option<thread::JoinHandle<()>>,
+    completion: Arc<Mutex<RunCompletion>>,
     _diagnostics: crate::diagnostics::Guard,
+}
+
+impl Worker {
+    pub(crate) fn attach_stop_origin(&self, origin: &crate::diagnostics::StopOrigin) {
+        origin.attach(&self._diagnostics.0);
+    }
 }
 
 impl Drop for Worker {
     fn drop(&mut self) {
+        // Mining is finished even if a previous HTTP request is still blocked.
+        // Keep spool/file-lock ownership on the uploader until delivery ends.
+        self.completion
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .finish();
         let _ = self.stop.try_send(());
         // HTTP has a strict total timeout, so shutdown remains bounded.
         if let Some(thread) = self.thread.take() {
@@ -457,6 +500,8 @@ fn start_with_context(
     let samples = recorder.clone();
     let options = options.clone();
     let (stop, stopped) = bounded(1);
+    let completion = Arc::new(Mutex::new(RunCompletion::default()));
+    let worker_completion = Arc::clone(&completion);
     let thread = thread::Builder::new()
         .name("hardware-telemetry".into())
         .spawn(move || {
@@ -470,9 +515,14 @@ fn start_with_context(
             let store =
                 crate::diagnostics::Store::open(&options.state_path, &options.installation_id).map(
                     |(store, unclean)| {
+                        let store = Arc::new(store);
+                        worker_completion
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .attach(&store);
                         diagnostics.set_previous_unclean(unclean);
                         diagnostics.set_previous_run(store.previous_run.clone());
-                        store.checkpoint(&options.installation_id, diagnostics.checkpoint());
+                        diagnostics.attach_checkpoint_store(&store, &options.installation_id);
                         store
                     },
                 );
@@ -487,12 +537,14 @@ fn start_with_context(
             let mut since = Instant::now();
             // Regular reports stay hourly; shutdown/failure wakes the worker immediately.
             let mut next_report = Instant::now() + Duration::from_secs(300);
+            let mut next_checkpoint = Instant::now();
+            let mut saved_shutdown = None;
             loop {
                 let final_report = !matches!(
                     stopped.recv_timeout(
                         next_report
                             .saturating_duration_since(Instant::now())
-                            .min(Duration::from_secs(5))
+                            .min(Duration::from_secs(1))
                     ),
                     Err(crossbeam_channel::RecvTimeoutError::Timeout)
                 );
@@ -503,15 +555,25 @@ fn start_with_context(
                     }
                     break;
                 }
-                // Checkpoints stay in the reporting thread. A forced stop may lose
-                // up to one tick; they describe the last observation, not its cause.
+                // Observe console close within one second while keeping ordinary
+                // checkpoint disk writes at five seconds. No IO in the OS handler.
                 if let Some(store) = &store {
-                    store.checkpoint(&options.installation_id, diagnostics.checkpoint());
+                    if final_report {
+                        // Mining has already released this worker. Do not leave a
+                        // false unfinished marker while final HTTP delivery waits.
+                        store.finish();
+                    } else if Instant::now() >= next_checkpoint
+                        || saved_shutdown != crate::shutdown::requested()
+                    {
+                        saved_shutdown = crate::shutdown::requested();
+                        diagnostics.persist_checkpoint();
+                        next_checkpoint = Instant::now() + Duration::from_secs(5);
+                    }
                 }
                 if !final_report && Instant::now() < next_report {
                     continue;
                 }
-                if let Some(store) = &store {
+                if let Some(store) = store.as_ref().filter(|_| !final_report) {
                     if let Some(pending) = store.pending(&options.installation_id) {
                         if send_report(&client, &options, &pending, Some(store)) {
                             store.clear_pending();
@@ -520,11 +582,21 @@ fn start_with_context(
                 }
                 let tuning = samples.drain_tuning();
                 let diagnostic_snapshot = diagnostics.snapshot(final_report);
+                let has_stop_context = diagnostic_snapshot.shutdown_request.is_some()
+                    || diagnostic_snapshot.cleanup_stage.is_some();
                 let has_diagnostics = !diagnostic_snapshot.events.is_empty()
                     || diagnostic_snapshot.previous_run_unclean
                     || diagnostic_snapshot.dropped_events > 0;
-                let has_evidence = has_diagnostics || tuning.is_some();
-                if final_report && !has_evidence {
+                let has_evidence = has_diagnostics || tuning.is_some() || has_stop_context;
+                // Routine stop context must not evict an undelivered report from
+                // the bounded spool. A replay may still be rate-limited or fail.
+                let preserve_pending = final_report
+                    && !has_diagnostics
+                    && tuning.is_none()
+                    && store
+                        .as_ref()
+                        .is_some_and(|s| s.pending(&options.installation_id).is_some());
+                if final_report && (!has_evidence || preserve_pending) {
                     if let Some(store) = &store {
                         store.finish();
                     }
@@ -584,7 +656,7 @@ fn start_with_context(
                         store.save(&report);
                     }
                 }
-                if send_report(&client, &options, &report, store.as_ref()) && has_evidence {
+                if send_report(&client, &options, &report, store.as_deref()) && has_evidence {
                     if let Some(store) = &store {
                         store.clear_pending();
                     }
@@ -608,6 +680,7 @@ fn start_with_context(
         Worker {
             stop,
             thread: Some(thread),
+            completion,
             _diagnostics: guard,
         },
     ))
@@ -722,6 +795,245 @@ mod tests {
         assert_eq!(tuning.trials[0].trial_id, 1);
         resolve(&dir.0, Some(false), None).unwrap();
         assert!(!dir.0.join("seine.diagnostics.pending.json").exists());
+    }
+
+    #[test]
+    fn completed_run_marker_is_cleared_before_slow_final_upload() {
+        let _guard = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let endpoint = format!("http://{}/reports", listener.local_addr().unwrap());
+        let options = resolve(&dir.0, Some(true), Some(&endpoint))
+            .unwrap()
+            .unwrap();
+        let (_, worker) = start_with_context(&options, crate::diagnostics::test_context()).unwrap();
+        crate::diagnostics::allocation_failure(true, 2147483648, Some(12));
+        let finished = std::thread::spawn(move || drop(worker));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut socket = loop {
+            match listener.accept() {
+                Ok((socket, _)) => break socket,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "final upload never arrived");
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(e) => panic!("{e}"),
+            }
+        };
+        assert!(!finished.is_finished());
+        assert!(!dir.0.join("seine.diagnostics.running").exists());
+        assert!(!dir.0.join("seine.diagnostics.phase.json").exists());
+        use std::io::Write;
+        socket
+            .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        drop(socket);
+        finished.join().unwrap();
+    }
+
+    #[test]
+    fn clean_stop_context_is_spooled_without_leaving_an_unclean_marker() {
+        let _guard = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}/reports", listener.local_addr().unwrap());
+        drop(listener); // An immediate connection refusal, no external service.
+        let options = resolve(&dir.0, Some(true), Some(&endpoint))
+            .unwrap()
+            .unwrap();
+        let (_, worker) = start_with_context(&options, crate::diagnostics::test_context()).unwrap();
+        let origin = crate::diagnostics::StopOrigin::default();
+        worker.attach_stop_origin(&origin);
+        origin.request(seine_telemetry::ShutdownRequest::ApiStop);
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::FinalizingTelemetry);
+        drop(worker);
+        let (store, unclean) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        assert!(!unclean);
+        let report = store.pending(&options.installation_id).unwrap();
+        assert!(report.validate());
+        let diagnostic = report.diagnostics.unwrap();
+        assert_eq!(
+            diagnostic.shutdown_request,
+            Some(seine_telemetry::ShutdownRequest::ApiStop)
+        );
+        assert_eq!(
+            diagnostic.cleanup_stage,
+            Some(seine_telemetry::CleanupStage::FinalizingTelemetry)
+        );
+        assert_eq!(diagnostic.reason, "shutdown");
+        store.finish();
+    }
+
+    #[test]
+    fn completed_run_marker_is_cleared_during_slow_pending_replay() {
+        let _guard = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let endpoint = format!("http://{}/reports", listener.local_addr().unwrap());
+        let options = resolve(&dir.0, Some(true), Some(&endpoint))
+            .unwrap()
+            .unwrap();
+        let mut pending: Report =
+            serde_json::from_str(include_str!("../telemetry/fixture.json")).unwrap();
+        pending.installation_id = options.installation_id.clone();
+        let (store, _) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        store.save(&pending);
+        store.finish();
+        drop(store);
+        let (_, worker) = start_with_context(&options, crate::diagnostics::test_context()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut socket = loop {
+            match listener.accept() {
+                Ok((socket, _)) => break socket,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                    assert!(Instant::now() < deadline, "pending replay never arrived");
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(e) => panic!("{e}"),
+            }
+        };
+        let marker = dir.0.join("seine.diagnostics.running");
+        assert!(marker.exists(), "live mining must retain its marker");
+        // The uploader is blocked in HTTP. Transitions must persist immediately,
+        // without waiting for its one-second polling loop or periodic checkpoint.
+        let origin = crate::diagnostics::StopOrigin::default();
+        worker.attach_stop_origin(&origin);
+        origin.request(seine_telemetry::ShutdownRequest::ApiStop);
+        crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingBackends);
+        crate::diagnostics::nvidia_software(seine_telemetry::NvidiaSoftware {
+            driver_cuda_version: Some(12080),
+            nvrtc_version: Some(12090),
+        });
+        let persisted: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(dir.0.join("seine.diagnostics.phase.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(persisted["run"]["shutdown_request"], "api_stop");
+        assert_eq!(persisted["run"]["cleanup_stage"], "stopping_backends");
+        assert_eq!(persisted["run"]["nvidia_software"]["nvrtc_version"], 12090);
+        let finished = std::thread::spawn(move || drop(worker));
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while marker.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let cleared_during_upload =
+            !marker.exists() && !dir.0.join("seine.diagnostics.phase.json").exists();
+        let still_uploading = !finished.is_finished();
+        let still_exclusive =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id)
+                .is_none();
+        use std::io::Write;
+        socket
+            .write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        drop(socket);
+        finished.join().unwrap();
+        let (store, unclean) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        assert!(!unclean);
+        assert_eq!(
+            store.pending(&options.installation_id).unwrap().report_id,
+            pending.report_id
+        );
+        store.finish();
+        assert!(still_uploading, "test must observe the in-flight upload");
+        assert!(
+            still_exclusive,
+            "spool ownership must survive until the upload ends"
+        );
+        assert!(
+            cleared_during_upload,
+            "completed mining must not wait for HTTP to clear its marker"
+        );
+    }
+
+    #[test]
+    fn completed_uploader_releases_ownership_before_mining_worker_exits() {
+        let dir = Temp::new();
+        let options = resolve(
+            &dir.0,
+            Some(true),
+            Some("https://collector.example/reports"),
+        )
+        .unwrap()
+        .unwrap();
+        let (store, _) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        let store = Arc::new(store);
+        let mut completion = RunCompletion::default();
+        completion.attach(&store);
+        store.finish(); // The uploader observes opt-out and exits before mining does.
+        drop(store);
+        let (next_store, unclean) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id)
+                .expect("the departed uploader must release its OS lock");
+        assert!(!unclean);
+        completion.finish(); // An old Worker must not clear the new run's marker.
+        assert!(dir.0.join("seine.diagnostics.running").exists());
+        next_store.finish();
+    }
+
+    #[test]
+    fn completed_run_rejects_late_store_attachment_and_checkpoints() {
+        let _lock = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let options = resolve(
+            &dir.0,
+            Some(true),
+            Some("https://collector.example/reports"),
+        )
+        .unwrap()
+        .unwrap();
+        let diagnostics = crate::diagnostics::install(crate::diagnostics::test_context());
+        let mut completion = RunCompletion::default();
+        completion.finish();
+        let (store, _) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        let store = Arc::new(store);
+        completion.attach(&store);
+        store.checkpoint(&options.installation_id, diagnostics.0.checkpoint());
+        assert!(!dir.0.join("seine.diagnostics.running").exists());
+        assert!(!dir.0.join("seine.diagnostics.phase.json").exists());
+        drop(store);
+        let (store, unclean) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        assert!(!unclean);
+        store.finish();
+    }
+
+    #[test]
+    fn completed_run_cannot_be_recreated_by_concurrent_checkpoints() {
+        let _lock = WORKER_TEST.lock().unwrap();
+        let dir = Temp::new();
+        let options = resolve(
+            &dir.0,
+            Some(true),
+            Some("https://collector.example/reports"),
+        )
+        .unwrap()
+        .unwrap();
+        let diagnostics = crate::diagnostics::install(crate::diagnostics::test_context());
+        let (store, _) =
+            crate::diagnostics::Store::open(&options.state_path, &options.installation_id).unwrap();
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            scope.spawn(|| {
+                barrier.wait();
+                for _ in 0..32 {
+                    store.checkpoint(&options.installation_id, diagnostics.0.checkpoint());
+                }
+            });
+            barrier.wait();
+            store.finish();
+        });
+        store.checkpoint(&options.installation_id, diagnostics.0.checkpoint());
+        assert!(!dir.0.join("seine.diagnostics.running").exists());
+        assert!(!dir.0.join("seine.diagnostics.phase.json").exists());
+        assert!(!dir.0.join("seine.diagnostics.phase.tmp").exists());
     }
 
     #[test]

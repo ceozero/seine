@@ -1,0 +1,74 @@
+---
+title: 'Jak korzystać z eksploratora Blocknet'
+description: 'Znajdź transakcje i bloki Blocknet, odczytaj potwierdzenia oraz publiczne opłaty i sprawdź prywatne szczegóły płatności we własnym portfelu.'
+tags: ['Blocknet', 'Eksplorator', 'Transakcje']
+faq:
+  - q: 'Czy można szukać po adresie portfela?'
+    a: 'Publiczna wyszukiwarka przyjmuje wysokość bloku, hash bloku lub transakcji. Dla konkretnej płatności użyj pełnego ID. Prywatne wyjścia Blocknet nie udostępniają publicznej strony salda adresu jak przejrzysty rejestr. Portfel rozpoznaje otrzymane wyjścia i pokazuje kwoty.'
+  - q: 'Czy transakcja w mempoolu ma potwierdzenia?'
+    a: 'Czeka na blok i ma zero potwierdzeń. Blok, który ją zawiera, daje pierwsze, a następne zwiększają liczbę. Sprawdzaj aktualną stronę i stan portfela, zamiast traktować docelowy czas bloku jako gwarantowany termin dotarcia.'
+  - q: 'Dlaczego opłata jest widoczna, a kwota ukryta?'
+    a: 'Opłata sieciowa jest publicznym polem. Kwoty zwykłych przelewów ukrywają zobowiązania kryptograficzne i dowody, a wyjścia używają jednorazowych kluczy. Eksplorator pokazuje opłatę i strukturę bez kwoty odbiorcy. Prywatne szczegóły swoich płatności sprawdzaj w portfelu.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Znajdź transakcję Blocknet, otwórz jej blok i zrozum publiczną stronę. Poradnik opisuje [oficjalny eksplorator](https://explorer.blocknetcrypto.com/), sprawdzony 26 października 2026 r. Zrzuty przedstawiają prawdziwe publiczne strony z tego dnia. Wysokości, potwierdzenia i dane sieci są historyczne; bieżący stan sprawdzaj na żywej stronie.
+
+## Jak wyszukać transakcję Blocknet?
+
+<Answer>
+Wklej pełne ID z portfela lub rejestru wypłaty do oficjalnej wyszukiwarki. Otwórz właściwą transakcję i sprawdź, czy jest w mempoolu, czy w bloku. Odczytaj potwierdzenia i pola publiczne, a prywatne szczegóły zweryfikuj w portfelu.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="Wyszukiwanie prowadzi do publicznego zapisu i jego bloku, a kwoty płatności sprawdza się w portfelu." width="1200" height="675" loading="lazy" />
+
+## Zacznij od właściwego identyfikatora
+
+ID transakcji służy do badania jednej płatności. Wysokość lub hash bloku otwierają blok i jego listę transakcji. Wyszukiwanie przyjmuje wszystkie trzy. Kopiuj pełny identyfikator ze źródła, nie skrócony tekst z listy. Potwierdź, że portfel i eksplorator dotyczą tej samej sieci.
+
+Strona główna pokazuje też ostatnie bloki, dane sieci i mempool. Mając identyfikator, zacznij od wyszukiwania; listy służą przeglądaniu aktywności. [Poradnik wysyłania i odbierania](/pl/blog/send-receive-blocknet/) wskazuje, gdzie ukończona wysyłka podaje ID.
+
+[![Strona główna oficjalnego eksploratora z wyszukiwaniem, wysokością łańcucha i kartami sieci, uchwycona 26 października 2026 r.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## Co pokazuje strona transakcji?
+
+Strona przelewu podaje hash, publiczny klucz transakcji, status bloku, opłatę sieciową i liczbę wejść/wyjść. Najpierw sprawdź hash, aby upewnić się, że to właściwa transakcja. Klucz publiczny ma inne przeznaczenie i nie zastępuje w wyszukiwaniu hasha skopiowanego z zapisu płatności.
+
+Poniżej jest prawdziwy publiczny przelew, nie płatność wykonana na potrzeby poradnika. Opłata dotyczy tej transakcji, a kwoty pozostają ukryte. [Artykuł o opłatach](/pl/blog/blocknet-transaction-fees/) wyjaśnia obliczenia portfela; tutaj uczysz się odczytywać wynik zapisany w sieci.
+
+[![Publiczna transakcja Blocknet z hashem, blokiem, opłatą, wejściami, wyjściami i ukrytymi kwotami.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Prawidłowo czytaj oczekiwanie i włączenie
+
+Transakcja w mempoolu czeka na włączenie i ma zero potwierdzeń. Po włączeniu strona odsyła do jej bloku. W [sprawdzonej implementacji](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go) potwierdzenia to bieżąca wysokość minus wysokość bloku zawierającego plus jeden. Ten blok daje więc pierwsze potwierdzenie.
+
+Przykład: transakcja w bloku 100 ma trzy potwierdzenia przy wysokości 102. To przykładowe wysokości, nie aktualne dane. Sprawdź bieżący licznik swojej transakcji. [Poradnik potwierdzeń](https://bntpool.com/blog/pl/block-confirmations-mining-rewards/) łączy włączenie, dojrzałość nagród i dostępność w portfelu; sam licznik nie wskazuje, które wyjścia możesz wydać.
+
+## Otwórz blok dla kontekstu
+
+Link do bloku pokazuje wysokość, hash, odwołanie do poprzednika, czas, trudność, nagrodę i transakcje. Strona oddziela coinbase od zwykłych przelewów. Coinbase oznacza tu transakcję nagrody wydobywczej bloku. Lista pozwala wrócić do pojedynczego przelewu i potwierdzić jego włączenie.
+
+Linki poprzedniego i następnego bloku prowadzą po otaczającym łańcuchu. Zrzut to datowany przykład; liczba potwierdzeń zmienia się na żywej stronie. Emisję wyjaśnia [harmonogram nagród Blocknet](https://bntpool.com/blog/pl/blocknet-block-reward-schedule/).
+
+[![Blok 69 579 w oficjalnym eksploratorze z właściwościami i listą transakcji coinbase oraz przelewów.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Zrozum, które szczegóły pozostają prywatne
+
+Przy zwykłych przelewach publiczna opłata i liczby wejść/wyjść opisują strukturę. Kwotę odbiorcy ukrywają zobowiązania i dowody; klucze wyjść są jednorazowymi celami. Wyświetlany klucz stealth nie jest publicznym saldem adresu. [Przegląd prywatności](/pl/blog/blocknet-privacy-features/) wiąże te pola z obecnymi mechanizmami.
+
+Historia portfela odbiorcy rozpoznaje jego płatność i kwotę. Zaszyfrowana notatka w eksploratorze nie jest czytelną treścią faktury. Ta procedura potrzebuje tylko publicznych identyfikatorów. Słowa odzyskiwania i klucze prywatne pozostaw w portfelu; osobne narzędzia dowodowe są poza tymi krokami. Sprawdzenie włączenia i potwierdzeń nie wymaga formularza dowodu.
+
+## Czytaj dane sieci razem z etykietami
+
+Hashrate, trudność i średni czas bloku na stronie głównej opisują aktywność i pomagają zrozumieć pojawianie się bloków. Liczba peerów dotyczy węzła eksploratora, nie spisu wszystkich uczestników. Czytaj wartość, etykietę i czas razem, zwłaszcza porównując własny węzeł.
+
+Docelowy odstęp bloków lub odliczanie nie wyznacza terminu konkretnej transakcji. Obserwuj rzeczywiste włączenie na jej stronie. [Poradnik hashrate](https://bntpool.com/blog/pl/what-is-hashrate/) oddziela lokalne obliczenia od szacunków sieci i puli. [Poradnik węzła](/pl/blog/run-blocknet-node/) obejmuje peery i synchronizację własnego węzła. Te zadania używają różnych pomiarów.
+
+## Co zrobić, jeśli transakcji nie znaleziono?
+
+Najpierw sprawdź pełny identyfikator i sieć. Porównaj z zapisem nadawcy lub ID wypłaty puli. Nowa transakcja może jeszcze nie dotrzeć do eksploratora; sprawdź ponownie po czasie na propagację i indeksowanie. Brak wyniku sam nie oznacza potrzeby wysłania nowej płatności.
+
+Przed kolejną czynnością wróć do portfela i sprawdź oryginalną operację oraz aktualną historię. Dla przychodów z kopania [poradnik od puli do portfela](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/) rozróżnia naliczone saldo, wysłaną wypłatę i zeskanowany odbiór. Zachowaj ID przy zapisie, by każdy etap śledził tę samą płatność we właściwym interfejsie.
+
+<CTA target="seine" title="Podłącz swój zestaw do kopania Blocknet" text="Korzystaj z seine i poradników kopania, a potem śledź wypłaty puli w eksploratorze i portfelu." />

@@ -1,0 +1,96 @@
+---
+title: 'Een Blocknet-wallet back-uppen, herstellen en verplaatsen'
+description: 'Maak een back-up van je Blocknet-wallet en herstel via seed of bestand. Controleer het adres en de scan voordat je de oude kopie buiten gebruik stelt.'
+tags: ['Blocknet', 'Wallet', 'Herstel']
+faq:
+  - q: 'Kan ik een Blocknet-wallet herstellen als ik het wachtwoord vergeet?'
+    a: 'Voor een wallet op basis van een seed importeer je de bewaarde herstel-seed onder een nieuwe naam en stel je een nieuw wachtwoord in. Het oude versleutelde bestand behoudt zijn wachtwoord. Vergelijk het herstelde adres met je gegevens en laat de node en walletscan bijwerken voordat je het saldo controleert.'
+  - q: 'Verandert het ontvangstadres als ik mijn Blocknet-wallet verplaats?'
+    a: 'Een kopie van hetzelfde walletbestand laden of de oorspronkelijke seed correct importeren behoudt het walletadres. Vergelijk het volledige adres op de bestemming met een betrouwbare eerdere registratie. Een geheel nieuwe wallet maken is een andere handeling en levert een nieuw adres op voor toekomstige betalingen.'
+  - q: 'Is een alleen-lezen-wallet voldoende om weer te kunnen uitgeven?'
+    a: 'Een alleen-lezen-wallet biedt inzage en is geschikt om inkomende betalingen op een andere computer te volgen. Om weer te kunnen uitgeven, gebruik je het volledige walletbestand met het wachtwoord of het herstelmateriaal van de volledige wallet. Bewaar de oorspronkelijke volledige back-up en controleer welk type wallet je hebt geladen.'
+sourceHash: '0a8e589f9e32'
+translation: draft
+---
+
+Maak een back-up van je Blocknet-wallet voordat je van computer wisselt en herstel daarna hetzelfde adres met het walletbestand of de herstel-seed. Deze gids volgt de officiële CLI v1.2.0 en core v0.22.0, gecontroleerd op 27 oktober 2026. Hij onderscheidt het maken van een back-up, het elders openen en de controle dat het herstel voltooid is.
+
+## Hoe maak en herstel je een back-up van een Blocknet-wallet?
+
+<Answer>
+Bewaar je herstel-seed offline en een afzonderlijke kopie van het volledige walletbestand. Laad dat bestand op de doelcomputer met het wachtwoord of importeer de oorspronkelijke seed in een nieuw bestand. Vergelijk het volledige ontvangstadres, laat de node en walletscan bijwerken en controleer je gegevens voordat je de oude kopie buiten gebruik stelt.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-backup-restore.svg" alt="Een wallet en de beschermde back-up worden naar een andere computer overgebracht, waar het herstelde adres en de scanvoortgang worden gecontroleerd." width="1200" height="675" loading="lazy" />
+
+## Kies de herstelroute waarvoor je de gegevens hebt
+
+Een back-up van het walletbestand en een herstel-seed hebben verschillende functies. Het bestand `.wallet.dat` bevat walletsleutels en opgeslagen walletstatus; voor het openen van een beveiligde kopie is het bijbehorende wachtwoord nodig. De seed kan de sleutels van een seed-gebaseerde wallet opnieuw maken in een nieuw bestand met een nieuw wachtwoord. Bewaar beide indien beschikbaar en houd je privébetalingsgegevens apart om ze na het herstel te vergelijken.
+
+Deze procedure gaat over een bestaande volledige wallet. Volg voor de eerste aanmaak de [installatiegids voor wallets](/nl/blog/blocknet-wallet-for-mining/). Gebruik de [gids voor alleen-lezen-wallets](/nl/blog/blocknet-view-only-wallet/) om betalingen op een tweede computer te volgen zonder uitgaverechten. Alleen een openbaar ontvangstadres kan geen wallet herstellen. Bepaal of je het volledige bestand, het wachtwoord en de oorspronkelijke seed hebt voordat je de volgende stappen kiest.
+
+## Bereid de oorspronkelijke wallet en je herstelgegevens voor
+
+Verbind vanuit een terminal met je actieve mainnet-core:
+
+```sh
+blocknet attach mainnet
+```
+
+Laad in de interactieve shell de bedoelde wallet en noteer het volledige openbare adres:
+
+```text
+load
+address
+```
+
+Kies de menuoptie voor de bestaande wallet. Is er een andere geladen, gebruik dan `unload` voordat je de juiste kiest. Bewaar het adres samen met het netwerk en de bestandsnaam in je privémigratienotities.
+
+Voer voor een seed-gebaseerde wallet `seed` uit in de shell, bevestig de vraag en geef het walletwachtwoord op. Schrijf de getoonde woorden in exact dezelfde volgorde op en bewaar ze offline. Doe dit zonder schermdeling of schermopname; de [seed-gids](/nl/blog/seed-phrase-explained/) legt uit hoe je deze notitie beschermt. Meldt de client dat er geen seed beschikbaar is, bewaar dan het volledige bestand en wachtwoord en gebruik de route met een bestandskopie. Ga er niet van uit dat iedere oudere of via sleutels geïmporteerde wallet een seed heeft.
+
+## Maak een afzonderlijke kopie van het walletbestand
+
+Zoek het bestand dat de core daadwerkelijk gebruikt. De standaardmap is `~/.config/bnt/wallets/`; op Windows is dat `C:\Users\<you>\.config\bnt\wallets\`. De map met de ingestelde `wallet_file` kan anders zijn. Gebruik het pad dat de officiële client toont en de [referentie voor walletbeheer](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-wallet.md), vooral als bestanden vergelijkbare namen hebben. Controleer het bedoelde bestand voordat je iets kopieert.
+
+Voer na het noteren van het adres `unload` uit en wacht op succes voordat je het bestand kopieert. Laat het origineel staan en bewaar een gedateerde kopie op een afzonderlijk opslagmedium onder jouw beheer. Behoud de extensie `.wallet.dat` en bescherm de back-up en het wachtwoord. De client kan bij het laden uit een andere map een lokale back-up maken, maar overschrijft geen bestaande gelijknamige back-up. Controleer je eigen opgeslagen kopie in plaats van aan te nemen dat de lokale kopie actueel is.
+
+## Hoe verplaats je de wallet naar een nieuwe computer?
+
+Installeer de [officiële client](https://github.com/blocknetprivacy/blocknet/releases/latest) en bereid met de [node-gids](/nl/blog/run-blocknet-node/) een mainnet-core voor. Breng een kopie van het volledige walletbestand via opslag onder jouw beheer over naar de walletmap van de doelcore. Behoud eventuele andere bestanden die daar al staan en kies zo nodig een andere bestandsnaam. In de onderzochte client leest `load` uit die walletmap, ook wanneer je een aangepast pad invoert.
+
+Verbind op de doelcomputer, voer `load` uit, kies het gekopieerde bestand en geef het bestaande wachtwoord op. Ontbreekt het bestand in het menu, controleer dan welke map de doelcore gebruikt en waar je het hebt neergezet. Kies het bestaande bestand in plaats van de optie om een nieuwe wallet te maken. Hetzelfde bestand kopiëren herstelt toegang tot dezelfde sleutels; het verstuurt geen coins en maakt geen tweede saldo.
+
+## Herstel vanuit de oorspronkelijke herstel-seed
+
+Bij een verloren bestand of vergeten wachtwoord gebruik je de bewaarde seed in de officiële client op je vertrouwde doelcomputer. Verbind met de bedoelde mainnet-core en ontlaad eerst een eventueel andere wallet. Start het herstel in de interactieve shell:
+
+```text
+import
+```
+
+Kies optie 1 voor de herstel-seed van 12 woorden. Voer je eigen oorspronkelijke woorden in de juiste volgorde in; gebruik nooit voorbeeldwoorden uit een gids en plak de seed nooit op een website.
+
+Kies een nieuwe, ongebruikte walletnaam en stel op verzoek een nieuw wachtwoord in en bevestig het. De [onderzochte importimplementatie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) maakt op basis van deze herstelgegevens een wallet en toont het adres. Het oorspronkelijke versleutelde bestand behoudt zijn oude wachtwoord. Bewaar het oude bestand en de back-up terwijl je de geïmporteerde wallet controleert en behandel het nieuwe bestand als een extra kopie die bescherming nodig heeft.
+
+## Controleer het adres, de chain en de walletscan
+
+Inspecteer na het laden of importeren de wallet op de doelcomputer:
+
+```text
+address
+status
+balance
+history
+```
+
+Vergelijk het hele adres met je eerdere notitie. De adrescontrole identificeert de wallet voordat je op het getoonde saldo vertrouwt. Wijkt het af, stop dan de migratie en controleer het gekozen bestand, de herstelwoorden en het netwerk opnieuw. Houd je oorspronkelijke back-up intact terwijl je het verschil oplost.
+
+Laat zowel de chaindownload van de node als de outputscan van de wallet bijwerken. Een pas geïmporteerde wallet moet zijn outputs op de chain vinden; een vroeg getoond saldo is niet de definitieve herstelcontrole. Vergelijk het beschikbare saldo en inkomende gegevens zodra de scan klaar is. Bewaar je afzonderlijke betalingsnotities en het originele bestand voor historische details. De [synchronisatiegids](/nl/blog/blocknet-wallet-not-syncing/) legt uit welke voortgangswaarden je controleert en wanneer opnieuw scannen passend is.
+
+## Rond de verhuizing af na de controle
+
+Bewaar een beschermde back-up van de gecontroleerde doelwallet en houd de seed offline. Noteer welke computer nu de actieve volledige wallet bevat en welke kopieën back-ups zijn. Een oude kopie behoudt dezelfde toegang tot sleutels; een bestand verplaatsen trekt die toegang niet in. Behandel bij het afdanken van een apparaat de opslag volgens je normale veilige afvoerprocedure nadat je hebt bevestigd dat de back-up werkt.
+
+Als het herstelde adres overeenkomt, kan je huidige bestemming voor mininguitbetalingen gelijk blijven. Vergelijk het [uitbetalingsrecord van de pool](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) met de inkomende walletgeschiedenis om miningontvangsten te verifiëren. Maak je bewust een andere wallet, dan is dat een adreswijziging in plaats van herstel. Controleer de herstelde wallet volledig voordat je afzonderlijke wijzigingen aan de minerconfiguratie aanbrengt.
+
+<CTA target="seine" title="Mine naar je gecontroleerde Blocknet-adres" text="Volg de seine-installatiegidsen om je miner te verbinden en bewaar walletback-ups op opslag onder jouw beheer." />

@@ -1,0 +1,93 @@
+---
+title: 'Assine e verifique mensagens com uma carteira Blocknet'
+description: 'Assine uma mensagem Blocknet para demonstrar controle de um endereço. Confira texto e assinatura exatos, use um desafio novo e entenda o resultado da verificação.'
+tags: ['Blocknet', 'Carteira', 'Assinaturas']
+faq:
+  - q: 'Assinar uma mensagem Blocknet envia moedas?'
+    a: 'O endpoint analisado assina texto com a chave de gasto da carteira e retorna uma assinatura. Ele não cria nem transmite um pagamento. Quem verifica precisa do endereço, da mensagem exata e da assinatura. Leia o texto solicitado com atenção, pois um serviço pode usá-lo para autorizar uma ação própria.'
+  - q: 'Posso verificar uma assinatura sem abrir uma carteira?'
+    a: 'Sim. O comando verify do cliente oficial chama o endpoint público de verificação, que não exige uma carteira carregada. Ele precisa de um core compatível em execução, endereço completo, mensagem exata e assinatura. A verificação confere essa combinação sem pedir seed, senha ou chaves privadas de quem assinou.'
+  - q: 'O que uma assinatura Blocknet válida comprova?'
+    a: 'Ela comprova que a mensagem verifica com a chave pública de gasto contida no endereço informado. Use um desafio novo acordado para demonstrar controle atual. Ela não estabelece identidade legal, saldo ou pagamento concluído; uma assinatura antiga válida pode ser apresentada novamente.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Use uma assinatura de mensagem Blocknet para demonstrar controle de um endereço sem fazer um pagamento. Este guia segue o CLI oficial v1.2.0 e core v0.22.0, conferidos em 27 de outubro de 2026. Você preparará um desafio claro, assinará na carteira pretendida e verificará endereço completo, mensagem e assinatura em conjunto.
+
+## Como assinar e verificar uma mensagem Blocknet?
+
+<Answer>
+Carregue sua carteira completa, confirme o endereço e use sign para assinar o texto acordado. Compartilhe endereço, mensagem exata e assinatura resultante com quem verificará. Essa pessoa usa verify para conferir os três valores e confirma que a mensagem corresponde à finalidade e ao novo desafio solicitado.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Uma carteira assina uma mensagem acordada e outra pessoa a verifica com o endereço e a assinatura." width="1200" height="675" loading="lazy" />
+
+## Combine o significado da mensagem assinada
+
+Comece com um pedido específico: qual endereço deve demonstrar controle, para quem e para qual ação? Uma [prova de pagamento](/pt-br/blog/blocknet-payment-proof/) estabelece detalhes de uma transação. Uma assinatura de mensagem serve para demonstrar controle da chave de assinatura, como ao confirmar um endereço para uma conta. O [guia da carteira](/pt-br/blog/blocknet-wallet-for-mining/) explica como criar e abrir a carteira que assinará.
+
+Peça ao verificador um desafio novo e imprevisível para esta solicitação. Inclua contexto suficiente para identificar serviço ou destinatário e ação pretendida; combine uma validade se o processo precisar. Essas são regras da aplicação: o verificador de assinaturas não impõe automaticamente novidade, expiração ou uso único. Quem verifica deve comparar o texto com o pedido e registrar quando o desafio foi usado.
+
+## Abra a carteira completa pretendida
+
+Conecte-se pelo terminal ao seu core mainnet em execução:
+
+```sh
+blocknet attach mainnet
+```
+
+No shell interativo, carregue a carteira e confira seu endereço:
+
+```text
+load
+address
+```
+
+Selecione o arquivo correto e desbloqueie pelo cliente se solicitado. Compare o endereço completo com o esperado pelo verificador, especialmente quando guarda vários arquivos de carteira no mesmo computador.
+
+O [core analisado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) assina mensagens com a chave privada de gasto da carteira. Uma [carteira somente de visualização](/pt-br/blog/blocknet-view-only-wallet/) não pode fazer isso. Mantenha a carteira completa no computador previsto; quem verifica só precisa da assinatura resultante e de informações públicas. Não é preciso enviar fundos nem exportar um arquivo da carteira para assinar.
+
+## Prepare o texto exato antes de assinar
+
+Leia toda a solicitação e confirme que aceita a finalidade declarada. O cliente oficial lê uma linha, remove espaços no início e no fim e rejeita mensagens vazias ou maiores que 1024 bytes. O limite conta bytes, então caracteres não ASCII podem ocupar mais de um. Use uma linha curta e inequívoca e preserve o texto exato enviado.
+
+Mantenha maiúsculas, pontuação e espaços internos ao repassar a mensagem. Um editor ou aplicativo de chat pode trocar aspas ou modificar o texto copiado; compare a mensagem real se a verificação falhar. Em fluxos de login ou conta, siga o formato de desafio documentado pelo serviço. Não reescreva silenciosamente o pedido: o verificador deve conferir o desafio específico que emitiu.
+
+## Assine a mensagem no shell oficial
+
+Inicie a solicitação no shell interativo:
+
+```text
+sign
+```
+
+O cliente pede o texto. Cole a mensagem acordada em uma linha e pressione Enter. Se der certo, ele imprime uma assinatura hexadecimal. Copie a saída completa preservando cada caractere. A [implementação do cliente](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) envia o texto ao endpoint de assinatura da carteira; essa operação não cria nem transmite uma transação.
+
+Forneça endereço completo, mensagem exata e assinatura como valores separados. Identifique cada um para não confundir assinatura, texto e endereço. Mantenha privados a frase de recuperação, as chaves privadas e a senha. O [guia da seed](/pt-br/blog/seed-phrase-explained/) explica o material de recuperação; nenhum desses dados pertence às evidências enviadas a quem verifica uma assinatura.
+
+## Como a outra pessoa verifica a assinatura?
+
+Ela usa o comando de verificação do shell oficial com um core compatível em execução:
+
+```text
+verify
+```
+
+Informe primeiro o endereço completo, depois a mensagem exata e, por último, a assinatura hexadecimal. A [referência do shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documenta essa sequência. Não é necessário carregar uma carteira, então a verificação dispensa importar a carteira do signatário ou lidar com chaves privadas.
+
+O cliente analisado mostra `Signature is VALID` quando a combinação verifica e `Signature is INVALID` caso contrário. Um erro de formato é um resultado diferente: confira todos os campos e preserve a evidência original antes de tentar novamente. Se a mensagem ou o endereço diferir do pedido esperado, esclareça a diferença mesmo que a assinatura seja matematicamente válida para os valores fornecidos.
+
+## Interprete o sucesso no contexto do pedido
+
+Uma assinatura válida verifica o texto com a chave pública de gasto codificada no endereço informado. Ela não estabelece identidade legal, mostra saldo nem comprova pagamento. Para questões de pagamento, use o [registro de envio](/pt-br/blog/send-receive-blocknet/), a [consulta no explorer](/pt-br/blog/blocknet-explorer-guide/) e a prova específica da transação. Escolha a evidência que responde à pergunta real, em vez de tratar toda assinatura válida como recibo.
+
+Confira se o desafio é novo e se o destinatário é o pretendido antes de aceitar. Alguém pode copiar uma mensagem e assinatura válidas e apresentar o mesmo par novamente. Um serviço que precisa de autorização de uso único deve aplicar essa regra. Da mesma forma, uma validade escrita no texto só tem efeito se for conferida. Esses controles conectam a validade criptográfica à ação combinada.
+
+## Mantenha um registro claro da verificação
+
+Guarde juntos endereço, mensagem exata, assinatura, contexto do pedido e resultado quando seu processo precisar de um registro de auditoria. Anote o horário da conferência separadamente de qualquer data escrita pelo signatário. Evite informações pessoais alheias ao propósito: qualquer pessoa que receba o texto assinado pode lê-lo e copiá-lo. Compartilhe a evidência com o verificador previsto pelo canal combinado.
+
+Se você recebe pagamentos de mineração nessa carteira, o [acompanhamento do pool](https://bntpool.com/blog/pt-br/track-your-miner-on-bntpool/) continua fornecendo registros de shares e pagamentos; uma assinatura de mensagem não os substitui. O [guia do nó](/pt-br/blog/run-blocknet-node/) cobre o core necessário ao shell oficial. Após concluir a conferência, mantenha o acesso de assinatura na carteira completa e use a verificação pública para quem confere o resultado.
+
+<CTA target="seine" title="Use seu endereço Blocknet com seine" text="Siga os guias de configuração do seine para minerar para seu endereço e organizar seus registros de assinaturas e pagamentos." />

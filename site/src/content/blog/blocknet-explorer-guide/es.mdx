@@ -1,0 +1,74 @@
+---
+title: 'Cómo usar el explorador de Blocknet'
+description: 'Busca transacciones y bloques en el explorador Blocknet, interpreta confirmaciones y comisiones públicas y consulta los detalles privados en la cartera.'
+tags: ['Blocknet', 'Explorador', 'Transacciones']
+faq:
+  - q: '¿Puedo buscar por dirección de cartera?'
+    a: 'La búsqueda pública acepta altura de bloque, hash de bloque o hash de transacción. Para un pago concreto, usa su ID completo. Las salidas privadas de Blocknet no ofrecen una página pública de saldo por dirección como un registro transparente. Tu cartera identifica las salidas recibidas y muestra sus importes.'
+  - q: '¿Una transacción en mempool tiene confirmaciones?'
+    a: 'Una transacción en mempool espera su inclusión en un bloque y tiene cero confirmaciones. Al incluirse, el bloque contenedor aporta la primera; los posteriores aumentan la cuenta. Consulta la página actual y el estado de tu cartera, sin convertir un tiempo objetivo de bloque en una llegada garantizada.'
+  - q: '¿Por qué se muestra la comisión y se oculta el importe?'
+    a: 'La comisión de red es un campo público. Los importes de transferencias normales se ocultan con compromisos y pruebas, y las salidas usan claves de un solo uso. El explorador puede mostrar comisión y estructura sin revelar el importe del destinatario. Consulta tu cartera para los detalles privados de tus pagos.'
+sourceHash: 'b060f0969446'
+translation: draft
+---
+
+Encuentra una transacción Blocknet, abre su bloque y entiende lo que cuenta la página pública. Esta guía sigue el [explorador oficial](https://explorer.blocknetcrypto.com/), revisado el 26 de octubre de 2026. Las capturas son páginas públicas reales de esa fecha. Alturas, confirmaciones y lecturas de red son observaciones históricas; abre la página en vivo para conocer el estado actual.
+
+## ¿Cómo buscas una transacción Blocknet?
+
+<Answer>
+Copia el ID completo de tu cartera o registro de pago en la búsqueda del explorador oficial. Abre la coincidencia y comprueba si está en mempool o incluida en un bloque. Lee allí confirmaciones y campos públicos, y verifica los detalles privados en tu cartera.
+</Answer>
+
+<img src="/assets/blog/blocknet-explorer-guide.svg" alt="Una búsqueda lleva al registro público y su bloque, mientras que el importe del pago se comprueba en la cartera." width="1200" height="675" loading="lazy" />
+
+## Empieza por el identificador adecuado
+
+Usa el ID de transacción para investigar un pago. Usa altura o hash de bloque para ver un bloque y su lista de transacciones. La búsqueda acepta los tres. Copia el identificador completo desde la fuente, no el texto abreviado de una lista compacta. Confirma que cartera y explorador corresponden a la misma red.
+
+La portada también muestra bloques recientes, datos de red y una sección de mempool. Busca directamente si ya tienes un identificador; usa las listas para recorrer la actividad. La [guía de envío y recepción](/es/blog/send-receive-blocknet/) explica dónde obtienes el ID al completar un envío.
+
+[![Portada del explorador oficial con búsqueda, altura de cadena y tarjetas de red, capturada el 26 de octubre de 2026.](/assets/blog/blocknet-explorer-home.jpg)](/assets/blog/blocknet-explorer-home.jpg)
+
+## ¿Qué muestra la página de una transacción?
+
+La página identifica hash de transacción, clave pública de transacción, estado del bloque, comisión de red y cantidades de entradas y salidas. Lee primero el hash para verificar que abriste la transacción deseada. La clave pública es otro campo con otra función; no sustituye al hash copiado del registro como identificador de búsqueda.
+
+El ejemplo es una transferencia pública real, no un pago realizado para esta guía. Su comisión pertenece a esa transacción y los importes siguen ocultos. El [artículo de comisiones](/es/blog/blocknet-transaction-fees/) explica el cálculo de la cartera; aquí aprendes a leer el resultado registrado en la red.
+
+[![Transacción pública Blocknet con hash, bloque contenedor, comisión, entradas, salidas e importes ocultos.](/assets/blog/blocknet-explorer-tx.jpg)](/assets/blog/blocknet-explorer-tx.jpg)
+
+## Interpreta pendientes e incluidas correctamente
+
+Una transacción en mempool espera inclusión y tiene cero confirmaciones. Cuando un bloque la incluye, su página enlaza a ese bloque. En la [implementación revisada](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/explorer.go), las confirmaciones son la altura actual menos la altura del bloque contenedor, más uno. Por eso el bloque contenedor cuenta como primera confirmación.
+
+Ejemplo aritmético: una transacción del bloque 100 tiene tres confirmaciones si la altura actual es 102. Son alturas de ejemplo, no lecturas actuales. Consulta la cuenta en vivo de tu transacción. La [guía de confirmaciones](https://bntpool.com/blog/es/block-confirmations-mining-rewards/) relaciona inclusión, madurez de recompensas y disponibilidad en cartera; la cuenta del explorador no identifica por sí sola qué salidas puedes gastar.
+
+## Abre el bloque para obtener contexto
+
+Sigue el enlace del bloque para ver altura, hash, referencia al anterior, fecha, dificultad, recompensa y transacciones. La página distingue coinbase de transferencias normales. Coinbase significa aquí la transacción de recompensa minera del bloque. La lista permite pasar del bloque a un pago concreto y verificar su inclusión.
+
+Usa los enlaces anterior y siguiente para recorrer la cadena alrededor del registro. La captura es un ejemplo fechado; sus confirmaciones cambian en la página en vivo. Para entender la emisión, consulta el [calendario de recompensas Blocknet](https://bntpool.com/blog/es/blocknet-block-reward-schedule/).
+
+[![Bloque 69.579 en el explorador oficial, con propiedades y lista de transacciones coinbase y transferencias.](/assets/blog/blocknet-explorer-block.jpg)](/assets/blog/blocknet-explorer-block.jpg)
+
+## Entiende qué detalles siguen siendo privados
+
+En transferencias normales, la comisión pública y las cantidades de entradas y salidas describen la estructura. El importe del destinatario se oculta mediante compromisos y pruebas; las claves de salida son destinos de un solo uso. La clave sigilosa mostrada no es el saldo público de una dirección. La [guía de privacidad](/es/blog/blocknet-privacy-features/) relaciona estos campos con los mecanismos actuales.
+
+Usa el historial de la cartera receptora para identificar su pago e importe. El memo cifrado del explorador no es la nota legible de una factura. Este procedimiento solo necesita identificadores públicos. Mantén palabras de recuperación y claves privadas en la cartera; las herramientas de pruebas del explorador quedan fuera de estos pasos. Ver inclusión y confirmaciones no exige rellenar un formulario de prueba.
+
+## Lee las cifras de red con sus etiquetas
+
+Hashrate, dificultad y tiempo medio de bloque en portada describen actividad de red. Dan contexto para entender la llegada de bloques. El número de pares corresponde al nodo del explorador, no a un censo de todos los participantes. Lee valor, etiqueta y momento de observación juntos, sobre todo al compararlos con tu nodo.
+
+Un intervalo objetivo o una cuenta atrás no son una cita para una transacción. Observa su inclusión real en la página. Para cifras del minero, la [guía de hashrate](https://bntpool.com/blog/es/what-is-hashrate/) separa cálculo local y estimaciones de red y pool. La [guía del nodo](/es/blog/run-blocknet-node/) cubre pares y sincronización de tu propio nodo. Son tareas con mediciones diferentes.
+
+## ¿Y si no se encuentra la transacción?
+
+Comprueba primero el identificador completo y la red. Compáralos con el registro del remitente o el ID de pago del pool. Una transacción reciente puede no haber llegado al nodo del explorador; vuelve a consultar tras dejar tiempo para propagación e indexado. No encontrarla no demuestra por sí solo que debas enviar otro pago.
+
+Vuelve a la cartera y examina la operación original y el historial actual antes de actuar otra vez. Para ingresos mineros, sigue la [guía del pool a la cartera](https://bntpool.com/blog/es/pool-payout-missing-from-wallet/) y distingue saldo acreditado, pago enviado y recepción escaneada. Guarda el ID con el registro para que cada comprobación siga el mismo pago en la interfaz correspondiente.
+
+<CTA target="seine" title="Conecta tu equipo de minería Blocknet" text="Usa seine con las guías de minería y sigue los registros de pago del pool hasta el explorador y la cartera." />

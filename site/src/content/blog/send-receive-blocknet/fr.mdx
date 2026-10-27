@@ -1,0 +1,99 @@
+---
+title: 'Comment envoyer et recevoir du Blocknet'
+description: 'Envoyez et recevez du Blocknet avec le portefeuille officiel : vérifiez le destinataire, relisez le paiement et confirmez sa réception dans l’historique.'
+tags: ['Blocknet', 'Portefeuille', 'Paiements']
+faq:
+  - q: 'Que partager pour recevoir du Blocknet ?'
+    a: 'Partagez l’adresse de réception affichée par votre portefeuille ou votre nom court Blocknet ID vérifié. Un lien de paiement peut contenir le montant et une note. L’expéditeur a besoin des coordonnées de réception ; vos mots de récupération et clés privées restent avec vous. Vérifiez la réception dans l’historique de votre portefeuille.'
+  - q: 'Puis-je annuler un paiement Blocknet avant sa confirmation ?'
+    a: 'Dans le client en ligne de commande examiné, la commande d’envoi demande d’abord un aperçu et affiche les détails du paiement. À la demande de confirmation, appuyer sur Entrée ou répondre non annule cette opération. Après un envoi confirmé, examinez son enregistrement avant de décider d’une autre action.'
+  - q: 'Pourquoi le Blocknet reçu n’est-il pas immédiatement dépensable ?'
+    a: 'Le portefeuille distingue les fonds dépensables de ceux en attente ou non confirmés. Une transaction peut apparaître sur le réseau avant que ses sorties soient dépensables. Consultez l’état du portefeuille et laissez avancer synchronisation et analyse. L’explorateur permet de vérifier l’inclusion ; le portefeuille identifie vos propres sorties.'
+sourceHash: '482b529feeb6'
+translation: draft
+---
+
+Envoyez un paiement Blocknet depuis un portefeuille prêt, puis suivez-le de l’écran de vérification de l’expéditeur jusqu’à l’historique du destinataire. Ce parcours utilise le client officiel en ligne de commande v1.2.0, vérifié le 26 octobre 2026. Il réunit adresse, aperçu du paiement et enregistrement de transaction dans une seule procédure. Consultez d’abord le [guide du portefeuille](/fr/blog/blocknet-wallet-for-mining/) si vous devez encore en créer ou en restaurer un.
+
+## Comment envoyer et recevoir du Blocknet ?
+
+<Answer>
+Pour recevoir du Blocknet, partagez l’adresse de réception de votre portefeuille ou votre nom court vérifié. Pour envoyer, saisissez le destinataire et le montant, vérifiez la destination et les frais, puis confirmez le paiement voulu. Conservez l’identifiant de transaction. Le destinataire consulte son historique et son solde dépensable à mesure que la transaction avance.
+</Answer>
+
+<img src="/assets/blog/send-receive-blocknet.svg" alt="L’expéditeur vérifie un paiement, le réseau enregistre la transaction et le destinataire consulte l’historique de son portefeuille." width="1200" height="675" loading="lazy" />
+
+## Ouvrez le bon portefeuille avant de préparer un paiement
+
+Connectez-vous au core mainnet en cours d’exécution avec le client officiel :
+
+```sh
+blocknet attach mainnet
+```
+
+À l’invite interactive, ouvrez votre portefeuille existant avec cette commande :
+
+```text
+load
+```
+
+Choisissez le fichier de portefeuille voulu et saisissez son mot de passe à la demande. Le [guide du nœud](/fr/blog/run-blocknet-node/) explique le démarrage et l’inspection du core en arrière-plan.
+
+Consultez l’adresse de réception et le solde avec ces commandes distinctes :
+
+```text
+address
+balance
+```
+
+Vérifiez que vous utilisez le portefeuille et le réseau voulus. Pour préparer un paiement sortant, regardez le montant dépensable. La [référence officielle du shell](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) documente ces commandes ; un portefeuille graphique peut présenter les mêmes tâches avec d’autres commandes visuelles et libellés.
+
+## Que devez-vous partager avec l’expéditeur ?
+
+Copiez l’adresse complète fournie par la commande d’adresse et transmettez-la par le canal convenu pour le paiement. Avec [Blocknet ID](/fr/blog/blocknet-id-pay-by-name/), partagez le nom court exact et demandez à l’expéditeur de vérifier l’adresse résolue. Pour un nouveau paiement, confirmez l’orthographe avec le destinataire. Reconnaître un nom affiché ne remplace pas la vérification des coordonnées réelles de réception.
+
+Un [lien de paiement](/fr/blog/blocknet-payment-links/) peut inclure le montant demandé et une note facultative. Il réduit la ressaisie, puis vous vérifiez les détails renseignés dans le portefeuille. Les mots de récupération et clés privées ne sont pas des coordonnées de réception. Ne les mettez pas dans des messages, factures ou captures d’écran. Cette étape demande l’adresse de réception.
+
+## Saisissez le destinataire et le montant voulu
+
+Voici un exemple de syntaxe dans attach. Remplacez le texte en majuscules par l’adresse réelle du destinataire, et le montant illustratif par celui que vous souhaitez payer :
+
+```text
+send RECIPIENT_ADDRESS 1.25
+```
+
+Le texte de remplacement n’est pas une adresse à payer. Le client examiné accepte aussi un nom court Blocknet ID à la place du destinataire.
+
+Pour une référence de facture ou de commande, ajoutez une note selon le [guide des notes chiffrées](/fr/blog/blocknet-encrypted-memos/). Vérifiez le texte demandé par le destinataire avant de la préparer. Ce premier parcours reste centré sur un montant fixe ; l’envoi de tout le solde est une autre opération, dont le calcul des frais diffère. Le [guide des frais](/fr/blog/blocknet-transaction-fees/) explique cette distinction et le retour de la monnaie dans votre portefeuille.
+
+## Relisez l’aperçu avant de confirmer
+
+Le [client examiné](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) demande une simulation avant l’envoi. Il affiche le montant, la destination, les frais et la monnaie éventuelle. Un nom court résolu est accompagné de son adresse dans l’aperçu. Si vous avez ajouté une note, relisez-la aussi. Comparez ces détails à la demande que vous vouliez satisfaire avant de répondre à l’invite.
+
+À `Confirm [y/N]:`, saisissez `y` uniquement pour le paiement que vous voulez effectuer. Appuyez sur Entrée ou répondez non pour annuler. Pour un envoi ordinaire d’un montant fixe, le montant destiné au bénéficiaire et les frais réseau sont deux éléments distincts du calcul. Utilisez les valeurs de l’aperçu actuel, plutôt que des frais copiés d’un ancien exemple ou d’une capture.
+
+## Conservez l’identifiant après l’envoi
+
+Après un envoi confirmé réussi, la CLI affiche un identifiant de transaction et un lien vers l’explorateur. Conservez cet identifiant dans votre dossier de paiement pour retrouver la même transaction. Pour suivre son avancement, il est plus utile qu’une capture recadrée du message de réussite. Gardez le destinataire, le montant prévu et la référence de facture dans vos propres documents privés selon les besoins.
+
+Consultez l’activité avec la commande d’historique :
+
+```text
+history
+```
+
+Le client actuel rassemble les sorties entrantes du portefeuille et les envois sortants enregistrés, y compris ceux encore dans la mempool. Si une opération donne un résultat ambigu, consultez d’abord l’historique et l’identifiant existants. Répéter l’envoi constitue une nouvelle instruction de paiement : établissez ce qui est arrivé au premier avant d’en préparer un autre.
+
+## Confirmez la réception dans le portefeuille du destinataire
+
+Le destinataire consulte l’historique de son propre portefeuille chargé et rapproche l’entrée reçue de la transaction concernée. L’analyse du portefeuille identifie les sorties qui lui appartiennent. Une page publique établit les informations réseau, tandis que le portefeuille destinataire fournit la vue privée du paiement. Le [guide de l’explorateur](/fr/blog/blocknet-explorer-guide/) explique comment lire l’enregistrement public en complément de cette vérification.
+
+Consultez à nouveau le solde pendant la progression du paiement. Dépensable, en attente et non confirmé sont des états différents. Un portefeuille restauré ou récemment ouvert peut encore analyser l’historique même si son nœud est connecté. Laissez-le avancer puis vérifiez de nouveau. Pour un paiement de minage, le [guide du pool au portefeuille](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/) suit l’étape supplémentaire entre le versement du pool et la réception.
+
+## Adoptez une procédure de paiement reproductible
+
+Pour chaque paiement voulu, commencez avec le bon portefeuille et le bon réseau, vérifiez les coordonnées de réception, relisez l’aperçu actuel et conservez l’identifiant obtenu. Le destinataire consulte ensuite son historique et son solde. Ces observations décrivent des étapes distinctes : notez celle réellement vérifiée, plutôt que de considérer tout écran de réussite comme une réception finale.
+
+Continuez à suivre les instructions officielles de votre client installé lorsque les libellés ou procédures changent. Ce guide décrit la CLI examinée ; les guides liés détaillent noms, notes, frais et analyse. Si vous minez aussi sur [bntpool.com](https://bntpool.com/blog/fr/mine-blocknet-on-bntpool/), utilisez une adresse de versement liée à un portefeuille que vous pouvez ouvrir et vérifier par le même parcours de réception.
+
+<CTA target="seine" title="Découvrez le minage Blocknet avec seine" text="Suivez les guides pour connecter seine et recevoir les versements du pool dans votre portefeuille Blocknet." />

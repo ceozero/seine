@@ -1,0 +1,93 @@
+---
+title: 'Berichten ondertekenen en verifiëren met een Blocknet-wallet'
+description: 'Onderteken een Blocknet-bericht om controle over een adres aan te tonen. Controleer tekst en handtekening, gebruik een verse uitdaging en beoordeel het resultaat.'
+tags: ['Blocknet', 'Wallet', 'Handtekeningen']
+faq:
+  - q: 'Verstuur je munten door een Blocknet-bericht te ondertekenen?'
+    a: 'Het onderzochte endpoint ondertekent tekst met de bestedingssleutel van de wallet en geeft een handtekening terug. Het maakt of verzendt geen betaling. Voor controle zijn adres, exacte berichttekst en handtekening nodig. Lees de gevraagde tekst zorgvuldig, want een dienst kan de handtekening gebruiken om een eigen handeling te autoriseren.'
+  - q: 'Kan ik een handtekening zonder geopende wallet verifiëren?'
+    a: 'Ja. De opdracht verify van de officiële shell gebruikt het openbare verificatie-endpoint, waarvoor geen wallet geladen hoeft te zijn. Je hebt een draaiende compatibele core, het volledige adres, de exacte tekst en de handtekening nodig. Controle vereist geen seed, wachtwoord of privésleutels van de ondertekenaar.'
+  - q: 'Wat bewijst een geldige Blocknet-berichthandtekening?'
+    a: 'Dat het bericht verifieert met de openbare bestedingssleutel uit het opgegeven adres. Gebruik een afgesproken verse uitdaging als je actuele controle wilt aantonen. Het bewijst geen wettelijke identiteit, saldo of voltooide betaling. Een oude geldige handtekening kan opnieuw worden aangeboden.'
+sourceHash: 'b8974b1eeb46'
+translation: draft
+---
+
+Gebruik een Blocknet-berichthandtekening om controle over een adres aan te tonen zonder een betaling te doen. Deze gids volgt de officiële CLI v1.2.0 en core v0.22.0, gecontroleerd op 27 oktober 2026. Je maakt een duidelijke uitdaging, ondertekent die in de bedoelde wallet en controleert volledig adres, bericht en handtekening samen.
+
+## Hoe onderteken en verifieer je een Blocknet-bericht?
+
+<Answer>
+Laad je volledige wallet, bevestig het adres en gebruik sign om de afgesproken tekst te ondertekenen. Deel adres, exacte tekst en handtekening met de controleur. Die gebruikt verify om de drie waarden samen te controleren en bevestigt vervolgens dat het bericht overeenkomt met het doel en de aangevraagde verse uitdaging.
+</Answer>
+
+<img src="/assets/blog/blocknet-sign-verify-message.svg" alt="Een wallet ondertekent een afgesproken bericht; een andere persoon controleert het met adres en handtekening." width="1200" height="675" loading="lazy" />
+
+## Spreek af wat het ondertekende bericht betekent
+
+Begin met een concreet verzoek: welk adres moet controle aantonen, tegenover wie en voor welke handeling? Een [betalingsbewijs](/nl/blog/blocknet-payment-proof/) stelt details van een transactie vast. Een berichthandtekening is bedoeld voor controle over een ondertekeningssleutel, bijvoorbeeld om een adres bij een account te bevestigen. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) behandelt het maken en openen van de wallet die ondertekent.
+
+Laat de controleur een verse, onvoorspelbare uitdaging voor dit verzoek leveren. Voeg genoeg context toe om dienst of ontvanger en handeling te identificeren, en spreek zo nodig een vervaltijd af. Dit zijn toepassingsregels: de handtekeningcontrole dwingt actualiteit, verval of eenmalig gebruik niet automatisch af. De controleur moet het bericht vergelijken met het verzoek en bijhouden wanneer de uitdaging is gebruikt.
+
+## Open de bedoelde volledige wallet
+
+Verbind vanuit een terminal met je draaiende mainnet-core:
+
+```sh
+blocknet attach mainnet
+```
+
+Laad in de interactieve shell de wallet en bekijk het adres:
+
+```text
+load
+address
+```
+
+Selecteer het bedoelde walletbestand en ontgrendel het via de client als daarom wordt gevraagd. Vergelijk het volledige adres met wat de controleur verwacht, ook als je meerdere walletbestanden op dezelfde computer bewaart.
+
+De [onderzochte core](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go) ondertekent berichten met de private bestedingssleutel van de wallet. Een [view-only-wallet](/nl/blog/blocknet-view-only-wallet/) kan dit niet. Bewaar de volledige wallet op de bedoelde computer; de controleur heeft alleen de handtekening en openbare informatie nodig. Je hoeft geen geld te versturen of walletbestand te exporteren om te ondertekenen.
+
+## Bereid de exacte tekst voor
+
+Lees het hele verzoek en bevestig dat je het beschreven doel bedoelt. De officiële client leest één regel, verwijdert witruimte aan begin en einde en weigert lege berichten of berichten boven 1024 bytes. De limiet telt bytes: niet-ASCII-tekens kunnen er meerdere gebruiken. Kies een korte, ondubbelzinnige regel en bewaar de exact ingediende tekst.
+
+Behoud hoofdletters, leestekens en interne spaties wanneer je het bericht doorgeeft. Een editor of chatprogramma kan aanhalingstekens vervangen of gekopieerde tekst veranderen; vergelijk de echte tekst als verificatie faalt. Volg voor inloggen of accounthandelingen het gedocumenteerde uitdagingformaat van de dienst. Herschrijf de gevraagde tekst niet ongemerkt, want de controleur hoort de specifiek uitgegeven uitdaging te controleren.
+
+## Onderteken in de officiële shell
+
+Start de invoer in de interactieve shell:
+
+```text
+sign
+```
+
+De client vraagt om tekst. Plak het afgesproken bericht op één regel en druk op Enter. Bij succes verschijnt een hexadecimale handtekening. Kopieer de volledige uitvoer met ieder teken. De [clientimplementatie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) stuurt de tekst naar het ondertekeningsendpoint van de wallet; deze handeling maakt of verzendt geen transactie.
+
+Geef volledig adres, exacte berichttekst en handtekening als afzonderlijke waarden. Benoem ze duidelijk zodat handtekening, tekst en adres niet worden verwisseld. Houd herstelzin, privésleutels en walletwachtwoord geheim. De [seedgids](/nl/blog/seed-phrase-explained/) behandelt herstelgegevens; die horen niet bij het bewijs dat je voor handtekeningcontrole deelt.
+
+## Hoe verifieert de andere persoon de handtekening?
+
+Die gebruikt de verificatieopdracht van de officiële shell met een draaiende compatibele core:
+
+```text
+verify
+```
+
+Voer eerst het volledige adres in, daarna de exacte tekst en vervolgens de hexadecimale handtekening. De [shellreferentie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) beschrijft deze volgorde. Verificatie vereist geen geladen wallet en kan dus zonder de wallet van de ondertekenaar te importeren of een privésleutel te behandelen.
+
+De onderzochte client toont `Signature is VALID` als de combinatie klopt, anders `Signature is INVALID`. Een invoerformaatfout is een apart resultaat: controleer alle velden en bewaar het oorspronkelijke bewijs voordat je opnieuw probeert. Wijkt het bericht of adres af van het verwachte verzoek, los dat verschil dan op, ook als de handtekening wiskundig geldig is voor de opgegeven waarden.
+
+## Beoordeel succes binnen het verzoek
+
+Een geldige handtekening verifieert het bericht met de openbare bestedingssleutel in het opgegeven adres. Ze stelt geen wettelijke identiteit vast, toont geen saldo en bewijst geen betaling. Gebruik voor betalingsvragen het [verzendoverzicht](/nl/blog/send-receive-blocknet/), de [explorerzoekopdracht](/nl/blog/blocknet-explorer-guide/) en het transactiespecifieke bewijs. Kies bewijs dat de echte vraag beantwoordt in plaats van iedere geldige handtekening als ontvangstbewijs te behandelen.
+
+Controleer of de uitdaging vers is en voor de bedoelde ontvanger geldt voordat je die accepteert. Iemand kan een geldig bericht en handtekening kopiëren en hetzelfde paar opnieuw aanbieden. Een dienst die eenmalige autorisatie nodig heeft, moet die regel zelf afdwingen. Ook een vervaltijd in de tekst geldt alleen als de controleur die controleert. Zo verbind je cryptografische geldigheid met de afgesproken handeling.
+
+## Bewaar een duidelijk verificatieverslag
+
+Bewaar adres, exacte tekst, handtekening, verzoekcontext en resultaat samen als je proces een controleverslag vereist. Noteer het controletijdstip los van een tijdstempel die de ondertekenaar opschreef. Vermijd ongerelateerde persoonsgegevens in de tekst: iedere ontvanger kan die lezen en kopiëren. Deel het bewijs via het afgesproken kanaal met de bedoelde controleur.
+
+Ontvang je mininguitbetalingen op die wallet, dan blijft [pooltracking](https://bntpool.com/blog/nl/track-your-miner-on-bntpool/) de share- en uitbetalingsgegevens leveren; een berichthandtekening vervangt die niet. De [nodegids](/nl/blog/run-blocknet-node/) behandelt de core voor de officiële shell. Bewaar na de afgesproken controle de ondertekeningstoegang in je volledige wallet en gebruik openbare verificatie voor degenen die het resultaat controleren.
+
+<CTA target="seine" title="Gebruik je Blocknet-adres met seine" text="Volg de seine-installatiegidsen om naar je walletadres te minen en je handtekeningen en betalingsgegevens te ordenen." />

@@ -5,11 +5,12 @@ memory-hard, so hashrate depends as much on memory bandwidth and latency as on c
 count. Seine ships hand-tuned kernels for each instruction set and picks the
 fastest one for your machine while it mines.
 
-Every number on this page is a measured result: completed hashes divided by the
-actual elapsed time, including the end-of-round fence, from repeated runs. Evidence
+Every number on this page is a measured result from repeated runs. Hash accounting
+and timing scopes are documented with each measurement below. Evidence
 for each row is linked, and chart data lives in
 [`assets/charts/benchmarks.json`](assets/charts/benchmarks.json).
 
+- [AMD EPYC 9554P bare metal](#amd-epyc-9554p-bare-metal)
 - [AMD EPYC 9355P bare metal](#amd-epyc-9355p-bare-metal)
 - [Automatic AMD tuning](#automatic-amd-tuning)
 - [Cloud servers](#cloud-servers)
@@ -22,14 +23,47 @@ for each row is linked, and chart data lives in
 A thread here is one hashing thread with its own 2 GiB arena, the same number you set
 with `--threads` or see as "Threads" on the dashboard.
 
+## AMD EPYC 9554P bare metal
+
+**75.04 H/s** on a complete 64-core/128-thread Zen 4 Genoa socket, with
+384 GiB of DDR5-4800 memory across twelve channels and native Linux.
+The official v0.2.39 release used a **fixed manual configuration**: 64 mining
+threads, `avx512-256-stream`, and explicit 1 GiB huge pages (128 GiB of hash
+arenas). Power settings were left unchanged; package power was not measured.
+
+Three fresh 120-second invocations measured **75.03, 75.05 and 75.02 H/s**.
+These rates count all completed hashes and divide by whole-process elapsed time,
+including startup, allocation, work, fences and shutdown. A separate 60-second
+screen of 32, 64, 96 and 128 mining threads selected 64 before those confirmations.
+All 21 independent 1 GiB kernel parity cases passed.
+
+[Reports, selection and reproduction](../experiments/headline-20261027/README.md).
+This is a measured configuration on this socket, not an automatic-tuning result
+or a same-hardware percentage gain over the previous cloud-server chart entry.
+
 ## AMD EPYC 9355P bare metal
 
-<img src="assets/charts/bare-metal.svg" alt="AMD EPYC 9355P: 68.3 H/s with 64 threads and 1 GiB huge pages" width="900">
+<img src="assets/charts/bare-metal.svg" alt="AMD EPYC 9355P: 77.1 H/s with 64 threads and 1 GiB huge pages" width="900">
 
 A complete 32-core/64-thread Turin socket with 192 GiB of memory across twelve
-DDR5-4800 channels, running native Linux. These are **fixed manual configurations**,
-measured over four fresh 120-second invocations each, including startup and
-shutdown. Each comparison has its own paired control.
+DDR5-4800 channels, running native Linux. The official v0.2.39 release measured
+**77.07 H/s** with 64 fixed mining threads, `avx512-256-stream` and explicit
+1 GiB huge pages. Power settings were left unchanged; power was not measured.
+
+The original v0.2.24 benchmark executable and v0.2.39 ran in baseline/current/
+current/baseline order, with one fresh 120-second invocation each. Current runs
+measured **77.13 and 77.02 H/s**; the paired baseline averaged **66.54 H/s**,
+a **15.83%** geometric paired improvement on this machine. Rates include all
+completed hashes and whole-process elapsed time. Both executables passed all
+21 independent 1 GiB kernel parity cases. This measures a manual configuration;
+it does not measure automatic cold-start tuning or pool-credited work.
+[Rebenchmark evidence](../experiments/headline-20261027/README.md#epyc-9355p-rebenchmark).
+
+### Earlier page-size and power-cap comparisons
+
+These separate historical comparisons used four fresh 120-second invocations
+per configuration, including startup and shutdown. Each has its own paired
+control; their power measurements do not apply to the v0.2.39 result above.
 
 | Configuration | H/s | Measured CPU-package W | CPU-package J/hash | Evidence |
 |---|---:|---:|---:|---|
@@ -75,10 +109,10 @@ fixed-kernel speedups or measurements of fully converged throughput.
 
 | CPU | Generation | Instance | Threads | Kernel | H/s |
 |---|---|---|---:|---|---:|
-| AMD EPYC 9R45 | Zen 5 Turin | m8a.8xlarge | 32 | streaming ring 64 / depth 3 | 49.95 |
+| AMD EPYC 9R45 | Zen 5 Turin | m8a.8xlarge | 32 | streaming ring 64 / depth 4 | 50.47 |
 | AMD EPYC 9R14 | Zen 4 Genoa | m7a.8xlarge | 32 | streaming ring 8 / depth 2 | 45.30 |
-| AMD EPYC 7R13 | Zen 3 Milan | c6a.8xlarge | 16 | AVX2 | 11.63 |
-| AMD EPYC 7R32 | Zen 2 Rome | c5a.8xlarge | 16 | AVX2 | 10.96 |
+| AMD EPYC 7R13 | Zen 3 Milan | c6a.8xlarge | 16 | AVX2 streaming | 16.89 |
+| AMD EPYC 7R32 | Zen 2 Rome | c5a.8xlarge | 16 | AVX2 streaming | 17.42 |
 | AMD EPYC 7571 | Zen 1 Naples | m5a.8xlarge | 16 | AVX2 | 9.38 |
 | Intel Xeon 8488C | Sapphire Rapids | m7i.8xlarge | 32 | streaming | 26.00 |
 | Intel Xeon 6975P-C | Granite Rapids | m8i.8xlarge | 32 | streaming | 24.42 |
@@ -91,12 +125,12 @@ fixed-kernel speedups or measurements of fully converged throughput.
 | AWS Graviton2 | Neoverse N1 | m6g.8xlarge | 30 | NEON | 18.63 |
 
 The EPYC 9R45 row uses 32 threads and full transparent huge-page backing.
-Three fresh alternating confirmation pairs measured **49.95 H/s versus 49.45 H/s**
-with the previous fence policy: **+1.01%**, with a paired 95% bootstrap interval
-of +0.39% to +1.64%. All 13,103 timed hashes across screening and confirmation
+Three fresh alternating confirmation pairs measured **50.47 H/s versus 50.29 H/s**
+with the previous prefetch depth: **+0.35%**, with a paired 95% bootstrap interval
+of +0.22% to +0.43%. All 13,302 timed hashes across screening and confirmation
 verified independently. This fixed-kernel measurement excludes allocation,
 warmup and teardown; startup, pool throughput and energy are separate results.
-[Turin confirmation, frozen sources and raw reports](../experiments/turin-fences-20261026/README.md).
+[Turin confirmation, frozen sources and raw reports](../experiments/turin-prefetch-20261026/README.md).
 
 The EPYC 9R14 row uses 32 threads and full transparent huge-page backing. Three
 alternating 30-second confirmation pairs measured **45.30 H/s versus 44.18 H/s**
@@ -115,6 +149,15 @@ from the Windows fence improvement in v0.2.33. Three fresh alternating
 30-second pairs gave a paired 95% interval of +2.19% to +2.99%; all 8,936
 timed hashes across screening and confirmation verified independently.
 [Windows method and raw reports](../experiments/genoa-windows-fences-20261026/README.md).
+
+The EPYC 7R32 and 7R13 rows use 16 fixed threads, full transparent huge-page
+backing and the AVX2 streaming kernel. Each value averages two 20-second
+candidate runs in an alternating baseline/candidate/candidate/baseline sequence,
+with one warmup round per run. These are the backend report's `avg_hps`:
+counted hashes divided by elapsed time including the final fence; hashes
+completed late are excluded from the numerator. Allocation and warmup are
+outside the timed interval. These settings shipped by v0.2.39.
+[Reports and calculation](../experiments/chart-refresh-20261027/README.md).
 
 Other rows use 32-vCPU AWS instances with explicit 2 MiB huge pages, swept
 across kernels and thread counts, with four timed runs at the winning setting.

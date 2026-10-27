@@ -1,0 +1,112 @@
+---
+title: 'Portfel Blocknet nie synchronizuje się lub pokazuje inne saldo'
+description: 'Sprawdź synchronizację portfela Blocknet: odróżnij postęp węzła od skanowania, prześledź wpłaty i sprawdź saldo po zakończeniu skanowania.'
+tags: ['Blocknet', 'Portfel', 'Rozwiązywanie problemów']
+faq:
+  - q: 'Dlaczego węzeł Blocknet jest zsynchronizowany, a portfel pozostaje w tyle?'
+    a: 'Węzeł pobiera i weryfikuje łańcuch, a portfel skanuje pobrane bloki w poszukiwaniu własnych wyjść. To osobne etapy. Przywrócony portfel może nadal skanować po nadrobieniu zaległości przez węzeł. Porównaj wysokość skanowania z lokalną wysokością łańcucha, zanim uznasz saldo za kompletne.'
+  - q: 'Czy sync pobiera brakujące bloki?'
+    a: 'W sprawdzonym kliencie wiersza poleceń sync zleca portfelowi skanowanie bloków już dostępnych w core. Synchronizacja sieciowa jest osobnym zadaniem węzła. Jeśli lokalny łańcuch jest opóźniony i nie ma połączonych peerów, najpierw sprawdź łączność. Skan nie znajdzie płatności w blokach jeszcze niepobranych przez węzeł.'
+  - q: 'Czy wysłać ponownie, jeśli płatności nie ma w saldzie?'
+    a: 'Najpierw prześledź istniejący identyfikator transakcji, sprawdź portfel odbiorczy i sieć oraz skanowanie i potwierdzenia. Samo saldo nie rozstrzyga wyniku wysłania. Przed kolejną płatnością sprawdź pierwotny zapis portfela lub wypłaty puli, ponieważ ponowne wysłanie jest nową instrukcją.'
+sourceHash: '526f90c94bb1'
+translation: draft
+---
+
+Ustal, który etap opóźnia saldo Blocknet: pobieranie łańcucha przez węzeł, skanowanie wyjść portfela czy płatność jeszcze niedostępna do wydania. Poradnik opiera się na oficjalnym CLI v1.2.0 i publicznym core v0.22.0, sprawdzonych 27 października 2026 r. Zacznij od utworzonego lub przywróconego portfela; przygotowanie opisuje [poradnik konfiguracji](/pl/blog/blocknet-wallet-for-mining/).
+
+## Dlaczego portfel Blocknet nadal się synchronizuje?
+
+<Answer>
+Sprawdź postęp łańcucha i połączenia węzła, potem skanowanie załadowanego portfela. Węzeł zbiera bloki, a portfel szuka w nich Twoich płatności. Sprawdź adres i sieć, pozwól postępującemu skanowi się zakończyć i porównaj historię z saldem dostępnym, oczekującym i niepotwierdzonym, zanim zdecydujesz, co wymaga uwagi.
+</Answer>
+
+<img src="/assets/blog/blocknet-wallet-not-syncing.svg" alt="Bloki sieci trafiają do lokalnego węzła, zanim portfel je przeskanuje i zaktualizuje zapisy płatności." width="1200" height="675" loading="lazy" />
+
+## Zacznij od właściwego portfela i sieci
+
+Otwórz istniejącą sesję mainnet w terminalu:
+
+```sh
+blocknet attach mainnet
+```
+
+W interaktywnej powłoce otwórz portfel:
+
+```text
+load
+```
+
+Wybierz oczekiwany plik. Jeśli portfel jest załadowany, ale zablokowany, odblokuj go hasłem przez monit klienta. Komunikat blokady opisuje stan dostępu; nie dowodzi, że węzeł przestał pobierać bloki.
+
+Uruchom osobno te polecenia:
+
+```text
+address
+status
+```
+
+Porównaj adres ze swoim zapisem odbioru. Mainnet i testnet używają osobnych core i portfeli. Sprawdź wybrany plik: otwarcie nowego pustego portfela nie przywraca starego adresu. Skorzystaj z [poradnika węzła](/pl/blog/run-blocknet-node/), jeśli core nie działa lub attach nie może się połączyć.
+
+## Opóźnia się węzeł czy skan portfela?
+
+Status węzła opisuje postęp łańcucha i łączność. Portfel ma własną wysokość skanowania. W [sprawdzonym kliencie](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/attach_wallet.go) ostrzeżenie salda porównuje ją z łańcuchem lub celem synchronizacji. Aktualny lokalny łańcuch może więc współistnieć z saldem nadal nadrabiającym zaległości. Czytaj oba etapy zamiast jednego słowa statusu.
+
+Sprawdź wyjścia portfela:
+
+```text
+outputs
+```
+
+Gdy nie ma pasujących wyjść, a skanowanie jest opóźnione, klient podaje wysokość skanu względem łańcucha. Porównaj późniejszy odczyt z wcześniejszym. Rosnąca wysokość oznacza postęp; pojedyncza pusta lista nie dowodzi braku płatności. Zanotuj wysokości i godziny obserwacji, by móc je porównać.
+
+## Sprawdź łączność, gdy łańcuch jest opóźniony
+
+Jeśli opóźniony jest sam węzeł, sprawdź połączonych peerów:
+
+```text
+peers
+```
+
+Bez peerów sprawdź internet komputera i ustawienia zapory dla węzła. Użyj [oficjalnej pomocy diagnostycznej](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/troubleshooting.md) wraz z poradnikiem węzła. Obserwuj także zmianę wysokości łańcucha: połączenie z peerem i ukończone pobieranie odpowiadają na różne pytania.
+
+Oddziel w notatkach uruchamianie węzła od skanowania portfela. Jeśli nowy węzeł pobiera historię, pozwól temu etapowi postępować, zanim ocenisz skan późniejszej płatności. [Poradnik checkpointów](https://bntpool.com/blog/pl/blocknet-checkpoints-fast-sync/) opisuje istniejącą szybką synchronizację. Wielokrotne tworzenie portfeli lub kasowanie danych łańcucha nie pomaga ustalić, który etap postępuje.
+
+## Kiedy uruchomić sync portfela?
+
+Użyj skanowania, gdy właściwy portfel jest otwarty, a jego zapisy wyjść muszą dogonić pobrane bloki:
+
+```text
+sync
+```
+
+[Dokumentacja powłoki](https://github.com/blocknetprivacy/blocknet/blob/948af4de8b7a3e3cddc86a329c7d2d003cb3fd6b/docs/reference-core.md) opisuje skanowanie lokalnych bloków w poszukiwaniu własnych wyjść. To operacja portfela, odrębna od pobierania bloków od peerów. Daj skanowi czas przed kolejnym sprawdzeniem tego samego odczytu.
+
+Polecenie podaje wysokość skanu i znalezione wyjścia albo informuje, że portfel jest aktualny. Po zakończeniu sprawdź wyjścia i saldo. Przy przekroczeniu czasu klienta sprawdź postęp przed powtórzeniem: sam timeout nie wskazuje końcowej pozycji skanera. Zachowaj oryginalny plik i kopię odzyskiwania podczas diagnozy.
+
+## Prześledź oczekiwaną płatność w zapisach
+
+Użyj pełnego identyfikatora z historii nadawcy lub zapisu wysłanej wypłaty puli. [Poradnik eksploratora](/pl/blog/blocknet-explorer-guide/) pokazuje, jak sprawdzić stan sieciowy i blok zawierający transakcję. Publiczny zapis włączenia wskazuje jej położenie; portfel odbiorczy rozpoznaje prywatne wyjścia. Porównaj dane odbioru ze swoim zapisem, zamiast oczekiwać publicznej strony salda adresu.
+
+Następnie sprawdź zapisy portfela:
+
+```text
+history
+balance
+```
+
+Kwota oczekująca lub niepotwierdzona różni się od dostępnych środków. Jeśli jest w takiej kategorii, śledź potwierdzenia zamiast uznawać ją za nieobecną. Przy kopaniu [poradnik od puli do portfela](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/) rozróżnia niewypłacone saldo puli, rzeczywistą wypłatę i odbiór w portfelu.
+
+## Skan ukończony, ale kwota nadal inna?
+
+Sprawdź razem plik portfela, pełny adres odbiorczy, sieć i identyfikator. Upewnij się, że porównujesz tę samą płatność i kategorię salda. Portfel tylko do podglądu służy monitorowaniu wpłat, a pełny — decyzjom o wydawaniu; [poradnik podglądu](/pl/blog/blocknet-view-only-wallet/) wyjaśnia ten podział. Ukończenie skanu nie zmienia typu portfela.
+
+Jeśli właściwy pełny portfel jest aktualny, a zapis nadal się nie zgadza, zachowaj plik i kopię przed oficjalną procedurą odzyskiwania. [Poradnik frazy seed](/pl/blog/seed-phrase-explained/) opisuje dane odzyskiwania, a konfiguracja — import. Odzyskiwanie wykonuj w programie portfela. Nigdy nie publikuj seeda, klucza prywatnego, pliku portfela ani hasła w publicznym zgłoszeniu pomocy.
+
+## Krótko zapisz wykonane kontrole
+
+Zanotuj wersje klienta i core, sieć, wysokość węzła i skanu, liczbę peerów oraz dokładny błąd. Zapisz, czy wartości zmieniły się między obserwacjami. Przed udostępnieniem logów usuń prywatne ścieżki, dane płatności i dane logowania zbędne dla pytania. Zwięzły zapis wskazuje wymagający uwagi etap bez ujawniania dostępu.
+
+Po ukierunkowanej kontroli wróć do historii i salda tego samego portfela. Użyteczny rezultat to oczekiwana płatność z jej rzeczywistym obecnym statusem i nadrobiony odpowiedni skan. [Poradnik wysyłania i odbierania](/pl/blog/send-receive-blocknet/) łączy tę końcową kontrolę z pierwotną płatnością. Zachowaj identyfikator, aby dalsze kontrole dotyczyły tej samej operacji.
+
+<CTA target="seine" title="Połącz nagrody za kopanie z portfelem" text="Skonfiguruj kopanie według poradników seine, a potem śledź wypłaty puli w zapisach odbioru portfela." />
