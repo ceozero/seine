@@ -127,6 +127,7 @@ worker_name="$(hostname)"
 printf -v tmux_command 'exec %q --pool-url %q --pool-worker %q --address %q --cpu-memory-reserve-percent 0' \
     "${INSTALL_DIR}/seine" "$POOL_URL" "$worker_name" "$WALLET_ADDRESS"
 tmux new-session -d -s "$TMUX_SESSION" "$tmux_command"
+echo "tmux new-session -d -s "$TMUX_SESSION" "$tmux_command""
 echo "已启动 Seine：架构=${release_arch}，未启用 HugeTLB。"
 echo "将在 5 秒后进入 tmux 会话；按 Ctrl+C 可取消自动进入。手动查看运行窗口：tmux attach -t ${TMUX_SESSION}"
 sleep 5
