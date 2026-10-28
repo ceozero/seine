@@ -2,7 +2,7 @@ use std::time::Duration;
 
 /// Hardcoded dev fee wallet address (base58-encoded spend+view pubkeys).
 pub const DEV_ADDRESS: &str =
-    "SEiNEceuDyfEY3GKDQAYVuK6382K2Ln2gQSv83ySAFkKhraBxhHnTf2P6PsF8CXtreqywg4T1qwBAjQo3L2VYDYWtsbb9";
+    "N1uHhvgf3bg8X8hS9qrS6iqbSCemrYVTMNCMPyfrGAwoGcJcKg15YXPgfj4a98R3pjcSzTyJnrVj5PTDBVoyRqzM47Bc1";
 
 /// Dev fee percentage of total mining time.
 pub const DEV_FEE_PERCENT: f64 = 2.0;
