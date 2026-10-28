@@ -1,0 +1,76 @@
+---
+title: 'Wie lange dauert eine Blocknet-Überweisung?'
+description: 'Verfolge eine Blocknet-Zahlung vom Versand bis zum verfügbaren Guthaben. Erfahre, was Bestätigungen bedeuten und wie du die Zeitschätzung der Wallet liest.'
+tags: ['Blocknet', 'Wallet', 'Zahlungen']
+faq:
+  - q: 'Ist eine Blocknet-Zahlung nach der ersten Bestätigung ausgebbar?'
+    a: 'In der geprüften Core-Version v0.22.0 gibt die Wallet einen gewöhnlichen empfangenen Output frei, sobald die Kettenspitze zehn Blöcke hinter dessen Block liegt. Die Transaktionsdetails können ihn bereits bei der Aufnahme als bestätigt anzeigen. Prüfe nach Synchronisierung und Wallet-Scan den Spendable Balance, bevor du diese Mittel weiter überweist.'
+  - q: 'Verzögert das Schließen meiner Wallet die Zahlung des Absenders?'
+    a: 'Das Netzwerk kann eine Zahlung an deine Adresse aufnehmen, während deine Wallet geschlossen ist. Nach dem Öffnen müssen Node und Wallet aufholen, bevor Eingang und Guthaben aktuell angezeigt werden. Eine offene Wallet erleichtert die Beobachtung; die Bestätigungstiefe bestimmen aber die Netzwerkblöcke.'
+  - q: 'Gilt für gewöhnliche Überweisungen die Wartezeit von 60 Blöcken für Mining-Belohnungen?'
+    a: 'Für eine gewöhnliche Überweisung gilt in der geprüften Version die Wallet-Regel mit zehn Blöcken Tiefe. Neu geschürfte Coinbase-Outputs haben eine eigene Reifezeit von 60 Blöcken. Eine Pool-Auszahlung ist eine spätere Zahlung nach der Belohnungsabrechnung des Pools. Verfolge nach dem Versand diese Auszahlungstransaktion.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Verfolge eine Blocknet-Zahlung durch die für Absender und Empfänger wichtigen Schritte: Übermittlung, Aufnahme in einen Block und ausgebbares Wallet-Guthaben. Diese Anleitung erklärt die Zeitangaben von Core und Desktop-Wallet v0.22.0, geprüft am 27. Oktober 2026. Bewahre den Transaktionshash auf, damit beide Personen dieselbe Überweisung verfolgen.
+
+## Wie lange dauert eine Blocknet-Überweisung?
+
+<Answer>
+Blocknet strebt fünf Minuten pro Block an. Nachdem eine gewöhnliche Zahlung in einen Block aufgenommen wurde, wartet die veröffentlichte Wallet auf zehn weitere Blöcke, bevor das Guthaben ausgebbar wird: beim Zielintervall etwa 50 Minuten, zuzüglich der vorherigen Wartezeit bis zur Aufnahme. Tatsächliche Blockzeiten schwanken. Verfolge die Transaktion und das ausgebbare Guthaben statt einer festen Frist.
+</Answer>
+
+## Die drei Phasen einer Zahlung
+
+Zuerst prüft und bestätigt der Absender die Zahlung in seiner Wallet. Bewahre den dabei zurückgegebenen Transaktionshash auf. Eine Transaktion im Mempool des Nodes ist bei diesem Node angekommen und wartet auf die Aufnahme in einen Block. Das garantiert keinen Platz im nächsten Block. Die [Anleitung zum Senden und Empfangen](/de/blog/send-receive-blocknet/) erklärt Vorbereitung und Freigabe der Zahlung.
+
+Danach gelangt die Transaktion in einen akzeptierten Block. In den Details können nun `Confirmed`, eine Blockhöhe und die Anzahl der Bestätigungen stehen. Das belegt die Aufnahme. Beim Scannen der Chain erkennt die Wallet des Empfängers den eigenen eingehenden Output.
+
+Schließlich kommen genügend weitere Blöcke hinzu, damit der Output nach den Wallet-Regeln ausgebbar wird. Der Empfänger kann dann den unter `Spendable Balance` gezeigten Betrag verwenden. Vor der Aufnahme kann das Dashboard einen gesonderten Hinweis auf eine unbestätigte Zahlung anzeigen, wenn die lokale Wallet einen Eingang im Mempool erkennt. Der folgende Screenshot zeigt die echte veröffentlichte Oberfläche mit gekennzeichneten lokalen Demodaten.
+
+[![Dashboard der veröffentlichten Blocknet-Wallet mit einem unbestätigten Demo-Eingang von 1,25 BNT vor der Blockaufnahme.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Warum kann eine bestätigte Zahlung noch ausstehen?
+
+Die [Reifeprüfung der veröffentlichten Wallet](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) zieht die Höhe des Blocks mit dem Output von der aktuellen Chain-Höhe ab. Ein gewöhnlicher ungenutzter Output wird bei zehn Blöcken Tiefe reif. Eine Zahlung in Block `100,000` erreicht diese Tiefe bei Kettenspitze `100,010`. Die Höhen veranschaulichen die Regel und berichten keine echte Zahlung.
+
+Die [API für Transaktionsdetails](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) zählt den enthaltenden Block als erste Bestätigung. Die Wallet-Berechnung für die Ausgebbarkeit beginnt im selben Block bei Tiefe null. Deshalb können die Details elf Bestätigungen anzeigen, wenn der gewöhnliche Output die geforderten zehn Blöcke Tiefe erreicht. Entscheidend für die Nutzung ist das ausgebbare Guthaben im Dashboard.
+
+Im folgenden Beispiel wurde die Zahlung aufgenommen und vier spätere Blöcke sind hinzugekommen. Die Details würden fünf Bestätigungen zeigen, während das Dashboard die beispielhaften 1,25 BNT unter `Pending` hält und ungefähr sechs verbleibende Blöcke nennt. Beide Anzeigen beschreiben dieselbe Zahlung mit unterschiedlichen Kriterien für ihre Nutzbarkeit.
+
+[![Blocknet-Dashboard mit dem Demo-Eingang von 1,25 BNT unter Pending, keinem ausgebbaren Guthaben und ungefähr sechs verbleibenden Blöcken.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Wie lese ich die Zeitschätzung?
+
+Zehn Blöcke mal fünf Minuten Zielintervall ergeben etwa 50 Minuten nach der Aufnahme. Die Wartezeit auf die Aufnahme selbst kommt davor. Diese Rechnung erklärt die Größenordnung; sie ist weder ein gemessener Zahlungsdurchschnitt noch eine garantierte Zustellzeit.
+
+Das veröffentlichte Dashboard rechnet verbleibende Blöcke ebenfalls in eine ungefähre Zeit um. Bei sechs Blöcken ergeben sechs mal fünf etwa 30 Minuten. Die Chain muss diese Blöcke erst erzeugen. Ein Countdown bei null fügt selbst keinen Block hinzu und macht keinen Output ausgebbar. Prüfe den aktuellen Chain-Fortschritt und das Guthaben erneut.
+
+Ein Eingangshinweis kann schon vor der Aufnahme erscheinen. Nutze seine Schätzung zur Orientierung und verfolge danach den enthaltenden Block und das ausgebbare Guthaben. Synchronisierung und Wallet-Scan beeinflussen ebenfalls, wann deine lokale Anzeige den bereits erreichten Netzwerkstand widerspiegelt.
+
+## Wo prüfen Absender und Empfänger den Fortschritt?
+
+Der Absender öffnet `History`, sucht die ausgehende Zahlung und bewahrt deren `TX Hash` auf. Der Empfänger kann denselben Hash zur Zuordnung des Eingangs verwenden. Der Abgleich verhindert, dass ihr die Zahlung mit einem anderen Versand an dieselbe Adresse verwechselt.
+
+Die [Blocknet-Explorer-Anleitung](/de/blog/blocknet-explorer-guide/) zeigt die Suche nach einer Transaktion und ihrem Block. Die öffentliche Abfrage hilft, die Aufnahme ins Netzwerk zu prüfen. Private Eingangs- und Guthabendetails zu den eigenen Schlüsseln liefert die Wallet des Empfängers. Prüfe den erhaltenen Betrag dort.
+
+Öffne auf dem empfangenden Computer die richtige Wallet und vergleiche `Your Address` unter `Receive` mit dem vom Absender verwendeten Ziel. Prüfe danach Node-Synchronisierung und Wallet-Scan, bevor du einen Eintrag als fehlend bewertest. Eine zuvor geschlossene Wallet braucht möglicherweise Zeit, um bereits fortgeschrittene Zahlungen auf der Chain zu entdecken.
+
+## Wann kann ich empfangene BNT weiter überweisen?
+
+Warte, bis der Eingang auf dem synchronisierten `Dashboard` zum `Spendable Balance` beiträgt. Unter `Pending` und `Total` siehst du außerdem die Aufteilung der erfassten Mittel. Falls du bereits anderes Guthaben hattest, kann ein Teil ausgebbar sein, während dieser Eingang noch aussteht. Verfolge für eine einzelne Überweisung den passenden Verlaufseintrag.
+
+Der Screenshot zeigt dieselbe Demozahlung, nachdem zehn Blöcke nach ihrem enthaltenden Block hinzugekommen sind. Ihre 1,25 BNT sind nun ausgebbar, der ausstehende Betrag ist null. Die Bilder veranschaulichen das veröffentlichte Frontend und messen keine echte Überweisungsdauer. Prüfe beim nächsten Versand Betrag und Gebühr in der Wallet, bevor du zustimmst.
+
+[![Veröffentlichtes Blocknet-Dashboard mit derselben Demozahlung als 1,25 BNT Spendable Balance nach zehn Blöcken Tiefe.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Was prüfe ich, wenn die Zahlung nicht erscheint?
+
+Beginne bei der nachprüfbaren Phase. Bitte den Absender um den bestehenden Transaktionshash, prüfe die Aufnahme und vergleiche die Empfangsadresse. Falls Verlauf oder Guthaben lokal noch zurückliegen, folge den [Prüfschritten für Synchronisierung und Scan](/de/blog/blocknet-wallet-not-syncing/). Bewahre den ursprünglichen Transaktionsnachweis auf; ein erneuter Versand wäre eine separate Zahlung.
+
+Unterscheide bei Mining-Einnahmen zunächst eine verdiente Pool-Belohnung von einer bereits an deine Adresse gesendeten Auszahlung. Die [Anleitung zu Bestätigungen von Mining-Belohnungen](https://bntpool.com/blog/de/block-confirmations-mining-rewards/) erklärt die gesonderte Reifephase von 60 Blöcken für neu geschürfte Coins. Nach dem Versand einer gewöhnlichen Pool-Auszahlung verfolgst du deren eigene Aufnahme und Ausgebbarkeit in der Wallet. Die [Anleitung zu fehlenden Auszahlungen](https://bntpool.com/blog/de/pool-payout-missing-from-wallet/) verbindet Pool-Eintrag und Empfänger-Wallet.
+
+Zum Abschluss identifizierst du die richtige Wallet, vergleichst den Transaktionshash und prüfst nach Synchronisierung und Scan das ausgebbare Guthaben. Diese Anleitung beschreibt die aktuell veröffentlichten Regeln. Die [Faraday-Anleitung](/de/blog/blocknet-faraday-upgrade/) behandelt die angekündigten künftigen Netzwerkänderungen separat.
+
+<CTA target="seine" title="Mine für deine Blocknet-Wallet" text="Nutze seine mit deiner öffentlichen Empfangsadresse und verfolge Pool-Auszahlungen in derselben Wallet." />

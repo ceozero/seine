@@ -1,0 +1,76 @@
+---
+title: 'Ile trwa przelew Blocknet?'
+description: 'Śledź przelew Blocknet od rozgłoszenia do dostępnego salda. Poznaj znaczenie potwierdzeń, odczytaj szacunek czasu w portfelu i sprawdź postęp swojej płatności.'
+tags: ['Blocknet', 'Portfel', 'Płatności']
+faq:
+  - q: 'Czy płatność Blocknet można wydać po pierwszym potwierdzeniu?'
+    a: 'W sprawdzonym core v0.22.0 portfel udostępnia zwykłe otrzymane wyjście do wydania, gdy koniec łańcucha jest o dziesięć bloków dalej niż blok zawierający wyjście. Szczegóły transakcji mogą już określać ją jako potwierdzoną po wejściu do bloku. Przed dalszym wysłaniem środków sprawdź Spendable Balance po zakończeniu synchronizacji i skanowania portfela.'
+  - q: 'Czy zamknięcie portfela opóźnia płatność nadawcy?'
+    a: 'Sieć może uwzględnić płatność na Twój adres, gdy portfel jest zamknięty. Po otwarciu węzeł i portfel muszą nadrobić zaległości, aby widoczne wpływy i saldo były aktualne. Otwarty portfel ułatwia obserwowanie postępu, ale głębokość potwierdzeń wyznaczają bloki sieci.'
+  - q: 'Czy zwykły przelew wymaga 60 bloków oczekiwania jak nagroda za kopanie?'
+    a: 'W sprawdzonym wydaniu zwykły przelew podlega regule głębokości dziesięciu bloków w portfelu. Nowe wyjścia coinbase mają osobną regułę dojrzałości wynoszącą 60 bloków. Wypłata z puli to późniejsza transakcja płatnicza po rozliczeniu nagrody przez pulę. Po jej wysłaniu śledź samą transakcję wypłaty.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Prześledź płatność Blocknet przez etapy istotne dla nadawcy i odbiorcy: przesłanie, umieszczenie w bloku i saldo dostępne do wydania. Poradnik wyjaśnia czas pokazywany przez wydane core i portfel desktopowy v0.22.0, sprawdzone 27 października 2026 r. Zachowaj hash transakcji, aby obie osoby śledziły ten sam przelew.
+
+## Ile trwa przelew Blocknet?
+
+<Answer>
+Blocknet zakłada pięciominutowe bloki. Po umieszczeniu zwykłej płatności w bloku wydany portfel czeka na dziesięć kolejnych bloków, zanim udostępni środki: około 50 minut przy docelowym odstępie, plus wcześniejsze oczekiwanie na włączenie. Rzeczywisty czas bloków jest zmienny. Śledź transakcję i dostępne saldo portfela zamiast stałego terminu.
+</Answer>
+
+## Trzy etapy płatności
+
+Najpierw nadawca sprawdza i zatwierdza płatność w portfelu. Zachowaj hash zwrócony dla tej transakcji. Transakcja oczekująca w mempoolu węzła została przez niego odebrana i czeka na umieszczenie w bloku. Jej obecność tam nie zapewnia włączenia do następnego bloku. [Poradnik wysyłania i odbierania](/pl/blog/send-receive-blocknet/) opisuje przygotowanie i zatwierdzenie płatności.
+
+Następnie transakcja trafia do zaakceptowanego bloku. Szczegóły mogą już pokazywać `Confirmed`, wysokość bloku i liczbę potwierdzeń. To przydatny dowód włączenia. Portfel odbiorcy rozpoznaje własne przychodzące wyjście podczas skanowania łańcucha.
+
+Wreszcie pojawia się wystarczająco dużo kolejnych bloków, aby wyjście można było wydać zgodnie z regułami portfela. Odbiorca może wtedy wykorzystać kwotę z `Spendable Balance`. Przed włączeniem panel może pokazywać osobne powiadomienie o niepotwierdzonej płatności, gdy lokalny portfel wykryje wpływ w mempoolu. Poniższy zrzut pokazuje rzeczywisty wydany interfejs z oznaczonymi lokalnymi danymi demonstracyjnymi.
+
+[![Wydany panel Blocknet pokazujący niepotwierdzoną demonstracyjną płatność przychodzącą 1,25 BNT przed włączeniem do bloku.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Dlaczego potwierdzona płatność nadal oczekuje?
+
+[Sprawdzanie dojrzałości w wydanym portfelu](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) odejmuje wysokość bloku zawierającego wyjście od aktualnej wysokości łańcucha. Zwykłe niewydane wyjście dojrzewa na głębokości dziesięciu bloków. Płatność z bloku `100,000` osiąga tę głębokość, gdy koniec łańcucha dochodzi do `100,010`. Te wysokości ilustrują regułę, a nie bieżący raport o płatności.
+
+[API szczegółów transakcji](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) liczy blok zawierający transakcję jako pierwsze potwierdzenie. Obliczenie dostępności środków w portfelu zaczyna od głębokości zero w tym samym bloku. Dlatego szczegóły mogą pokazywać jedenaście potwierdzeń, gdy zwykłe wyjście spełni wymóg dziesięciu bloków portfela. O gotowości środków do użycia decyduj na podstawie dostępnego salda w panelu.
+
+W przykładzie poniżej płatność jest w bloku i pojawiły się cztery kolejne bloki. Szczegóły transakcji pokazywałyby pięć potwierdzeń, a panel pozostawia przykładowe 1,25 BNT w `Pending` i wskazuje około sześciu pozostałych bloków. Oba ekrany opisują tę samą płatność na różnych etapach gotowości.
+
+[![Panel Blocknet z demonstracyjnym wpływem 1,25 BNT w oczekiwaniu, zerowym dostępnym saldem i około sześcioma pozostałymi blokami.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Jak odczytywać szacowany czas?
+
+Dziesięć bloków razy docelowe pięć minut daje około 50 minut po włączeniu. Wcześniej trzeba jeszcze poczekać na wejście transakcji do bloku. Ten rachunek wyjaśnia rząd wielkości; nie jest zmierzoną średnią z próby płatności ani gwarantowanym czasem dostarczenia.
+
+Wydany panel przelicza też pozostałe bloki na przybliżony czas. W przykładzie sześciu bloków sześć razy pięć daje około 30 minut. Łańcuch nadal musi wytworzyć te bloki. Dojście odliczania do zera samo nie dodaje bloku ani nie udostępnia wyjścia. Ponownie sprawdź aktualny postęp łańcucha i saldo.
+
+Powiadomienie o wpływie może pojawić się przed włączeniem transakcji. Traktuj jego szacunek jako wskazówkę postępu, a następnie śledź blok zawierający płatność i dostępne saldo. Synchronizacja oraz skanowanie portfela także wpływają na moment odzwierciedlenia działań sieci na lokalnym ekranie.
+
+## Gdzie powinni sprawdzać nadawca i odbiorca?
+
+Nadawca powinien otworzyć `History`, znaleźć płatność wychodzącą i zachować `TX Hash`. Odbiorca może użyć tego samego hasha do identyfikacji przelewu przychodzącego. Gdy obie osoby omawiają płatność, porównanie hasha zapobiega pomyleniu jej z inną wysyłką na ten sam adres.
+
+[Poradnik eksploratora Blocknet](/pl/blog/blocknet-explorer-guide/) pokazuje, jak znaleźć transakcję i jej blok. Publiczne wyszukiwanie pomaga sprawdzić włączenie w sieci. Portfel odbiorcy dostarcza prywatne informacje o wpływie i saldzie związane z jego kluczami. Otrzymaną kwotę sprawdzaj w portfelu.
+
+Na komputerze odbiorcy otwórz właściwy portfel i porównaj `Your Address` w `Receive` z adresem użytym przez nadawcę. Następnie sprawdź synchronizację węzła i skanowanie portfela przed oceną brakującej pozycji. Wcześniej zamknięty portfel może potrzebować czasu, aby odkryć płatności, które już posunęły się w łańcuchu.
+
+## Kiedy mogę wysłać otrzymane BNT dalej?
+
+Poczekaj, aż wpływ powiększy `Spendable Balance` na zsynchronizowanym `Dashboard`. Pola `Pending` i `Total` pokazują podział zarejestrowanych środków. Jeśli miałeś już inne środki, część salda może być dostępna, gdy ten wpływ nadal oczekuje. Śledząc jeden przelew, korzystaj z pasującej pozycji historii.
+
+Zrzut pokazuje tę samą demonstracyjną płatność po dodaniu dziesięciu bloków za blokiem, który ją zawiera. Jej 1,25 BNT można już wydać, a oczekująca kwota wynosi zero. Zrzuty ilustrują wydany interfejs, a nie mierzą czasu rzeczywistego przelewu. Przy kolejnej płatności sprawdź kwotę i opłatę w portfelu przed zatwierdzeniem.
+
+[![Wydany panel Blocknet pokazujący tę samą demonstracyjną płatność jako dostępne saldo 1,25 BNT po osiągnięciu głębokości dziesięciu bloków.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Co sprawdzić, jeśli płatność się nie pojawiła?
+
+Oprzyj się na etapie, który możesz zweryfikować. Poproś nadawcę o istniejący hash transakcji, sprawdź włączenie i porównaj adres odbiorcy. Jeśli lokalna historia lub saldo nie są aktualne, wykonaj [sprawdzenie synchronizacji i skanowania portfela](/pl/blog/blocknet-wallet-not-syncing/). Zachowaj pierwotny zapis transakcji podczas sprawdzania; kolejna wysyłka jest osobną płatnością.
+
+Przy dochodach z kopania odróżnij najpierw zarobioną nagrodę puli od wypłaty już wysłanej na Twój adres. [Poradnik potwierdzeń nagród za kopanie](https://bntpool.com/blog/pl/block-confirmations-mining-rewards/) wyjaśnia osobny etap dojrzewania nowych monet przez 60 bloków. Gdy pula wyśle zwykłą transakcję wypłaty, śledź jej własne włączenie i dostępność w portfelu. [Poradnik brakującej wypłaty](https://bntpool.com/blog/pl/pool-payout-missing-from-wallet/) łączy zapis puli z portfelem odbiorcy.
+
+Końcowa kontrola jest prosta: wskaż właściwy portfel, dopasuj hash płatności i sprawdź dostępne saldo po synchronizacji i skanowaniu. Poradnik opisuje obecnie wydane reguły. [Poradnik Faraday](/pl/blog/blocknet-faraday-upgrade/) osobno śledzi ogłoszone przyszłe zmiany sieci.
+
+<CTA target="seine" title="Kop na swój portfel Blocknet" text="Używaj seine z publicznym adresem odbioru i śledź wypłaty z puli do tego samego portfela." />

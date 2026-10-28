@@ -11,7 +11,7 @@ faq:
     a: 'Ja. Start seine met --api-server of --service en het serveert Prometheus-metrics op /metrics via zijn lokale besturings-API, die standaard luistert op 127.0.0.1 poort 9977. De metrics laten zien of de miner draait, wat zijn lifecycle-status is, hoeveel oplossingen zijn ingediend, geaccepteerd en verouderd, en welke backends in quarantaine staan. Scrapes sturen het bearer-token van de API mee.'
   - q: 'Waarom vraagt de besturings-API van seine om een token?'
     a: 'Sinds seine v0.2.23 heeft elk endpoint van de besturings-API behalve de health check een bearer-token nodig, zodat websites die je bezoekt je uitbetalingsadres of instellingen niet kunnen wijzigen. seine schrijft bij elke start een nieuw token naar control-api.cookie in zijn datamap, of je stelt een vast token in met --api-token.'
-sourceHash: 186b1dc3c49e
+sourceHash: 747f36a1fe6d
 translation: draft
 ---
 
@@ -49,7 +49,7 @@ Om het effect op je eigen machine te controleren, vergelijk je `auto` met `os` b
 
 ### Geheugenmarge op gedeelde servers
 
-De automatische bepaling van het aantal threads houdt 5% van het totale RAM vrij, bovenop een eventuele GPU-reservering. Je wijzigt dat met `--cpu-memory-reserve-percent`. Gaan andere services geheugen gebruiken, dan geven de automatische threads van seine hun arena's vrij en komen ze terug zodra er weer geheugen vrijkomt, zodat het minen zich voegt naar de rest van de machine. Tuningresultaten worden per machine gecachet, en de cache wordt gereset wanneer de toegestane CPU-set of de NUMA- en L3-indeling verandert, bijvoorbeeld na het vergroten of verkleinen van een VM.
+De automatische bepaling van het aantal threads houdt 5% (standaard maximaal 1 GiB) van het totale RAM vrij, bovenop een eventuele GPU-reservering. Je wijzigt dat met `--cpu-memory-reserve-percent`. Gaan andere services geheugen gebruiken, dan geven de automatische threads van seine hun arena's vrij en komen ze terug zodra er weer geheugen vrijkomt, zodat het minen zich voegt naar de rest van de machine. Tuningresultaten worden per machine gecachet, en de cache wordt gereset wanneer de toegestane CPU-set of de NUMA- en L3-indeling verandert, bijvoorbeeld na het vergroten of verkleinen van een VM. In v0.2.43 is de standaardreserve begrensd op 1 GiB; een expliciet opgegeven percentage heeft die grens niet.
 
 ## Hoe draai je seine headless?
 

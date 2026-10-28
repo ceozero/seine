@@ -10,6 +10,7 @@ and timing scopes are documented with each measurement below. Evidence
 for each row is linked, and chart data lives in
 [`assets/charts/benchmarks.json`](assets/charts/benchmarks.json).
 
+- [AMD EPYC 9375F bare metal](#amd-epyc-9375f-bare-metal)
 - [AMD EPYC 9554P bare metal](#amd-epyc-9554p-bare-metal)
 - [AMD EPYC 9355P bare metal](#amd-epyc-9355p-bare-metal)
 - [Automatic AMD tuning](#automatic-amd-tuning)
@@ -22,6 +23,23 @@ for each row is linked, and chart data lives in
 
 A thread here is one hashing thread with its own 2 GiB arena, the same number you set
 with `--threads` or see as "Threads" on the dashboard.
+
+## AMD EPYC 9375F bare metal
+
+**85.10 H/s** on a complete 32-core/64-thread Zen 5 Turin socket, with
+384 GiB across twelve DDR5-6000 memory channels and native Linux.
+The official v0.2.39 release used 64 fixed mining threads,
+`avx512-256-stream` and explicit 1 GiB huge pages (128 GiB of hash arenas).
+
+Three fresh 120-second invocations measured **85.18, 85.14 and 84.97 H/s**.
+The rate counts all completed hashes over the entire process invocation,
+including allocation, work, fences and shutdown. A separate 60-second screen
+at 16, 32, 48 and 64 workers selected 64 before confirmation. All worker arenas
+had verified 1 GiB backing, with zero allocation failures, and all 21 independent
+reference-parity cases passed. Power settings were unchanged; power was not
+measured. This is a manual configuration, not an automatic-startup or pool-credited
+rate, and the comparison with another CPU is not a software percentage gain.
+[Selection, reports and reproduction](../experiments/9375f-headline-20261027/README.md).
 
 ## AMD EPYC 9554P bare metal
 
@@ -111,7 +129,7 @@ fixed-kernel speedups or measurements of fully converged throughput.
 |---|---|---|---:|---|---:|
 | AMD EPYC 9R45 | Zen 5 Turin | m8a.8xlarge | 32 | streaming ring 64 / depth 4 | 50.47 |
 | AMD EPYC 9R14 | Zen 4 Genoa | m7a.8xlarge | 32 | streaming ring 8 / depth 2 | 45.30 |
-| AMD EPYC 7R13 | Zen 3 Milan | c6a.8xlarge | 16 | AVX2 streaming | 16.89 |
+| AMD EPYC 7R13 | Zen 3 Milan | c6a.8xlarge | 16 | AVX2 streaming | 18.09 |
 | AMD EPYC 7R32 | Zen 2 Rome | c5a.8xlarge | 16 | AVX2 streaming | 17.42 |
 | AMD EPYC 7571 | Zen 1 Naples | m5a.8xlarge | 16 | AVX2 | 9.38 |
 | Intel Xeon 8488C | Sapphire Rapids | m7i.8xlarge | 32 | streaming | 26.00 |
@@ -150,14 +168,22 @@ from the Windows fence improvement in v0.2.33. Three fresh alternating
 timed hashes across screening and confirmation verified independently.
 [Windows method and raw reports](../experiments/genoa-windows-fences-20261026/README.md).
 
-The EPYC 7R32 and 7R13 rows use 16 fixed threads, full transparent huge-page
-backing and the AVX2 streaming kernel. Each value averages two 20-second
+The EPYC 7R32 row uses 16 fixed threads, full transparent huge-page
+backing and the AVX2 streaming kernel. Its value averages two 20-second
 candidate runs in an alternating baseline/candidate/candidate/baseline sequence,
 with one warmup round per run. These are the backend report's `avg_hps`:
 counted hashes divided by elapsed time including the final fence; hashes
 completed late are excluded from the numerator. Allocation and warmup are
 outside the timed interval. These settings shipped by v0.2.39.
 [Reports and calculation](../experiments/chart-refresh-20261027/README.md).
+
+The EPYC 7R13 row uses the official v0.2.39 release at 16 fixed threads with
+full THP backing. Two 120-second measured rounds, each after a 120-second warmup,
+averaged **18.09 H/s**, versus **12.09 H/s** for v0.2.29 in a same-instance
+baseline/current/current/baseline comparison: **+49.55%** geometric paired gain.
+Rates count hashes within the measured window and include fence time; allocation,
+warmup and shutdown are excluded. This compares the versions and selected
+kernels together. [Method and all four reports](../experiments/zen3-release-20261027/README.md).
 
 Other rows use 32-vCPU AWS instances with explicit 2 MiB huge pages, swept
 across kernels and thread counts, with four timed runs at the winning setting.

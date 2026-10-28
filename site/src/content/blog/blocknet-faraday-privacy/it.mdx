@@ -1,0 +1,62 @@
+---
+title: 'Come Faraday cambia la privacy di Blocknet'
+description: 'Scopri la privacy di Faraday: prove di spesa sull’intero insieme, rilevamento con ML-KEM, aggregazione delle prove e modifiche proposte per chi usa il wallet.'
+tags: ['Blocknet', 'Faraday', 'Privacy']
+faq:
+  - q: 'La privacy dell’intera blockchain significa che ogni output storico è già protetto da Faraday?'
+    a: 'L’annuncio dettagliato descrive l’intero insieme di monete Faraday. Questo insieme cresce man mano che le monete entrano nel nuovo formato. Occorre distinguere le attuali transazioni ad anello dalla migrazione al formato proposto. Faraday è ancora in sviluppo; il nuovo progetto non è attivo sulla rete attualmente rilasciata.'
+  - q: 'ML-KEM crea le prove di spesa di Faraday?'
+    a: 'ML-KEM è un meccanismo di incapsulamento delle chiavi usato per stabilire un segreto condiviso. Il progetto lo assegna al rilevamento dei pagamenti. Le prove di spesa hanno un ruolo distinto: consentire alla rete di verificare una spesa proteggendo le informazioni private. Per questo ruolo Faraday propone prove basate su hash costruite con Plonky3.'
+  - q: 'Dimensioni delle prove, commissioni e tempi di Faraday sono definitivi?'
+    a: 'No. L’annuncio ufficiale presenta un progetto ancora in costruzione e collaudo. Le dimensioni delle prove e i tempi obiettivo descrivono il piano attuale, mentre le commissioni finali restano da definire. Segui la versione che implementerà Faraday per le impostazioni operative e la guida all’aggiornamento esistente per le informazioni sulla migrazione.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Segui le due domande sulla privacy alla base di Faraday: come la rete verifica una spesa senza identificarne la fonte e come il wallet riconosce un pagamento in entrata. Questo articolo spiega i meccanismi proposti e le conseguenze pratiche. L’[annuncio ufficiale del 27 ottobre](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) precisa che il progetto è ancora in sviluppo; per la rete attuale usa le istruzioni del wallet rilasciato.
+
+## Cosa cambierebbe Faraday nella privacy dei pagamenti?
+
+<Answer>
+Faraday propone di sostituire gli attuali anelli di input da 16 membri con prove di spesa che coprono l’insieme di monete Faraday. Le prove basate su hash proteggerebbero la spesa, mentre ML-KEM supporterebbe il rilevamento dei pagamenti. Sono meccanismi con compiti diversi. L’obiettivo è una privacy di spesa più ampia e una protezione post-quantistica nel nuovo formato delle monete.
+</Answer>
+
+## Da un anello di 16 all’insieme di monete Faraday
+
+Oggi una spesa identifica un anello contenente l’output reale usato come input e 15 decoy. La firma permette alla rete di verificare l’autorizzazione mantenendo nascosto il membro reale. La [guida alle firme ad anello](/it/blog/ring-signatures-explained/) spiega questo meccanismo attuale. L’insieme di candidati è l’anello incluso con quell’input.
+
+La prova Faraday proposta dimostrerebbe che la moneta spesa appartiene a un punto dell’insieme Faraday ammissibile senza pubblicare il membro specifico. Questo è il significato utile dell’appartenenza all’intero insieme: il verificatore controlla appartenenza e validità mentre la scelta nascosta resta privata. Non significa scaricare i registri privati dei wallet altrui o esporne i saldi.
+
+L’annuncio dettagliato specifica monete Faraday: l’insieme in crescita va quindi distinto da tutti gli output storici nel vecchio formato. Il diagramma illustra questa distinzione; i punti sono un esempio concettuale, non un conteggio attuale delle monete. La [guida all’aggiornamento](/it/blog/blocknet-faraday-upgrade/) tratta la migrazione proposta che trasferisce le monete esistenti nel nuovo formato.
+
+[![Un anello di input attuale contiene 16 candidati, mentre la prova Faraday proposta si riferisce a un insieme crescente di monete in formato Faraday; gli output vecchi restano fuori dall’insieme illustrato fino alla migrazione.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Perché prove di spesa e rilevamento dei pagamenti sono separati
+
+Una prova di spesa risponde a una domanda di validazione della rete: questa spesa soddisfa le regole richieste? Il wallet del mittente crea la prova e i nodi la verificano. Il progetto propone prove basate su hash usando [Plonky3](https://github.com/Plonky3/Plonky3), una raccolta di strumenti per costruire sistemi di prova. Gli strumenti forniscono i componenti; le regole concrete di Blocknet e la loro implementazione continuano a determinare cosa accetta il verificatore.
+
+Il rilevamento dei pagamenti risponde a una domanda del wallet: quali output mi appartengono? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) è un meccanismo standardizzato di incapsulamento delle chiavi per stabilire un segreto condiviso. Il piano Faraday lo assegna alla ricezione. Non va interpretato come un altro nome della prova di spesa o come un algoritmo di firma.
+
+La distinzione spiega anche il termine post-quantistico. Descrive soluzioni crittografiche pensate per resistere ad attacchi mediante computer quantistici; non richiede che gli utenti ne possiedano uno. ML-KEM si basa su problemi reticolari, mentre la prova di spesa annunciata usa tecniche basate su hash. Usare un componente standardizzato non certifica da solo l’intera implementazione di una criptovaluta. Leggi le affermazioni su algoritmi, costruzione delle prove e wallet completo come affermazioni separate.
+
+## Cosa succede alla prova dopo un pagamento?
+
+La proposta distingue la prova inviata attraverso la rete dalla prova conservata con un blocco. Le stime attuali sono circa 1,4 MB per prova di spesa e circa 1 MB per una prova di blocco combinata. I nodi inoltrerebbero e verificherebbero le prove di spesa, le combinerebbero e scarterebbero le singole prove dopo la finalità. Questi sono valori progettuali dichiarati dal progetto, non misurazioni effettuate per questo articolo.
+
+Combinare le prove è un modo per riassumere le verifiche. Immagina varie affermazioni controllate indipendentemente e poi rappresentate da una prova della loro verifica. La prova del blocco svolge questo compito diverso da quello della prova individuale originale. Un registro conservato compatto non elimina il precedente trasferimento di rete e il calcolo; inoltro, creazione delle prove, aggregazione e archiviazione a lungo termine sono attività separate.
+
+[![Le prove individuali di spesa raggiungono i nodi, vengono combinate in una prova di blocco e scartate dopo la finalità secondo il progetto Faraday proposto.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Cosa noterebbe chi usa il wallet?
+
+Un modo utile di leggere la proposta è separare il momento in cui approvi un pagamento, il lavoro del wallet per prepararne la prova, l’inclusione in un blocco e l’attesa prima che i fondi ricevuti diventino spendibili. Sono parti diverse del percorso del pagamento. Una generazione rapida della prova, da sola, non dimostra un trasferimento rapido dall’inizio alla fine.
+
+Il piano propone un intervallo obiettivo di dieci minuti per blocco e afferma che spese più grandi aumenterebbero le commissioni, con gli importi finali ancora da definire. Controlla l’anteprima delle commissioni nel wallet reale quando arriveranno versioni compatibili. La [guida ai tempi di trasferimento](/it/blog/blocknet-transfer-time/) descrive la rete rilasciata con obiettivo di cinque minuti; i tempi futuri dipendono dalle regole definitive di Faraday. Dimensioni del pagamento, lavoro delle prove e tempi dei blocchi vanno considerati insieme quando valuti una stima.
+
+## Quale guida usare dopo?
+
+Consulta [cosa può vedere qualcuno di un pagamento](/it/blog/blocknet-payment-visibility/) per i campi pubblici attuali, i registri del wallet e le divulgazioni deliberate. Usa la [guida all’aggiornamento Faraday esistente](/it/blog/blocknet-faraday-upgrade/) per piani di attivazione, materiale di recupero e migrazione delle monete.
+
+Quando esce un nuovo annuncio, controlla cosa è cambiato: insieme delle monete ammissibili, sistema di prova, rilevamento dei pagamenti, dimensioni delle prove o comportamento del wallet. Poi verifica se descrive una proposta, un risultato di test o una funzionalità rilasciata. Questo mantiene la procedura di pagamento attuale allineata al software che usi davvero, consentendoti di seguire nel dettaglio l’aggiornamento della privacy proposto.
+
+<CTA target="seine" title="Continua a minare con la configurazione rilasciata" text="Usa le guide attuali al mining con seine e segui le istruzioni compatibili per miner e pool durante lo sviluppo di Faraday." />

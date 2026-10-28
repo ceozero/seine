@@ -1,0 +1,76 @@
+---
+title: 'Berapa lama transfer Blocknet berlangsung?'
+description: 'Ikuti transfer Blocknet dari penyiaran hingga saldo dapat dibelanjakan. Pahami konfirmasi, perkiraan waktu wallet, dan tempat memeriksa kemajuan pembayaran.'
+tags: ['Blocknet', 'Wallet', 'Pembayaran']
+faq:
+  - q: 'Apakah pembayaran Blocknet dapat dibelanjakan setelah konfirmasi pertama?'
+    a: 'Pada core v0.22.0 yang diperiksa, wallet membuat output biasa yang diterima dapat dibelanjakan ketika ujung blockchain berada sepuluh blok setelah blok yang memuatnya. Detail transaksi sudah dapat menyebutnya terkonfirmasi saat masuk ke blok. Periksa Spendable Balance setelah sinkronisasi dan pemindaian wallet selesai sebelum mengirim dana itu lagi.'
+  - q: 'Apakah menutup wallet menunda pembayaran pengirim?'
+    a: 'Jaringan dapat memasukkan pembayaran ke alamat Anda saat wallet ditutup. Saat dibuka kembali, node dan wallet perlu mengejar ketertinggalan agar penerimaan dan saldo yang ditampilkan mutakhir. Membiarkan wallet terbuka membantu memantau kemajuan, tetapi blok jaringan menentukan kedalaman konfirmasi.'
+  - q: 'Apakah transfer biasa perlu menunggu 60 blok seperti imbalan penambangan?'
+    a: 'Transfer biasa memakai aturan kedalaman sepuluh blok wallet pada rilis yang diperiksa. Output coinbase yang baru ditambang memiliki aturan kematangan 60 blok tersendiri. Pembayaran pool adalah transaksi pembayaran berikutnya setelah pool menangani pencatatan imbalannya. Ikuti transaksi pembayaran itu sendiri setelah pool mengirimnya.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Ikuti pembayaran Blocknet melalui tahap yang penting bagi pengirim dan penerima: pengajuan, penyertaan dalam blok, dan saldo wallet yang dapat dibelanjakan. Panduan ini menjelaskan waktu yang ditampilkan core dan wallet desktop v0.22.0 yang telah dirilis, diperiksa pada 27 Oktober 2026. Simpan hash transaksi pembayaran agar kedua pihak dapat mengikuti transfer yang sama.
+
+## Berapa lama transfer Blocknet berlangsung?
+
+<Answer>
+Blocknet menargetkan blok lima menit. Setelah pembayaran biasa masuk ke sebuah blok, wallet yang dirilis menunggu sepuluh blok tambahan sebelum dananya dapat dibelanjakan: sekitar 50 menit pada interval target, ditambah waktu menunggu penyertaan sebelumnya. Waktu blok sebenarnya bervariasi. Ikuti transaksi dan saldo yang dapat dibelanjakan, bukan tenggat tetap.
+</Answer>
+
+## Ikuti tiga tahap pembayaran
+
+Pertama, pengirim memeriksa dan menyetujui pembayaran di wallet. Simpan hash transaksi yang dikembalikan untuk pengiriman itu. Transaksi dalam mempool node sudah diterima node tersebut dan menunggu masuk ke blok. Keberadaannya di sana tidak menjanjikan penyertaan dalam blok berikutnya. [Panduan mengirim dan menerima](/id/blog/send-receive-blocknet/) membahas persiapan dan persetujuan pembayaran.
+
+Kedua, transaksi masuk ke blok yang diterima. Detailnya kini dapat menampilkan `Confirmed`, tinggi blok, dan jumlah konfirmasi. Ini merupakan bukti penyertaan yang berguna. Wallet penerima mengenali output masuk miliknya saat memindai blockchain.
+
+Ketiga, cukup banyak blok berikutnya hadir sehingga output dapat dibelanjakan menurut aturan wallet. Penerima kemudian dapat memakai jumlah dalam `Spendable Balance`. Sebelum penyertaan, dasbor dapat menampilkan pemberitahuan pembayaran belum terkonfirmasi tersendiri ketika wallet lokal mendeteksi pembayaran masuk di mempool. Gambar di bawah memakai antarmuka rilis sebenarnya dengan data demo lokal berlabel.
+
+[![Dasbor Blocknet yang dirilis menampilkan pembayaran demo masuk 1,25 BNT yang belum terkonfirmasi sebelum masuk ke blok.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Mengapa pembayaran terkonfirmasi masih tertunda?
+
+[Pemeriksaan kematangan wallet yang dirilis](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) memakai tinggi blockchain saat ini dikurangi tinggi blok yang memuat output. Output biasa yang belum dibelanjakan matang pada kedalaman sepuluh blok. Pembayaran dalam blok `100,000` mencapai kedalaman itu saat ujung blockchain mencapai `100,010`. Angka ini menggambarkan aturan, bukan laporan pembayaran langsung.
+
+[API detail transaksi](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) menghitung blok yang memuat transaksi sebagai konfirmasi pertama. Perhitungan keterbelanjaan wallet mulai dari kedalaman nol pada blok yang sama. Karena itu, detail dapat menampilkan sebelas konfirmasi ketika output biasa memenuhi kedalaman sepuluh blok yang disyaratkan wallet. Gunakan nilai saldo yang dapat dibelanjakan di dasbor untuk menentukan apakah dana siap digunakan.
+
+Pada contoh berikut, pembayaran sudah masuk ke blok dan empat blok berikutnya sudah hadir. Detail transaksi akan menampilkan lima konfirmasi, sementara dasbor tetap menempatkan ilustrasi 1,25 BNT dalam `Pending` dan menunjukkan sekitar enam blok tersisa. Kedua layar menjelaskan pembayaran yang sama dengan ukuran kesiapan berbeda.
+
+[![Dasbor Blocknet dengan penerimaan demo 1,25 BNT tertunda, saldo dapat dibelanjakan nol dan sekitar enam blok tersisa.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Bagaimana membaca perkiraan waktu?
+
+Sepuluh blok dikali target lima menit menghasilkan sekitar 50 menit setelah penyertaan. Waktu sebelumnya untuk menunggu transaksi masuk ke blok mendahului itu. Perhitungan ini menjelaskan skala waktu, bukan rata-rata terukur dari sampel pembayaran atau waktu pengiriman yang dijamin.
+
+Dasbor yang dirilis juga mengubah sisa blok menjadi perkiraan waktu. Dalam contoh enam blok tersisa, enam kali lima menghasilkan sekitar 30 menit. Blockchain tetap harus menghasilkan blok tersebut. Hitung mundur yang mencapai nol tidak menambah blok atau membuat output dapat dibelanjakan. Periksa kembali kemajuan blockchain dan saldo saat ini.
+
+Pemberitahuan pembayaran masuk dapat muncul sebelum transaksi masuk ke blok. Anggap perkiraannya sebagai petunjuk kemajuan, lalu ikuti blok yang memuatnya dan saldo yang dapat dibelanjakan. Sinkronisasi dan pemindaian wallet juga memengaruhi kapan layar lokal mencerminkan pekerjaan yang telah diselesaikan jaringan.
+
+## Di mana pengirim dan penerima memeriksa?
+
+Pengirim perlu membuka `History`, menemukan pembayaran keluar, dan menyimpan `TX Hash`. Penerima dapat memakai hash yang sama untuk mengenali transfer masuk. Jika kedua pihak membahas pembayaran, mencocokkan hash mencegah tertukar dengan pengiriman lain ke alamat yang sama.
+
+[Panduan explorer Blocknet](/id/blog/blocknet-explorer-guide/) menunjukkan cara mencari transaksi dan blok yang memuatnya. Pencarian publik membantu memeriksa penyertaan di jaringan. Wallet penerima menyediakan detail penerimaan dan saldo privat yang terkait dengan kuncinya. Gunakan wallet untuk memeriksa jumlah yang diterima.
+
+Di komputer penerima, buka wallet yang dimaksud dan bandingkan `Your Address` pada `Receive` dengan tujuan yang dipakai pengirim. Lalu periksa sinkronisasi node dan pemindaian wallet sebelum menyimpulkan catatan hilang. Wallet yang sebelumnya ditutup dapat membutuhkan waktu untuk menemukan pembayaran yang sudah berkembang di blockchain.
+
+## Kapan BNT yang diterima dapat dikirim lagi?
+
+Tunggu hingga penerimaan berkontribusi pada `Spendable Balance` di `Dashboard` yang tersinkronisasi. Anda juga dapat membaca `Pending` dan `Total` untuk melihat pembagian dana tercatat. Jika sebelumnya ada dana lain, sebagian saldo mungkin dapat dibelanjakan sementara penerimaan ini masih tertunda. Gunakan catatan riwayat yang cocok untuk mengikuti satu transfer.
+
+Gambar memperlihatkan pembayaran demo yang sama setelah sepuluh blok ditambahkan setelah blok yang memuatnya. Kini 1,25 BNT dapat dibelanjakan dan jumlah tertunda nol. Gambar ini mengilustrasikan frontend yang dirilis, bukan mengukur durasi transfer nyata. Saat menyiapkan pembayaran berikutnya, periksa jumlah dan biaya di wallet sebelum menyetujuinya.
+
+[![Dasbor Blocknet yang dirilis menampilkan pembayaran demo yang sama sebagai saldo dapat dibelanjakan 1,25 BNT setelah mencapai kedalaman sepuluh blok.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Apa yang diperiksa jika pembayaran belum muncul?
+
+Gunakan tahap yang dapat diverifikasi. Minta hash transaksi yang sudah ada dari pengirim, periksa penyertaannya, dan cocokkan tujuan penerimaan. Lalu ikuti [pemeriksaan sinkronisasi dan pemindaian wallet](/id/blog/blocknet-wallet-not-syncing/) jika riwayat atau saldo lokal belum mutakhir. Simpan catatan transaksi awal saat memeriksa; membuat pengiriman lain merupakan pembayaran terpisah.
+
+Untuk pendapatan penambangan, bedakan dahulu imbalan pool yang diperoleh dari pembayaran yang sudah dikirim ke alamat Anda. [Panduan konfirmasi imbalan penambangan](https://bntpool.com/blog/id/block-confirmations-mining-rewards/) menjelaskan tahap kematangan 60 blok tersendiri untuk koin baru ditambang. Setelah pool mengirim transaksi pembayaran biasa, ikuti penyertaan dan keterbelanjaan transaksi itu sendiri. [Panduan pembayaran yang belum diterima](https://bntpool.com/blog/id/pool-payout-missing-from-wallet/) menghubungkan catatan pool dengan wallet penerima.
+
+Pemeriksaan akhirnya sederhana: kenali wallet yang dimaksud, cocokkan hash transaksi pembayaran, dan periksa saldo dapat dibelanjakan setelah sinkronisasi dan pemindaian. Panduan ini menjelaskan aturan yang telah dirilis saat ini. [Panduan Faraday](/id/blog/blocknet-faraday-upgrade/) melacak perubahan jaringan masa depan yang diumumkan secara terpisah.
+
+<CTA target="seine" title="Tambang ke wallet Blocknet Anda" text="Gunakan seine dengan alamat penerimaan publik dan ikuti pembayaran pool ke wallet yang sama." />

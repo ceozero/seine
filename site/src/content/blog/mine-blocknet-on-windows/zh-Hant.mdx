@@ -1,6 +1,6 @@
 ---
 title: '如何在 Windows 上挖 Blocknet'
-description: '使用 seine 在 Windows 上挖 Blocknet。從選擇 ZIP、驗證下載和填寫地址，到確認 CPU 與 NVIDIA 同時運作並提交已接受的份額，本指南逐步說明。'
+description: '使用 seine 在 Windows 上挖 Blocknet。從選擇 ZIP、解壓縮檔案和填寫地址，到確認 CPU 與 NVIDIA 同時運作並提交已接受的份額，本指南逐步說明。'
 tags: ['挖礦指南', 'Windows', 'NVIDIA']
 faq:
   - q: '在 Windows 上挖 Blocknet 需要 CUDA Toolkit 嗎？'
@@ -9,11 +9,11 @@ faq:
     a: '預設情況下，seine 將收款地址、礦池和礦機名稱儲存在啟動目錄下的 seine-data/seine.config.json。從同一個解壓縮目錄執行即可沿用這些設定。需要其他目錄時，可以使用 data-dir 選項指定。'
   - q: '開始挖礦前需要啟用 Windows 大型分頁嗎？'
     a: '不需要。seine 會自動嘗試使用大型分頁，無法使用時則採用一般分頁。你可以直接使用預設設定開始挖礦。如需進行選用的大型分頁設定，請為挖礦帳戶授予「鎖定記憶體分頁」權限，然後登出並重新登入，再重新啟動 seine。'
-sourceHash: '40744a186c8a'
+sourceHash: '1b3fa78c3bfe'
 translation: draft
 ---
 
-本指南將帶你從下載 Windows ZIP，一直到在 bntpool.com 取得已接受的份額。你將檢查壓縮檔、解壓縮檔案、填寫收款地址，並確認 CPU 和支援的 NVIDIA 顯示卡正在挖礦。以下指令使用直接在 Windows 上執行的 PowerShell。
+本指南將帶你從下載 Windows ZIP，一直到在 bntpool.com 取得已接受的份額。你將解壓縮檔案、填寫收款地址，並確認 CPU 和支援的 NVIDIA 顯示卡正在挖礦。以下指令使用直接在 Windows 上執行的 PowerShell。
 
 ## 如何在 Windows 上開始挖 Blocknet？
 
@@ -25,20 +25,11 @@ translation: draft
 
 每個 CPU 挖礦執行緒使用一個 2 GiB 的記憶體區塊。seine 會檢查可用 RAM 和核心數，保留記憶體餘裕，並為你選擇初始執行緒數。桌上型電腦或筆記型電腦都可以從預設設定開始，不必預先計算執行緒數或選擇 CPU 運算核心程式。
 
-## 第 1 步：下載並檢查 Windows 壓縮檔
+## 第 1 步：下載 Windows 壓縮檔
 
-開啟[下載區域](/zh-hant/#download)，選擇 Windows x86_64。壓縮檔名為 `seine-windows-x86_64.zip`。如果想在解壓縮前驗證 ZIP，請從同一[發行版本](https://github.com/zpalmtree/seine/releases/latest)下載 `SHA256SUMS.txt`。壓縮檔與校驗和檔案必須來自同一發行版本。
+開啟[下載區域](/zh-hant/#download)，選擇 Windows x86_64。壓縮檔名為 `seine-windows-x86_64.zip`。
 
 ![seine 官方下載清單中的 Windows ZIP](/assets/blog/windows-download.png)
-
-在 PowerShell 中切換到 Downloads 資料夾，然後計算壓縮檔的 SHA-256 雜湊值：
-
-```powershell
-cd "$HOME\Downloads"
-Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
-```
-
-將顯示的雜湊值與 `SHA256SUMS.txt` 中該 ZIP 對應的項目比較。字母大小寫不影響結果，但每一位十六進位數字都必須一致。如果檔案儲存在其他資料夾，可以參考 [Microsoft 的 Get-FileHash 文件](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash)。校驗和用來確認壓縮檔與已發布版本一致；請從官方發行頁面下載這兩個檔案。
 
 ## 第 2 步：完整解壓縮 ZIP
 

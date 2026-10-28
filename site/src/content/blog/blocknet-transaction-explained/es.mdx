@@ -1,0 +1,68 @@
+---
+title: '¿Qué ocurre dentro de una transacción de Blocknet?'
+description: 'Sigue un pago de Blocknet desde las entradas hasta las salidas, el cambio, la comisión y la confirmación. Entiende por qué un pago puede tener varias salidas.'
+tags: ['Blocknet', 'Monedero', 'Pagos']
+faq:
+  - q: '¿Por qué mi pago de Blocknet tiene dos salidas?'
+    a: 'Un pago de importe fijo puede crear una salida para el destinatario y otra que devuelve al monedero el valor no utilizado de las entradas como cambio. También puede haber varios destinatarios, cambio dividido o ningún cambio. El número de salidas por sí solo no indica cuántas personas cobraron.'
+  - q: '¿Debo copiar una dirección de cambio antes de enviar?'
+    a: 'El constructor de transacciones del monedero revisado crea el cambio con las claves públicas de tu propio monedero. Tú introduces los datos del destinatario; el monedero gestiona su salida de cambio. Esa salida pertenece al monedero emisor y se puede gastar según las reglas habituales de confirmación y madurez.'
+  - q: '¿Un anillo de entrada gasta fondos de todos sus miembros?'
+    a: 'Cada entrada gasta una salida real propiedad del emisor. Los demás miembros del anillo ofrecen posibles orígenes para la prueba de privacidad; su valor no se suma al pago. Una transacción puede usar varias entradas reales, cada una con su anillo e imagen de clave.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Sigue un pago de Blocknet por las piezas que construye tu monedero: fondos existentes, nuevas salidas, cambio y comisión de red. Este recorrido explica por qué un pago a una persona puede tener varias salidas y por qué gastar una salida del monedero no significa entregar todo su valor al destinatario. El ejemplo contable usa importes inventados y toma como referencia de implementación el monedero de core v0.22.0 publicado.
+
+## ¿Cómo mueve tus fondos una transacción de Blocknet?
+
+<Answer>
+Tu monedero selecciona salidas propias que se pueden gastar, las usa como entradas y crea salidas nuevas para el destinatario y el cambio. El valor seleccionado cubre el importe del destinatario más la comisión de red. Las pruebas de privacidad permiten a la red validar el pago, mientras tu monedero reconoce las nuevas salidas que te pertenecen.
+</Answer>
+
+## Empieza por las salidas que ya posee tu monedero
+
+Una salida es una porción de valor creada por una transacción anterior. Mientras siga sin gastarse y cumpla las reglas de madurez, tu monedero puede elegirla para otro pago. El saldo puede incluir varias porciones de cobros anteriores, pagos de minería o cambio. Normalmente no necesitas elegirlas tú.
+
+Supón que tu monedero elige una salida de `10 BNT` para un pago de `3 BNT`. Gasta toda esa salida existente. La nueva transacción reparte después el valor entre destinatario, cambio y comisión. Otras salidas de tu monedero pueden quedar intactas; el total seleccionado no tiene por qué ser todo tu saldo.
+
+Varias salidas pequeñas también pueden financiar un solo pago. El [constructor del monedero publicado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) elige suficientes fondos maduros para cubrir el importe del destinatario y la comisión. La selección de entradas y la estimación de la comisión por tamaño se influyen mutuamente, por lo que importa la vista previa actual del monedero. La [guía de comisiones de transacción](/es/blog/blocknet-transaction-fees/) explica ese cálculo y dónde consultarlo.
+
+[![Transacción ilustrativa: 1 selecciona 10 BNT; 2 envía 3 BNT al destinatario; 3 devuelve 6,9995 BNT de cambio; 4 contabiliza una comisión de red de 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Lee el diagrama como contabilidad del monedero: **1** es la entrada elegida, **2** la salida del destinatario, **3** tu salida de cambio y **4** la comisión. Los números son ilustrativos; la comisión es supuesta, no una cotización. Las flechas muestran propiedad y asignación de valor, no vínculos públicos visibles en un explorador.
+
+## ¿Por qué un pago puede crear varias salidas?
+
+En este ejemplo, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. El destinatario recibe `3 BNT`, tu monedero recibe `6.9995 BNT` de cambio y la transacción paga la comisión supuesta de `0.0005 BNT`. Hay dos salidas nuevas de monedero aunque solo querías pagar a una persona. La comisión es un campo separado de la transacción, no una tercera salida de destinatario.
+
+Dos salidas son un ejemplo útil, no una regla para todos los pagos. El constructor admite varios destinatarios y su ruta avanzada de selección de entradas puede dividir el cambio entre varias salidas. Si el valor elegido cubre exactamente destinatarios y comisión, no hace falta salida de cambio. Una operación de enviar todo calcula, en cambio, el importe del destinatario descontando la comisión del total seleccionado que se puede gastar.
+
+Por tanto, el número de salidas describe la estructura de la transacción. No cuenta clientes, facturas ni monederos distintos. Varias salidas pueden pertenecer al mismo monedero y una transacción con varias entradas puede pagar a un solo destinatario. Ten presentes estas diferencias al comparar el registro de pago del monedero con el resumen estructural más breve del explorador.
+
+## ¿Adónde va el cambio?
+
+El monedero construye el cambio para sus propias claves. En el ejemplo, la salida original de `10 BNT` se consume y el cambio de `6.9995 BNT` es una salida nueva que el mismo monedero reconoce. En el envío habitual no necesitas añadir un segundo destinatario ni copiar manualmente una dirección de cambio.
+
+Las salidas del destinatario y el cambio usan claves de salida de un solo uso. La transacción pública no coloca tu dirección habitual de recepción junto a una etiqueta de «cambio». Tu monedero tiene la información privada necesaria para reconocer sus salidas. La [guía de direcciones sigilosas](/es/blog/stealth-addresses-explained/) explica cómo se relacionan esas claves de un solo uso con una dirección de recepción reutilizable.
+
+El cambio también sigue las reglas de las salidas recién creadas. Tras enviar, parte del saldo puede esperar confirmación o madurez aunque siga perteneciendo a ti. Una salida madura intacta puede seguir disponible mientras el cambio nuevo está pendiente. Consulta el saldo gastable antes de otro pago; la [guía de tiempos de transferencia](/es/blog/blocknet-transfer-time/) explica las etapas desde la difusión hasta que se puede gastar.
+
+## ¿Qué comprueba la red y qué muestra el explorador?
+
+Cada entrada real tiene una prueba de privacidad que la sitúa entre posibles salidas anteriores. Los demás miembros del anillo son señuelos: no aportan fondos de sus propietarios a tu pago. Una imagen de clave permite a la red detectar un gasto repetido sin publicar qué miembro del anillo era el origen real. Consulta las [firmas de anillo](/es/blog/ring-signatures-explained/) para conocer ese mecanismo.
+
+La red también verifica compromisos de importes y pruebas, incluido que la transacción cuadre con su comisión. La [guía de pruebas de rango](/es/blog/bulletproofs-explained/) explica cómo funcionan esas comprobaciones con importes ocultos. Los datos públicos incluyen el hash, la estructura de entradas y salidas y la comisión. Pegar el hash en el explorador no revela por sí solo la contabilidad privada del ejemplo.
+
+Usa tu monedero para identificar tus cobros y tu cambio. Usa el [explorador](/es/blog/blocknet-explorer-guide/) para consultar el estado público de transacciones y bloques. Para entender qué puede saber un emisor, destinatario o tercero, la [guía de visibilidad de pagos](/es/blog/blocknet-payment-visibility/) compara sus perspectivas y las opciones para compartir información deliberadamente.
+
+## Sigue el pago durante la confirmación
+
+Antes de confirmar un envío, lee juntos los datos del destinatario, su importe, la comisión y el cambio. Una vez enviada, el hash identifica toda la transacción, incluidas todas sus entradas y salidas. No es una dirección de recepción ni el identificador exclusivo de la salida del destinatario.
+
+La difusión, la inclusión en un bloque y la posibilidad de gastar son etapas distintas. El monedero del destinatario busca salidas para sus claves, mientras el tuyo reconoce su cambio. La confirmación y la madurez determinan cuándo pueden usarse esas salidas en otra transacción. La [guía de envío y recepción](/es/blog/send-receive-blocknet/) cubre los pasos reales en el monedero.
+
+Para una consulta sobre un pago, empieza por el importe previsto y el registro del monedero, y comprueba después el estado de la transacción. Así puedes interpretar el pago: qué se seleccionó, qué recibió el destinatario, qué volvió como cambio y qué sigue pendiente. Sirve tanto si los fondos procedían de otra persona como de un [pago de un pool de minería](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Usa seine con bntpool.com para minar Blocknet y recibir los pagos en tu monedero." />

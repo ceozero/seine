@@ -1,0 +1,60 @@
+---
+title: '¿Qué puede ver alguien de un pago de Blocknet?'
+description: 'Descubre qué ven remitente, destinatario, explorador y quien tiene acceso de lectura, y cómo las pruebas y los registros compartidos afectan a la privacidad.'
+tags: ['Blocknet', 'Privacidad', 'Pagos']
+faq:
+  - q: '¿El hash de una transacción de Blocknet revela cuánto pagué?'
+    a: 'El hash permite localizar una transacción pública. Su página normal en el explorador muestra campos como la comisión, el bloque y las confirmaciones, mientras que los importes permanecen ocultos. El destinatario puede consultar su propio cobro en la cartera. Datos adicionales, como la clave de transacción y la dirección del destinatario, permiten verificar un pago de forma deliberada.'
+  - q: '¿Alguien puede ver mi saldo con mi dirección de recepción?'
+    a: 'Una dirección de recepción no ofrece una página pública de saldo como la que se podría esperar de una cadena transparente. Los pagos usan direcciones de salida de un solo uso e importes ocultos. Quien conoce tu dirección puede saber que es tuya por una factura, perfil o conversación. Distingue ese contexto externo de lo que publica la cadena.'
+  - q: '¿Una cartera de solo lectura revela información privada de pagos?'
+    a: 'Sí. El acceso de lectura permite identificar salidas entrantes y leer sus importes y memos recuperables. No concede autorización para gastar. Por tanto, una copia de lectura contiene información privada aunque solo se utilice para supervisar. Usa una prueba de pago de una transacción concreta cuando esa sea la evidencia que quieras compartir.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Entiende un pago de Blocknet desde cuatro perspectivas: quien lo envía, quien lo recibe, quien consulta el explorador público y quien dispone de acceso de lectura. Esta guía describe core v0.22.0 publicado, comprobado el 27 de octubre de 2026. Te ayuda a elegir qué compartir al recibir dinero, comprobar un pago o pedir ayuda.
+
+## ¿Qué mantiene privado Blocknet?
+
+<Answer>
+Blocknet usa firmas de anillo para la entrada gastada, direcciones sigilosas de un solo uso para los destinatarios y compromisos con pruebas de rango para los importes. La transacción pública sigue teniendo hash, comisión y estructura. Tu cartera aporta los detalles privados asociados a tus claves. Compartir un recibo, una prueba de pago o acceso de lectura aporta información adicional a quien lo recibe.
+</Answer>
+
+## ¿Qué puede ver cualquiera en el explorador?
+
+Abre una transacción en el [explorador de Blocknet](/es/blog/blocknet-explorer-guide/). Su registro público incluye hash, bloque que la contiene, número de confirmaciones, comisión, anillos de entrada y datos de salida. Un observador puede ver que existe una transacción e inspeccionar su estructura. El importe comprometido en cada salida y el texto de su memo cifrado no aparecen como campos públicos normales.
+
+La [introducción a la privacidad](/es/blog/blocknet-privacy-features/) explica cómo encajan las capas. Hoy cada entrada tiene un anillo de 16 miembros: la salida real y 15 señuelos. Una firma de anillo demuestra que un miembro autorizó el gasto sin identificar cuál. La dirección de un solo uso de una salida es distinta de la dirección de recepción que diste a quien paga.
+
+[![Un registro público muestra hash, bloque y comisión, mientras que la cartera del destinatario revela el importe y memo de su propio cobro.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## ¿Qué saben remitente y destinatario?
+
+El remitente conoce el destino, importe y memo que introdujo. Su registro de envío puede asociarlos con un hash de transacción. La cartera del destinatario reconoce sus salidas entrantes y recupera el importe y el memo. Usa la [guía de envío y recepción](/es/blog/send-receive-blocknet/) para encontrar los registros correspondientes.
+
+Una transacción privada no proporciona automáticamente un nombre real verificado del remitente. El destinatario puede saber quién pagó porque emitió una factura, habló del pago o recibió su hash. Ese conocimiento procede de la interacción. Un comercio puede conservar el pedido y la dirección de entrega junto al pago realizado.
+
+Por ejemplo, envías el importe acordado de un pedido y pones su referencia en un memo. El comercio puede relacionar el cobro con el pedido. Un visitante del explorador público ve la estructura de la transacción sin recibir automáticamente los detalles del pedido. Si cualquiera publica una captura de la cartera con importe, nota y hash, esa publicación aporta información que la página pública normal no mostraba.
+
+## ¿Qué cambia al compartir una prueba o clave de visualización?
+
+Una [prueba de pago](/es/blog/blocknet-payment-proof/) usa una clave específica de la transacción junto con el hash y la dirección del destinatario para comprobar salidas coincidentes. En la API de verificación publicada, estos campos pueden revelar el importe coincidente y el memo recuperable. Compartirlos es una forma deliberada de acreditar un pago concreto. El servidor que recibe la solicitud de verificación también recibe los campos enviados.
+
+Una [cartera de solo lectura](/es/blog/blocknet-view-only-wallet/) ofrece acceso más amplio a los registros entrantes de esa cartera. Su titular puede identificar cobros y leer detalles privados, mientras que la cartera completa conserva la capacidad de gasto. El acceso de lectura no demuestra que se reflejen todos los registros salientes ni todas las decisiones actuales sobre saldo disponible. Usa la cartera completa para decidir qué gastar. Cambiar la contraseña del archivo de lectura no revoca una clave ya copiada.
+
+[![Una prueba específica identifica un pago para verificarlo, mientras que el acceso de lectura cubre registros entrantes y permanece separado de la capacidad de gasto.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## ¿Y los nombres públicos y la información de red?
+
+Un [nombre de Blocknet ID](/es/blog/blocknet-id-pay-by-name/) permite encontrar públicamente un destino de recepción. Publicarlo en un perfil puede asociarlo contigo. El pago sigue usando direcciones de salida de un solo uso e importes ocultos del protocolo. Publicar un nombre y publicar acceso privado a la cartera son decisiones distintas.
+
+La privacidad de red tiene su propia capa. [Dandelion++](/es/blog/dandelion-plus-plus-explained/) retransmite una transacción nueva por una fase de tallo antes de difundirla ampliamente, reduciendo la relación directa entre su origen y los primeros pares que la reciben. Esto no borra una factura, un mensaje de chat ni los datos enviados a una web. El operador del explorador recibe tu consulta; un verificador remoto recibe los campos de la prueba enviados.
+
+## ¿Cómo elegir qué compartir?
+
+Para recibir un pago, comparte la dirección de recepción o el nombre público previsto. Para comprobar si una transacción entró en un bloque, usa su hash. Para demostrar un cobro concreto, sigue el procedimiento de prueba de pago y considera el importe y memo que revela. Para supervisar pagos entrantes continuamente, concede acceso de lectura de forma deliberada. Estas opciones responden a preguntas diferentes.
+
+Antes de publicar una captura, revisa dirección, hash, saldo, notas y cualquier clave visible. No publiques palabras de recuperación, claves de gasto ni secretos de visualización de toda la cartera en mensajes de soporte. La [guía de copias de seguridad](/es/blog/blocknet-wallet-backup-restore/) explica el material de recuperación. Para seguir la actualización propuesta, consulta [los cambios de privacidad de Faraday](/es/blog/blocknet-faraday-privacy/) sobre el diseño futuro; esta guía describe el formato de pago publicado actualmente.
+
+<CTA target="seine" title="Recibe pagos de minería en tu cartera" text="Usa seine con tu dirección de recepción y sigue tus pagos mediante los registros de cartera que decidas compartir." />

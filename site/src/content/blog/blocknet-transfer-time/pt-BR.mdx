@@ -1,0 +1,76 @@
+---
+title: 'Quanto tempo leva uma transferência de Blocknet?'
+description: 'Acompanhe uma transferência de Blocknet do envio ao saldo disponível. Entenda as confirmações, a estimativa da carteira e onde verificar cada etapa.'
+tags: ['Blocknet', 'Carteira', 'Pagamentos']
+faq:
+  - q: 'Um pagamento de Blocknet pode ser gasto após a primeira confirmação?'
+    a: 'No core v0.22.0 analisado, a carteira libera uma saída recebida comum quando a ponta da cadeia está dez blocos além do bloco que a contém. O detalhe da transação já pode marcá-la como confirmada ao entrar em um bloco. Confira Spendable Balance após a sincronização e a varredura antes de enviar esses fundos adiante.'
+  - q: 'Fechar minha carteira atrasa o pagamento do remetente?'
+    a: 'A rede pode incluir um pagamento para seu endereço enquanto a carteira está fechada. Ao reabri-la, o nó e a carteira precisam se atualizar para exibir o recebimento e o saldo atuais. Mantê-la aberta ajuda a acompanhar o progresso, mas os blocos da rede determinam a profundidade das confirmações.'
+  - q: 'Uma transferência comum precisa esperar os 60 blocos da recompensa de mineração?'
+    a: 'Na versão analisada, uma transferência comum segue a regra da carteira de dez blocos de profundidade. Saídas coinbase recém-mineradas têm uma maturidade separada de 60 blocos. O pagamento de um pool é uma transação posterior, após a contabilização das recompensas. Quando o pool o enviar, acompanhe essa transação de pagamento.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Acompanhe um pagamento de Blocknet pelas etapas importantes para remetente e destinatário: envio, inclusão em um bloco e saldo disponível na carteira. Este guia explica os tempos mostrados pelo core e pela carteira desktop v0.22.0, verificados em 27 de outubro de 2026. Guarde o hash da transação para que ambos acompanhem a mesma transferência.
+
+## Quanto tempo leva uma transferência de Blocknet?
+
+<Answer>
+Blocknet tem uma meta de cinco minutos por bloco. Após um pagamento comum entrar em um bloco, a carteira publicada espera mais dez blocos antes de liberar os fundos: cerca de 50 minutos no intervalo-alvo, além da espera anterior pela inclusão. Os tempos reais variam. Acompanhe a transação e o saldo disponível, em vez de depender de um prazo fixo.
+</Answer>
+
+## Acompanhe as três etapas do pagamento
+
+Primeiro, o remetente revisa e confirma o pagamento na carteira. Guarde o hash retornado para esse envio. Uma transação no mempool do nó foi recebida por esse nó e aguarda inclusão em um bloco. Estar ali não garante que entre no próximo bloco. O [guia de envio e recebimento](/pt-br/blog/send-receive-blocknet/) explica como preparar e aprovar o pagamento.
+
+Depois, a transação entra em um bloco aceito. O detalhe pode mostrar `Confirmed`, a altura do bloco e o número de confirmações. Isso ajuda a comprovar a inclusão. A carteira do destinatário identifica sua própria saída recebida ao percorrer a cadeia.
+
+Por fim, chegam blocos posteriores suficientes para tornar a saída disponível conforme as regras da carteira. O destinatário pode então usar o valor em `Spendable Balance`. Antes da inclusão, o painel pode mostrar um aviso separado de pagamento não confirmado se a carteira local detectar uma entrada no mempool. A captura abaixo usa a interface real publicada com dados locais de demonstração identificados.
+
+[![Dashboard publicado do Blocknet mostrando um pagamento recebido de demonstração de 1,25 BNT ainda não confirmado, antes da inclusão em um bloco.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Por que um pagamento confirmado ainda pode estar pendente?
+
+A [verificação de maturidade da carteira publicada](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) subtrai a altura do bloco que contém a saída da altura atual da cadeia. Uma saída comum não gasta amadurece com dez blocos de profundidade. Um pagamento incluído no bloco `100,000` alcança essa profundidade quando a ponta chega a `100,010`. Essas alturas ilustram a regra; não são o relato de um pagamento real.
+
+A [API de detalhes de transações](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) conta o bloco que contém a transação como a primeira confirmação. O cálculo de disponibilidade da carteira começa com profundidade zero nesse mesmo bloco. Assim, o detalhe pode mostrar onze confirmações quando a saída comum atinge a profundidade exigida de dez blocos. Use o saldo disponível do painel para decidir se os fundos estão prontos para uso.
+
+No exemplo abaixo, o pagamento foi incluído e chegaram quatro blocos posteriores. O detalhe mostraria cinco confirmações, enquanto o painel mantém os 1,25 BNT ilustrativos em `Pending` e indica cerca de seis blocos restantes. As duas telas descrevem o mesmo pagamento com critérios diferentes de disponibilidade.
+
+[![Dashboard do Blocknet com o recebimento de demonstração de 1,25 BNT em Pending, nenhum fundo disponível e cerca de seis blocos restantes.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Como interpretar a estimativa de tempo?
+
+Dez blocos multiplicados pela meta de cinco minutos resultam em cerca de 50 minutos após a inclusão. Antes disso vem a espera para a transação entrar em um bloco. O cálculo explica a ordem de grandeza; não é uma média medida de pagamentos nem um prazo garantido.
+
+O painel publicado também converte blocos restantes em um tempo aproximado. Com seis blocos faltando, seis vezes cinco resulta em cerca de 30 minutos. A cadeia ainda precisa produzir esses blocos. Um contador chegar a zero não adiciona um bloco nem libera uma saída por si só. Confira novamente o progresso atual da cadeia e o saldo.
+
+Um aviso de pagamento recebido pode aparecer antes da inclusão. Use a estimativa como orientação e depois acompanhe o bloco que contém a transação e o saldo disponível. A sincronização e a varredura da carteira também afetam quando sua tela local reflete o que a rede já fez.
+
+## Onde remetente e destinatário devem verificar?
+
+O remetente deve abrir `History`, localizar o pagamento enviado e guardar seu `TX Hash`. O destinatário pode usar o mesmo hash para identificar a transferência recebida. Compará-lo evita confundir o pagamento com outro envio ao mesmo endereço.
+
+O [guia do explorador de Blocknet](/pt-br/blog/blocknet-explorer-guide/) mostra como procurar uma transação e seu bloco. A consulta pública ajuda a verificar a inclusão na rede. A carteira do destinatário fornece os detalhes privados de recebimento e saldo associados às suas chaves. Use a carteira para conferir o valor recebido.
+
+No computador que recebe, abra a carteira correta e compare `Your Address`, em `Receive`, com o destino usado pelo remetente. Depois confira a sincronização do nó e a varredura antes de considerar que uma entrada está ausente. Uma carteira que estava fechada pode precisar de tempo para descobrir pagamentos que já avançaram na cadeia.
+
+## Quando posso enviar os BNT recebidos adiante?
+
+Espere o recebimento contribuir para `Spendable Balance` em um `Dashboard` sincronizado. Consulte também `Pending` e `Total` para ver a divisão dos fundos registrados. Se você já tinha outros fundos, parte do saldo pode estar disponível enquanto esse recebimento continua pendente. Use a entrada correspondente do histórico para acompanhar uma transferência específica.
+
+A captura mostra o mesmo pagamento de demonstração após a adição de dez blocos depois daquele que o contém. Seus 1,25 BNT agora estão disponíveis e o valor pendente é zero. As imagens ilustram o frontend publicado; não medem o tempo de uma transferência real. Antes de aprovar o próximo pagamento, revise o valor e a taxa na carteira.
+
+[![Dashboard publicado do Blocknet mostrando o mesmo pagamento de demonstração como 1,25 BNT de Spendable Balance após dez blocos de profundidade.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## O que verificar se o pagamento não apareceu?
+
+Comece pela etapa que consegue verificar. Peça ao remetente o hash existente, confira a inclusão e compare o destino. Depois siga as [verificações de sincronização e varredura](/pt-br/blog/blocknet-wallet-not-syncing/) se o histórico ou saldo local estiver desatualizado. Guarde o registro original durante a checagem; fazer outro envio é um pagamento separado.
+
+Para renda de mineração, primeiro diferencie uma recompensa ganha no pool de um pagamento já enviado ao seu endereço. O [guia de confirmações de recompensas](https://bntpool.com/blog/pt-br/block-confirmations-mining-rewards/) explica a etapa separada de maturidade de 60 blocos das moedas recém-mineradas. Depois que o pool envia uma transação comum de pagamento, acompanhe a inclusão e a disponibilidade dessa transação na carteira. O [guia de pagamentos ausentes](https://bntpool.com/blog/pt-br/pool-payout-missing-from-wallet/) conecta o registro do pool à carteira que recebe.
+
+A conferência final é simples: identifique a carteira correta, compare o hash do pagamento e confira o saldo disponível após a sincronização e a varredura. Este guia descreve as regras atualmente publicadas. O [guia de Faraday](/pt-br/blog/blocknet-faraday-upgrade/) acompanha separadamente as mudanças futuras anunciadas para a rede.
+
+<CTA target="seine" title="Minere para sua carteira de Blocknet" text="Use seine com seu endereço público de recebimento e acompanhe os pagamentos do pool na mesma carteira." />

@@ -1,0 +1,61 @@
+---
+title: 'What can someone see about a Blocknet payment?'
+description: 'Learn what a Blocknet sender, recipient, public explorer and view-key holder can see, and how payment proofs and shared records affect payment privacy.'
+date: 2026-10-27
+tags: ['Blocknet', 'Privacy', 'Payments']
+faq:
+  - q: 'Does a Blocknet transaction hash reveal the amount I paid?'
+    a: 'A transaction hash locates a public transaction. Its ordinary explorer page shows fields such as the fee, block and confirmation count, while payment amounts remain hidden. A recipient can read their own receipt through their wallet. Additional information, such as a transaction key and recipient address, enables deliberate payment verification.'
+  - q: 'Can someone see my balance from my receiving address?'
+    a: 'A receiving address does not provide a public address-balance page like the one users may expect from a transparent chain. Payments use one-time output addresses and hidden amounts. Someone who knows your address can still know that it belongs to you through your invoice, profile or conversation. Keep that outside context separate from what the chain publishes.'
+  - q: 'Does a view-only wallet reveal private payment information?'
+    a: 'Yes. Viewing access lets the holder identify incoming outputs and read their amounts and recoverable memos. It does not grant spending authority. A viewing copy is therefore private information, even when used only for monitoring. Use a transaction-specific payment proof when that is the evidence you intend to share.'
+related: [blocknet-transaction-explained, blocknet-payment-proof, blocknet-view-only-wallet, blocknet-faraday-privacy]
+image: /assets/blog/blocknet-payment-visibility-public.svg
+---
+
+Understand a Blocknet payment from four viewpoints: the person sending it, the person receiving it, someone reading the public explorer, and someone given viewing access. This guide describes released core v0.22.0, checked on October 27, 2026. It helps you choose which information to share when receiving money, checking a payment or asking for help.
+
+## What does Blocknet keep private?
+
+<Answer>
+Blocknet uses ring signatures for the spent input, one-time stealth addresses for recipients, and commitments with range proofs for amounts. The public transaction still has a hash, fee and structure. Your wallet supplies the private details that belong to your keys. Sharing a receipt, payment proof or viewing access gives its recipient additional information.
+</Answer>
+
+## What can anyone see in the explorer?
+
+Open a transaction in the [Blocknet explorer](/blog/blocknet-explorer-guide/). Its public record includes the transaction hash, containing block and confirmation count, fee, input rings and output data. An observer can see that a transaction exists and inspect its structure. The amount committed to each output and the text of its encrypted memo are not displayed as ordinary public fields.
+
+The [privacy overview](/blog/blocknet-privacy-features/) explains how the layers fit together. Today each input has a ring of 16 members: the real output and 15 decoys. A ring signature proves that a member authorized the spend without identifying which member. The one-time address on an output is different from the receiving address you gave the payer.
+
+[![A public transaction record shows its hash, block and fee, while the recipient wallet reveals its own receipt amount and memo.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## What do the sender and recipient know?
+
+The sender knows the destination, amount and memo they entered. Their sending record can associate that information with a transaction hash. The recipient wallet recognizes its incoming outputs and recovers the amount and memo. Use the [sending and receiving guide](/blog/send-receive-blocknet/) to find the relevant wallet records.
+
+A private transaction does not automatically provide a verified real-world sender name. A recipient may know who paid because they issued an invoice, discussed the payment or received its hash. That knowledge comes from the interaction. A merchant can retain an order and delivery address alongside the payment you made.
+
+For example, you send an agreed amount for an order and put its reference in a memo. The merchant can connect the receipt to that order. A public explorer visitor sees the transaction structure without automatically receiving your order details. If either person posts a wallet screenshot with the amount, note and hash, the post supplies information that the ordinary public transaction page did not show.
+
+## What changes when you share a payment proof or view key?
+
+A [payment proof](/blog/blocknet-payment-proof/) uses a transaction-specific key together with the hash and recipient address to check matching outputs. In the released verification API, those fields can reveal the matched amount and recoverable memo. Sharing them is a deliberate way to establish a particular payment. The server receiving a verification request also receives the fields you submit.
+
+A [view-only wallet](/blog/blocknet-view-only-wallet/) gives broader access to incoming records for the corresponding wallet. Its holder can identify receipts and read private payment details, while the full wallet keeps spending authority. Viewing access does not establish that every outgoing record or current spendable-balance decision is mirrored. Use the full wallet for spending decisions. Changing the viewing file’s password does not revoke a key already copied.
+
+[![A transaction-specific proof identifies one payment for verification, while wallet viewing access covers incoming records and remains separate from spending authority.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## What about public names and network information?
+
+A [Blocknet ID name](/blog/blocknet-id-pay-by-name/) is a public way for a payer to find a receiving destination. Putting that name on a profile can associate it with you. The payment still uses the protocol’s one-time output addresses and hidden amounts. Publishing a name and publishing private wallet access are different sharing decisions.
+
+Network privacy has its own layer. [Dandelion++](/blog/dandelion-plus-plus-explained/) relays a new transaction through a stem before wider broadcast, reducing the direct connection between its origin and the peers first hearing it. That mechanism does not erase an invoice, a chat message, or the information you send to a website. An explorer operator receives your lookup request; a remote proof checker receives the proof fields submitted to it.
+
+## How do you choose what to share?
+
+For receiving a payment, share the intended receiving address or public name. For checking whether a transaction entered a block, use its hash. For demonstrating a particular receipt, follow the payment-proof workflow and consider the amount and memo it discloses. For ongoing incoming-payment monitoring, grant viewing access deliberately. These choices answer different questions.
+
+Before posting a screenshot, inspect the address, hash, balance, notes and any keys visible in it. Keep recovery words, spending keys and wallet-wide viewing secrets out of public support messages. The [wallet backup guide](/blog/blocknet-wallet-backup-restore/) explains recovery material. When following the proposed upgrade, use [Faraday’s privacy changes](/blog/blocknet-faraday-privacy/) for the future design; this guide describes today’s released payment format.
+
+<CTA target="seine" title="Receive mining payments in your own wallet" text="Use seine with your receiving address and follow your payouts through the wallet records you choose to share." />

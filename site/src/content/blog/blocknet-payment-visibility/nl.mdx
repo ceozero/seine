@@ -1,0 +1,60 @@
+---
+title: 'Wat kan iemand zien van een Blocknet-betaling?'
+description: 'Lees wat verzender, ontvanger, openbare explorer en iemand met een view key kunnen zien, en hoe betaalbewijzen en gedeelde gegevens je privacy beïnvloeden.'
+tags: ['Blocknet', 'Privacy', 'Betalingen']
+faq:
+  - q: 'Onthult een Blocknet-transactiehash hoeveel ik heb betaald?'
+    a: 'Een transactiehash wijst naar een openbare transactie. De gewone explorerpagina toont velden zoals de fee, het blok en het aantal bevestigingen, terwijl betaalbedragen verborgen blijven. Een ontvanger kan de eigen ontvangst in de wallet lezen. Aanvullende informatie, zoals een transactiesleutel en het ontvangstadres, maakt bewuste verificatie van een betaling mogelijk.'
+  - q: 'Kan iemand mijn saldo zien via mijn ontvangstadres?'
+    a: 'Een ontvangstadres biedt geen openbare saldopagina per adres zoals gebruikers mogelijk verwachten bij een transparante blockchain. Betalingen gebruiken eenmalige outputadressen en verborgen bedragen. Iemand die je adres kent, kan via je factuur, profiel of gesprek wel weten dat het van jou is. Houd die context buiten de blockchain gescheiden van wat de blockchain publiceert.'
+  - q: 'Onthult een view-only wallet privégegevens over betalingen?'
+    a: 'Ja. Met kijktoegang kan de houder inkomende outputs herkennen en hun bedragen en terug te halen memo’s lezen. Het geeft geen bevoegdheid om te besteden. Een kijkkopie bevat dus privégegevens, ook als die alleen voor monitoring wordt gebruikt. Gebruik een transactiespecifiek betaalbewijs als dat het bewijs is dat je wilt delen.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Bekijk een Blocknet-betaling vanuit vier perspectieven: de verzender, de ontvanger, iemand die de openbare explorer leest en iemand met kijktoegang. Deze gids beschrijft de uitgebrachte core v0.22.0, gecontroleerd op 27 oktober 2026. Zo kun je kiezen welke informatie je deelt wanneer je geld ontvangt, een betaling controleert of hulp vraagt.
+
+## Wat houdt Blocknet privé?
+
+<Answer>
+Blocknet gebruikt ringhandtekeningen voor de bestede input, eenmalige stealth-adressen voor ontvangers en commitments met range proofs voor bedragen. De openbare transactie heeft nog steeds een hash, fee en structuur. Je wallet levert de privégegevens die bij je sleutels horen. Een ontvangstbewijs, betaalbewijs of kijktoegang delen geeft de ontvanger daarvan extra informatie.
+</Answer>
+
+## Wat kan iedereen in de explorer zien?
+
+Open een transactie in de [Blocknet-explorer](/nl/blog/blocknet-explorer-guide/). Het openbare record bevat de transactiehash, het bijbehorende blok en aantal bevestigingen, de fee, inputringen en outputgegevens. Een waarnemer kan zien dat een transactie bestaat en de structuur onderzoeken. Het bedrag in de commitment van elke output en de tekst van de versleutelde memo worden niet als gewone openbare velden getoond.
+
+Het [privacyoverzicht](/nl/blog/blocknet-privacy-features/) legt uit hoe de lagen samenwerken. Vandaag heeft elke input een ring van 16 leden: de echte output en 15 decoys. Een ringhandtekening bewijst dat een lid de besteding heeft geautoriseerd, zonder te identificeren welk lid. Het eenmalige adres van een output verschilt van het ontvangstadres dat je aan de betaler gaf.
+
+[![Een openbaar transactierecord toont hash, blok en fee, terwijl de wallet van de ontvanger het bedrag en de memo van de eigen ontvangst laat zien.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## Wat weten de verzender en ontvanger?
+
+De verzender kent de bestemming, het bedrag en de ingevoerde memo. Het verzendrecord kan die informatie aan een transactiehash koppelen. De wallet van de ontvanger herkent de eigen inkomende outputs en haalt bedrag en memo terug. Gebruik de [gids voor verzenden en ontvangen](/nl/blog/send-receive-blocknet/) om de relevante walletgegevens te vinden.
+
+Een privétransactie levert niet automatisch een geverifieerde echte naam van de verzender. Een ontvanger kan weten wie betaald heeft doordat die een factuur heeft verstuurd, de betaling heeft besproken of de hash heeft ontvangen. Die kennis komt uit de interactie. Een handelaar kan een bestelling en afleveradres bewaren naast de betaling die je deed.
+
+Je stuurt bijvoorbeeld het afgesproken bedrag voor een bestelling en zet het bestelnummer in een memo. De handelaar kan de ontvangst aan die bestelling koppelen. Een bezoeker van de openbare explorer ziet de transactiestructuur zonder automatisch je bestelgegevens te krijgen. Als een van beiden een walletscreenshot met bedrag, notitie en hash publiceert, voegt dat bericht informatie toe die de gewone openbare transactiepagina niet liet zien.
+
+## Wat verandert er als je een betaalbewijs of view key deelt?
+
+Een [betaalbewijs](/nl/blog/blocknet-payment-proof/) gebruikt een transactiespecifieke sleutel samen met de hash en het ontvangstadres om overeenkomende outputs te controleren. In de uitgebrachte verificatie-API kunnen die velden het bijbehorende bedrag en de terug te halen memo onthullen. Ze delen is een bewuste manier om een bepaalde betaling aan te tonen. De server die een verificatieverzoek ontvangt, krijgt ook de velden die je instuurt.
+
+Een [view-only wallet](/nl/blog/blocknet-view-only-wallet/) geeft bredere toegang tot de inkomende records van de bijbehorende wallet. De houder kan ontvangsten herkennen en privégegevens van betalingen lezen, terwijl de volledige wallet de bevoegdheid om te besteden behoudt. Kijktoegang garandeert niet dat elk uitgaand record of elke beslissing over het huidige uitgeefbare saldo wordt gespiegeld. Gebruik de volledige wallet voor bestedingsbeslissingen. Het wachtwoord van het kijkbestand veranderen trekt een eerder gekopieerde sleutel niet in.
+
+[![Een transactiespecifiek bewijs identificeert één betaling voor verificatie, terwijl kijktoegang tot de wallet inkomende records omvat en losstaat van bestedingsbevoegdheid.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## Hoe zit het met openbare namen en netwerkgegevens?
+
+Een [Blocknet ID-naam](/nl/blog/blocknet-id-pay-by-name/) is een openbare manier voor een betaler om een ontvangstadres te vinden. De naam op een profiel zetten kan die aan jou koppelen. De betaling gebruikt nog steeds de eenmalige outputadressen en verborgen bedragen van het protocol. Een naam publiceren en privétoegang tot de wallet publiceren zijn verschillende keuzes over gegevens delen.
+
+Netwerkprivacy heeft een eigen laag. [Dandelion++](/nl/blog/dandelion-plus-plus-explained/) geeft een nieuwe transactie door via een stem-fase vóór bredere verspreiding, waardoor de directe koppeling tussen de oorsprong en de peers die haar eerst horen afneemt. Dat mechanisme wist geen factuur, chatbericht of informatie die je naar een website stuurt. Een explorerbeheerder ontvangt je zoekverzoek; een externe bewijscontroleur ontvangt de ingediende bewijsvelden.
+
+## Hoe kies je wat je deelt?
+
+Om een betaling te ontvangen, deel je het bedoelde ontvangstadres of de openbare naam. Om te controleren of een transactie in een blok is opgenomen, gebruik je de hash. Om een bepaalde ontvangst aan te tonen, volg je de betaalbewijsprocedure en houd je rekening met het onthulde bedrag en de memo. Voor doorlopende monitoring van inkomende betalingen verleen je bewust kijktoegang. Deze keuzes beantwoorden verschillende vragen.
+
+Controleer vóór het plaatsen van een screenshot het adres, de hash, het saldo, notities en eventuele zichtbare sleutels. Houd herstelwoorden, spend keys en walletbrede kijkgeheimen buiten openbare supportberichten. De [gids voor walletback-ups](/nl/blog/blocknet-wallet-backup-restore/) legt herstelmateriaal uit. Volg voor de voorgestelde upgrade [Faradays privacywijzigingen](/nl/blog/blocknet-faraday-privacy/) voor het toekomstige ontwerp; deze gids beschrijft het huidige uitgebrachte betaalformaat.
+
+<CTA target="seine" title="Ontvang miningbetalingen in je eigen wallet" text="Gebruik seine met je ontvangstadres en volg je uitbetalingen via de walletrecords die je kiest te delen." />

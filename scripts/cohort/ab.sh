@@ -5,6 +5,8 @@
 # the host from /opt/cohort as root, e.g. "remote_bin_ab.sh depth avx2-stream 12 24".
 # Optional EXTRA_DIR (for example competitor binaries) is uploaded as /opt/cohort/extra.
 # The lease is deleted on exit; its systemd timer remains the backstop.
+# KEEP_LEASE=1 keeps it on success for a follow-up screen (rerun ab.sh with the same
+# name; each run uploads into a fresh /opt/cohort/results and steps).
 set -euo pipefail
 if [ -z "${COHORT_RUN_COPY:-}" ]; then  # run from a private copy (safe to edit mid-run)
   copy=$(mktemp); cp "$0" "$copy"
@@ -19,7 +21,11 @@ TOOL=$HERE/$PROVIDER.py
 mkdir -p "$OUT"
 # Delete on completion or error. A signal (e.g. an interrupted agent turn) keeps
 # the lease so the remote job can finish; its systemd timer still deletes it.
-trap 'python3 "$TOOL" down "$NAME" || echo "DELETE FAILED for $NAME" >&2' EXIT
+if [ "${KEEP_LEASE:-0}" = 1 ]; then
+  trap '[ $? = 0 ] && echo "kept $NAME for a follow-up run" >&2 || python3 "$TOOL" down "$NAME" || echo "DELETE FAILED for $NAME" >&2' EXIT
+else
+  trap 'python3 "$TOOL" down "$NAME" || echo "DELETE FAILED for $NAME" >&2' EXIT
+fi
 trap 'trap - EXIT; echo "interrupted: keeping $NAME for its timer" >&2; exit 130' INT TERM HUP
 
 IP=$(python3 "$TOOL" ip "$NAME")
@@ -33,12 +39,12 @@ stage=$(mktemp -d)
 mkdir -p "$stage/baseline" "$stage/candidate"
 cp "$BASE"/seine "$BASE"/verify_cpu_kernels "$stage/baseline/"
 cp "$CAND"/seine "$CAND"/verify_cpu_kernels "$stage/candidate/"
-cp "$HERE"/remote_*.sh "$stage/"
+cp "$HERE"/remote_*.sh "$HERE"/pool_fixture.py "$stage/"
 if [ -n "${EXTRA_DIR:-}" ]; then cp -r "$EXTRA_DIR" "$stage/extra"; fi
 retry bash -c "tar -C '$stage' -czf - . | $(printf '%q ' "${SSH[@]}") 'mkdir -p /opt/cohort && tar -C /opt/cohort -xzf -'"
 id bench >/dev/null 2>&1 || true
 STEPS=$(printf '%s; ' "$@")
-retry "${SSH[@]}" "id bench >/dev/null 2>&1 || useradd -m bench; cd /opt/cohort && (nohup bash -c '$STEPS touch /opt/cohort/AB-DONE' > ab-progress.log 2>&1 &)"
+retry "${SSH[@]}" "id bench >/dev/null 2>&1 || useradd -m bench; cd /opt/cohort && rm -rf results AB-DONE && (nohup bash -c '$STEPS touch /opt/cohort/AB-DONE' > ab-progress.log 2>&1 &)"
 
 until timeout 20 "${SSH[@]}" test -e /opt/cohort/AB-DONE 2>/dev/null; do sleep 30; done
 retry bash -c "$(printf '%q ' "${SSH[@]}") 'tar -C /opt/cohort -czf - results ab-progress.log' | tar -C '$OUT' -xzf -"

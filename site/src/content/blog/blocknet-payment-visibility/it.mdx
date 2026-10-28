@@ -1,0 +1,60 @@
+---
+title: 'Cosa può vedere qualcuno di un pagamento Blocknet?'
+description: 'Scopri cosa vedono mittente, destinatario, explorer pubblico e titolare di view key, e come prove e registrazioni incidono sulla privacy dei pagamenti.'
+tags: ['Blocknet', 'Privacy', 'Pagamenti']
+faq:
+  - q: 'L’hash di una transazione Blocknet rivela quanto ho pagato?'
+    a: 'Un hash permette di trovare una transazione pubblica. La normale pagina nell’explorer mostra campi come commissione, blocco e numero di conferme, mentre gli importi restano nascosti. Il destinatario può leggere la propria ricezione nel wallet. Informazioni aggiuntive, come chiave della transazione e indirizzo del destinatario, consentono una verifica deliberata del pagamento.'
+  - q: 'Qualcuno può vedere il mio saldo dal mio indirizzo di ricezione?'
+    a: 'Un indirizzo di ricezione non offre una pagina pubblica del saldo come quella che ci si potrebbe aspettare da una blockchain trasparente. I pagamenti usano indirizzi di output monouso e importi nascosti. Chi conosce il tuo indirizzo può comunque sapere che ti appartiene tramite una fattura, un profilo o una conversazione. Distingui questo contesto esterno dai dati pubblicati sulla blockchain.'
+  - q: 'Un wallet di sola visualizzazione rivela informazioni private sui pagamenti?'
+    a: 'Sì. L’accesso di visualizzazione permette di identificare gli output in entrata e leggerne importi e memo recuperabili. Non conferisce l’autorità di spendere. Una copia di visualizzazione contiene quindi informazioni private, anche se usata solo per monitorare. Usa una prova specifica della transazione quando è questa l’evidenza che intendi condividere.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Osserva un pagamento Blocknet da quattro prospettive: chi lo invia, chi lo riceve, chi consulta l’explorer pubblico e chi dispone dell’accesso di visualizzazione. Questa guida descrive il core v0.22.0 rilasciato, verificato il 27 ottobre 2026. Ti aiuta a scegliere quali informazioni condividere quando ricevi denaro, controlli un pagamento o chiedi assistenza.
+
+## Cosa mantiene privato Blocknet?
+
+<Answer>
+Blocknet usa firme ad anello per l’input speso, indirizzi stealth monouso per i destinatari e commitment con range proof per gli importi. La transazione pubblica conserva hash, commissione e struttura. Il wallet fornisce i dettagli privati associati alle tue chiavi. Condividere una ricevuta, una prova di pagamento o l’accesso di visualizzazione dà al destinatario informazioni aggiuntive.
+</Answer>
+
+## Cosa può vedere chiunque nell’explorer?
+
+Apri una transazione nel [Blocknet explorer](/it/blog/blocknet-explorer-guide/). Il registro pubblico comprende hash della transazione, blocco che la contiene, numero di conferme, commissione, anelli degli input e dati degli output. Un osservatore può vedere che la transazione esiste ed esaminarne la struttura. L’importo vincolato in ciascun output e il testo del relativo memo cifrato non sono mostrati come normali campi pubblici.
+
+La [panoramica sulla privacy](/it/blog/blocknet-privacy-features/) spiega come si combinano i vari livelli. Oggi ogni input ha un anello di 16 membri: l’output reale e 15 decoy. Una firma ad anello dimostra che un membro ha autorizzato la spesa senza identificarlo. L’indirizzo monouso di un output è diverso dall’indirizzo di ricezione che hai dato a chi paga.
+
+[![Il registro pubblico mostra hash, blocco e commissione, mentre il wallet del destinatario rivela importo e memo della propria ricezione.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## Cosa sanno mittente e destinatario?
+
+Il mittente conosce destinazione, importo e memo inseriti. Il registro di invio può associare queste informazioni a un hash di transazione. Il wallet del destinatario riconosce i propri output in entrata e recupera importo e memo. Usa la [guida all’invio e alla ricezione](/it/blog/send-receive-blocknet/) per trovare le registrazioni pertinenti nel wallet.
+
+Una transazione privata non fornisce automaticamente un nome reale verificato del mittente. Il destinatario può sapere chi ha pagato perché ha emesso una fattura, discusso il pagamento o ricevuto l’hash. Questa conoscenza deriva dall’interazione. Un commerciante può conservare ordine e indirizzo di consegna insieme al pagamento effettuato.
+
+Per esempio, invii l’importo concordato per un ordine e inserisci il riferimento nel memo. Il commerciante può collegare la ricezione all’ordine. Un visitatore dell’explorer pubblico vede la struttura della transazione senza ricevere automaticamente i dettagli dell’acquisto. Se una delle due persone pubblica una schermata del wallet con importo, nota e hash, il post aggiunge informazioni che la normale pagina pubblica della transazione non mostrava.
+
+## Cosa cambia condividendo una prova di pagamento o una view key?
+
+Una [prova di pagamento](/it/blog/blocknet-payment-proof/) usa una chiave specifica della transazione insieme a hash e indirizzo del destinatario per verificare gli output corrispondenti. Nell’API di verifica rilasciata, questi campi possono rivelare l’importo corrispondente e il memo recuperabile. Condividerli è un modo deliberato per dimostrare un pagamento specifico. Anche il server che riceve la richiesta di verifica riceve i campi inviati.
+
+Un [wallet di sola visualizzazione](/it/blog/blocknet-view-only-wallet/) offre un accesso più ampio alle registrazioni in entrata del wallet corrispondente. Il titolare può identificare le ricezioni e leggere dettagli privati dei pagamenti, mentre il wallet completo mantiene l’autorità di spendere. L’accesso di visualizzazione non garantisce che vengano riprodotti tutti i movimenti in uscita o le decisioni sul saldo attualmente spendibile. Usa il wallet completo per decidere le spese. Cambiare la password del file di visualizzazione non revoca una chiave già copiata.
+
+[![Una prova specifica identifica un pagamento da verificare, mentre l’accesso di visualizzazione del wallet copre le registrazioni in entrata e resta separato dall’autorità di spendere.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## E i nomi pubblici e le informazioni di rete?
+
+Un [nome Blocknet ID](/it/blog/blocknet-id-pay-by-name/) è un modo pubblico con cui chi paga può trovare una destinazione di ricezione. Inserirlo in un profilo può associarlo a te. Il pagamento continua a usare indirizzi di output monouso e importi nascosti previsti dal protocollo. Pubblicare un nome e pubblicare l’accesso privato al wallet sono decisioni di condivisione diverse.
+
+La privacy di rete ha un livello proprio. [Dandelion++](/it/blog/dandelion-plus-plus-explained/) inoltra una nuova transazione attraverso una fase stem prima della diffusione più ampia, riducendo il collegamento diretto tra l’origine e i peer che la ricevono per primi. Questo meccanismo non cancella una fattura, un messaggio in chat o le informazioni inviate a un sito. L’operatore di un explorer riceve la tua ricerca; un verificatore remoto riceve i campi della prova che gli invii.
+
+## Come scegli cosa condividere?
+
+Per ricevere un pagamento, condividi l’indirizzo di ricezione o il nome pubblico desiderato. Per controllare se una transazione è entrata in un blocco, usa il suo hash. Per dimostrare una ricezione specifica, segui il procedimento della prova di pagamento e considera importo e memo divulgati. Per monitorare continuativamente i pagamenti in entrata, concedi intenzionalmente l’accesso di visualizzazione. Queste scelte rispondono a domande diverse.
+
+Prima di pubblicare una schermata, esamina indirizzo, hash, saldo, note e qualsiasi chiave visibile. Tieni parole di recupero, chiavi di spesa e segreti di visualizzazione dell’intero wallet fuori dai messaggi pubblici di assistenza. La [guida al backup del wallet](/it/blog/blocknet-wallet-backup-restore/) spiega il materiale di recupero. Per seguire l’aggiornamento proposto, consulta [le modifiche alla privacy di Faraday](/it/blog/blocknet-faraday-privacy/) per il progetto futuro; questa guida descrive il formato di pagamento attualmente rilasciato.
+
+<CTA target="seine" title="Ricevi i pagamenti del mining nel tuo wallet" text="Usa seine con il tuo indirizzo di ricezione e segui i pagamenti tramite le registrazioni del wallet che scegli di condividere." />

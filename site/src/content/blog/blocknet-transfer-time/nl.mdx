@@ -1,0 +1,76 @@
+---
+title: 'Hoe lang duurt een Blocknet-overboeking?'
+description: 'Volg een Blocknet-betaling van verzending tot uitgeefbaar saldo. Lees wat bevestigingen betekenen, hoe de tijdschatting werkt en waar je de voortgang ziet.'
+tags: ['Blocknet', 'Wallet', 'Betalingen']
+faq:
+  - q: 'Is een Blocknet-betaling na de eerste bevestiging uitgeefbaar?'
+    a: 'In de gecontroleerde core v0.22.0 maakt de wallet een gewone ontvangen output uitgeefbaar zodra de ketentop tien blokken voorbij het blok met die output ligt. De transactiedetails kunnen al bevestigd aangeven zodra de transactie in een blok staat. Controleer Spendable Balance na synchronisatie en de walletscan voordat je het geld doorstuurt.'
+  - q: 'Vertraagt het sluiten van mijn wallet de betaling van de afzender?'
+    a: 'Het netwerk kan een betaling aan je adres opnemen terwijl je wallet gesloten is. Na het openen moeten de node en wallet bijwerken voordat ontvangst en saldo actueel worden weergegeven. Een open wallet helpt je de voortgang te volgen, maar de netwerkblokken bepalen de bevestigingsdiepte.'
+  - q: 'Moet een gewone overboeking de 60 blokken voor een miningbeloning wachten?'
+    a: 'Een gewone overboeking volgt in de gecontroleerde versie de walletregel van tien blokken diepte. Nieuwe coinbase-outputs hebben een afzonderlijke rijpingsregel van 60 blokken. Een pooluitbetaling is een latere transactie nadat de pool de beloning heeft verwerkt. Volg die betalingstransactie zodra de pool haar heeft verstuurd.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Volg een Blocknet-betaling door de stappen die voor afzender en ontvanger belangrijk zijn: indienen, opname in een blok en uitgeefbaar walletsaldo. Deze gids legt de tijden uit die core en de desktopwallet v0.22.0 tonen, gecontroleerd op 27 oktober 2026. Bewaar de transactiehash zodat jullie dezelfde overboeking kunnen volgen.
+
+## Hoe lang duurt een Blocknet-overboeking?
+
+<Answer>
+Blocknet streeft naar blokken om de vijf minuten. Nadat een gewone betaling in een blok is opgenomen, wacht de uitgebrachte wallet op tien volgende blokken voordat het geld uitgeefbaar wordt: ongeveer 50 minuten bij het streefinterval, plus de eerdere wachttijd op opname. Werkelijke bloktijden variëren. Volg de transactie en het uitgeefbare saldo in plaats van een vaste deadline.
+</Answer>
+
+## Volg de drie stappen van de betaling
+
+Eerst controleert en bevestigt de afzender de betaling in de wallet. Bewaar de transactiehash die voor die verzending wordt teruggegeven. Een transactie in de mempool van de node is door die node ontvangen en wacht op opname in een blok. Aanwezigheid daar garandeert geen opname in het volgende blok. De [gids voor verzenden en ontvangen](/nl/blog/send-receive-blocknet/) behandelt het voorbereiden en goedkeuren van de betaling.
+
+Daarna komt de transactie in een geaccepteerd blok. De details kunnen nu `Confirmed`, een blokhoogte en een aantal bevestigingen tonen. Daarmee kun je de opname controleren. De wallet van de ontvanger herkent de eigen inkomende output tijdens het scannen van de keten.
+
+Ten slotte komen er voldoende volgende blokken om de output volgens de walletregels uitgeefbaar te maken. De ontvanger kan dan het bedrag onder `Spendable Balance` gebruiken. Voor opname kan het dashboard een aparte melding van een onbevestigde betaling tonen wanneer de lokale wallet een inkomende mempoolbetaling herkent. De onderstaande screenshot gebruikt de echte uitgebrachte interface met duidelijk gemarkeerde lokale demogegevens.
+
+[![Uitgebracht Blocknet-dashboard met een onbevestigde inkomende demobetaling van 1,25 BNT vóór opname in een blok.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Waarom kan een bevestigde betaling nog in behandeling zijn?
+
+De [rijpingscontrole van de uitgebrachte wallet](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) trekt de hoogte van het blok met de output af van de huidige ketenhoogte. Een gewone ongebruikte output is rijp bij tien blokken diepte. Een betaling in blok `100,000` bereikt die diepte bij ketentop `100,010`. Deze hoogten illustreren de regel en beschrijven geen echte betaling.
+
+De [API voor transactiedetails](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) telt het blok met de transactie als de eerste bevestiging. De walletberekening voor uitgeefbaarheid begint in hetzelfde blok op diepte nul. Daardoor kunnen de details elf bevestigingen tonen wanneer de gewone output de vereiste tien blokken diepte bereikt. Controleer het uitgeefbare saldo op het dashboard om te bepalen of je de ontvangen middelen kunt gebruiken.
+
+In het volgende voorbeeld is de betaling opgenomen en zijn vier latere blokken toegevoegd. De transactiedetails zouden vijf bevestigingen tonen, terwijl het dashboard de voorbeeldwaarde van 1,25 BNT onder `Pending` houdt en ongeveer zes resterende blokken aangeeft. Beide schermen beschrijven dezelfde betaling vanuit verschillende criteria voor beschikbaarheid.
+
+[![Blocknet-dashboard met de demo-ontvangst van 1,25 BNT onder Pending, geen uitgeefbaar geld en ongeveer zes resterende blokken.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Hoe lees ik de tijdschatting?
+
+Tien blokken maal het streefinterval van vijf minuten is ongeveer 50 minuten na opname. Daarvóór komt de wachttijd totdat de transactie in een blok wordt opgenomen. Deze berekening geeft een orde van grootte; het is geen gemeten gemiddelde van betalingen of gegarandeerde aankomsttijd.
+
+Het uitgebrachte dashboard zet resterende blokken ook om in een geschatte tijd. Bij zes resterende blokken geeft zes maal vijf ongeveer 30 minuten. De keten moet die blokken nog produceren. Een afteller die nul bereikt, voegt zelf geen blok toe en maakt geen output uitgeefbaar. Controleer de actuele ketenvoortgang en het saldo opnieuw.
+
+Een melding van een inkomende betaling kan al vóór opname verschijnen. Gebruik de schatting als indicatie en volg daarna het blok met de transactie en het uitgeefbare saldo. Synchronisatie en de walletscan beïnvloeden ook wanneer jouw scherm weergeeft wat het netwerk al heeft gedaan.
+
+## Waar controleren afzender en ontvanger de voortgang?
+
+De afzender opent `History`, zoekt de uitgaande betaling en bewaart de `TX Hash`. De ontvanger kan dezelfde hash gebruiken om de inkomende overboeking te herkennen. Door die te vergelijken voorkom je verwarring met een andere betaling aan hetzelfde adres.
+
+De [Blocknet-explorergids](/nl/blog/blocknet-explorer-guide/) legt uit hoe je een transactie en het bijbehorende blok opzoekt. De openbare zoekfunctie helpt bij het controleren van opname in het netwerk. De wallet van de ontvanger levert de privégegevens over ontvangst en saldo die bij de eigen sleutels horen. Controleer het ontvangen bedrag in de wallet.
+
+Open op de ontvangende computer de bedoelde wallet en vergelijk `Your Address` onder `Receive` met het adres dat de afzender gebruikte. Controleer daarna nodesynchronisatie en de walletscan voordat je concludeert dat een betaling ontbreekt. Een eerder gesloten wallet kan tijd nodig hebben om betalingen te ontdekken die op de keten al verder zijn.
+
+## Wanneer kan ik de ontvangen BNT doorsturen?
+
+Wacht totdat de ontvangst meetelt in `Spendable Balance` op een gesynchroniseerd `Dashboard`. Onder `Pending` en `Total` zie je hoe de geregistreerde middelen zijn verdeeld. Als je al ander geld had, kan een deel uitgeefbaar zijn terwijl deze ontvangst nog in behandeling is. Gebruik de bijbehorende geschiedenisregel om één overboeking te volgen.
+
+De screenshot toont dezelfde demobetaling nadat tien blokken na het blok met de betaling zijn toegevoegd. De 1,25 BNT is nu uitgeefbaar en het bedrag in behandeling is nul. De screenshots illustreren de uitgebrachte frontend en meten niet de duur van een echte overboeking. Controleer bij je volgende betaling het bedrag en de fee in de wallet voordat je akkoord gaat.
+
+[![Uitgebracht Blocknet-dashboard met dezelfde demobetaling als 1,25 BNT Spendable Balance na tien blokken diepte.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Wat controleer ik als de betaling niet verschijnt?
+
+Begin bij de stap die je kunt verifiëren. Vraag de afzender om de bestaande transactiehash, controleer opname en vergelijk het ontvangstadres. Volg daarna de [controles voor walletsynchronisatie en scannen](/nl/blog/blocknet-wallet-not-syncing/) als de lokale geschiedenis of het saldo achterloopt. Bewaar tijdens het controleren de oorspronkelijke transactiegegevens; opnieuw verzenden is een afzonderlijke betaling.
+
+Maak bij mininginkomsten eerst onderscheid tussen een verdiende poolbeloning en een al naar je adres verzonden uitbetaling. De [gids voor bevestigingen van miningbeloningen](https://bntpool.com/blog/nl/block-confirmations-mining-rewards/) legt de afzonderlijke rijpingsfase van 60 blokken voor nieuwe coins uit. Zodra de pool een gewone uitbetalingstransactie verstuurt, volg je de opname en uitgeefbaarheid daarvan in de wallet. De [gids voor ontbrekende uitbetalingen](https://bntpool.com/blog/nl/pool-payout-missing-from-wallet/) verbindt de poolregistratie met de ontvangende wallet.
+
+De eindcontrole is eenvoudig: bepaal de juiste wallet, vergelijk de transactiehash en controleer het uitgeefbare saldo na synchronisatie en scannen. Deze gids beschrijft de momenteel uitgebrachte regels. De [Faraday-gids](/nl/blog/blocknet-faraday-upgrade/) volgt de aangekondigde toekomstige netwerkveranderingen afzonderlijk.
+
+<CTA target="seine" title="Mine naar je Blocknet-wallet" text="Gebruik seine met je openbare ontvangstadres en volg pooluitbetalingen in dezelfde wallet." />

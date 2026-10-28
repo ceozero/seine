@@ -1,0 +1,60 @@
+---
+title: 'Co można zobaczyć o płatności Blocknet?'
+description: 'Poznaj dane widoczne dla nadawcy, odbiorcy, eksploratora i posiadacza klucza podglądu oraz wpływ dowodów płatności i udostępnianych zapisów na prywatność.'
+tags: ['Blocknet', 'Prywatność', 'Płatności']
+faq:
+  - q: 'Czy hash transakcji Blocknet ujawnia zapłaconą kwotę?'
+    a: 'Hash pozwala znaleźć publiczną transakcję. Jej zwykła strona w eksploratorze pokazuje m.in. opłatę, blok i liczbę potwierdzeń, ale kwoty płatności pozostają ukryte. Odbiorca może odczytać własny wpływ w portfelu. Dodatkowe dane, takie jak klucz transakcji i adres odbiorcy, umożliwiają celową weryfikację płatności.'
+  - q: 'Czy ktoś może zobaczyć saldo na podstawie adresu odbioru?'
+    a: 'Adres odbioru nie udostępnia publicznej strony salda, jakiej można oczekiwać po przejrzystym łańcuchu. Płatności używają jednorazowych adresów wyjść i ukrytych kwot. Osoba znająca Twój adres może jednak wiedzieć, że należy do Ciebie, z faktury, profilu lub rozmowy. Oddziel ten zewnętrzny kontekst od informacji publikowanych przez łańcuch.'
+  - q: 'Czy portfel tylko do podglądu ujawnia prywatne informacje?'
+    a: 'Tak. Dostęp do podglądu pozwala rozpoznawać przychodzące wyjścia i czytać ich kwoty oraz możliwe do odzyskania memo. Nie uprawnia do wydawania. Kopia do podglądu zawiera więc prywatne dane, nawet używana tylko do monitorowania. Jeśli chcesz udostępnić dowód jednej płatności, użyj dowodu konkretnej transakcji.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Spójrz na płatność Blocknet z czterech perspektyw: nadawcy, odbiorcy, osoby przeglądającej publiczny eksplorator i osoby z dostępem do podglądu. Poradnik opisuje wydany core v0.22.0, sprawdzony 27 października 2026 r. Pomaga wybrać dane udostępniane podczas odbierania pieniędzy, sprawdzania płatności lub proszenia o pomoc.
+
+## Co Blocknet zachowuje jako prywatne?
+
+<Answer>
+Blocknet używa podpisów pierścieniowych dla wydawanego wejścia, jednorazowych adresów stealth dla odbiorców oraz zobowiązań z dowodami zakresu dla kwot. Publiczna transakcja nadal ma hash, opłatę i strukturę. Portfel dostarcza prywatne szczegóły związane z Twoimi kluczami. Udostępnienie zapisu wpływu, dowodu płatności lub podglądu przekazuje odbiorcy dodatkowe informacje.
+</Answer>
+
+## Co każdy zobaczy w eksploratorze?
+
+Otwórz transakcję w [eksploratorze Blocknet](/pl/blog/blocknet-explorer-guide/). Publiczny zapis zawiera hash, blok, liczbę potwierdzeń, opłatę, pierścienie wejść i dane wyjść. Obserwator widzi istnienie transakcji i może zbadać jej strukturę. Kwota w zobowiązaniu każdego wyjścia i tekst zaszyfrowanego memo nie są pokazywane jako zwykłe publiczne pola.
+
+[Przegląd prywatności](/pl/blog/blocknet-privacy-features/) wyjaśnia współpracę warstw. Obecnie każde wejście ma pierścień 16 członków: prawdziwe wyjście i 15 wabików. Podpis pierścieniowy dowodzi autoryzacji przez jednego członka bez wskazania którego. Jednorazowy adres wyjścia różni się od adresu odbioru przekazanego płacącemu.
+
+[![Publiczny zapis transakcji pokazuje hash, blok i opłatę, a portfel odbiorcy ujawnia kwotę i memo własnego wpływu.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## Co wiedzą nadawca i odbiorca?
+
+Nadawca zna wpisany cel, kwotę i memo. Zapis wysyłki może łączyć te dane z hashem transakcji. Portfel odbiorcy rozpoznaje własne przychodzące wyjścia i odzyskuje kwotę oraz memo. [Poradnik wysyłania i odbierania](/pl/blog/send-receive-blocknet/) pomaga znaleźć właściwe zapisy portfela.
+
+Prywatna transakcja nie dostarcza automatycznie zweryfikowanego rzeczywistego imienia i nazwiska nadawcy. Odbiorca może wiedzieć, kto zapłacił, ponieważ wystawił fakturę, omówił płatność lub otrzymał hash. Ta wiedza wynika z kontaktu. Sprzedawca może przechowywać zamówienie i adres dostawy wraz z płatnością.
+
+Przykładowo wysyłasz uzgodnioną kwotę za zamówienie i wpisujesz jego numer w memo. Sprzedawca może połączyć wpływ z zamówieniem. Użytkownik publicznego eksploratora widzi strukturę transakcji, ale nie dostaje automatycznie szczegółów zamówienia. Jeśli jedna ze stron opublikuje zrzut portfela z kwotą, notatką i hashem, wpis dostarczy informacji nieobecnych na zwykłej publicznej stronie.
+
+## Co zmienia udostępnienie dowodu lub klucza podglądu?
+
+[Dowód płatności](/pl/blog/blocknet-payment-proof/) używa klucza konkretnej transakcji wraz z hashem i adresem odbiorcy do sprawdzenia pasujących wyjść. W wydanym API weryfikacji pola te mogą ujawnić pasującą kwotę i możliwe do odzyskania memo. Ich udostępnienie celowo poświadcza konkretną płatność. Serwer otrzymujący żądanie weryfikacji również otrzymuje przesłane pola.
+
+[Portfel tylko do podglądu](/pl/blog/blocknet-view-only-wallet/) daje szerszy dostęp do przychodzących zapisów właściwego portfela. Jego posiadacz może rozpoznawać wpływy i czytać prywatne szczegóły, a pełny portfel zachowuje uprawnienie do wydawania. Podgląd nie dowodzi odzwierciedlenia każdego zapisu wychodzącego ani każdej bieżącej decyzji o dostępnym saldzie. Do decyzji o wydawaniu używaj pełnego portfela. Zmiana hasła pliku podglądu nie unieważnia skopiowanego wcześniej klucza.
+
+[![Dowód konkretnej transakcji identyfikuje jedną płatność do weryfikacji; dostęp do podglądu obejmuje wpływy i pozostaje oddzielony od prawa wydawania.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## A publiczne nazwy i informacje sieciowe?
+
+[Nazwa Blocknet ID](/pl/blog/blocknet-id-pay-by-name/) jest publicznym sposobem znalezienia celu płatności. Umieszczenie jej w profilu może powiązać ją z Tobą. Płatność nadal używa jednorazowych adresów wyjść i ukrytych kwot protokołu. Publikacja nazwy i publikacja prywatnego dostępu do portfela to różne decyzje.
+
+Prywatność sieci ma własną warstwę. [Dandelion++](/pl/blog/dandelion-plus-plus-explained/) przekazuje nową transakcję przez fazę łodygi przed szerszym rozgłoszeniem, ograniczając bezpośredni związek źródła z pierwszymi odbierającymi węzłami. Nie usuwa to faktury, wiadomości ani danych wysłanych witrynie. Operator eksploratora otrzymuje Twoje zapytanie; zdalny weryfikator otrzymuje przesłane pola dowodu.
+
+## Jak wybrać, co udostępnić?
+
+Aby odebrać płatność, udostępnij właściwy adres lub publiczną nazwę. Aby sprawdzić wejście do bloku, użyj hasha. Aby wykazać konkretny wpływ, zastosuj procedurę dowodu płatności i uwzględnij ujawniane kwotę i memo. Do stałego monitorowania wpływów świadomie udziel dostępu do podglądu. Te opcje odpowiadają na różne pytania.
+
+Przed publikacją zrzutu sprawdź adres, hash, saldo, notatki i widoczne klucze. Nie zamieszczaj słów odzyskiwania, kluczy wydawania ani sekretów podglądu całego portfela w publicznych wiadomościach pomocy. [Poradnik kopii zapasowej](/pl/blog/blocknet-wallet-backup-restore/) opisuje materiały odzyskiwania. Przyszły projekt aktualizacji wyjaśniają [zmiany prywatności Faraday](/pl/blog/blocknet-faraday-privacy/); ten poradnik opisuje obecnie wydany format płatności.
+
+<CTA target="seine" title="Odbieraj wypłaty z kopania we własnym portfelu" text="Używaj seine z adresem odbioru i śledź wypłaty w zapisach portfela, które zdecydujesz się udostępnić." />

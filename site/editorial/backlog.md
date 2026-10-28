@@ -58,3 +58,11 @@ Published 2026-10-25: `mine-blocknet-nvidia-gpu` owns NVIDIA setup, runtime diag
 Published 2026-10-25: `antivirus-flags-crypto-miner` owns Windows download warnings, official-release checksum verification and reporting unresolved detections. It includes an actual v0.2.26 Windows PowerShell verification record and release-assets capture.
 
 Published October 26, 2026: `how-much-ram-to-mine-blocknet` covers memory arithmetic, current-release sizing and allocation troubleshooting. No new hardware measurements were commissioned; channel-scaling benchmarks remain separate future research.
+
+Published October 27, 2026: `update-blocknet-wallet` covers routine desktop application updates, preserving wallet data, fully quitting, choosing the official package and verifying the same address and synchronized history. Available in all 20 languages; no new hardware measurements.
+
+Published October 27, 2026: `blocknet-transfer-time` answers the ordinary payment timing question in all 20 languages: broadcast, block inclusion, ten later blocks, spendable balance, and checks for sender/recipient. Three released-wallet screenshots use labeled local demo data, not measured real transfers.
+
+Published October 27, 2026: `blocknet-payment-visibility` and `blocknet-faraday-privacy`, each in all 20 languages, with four original explanatory graphics. The existing privacy overview's Faraday section now distinguishes eligible Faraday coins from all historical outputs. User requested privacy/Faraday coverage and approved publication.
+
+Published October 28, 2026: `blocknet-transaction-explained`, all 20 languages, with an original numbered transaction-accounting diagram. User approved the proposed walkthrough with “proceed”; Android remains deferred.

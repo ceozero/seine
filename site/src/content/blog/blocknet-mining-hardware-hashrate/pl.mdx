@@ -1,17 +1,17 @@
 ---
 title: Najlepszy sprzęt do kopania Blocknet
-description: "Porównaj sprzęt do kopania Blocknet na podstawie pomiarów: EPYC 9355P osiąga 77,1 H/s. Sprawdź RAM, wątki, ustawienia stron i dane benchmarku."
+description: "Porównaj sprzęt do kopania Blocknet na podstawie pomiarów: EPYC 9375F osiąga 85,1 H/s. Sprawdź RAM, wątki, ustawienia stron i dane benchmarku."
 tags: [Sprzęt, Hashrate, Poradnik kopania, Argon2id, NVIDIA]
 faq:
   - q: 'Czy komputer do gier może kopać Blocknet?'
     a: 'Tak. W systemach Windows i Linux seine kopie jednocześnie na procesorze i na każdej karcie graficznej NVIDIA w komputerze, a hashrate się sumuje. Dopasowuje liczbę wątków do Twojego RAM, więc komputer do gier z 32 GB uruchamia do około 14 wątków, a procesor i każdą kartę dostraja automatycznie podczas kopania.'
   - q: 'Ile wątków kopiących Blocknet uruchomi 32 GB RAM?'
-    a: 'Około 14. Każdy wątek potrzebuje do każdego hasha bloku pamięci 2 GiB, więc 32 GB teoretycznie mieści 16 takich bloków. seine zostawia 5% RAM w rezerwie i miejsce dla systemu operacyjnego, co daje na komputerze z 32 GB około 14 wątków. Oblicza to za Ciebie przy starcie.'
+    a: 'Około 14. Każdy wątek potrzebuje do każdego hasha bloku pamięci 2 GiB, więc 32 GB teoretycznie mieści 16 takich bloków. seine zostawia 5% (domyślnie najwyżej 1 GiB) RAM w rezerwie i miejsce dla systemu operacyjnego, co daje na komputerze z 32 GB około 14 wątków. Oblicza to za Ciebie przy starcie.'
   - q: 'Których kart graficznych używa seine do kopania Blocknet?'
     a: 'W wersjach dla systemów Windows i Linux seine kopie na kartach graficznych NVIDIA, używając każdej wykrytej karty razem z procesorem. W systemie Windows środowisko uruchomieniowe CUDA jest dołączone, więc potrzebujesz tylko sterownika NVIDIA. W systemie Linux zainstaluj sterownik i biblioteki NVRTC. Przy pierwszym uruchomieniu seine dostraja każdą kartę i zapamiętuje wynik.'
   - q: 'Dlaczego przepustowość pamięci ma znaczenie przy kopaniu Blocknet?'
     a: 'Każdy hash Blocknet zapisuje pełny blok pamięci 2 GiB i odczytuje dane z całego tego obszaru, znacznie więcej, niż mieści jakakolwiek pamięć podręczna procesora. Hashrate zależy więc od tego, jak szybko system pamięci przesyła dane. Najszybciej kopią komputery z większą przepustowością pamięci i wystarczającą ilością RAM na wiele wątków.'
-sourceHash: '005a847e85db'
+sourceHash: 666371e468ff
 translation: draft
 ---
 
@@ -22,10 +22,10 @@ Ten poradnik pokazuje, które komputery kopią Blocknet najszybciej z seine, ile
 ## Jaki jest najlepszy sprzęt do kopania Blocknet?
 
 <Answer>
-Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9355P osiągający 77,1 H/s: 64 wątki kopania, 192 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie. Kopanie Blocknet korzysta z przepustowości pamięci i wystarczającej ilości RAM na 2 GiB na wątek. Karty NVIDIA mogą dodawać swoją moc obliczeniową do CPU.
+Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9375F osiągający 85,1 H/s: 64 wątki kopania, 384 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie. Kopanie Blocknet korzysta z przepustowości pamięci i wystarczającej ilości RAM na 2 GiB na wątek. Karty NVIDIA mogą dodawać swoją moc obliczeniową do CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 77.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/headline-20261027/README.md#epyc-9355p-rebenchmark)
+[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
 
 Proof of work Blocknet to Argon2id z blokiem pamięci 2 GiB na każdy hash. To sprawia, że jest [wymagający dużo pamięci](/pl/blog/argon2id-proof-of-work-explained/): hashrate zależy w takim samym stopniu od przepustowości i opóźnień pamięci, jak od liczby rdzeni, a także od tego, ile takich bloków 2 GiB mieści się naraz w RAM. Mocny system pamięci to cecha wspólna najlepszych komputerów z poniższej tabeli.
 
@@ -77,19 +77,19 @@ Przy wyborze sprzętu wynikają z tego trzy rzeczy:
 ## Ile RAM potrzebujesz na każdy wątek kopiący?
 
 <Answer>
-Każdy wątek kopiący potrzebuje około 2 GB RAM, bo każdy hash zapełnia własny blok pamięci 2 GiB. Podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą, a potem odejmij trochę na system operacyjny. seine liczy to za Ciebie i zostawia 5% RAM w rezerwie.
+Każdy wątek kopiący potrzebuje około 2 GB RAM, bo każdy hash zapełnia własny blok pamięci 2 GiB. Podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą, a potem odejmij trochę na system operacyjny. seine liczy to za Ciebie i zostawia 5% (domyślnie najwyżej 1 GiB) RAM w rezerwie.
 </Answer>
 
-Oto obliczenia dla popularnych rozmiarów. „Teoretycznie” oznacza RAM ÷ 2 GiB. Ostatnia kolumna odejmuje 5% rezerwy seine i około 2–3 GB na system operacyjny, więc traktuj ją jako przybliżenie. O laptopach i starszych komputerach z 4–12 GB przeczytasz w poradniku o [kopaniu na starym komputerze lub laptopie](/pl/blog/mine-crypto-on-old-pc-or-laptop/).
+Oto obliczenia dla popularnych rozmiarów. „Teoretycznie” oznacza RAM ÷ 2 GiB. Ostatnia kolumna odejmuje 5% (domyślnie najwyżej 1 GiB) rezerwy seine i około 2–3 GB na system operacyjny, więc traktuj ją jako przybliżenie. O laptopach i starszych komputerach z 4–12 GB przeczytasz w poradniku o [kopaniu na starym komputerze lub laptopie](/pl/blog/mine-crypto-on-old-pc-or-laptop/).
 
 | RAM | Bloki pamięci teoretycznie | Wątki, które seine może uruchomić, w przybliżeniu |
 |---|---|---|
 | 16 GB | 8 | 6 |
 | 32 GB | 16 | 14 |
-| 64 GB | 32 | 29 |
-| 128 GB | 64 | 59 |
+| 64 GB | 32 | 30 |
+| 128 GB | 64 | 62 |
 
-seine ogranicza też liczbę wątków do liczby rdzeni logicznych procesora, więc rzeczywistym limitem jest to, co skończy się pierwsze. Weźmy 16-rdzeniowy procesor desktopowy z 32 wątkami sprzętowymi. Z 32 GB RAM uruchamia około 14 wątków kopiących, a z 64 GB około 29. Aby uruchomić 32 wątki, potrzebujesz 64 GiB na same bloki pamięci plus zapas, dlatego 32-wątkowy wynik Zen 5 pochodzi z maszyny ze 128 GiB.
+seine ogranicza też liczbę wątków do liczby rdzeni logicznych procesora, więc rzeczywistym limitem jest to, co skończy się pierwsze. Weźmy 16-rdzeniowy procesor desktopowy z 32 wątkami sprzętowymi. Z 32 GB RAM uruchamia około 14 wątków kopiących, a z 64 GB około 30. Aby uruchomić 32 wątki, potrzebujesz 64 GiB na same bloki pamięci plus zapas, dlatego 32-wątkowy wynik Zen 5 pochodzi z maszyny ze 128 GiB.
 
 Jeśli kupujesz RAM do kopania, dopasuj go do liczby wątków, którą chcesz uruchomić: około 2 GB na wątek plus kilka gigabajtów dla systemu.
 
@@ -110,7 +110,7 @@ Do codziennego kopania uruchom seine, wklej adres lub `@name` i zaakceptuj domy�
 - **Dobiera liczbę wątków** do Twojego RAM i rdzeni, a potem porównuje różne liczby wątków na prawdziwej pracy kopania i zostawia najlepszą.
 - **Wybiera jądro obliczeniowe CPU**, na przykład AVX2, AVX-512, jądro strumieniowe na EPYC Zen 5 albo SHA3 na Arm, i przełącza się dopiero po dwóch potwierdzonych zyskach.
 - **Rozmieszcza wątki na dużych serwerach.** W systemie Linux rozkłada wątki między węzły NUMA i grupy pamięci podręcznej L3, co na wynajętym EPYC 8434P przy 24 wątkach dało 16,7%. Szczegóły znajdziesz w [poradniku o kopaniu na serwerach](/pl/blog/mine-blocknet-on-servers/).
-- **Chroni Twoją pamięć.** Zostawia 5% rezerwy, wstrzymuje wątki, gdy zaczyna brakować RAM, i przywraca je, gdy pamięć się zwolni.
+- **Chroni Twoją pamięć.** Zostawia 5% (domyślnie najwyżej 1 GiB) rezerwy, wstrzymuje wątki, gdy zaczyna brakować RAM, i przywraca je, gdy pamięć się zwolni.
 - **Zapamiętuje, co zadziałało**, więc kolejny start zaczyna się od dostrojonych ustawień.
 
 Nic z tego nie wymaga ponownego łączenia z pulą, więc dostrajanie nie kosztuje Cię czasu kopania. [Poradnik o automatycznym dostrajaniu](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) wyjaśnia każdy krok.

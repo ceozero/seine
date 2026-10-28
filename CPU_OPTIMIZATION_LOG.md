@@ -38,6 +38,61 @@ counts, ABBA pairs, full 2 GiB reference parity first. Evidence:
 | Same, Zen 3 neighbour check | EPYC 7R13 (c6a.8xlarge), same host, 15 min live each | lifetime 15.45 → 15.73 H/s (+1.8%); settled 21 → 24 workers, 771 → 585 s | no regression; adopted |
 | Explicit 2 MiB / 1 GiB HugeTLB instead of THP with streaming kernels | EPYC 9355 bare metal, 32 workers, 2 interleaved reps | THP 58.08/58.16; 2 MiB 57.97/58.07; 1 GiB 57.96/58.01 | rejected (±0.2%; July's +4% predates streaming). EPYC 9124P partial: THP 22.58, 2 MiB 22.53 |
 | `avx2-stream` on Windows | EPYC 7R13 (c6a.8xlarge, Windows Server 2025), 16 / 24 workers | 15.21 vs 10.97 (+39%) / 14.32 vs 9.57 (+50%); full 2 GiB parity (mingw build) | adopted: AVX2 streaming cohort now Linux + Windows |
+| Full-width AVX-512 compress in the ring-2 streaming loop (`avx512-stream`), Zen 5 server-class | EPYC 9355P research build 64 workers; EPYC 9R45 (c8a.8xlarge) 16 / 28 workers | +4.9%; 36.71 vs 35.02 (**+4.8%**) / 46.30 vs 45.94 (+0.8%); full 2 GiB parity | adopted for Zen 5 models 00h-1Fh only (9700X neutral, EPYC 9124P -1.5%) |
+| Far L2 prefetch (`prefetcht1`, 14 blocks ahead) of data-independent references, copied from a competitor's AVX-512 loop | EPYC 9124P (Zen 4), 16 / 28 workers | 24.03 vs 22.61 (**+6.3%**); rerun +6.9% / **+6.7%** (24.84 vs 23.31) | adopted for Zen 4 as `avx512-256-stream-l2` |
+| Same, distance 8 / 24 instead of 14 | EPYC 9124P, 16 workers | +6.9% / +6.7% | flat; 14 kept |
+| Same plus 16-byte NT stores | EPYC 9124P, 16 workers | +6.6% | stores add nothing; rejected |
+| Far L2 prefetch on Zen 4 desktop | Ryzen 7 7700X, 8 / 16 workers | +5.0% / +1.4% | confirms Zen 4 |
+| Far L2 prefetch on Zen 5 desktop | Ryzen 9 9900X, 12 / 24 workers | -1.9% / -2.8% (distance 8: -2.6% at 24) | rejected for Zen 5 client |
+| Far L2 prefetch in full-width `avx512-stream` | EPYC 9R45 (c8a.8xlarge), 16 / 28 workers | -2.2% / -1.2% (distance 24: -2.1% at 28) | rejected for Zen 5 server |
+| Far L2 prefetch in `avx2-stream` | EPYC 7313P (Zen 3), 16 workers | -1.5% | rejected for Zen 2/3 |
+| Same-host defaults vs competitors on Zen 4 desktop (far-prefetch build) | Ryzen 7 7700X | Seine autotune 14 lanes 12.20 H/s (3.6% late-hash bench loss); 0%-fee NTM 12.61 @16; 2%-fee Longhorn 12.45 @16 | gross parity |
+| Worker count on Zen 5 desktop | Ryzen 9 9900X, `avx512-256-stream` | bench: 12 workers 12.08 vs 24 workers 11.20 (-7.3%, mostly late-hash bias) | see live row below |
+| Same, fixed counts in live bntpool mining (10 min each) | Ryzen 9 9900X | steady 12.67 / 12.57 / 12.53 H/s at 12 / 16 / 24; lifetime 12.59 / 12.46 / 12.33 | 12 workers only ~1% faster steady; no Zen 5 client cold-start gate (9700X prefers 16) |
+| Same-host live mining on the local fixture, 15 min each | EPYC 9355 bare metal (v0.2.40 code) | Seine lifetime 80.5 user / 82.2 gross, minutes 2-15 gross 84.1-85.0 (fee minute 80.0); 0%-fee NTM lifetime 83.8, steady ~84.0; 2%-fee Longhorn lifetime 50.2 (5.4 min self-tune), last 5 min 77.7 user | Turin: Seine steady gross ~+0.8% over NTM, fee-adjusted ~-1%; first share 21 s vs 1.3 s costs ~2% of lifetime -> allocation lead |
+| Hint-first THP prefault (MADV_HUGEPAGE + MADV_POPULATE_WRITE) for every Linux Auto arena, not just two EPYC SKUs | EPYC 9355 bare metal, 64 workers, 15 min live bntpool each | backend ready 21.2 s -> 1.5 s; lifetime 89.2 -> 90.8 H/s (**+1.8%**); steady 91.4 / 91.0 (single pair, -0.5% within run noise) | adopted |
+| Streaming on Intel Sapphire Rapids with today's kernel (telemetry: Emerald Rapids 8582C is the most-installed CPU, 233 installs; 231 more are masked AMD VMs reporting family 6) | Xeon Platinum 8488C (m7i.8xlarge, shared socket), 16 / 32 workers | plain AVX-512 -> `avx512-256-stream` **+14.5% / +19.3%** (24.97 vs 21.00 at 32); full-width and far-L2 pairs drifted 25 -> 20 H/s (noisy neighbour), inconclusive | adopted: SPR/EMR (06h/8Fh, CFh) cohort default; other x86 hosts get a streaming tuner challenger |
+| Same-host live mining on the local fixture, 15 min each | EPYC 7313P bare metal (Zen 3, master 6aa1ecb) | Seine lifetime 18.81 user / 19.22 gross, first share 2.9 s; 0%-fee NTM lifetime 18.21, last 5 min 18.27; 2%-fee Longhorn lifetime 10.33 (4.3 min to first share), last 5 min 14.45 user | Zen 3: Seine **+3.3%** over NTM fee-adjusted lifetime (+5.5% gross), +82% / ~+25% over Longhorn |
+| Intel SPR/EMR streaming cohort default, live bntpool 15 min each | Xeon 8488C m7i.4xlarge (16 vCPU, outside the old exact-host gate) | lifetime 14.25 -> 15.76 H/s (**+10.5%**), steady 15.18 -> 15.74 (+3.7%); baseline started at 8 workers on AVX-512 and took ~7 min to reach 16; full-width vs 256-bit at 16: 15.17 vs 15.20 (neutral) | adopted |
+| 16-byte NT stores / no periodic SFENCE in `avx512-256-stream` on Intel | Xeon 8488C m7i.4xlarge, 8 / 16 workers | 16-byte: 0.0% / +0.8%; no SFENCE: +0.2% / +0.2% | rejected (noise) |
+| Same-host live mining on the local fixture, 15 min each | Xeon 8488C m7i.4xlarge (v0.2.41, shared socket: per-minute rates swing ±5% for every miner) | Seine lifetime 15.44 user / 15.78 gross; 0%-fee NTM 16.49; 2%-fee Longhorn 10.21 (5.4 min self-tune), last 5 min ~16.4 gross | Intel: Seine ~-4% gross, ~-6% fee-adjusted vs NTM |
+| Same-host live mining on the local fixture, 15 min each | EPYC 9124P bare metal (Zen 4, v0.2.41) | Seine lifetime 26.11 user, steady ~26.9 gross at 28 workers; 0%-fee NTM lifetime 24.58, steady ~24.6 at 30; 2%-fee Longhorn 1dee94f lifetime 17.74 (4.2 min self-tune), steady ~25.2 at 16 | Genoa: Seine **+6.2%** fee-adjusted lifetime, ~+7% steady over the best competitor |
+| Same-host live mining on Windows (local fixture, 15 min each) | EPYC 9R14 m7a.4xlarge, Windows Server 2025 (v0.2.41) | Seine lifetime 18.39 user, steady ~19.1 gross (first share 7.1 s); 0%-fee NTM v1.2.1 lifetime 18.44, steady ~18.5; 2%-fee Longhorn 1dee94f lifetime 13.43, steady ~19.1 gross | Windows Zen 4: lifetime parity with NTM, steady ~+1.5% fee-adjusted |
+| Same, Windows Zen 5 | EPYC 9R45 c8a.4xlarge, Windows Server 2025 | Seine lifetime 21.48 user, steady ~22.3 gross; Longhorn lifetime 18.43, steady ~22.4 gross; NTM executable missing at launch (likely removed by Defender) | Windows Zen 5: +16.5% lifetime over Longhorn, steady parity; NTM pending |
+| Cache sysinfo hardware facts in the autotune host fingerprint (Windows startup) | EPYC 9R45 c8a.4xlarge, Windows Server 2025 | starting count still chosen at 2.3 s (2.4 s before); first share 3.8 s | reverted (no effect; whole gap is ~0.2% of a 15 min run) |
+| `avx2-stream` on Intel Broadwell (E5-2650/2680 v4: ~70 telemetry installs) | Xeon E5-2686 v4 (m4.4xlarge), 8 / 16 workers | -8.0% (6.51 vs 7.08) / +3.0% (9.58 vs 9.30) | no cohort default; the tuner's streaming challenger covers it |
+| `avx2-stream` for masked-CPUID AMD VMs (AuthenticAMD family 06h/model 63, AVX2 only; 231 installs of one 16-vCPU/32 GiB type running fixed `--threads 14`, `--cpu-page-mode regular`, plain AVX2 at 0.46 H/s per lane) | EPYC 7R32 (c5a.4xlarge), 14 workers | 4 KiB pages: 5.44 -> 7.86 H/s (**+44.5%**); THP: 5.30 -> 8.12 (+53%) | adopted: family 06h AMD + AVX2 cohort default, incl. fixed `--threads` |
+| Same, Zen 4 neighbour (AVX-512 hidden by the masked model would leave AVX2 only) | EPYC 9R14 (m7a.4xlarge), 14 workers, 4 KiB pages | avx2 13.45 -> avx2-stream 16.67 (+23.9%) | confirms |
+| Same-host live mining on Windows (local fixture, 15 min each) | EPYC 7R13 c6a.4xlarge, Windows Server 2025 (v0.2.41) | Seine lifetime 7.91 user, steady ~8.2 gross; 2%-fee Longhorn lifetime 4.69 (4.3 min self-tune), steady ~6.6; NTM quarantined at upload (fixed in win_ab.sh) | Windows Zen 3: **+69%** lifetime / ~+24% steady over Longhorn; NTM pending |
+| 0%-fee NTM v1.2.1 live on Windows (separate instances from the Seine runs) | c6a.4xlarge / c8a.4xlarge, Windows Server 2025 | Zen 3: lifetime 7.94, steady ~8.0 (Seine 7.91 user, ~8.2 gross: parity); Zen 5: lifetime 23.64 at 14 lanes, steady ~23.7 vs Seine 21.48 user, ~22.3 gross at 13 lanes | Windows Zen 5 gap traced to Seine's 5% RAM reserve leaving 13 of 14 arenas on 32 GiB |
+| Default RAM reserve 5% capped at 1 GiB (was 5%) | EPYC 9R45 c8a.4xlarge, Windows Server 2025, 32 GiB; Seine then NTM on the same instance | Seine starts at 14 workers (was 13); lifetime 22.51 user (21.48 on an earlier instance at 13); same-host NTM 24.03, steady 24.1 vs Seine ~23.5 gross | adopted; Windows Zen 5 still ~2.5% behind NTM gross |
+| Same, Linux neighbour | EPYC 7R13 c6a.4xlarge (32 GiB, 30 GiB free), 15 min live each | cap 14 either way; lifetime 8.70 -> 8.77 H/s | neutral; no regression |
+| `avx512-256-stream-l2` on dense Zen 4c | EPYC 9754 bare metal (128C/256T), 128 / 256 workers | -0.1% / -0.5% | neutral; Zen 4 cohort default unchanged |
+| Same-host live mining on the local fixture, 15 min each | EPYC 9754 bare metal (v0.2.41) | Seine lifetime 48.80 user, steady ~53 gross at 256 workers, first share 42 s (prefault of 512 GiB took 33.4 s); 0%-fee NTM lifetime 52.26, steady ~53, first share 6 s (lazy THP faults); 2%-fee Longhorn 1dee94f lifetime 31.49 (6.2 min self-tune), steady ~54 at 96 workers | dense Zen 4c: steady parity, lifetime -6.6% fee-adjusted from startup + fee -> lazy-THP lead |
+| Lazy THP: hint and fault during the first hash instead of MADV_POPULATE_WRITE prefault | EPYC 9554P bare metal, 128 workers, 15 min live each | ready 11.3 s -> 0.5 s; first minute 62.1 -> 75.0 H/s; lifetime 80.61 -> 81.36 (+0.9%); steady 81.52 / 81.35 | adopted (9754 prefault had taken 33 s) |
+| Same, Zen 4 desktop neighbour | Ryzen 7 7700X, 16 workers, 15 min live each | ready 1.5 s -> 0.0 s; lifetime 12.66 -> 12.68, steady 12.64 -> 12.73 | neutral; no regression |
+| Require a one-hash-per-worker margin before a fewer-worker sample wins (noise moved 14 -> 13 on Windows Zen 5) | design review, synthetic tuner tests | relative margin is 1/(per-worker rate x window): ~2% at 14 workers, ~16% at 256 on EPYC 9754, which would block real downward wins (9900X 24 -> 12, ~3%) | not adopted; expected benefit <1% |
+| CLZERO + cached stores instead of NT stores (allocate arena lines without RFO, keep recent blocks cached for nearby references) | EPYC 9R14 m7a.4xlarge 8 / 16 workers; EPYC 7R13 c6a.4xlarge 8 / 14 | -76% / -71%; -63% / -57% | rejected (CLZERO is a slow path on Zen) |
+| Tuner backoff after converged count probes (5 -> 60 min) | synthetic tuner tests | broke rediscovery after load/RAM changes that leave the low-count rate unchanged | not adopted |
+| 8-block NT write bursts from a 16-block ring (fewer DRAM read/write turnarounds) | EPYC 9R14 m7a.4xlarge, `avx512-256-stream-l2`, 8 / 16 workers | -9.3% / -18.8% | rejected (ring beyond L1 costs more than burst writes save; controllers already batch writes) |
+| Tuner: fewer workers must beat the baseline's own window spread | EPYC 9R45 c8a.4xlarge Windows, same guest, 15 min live each | baseline dropped 14 -> 13 workers at 239 s and stayed until 611 s; candidate held 14; lifetime 21.75 -> 22.39 user H/s (**+3.0%**) | adopted |
+| Same, Linux neighbour | EPYC 9R14 m7a.4xlarge, 15 min live each | baseline wandered 16 -> 15 -> 16 -> 15 -> 14 -> 15; candidate held 16; lifetime 21.91 -> 22.25 (+1.6%), last 5 min 21.86 -> 22.22 | confirms |
+| 64-byte NT stores / far L2 prefetch on Intel | Xeon 8488C m7i.4xlarge, `avx512-256-stream`, 8 / 16 workers | 64-byte: +1.7% (baseline drift) / -5.0%; far L2: -7.6% / -6.9% | both rejected; Intel keeps plain 256-bit streaming |
+| Near prefetch distance 2 / 6 (instead of 3) on Intel | Xeon 8488C m7i.4xlarge, `avx512-256-stream`, 8 / 16 workers | d2: +0.2% / -3.1%; d6: 0.0% / 0.0% | rejected; 3 stays. Intel loop variants now all screened (width, store size, fence, far L2, distance) |
+| Register-resident full-width compress (block in 16 zmm, no working copy in memory; Longhorn-style layout written from the Argon2 definition) | Xeon 8488C m7i.4xlarge; EPYC 9R45 c8a.4xlarge; EPYC 9R14 m7a.4xlarge | Intel: vs 256-bit stream +6.5% at 8, +1.5% / +2.3% / +2.1% at 16 (three pair sets); vs old full-width +0.5% / +1.3%. Zen 5 server: vs old full-width 0.0% / -1.0%. Zen 4: vs 256-bit far-L2 -8.0% / -1.0% at 8 / 16 | adopted as the `avx512-stream` compress; Intel SPR/EMR default -> `avx512-stream`; Zen 4 unchanged |
+| Same, live bntpool 15 min each (v0.2.44 vs candidate) | Xeon 8488C m7i.4xlarge; EPYC 9R45 c8a.4xlarge | Intel: lifetime 16.13 -> 16.83 (**+4.4%**), last 5 min 16.06 -> 16.85 (+4.9%); Zen 5 server: 25.05 -> 25.04 (neutral) | validated |
+| Same-host live vs 0%-fee NTM with the register-resident compress (master 41202f4) | Xeon 8488C m7i.4xlarge; EPYC 9R45 c8a.4xlarge Windows | Intel: Seine 15.25 user / 15.57 gross vs 15.39, steady ~15.7 vs 15.4 gross (+1.9%); Windows Zen 5: 22.75 user / 23.24 gross vs 24.06, steady ~23.4 vs 24.1 (-2.9% gross) | Intel gross lead; Windows Zen 5 still behind -> Linux same-shape check |
+| Same-host live vs 0%-fee NTM, Linux Zen 5 server (same shape as the Windows run) | EPYC 9R45 c8a.4xlarge Linux (master 41202f4) | Seine 24.83 user vs NTM 24.57 (**+1.1%** fee-adjusted); steady ~25.6 vs 24.6 gross (+4%) | Zen 5 server leads on Linux; Windows gap is Windows-specific (4 KiB pages) |
+| Large cached ring (512 / 2048 blocks) so recent references (~2·sqrt(d/N) of them) hit L2/L3 | Ryzen 7 7700X, `avx512-256-stream-l2`, 8 / 16 workers | ring 512: -24% at 16; ring 2048: -11% / -36% | rejected: evicted dirty ring lines add DRAM writes; ring 2 stays L1-resident |
+| Tuner: defer plain AVX-512/AVX2 trials 30 min after a cohort streaming start | Ryzen 7 9700X, same host, 15 min live bntpool each | lifetime 9.81 -> 10.01 H/s (**+2.0%**), steady 10.05 both; count tuning starts at 44 s instead of 245 s | adopted |
+| Same, Zen 3 neighbour check | EPYC 7313P bare metal, 15 min live each | lifetime 18.05 -> 18.60 H/s (**+3.0%**), steady 19.04 / 19.03 | confirms |
+| Same-host live mining on a local all-target Stratum fixture (every hash a share) | Ryzen 7 7700X, 15 min each (Seine on a second 7700X) | Seine default (pre-deferral build): lifetime 12.27 user / 12.54 gross H/s; 0%-fee NTM: lifetime 12.64, last 5 min 12.68; 2%-fee Longhorn: lifetime 7.80 (5.5 min self-tune), last 5 min 12.15 user | Zen 4 desktop: Seine ~3% behind NTM fee-adjusted (gross within 1%), ahead of Longhorn; far from the 20% bar |
+| `avx512-256-stream-l2` production build, kernel A/B and live bntpool (15 min each, tuner from cold) | Ryzen 7 7700X | bench +4.0% / +1.0% at 8 / 16; live lifetime 12.00 -> 12.11 H/s (+1.0%), steady 12.54 -> 12.76 (+1.7%) at the tuner's 16 workers | validated; full 2 GiB parity |
+| No periodic SFENCE in full-width `avx512-stream` | EPYC 9355 bare metal, 32 / 64 workers | -0.5% / -0.6% | rejected; SFENCE stays |
+| Live default mining vs a 0%-fee competitor's bench, same host | EPYC 9355 bare metal | Seine lifetime 78.9 H/s, steady ~83 at 64 workers (15 min bntpool); competitor bench 83.4 @64 | Turin gross parity in live mining |
+| Bench accounting at high lane counts | Ryzen 9 9900X curve 8-24 workers | exactly one uncounted late hash per lane per round (24 of 262 at 24 lanes); live 24-worker trial windows read 12.4-12.6 vs bench 11.4 | bench understates high counts ~0.5 hash/lane/round; compare counts live, not by bench |
+| `avx512-256-stream-l2` on Windows | EPYC 9R14 (m7a.4xlarge, Windows Server 2025), 8 / 16 workers | +1.5% / +2.1% (17.93 vs 17.55); full 2 GiB parity (mingw build) | confirms Zen 4 on Windows |
+| `avx512-stream` on Windows | EPYC 9R45 (c8a.4xlarge, Windows Server 2025), 8 / 14 workers | +0.8% / +2.1% (22.42 vs 21.97); full 2 GiB parity | confirms Zen 5 server on Windows |
 | Worker placement explains high-count flattening | 7443P, 24 workers, affinity off/os/auto | 14.28 / 14.13 / 14.11 | rejected (placement-neutral) |
 
 Open: Zen 3 still flattens past ~12 workers (seine ~14.8 H/s) while a
@@ -4862,3 +4917,35 @@ Its `independent-verification.json` preserves report hashes and verification
 counts; `comparison-diagnostics/genoa-prefetch-and-wide-stores-result.json`
 preserves decisions and cleanup. These results do not replace the public
 steady-state benchmark or establish a power-efficiency gain.
+
+
+### 2026-10-27: Count owned arenas in the initial CPU capacity observation
+
+Kept the small controller-start correction: account for running CPU backends'
+committed arenas when initializing the capacity policy, as subsequent ticks
+already do. Counting zero after allocation made large cached counts appear to
+recover capacity on the next tick and delayed cached kernel restoration.
+No kernel, identity gate, tuning window, pressure threshold or cached score changes.
+
+Native Linux EPYC 9375F (32C/64T, 384 GiB host, deliberately constrained to a
+192 GiB MemoryMax cgroup), v0.2.39 versus that exact release plus the patch.
+Independent 300-second cold runs created each binary's natural 48-worker cache;
+four fresh 180-second cached invocations used B/C/C/B order and unmodified copies
+of those caches. Thread/kernel/page/profile settings were automatic, THP backing,
+unprivileged private-network loopback fixture, no real shares or pool traffic.
+
+Logged completed hashes / whole-invocation elapsed (a lower bound) was
+68.99522 / 72.90969 / 72.99905 / 69.02797 H/s for the cached sequence:
+paired +5.674% / +5.753%, geometric +5.713%. Cold 66.21307 → 66.19679 H/s
+(-0.025%). All predeclared gates pass; two cached pairs are not a confidence
+interval or evidence for other hardware. Baseline streaming started at 62.0/61.1s;
+candidate restored it at 16.7/16.2s immediately after allocation. This is early
+restart output, not sustained hashrate or the separate manual 85.1 H/s headline.
+
+All six runs exited cleanly with zero swap/OOM counter deltas; full 21-case
+streaming reference parity passed before the manual benchmark. Relevant local
+suites: 53 adaptive CPU, 66 config, 65 kernel-policy passed; three native tests
+ignored locally. Rental results and [reproducible evidence](experiments/9375f-cached-start-20261027/README.md)
+include raw logs, memory samples, cache/provenance hashes, and verified cleanup.
+The server and its task SSH key were deleted; no release tag or production miner
+restart accompanies this change.

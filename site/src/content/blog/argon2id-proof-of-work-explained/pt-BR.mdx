@@ -11,7 +11,7 @@ faq:
     a: 'O Argon2id faz da memória a parte cara de cada hash. Cada hash do Blocknet precisa de 2 GiB de memória rápida e movimenta gigabytes através dela, então um chip feito só para calcular hashes ainda precisaria de muita RAM por núcleo. O código do daemon descreve a escolha como uma prova de trabalho memory-hard para resistir a ASICs e garantir uma mineração justa.'
   - q: 'Uma placa de vídeo consegue minerar o Argon2id do Blocknet?'
     a: 'Sim. No Windows e no Linux, o seine minera com todas as placas de vídeo NVIDIA da máquina ao mesmo tempo que a CPU, e os hashrates se somam. Os kernels são compilados na inicialização, e a primeira execução ajusta cada placa e guarda o resultado em cache, então não há nada para configurar antes de começar.'
-sourceHash: ddc65bcd4eb2
+sourceHash: 3bf4c5dc1b0d
 translation: reviewed
 ---
 
@@ -65,7 +65,7 @@ Um minerador poderia tentar guardar menos blocos e recalcular os que faltam sob 
 Cada thread de mineração mantém sua própria arena de 2 GiB, então sua RAM define quantas threads você pode rodar. Cada hash também grava 2 GiB e lê de volta mais ou menos o mesmo volume em lugares espalhados, então a velocidade e a latência da sua memória definem a rapidez com que essas threads terminam. A memória importa tanto quanto o número de núcleos.
 </Answer>
 
-**A RAM define o número de threads.** Paralelismo 1 significa que um hash roda em uma thread, e cada thread precisa de uma arena de 2 GiB só sua. Uma máquina com 16 GB consegue rodar cerca de seis a sete threads depois de deixar espaço para o sistema. O seine mede sua memória, mantém 5% de reserva e escolhe o número de threads para você.
+**A RAM define o número de threads.** Paralelismo 1 significa que um hash roda em uma thread, e cada thread precisa de uma arena de 2 GiB só sua. Uma máquina com 16 GB consegue rodar cerca de seis a sete threads depois de deixar espaço para o sistema. O seine mede sua memória, mantém 5% (no máximo 1 GiB por padrão) de reserva e escolhe o número de threads para você.
 
 **A largura de banda e a latência definem a velocidade de cada thread.** Um hash cria 2.097.152 novos blocos, e cada um lê um bloco de referência de 1 KiB de algum ponto da arena. Isso dá cerca de 2 GiB gravados e cerca de 2 GiB lidos a cada hash. A 10 H/s, uma máquina movimenta aproximadamente 40 GiB de dados pela memória a cada segundo. Na metade que depende dos dados, cada endereço de leitura só é conhecido quando o bloco anterior termina, então o tempo que a memória leva para responder conta tanto quanto a vazão bruta.
 

@@ -11,7 +11,7 @@ faq:
     a: 'Oui. Lancez seine avec --api-server ou --service et il sert des métriques Prometheus sur /metrics via son API de contrôle locale, qui écoute par défaut sur 127.0.0.1, port 9977. Les métriques indiquent si le mineur tourne, son état de cycle de vie, les solutions soumises, acceptées et périmées, et les mises en quarantaine de backends. Les collectes envoient le jeton bearer de l''API.'
   - q: 'Pourquoi l''API de contrôle de seine demande-t-elle un jeton ?'
     a: 'Depuis seine v0.2.23, chaque endpoint de l''API de contrôle, sauf le contrôle de santé, exige un jeton bearer, ce qui empêche les sites web que vous visitez de modifier votre adresse de paiement ou vos réglages. seine écrit un nouveau jeton dans control-api.cookie dans son répertoire de données à chaque démarrage, ou vous pouvez en fixer un avec --api-token.'
-sourceHash: 186b1dc3c49e
+sourceHash: 747f36a1fe6d
 translation: draft
 ---
 
@@ -49,7 +49,7 @@ Pour vérifier l'effet sur votre propre machine, comparez `auto` et `os` avec le
 
 ### Marge mémoire sur les serveurs partagés
 
-Le dimensionnement automatique des threads garde 5 % de la RAM totale libre, en plus de toute réservation pour le GPU. Modifiez-le avec `--cpu-memory-reserve-percent`. Si d'autres services se mettent à consommer de la mémoire, les threads automatiques de seine libèrent leurs zones et reviennent dès que la mémoire se libère : le minage s'adapte ainsi au reste de la machine. Les résultats d'optimisation sont mis en cache par machine, et le cache est réinitialisé quand l'ensemble de CPU autorisés ou la disposition NUMA et L3 change, par exemple après le redimensionnement d'une VM.
+Le dimensionnement automatique des threads garde 5 % (au maximum 1 GiB par défaut) de la RAM totale libre, en plus de toute réservation pour le GPU. Modifiez-le avec `--cpu-memory-reserve-percent`. Si d'autres services se mettent à consommer de la mémoire, les threads automatiques de seine libèrent leurs zones et reviennent dès que la mémoire se libère : le minage s'adapte ainsi au reste de la machine. Les résultats d'optimisation sont mis en cache par machine, et le cache est réinitialisé quand l'ensemble de CPU autorisés ou la disposition NUMA et L3 change, par exemple après le redimensionnement d'une VM. Dans v0.2.43, la réserve par défaut est plafonnée à 1 GiB ; un pourcentage explicitement fourni ne l’est pas.
 
 ## Comment faire tourner seine sans écran ?
 

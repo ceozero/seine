@@ -1,6 +1,6 @@
 ---
 title: 'WindowsでBlocknetをマイニングする方法'
-description: 'seineでWindowsからBlocknetをマイニング。ZIPの選択と検証、アドレスの入力、CPUとNVIDIAの同時稼働、承認されたシェアの確認までを説明します。'
+description: 'seineでWindowsからBlocknetをマイニング。ZIPの選択と展開、アドレスの入力、CPUとNVIDIAの同時稼働、承認されたシェアの確認までを説明します。'
 tags: ['マイニングガイド', 'Windows', 'NVIDIA']
 faq:
   - q: 'WindowsでBlocknetをマイニングするにはCUDA Toolkitが必要ですか？'
@@ -9,11 +9,11 @@ faq:
     a: 'デフォルトでは、seineは起動したフォルダー内のseine-data/seine.config.jsonに受取アドレス、プール、リグ名を保存します。同じ展開先フォルダーから実行すると、その設定を再利用できます。必要な場合はdata-dirオプションで別のディレクトリを指定できます。'
   - q: 'マイニングを始める前にWindowsのラージページが必要ですか？'
     a: 'いいえ。seineはラージページを自動的に試し、利用できない場合は通常のページを使います。デフォルト設定でマイニングを始められます。任意でラージページを設定する場合は、マイニング用アカウントに「メモリ内のページのロック」権限を与え、サインアウトして再びサインインした後にseineを再起動してください。'
-sourceHash: '40744a186c8a'
+sourceHash: '1b3fa78c3bfe'
 translation: draft
 ---
 
-このガイドでは、Windows版ZIPのダウンロードから、bntpool.comでシェアが承認されるまでを説明します。アーカイブを確認してファイルを展開し、受取アドレスを入力して、CPUと対応NVIDIAカードがマイニングしていることを確かめます。以下のコマンドはWindows上で直接動かすPowerShell用です。
+このガイドでは、Windows版ZIPのダウンロードから、bntpool.comでシェアが承認されるまでを説明します。ファイルを展開し、受取アドレスを入力して、CPUと対応NVIDIAカードがマイニングしていることを確かめます。以下のコマンドはWindows上で直接動かすPowerShell用です。
 
 ## WindowsでBlocknetのマイニングを始めるには？
 
@@ -25,20 +25,11 @@ translation: draft
 
 CPUマイニングの各スレッドは2 GiBのメモリブロックを使います。seineは利用可能なRAMとコア数を確認し、メモリに余裕を残して初期スレッド数を選びます。デスクトップでもノートPCでもデフォルト設定で始められます。最初にスレッド数を計算したり、CPUカーネルを選んだりする必要はありません。
 
-## ステップ1：Windows版アーカイブをダウンロードして確認する
+## ステップ1：Windows版アーカイブをダウンロードする
 
-[ダウンロードセクション](/ja/#download)を開き、Windows x86_64を選びます。アーカイブ名は`seine-windows-x86_64.zip`です。展開前にZIPを検証する場合は、同じ[リリース](https://github.com/zpalmtree/seine/releases/latest)から`SHA256SUMS.txt`をダウンロードしてください。アーカイブとチェックサムファイルは同じリリースバージョンのものを使います。
+[ダウンロードセクション](/ja/#download)を開き、Windows x86_64を選びます。アーカイブ名は`seine-windows-x86_64.zip`です。
 
 ![seine公式ダウンロード一覧のWindows版ZIP](/assets/blog/windows-download.png)
-
-PowerShellでDownloadsフォルダーに移動し、アーカイブのSHA-256ハッシュを計算します。
-
-```powershell
-cd "$HOME\Downloads"
-Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
-```
-
-表示されたハッシュを、`SHA256SUMS.txt`にある該当ZIPの項目と比較します。英字の大小は問いませんが、16進数のすべての桁が一致する必要があります。別のフォルダーに保存したファイルを確認する方法は、[MicrosoftのGet-FileHashドキュメント](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash)を参照してください。チェックサムはアーカイブが公開リリースと一致することを確認するものです。両方のファイルを公式リリースページからダウンロードしてください。
 
 ## ステップ2：ZIP全体を展開する
 

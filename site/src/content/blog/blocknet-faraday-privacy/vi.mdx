@@ -1,0 +1,62 @@
+---
+title: 'Faraday thay đổi riêng tư Blocknet thế nào?'
+description: 'Hiểu thiết kế riêng tư Faraday: bằng chứng chi tiêu toàn tập, phát hiện thanh toán ML-KEM, gộp bằng chứng và ý nghĩa thay đổi đề xuất với người dùng ví.'
+tags: ['Blocknet', 'Faraday', 'Quyền riêng tư']
+faq:
+  - q: 'Riêng tư toàn chuỗi có nghĩa Faraday đã bảo vệ mọi output lịch sử không?'
+    a: 'Thông báo chi tiết mô tả toàn bộ tập coin Faraday. Tập này tăng khi coin vào định dạng mới. Cần phân biệt giao dịch vòng hiện tại với việc di chuyển sang định dạng đề xuất. Faraday vẫn đang phát triển; thiết kế mới chưa hoạt động trên mạng đã phát hành hiện nay.'
+  - q: 'ML-KEM có tạo bằng chứng chi tiêu Faraday không?'
+    a: 'ML-KEM là cơ chế đóng gói khóa để thiết lập bí mật chung. Dự án dùng nó cho phát hiện thanh toán. Bằng chứng chi tiêu có vai trò khác: cho mạng kiểm tra chi tiêu trong khi bảo vệ thông tin riêng tư. Faraday đề xuất bằng chứng dựa trên hàm băm xây dựng bằng Plonky3 cho vai trò này.'
+  - q: 'Kích thước bằng chứng, phí và thời gian Faraday đã chốt chưa?'
+    a: 'Chưa. Thông báo chính thức trình bày thiết kế còn xây dựng và thử nghiệm. Kích thước bằng chứng và thời gian mục tiêu mô tả kế hoạch hiện tại; phí cuối cùng chưa xác định. Theo bản phát hành triển khai Faraday để biết cài đặt vận hành và hướng dẫn nâng cấp hiện có để biết việc di chuyển.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Theo dõi hai câu hỏi riêng tư của Faraday: mạng kiểm tra chi tiêu mà không xác định nguồn thế nào, và ví nhận ra khoản đến ra sao? Bài viết giải thích cơ chế đề xuất và hệ quả thực tế. [Thông báo chính thức ngày 27 tháng 10](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) nói thiết kế còn phát triển; hãy dùng chỉ dẫn ví đã phát hành cho mạng hiện tại.
+
+## Faraday sẽ đổi gì về riêng tư thanh toán?
+
+<Answer>
+Faraday đề xuất thay vòng input 16 thành viên hiện nay bằng bằng chứng chi tiêu bao phủ tập coin Faraday. Bằng chứng dựa trên hàm băm sẽ bảo vệ chi tiêu, còn ML-KEM hỗ trợ phát hiện thanh toán. Hai cơ chế làm việc khác nhau. Mục tiêu Faraday là riêng tư chi tiêu rộng hơn và bảo vệ hậu lượng tử trong định dạng coin mới.
+</Answer>
+
+## Từ vòng 16 đến tập coin Faraday
+
+Hiện một lần chi tiêu chỉ ra vòng gồm output input thật và 15 mồi. Chữ ký cho mạng xác minh quyền mà vẫn giấu thành viên thật. [Hướng dẫn chữ ký vòng](/vi/blog/ring-signatures-explained/) giải thích cơ chế hiện tại. Tập ứng viên là vòng đi kèm input đó.
+
+Bằng chứng Faraday đề xuất sẽ xác lập coin được chi thuộc tập Faraday hợp lệ mà không công bố thành viên cụ thể. Đó là ý nghĩa hữu ích của tư cách thành viên toàn tập: bên xác minh kiểm tra sự thuộc tập và tính hợp lệ trong khi lựa chọn ẩn vẫn riêng tư. Nó không có nghĩa tải bản ghi ví riêng của mọi người khác hay phơi bày số dư họ.
+
+Thông báo chi tiết nêu coin Faraday, nên cần phân biệt tập đang tăng với mọi output lịch sử định dạng cũ. Sơ đồ minh họa khác biệt; các chấm là ví dụ khái niệm chứ không phải số coin trực tiếp. [Hướng dẫn nâng cấp](/vi/blog/blocknet-faraday-upgrade/) mô tả việc di chuyển đề xuất để đưa coin hiện có sang định dạng mới.
+
+[![Vòng input hiện tại có 16 ứng viên; bằng chứng Faraday đề xuất nói tới tập coin định dạng Faraday đang tăng. Output cũ nằm ngoài tập minh họa đến khi di chuyển.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Vì sao bằng chứng chi tiêu và phát hiện tách biệt
+
+Bằng chứng chi tiêu trả lời câu hỏi xác thực mạng: lần chi này thỏa các quy tắc cần thiết không? Ví người gửi tạo bằng chứng, node kiểm tra. Dự án đề xuất bằng chứng dựa trên hàm băm dùng [Plonky3](https://github.com/Plonky3/Plonky3), bộ công cụ xây hệ thống bằng chứng. Công cụ cung cấp thành phần; quy tắc cụ thể của Blocknet và cách triển khai vẫn quyết định bên xác minh chấp nhận gì.
+
+Phát hiện thanh toán trả lời câu hỏi của ví: output nào thuộc tôi? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) là cơ chế đóng gói khóa chuẩn hóa để lập bí mật chung. Kế hoạch Faraday dùng nó ở phía nhận. Không nên hiểu đó là tên khác của bằng chứng chi tiêu hay thuật toán chữ ký.
+
+Phân biệt này cũng giải thích thuật ngữ hậu lượng tử trong Faraday. Nó mô tả thiết kế mật mã nhằm chống tấn công bằng máy tính lượng tử; người dùng không cần sở hữu máy đó. ML-KEM dựa trên bài toán lưới, còn bằng chứng chi tiêu công bố dùng kỹ thuật hàm băm. Một thành phần chuẩn hóa tự nó không chứng nhận toàn bộ triển khai tiền mã hóa. Hãy tách các tuyên bố về thuật toán, cấu trúc bằng chứng và ví hoàn chỉnh.
+
+## Bằng chứng đi đâu sau thanh toán?
+
+Đề xuất phân biệt bằng chứng truyền qua mạng với bằng chứng giữ cùng khối. Số hiện tại khoảng 1,4 MB cho mỗi bằng chứng chi tiêu và 1 MB cho bằng chứng khối gộp. Node sẽ chuyển tiếp, xác minh, kết hợp và bỏ bằng chứng riêng sau tính chung cuộc. Đây là số thiết kế của dự án, không phải phép đo của bài viết.
+
+Gộp bằng chứng là cách tóm tắt kiểm tra. Hình dung nhiều phát biểu đã kiểm tra riêng được mang tiếp bằng bằng chứng về việc xác minh chúng. Bằng chứng khối phục vụ mục đích khác với bằng chứng riêng ban đầu. Bản ghi lưu gọn không làm mất truyền mạng và tính toán trước đó; chuyển tiếp, tạo bằng chứng, gộp và lưu dài hạn là công việc riêng.
+
+[![Bằng chứng chi tiêu riêng truyền đến node, gộp thành bằng chứng khối và bị bỏ sau tính chung cuộc theo thiết kế Faraday đề xuất.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Người dùng ví sẽ nhận thấy gì?
+
+Khi đọc đề xuất, nên tách lúc phê duyệt thanh toán, công việc ví chuẩn bị bằng chứng, việc vào khối và chờ đến khi tiền nhận chi tiêu được. Đây là các phần khác nhau của hành trình thanh toán. Kết quả tạo bằng chứng nhanh tự nó không xác lập chuyển khoản nhanh từ đầu đến cuối.
+
+Kế hoạch đề xuất mục tiêu mười phút mỗi khối và nói lần chi có kích thước lớn hơn sẽ tăng phí; mức phí cuối cùng còn đang xây dựng. Kiểm tra phí xem trước trong ví thật khi có bản tương thích. [Hướng dẫn thời gian chuyển](/vi/blog/blocknet-transfer-time/) mô tả mạng đã phát hành với mục tiêu năm phút; thời gian tương lai thuộc quy tắc Faraday cuối cùng. Khi đánh giá ước tính, xem đồng thời kích thước thanh toán, công việc bằng chứng và thời gian khối.
+
+## Nên đọc hướng dẫn nào tiếp theo?
+
+Dùng [người khác thấy gì về thanh toán](/vi/blog/blocknet-payment-visibility/) cho trường giao dịch công khai hiện tại, bản ghi ví và tiết lộ có chủ ý. Dùng [hướng dẫn nâng cấp Faraday hiện có](/vi/blog/blocknet-faraday-upgrade/) cho kế hoạch kích hoạt, dữ liệu khôi phục và di chuyển coin.
+
+Khi có thông báo mới, kiểm tra thứ thay đổi: tập coin hợp lệ, hệ thống bằng chứng, phát hiện thanh toán, kích thước bằng chứng hay hoạt động ví. Sau đó xem nó mô tả đề xuất, kết quả thử nghiệm hay tính năng đã phát hành. Như vậy quy trình thanh toán hiện tại khớp phần mềm đang chạy trong khi bạn theo dõi chi tiết nâng cấp riêng tư đề xuất.
+
+<CTA target="seine" title="Tiếp tục đào với thiết lập đã phát hành" text="Dùng hướng dẫn đào hiện tại của seine và theo chỉ dẫn trình đào, pool tương thích khi Faraday tiếp tục phát triển." />

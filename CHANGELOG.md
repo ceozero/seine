@@ -9,7 +9,36 @@ supported hardware only.
 
 ## Unreleased
 
+- **About 4-5% faster CPU hashing on Intel Xeon Sapphire Rapids and Emerald Rapids** (measured on Xeon Platinum 8488C) with a new full-width AVX-512 kernel.
+
+## v0.2.44
+
+- **About 2-3% more hashes in the first 15 minutes on AMD EPYC servers** (measured on EPYC 9R45 and 9R14): automatic tuning no longer drops workers on measurement noise.
+
+## v0.2.43
+
+- **Mining starts within a second on large Linux servers** (measured on a 64-core EPYC 9554P: 11 s to 0.5 s), instead of waiting for all worker memory to be prepared first.
+- **About 5% faster on 32 GiB Windows machines with 16 or more CPU threads** (measured on EPYC 9R45): automatic sizing now keeps at most 1 GiB of RAM in reserve, fitting one more 2 GiB worker.
+
+## v0.2.42
+
+- **About 45% faster CPU hashing on cloud VMs that report "AMD EPYC" with a generic CPU model** (AuthenticAMD family 6, AVX2 only), including with `--threads`: they now use the memory-streaming kernel.
+
+## v0.2.41
+
+- **About 10% more hashes in the first 15 minutes on Intel Xeon Sapphire Rapids and Emerald Rapids** (measured on Xeon Platinum 8488C): mining now starts on the memory-streaming kernel at every logical CPU. Other x86 CPUs can now discover it while mining.
+- **Mining starts hashing in seconds instead of up to half a minute on Linux** (measured on a 32-core EPYC 9355: 21 s to 1.5 s), adding about 2% more hashes in the first 15 minutes.
+- Linux no longer asks you to reserve HugeTLB pages when transparent huge pages are enabled; they made no measurable difference to hashrate.
+
+## v0.2.40
+
 - **About 40-50% faster CPU hashing on Windows with AMD Zen 2 and Zen 3 processors** (measured on EPYC 7R13): the memory-streaming kernel is now used on Windows too.
+- **About 7% faster CPU hashing on AMD Zen 4 servers** (measured on EPYC 9124P), and up to about 4% on Ryzen 7000 (measured on Ryzen 7 7700X).
+- **About 5% faster CPU hashing on AMD Zen 5 servers** (measured on EPYC 9355P and EPYC 9R45).
+- **About 5% more hashes in the first 15 minutes on AMD Zen 4 and Zen 5 servers with SMT** (measured on EPYC 9355P): automatic tuning now starts at every logical CPU that fits in memory.
+- **About 2-3% more hashes in the first 15 minutes on AMD Zen 3 to Zen 5 CPUs** (measured on EPYC 7313P and Ryzen 7 9700X): automatic tuning no longer spends its first minutes re-testing slower kernels.
+- `seine --bench` thread autotuning now checks a few widely spaced counts first, so it settles on a good thread count in fewer steps.
+- Faster restarts with saved CPU tuning on Linux EPYC 9375F systems: the fast kernel resumes promptly after memory initialization.
 
 ## v0.2.39
 

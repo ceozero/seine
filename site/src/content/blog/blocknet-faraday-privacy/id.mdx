@@ -1,0 +1,62 @@
+---
+title: 'Bagaimana Faraday mengubah privasi Blocknet'
+description: 'Pahami rancangan privasi Faraday: bukti belanja seluruh himpunan, deteksi pembayaran ML-KEM, agregasi bukti dan arti usulan perubahan ini bagi pengguna wallet.'
+tags: ['Blocknet', 'Faraday', 'Privasi']
+faq:
+  - q: 'Apakah privasi seluruh blockchain berarti semua output historis Blocknet sudah dilindungi Faraday?'
+    a: 'Pengumuman terperinci menjelaskan seluruh himpunan koin Faraday. Himpunan itu tumbuh saat koin memasuki format baru. Transaksi ring saat ini dan migrasi ke format usulan perlu dibedakan. Faraday masih dikembangkan; rancangan baru belum aktif di jaringan yang dirilis saat ini.'
+  - q: 'Apakah ML-KEM membuat bukti pembelanjaan Faraday?'
+    a: 'ML-KEM adalah mekanisme enkapsulasi kunci untuk membentuk rahasia bersama. Proyek menempatkannya pada deteksi pembayaran. Bukti pembelanjaan memiliki peran terpisah: memungkinkan jaringan memeriksa pembelanjaan sambil melindungi informasi privat. Faraday mengusulkan bukti berbasis hash yang dibangun dengan Plonky3 untuk peran itu.'
+  - q: 'Apakah ukuran bukti, biaya dan waktu Faraday sudah final?'
+    a: 'Belum. Pengumuman resmi menyajikan rancangan yang masih dibangun dan diuji. Angka ukuran bukti dan target waktunya menjelaskan rencana saat ini, sedangkan angka biaya akhir belum ditetapkan. Ikuti rilis yang menerapkan Faraday untuk pengaturan operasional dan panduan peningkatan yang ada untuk informasi migrasi.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Ikuti dua pertanyaan privasi di balik Faraday: bagaimana jaringan memeriksa pembelanjaan tanpa mengenali sumbernya, dan bagaimana wallet mengenali pembayaran masuk. Artikel ini menjelaskan mekanisme usulan dan akibat praktisnya. [Pengumuman resmi 27 Oktober](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) menyatakan rancangan masih dikembangkan; gunakan petunjuk wallet yang telah dirilis untuk jaringan saat ini.
+
+## Apa yang akan diubah Faraday pada privasi pembayaran?
+
+<Answer>
+Faraday mengusulkan penggantian ring input beranggota 16 saat ini dengan bukti pembelanjaan yang mencakup himpunan koin Faraday. Bukti berbasis hash akan melindungi pembelanjaan, sementara ML-KEM mendukung deteksi pembayaran. Mekanisme ini memiliki tugas berbeda. Hasil yang dituju Faraday adalah privasi pembelanjaan lebih luas dan perlindungan pascakuantum dalam format koin baru.
+</Answer>
+
+## Dari ring 16 ke himpunan koin Faraday
+
+Saat ini pembelanjaan menunjukkan ring yang memuat output input sebenarnya dan 15 umpan. Tanda tangannya memungkinkan jaringan memverifikasi izin sambil menyembunyikan anggota sebenarnya. [Panduan ring signature](/id/blog/ring-signatures-explained/) menjelaskan mekanisme saat ini. Himpunan kandidatnya adalah ring yang disertakan dengan input itu.
+
+Bukti Faraday yang diusulkan akan membuktikan bahwa koin yang dibelanjakan berada di suatu tempat dalam himpunan Faraday yang memenuhi syarat tanpa menerbitkan anggota tertentu. Itulah makna berguna keanggotaan seluruh himpunan: pemeriksa memeriksa keanggotaan dan keabsahan sementara pilihan tersembunyi tetap privat. Ini bukan berarti mengunduh catatan wallet privat semua orang lain atau mengungkap saldo mereka.
+
+Pengumuman terperinci menyebut koin Faraday, sehingga himpunan yang tumbuh itu harus dibedakan dari semua output historis berformat lama. Diagram menggambarkan perbedaan tersebut; titiknya merupakan contoh konseptual, bukan jumlah koin langsung. [Panduan peningkatan](/id/blog/blocknet-faraday-upgrade/) membahas migrasi usulan yang memindahkan koin lama ke format baru.
+
+[![Ring input saat ini memiliki 16 kandidat, sementara bukti Faraday usulan mengacu pada himpunan koin format Faraday yang tumbuh; output lama berada di luar himpunan ilustrasi sampai migrasi.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Mengapa bukti belanja dan deteksi pembayaran terpisah
+
+Bukti pembelanjaan menjawab pertanyaan validasi jaringan: apakah pembelanjaan memenuhi aturan yang disyaratkan? Wallet pengirim membuat bukti dan node memeriksanya. Proyek mengusulkan bukti berbasis hash memakai [Plonky3](https://github.com/Plonky3/Plonky3), perangkat untuk membangun sistem bukti. Perangkat itu menyediakan komponen; aturan konkret Blocknet dan implementasinya tetap menentukan apa yang diterima pemeriksa.
+
+Deteksi pembayaran menjawab pertanyaan wallet: output mana milik saya? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) merupakan mekanisme enkapsulasi kunci terstandar untuk membentuk rahasia bersama. Rencana Faraday menempatkannya di sisi penerima. Ini bukan nama pengganti bukti pembelanjaan atau algoritma tanda tangan.
+
+Perbedaan ini juga menjelaskan istilah pascakuantum dalam Faraday. Istilah itu menggambarkan rancangan kriptografi yang ditujukan untuk menahan serangan komputer kuantum; pengguna tidak perlu memilikinya. ML-KEM bertumpu pada masalah kisi, sedangkan bukti pembelanjaan yang diumumkan memakai teknik berbasis hash. Memakai komponen terstandar saja tidak mensertifikasi seluruh implementasi mata uang kripto. Baca klaim tentang algoritma, konstruksi bukti dan wallet lengkap sebagai klaim terpisah.
+
+## Apa yang terjadi pada bukti setelah pembayaran?
+
+Usulan ini membedakan bukti yang dikirim melalui jaringan dari bukti yang disimpan bersama blok. Angka saat ini sekitar 1,4 MB per bukti pembelanjaan dan sekitar 1 MB untuk bukti blok gabungan. Node akan meneruskan dan memverifikasi bukti pembelanjaan, menggabungkannya, lalu membuang bukti individual setelah finalitas. Angka tersebut merupakan rancangan proyek, bukan pengukuran untuk artikel ini.
+
+Menggabungkan bukti merupakan cara merangkum pemeriksaan. Bayangkan beberapa pernyataan yang diperiksa secara mandiri dibawa maju oleh bukti bahwa pemeriksaannya dilakukan. Bukti blok memiliki tujuan berbeda dari bukti individual awal. Catatan tersimpan yang ringkas tidak menghilangkan transfer jaringan dan komputasi sebelumnya; penerusan, pembuatan bukti, agregasi dan penyimpanan jangka panjang adalah tugas terpisah.
+
+[![Bukti pembelanjaan individual dikirim ke node, digabung menjadi satu bukti blok dan dibuang setelah finalitas menurut rancangan Faraday usulan.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Apa yang akan dirasakan pengguna wallet?
+
+Cara berguna membaca usulan adalah memisahkan saat Anda menyetujui pembayaran, pekerjaan wallet menyiapkan bukti, penyertaan dalam blok, dan penantian sebelum dana diterima dapat dibelanjakan. Ini bagian berbeda dari perjalanan pembayaran. Hasil pembuatan bukti yang cepat saja tidak membuktikan transfer keseluruhan yang cepat.
+
+Rencana mengusulkan target blok sepuluh menit dan menyebut pembelanjaan berukuran lebih besar akan menaikkan biaya, dengan jumlah biaya akhir masih disusun. Periksa pratinjau biaya wallet sebenarnya saat rilis kompatibel tersedia. [Panduan waktu transfer](/id/blog/blocknet-transfer-time/) membahas jaringan yang dirilis dengan target lima menit; waktu mendatang mengikuti aturan Faraday final. Ukuran pembayaran, pekerjaan bukti dan waktu blok perlu dibaca bersama saat menilai perkiraan.
+
+## Panduan mana yang dipakai berikutnya?
+
+Gunakan [apa yang dapat dilihat orang tentang pembayaran](/id/blog/blocknet-payment-visibility/) untuk bidang transaksi publik, catatan wallet dan pengungkapan sengaja saat ini. Gunakan [panduan peningkatan Faraday yang ada](/id/blog/blocknet-faraday-upgrade/) untuk rencana aktivasi, bahan pemulihan dan migrasi koin.
+
+Saat pengumuman baru muncul, periksa yang berubah: himpunan koin yang memenuhi syarat, sistem bukti, deteksi pembayaran, ukuran bukti atau perilaku wallet. Lalu periksa apakah itu usulan, hasil pengujian atau fitur yang dirilis. Ini menjaga prosedur pembayaran saat ini sesuai dengan perangkat lunak yang benar-benar dipakai sambil memungkinkan Anda mengikuti peningkatan privasi usulan secara rinci.
+
+<CTA target="seine" title="Terus menambang dengan konfigurasi yang dirilis" text="Gunakan panduan penambangan seine saat ini dan ikuti petunjuk penambang serta pool yang kompatibel seiring perkembangan Faraday." />

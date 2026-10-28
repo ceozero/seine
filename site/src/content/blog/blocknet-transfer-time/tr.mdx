@@ -1,0 +1,76 @@
+---
+title: 'Blocknet transferi ne kadar sürer?'
+description: 'Blocknet transferini yayından harcanabilir bakiyeye kadar izleyin. Onayların anlamını, cüzdanın süre tahminini ve ilerlemeyi nereden izleyeceğinizi öğrenin.'
+tags: ['Blocknet', 'Cüzdan', 'Ödemeler']
+faq:
+  - q: 'Blocknet ödemesi ilk onaydan sonra harcanabilir mi?'
+    a: 'İncelenen core v0.22.0’da cüzdan, alınan normal bir çıktıyı zincir ucu onu içeren bloktan on blok ileride olduğunda harcanabilir yapar. İşlem ayrıntısı, ödeme bloğa girer girmez onu onaylanmış sayabilir. Bu fonları yeniden göndermeden önce eşitleme ve cüzdan taraması tamamlandıktan sonra Spendable Balance alanını kontrol edin.'
+  - q: 'Cüzdanı kapatmak gönderenin ödemesini geciktirir mi?'
+    a: 'Cüzdanınız kapalıyken ağ adresinize gelen ödemeyi bloğa dahil edebilir. Yeniden açtığınızda görünen alım ve bakiyenin güncel olması için düğüm ve cüzdanın zincire yetişmesi gerekir. Cüzdanı açık tutmak ilerlemeyi izlemenizi sağlar, ancak onay derinliğini ağın blokları belirler.'
+  - q: 'Normal transfer madencilik ödülü gibi 60 blok bekler mi?'
+    a: 'İncelenen sürümde normal transfer cüzdanın on blok derinlik kuralını kullanır. Yeni çıkarılan coinbase çıktılarının ayrı bir 60 blok olgunlaşma kuralı vardır. Havuz ödemesi, havuz ödül muhasebesini yaptıktan sonraki bir ödeme işlemidir. Havuz gönderdikten sonra ödeme işleminin kendisini izleyin.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Blocknet ödemesini gönderen ve alıcı için önemli aşamalarda izleyin: iletim, bloğa dahil olma ve harcanabilir cüzdan bakiyesi. Bu rehber, 27 Ekim 2026 tarihinde incelenen yayımlanmış core ve masaüstü cüzdan v0.22.0’ın gösterdiği süreyi açıklar. İki kişinin aynı transferi izlemesi için ödemenin işlem hash’ini saklayın.
+
+## Blocknet transferi ne kadar sürer?
+
+<Answer>
+Blocknet beş dakikalık blokları hedefler. Normal ödeme bir bloğa girdikten sonra yayımlanmış cüzdan, fonları harcanabilir yapmadan önce on blok daha eklenmesini bekler: hedef aralıkta yaklaşık 50 dakika ve öncesindeki bloğa dahil olma bekleyişi. Gerçek blok süreleri değişir. Sabit bir son tarih yerine işlemi ve cüzdanın harcanabilir bakiyesini izleyin.
+</Answer>
+
+## Ödemeyi üç aşamada izleyin
+
+Önce gönderen ödemeyi cüzdanında inceler ve onaylar. Bu gönderim için döndürülen işlem hash’ini saklayın. Düğümün mempool’unda bekleyen işlem o düğüm tarafından alınmıştır ve bloğa dahil olmayı bekler. Orada olması sonraki bloğa gireceği sözünü vermez. [Gönderme ve alma rehberi](/tr/blog/send-receive-blocknet/) ödemenin hazırlanmasını ve onaylanmasını anlatır.
+
+İkinci aşamada işlem kabul edilmiş bir bloğa girer. Ayrıntısı artık `Confirmed`, blok yüksekliği ve onay sayısı gösterebilir. Bu, dahil olduğuna dair yararlı bir kanıttır. Alıcının cüzdanı zinciri tararken kendine ait gelen çıktıyı tanır.
+
+Üçüncü aşamada cüzdan kurallarına göre çıktının harcanabilmesi için yeterli sayıda sonraki blok gelir. Alıcı artık `Spendable Balance` tutarını kullanabilir. Dahil olmadan önce yerel cüzdan gelen mempool ödemesini algılarsa panel ayrı bir onaylanmamış ödeme bildirimi gösterebilir. Aşağıdaki görüntü etiketli yerel demo verilerle gerçek yayımlanmış arayüzü kullanır.
+
+[![Yayımlanmış Blocknet paneli, bloğa girmeden önce onaylanmamış 1,25 BNT gelen demo ödemeyi gösteriyor.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Onaylanmış ödeme neden hâlâ bekliyor?
+
+[Yayımlanmış cüzdanın olgunluk kontrolü](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738), mevcut zincir yüksekliğinden çıktıyı içeren bloğun yüksekliğini çıkarır. Normal harcanmamış çıktı on blok derinlikte olgunlaşır. `100,000` bloğundaki ödeme, zincir ucu `100,010` olduğunda bu derinliğe ulaşır. Bu yükseklikler kuralı örnekler; canlı ödeme raporu değildir.
+
+[İşlem ayrıntısı API’si](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) işlemi içeren bloğu ilk onay sayar. Cüzdanın harcanabilirlik hesabı aynı blokta sıfır derinlikle başlar. Bu nedenle normal çıktı cüzdanın on blok derinlik şartına ulaştığında ayrıntıda on bir onay görünebilir. Alınan fonların kullanıma hazır olup olmadığını panelin harcanabilir bakiyesinden değerlendirin.
+
+Aşağıdaki örnekte ödeme bloğa alınmış ve sonrasında dört blok gelmiştir. İşlem ayrıntısı beş onay gösterirken panel örnek 1,25 BNT’yi `Pending` içinde tutar ve yaklaşık altı blok kaldığını gösterir. İki ekran aynı ödemeyi farklı hazır olma aşamalarıyla anlatır.
+
+[![Blocknet panelinde bekleyen 1,25 BNT demo alım, sıfır harcanabilir fon ve yaklaşık altı kalan blok.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Süre tahminini nasıl okumalıyım?
+
+On blok ile beş dakikalık hedef çarpıldığında bloğa girişten sonra yaklaşık 50 dakika elde edilir. İşlemin bloğa girmesi için önceki bekleyiş bundan önce gelir. Bu hesap süre ölçeğini açıklar; ödeme örnekleminden ölçülen ortalama veya garantili teslim süresi değildir.
+
+Yayımlanmış panel kalan blokları da yaklaşık süreye çevirir. Altı blok kalan örnekte altı çarpı beş yaklaşık 30 dakikadır. Zincirin bu blokları üretmesi gerekir. Geri sayımın sıfıra ulaşması kendi başına blok eklemez veya çıktıyı harcanabilir yapmaz. Güncel zincir ilerlemesini ve bakiyeyi tekrar kontrol edin.
+
+Gelen ödeme bildirimi işlem bloğa girmeden görünebilir. Tahminini ilerleme hakkında yol gösterici olarak kullanın, ardından işlemi içeren bloğu ve harcanabilir bakiyeyi izleyin. Cüzdan eşitlemesi ve taraması, ağın zaten yaptığı işleri yerel ekranın ne zaman yansıtacağını da etkiler.
+
+## Gönderen ve alıcı nereden kontrol etmeli?
+
+Gönderen `History` bölümünü açmalı, giden ödemeyi bulmalı ve `TX Hash` değerini saklamalıdır. Alıcı aynı hash ile gelen transferi tanıyabilir. İki kişi ödemeyi konuşurken hash’i eşleştirmek, aynı adrese yapılan başka gönderimle karışmasını önler.
+
+[Blocknet gezgini rehberi](/tr/blog/blocknet-explorer-guide/) işlem ve onu içeren bloğun nasıl bulunacağını gösterir. Herkese açık sorgu, ağda bloğa dahil olmayı kontrol etmeye yardımcı olur. Alıcının cüzdanı, kendi anahtarlarına ait özel alım ve bakiye bilgilerini sağlar. Aldığınız tutarı kontrol etmek için cüzdanı kullanın.
+
+Alıcının bilgisayarında amaçlanan cüzdanı açıp `Your Address` değerini `Receive` altında gönderenin kullandığı hedefle karşılaştırın. Sonra eksik kayıt hakkında karar vermeden önce düğüm eşitlemesini ve cüzdan taramasını kontrol edin. Kapalı kalmış cüzdan, zincirde zaten ilerlemiş ödemeleri bulmak için zamana ihtiyaç duyabilir.
+
+## Aldığım BNT’yi ne zaman gönderebilirim?
+
+Alımın `Spendable Balance` alanına eklenmesini bekleyin; bunu eşitlenmiş `Dashboard` üzerinde kontrol edin. Kaydedilen fonların bölünmesini görmek için `Pending` ve `Total` değerlerini de okuyabilirsiniz. Önceden başka fonlarınız varsa bu alım beklerken bakiyenin bir kısmı harcanabilir olabilir. Tek transferi izlerken eşleşen geçmiş kaydını kullanın.
+
+Görüntü, ödemeyi içeren bloktan sonra on blok eklendiğinde aynı demo ödemeyi gösterir. 1,25 BNT artık harcanabilir ve bekleyen tutar sıfırdır. Bu görüntüler yayımlanmış arayüzü örnekler; gerçek bir transferin geçen süresini ölçmez. Sonraki ödemeyi hazırlarken onaylamadan önce cüzdanda tutarı ve ücreti inceleyin.
+
+[![Yayımlanmış Blocknet paneli, on blok derinliğe ulaşan aynı demo ödemeyi 1,25 BNT harcanabilir bakiye olarak gösteriyor.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Ödeme görünmediyse neyi kontrol etmeliyim?
+
+Doğrulayabildiğiniz aşamayı kullanın. Gönderenden mevcut işlem hash’ini isteyin, bloğa dahil olmasını kontrol edin ve alıcı hedefini karşılaştırın. Yerel geçmiş veya bakiye yetişmediyse [cüzdan eşitleme ve tarama kontrollerini](/tr/blog/blocknet-wallet-not-syncing/) izleyin. Kontrol sırasında ilk işlem kaydını saklayın; yeni gönderim ayrı bir ödemedir.
+
+Madencilik gelirinde önce kazanılmış havuz ödülünü adresinize zaten gönderilmiş ödemeden ayırın. [Madencilik ödülü onay rehberi](https://bntpool.com/blog/tr/block-confirmations-mining-rewards/), yeni çıkarılan coinlerin ayrı 60 blok olgunlaşma aşamasını açıklar. Havuz normal ödeme işlemini gönderince o işlemin kendi bloğa girişini ve cüzdandaki harcanabilirliğini izleyin. [Eksik ödeme rehberi](https://bntpool.com/blog/tr/pool-payout-missing-from-wallet/) havuz kaydını alıcı cüzdanıyla bağlar.
+
+Tamamlanma kontrolü basittir: amaçlanan cüzdanı belirleyin, ödemenin işlem hash’ini eşleştirin ve eşitleme ile taramadan sonra harcanabilir bakiyeyi kontrol edin. Bu rehber mevcut yayımlanmış kuralları anlatır. [Faraday rehberi](/tr/blog/blocknet-faraday-upgrade/) duyurulmuş gelecekteki ağ değişikliklerini ayrıca izler.
+
+<CTA target="seine" title="Blocknet cüzdanınıza madencilik yapın" text="seine’i açık alım adresinizle kullanın ve havuz ödemelerinizi aynı cüzdana kadar izleyin." />

@@ -1,0 +1,63 @@
+---
+title: 'How Faraday changes Blocknet privacy'
+description: 'Understand Faraday’s privacy design: full-set spending proofs, ML-KEM payment detection, proof aggregation and what the proposed changes mean for wallet users.'
+date: 2026-10-27
+tags: ['Blocknet', 'Faraday', 'Privacy']
+faq:
+  - q: 'Does full-chain privacy mean every historical Blocknet output is already protected by Faraday?'
+    a: 'The detailed announcement describes the full set of Faraday coins. That set grows as coins enter the new format. Current ring transactions and the migration into the proposed format need to be distinguished. Faraday is still being developed; the new design is not active on today’s released network.'
+  - q: 'Does ML-KEM create Faraday spending proofs?'
+    a: 'ML-KEM is a key-encapsulation mechanism used to establish a shared secret. The project assigns it to payment detection. Spending proofs have a separate role: allowing the network to check a spend while protecting private information. Faraday proposes hash-based proofs built with Plonky3 for that role.'
+  - q: 'Are Faraday’s proof sizes, fees and timing final?'
+    a: 'No. The official announcement presents a design still being built and tested. Its proof-size figures and target timing describe the current plan, and final fee figures remain unsettled. Follow the release that implements Faraday for operational settings and the existing upgrade guide for migration information.'
+related: [blocknet-faraday-upgrade, ring-signatures-explained, blocknet-payment-visibility, blocknet-transfer-time]
+image: /assets/blog/blocknet-faraday-privacy-set.svg
+---
+
+Follow the two privacy questions behind Faraday: how the network checks a spend without identifying its source, and how your wallet recognizes an incoming payment. This article explains the proposed mechanisms and their practical consequences. The [official October 27 announcement](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) says the design remains under development; use released wallet instructions for today’s network.
+
+## What would Faraday change about payment privacy?
+
+<Answer>
+Faraday proposes replacing today’s 16-member input rings with spending proofs covering the set of Faraday coins. Hash-based proofs would protect spending, while ML-KEM would support payment detection. These mechanisms have different jobs. Faraday’s intended result is broader spend privacy and post-quantum protection within the new coin format.
+</Answer>
+
+## From a ring of 16 to the set of Faraday coins
+
+Today a spend identifies a ring containing the real input output and 15 decoys. The signature lets the network verify authorization while keeping the real member hidden. The [ring-signature guide](/blog/ring-signatures-explained/) explains this current mechanism. Its set of candidates is the ring included with that input.
+
+The proposed Faraday proof would establish that the spent coin belongs somewhere in the eligible Faraday set without publishing the particular member. This is the useful meaning of full-set membership: the verifier checks belonging and validity while the hidden choice stays private. It does not mean downloading every other person’s private wallet record or exposing their balances.
+
+The detailed announcement specifies Faraday coins, so the growing set must be distinguished from all historical outputs in the old format. The diagram illustrates that distinction; its dots are a conceptual example rather than a live count of coins. The [upgrade guide](/blog/blocknet-faraday-upgrade/) covers the proposed migration that moves existing coins into the new format.
+
+[![A current input ring contains 16 candidates, while the proposed Faraday proof refers to a growing set of Faraday-format coins; old-format outputs remain outside that illustrated set until migration.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Why spending proofs and payment detection are separate
+
+A spending proof answers a network-validation question: does this spend satisfy the required rules? The sender’s wallet creates the proof and nodes check it. The project proposes hash-based proofs using [Plonky3](https://github.com/Plonky3/Plonky3), a toolkit for constructing proof systems. The toolkit supplies building blocks; Blocknet’s concrete rules and their implementation still determine what its verifier accepts.
+
+Payment detection answers a wallet question: which outputs belong to me? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) is a standardized key-encapsulation mechanism for establishing a shared secret. The Faraday plan assigns it to the receiving side. It should not be read as a replacement name for the spending proof or as a signature algorithm.
+
+The distinction also explains Faraday’s use of the term post-quantum. It describes cryptographic designs intended to withstand attacks using quantum computers; it does not require users to own one. ML-KEM relies on lattice problems, while the announced spending proof uses hash-based techniques. Using a standardized component does not by itself certify an entire cryptocurrency implementation. Read claims about algorithms, proof construction and the complete wallet as separate claims.
+
+## What happens to the proof after a payment?
+
+The proposal distinguishes the proof sent through the network from the proof retained with a block. Its current figures are about 1.4 MB per spend proof and about 1 MB for a combined block proof. Nodes would relay and verify spend proofs, combine them, and discard individual proofs after finality. These are the project’s design figures, not measurements made for this article.
+
+Combining proofs is a way to summarize checks. Imagine several independently checked statements being carried forward by a proof of their verification. The block proof serves that different purpose from the original individual proof. A compact retained record does not make the earlier network transfer and computation disappear; relay, proof creation, aggregation and long-term storage are separate jobs.
+
+[![Individual spend proofs travel to nodes, combine into one block proof and are discarded after finality under the proposed Faraday design.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## What would wallet users notice?
+
+A useful way to read the proposal is to separate the moment you approve a payment, the work your wallet does to prepare its proof, inclusion in a block, and the wait before received funds become spendable. These are different parts of the payment journey. A quick proof-generation result alone does not establish a quick end-to-end transfer.
+
+The plan proposes a ten-minute block target and says larger spends would increase fees, with final fee amounts still being worked out. Check the actual wallet’s fee preview when compatible releases arrive. The [transfer-timing guide](/blog/blocknet-transfer-time/) describes the released five-minute-target network; future timing belongs with the final Faraday rules. Payment size, proof work and block timing should be read together when evaluating an estimate.
+
+## Which guide should you use next?
+
+Use [what someone can see about a payment](/blog/blocknet-payment-visibility/) for today’s public transaction fields, wallet records and deliberate disclosures. Use the [existing Faraday upgrade guide](/blog/blocknet-faraday-upgrade/) for activation plans, recovery material and coin migration.
+
+When a new announcement appears, check what changed: the eligible coin set, the proof system, payment detection, proof sizes, or wallet behavior. Then check whether it describes a proposal, a test result or a released feature. That keeps today’s payment procedure aligned with the software you actually run while letting you follow the proposed privacy upgrade in detail.
+
+<CTA target="seine" title="Keep mining with the released setup" text="Use seine’s current mining guides and follow compatible miner and pool instructions as Faraday development progresses." />

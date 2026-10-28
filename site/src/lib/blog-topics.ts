@@ -23,6 +23,8 @@ export const TOPICS = [
 ] as const;
 const groups: Record<string, readonly string[]> = {
   "getting-started": [
+    "blocknet-transfer-time",
+    "update-blocknet-wallet",
     "get-first-blocknet",
     "blocknet-wallet-node-miner",
     "blocknet-desktop-wallet",
@@ -59,6 +61,9 @@ const groups: Record<string, readonly string[]> = {
     "seine-dashboard-explained"
   ],
   "blocknet": [
+    "blocknet-transaction-explained",
+    "blocknet-payment-visibility",
+    "blocknet-faraday-privacy",
     "blocknet-wallet-backup-restore",
     "blocknet-payment-proof",
     "blocknet-sign-verify-message",

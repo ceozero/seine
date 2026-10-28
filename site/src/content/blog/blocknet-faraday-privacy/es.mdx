@@ -1,0 +1,62 @@
+---
+title: 'Cómo cambia Faraday la privacidad de Blocknet'
+description: 'Conoce el diseño de privacidad de Faraday: pruebas de gasto de conjunto completo, detección con ML-KEM, agregación y sus efectos propuestos para la cartera.'
+tags: ['Blocknet', 'Faraday', 'Privacidad']
+faq:
+  - q: '¿Privacidad de toda la cadena significa que Faraday ya protege todas las salidas históricas?'
+    a: 'El anuncio detallado describe el conjunto completo de monedas Faraday. Ese conjunto crece a medida que las monedas entran en el nuevo formato. Hay que distinguir las transacciones de anillo actuales de la migración al formato propuesto. Faraday sigue en desarrollo; el diseño nuevo no está activo en la red publicada hoy.'
+  - q: '¿ML-KEM crea las pruebas de gasto de Faraday?'
+    a: 'ML-KEM es un mecanismo de encapsulación de claves para establecer un secreto compartido. El proyecto lo asigna a la detección de pagos. Las pruebas de gasto tienen otra función: permitir que la red compruebe un gasto protegiendo la información privada. Faraday propone pruebas basadas en hash construidas con Plonky3 para esa función.'
+  - q: '¿Son definitivos los tamaños de prueba, las comisiones y los tiempos de Faraday?'
+    a: 'No. El anuncio oficial presenta un diseño aún en construcción y pruebas. Sus tamaños de prueba y tiempos objetivo describen el plan actual, y las comisiones definitivas siguen sin concretarse. Consulta la versión que implemente Faraday para la configuración operativa y la guía de actualización existente para la migración.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Sigue las dos cuestiones de privacidad de Faraday: cómo comprueba la red un gasto sin identificar su origen y cómo reconoce tu cartera un pago entrante. Este artículo explica los mecanismos propuestos y sus consecuencias prácticas. El [anuncio oficial del 27 de octubre](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) dice que el diseño sigue en desarrollo; usa las instrucciones de las carteras publicadas para la red actual.
+
+## ¿Qué cambiaría Faraday en la privacidad de los pagos?
+
+<Answer>
+Faraday propone sustituir los anillos de entrada actuales de 16 miembros por pruebas de gasto que abarquen el conjunto de monedas Faraday. Las pruebas basadas en hash protegerían el gasto, mientras que ML-KEM ayudaría a detectar pagos. Son funciones distintas. El resultado previsto de Faraday es una privacidad de gasto más amplia y protección poscuántica en el nuevo formato.
+</Answer>
+
+## De un anillo de 16 al conjunto de monedas Faraday
+
+Hoy un gasto identifica un anillo con la salida de entrada real y 15 señuelos. La firma permite verificar la autorización sin revelar el miembro real. La [guía de firmas de anillo](/es/blog/ring-signatures-explained/) explica este mecanismo actual. Su conjunto de candidatos es el anillo incluido con esa entrada.
+
+La prueba Faraday propuesta demostraría que la moneda gastada pertenece al conjunto Faraday admisible sin publicar qué miembro es. Ese es el significado útil de pertenencia al conjunto completo: el verificador comprueba pertenencia y validez mientras la elección oculta sigue siendo privada. No significa descargar los registros privados de cartera de todos los demás ni revelar sus saldos.
+
+El anuncio detallado especifica monedas Faraday, por lo que hay que distinguir ese conjunto creciente de todas las salidas históricas del formato antiguo. El diagrama ilustra la distinción; sus puntos son un ejemplo conceptual, no un recuento en directo. La [guía de actualización](/es/blog/blocknet-faraday-upgrade/) cubre la migración propuesta de monedas existentes al nuevo formato.
+
+[![Un anillo actual tiene 16 candidatos; la prueba Faraday propuesta se refiere a un conjunto creciente de monedas Faraday. Las salidas antiguas quedan fuera de ese conjunto ilustrado hasta la migración.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Por qué gasto y detección de pagos son distintos
+
+Una prueba de gasto responde a una pregunta de validación: ¿cumple este gasto las reglas requeridas? La cartera del remitente crea la prueba y los nodos la comprueban. El proyecto propone pruebas basadas en hash con [Plonky3](https://github.com/Plonky3/Plonky3), un conjunto de herramientas para construir sistemas de pruebas. Aporta componentes; las reglas concretas de Blocknet y su implementación siguen determinando qué acepta el verificador.
+
+La detección de pagos responde a una pregunta de la cartera: ¿qué salidas son mías? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) es un mecanismo estandarizado de encapsulación de claves para establecer un secreto compartido. El plan Faraday lo asigna a la recepción. No debe entenderse como otro nombre de la prueba de gasto ni como un algoritmo de firma.
+
+Esta distinción también explica el término poscuántico en Faraday. Describe diseños criptográficos destinados a resistir ataques con ordenadores cuánticos; no exige que los usuarios posean uno. ML-KEM se basa en problemas de retículas, mientras que la prueba de gasto anunciada usa técnicas basadas en hash. Usar un componente estandarizado no certifica por sí solo toda una implementación de criptomoneda. Lee por separado las afirmaciones sobre algoritmos, construcción de pruebas y cartera completa.
+
+## ¿Qué ocurre con la prueba después del pago?
+
+La propuesta distingue la prueba transmitida por la red de la conservada con un bloque. Las cifras actuales son unos 1,4 MB por prueba de gasto y 1 MB por prueba de bloque combinada. Los nodos retransmitirían y verificarían las pruebas de gasto, las combinarían y descartarían las individuales tras la finalidad. Son cifras de diseño del proyecto, no mediciones de este artículo.
+
+Combinar pruebas permite resumir comprobaciones. Imagina varias afirmaciones verificadas de forma independiente que se conservan mediante una prueba de su verificación. La prueba del bloque cumple esa función distinta de la individual original. Un registro conservado compacto no elimina la transferencia de red ni el cálculo previos; retransmisión, creación de pruebas, agregación y almacenamiento a largo plazo son tareas distintas.
+
+[![Las pruebas individuales viajan a los nodos, se combinan en una prueba de bloque y se descartan tras la finalidad según el diseño Faraday propuesto.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## ¿Qué notarían los usuarios de la cartera?
+
+Conviene distinguir el momento de aprobar un pago, el trabajo de la cartera para preparar la prueba, la inclusión en un bloque y la espera hasta que los fondos recibidos se puedan gastar. Son partes distintas del recorrido. Un resultado rápido de generación de prueba no demuestra por sí solo una transferencia rápida de principio a fin.
+
+El plan propone bloques de diez minutos y afirma que los gastos de mayor tamaño aumentarían las comisiones, cuyos importes definitivos aún se estudian. Comprueba la vista previa de comisión de la cartera real cuando lleguen versiones compatibles. La [guía de tiempos de transferencia](/es/blog/blocknet-transfer-time/) describe la red publicada con objetivo de cinco minutos; los tiempos futuros corresponden a las reglas finales de Faraday. Evalúa conjuntamente tamaño del pago, trabajo de prueba y tiempo de bloque al valorar una estimación.
+
+## ¿Qué guía consultar después?
+
+Consulta [qué puede ver alguien de un pago](/es/blog/blocknet-payment-visibility/) para los campos públicos actuales, registros de cartera y revelaciones deliberadas. Usa la [guía existente de actualización Faraday](/es/blog/blocknet-faraday-upgrade/) para planes de activación, material de recuperación y migración de monedas.
+
+Cuando aparezca un anuncio, comprueba qué cambió: conjunto de monedas admisibles, sistema de pruebas, detección de pagos, tamaños de prueba o comportamiento de cartera. Después mira si describe una propuesta, un resultado de prueba o una función publicada. Así mantienes el procedimiento actual alineado con el software que ejecutas y puedes seguir la mejora de privacidad propuesta en detalle.
+
+<CTA target="seine" title="Sigue minando con la configuración publicada" text="Usa las guías actuales de minería de seine y sigue las instrucciones compatibles del minero y del pool mientras avanza Faraday." />

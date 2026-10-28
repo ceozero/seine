@@ -269,3 +269,36 @@ This page owns the visual desktop procedure, using the released interface with l
 | how to get Blocknet; get first BNT; receive or mine Blocknet | `/blog/get-first-blocknet/` | Choose receiving a transfer or mining with an existing computer, then identify the first incoming wallet payment and spendable balance |
 
 This is the acquisition starting-point guide. Desktop wallet owns interface setup, sending/receiving owns the payment procedure, and mining owns installation and accepted shares. The new article routes to those owners, adds a simple first-receipt checklist and follows a single labeled demo payment through History and Dashboard. Pool payout rules and troubleshooting remain on bntpool.com. No existing URL is retargeted. Demand is inferred from the newcomer journey; no measured query-volume claim is made.
+
+## Desktop wallet updates (October 27, 2026)
+
+| Primary search intent | Owner | Distinct reader job |
+|---|---|---|
+| update Blocknet wallet; Blocknet wallet latest version | `/blog/update-blocknet-wallet/` | Replace the released desktop application while preserving the existing wallet, then verify application version, receiving address and synchronized history |
+
+Desktop setup owns creating and opening wallets. Backup/restore owns recovery and moving keys. Synchronization owns diagnosing an incomplete balance. This article owns the routine application replacement sequence, with release-specific version-label and full-exit behavior and actual released-interface screenshots. Faraday owns the future network migration; this article does not supply migration instructions. Demand is inferred from ordinary wallet maintenance, not measured search volume.
+
+## Ordinary payment timing (October 27, 2026)
+
+| Primary search intent | Owner | Distinct reader job |
+|---|---|---|
+| how long does a Blocknet transfer take; Blocknet transaction pending; when can I spend received BNT | `/blog/blocknet-transfer-time/` | Follow an ordinary payment from mempool to block inclusion to spendable wallet balance, including the ten-block depth rule and differing confirmation counters |
+
+Sending/receiving owns payment construction and approval. Explorer owns public lookup. Wallet synchronization owns diagnosing a stale local view. The pool mining-reward confirmations article owns coinbase maturity and pool accounting, not ordinary recipient wallet timing. This article owns the ordinary-payment timeline, with released-interface screenshots of the same labeled demo receipt in three stages. Search demand is inferred from an ordinary user question, not measured volume.
+
+## Payment visibility and Faraday mechanisms (October 27, 2026)
+
+| Primary search intent | Owner | Distinct reader job |
+|---|---|---|
+| what can someone see about a Blocknet payment; Blocknet transaction privacy; sharing payment information | `/blog/blocknet-payment-visibility/` | Compare public explorer, sender, recipient and granted viewing/proof access; choose what to share for a particular payment question |
+| how Faraday privacy works; Faraday spend proofs; Faraday ML-KEM; Faraday proof aggregation | `/blog/blocknet-faraday-privacy/` | Understand proposed full-set membership, separate spending/receiving mechanisms, proof lifecycle and consequences for wallet use |
+
+Privacy overview remains the mechanism hub for today's released format. Payment-proof and view-only guides own their actual procedures; the new visibility article compares their disclosure scope. Existing Faraday upgrade guide owns activation, recovery material and migration. The new mechanism article explains the eligible Faraday coin set and the proposal's distinct cryptographic jobs. No measured search volume is claimed.
+
+## Transaction anatomy and change (October 27, 2026)
+
+| Primary search intent | Owner | Distinct reader job |
+|---|---|---|
+| Blocknet transaction inputs and outputs; why two outputs; where transaction change goes | `/blog/blocknet-transaction-explained/` | Follow one payment's selected value into recipient outputs, change and fee; distinguish outputs from recipients and ring decoys from funding |
+
+The fee guide retains fee estimation and preview steps. Send/receive owns wallet procedure; transfer-time owns confirmation/maturity timing; payment-visibility owns observer/disclosure scope. This walkthrough owns the structure and change accounting of one payment. Closest existing fee coverage includes a short version of the same arithmetic; the new page expands output ownership and lifecycle without repeating rate calculations or CLI steps. Search demand is inferred from the user’s requested practical coverage, not measured analytics.

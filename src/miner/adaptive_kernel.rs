@@ -14,6 +14,30 @@ const MAX_DRIFT: f64 = 0.05;
 
 const CACHE_SCHEMA: u32 = 3;
 
+// Plain AVX-512/AVX2 ran 25-67% slower than the cohort streaming kernel on every
+// validated host, and each A/B/A trial spent ~3% of a 15-minute run's hashes before
+// count tuning could start (Ryzen 7 7700X, EPYC 9355). Keep them as a safety-net
+// comparison, but out of the first half hour when mining started on that kernel.
+const GENERIC_TRIAL_DEFER_SECS: u64 = 1800;
+
+fn defer_generic_trial(
+    startup: Option<CpuKernel>,
+    base: CpuKernel,
+    candidate: CpuKernel,
+    now: u64,
+) -> bool {
+    now < GENERIC_TRIAL_DEFER_SECS
+        && startup == Some(base)
+        && matches!(
+            base,
+            CpuKernel::Avx512256Stream
+                | CpuKernel::Avx512256StreamL2
+                | CpuKernel::Avx512Stream
+                | CpuKernel::Avx2Stream
+        )
+        && matches!(candidate, CpuKernel::Avx512 | CpuKernel::Avx2)
+}
+
 // Validated policy, restricted to the native Turin measurement identity.
 // Slow samples and explicitly lengthened trials retain the existing window.
 fn short_trials_for(
@@ -83,6 +107,21 @@ fn candidates_for(
         } else {
             paths.push(stream);
         }
+    } else if let Some(stream) = matches!(
+        identity.vendor.as_deref(),
+        Some("AuthenticAMD" | "GenuineIntel")
+    )
+    .then(|| {
+        [CpuKernel::Avx512256Stream, CpuKernel::Avx2Stream]
+            .into_iter()
+            .find(|k| supported.contains(k))
+    })
+    .flatten()
+    {
+        // Unvalidated x86 hosts (Intel, masked-CPUID AMD VMs, Zen 1) keep their
+        // start, but may discover streaming through the repeated-win gate: it was
+        // 25-67% faster on every measured AMD cohort and +13.5% on Sapphire Rapids.
+        paths.push(stream);
     }
     paths
 }
@@ -102,10 +141,36 @@ fn cohort_stream_kernel(
     identity: &crate::runtime_identity::CpuIdentity,
     supported: &[CpuKernel],
 ) -> Option<CpuKernel> {
+    // Intel Sapphire Rapids (06h/8Fh) and Emerald Rapids (06h/CFh, same Raptor
+    // Cove core): streaming beat plain AVX-512 by 14.5% / 19.3% at 16 / 32 workers
+    // on a Xeon Platinum 8488C (m7i.8xlarge) with full 2 GiB parity, and the
+    // register-resident full-width compress adds ~2% at 16 workers (6.5% at 8).
+    if identity.vendor.as_deref() == Some("GenuineIntel") {
+        if identity.family != Some(6) || !matches!(identity.model, Some(0x8f | 0xcf)) {
+            return None;
+        }
+        return [CpuKernel::Avx512Stream, CpuKernel::Avx512256Stream]
+            .into_iter()
+            .find(|k| supported.contains(k));
+    }
     if identity.vendor.as_deref() != Some("AuthenticAMD") {
         return None;
     }
     match identity.family {
+        // Zen 5 server-class models (00h-1Fh: Turin, Turin Dense, masked cloud
+        // CPUIDs) use full-width compression: EPYC 9355P +4.9% at 64 workers.
+        // Client Zen 5 (20h+) stays 256-bit: Ryzen 7 9700X measured neutral.
+        Some(0x1a)
+            if identity.model.is_some_and(|m| m < 0x20)
+                && supported.contains(&CpuKernel::Avx512Stream) =>
+        {
+            Some(CpuKernel::Avx512Stream)
+        }
+        // Zen 4 adds a far L2 prefetch: EPYC 9124P +6% at 16 workers, Ryzen 7
+        // 7700X +5% / +1% at 8 / 16. Zen 5 measured 1-3% slower with it.
+        Some(0x19) if supported.contains(&CpuKernel::Avx512256StreamL2) => {
+            Some(CpuKernel::Avx512256StreamL2)
+        }
         Some(0x19 | 0x1a) if supported.contains(&CpuKernel::Avx512256Stream) => {
             Some(CpuKernel::Avx512256Stream)
         }
@@ -117,6 +182,13 @@ fn cohort_stream_kernel(
                 && identity.model.is_some_and(|m| m >= 0x30)
                 && supported.contains(&CpuKernel::Avx2Stream) =>
         {
+            Some(CpuKernel::Avx2Stream)
+        }
+        // No AMD CPU with AVX2 reports family 06h: these are hypervisor CPU models
+        // that hide the real Zen family and AVX-512 (231 telemetry installs of one
+        // 16-vCPU "AMD EPYC" VM type). EPYC 7R32 with 4 KiB pages at 14 workers,
+        // matching that fleet: avx2-stream 7.86 vs avx2 5.44 H/s (+44.5%).
+        Some(6) if AVX2_STREAM_OS && supported.contains(&CpuKernel::Avx2Stream) => {
             Some(CpuKernel::Avx2Stream)
         }
         _ => None,
@@ -655,8 +727,17 @@ impl Tuner {
         // gates. Only synthetic fixtures opt into an identity-neutral tuner.
         let supported = supported_kernels();
         let mut candidates = candidates_for(identity, &supported);
+        // The exact 9R14 rental context keeps its separately validated startup,
+        // frontier and sample policies, which were measured on the 256-bit kernel.
+        if super::adaptive_cpu::full_count_cold_start(cfg, &host, identity, 32, 32) {
+            for kernel in &mut candidates {
+                if *kernel == CpuKernel::Avx512256StreamL2 {
+                    *kernel = CpuKernel::Avx512256Stream;
+                }
+            }
+        }
         let sapphire_startup = sapphire_stream_startup(cfg, &host, identity, &supported);
-        if sapphire_startup {
+        if sapphire_startup && !candidates.contains(&CpuKernel::Avx512256Stream) {
             candidates.push(CpuKernel::Avx512256Stream);
         }
         let turin_startup = turin_stream_startup(cfg, &host, identity, &supported);
@@ -1180,6 +1261,7 @@ impl Tuner {
                     .copied()
                     .filter(|&k| k != base)
                     .filter(|&k| !decisive.iter().any(|d| d.applies(base, k, workers, wall)))
+                    .filter(|&k| !defer_generic_trial(self.startup, base, k, now))
                     .filter(|&k| {
                         !frontier
                             || matches!(
@@ -1886,15 +1968,16 @@ mod tests {
             model: Some(0x02),
             ..CpuIdentity::default()
         };
-        for (identity, eligible, starts_streaming) in [
-            (turin.clone(), true, true),
+        // Zen 5 server-class models use full-width streaming, client Zen 5 the
+        // 256-bit path and Zen 4 the 256-bit path with a far L2 prefetch.
+        for (identity, stream) in [
+            (turin.clone(), Some(CpuKernel::Avx512Stream)),
             (
                 CpuIdentity {
                     model: Some(0x44),
                     ..turin.clone()
                 },
-                true,
-                true,
+                Some(CpuKernel::Avx512256Stream),
             ),
             (
                 CpuIdentity {
@@ -1902,31 +1985,26 @@ mod tests {
                     model: Some(0x11),
                     ..turin.clone()
                 },
-                true,
-                true,
+                Some(CpuKernel::Avx512256StreamL2),
             ),
             (
                 CpuIdentity {
                     vendor: Some("GenuineIntel".into()),
                     ..turin
                 },
-                false,
-                false,
+                None,
             ),
         ] {
             let t = Tuner::for_identity(&cfg, host.clone(), &identity);
-            let streaming = eligible && CpuKernel::Avx512256Stream.is_supported();
+            let stream = stream.filter(|k| k.is_supported());
             assert_eq!(
-                t.candidates.contains(&CpuKernel::Avx512256Stream),
-                streaming
+                stream.is_some_and(|k| t.candidates.contains(&k)),
+                stream.is_some()
             );
-            assert_eq!(
-                t.startup,
-                (streaming && starts_streaming).then_some(CpuKernel::Avx512256Stream)
-            );
+            assert_eq!(t.startup, stream);
             assert_eq!(
                 t.cache.configuration != neutral.cache.configuration,
-                streaming
+                t.candidates != neutral.candidates
             );
             assert!(t.candidates.iter().all(|k| k.is_supported()));
         }
@@ -2478,6 +2556,8 @@ mod tests {
             };
             assert_eq!(candidates_for(&zen5, &supported), supported);
         }
+        // Unvalidated x86 hosts keep their start but may discover streaming
+        // through repeated trials; identity-neutral fixtures stay unchanged.
         for identity in [
             CpuIdentity {
                 vendor: Some("GenuineIntel".into()),
@@ -2488,10 +2568,49 @@ mod tests {
                 model: Some(0x31),
                 ..turin.clone()
             },
-            CpuIdentity::default(),
         ] {
-            assert_eq!(candidates_for(&identity, &supported), supported[..2]);
-            assert_eq!(startup_kernel_for(&identity, &supported[..2]), None);
+            assert_eq!(candidates_for(&identity, &supported), supported);
+            assert_eq!(startup_kernel_for(&identity, &supported), None);
+        }
+        assert_eq!(
+            candidates_for(&CpuIdentity::default(), &supported),
+            supported[..2]
+        );
+        // A masked-CPUID AMD VM (family 06h) starts AVX2-only hosts on streaming.
+        let masked = CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(6),
+            model: Some(63),
+            ..CpuIdentity::default()
+        };
+        let avx2_paths = [CpuKernel::Avx2, CpuKernel::Avx2Stream];
+        assert_eq!(
+            startup_kernel_for(&masked, &avx2_paths),
+            Some(CpuKernel::Avx2Stream)
+        );
+        assert_eq!(
+            static_kernel_for_identity(&masked, &avx2_paths, 14),
+            Some(CpuKernel::Avx2Stream)
+        );
+        // Sapphire and Emerald Rapids start on streaming (full width when
+        // available); other Intel models do not.
+        for (model, stream) in [(0x8f, true), (0xcf, true), (0xad, false), (0x55, false)] {
+            let xeon = CpuIdentity {
+                vendor: Some("GenuineIntel".into()),
+                family: Some(6),
+                model: Some(model),
+                ..CpuIdentity::default()
+            };
+            assert_eq!(candidates_for(&xeon, &supported), supported);
+            assert_eq!(
+                startup_kernel_for(&xeon, &supported),
+                stream.then_some(CpuKernel::Avx512256Stream)
+            );
+            let with_full = [supported.as_slice(), &[CpuKernel::Avx512Stream]].concat();
+            assert_eq!(
+                startup_kernel_for(&xeon, &with_full),
+                stream.then_some(CpuKernel::Avx512Stream)
+            );
         }
         assert_eq!(
             candidates_for(&turin, &[CpuKernel::Avx2]),
@@ -2561,7 +2680,10 @@ mod tests {
             ..rome.clone()
         };
         assert_eq!(static_kernel_for_identity(&naples, &avx2_only, 32), None);
-        assert_eq!(candidates_for(&naples, &avx2_only), [CpuKernel::Avx2]);
+        assert_eq!(
+            candidates_for(&naples, &avx2_only),
+            [CpuKernel::Avx2, CpuKernel::Avx2Stream]
+        );
         let intel = CpuIdentity {
             vendor: Some("GenuineIntel".into()),
             ..masked_zen5.clone()
@@ -3907,7 +4029,8 @@ mod tests {
             assert!(t.cache.winners.is_empty());
             s.kernel = CpuKernel::Avx512256Stream;
             s.kernel_generation += 1;
-            let mut now = 2;
+            // Plain-kernel challengers wait out the startup half hour.
+            let mut now = GENERIC_TRIAL_DEFER_SECS;
             run_comparison(&mut t, &mut s, &mut now, &[100, 130, 100, 100, 130, 100]);
             assert_eq!(s.kernel, CpuKernel::Avx512);
             run_comparison(&mut t, &mut s, &mut now, &[130, 120, 130]);
@@ -3984,8 +4107,14 @@ mod tests {
         assert!(t.cache.winners.is_empty());
         s.kernel = CpuKernel::Avx512256Stream;
         s.kernel_generation += 1;
-        let mut now = 2;
-        // Settles, then compares the remaining paths against streaming at once.
+        // Settles, then defers the plain-kernel challengers for the first half hour.
+        assert!(!t.tick(2, &[s], true, true).hold_counts);
+        assert!(
+            !t.tick(GENERIC_TRIAL_DEFER_SECS - 1, &[s], true, true)
+                .hold_counts
+        );
+        assert!(t.trial.is_none());
+        let mut now = GENERIC_TRIAL_DEFER_SECS;
         let a = run_comparison(&mut t, &mut s, &mut now, &[100, 95, 100]);
         assert_eq!(s.kernel, CpuKernel::Avx512256Stream);
         assert!(a

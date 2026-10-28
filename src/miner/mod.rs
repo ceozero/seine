@@ -68,9 +68,6 @@ const CPU_AUTOTUNE_LINEAR_SCAN_MAX_CANDIDATES: usize = 8;
 const CPU_AUTOTUNE_FINAL_SWEEP_RADIUS: usize = 2;
 const CPU_AUTOTUNE_TARGET_HASHES_PER_CANDIDATE: u64 = 20;
 const CPU_AUTOTUNE_MAX_SAMPLE_SECS_PER_CANDIDATE: u64 = 30;
-const CPU_AUTOTUNE_RAMP_EARLY_STOP_MIN_SAMPLES: usize = 5;
-const CPU_AUTOTUNE_RAMP_EARLY_STOP_STREAK: usize = 2;
-const CPU_AUTOTUNE_RAMP_EARLY_STOP_FLOOR_FRAC: f64 = 0.985;
 // Default mining targets the measured peak. Only the explicit efficiency
 // profile may trade measured hashrate for fewer workers.
 const CPU_AUTOTUNE_BALANCED_PEAK_FLOOR_FRAC: f64 = 1.0;
@@ -1356,22 +1353,29 @@ fn maybe_autotune_cpu_threads(
             }
         }
     } else {
+        // Coarse descending grid, then the local refinement below. Climbing one
+        // count at a time and stopping on dips left an EPYC 9355 at 41 of 64
+        // workers (68.9 vs ~75+ H/s); counts near capacity were best on every
+        // measured streaming-kernel host.
+        let mut coarse: Vec<usize> = [
+            max_threads,
+            max_threads * 3 / 4,
+            max_threads / 2,
+            max_threads / 4,
+        ]
+        .into_iter()
+        .filter(|&threads| threads >= min_threads)
+        .collect();
+        coarse.dedup();
         info(
             tag,
             format!(
-                "cpu-autotune | {candidate_count} thread counts to search — ramping threads up until throughput saturates",
+                "cpu-autotune | {candidate_count} thread counts possible — measuring {coarse:?} first, then refining around the best",
             ),
-        );
-        info(
-            tag,
-            "cpu-autotune | phase 1/2: ramping upward to find peak/saturation (and memory ceiling if reached) ...",
         );
         let mut peak_threads = min_threads;
         let mut peak_hps = 0.0f64;
-        let mut below_peak_streak = 0usize;
-        let mut ramp_stopped_early = false;
-
-        for (step, threads) in (min_threads..=max_threads).enumerate() {
+        for (step, threads) in coarse.into_iter().enumerate() {
             info(
                 tag,
                 format!(
@@ -1393,40 +1397,16 @@ fn maybe_autotune_cpu_threads(
                     interrupted = true;
                     break;
                 }
-                CpuAutotuneMeasureOutcome::MemoryLimited => {
-                    ramp_stopped_early = true;
-                    break;
-                }
+                // A smaller coarse candidate may still fit.
+                CpuAutotuneMeasureOutcome::MemoryLimited => continue,
             }
             let current_hps = measurements.get(&threads).map(|m| m.hps).unwrap_or(0.0);
-            if current_hps >= peak_hps {
+            if current_hps > peak_hps {
                 peak_hps = current_hps;
                 peak_threads = threads;
-                below_peak_streak = 0;
-            } else if threads > peak_threads
-                && cpu_autotune_is_ramp_drop(peak_hps, current_hps)
-                && step + 1 >= CPU_AUTOTUNE_RAMP_EARLY_STOP_MIN_SAMPLES
-            {
-                below_peak_streak = below_peak_streak.saturating_add(1);
-                if below_peak_streak >= CPU_AUTOTUNE_RAMP_EARLY_STOP_STREAK {
-                    ramp_stopped_early = true;
-                    info(
-                        tag,
-                        format!(
-                            "cpu-autotune | phase 1: throughput plateaued below {:.1}% of peak for {} step(s); stopping ramp at {} threads (peak so far: {} at {})",
-                            CPU_AUTOTUNE_RAMP_EARLY_STOP_FLOOR_FRAC * 100.0,
-                            below_peak_streak,
-                            threads,
-                            peak_threads,
-                            format_hashrate(peak_hps),
-                        ),
-                    );
-                    break;
-                }
-            } else {
-                below_peak_streak = 0;
             }
         }
+        let ramp_stopped_early = false;
 
         if !interrupted && !measurements.is_empty() {
             let phase2_center = select_peak_autotune_candidate(&measurements)
@@ -1712,11 +1692,6 @@ fn select_cpu_autotune_candidate(
         peak_hps: peak.hps,
         peak_floor_frac,
     })
-}
-
-fn cpu_autotune_is_ramp_drop(peak_hps: f64, current_hps: f64) -> bool {
-    peak_hps > 0.0
-        && current_hps + f64::EPSILON < peak_hps * CPU_AUTOTUNE_RAMP_EARLY_STOP_FLOOR_FRAC
 }
 
 fn cpu_autotune_refinement_window(
@@ -2216,6 +2191,12 @@ fn maybe_warn_linux_hugepages_setup(cfg: &Config, mode: RuntimeMode) {
         maybe_warn_linux_1g_hugepages_setup(cpu_lanes, mode);
         return;
     }
+    // Auto mode backs arenas with transparent huge pages when the kernel allows
+    // them; explicit 2 MiB or 1 GiB HugeTLB measured within 0.2% of THP with the
+    // streaming kernels (EPYC 9355, 32 workers), so only nag when THP is off.
+    if cfg.cpu_page_mode == CpuPageMode::Auto && linux_thp_enabled() {
+        return;
+    }
 
     let Some(meminfo) = read_linux_hugepages_meminfo() else {
         return;
@@ -2271,6 +2252,12 @@ fn maybe_warn_linux_hugepages_setup(cfg: &Config, mode: RuntimeMode) {
         tag,
         "hugepages | if allocation is partial, run: echo 3 | sudo tee /proc/sys/vm/drop_caches && echo 1 | sudo tee /proc/sys/vm/compact_memory",
     );
+}
+
+#[cfg(target_os = "linux")]
+fn linux_thp_enabled() -> bool {
+    std::fs::read_to_string("/sys/kernel/mm/transparent_hugepage/enabled")
+        .is_ok_and(|mode| !mode.contains("[never]"))
 }
 
 /// Sizing guidance for `--cpu-page-mode large-1g`: each 2 GiB worker arena
@@ -3948,7 +3935,7 @@ pub(crate) mod tests {
             cpu_auto_threads_cap: 1,
             cpu_manual_memory_check: false,
             cpu_autotune_worker_slots: None,
-            cpu_memory_reserve_percent: 5,
+            cpu_memory_reserve_percent: None,
             cpu_affinity: crate::config::CpuAffinityMode::Off,
             cpu_page_mode: crate::config::CpuPageMode::Auto,
             cpu_profile: crate::config::CpuPerformanceProfile::Balanced,
@@ -4114,12 +4101,6 @@ pub(crate) mod tests {
         let measurements = autotune_measurements(&[(9, 3.0), (10, 3.2)]);
         let candidates = cpu_autotune_refinement_candidates(1, 20, 10, true, &measurements);
         assert_eq!(candidates, vec![1, 8, 11, 12]);
-    }
-
-    #[test]
-    fn autotune_ramp_drop_threshold_filters_small_noise() {
-        assert!(!cpu_autotune_is_ramp_drop(4.0, 3.95));
-        assert!(cpu_autotune_is_ramp_drop(4.0, 3.90));
     }
 
     #[test]

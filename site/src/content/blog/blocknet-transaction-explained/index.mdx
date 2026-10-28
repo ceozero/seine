@@ -1,0 +1,69 @@
+---
+title: 'What happens inside a Blocknet transaction?'
+description: 'Follow a Blocknet payment from selected inputs to recipient outputs, change, fees and confirmation. Learn why several outputs can belong to one payment.'
+date: 2026-10-28
+tags: ['Blocknet', 'Wallet', 'Payments']
+faq:
+  - q: 'Why does my Blocknet payment have two outputs?'
+    a: 'A fixed-amount payment can create one output for the recipient and another returning unused input value to your wallet as change. Other shapes are possible: several recipients, split change or no change. The output count alone does not tell you how many people were paid.'
+  - q: 'Do I need to copy a change address before sending?'
+    a: 'The reviewed wallet builder creates change using your own wallet’s public keys. You enter the intended recipient details; the wallet handles its change output. That output belongs to the sending wallet and becomes spendable according to the normal confirmation and maturity rules.'
+  - q: 'Does an input ring spend money from every member?'
+    a: 'Each input spends one real output owned by the sender. Other ring members provide possible sources for the privacy proof; their value is not added to the payment. A transaction can use several real inputs, each with its own ring and key image.'
+related: [blocknet-transaction-fees, send-receive-blocknet, blocknet-transfer-time, blocknet-payment-visibility]
+image: /assets/blog/blocknet-transaction-explained-flow.svg
+---
+
+Follow one Blocknet payment through the pieces your wallet builds: existing funds, new outputs, change and the network fee. This walkthrough explains why a payment to one person can have several outputs and why spending one wallet output does not mean giving its whole value to the recipient. The accounting example uses invented amounts, with the released core v0.22.0 wallet as the implementation reference.
+
+## How does a Blocknet transaction move your funds?
+
+<Answer>
+Your wallet selects spendable outputs it owns, uses them as inputs and creates new outputs for the recipient and any change. The selected value covers the recipient amount plus the network fee. Privacy proofs let the network validate the payment, while your wallet recognizes the new outputs that belong to you.
+</Answer>
+
+## Start with the outputs your wallet already owns
+
+An output is a piece of value created by an earlier transaction. While it remains unspent and satisfies the maturity rules, your wallet can select it for a new payment. The wallet balance can include several such pieces from earlier receipts, mining payouts or change. You do not normally need to choose them yourself.
+
+Suppose your wallet selects an output worth `10 BNT` for a payment of `3 BNT`. It spends that whole existing output. The new transaction then assigns the value to the recipient, change and a fee. Other outputs in your wallet can stay untouched; the selected total is not necessarily your entire balance.
+
+Several smaller outputs can also fund a single payment. The [released wallet builder](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) selects enough mature funds to cover the recipient amount and fee. Input selection and the size-based fee estimate interact, which is why the wallet’s current preview matters. The [transaction-fee guide](/blog/blocknet-transaction-fees/) explains that calculation and where to inspect it.
+
+[![Illustrative transaction: 1 selects 10 BNT; 2 sends 3 BNT to the recipient; 3 returns 6.9995 BNT as change; 4 accounts for a 0.0005 BNT network fee.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Read the diagram as wallet accounting: **1** is the selected input, **2** the recipient output, **3** your change output and **4** the fee. The numbers are illustrative; the fee is assumed, not a quote. The arrows show ownership and value allocation, not publicly visible links on an explorer.
+
+## Why can one payment create several outputs?
+
+In this example, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. The recipient gets `3 BNT`, your wallet receives `6.9995 BNT` in change, and the transaction pays the assumed `0.0005 BNT` fee. There are two new wallet outputs, although you intended to pay only one person. The fee is a separate transaction field, not a third recipient output.
+
+Two outputs are a useful example, not a rule for every payment. The builder supports multiple recipients, and its advanced input-selection path can split change across several outputs. If selected value exactly covers the recipients and fee, no change output is needed. A send-all operation instead calculates the recipient amount after deducting the fee from the selected spendable total.
+
+An output count therefore describes transaction structure. It does not count customers, invoices or different wallets. Several outputs may belong to the same wallet, and a transaction with several inputs can still pay one recipient. Keep these distinctions in mind when comparing a wallet payment record with the shorter structural summary shown by an explorer.
+
+## Where does the change go?
+
+The wallet builds change for its own keys. In the example, the original `10 BNT` output is consumed and the `6.9995 BNT` change is a new output that the same wallet can recognize. You do not need to enter a second recipient or manually copy a change address in the ordinary send flow.
+
+Recipient outputs and change use one-time output keys. The public transaction does not put your familiar receiving address beside a label saying “change.” Your wallet has the private information needed to recognize its own outputs. The [stealth-address guide](/blog/stealth-addresses-explained/) explains how those one-time keys relate to a reusable receiving address.
+
+Change also follows the rules for newly created outputs. After sending, part of your balance may be waiting for confirmation or maturity even though it still belongs to you. An untouched mature output can remain available while new change is still pending. Check the wallet’s spendable balance when preparing another payment; the [transfer-time guide](/blog/blocknet-transfer-time/) explains the stages from broadcast to spendability.
+
+## What does the network check, and what can an explorer show?
+
+Each real input has a privacy proof that places it among possible prior outputs. The other ring members are decoys: they do not contribute their owners’ funds to your payment. A key image lets the network detect a repeated spend without publishing which ring member was the real source. See [ring signatures](/blog/ring-signatures-explained/) for that mechanism.
+
+The network also verifies amount commitments and proofs, including that the transaction balances with its fee. The [range-proof guide](/blog/bulletproofs-explained/) explains how those checks work with hidden amounts. Public transaction data includes the transaction hash, input and output structure, and fee. The explorer does not reveal the example’s private accounting simply because you paste its hash.
+
+Use your wallet to identify your own receipts and change. Use the [explorer](/blog/blocknet-explorer-guide/) for public transaction and block status. If you want to understand what a sender, recipient or third party can learn, the [payment-visibility guide](/blog/blocknet-payment-visibility/) compares their views and deliberate sharing options.
+
+## Follow the payment through confirmation
+
+Before confirming an intended send, read the recipient details, recipient amount, fee and change together. Once submitted, the transaction hash identifies the whole transaction, including all its inputs and outputs. It is not a receiving address or the identifier of just the recipient output.
+
+Broadcast, block inclusion and spendability are separate stages. A recipient’s wallet scans for outputs belonging to its keys, while your wallet recognizes its change. Confirmation and maturity determine when those new outputs can be used in a later transaction. The [send-and-receive guide](/blog/send-receive-blocknet/) covers the actual wallet steps.
+
+For a payment question, start with the intended amount and the wallet’s record, then check transaction status. This gives you a useful way to read the payment: what was selected, what the recipient received, what returned as change and what remains pending. It works whether the funds originally came from another person or a [mining-pool payout](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Mine Blocknet with seine" text="Use seine with bntpool.com to mine Blocknet and receive payouts in your wallet." />

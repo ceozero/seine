@@ -1,0 +1,62 @@
+---
+title: 'Comment Faraday change la confidentialité de Blocknet'
+description: 'Comprenez Faraday : preuves de dépense sur l’ensemble des pièces, détection ML-KEM, agrégation et effets proposés pour les utilisateurs de portefeuille.'
+tags: ['Blocknet', 'Faraday', 'Confidentialité']
+faq:
+  - q: 'La confidentialité de toute la chaîne signifie-t-elle que Faraday protège déjà toutes les sorties historiques ?'
+    a: 'L’annonce détaillée décrit l’ensemble des pièces Faraday. Cet ensemble grandit à mesure que des pièces adoptent le nouveau format. Il faut distinguer les transactions en anneau actuelles de la migration proposée. Faraday reste en développement ; le nouveau design n’est pas actif sur le réseau publié aujourd’hui.'
+  - q: 'ML-KEM crée-t-il les preuves de dépense de Faraday ?'
+    a: 'ML-KEM est un mécanisme d’encapsulation de clés qui établit un secret partagé. Le projet l’affecte à la détection des paiements. Les preuves de dépense ont un rôle distinct : permettre au réseau de vérifier une dépense tout en protégeant les informations privées. Faraday propose pour cela des preuves fondées sur le hachage et construites avec Plonky3.'
+  - q: 'Les tailles de preuve, frais et délais de Faraday sont-ils définitifs ?'
+    a: 'Non. L’annonce officielle présente un design encore en construction et en test. Les tailles de preuve et délais visés décrivent le plan actuel ; les frais définitifs restent à fixer. Consultez la version qui implémentera Faraday pour les paramètres opérationnels et le guide existant pour la migration.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Suivez les deux questions de confidentialité de Faraday : comment le réseau vérifie une dépense sans identifier sa source, et comment votre portefeuille reconnaît un paiement entrant. Cet article explique les mécanismes proposés et leurs conséquences pratiques. L’[annonce officielle du 27 octobre](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) indique que le design reste en développement ; utilisez les instructions des portefeuilles publiés pour le réseau actuel.
+
+## Que changerait Faraday pour les paiements privés ?
+
+<Answer>
+Faraday propose de remplacer les anneaux d’entrée actuels de 16 membres par des preuves de dépense couvrant l’ensemble des pièces Faraday. Des preuves fondées sur le hachage protégeraient la dépense, tandis que ML-KEM aiderait à détecter les paiements. Leurs rôles diffèrent. Faraday vise une confidentialité plus large des dépenses et une protection post-quantique dans le nouveau format.
+</Answer>
+
+## D’un anneau de 16 à l’ensemble des pièces Faraday
+
+Aujourd’hui, une dépense désigne un anneau contenant la sortie réellement utilisée et 15 leurres. La signature permet de vérifier l’autorisation tout en masquant le vrai membre. Le [guide des signatures en anneau](/fr/blog/ring-signatures-explained/) explique ce mécanisme actuel. L’ensemble des candidats est l’anneau joint à cette entrée.
+
+La preuve Faraday proposée établirait que la pièce dépensée appartient à l’ensemble Faraday admissible sans publier son identité précise. C’est le sens utile de l’appartenance à l’ensemble complet : le vérificateur contrôle l’appartenance et la validité tandis que le choix masqué reste privé. Cela ne signifie pas télécharger les données privées des portefeuilles de tous les autres ni exposer leurs soldes.
+
+L’annonce détaillée précise les pièces Faraday : il faut donc distinguer cet ensemble croissant de toutes les sorties historiques de l’ancien format. Le schéma illustre cette distinction ; ses points sont conceptuels, pas un décompte en direct. Le [guide de mise à niveau](/fr/blog/blocknet-faraday-upgrade/) décrit la migration proposée des pièces existantes vers le nouveau format.
+
+[![Un anneau actuel contient 16 candidats, tandis que la preuve Faraday proposée vise un ensemble croissant de pièces Faraday ; les anciennes sorties restent hors de cet ensemble illustré jusqu’à la migration.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Pourquoi séparer preuve de dépense et détection ?
+
+Une preuve de dépense répond à une question de validation réseau : cette dépense respecte-t-elle les règles ? Le portefeuille de l’expéditeur crée la preuve et les nœuds la vérifient. Le projet propose des preuves fondées sur le hachage avec [Plonky3](https://github.com/Plonky3/Plonky3), une boîte à outils de construction de systèmes de preuve. Elle apporte des composants ; les règles concrètes de Blocknet et leur implémentation déterminent toujours ce que son vérificateur accepte.
+
+La détection des paiements répond à une question du portefeuille : quelles sorties m’appartiennent ? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) est un mécanisme standardisé d’encapsulation de clés permettant un secret partagé. Le plan Faraday l’affecte à la réception. Ce n’est ni un autre nom de la preuve de dépense ni un algorithme de signature.
+
+Cette distinction explique aussi le terme post-quantique dans Faraday. Il désigne des constructions cryptographiques visant à résister aux attaques par ordinateur quantique ; l’utilisateur n’a pas besoin d’en posséder un. ML-KEM repose sur des problèmes de réseaux euclidiens, tandis que la preuve de dépense annoncée utilise le hachage. Un composant standardisé ne certifie pas à lui seul toute l’implémentation d’une cryptomonnaie. Distinguez les affirmations sur les algorithmes, la construction des preuves et le portefeuille complet.
+
+## Que devient la preuve après le paiement ?
+
+La proposition distingue la preuve transmise sur le réseau de celle conservée avec un bloc. Les chiffres actuels sont d’environ 1,4 MB par preuve de dépense et 1 MB pour une preuve de bloc combinée. Les nœuds relaieraient et vérifieraient les preuves, les combineraient puis supprimeraient les preuves individuelles après la finalité. Ce sont les chiffres de conception du projet, pas des mesures réalisées pour cet article.
+
+Combiner des preuves permet de résumer les vérifications. Imaginez plusieurs affirmations vérifiées séparément, puis représentées par une preuve de leur vérification. La preuve de bloc remplit ce rôle distinct de la preuve individuelle initiale. Un enregistrement conservé compact n’efface pas les transferts réseau et calculs précédents : relais, création de preuve, agrégation et stockage à long terme restent des tâches séparées.
+
+[![Les preuves individuelles arrivent aux nœuds, sont combinées en une preuve de bloc puis supprimées après la finalité selon le design Faraday proposé.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Que remarqueraient les utilisateurs ?
+
+Pour lire la proposition, distinguez l’approbation du paiement, le travail du portefeuille pour préparer la preuve, l’inclusion dans un bloc et l’attente avant de pouvoir dépenser les fonds reçus. Ce sont différentes étapes du paiement. Une génération de preuve rapide ne démontre pas à elle seule un transfert rapide de bout en bout.
+
+Le plan propose un objectif de dix minutes par bloc et indique que des dépenses plus volumineuses augmenteraient les frais, dont les montants définitifs restent à établir. Vérifiez l’aperçu des frais du portefeuille réel quand les versions compatibles arriveront. Le [guide des délais de transfert](/fr/blog/blocknet-transfer-time/) décrit le réseau publié visant cinq minutes ; les futurs délais relèvent des règles Faraday finales. Évaluez ensemble volume du paiement, travail de preuve et durée des blocs.
+
+## Quel guide consulter ensuite ?
+
+Consultez [ce qu’on peut voir d’un paiement](/fr/blog/blocknet-payment-visibility/) pour les champs publics actuels, les enregistrements de portefeuille et les divulgations volontaires. Le [guide Faraday existant](/fr/blog/blocknet-faraday-upgrade/) couvre activation, éléments de récupération et migration.
+
+À chaque nouvelle annonce, vérifiez ce qui change : ensemble de pièces admissibles, système de preuve, détection des paiements, tailles de preuve ou comportement du portefeuille. Déterminez ensuite s’il s’agit d’une proposition, d’un résultat de test ou d’une fonction publiée. Votre procédure actuelle reste ainsi adaptée au logiciel utilisé tout en vous permettant de suivre en détail l’amélioration proposée.
+
+<CTA target="seine" title="Continuez à miner avec la configuration publiée" text="Utilisez les guides actuels de minage de seine et suivez les instructions compatibles du mineur et du pool à mesure que Faraday progresse." />

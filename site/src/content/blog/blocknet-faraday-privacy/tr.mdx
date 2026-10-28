@@ -1,0 +1,62 @@
+---
+title: 'Faraday Blocknet gizliliğini nasıl değiştirir?'
+description: 'Faraday gizlilik tasarımını öğrenin: tüm küme için harcama kanıtları, ML-KEM ile ödeme tespiti, kanıt birleştirme ve cüzdanlar için önerilen değişiklikler.'
+tags: ['Blocknet', 'Faraday', 'Gizlilik']
+faq:
+  - q: 'Tüm zincir gizliliği, Faraday’ın tüm tarihsel çıktıları zaten koruduğu anlamına mı gelir?'
+    a: 'Ayrıntılı duyuru Faraday coinlerinin tüm kümesini anlatır. Coinler yeni biçime girdikçe küme büyür. Güncel halka işlemleri ile önerilen biçime geçiş ayrılmalıdır. Faraday hâlâ geliştiriliyor; yeni tasarım bugün yayımlanmış ağda etkin değildir.'
+  - q: 'ML-KEM Faraday harcama kanıtlarını mı oluşturur?'
+    a: 'ML-KEM ortak sır oluşturmak için kullanılan anahtar kapsülleme mekanizmasıdır. Proje onu ödeme tespitine ayırır. Harcama kanıtlarının görevi farklıdır: özel bilgiyi koruyarak ağın harcamayı kontrol etmesini sağlamak. Faraday bu görev için Plonky3 ile oluşturulan hash tabanlı kanıtlar önerir.'
+  - q: 'Faraday kanıt boyutları, ücretleri ve süreleri kesin mi?'
+    a: 'Hayır. Resmî duyuru hâlâ geliştirilen ve test edilen tasarımı sunar. Kanıt boyutları ve hedef süreler mevcut planı açıklar; nihai ücretler henüz belirlenmemiştir. İşletim ayarları için Faraday’ı uygulayan sürümü, geçiş bilgileri için mevcut yükseltme rehberini izleyin.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Faraday’ın iki gizlilik sorusunu izleyin: ağ kaynağını belirlemeden harcamayı nasıl kontrol eder ve cüzdanınız gelen ödemeyi nasıl tanır? Bu yazı önerilen mekanizmaları ve pratik sonuçlarını açıklar. [27 Ekim resmî duyurusu](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/), tasarımın geliştirilmekte olduğunu belirtir; bugünkü ağ için yayımlanmış cüzdan talimatlarını kullanın.
+
+## Faraday ödeme gizliliğinde neyi değiştirir?
+
+<Answer>
+Faraday bugünkü 16 üyeli girdi halkalarını, Faraday coinleri kümesini kapsayan harcama kanıtlarıyla değiştirmeyi önerir. Hash tabanlı kanıtlar harcamayı korurken ML-KEM ödeme tespitini destekleyecektir. Bu mekanizmaların işleri farklıdır. Faraday’ın amaçladığı sonuç yeni coin biçiminde daha geniş harcama gizliliği ve kuantum sonrası korumadır.
+</Answer>
+
+## 16 üyeli halkadan Faraday coinleri kümesine
+
+Bugün bir harcama gerçek girdi çıktısı ve 15 sahte girdi içeren halkayı belirtir. İmza, gerçek üyeyi gizleyerek ağın yetkiyi doğrulamasını sağlar. [Halka imza rehberi](/tr/blog/ring-signatures-explained/) mevcut mekanizmayı anlatır. Aday kümesi o girdiyle verilen halkadır.
+
+Önerilen Faraday kanıtı, harcanan coinin uygun Faraday kümesinde bir yerde olduğunu belirli üyeyi yayımlamadan gösterecektir. Tüm kümeye üyeliğin yararlı anlamı budur: doğrulayıcı üyelik ve geçerliliği kontrol ederken gizli seçim özel kalır. Bu, diğer herkesin özel cüzdan kayıtlarını indirmek veya bakiyelerini açığa çıkarmak değildir.
+
+Ayrıntılı duyuru Faraday coinlerini belirtir; büyüyen küme eski biçimdeki tüm tarihsel çıktılardan ayrılmalıdır. Şema bu farkı örnekler; noktaları canlı coin sayımı değil kavramsal örnektir. [Yükseltme rehberi](/tr/blog/blocknet-faraday-upgrade/), mevcut coinleri yeni biçime taşıyan önerilen geçişi anlatır.
+
+[![Güncel girdi halkasında 16 aday bulunur; önerilen Faraday kanıtı büyüyen Faraday biçimli coin kümesine atıfta bulunur. Eski çıktılar geçişe kadar gösterilen kümenin dışındadır.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Harcama kanıtı ve ödeme tespiti neden ayrıdır?
+
+Harcama kanıtı bir ağ doğrulama sorusunu yanıtlar: bu harcama gerekli kurallara uyuyor mu? Gönderenin cüzdanı kanıtı oluşturur, düğümler kontrol eder. Proje, kanıt sistemleri oluşturma araç takımı [Plonky3](https://github.com/Plonky3/Plonky3) ile hash tabanlı kanıtlar önerir. Araç takımı yapı taşları sağlar; doğrulayıcının ne kabul ettiğini yine Blocknet’in somut kuralları ve uygulaması belirler.
+
+Ödeme tespiti cüzdan sorusunu yanıtlar: hangi çıktılar benim? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final), ortak sır oluşturmak için standartlaştırılmış anahtar kapsülleme mekanizmasıdır. Faraday planı bunu alıcı tarafına ayırır. Harcama kanıtının diğer adı veya imza algoritması olarak okunmamalıdır.
+
+Bu ayrım Faraday’daki kuantum sonrası terimini de açıklar. Terim, kuantum bilgisayarlı saldırılara dayanması amaçlanan kriptografik tasarımları anlatır; kullanıcının böyle bir bilgisayarı olması gerekmez. ML-KEM kafes problemlerine, duyurulan harcama kanıtı hash tabanlı tekniklere dayanır. Standart bir bileşen kullanmak tek başına bütün kripto para uygulamasını sertifikalandırmaz. Algoritmalar, kanıt yapısı ve tam cüzdan hakkındaki iddiaları ayrı değerlendirin.
+
+## Ödemeden sonra kanıta ne olur?
+
+Öneri ağdan gönderilen kanıt ile blokla saklanan kanıtı ayırır. Güncel rakamlar harcama kanıtı başına yaklaşık 1,4 MB ve birleşik blok kanıtı için yaklaşık 1 MB’dir. Düğümler harcama kanıtlarını aktaracak, doğrulayacak, birleştirecek ve kesinlikten sonra tekil kanıtları atacaktır. Bunlar projenin tasarım rakamlarıdır, bu yazı için yapılmış ölçümler değildir.
+
+Kanıt birleştirmek kontrolleri özetler. Bağımsız kontrol edilmiş birkaç ifadenin, doğrulanmalarının kanıtıyla ileri taşındığını düşünün. Blok kanıtı ilk tekil kanıttan farklı bu amaca hizmet eder. Küçük saklama kaydı önceki ağ aktarımını ve hesaplamayı ortadan kaldırmaz; aktarma, kanıt oluşturma, birleştirme ve uzun süreli saklama ayrı işlerdir.
+
+[![Önerilen Faraday tasarımında tekil harcama kanıtları düğümlere gider, blok kanıtında birleşir ve kesinlikten sonra atılır.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Cüzdan kullanıcıları ne fark eder?
+
+Öneriyi okurken ödeme onayı anını, cüzdanın kanıt hazırlama işini, bloğa dahil olmayı ve alınan paranın harcanabilir olmasına kadar bekleyişi ayırın. Bunlar ödeme yolculuğunun farklı parçalarıdır. Hızlı kanıt üretimi tek başına hızlı uçtan uca transfer göstermez.
+
+Plan on dakikalık blok hedefi önerir ve daha büyük harcamaların ücretleri artıracağını söyler; nihai ücret tutarları hâlâ çalışılmaktadır. Uyumlu sürümler geldiğinde gerçek cüzdanın ücret önizlemesini kontrol edin. [Transfer süresi rehberi](/tr/blog/blocknet-transfer-time/), yayımlanmış beş dakika hedefli ağı anlatır; gelecekteki süreler nihai Faraday kurallarına aittir. Tahmini değerlendirirken ödeme boyutu, kanıt işi ve blok süresi birlikte okunmalıdır.
+
+## Sırada hangi rehberi kullanmalısınız?
+
+Bugünkü açık işlem alanları, cüzdan kayıtları ve bilinçli açıklamalar için [ödeme hakkında neler görülebileceğini](/tr/blog/blocknet-payment-visibility/) okuyun. Etkinleşme planları, kurtarma malzemesi ve coin geçişi için [mevcut Faraday yükseltme rehberini](/tr/blog/blocknet-faraday-upgrade/) kullanın.
+
+Yeni duyuruda neyin değiştiğine bakın: uygun coin kümesi, kanıt sistemi, ödeme tespiti, kanıt boyutları veya cüzdan davranışı. Sonra bunun öneri, test sonucu ya da yayımlanmış özellik olduğunu kontrol edin. Böylece önerilen gizlilik yükseltmesini ayrıntılı izlerken bugünkü ödeme yönteminiz kullandığınız yazılımla uyumlu kalır.
+
+<CTA target="seine" title="Yayımlanmış kurulumla madenciliğe devam edin" text="seine’in güncel madencilik rehberlerini kullanın ve Faraday geliştikçe uyumlu madenci ve havuz talimatlarını izleyin." />

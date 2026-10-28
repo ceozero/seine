@@ -11,7 +11,7 @@ faq:
     a: 'Sí. Inicia seine con --api-server o --service y servirá métricas de Prometheus en /metrics a través de su API de control local, que escucha en 127.0.0.1, puerto 9977, de forma predeterminada. Las métricas indican si el minero está funcionando, su estado del ciclo de vida, las soluciones enviadas, aceptadas y obsoletas, y las cuarentenas de backends. Las consultas de Prometheus envían el token de la API.'
   - q: '¿Por qué la API de control de seine pide un token?'
     a: 'Desde seine v0.2.23, todos los endpoints de la API de control salvo la comprobación de estado necesitan un token bearer, lo que impide que los sitios web que visitas cambien tu dirección de pago o tu configuración. seine escribe un token nuevo en control-api.cookie dentro de su directorio de datos en cada arranque, o puedes fijar uno con --api-token.'
-sourceHash: 186b1dc3c49e
+sourceHash: 747f36a1fe6d
 translation: reviewed
 ---
 
@@ -49,7 +49,7 @@ Para comprobar el efecto en tu propia máquina, compara `auto` con `os` con el m
 
 ### Margen de memoria en servidores compartidos
 
-El dimensionado automático de hilos mantiene libre un 5% de la RAM total, además de cualquier reserva para la GPU. Cámbialo con `--cpu-memory-reserve-percent`. Si otros servicios empiezan a usar memoria, los hilos automáticos de seine liberan sus áreas y vuelven cuando la memoria queda libre, así que la minería se adapta al resto de la máquina. Los resultados del ajuste se guardan en caché por máquina, y esa caché se reinicia cuando cambia el conjunto de CPU permitido o la disposición de NUMA y L3, por ejemplo tras redimensionar una máquina virtual.
+El dimensionado automático de hilos mantiene libre un 5% (como máximo 1 GiB por defecto) de la RAM total, además de cualquier reserva para la GPU. Cámbialo con `--cpu-memory-reserve-percent`. Si otros servicios empiezan a usar memoria, los hilos automáticos de seine liberan sus áreas y vuelven cuando la memoria queda libre, así que la minería se adapta al resto de la máquina. Los resultados del ajuste se guardan en caché por máquina, y esa caché se reinicia cuando cambia el conjunto de CPU permitido o la disposición de NUMA y L3, por ejemplo tras redimensionar una máquina virtual. En v0.2.43, la reserva predeterminada tiene un límite de 1 GiB; un porcentaje indicado explícitamente no tiene ese límite.
 
 ## ¿Cómo se ejecuta seine sin interfaz?
 

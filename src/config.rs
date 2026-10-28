@@ -396,9 +396,10 @@ struct Cli {
     threads: Option<usize>,
 
     /// Percentage of effective total RAM left unused by automatic CPU sizing/autotuning.
-    /// Explicit thread counts override this reserve. Set 0 to disable headroom.
-    #[arg(long, default_value_t = 5, value_parser = clap::value_parser!(u8).range(0..=99))]
-    cpu_memory_reserve_percent: u8,
+    /// Default: 5%, at most 1 GiB. Explicit thread counts override this reserve.
+    /// Set 0 to disable headroom.
+    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=99))]
+    cpu_memory_reserve_percent: Option<u8>,
 
     /// CPU affinity/scheduler-hint policy for CPU mining workers.
     /// Default: `pcore-only` on macOS Apple Silicon, otherwise `auto`.
@@ -704,7 +705,7 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = BenchKind::Backend)]
     bench_kind: BenchKind,
 
-    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, neon, neon-sha3).
+    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, neon, neon-sha3).
     /// Requires --bench, CPU-only backends, fixed --threads, and no CPU autotuning.
     #[arg(long, requires_all = ["bench", "threads"])]
     bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
@@ -764,7 +765,8 @@ pub struct Config {
     /// Frozen automatic worker slots for this run; distinct from the RAM-safe
     /// manual/offline ceiling and the CPU-only cache/search maximum.
     pub cpu_autotune_worker_slots: Option<usize>,
-    pub cpu_memory_reserve_percent: u8,
+    /// `None` reserves 5% of effective RAM, at most 1 GiB.
+    pub cpu_memory_reserve_percent: Option<u8>,
     pub cpu_affinity: CpuAffinityMode,
     pub cpu_page_mode: CpuPageMode,
     pub cpu_profile: CpuPerformanceProfile,
@@ -1144,8 +1146,10 @@ impl Config {
         )?;
         if cpu_backend_instances > 0 && (cli.threads.is_none() || cpu_autotune_threads) {
             startup_notices.push(format!(
-                "CPU automatic sizing reserves {}% of effective RAM; cap={} thread(s) per instance (--cpu-memory-reserve-percent 0 disables the reserve)",
-                cli.cpu_memory_reserve_percent, auto_threads_cap,
+                "CPU automatic sizing reserves {} of effective RAM; cap={} thread(s) per instance (--cpu-memory-reserve-percent 0 disables the reserve)",
+                cli.cpu_memory_reserve_percent
+                    .map_or("5% (at most 1 GiB)".to_string(), |p| format!("{p}%")),
+                auto_threads_cap,
             ));
         }
         startup_notices.extend(underused_threads_notice(
@@ -2850,7 +2854,7 @@ fn auto_cpu_threads(
     gpu_memory_reservation: u64,
     affinity: CpuAffinityMode,
     page_mode: CpuPageMode,
-    reserve_percent: u8,
+    reserve_percent: Option<u8>,
 ) -> usize {
     let cpu_parallelism = cpu_parallelism_cap(affinity);
     let memory_cap_total = detect_memory_budget_bytes(page_mode)
@@ -2864,13 +2868,22 @@ fn auto_cpu_threads(
     distribute_auto_cpu_threads(total_lanes_cap, cpu_backend_instances)
 }
 
+// RAM kept free by automatic sizing, as a share of the effective (cgroup-aware)
+// total; free memory already excludes what the OS uses. The default caps 5% at
+// 1 GiB: on 32 GiB hosts the full 5% left 13 of 14 possible 2 GiB arenas.
+fn memory_reserve_bytes(effective_total: u64, reserve_percent: Option<u8>) -> u64 {
+    match reserve_percent {
+        Some(percent) => effective_total / 100 * u64::from(percent),
+        None => (effective_total / 100 * 5).min(1024 * 1024 * 1024),
+    }
+}
+
 fn auto_cpu_memory_bytes(
     budget: MemoryBudgetBytes,
     gpu_memory_reservation: u64,
-    reserve_percent: u8,
+    reserve_percent: Option<u8>,
 ) -> u64 {
-    // Reserve a share of the effective (including cgroup) total, not just free RAM.
-    let reserve = budget.effective_total / 100 * u64::from(reserve_percent);
+    let reserve = memory_reserve_bytes(budget.effective_total, reserve_percent);
     budget
         .effective_available
         .saturating_sub(gpu_memory_reservation)
@@ -3039,11 +3052,11 @@ fn cpu_capacity_from_budget(
     budget: MemoryBudgetBytes,
     owned_bytes: u64,
     gpu_reserve: u64,
-    reserve_percent: u8,
+    reserve_percent: Option<u8>,
     instances: usize,
     cpu_cap: usize,
 ) -> (usize, usize) {
-    let reserve = budget.effective_total / 100 * u64::from(reserve_percent);
+    let reserve = memory_reserve_bytes(budget.effective_total, reserve_percent);
     let per_count = CPU_LANE_MEMORY_BYTES.saturating_mul(instances.max(1) as u64);
     let usable = |bytes: u64| bytes.saturating_sub(reserve).saturating_sub(gpu_reserve) / per_count;
     let capacity = (usable(budget.effective_total) as usize).min(cpu_cap);
@@ -3446,7 +3459,7 @@ mod tests {
             cpu_profile: CpuPerformanceProfile::Balanced,
             cpu_threads_per_instance: Vec::new(),
             cpu_affinity_per_instance: Vec::new(),
-            cpu_memory_reserve_percent: 5,
+            cpu_memory_reserve_percent: None,
             allow_oversubscribe: false,
             refresh_secs: 20,
             request_timeout_secs: 10,
@@ -4291,8 +4304,10 @@ HugePages_Rsvd:          0
 
     #[test]
     fn auto_cpu_threads_is_never_zero_and_scales_per_instance() {
-        let single_instance = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
-        let dual_instance = auto_cpu_threads(2, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
+        let single_instance =
+            auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, Some(5));
+        let dual_instance =
+            auto_cpu_threads(2, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, Some(5));
 
         assert!(single_instance >= 1);
         assert!(dual_instance >= 1);
@@ -4378,11 +4393,11 @@ HugePages_Rsvd:          0
             effective_total: 32 * gib,
             effective_available: 8 * gib,
         };
-        let calculate = |owned| cpu_capacity_from_budget(budget, owned, 0, 5, 1, 16);
+        let calculate = |owned| cpu_capacity_from_budget(budget, owned, 0, Some(5), 1, 16);
         assert_eq!(calculate(0), (15, 3));
         assert_eq!(calculate(8 * gib), (15, 7));
         assert_eq!(
-            cpu_capacity_from_budget(budget, 8 * gib, 0, 5, 1, 2),
+            cpu_capacity_from_budget(budget, 8 * gib, 0, Some(5), 1, 2),
             (2, 7)
         );
         assert_eq!(
@@ -4393,18 +4408,18 @@ HugePages_Rsvd:          0
                 },
                 0,
                 0,
-                5,
+                Some(5),
                 1,
                 16
             ),
             (15, 0)
         );
         assert_eq!(
-            cpu_capacity_from_budget(budget, 8 * gib, 0, 5, 2, 8),
+            cpu_capacity_from_budget(budget, 8 * gib, 0, Some(5), 2, 8),
             (7, 3)
         );
         assert_eq!(
-            cpu_capacity_from_budget(budget, u64::MAX, 0, 5, 1, 16),
+            cpu_capacity_from_budget(budget, u64::MAX, 0, Some(5), 1, 16),
             (15, 15)
         );
     }
@@ -4416,16 +4431,31 @@ HugePages_Rsvd:          0
             effective_total: 512 * gib,
             effective_available: 490 * gib,
         };
-        let usable = auto_cpu_memory_bytes(budget, 8 * gib, 5);
+        let usable = auto_cpu_memory_bytes(budget, 8 * gib, Some(5));
         assert_eq!(usable, 482 * gib - (512 * gib / 100 * 5));
         assert_eq!(usable / CPU_LANE_MEMORY_BYTES, 228);
-        assert_eq!(auto_cpu_memory_bytes(budget, 0, 0), 490 * gib);
+        assert_eq!(auto_cpu_memory_bytes(budget, 0, Some(0)), 490 * gib);
         let constrained = MemoryBudgetBytes {
             effective_total: 16 * gib,
             effective_available: gib / 2,
         };
-        assert_eq!(auto_cpu_memory_bytes(constrained, 0, 5), 0);
-        assert_eq!(auto_cpu_memory_bytes(constrained, 20 * gib, 0), 0);
+        assert_eq!(auto_cpu_memory_bytes(constrained, 0, Some(5)), 0);
+        assert_eq!(auto_cpu_memory_bytes(constrained, 20 * gib, Some(0)), 0);
+        // The default reserve is 5% capped at 1 GiB: a 32 GiB host with 29.4 GiB
+        // free fits 14 arenas (an uncapped 5% left 13).
+        let vm = MemoryBudgetBytes {
+            effective_total: 32 * gib,
+            effective_available: 29 * gib + 400 * 1024 * 1024,
+        };
+        assert_eq!(
+            auto_cpu_memory_bytes(vm, 0, None) / CPU_LANE_MEMORY_BYTES,
+            14
+        );
+        assert_eq!(
+            auto_cpu_memory_bytes(vm, 0, Some(5)) / CPU_LANE_MEMORY_BYTES,
+            13
+        );
+        assert_eq!(memory_reserve_bytes(8 * gib, None), 8 * gib / 100 * 5);
     }
 
     #[test]
@@ -4444,7 +4474,7 @@ HugePages_Rsvd:          0
             Cli::try_parse_from(["seine"])
                 .unwrap()
                 .cpu_memory_reserve_percent,
-            5
+            None
         );
         let cli = Cli::try_parse_from([
             "seine",
@@ -4454,20 +4484,20 @@ HugePages_Rsvd:          0
             "os",
         ])
         .unwrap();
-        assert_eq!(cli.cpu_memory_reserve_percent, 0);
+        assert_eq!(cli.cpu_memory_reserve_percent, Some(0));
         assert_eq!(cli.cpu_affinity, CpuAffinityMode::Os);
         assert!(Cli::try_parse_from(["seine", "--cpu-memory-reserve-percent", "100"]).is_err());
     }
 
     #[test]
     fn auto_cpu_threads_reduced_by_gpu_reservation() {
-        let without_gpu = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, 5);
+        let without_gpu = auto_cpu_threads(1, 0, CpuAffinityMode::Auto, CpuPageMode::Auto, Some(5));
         let with_gpu = auto_cpu_threads(
             1,
             4 * CPU_LANE_MEMORY_BYTES,
             CpuAffinityMode::Auto,
             CpuPageMode::Auto,
-            5,
+            Some(5),
         );
 
         assert!(with_gpu >= 1);

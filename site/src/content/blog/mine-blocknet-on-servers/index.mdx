@@ -2,6 +2,7 @@
 title: Mining Blocknet on servers and rigs
 description: Mine Blocknet on EPYC servers and multi-rig setups with seine. Automatic NUMA and L3 thread placement, headless runs, a control API and Prometheus metrics.
 date: 2026-10-25
+updated: 2026-10-27
 tags: [Mining guide, Servers, Linux, seine]
 faq:
   - q: Does seine support NUMA servers?
@@ -49,7 +50,7 @@ To check the effect on your own machine, compare `auto` with `os` at the same th
 
 ### Memory headroom on shared servers
 
-Automatic thread sizing keeps 5% of total RAM free, on top of any GPU reservation. Change it with `--cpu-memory-reserve-percent`. If other services start using memory, seine's automatic threads release their arenas and come back once memory frees up, so mining fits around the rest of the machine. Tuning results are cached per machine, and the cache resets when the allowed CPU set or the NUMA and L3 layout changes, such as after resizing a VM.
+Automatic thread sizing keeps 5% (at most 1 GiB by default) of total RAM free, on top of any GPU reservation. Change it with `--cpu-memory-reserve-percent`. If other services start using memory, seine's automatic threads release their arenas and come back once memory frees up, so mining fits around the rest of the machine. Tuning results are cached per machine, and the cache resets when the allowed CPU set or the NUMA and L3 layout changes, such as after resizing a VM. In v0.2.43, the default reserve is capped at 1 GiB; an explicitly supplied percentage is not capped.
 
 ## How do you run seine headless?
 

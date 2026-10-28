@@ -2881,7 +2881,7 @@ mod tests {
     fn rejected_thread_request_keeps_session_and_config_and_replies() {
         let mut cfg = crate::miner::tests::test_config();
         // Deterministic zero headroom without allocating RAM or relying on this host.
-        cfg.cpu_memory_reserve_percent = 100;
+        cfg.cpu_memory_reserve_percent = Some(100);
         let supervisor = MinerSupervisor::new(cfg.clone(), Arc::new(AtomicBool::new(false)));
         let session_shutdown = Arc::new(AtomicBool::new(false));
         {

@@ -1,13 +1,14 @@
 ---
 title: Best hardware for Blocknet mining
-description: "Compare Blocknet mining hardware with measured results: EPYC 9355P reaches 77.1 H/s. See exact RAM, threads, page settings and the benchmark evidence."
+description: "Compare Blocknet mining hardware with measured results: EPYC 9375F reaches 85.1 H/s. See exact RAM, threads, page settings and the benchmark evidence."
 date: 2026-10-25
+updated: 2026-10-27
 tags: [Hardware, Hashrate, Mining guide, Argon2id, NVIDIA]
 faq:
   - q: Can a gaming PC mine Blocknet?
     a: Yes. On Windows and Linux, seine mines on the processor and every NVIDIA graphics card in the PC at once, and the hashrates add up. It sizes the thread count to your RAM, so a 32 GB gaming PC runs up to about 14 threads, and it tunes the processor and each card automatically while it mines.
   - q: How many Blocknet mining threads will 32 GB of RAM run?
-    a: About 14. Each thread needs a 2 GiB block of memory for every hash, so 32 GB holds 16 of them on paper. Seine keeps 5% of RAM in reserve and leaves room for the operating system, which brings a 32 GB machine to about 14 threads. It works this out for you when it starts.
+    a: About 14. Each thread needs a 2 GiB block of memory for every hash, so 32 GB holds 16 of them on paper. Seine keeps 5% (at most 1 GiB by default) of RAM in reserve and leaves room for the operating system, which brings a 32 GB machine to about 14 threads. It works this out for you when it starts.
   - q: Which graphics cards does seine use for Blocknet mining?
     a: Seine mines on NVIDIA graphics cards with the Windows and Linux downloads, using every card it detects alongside the processor. On Windows, the CUDA runtime is included, so you only need the NVIDIA driver. On Linux, install the driver and the NVRTC libraries. The first launch tunes each card and remembers the result.
   - q: Why does memory bandwidth matter for Blocknet mining?
@@ -22,10 +23,10 @@ This guide shows which machines mine Blocknet fastest with seine, how many threa
 ## What is the best hardware for Blocknet mining?
 
 <Answer>
-The fastest configuration in these measurements is an AMD EPYC 9355P at 77.1 H/s: 64 mining threads, 192 GiB of RAM and manually prepared 1 GiB huge pages on Linux. Blocknet mining benefits from memory bandwidth and enough RAM for 2 GiB per thread. NVIDIA cards can add their hashrate alongside the CPU.
+The fastest configuration in these measurements is an AMD EPYC 9375F at 85.1 H/s: 64 mining threads, 384 GiB of RAM and manually prepared 1 GiB huge pages on Linux. Blocknet mining benefits from memory bandwidth and enough RAM for 2 GiB per thread. NVIDIA cards can add their hashrate alongside the CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 77.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/headline-20261027/README.md#epyc-9355p-rebenchmark)
+[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
 
 Blocknet's proof of work is Argon2id with a 2 GiB memory block per hash. That makes it [memory-hard](/blog/argon2id-proof-of-work-explained/): hashrate depends as much on memory bandwidth and latency as on core count, and on how many of those 2 GiB blocks fit in RAM at once. A strong memory system is what the top machines in the table below have in common.
 
@@ -77,19 +78,19 @@ Three things follow when you choose hardware:
 ## How much RAM do you need for each mining thread?
 
 <Answer>
-Each mining thread needs about 2 GB of RAM, because every hash fills its own 2 GiB block of memory. Divide your RAM by two for the most threads that fit, then subtract a little for the operating system. Seine does this sum for you and keeps 5% of RAM in reserve.
+Each mining thread needs about 2 GB of RAM, because every hash fills its own 2 GiB block of memory. Divide your RAM by two for the most threads that fit, then subtract a little for the operating system. Seine does this sum for you and keeps 5% (at most 1 GiB by default) of RAM in reserve.
 </Answer>
 
-Here is the arithmetic for common sizes. "On paper" is RAM ÷ 2 GiB. The last column subtracts seine's 5% reserve and about 2-3 GB for the operating system, so treat it as a rough guide. For laptops and older PCs with 4-12 GB, see the guide to [mining on an old PC or laptop](/blog/mine-crypto-on-old-pc-or-laptop/).
+Here is the arithmetic for common sizes. "On paper" is RAM ÷ 2 GiB. The last column subtracts seine's 5% (at most 1 GiB by default) reserve and about 2-3 GB for the operating system, so treat it as a rough guide. For laptops and older PCs with 4-12 GB, see the guide to [mining on an old PC or laptop](/blog/mine-crypto-on-old-pc-or-laptop/).
 
 | RAM | Memory blocks on paper | Threads seine can run, roughly |
 |---|---|---|
 | 16 GB | 8 | 6 |
 | 32 GB | 16 | 14 |
-| 64 GB | 32 | 29 |
-| 128 GB | 64 | 59 |
+| 64 GB | 32 | 30 |
+| 128 GB | 64 | 62 |
 
-Seine also caps threads at the processor's logical core count, so the real limit is whichever runs out first. Take a 16-core desktop processor with 32 hardware threads. With 32 GB of RAM it runs about 14 mining threads, and with 64 GB about 29. To run 32 threads you need 64 GiB for the memory blocks alone plus headroom, which is why the 32-thread Zen 5 result came from a machine with 128 GiB.
+Seine also caps threads at the processor's logical core count, so the real limit is whichever runs out first. Take a 16-core desktop processor with 32 hardware threads. With 32 GB of RAM it runs about 14 mining threads, and with 64 GB about 30. To run 32 threads you need 64 GiB for the memory blocks alone plus headroom, which is why the 32-thread Zen 5 result came from a machine with 128 GiB.
 
 If you're buying RAM for mining, match it to the threads you want: about 2 GB per thread, plus a few gigabytes for the system.
 
@@ -110,7 +111,7 @@ For everyday mining, run seine, paste your address or `@name`, and accept the de
 - **Sizes the thread count** to your RAM and cores, then compares thread counts on real mining work and keeps the best one.
 - **Picks the CPU kernel**, such as AVX2, AVX-512, the streaming kernel on Zen 5 EPYC or SHA3 on Arm, switching only after two confirmed gains.
 - **Places threads on big servers.** On Linux, it spreads threads across NUMA nodes and L3 cache groups, which added 16.7% on a rented EPYC 8434P at 24 threads. The [guide to mining on servers](/blog/mine-blocknet-on-servers/) has the details.
-- **Protects your memory.** It keeps a 5% reserve, parks threads if RAM gets tight and brings them back when it frees up.
+- **Protects your memory.** It keeps a 5% (at most 1 GiB by default) reserve, parks threads if RAM gets tight and brings them back when it frees up.
 - **Remembers what worked**, so the next start begins from the tuned settings.
 
 None of this reconnects to the pool, so tuning costs you no mining time. The [automatic tuning guide](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) explains each step.

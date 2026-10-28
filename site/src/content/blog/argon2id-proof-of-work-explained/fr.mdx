@@ -11,7 +11,7 @@ faq:
     a: 'Argon2id fait de la mémoire la partie coûteuse de chaque hash. Chaque hash Blocknet a besoin de 2 GiB de mémoire rapide et y fait transiter des gigaoctets, si bien qu''une puce conçue uniquement pour hacher aurait quand même besoin de grandes quantités de RAM par cœur. Le code du daemon décrit ce choix comme une preuve de travail gourmande en mémoire pour résister aux ASIC et garantir un minage équitable.'
   - q: 'Une carte graphique peut-elle miner l''Argon2id de Blocknet ?'
     a: 'Oui. Sous Windows et Linux, seine mine sur toutes les cartes graphiques NVIDIA de la machine en même temps que sur le CPU, et les hashrates s''additionnent. Les kernels sont compilés au démarrage, et le premier lancement optimise chaque carte puis met le résultat en cache : il n''y a donc rien à configurer avant de commencer.'
-sourceHash: ddc65bcd4eb2
+sourceHash: 3bf4c5dc1b0d
 translation: draft
 ---
 
@@ -65,7 +65,7 @@ C'est ce qui rend cette conception favorable au matériel ordinaire. Les ordinat
 Chaque thread de minage occupe sa propre zone de 2 GiB : votre RAM fixe donc le nombre de threads que vous pouvez lancer. Chaque hash écrit aussi 2 GiB et en relit à peu près autant à des endroits dispersés, si bien que la vitesse et la latence de votre mémoire fixent la rapidité de ces threads. La mémoire compte autant que le nombre de cœurs.
 </Answer>
 
-**La RAM fixe le nombre de threads.** Un parallélisme de 1 signifie qu'un hash s'exécute sur un seul thread, et chaque thread a besoin de sa propre zone complète de 2 GiB. Une machine de 16 GB peut faire tourner environ six à sept threads tout en laissant de la place au système. seine mesure votre mémoire, en garde 5 % en réserve et choisit le nombre de threads pour vous.
+**La RAM fixe le nombre de threads.** Un parallélisme de 1 signifie qu'un hash s'exécute sur un seul thread, et chaque thread a besoin de sa propre zone complète de 2 GiB. Une machine de 16 GB peut faire tourner environ six à sept threads tout en laissant de la place au système. seine mesure votre mémoire, en garde 5 % (au maximum 1 GiB par défaut) en réserve et choisit le nombre de threads pour vous.
 
 **La bande passante et la latence fixent la vitesse de chaque thread.** Un hash crée 2 097 152 nouveaux blocs, et chacun lit un bloc de référence de 1 KiB quelque part dans la zone. Cela représente environ 2 GiB écrits et environ 2 GiB lus pour chaque hash. À 10 H/s, une machine fait transiter environ 40 GiB de données par seconde dans sa mémoire. Dans la moitié qui dépend des données, chaque adresse de lecture n'est connue qu'une fois le bloc précédent terminé : le temps de réponse de la mémoire compte donc autant que le débit brut.
 

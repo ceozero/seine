@@ -1,0 +1,68 @@
+---
+title: 'Que contient une transaction Blocknet ?'
+description: 'Suivez un paiement Blocknet : entrées, sorties du destinataire, monnaie rendue, frais et confirmation. Voyez pourquoi un paiement peut avoir plusieurs sorties.'
+tags: ['Blocknet', 'Portefeuille', 'Paiements']
+faq:
+  - q: 'Pourquoi mon paiement Blocknet a-t-il deux sorties ?'
+    a: 'Un paiement à montant fixe peut créer une sortie pour le destinataire et une autre qui restitue au portefeuille la valeur inutilisée des entrées comme monnaie rendue. D’autres formes existent : plusieurs destinataires, monnaie répartie ou aucune monnaie rendue. Le nombre de sorties seul ne dit pas combien de personnes ont été payées.'
+  - q: 'Dois-je copier une adresse de monnaie rendue avant l’envoi ?'
+    a: 'Le constructeur de transactions examiné crée la monnaie rendue avec les clés publiques de votre propre portefeuille. Vous saisissez les coordonnées du destinataire voulu ; le portefeuille gère sa sortie de monnaie. Cette sortie appartient au portefeuille émetteur et devient dépensable selon les règles habituelles de confirmation et de maturité.'
+  - q: 'Un anneau d’entrée dépense-t-il les fonds de tous ses membres ?'
+    a: 'Chaque entrée dépense une vraie sortie appartenant à l’émetteur. Les autres membres de l’anneau offrent des origines possibles pour la preuve de confidentialité ; leur valeur ne s’ajoute pas au paiement. Une transaction peut utiliser plusieurs vraies entrées, chacune avec son anneau et son image de clé.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Suivez un paiement Blocknet à travers les éléments construits par votre portefeuille : fonds existants, nouvelles sorties, monnaie rendue et frais réseau. Ce parcours explique pourquoi un paiement à une personne peut avoir plusieurs sorties et pourquoi dépenser une sortie ne signifie pas donner toute sa valeur au destinataire. L’exemple comptable utilise des montants inventés, avec le portefeuille publié de core v0.22.0 comme référence d’implémentation.
+
+## Comment une transaction Blocknet déplace-t-elle vos fonds ?
+
+<Answer>
+Votre portefeuille choisit des sorties dépensables qu’il possède, les utilise comme entrées et crée de nouvelles sorties pour le destinataire et la monnaie éventuelle. La valeur sélectionnée couvre le montant du destinataire et les frais réseau. Les preuves de confidentialité permettent au réseau de valider le paiement, tandis que votre portefeuille reconnaît les nouvelles sorties qui vous appartiennent.
+</Answer>
+
+## Partez des sorties que possède déjà votre portefeuille
+
+Une sortie est une portion de valeur créée par une transaction antérieure. Tant qu’elle reste non dépensée et respecte les règles de maturité, votre portefeuille peut la choisir pour un nouveau paiement. Le solde peut inclure plusieurs portions issues de réceptions précédentes, de paiements de minage ou de monnaie rendue. Vous n’avez normalement pas à les choisir vous-même.
+
+Supposons que votre portefeuille choisisse une sortie de `10 BNT` pour un paiement de `3 BNT`. Il dépense entièrement cette sortie existante. La nouvelle transaction affecte ensuite la valeur au destinataire, à la monnaie et aux frais. Les autres sorties peuvent rester intactes ; le total choisi n’est pas nécessairement tout votre solde.
+
+Plusieurs petites sorties peuvent aussi financer un seul paiement. Le [constructeur du portefeuille publié](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) sélectionne assez de fonds matures pour couvrir le montant du destinataire et les frais. La sélection des entrées et l’estimation des frais selon la taille interagissent, d’où l’importance de l’aperçu actuel du portefeuille. Le [guide des frais de transaction](/fr/blog/blocknet-transaction-fees/) explique ce calcul et où le consulter.
+
+[![Transaction illustrative : 1 sélectionne 10 BNT ; 2 envoie 3 BNT au destinataire ; 3 restitue 6,9995 BNT de monnaie ; 4 comptabilise 0,0005 BNT de frais réseau.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Lisez le schéma comme une comptabilité du portefeuille : **1** est l’entrée sélectionnée, **2** la sortie du destinataire, **3** votre sortie de monnaie et **4** les frais. Les nombres sont illustratifs ; les frais sont supposés, pas un devis. Les flèches montrent la propriété et l’affectation de valeur, pas des liens publics visibles dans un explorateur.
+
+## Pourquoi un paiement peut-il créer plusieurs sorties ?
+
+Dans cet exemple, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Le destinataire reçoit `3 BNT`, votre portefeuille reçoit `6.9995 BNT` de monnaie et la transaction paie les frais supposés de `0.0005 BNT`. Il y a deux nouvelles sorties de portefeuille, alors que vous vouliez payer une seule personne. Les frais sont un champ distinct de la transaction, pas une troisième sortie de destinataire.
+
+Deux sorties constituent un exemple utile, pas une règle universelle. Le constructeur accepte plusieurs destinataires et sa sélection avancée des entrées peut répartir la monnaie entre plusieurs sorties. Si la valeur choisie couvre exactement les destinataires et les frais, aucune sortie de monnaie n’est nécessaire. Une opération d’envoi total calcule plutôt le montant du destinataire après déduction des frais du total dépensable sélectionné.
+
+Le nombre de sorties décrit donc la structure de la transaction. Il ne compte ni clients, ni factures, ni portefeuilles différents. Plusieurs sorties peuvent appartenir au même portefeuille, et une transaction à plusieurs entrées peut payer un seul destinataire. Gardez ces différences à l’esprit en comparant un paiement enregistré dans le portefeuille au résumé structurel plus court d’un explorateur.
+
+## Où va la monnaie rendue ?
+
+Le portefeuille construit la monnaie pour ses propres clés. Dans l’exemple, la sortie initiale de `10 BNT` est consommée et la monnaie de `6.9995 BNT` est une nouvelle sortie que le même portefeuille reconnaît. Dans l’envoi ordinaire, vous n’avez pas à saisir un deuxième destinataire ni à copier manuellement une adresse de monnaie.
+
+Les sorties du destinataire et la monnaie utilisent des clés de sortie à usage unique. La transaction publique ne place pas votre adresse de réception habituelle à côté d’une étiquette « monnaie rendue ». Votre portefeuille possède les informations privées nécessaires pour reconnaître ses sorties. Le [guide des adresses furtives](/fr/blog/stealth-addresses-explained/) explique le lien entre ces clés uniques et une adresse de réception réutilisable.
+
+La monnaie suit aussi les règles des sorties nouvellement créées. Après l’envoi, une partie du solde peut attendre confirmation ou maturité tout en vous appartenant toujours. Une sortie mature intacte peut rester disponible tandis que la nouvelle monnaie est encore en attente. Vérifiez le solde dépensable avant un autre paiement ; le [guide des délais de transfert](/fr/blog/blocknet-transfer-time/) explique les étapes de la diffusion à la possibilité de dépenser.
+
+## Que vérifie le réseau et que montre un explorateur ?
+
+Chaque vraie entrée dispose d’une preuve de confidentialité qui la place parmi des sorties antérieures possibles. Les autres membres de l’anneau sont des leurres : ils n’utilisent pas les fonds de leurs propriétaires pour financer votre paiement. Une image de clé permet au réseau de détecter une dépense répétée sans publier le membre qui était la vraie source. Consultez les [signatures en anneau](/fr/blog/ring-signatures-explained/) pour ce mécanisme.
+
+Le réseau vérifie aussi les engagements de montant et les preuves, notamment l’équilibre de la transaction avec ses frais. Le [guide des preuves de plage](/fr/blog/bulletproofs-explained/) explique ces vérifications avec des montants cachés. Les données publiques incluent le hash, la structure des entrées et sorties, ainsi que les frais. Coller le hash dans l’explorateur ne révèle pas à lui seul la comptabilité privée de l’exemple.
+
+Utilisez votre portefeuille pour identifier vos réceptions et votre monnaie. Utilisez l’[explorateur](/fr/blog/blocknet-explorer-guide/) pour le statut public des transactions et blocs. Le [guide de visibilité des paiements](/fr/blog/blocknet-payment-visibility/) compare ce qu’un émetteur, un destinataire ou un tiers peut apprendre, ainsi que les options de partage volontaire.
+
+## Suivez le paiement jusqu’à sa confirmation
+
+Avant de confirmer un envoi prévu, lisez ensemble les coordonnées du destinataire, son montant, les frais et la monnaie. Après soumission, le hash identifie toute la transaction, avec toutes ses entrées et sorties. Ce n’est ni une adresse de réception ni l’identifiant de la seule sortie du destinataire.
+
+La diffusion, l’inclusion dans un bloc et la possibilité de dépenser sont des étapes distinctes. Le portefeuille du destinataire recherche les sorties correspondant à ses clés, tandis que le vôtre reconnaît sa monnaie. Confirmation et maturité déterminent quand ces nouvelles sorties pourront servir dans une autre transaction. Le [guide d’envoi et de réception](/fr/blog/send-receive-blocknet/) couvre les véritables étapes dans le portefeuille.
+
+Pour une question de paiement, commencez par le montant prévu et l’enregistrement du portefeuille, puis vérifiez le statut de la transaction. Vous pouvez ainsi lire le paiement : ce qui a été sélectionné, ce que le destinataire a reçu, ce qui est revenu en monnaie et ce qui attend encore. Cela fonctionne que les fonds viennent initialement d’une autre personne ou d’un [paiement de pool de minage](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Minez Blocknet avec seine" text="Utilisez seine avec bntpool.com pour miner Blocknet et recevoir les paiements dans votre portefeuille." />

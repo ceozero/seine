@@ -2,6 +2,7 @@
 title: Argon2id proof of work explained
 description: How Blocknet's Argon2id proof of work fills 2 GiB of memory per hash, why RAM and memory bandwidth set your hashrate, and how seine's CPU kernels use it.
 date: 2026-10-25
+updated: 2026-10-27
 tags: [Argon2id, Proof of work, Blocknet, Mining]
 faq:
   - q: What Argon2id parameters does Blocknet use for proof of work?
@@ -65,7 +66,7 @@ That is what makes the design friendly to ordinary hardware. Desktops, laptops a
 Each mining thread holds its own 2 GiB arena, so your RAM sets how many threads you can run. Each hash also writes 2 GiB and reads back about as much from scattered places, so the speed and latency of your memory set how fast those threads finish. Memory matters as much as core count.
 </Answer>
 
-**RAM sets the thread count.** Parallelism 1 means one hash runs on one thread, and each thread needs a full 2 GiB arena of its own. A machine with 16 GB can run roughly six to seven threads after leaving room for the system. Seine measures your memory, keeps 5% in reserve, and picks the thread count for you.
+**RAM sets the thread count.** Parallelism 1 means one hash runs on one thread, and each thread needs a full 2 GiB arena of its own. A machine with 16 GB can run roughly six to seven threads after leaving room for the system. Seine measures your memory, keeps 5% (at most 1 GiB by default) in reserve, and picks the thread count for you.
 
 **Bandwidth and latency set the speed of each thread.** A hash creates 2,097,152 new blocks, and each one reads a 1 KiB reference block from somewhere in the arena. That works out to about 2 GiB written and about 2 GiB read for every hash. At 10 H/s, a machine moves roughly 40 GiB of data through memory every second. In the data-dependent half, each read address is known only once the previous block is done, so the time it takes memory to answer counts as much as raw throughput.
 

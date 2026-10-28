@@ -68,6 +68,9 @@ def cmd_up(args):
     save(receipt)
     aws('ec2', 'authorize-security-group-ingress', '--group-id', group,
         '--protocol', 'tcp', '--port', '22', '--cidr', f'{my_ip}/32')
+    if args.acme_http:  # HTTP-01 for a short-lived IP certificate (NTM's TLS-only client)
+        aws('ec2', 'authorize-security-group-ingress', '--group-id', group,
+            '--protocol', 'tcp', '--port', '80', '--cidr', '0.0.0.0/0')
     minutes = max(5, int(args.hours * 60) - 5)
     if args.windows:
         images = aws('ec2', 'describe-images', '--owners', 'amazon', '--filters',
@@ -179,6 +182,7 @@ def main():
     up.add_argument('--on-demand', action='store_true')
     up.add_argument('--max-price', type=float)
     up.add_argument('--windows', action='store_true', help='Windows Server 2025 with OpenSSH (user Administrator)')
+    up.add_argument('--acme-http', action='store_true', help='open port 80 for remote_live_compete.sh certificate issuance')
     ip = sub.add_parser('ip')
     ip.add_argument('name')
     ip.add_argument('--wait', type=int, default=900)

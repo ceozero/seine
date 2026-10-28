@@ -6,6 +6,7 @@ up:    deploy a server, register a task-only SSH key and arm a local systemd
        on provider deletion, not guest shutdown).
 ip:    print the primary IPv4 once provisioned.
 down:  delete the server and the task SSH key; idempotent.
+extend: re-arm the delete timer N hours from now.
 stock: list in-stock AMD plans.
 
 The API token lives at $CHERRY_TOKEN_FILE (default
@@ -152,6 +153,20 @@ def cmd_down(args):
     print(f'deleted {args.name} (server {server_id})')
 
 
+def cmd_extend(args):
+    receipt = load(args.name)
+    unit = f'seine-lease-{args.name}'
+    # Re-arm the delete timer from now; stopping the transient timer frees its name.
+    subprocess.run(['systemctl', '--user', 'stop', f'{unit}.timer'], capture_output=True)
+    subprocess.run(['systemd-run', '--user', f'--on-active={int(args.hours * 3600)}', f'--unit={unit}',
+                    sys.executable, str(Path(__file__).resolve()), 'down', args.name], check=True,
+                   capture_output=True)
+    receipt['extended_at'] = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+    receipt['extended_hours'] = args.hours
+    receipt_path(args.name).write_text(json.dumps(receipt, indent=2))
+    print(json.dumps({'name': args.name, 'delete_after_hours_from_now': args.hours}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -167,8 +182,11 @@ def main():
     ip.add_argument('--wait', type=int, default=1800)
     down = sub.add_parser('down')
     down.add_argument('name')
+    extend = sub.add_parser('extend')
+    extend.add_argument('name')
+    extend.add_argument('--hours', type=float, required=True, help='new deadline, counted from now')
     args = parser.parse_args()
-    {'stock': cmd_stock, 'up': cmd_up, 'ip': cmd_ip, 'down': cmd_down}[args.command](args)
+    {'stock': cmd_stock, 'up': cmd_up, 'ip': cmd_ip, 'down': cmd_down, 'extend': cmd_extend}[args.command](args)
 
 
 if __name__ == '__main__':

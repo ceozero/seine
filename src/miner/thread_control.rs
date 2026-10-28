@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn configured_but_unallocated_workers_do_not_create_headroom() {
         let mut cfg = crate::miner::tests::test_config();
-        cfg.cpu_memory_reserve_percent = 100;
+        cfg.cpu_memory_reserve_percent = Some(100);
         let backend = Arc::new(CpuBackend::new(4, crate::config::CpuAffinityMode::Off));
         let guard = ThreadMemoryGuard::new(&cfg, vec![backend]);
         assert!(guard.validate(5).is_err());

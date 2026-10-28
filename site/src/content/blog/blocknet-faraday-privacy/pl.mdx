@@ -1,0 +1,62 @@
+---
+title: 'Jak Faraday zmienia prywatność Blocknet'
+description: 'Poznaj projekt prywatności Faraday: dowody wydawania dla całego zbioru, wykrywanie płatności ML-KEM, agregację i proponowane skutki dla użytkowników portfela.'
+tags: ['Blocknet', 'Faraday', 'Prywatność']
+faq:
+  - q: 'Czy prywatność całego łańcucha oznacza, że Faraday już chroni wszystkie historyczne wyjścia?'
+    a: 'Szczegółowe ogłoszenie opisuje pełny zbiór monet Faraday. Rośnie on, gdy monety przechodzą do nowego formatu. Trzeba odróżnić obecne transakcje pierścieniowe od migracji do proponowanego formatu. Faraday nadal powstaje; nowy projekt nie działa w obecnie wydanej sieci.'
+  - q: 'Czy ML-KEM tworzy dowody wydawania Faraday?'
+    a: 'ML-KEM to mechanizm enkapsulacji kluczy służący ustanowieniu wspólnego sekretu. Projekt przypisuje mu wykrywanie płatności. Dowody wydawania mają osobną rolę: pozwalają sieci sprawdzić wydatek, chroniąc prywatne informacje. Faraday proponuje do tego dowody oparte na haszowaniu, budowane z Plonky3.'
+  - q: 'Czy rozmiary dowodów, opłaty i czasy Faraday są ostateczne?'
+    a: 'Nie. Oficjalne ogłoszenie przedstawia projekt nadal budowany i testowany. Rozmiary dowodów i docelowe czasy opisują obecny plan, a ostateczne opłaty pozostają nieustalone. Ustawienia operacyjne sprawdzaj w wydaniu wdrażającym Faraday, a informacje o migracji w istniejącym poradniku aktualizacji.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Poznaj dwa pytania o prywatność stojące za Faraday: jak sieć sprawdza wydatek bez identyfikowania źródła i jak portfel rozpoznaje wpływ. Artykuł wyjaśnia proponowane mechanizmy i ich praktyczne konsekwencje. [Oficjalne ogłoszenie z 27 października](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) mówi, że projekt nadal powstaje; do obecnej sieci używaj instrukcji wydanego portfela.
+
+## Co Faraday zmieniłby w prywatności płatności?
+
+<Answer>
+Faraday proponuje zastąpić obecne 16-elementowe pierścienie wejść dowodami wydawania obejmującymi zbiór monet Faraday. Dowody oparte na haszowaniu chroniłyby wydawanie, a ML-KEM wspierałby wykrywanie płatności. To odrębne zadania. Celem Faraday jest szersza prywatność wydawania i ochrona postkwantowa w nowym formacie monet.
+</Answer>
+
+## Od pierścienia 16 do zbioru monet Faraday
+
+Dzisiaj wydatek wskazuje pierścień zawierający prawdziwe wydawane wyjście i 15 wabików. Podpis pozwala sprawdzić autoryzację bez ujawnienia prawdziwego członka. [Poradnik podpisów pierścieniowych](/pl/blog/ring-signatures-explained/) wyjaśnia obecny mechanizm. Zbiorem kandydatów jest pierścień dołączony do danego wejścia.
+
+Proponowany dowód Faraday wykazywałby, że wydawana moneta należy do dopuszczalnego zbioru Faraday, bez publikowania konkretnego członka. To użyteczne znaczenie przynależności do pełnego zbioru: weryfikator sprawdza przynależność i poprawność, a ukryty wybór pozostaje prywatny. Nie oznacza to pobierania prywatnych zapisów wszystkich innych portfeli ani ujawniania ich sald.
+
+Szczegółowe ogłoszenie wskazuje monety Faraday, więc rosnący zbiór trzeba odróżnić od wszystkich historycznych wyjść starego formatu. Diagram ilustruje tę różnicę; kropki są przykładem pojęciowym, a nie bieżącą liczbą monet. [Poradnik aktualizacji](/pl/blog/blocknet-faraday-upgrade/) opisuje proponowaną migrację istniejących monet do nowego formatu.
+
+[![Obecny pierścień wejścia ma 16 kandydatów, a proponowany dowód Faraday dotyczy rosnącego zbioru monet nowego formatu; stare wyjścia pozostają poza pokazanym zbiorem do migracji.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Dlaczego dowody wydawania i wykrywanie są osobne
+
+Dowód wydawania odpowiada na pytanie walidacji sieci: czy wydatek spełnia wymagane reguły? Portfel nadawcy tworzy dowód, a węzły go sprawdzają. Projekt proponuje dowody oparte na haszowaniu z [Plonky3](https://github.com/Plonky3/Plonky3), zestawem narzędzi do budowy systemów dowodowych. Dostarcza on komponenty; konkretne reguły Blocknet i ich implementacja nadal określają, co akceptuje weryfikator.
+
+Wykrywanie płatności odpowiada na pytanie portfela: które wyjścia należą do mnie? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) to standardowy mechanizm enkapsulacji kluczy dla wspólnego sekretu. Plan Faraday przypisuje go stronie odbiorczej. Nie jest to inna nazwa dowodu wydawania ani algorytm podpisu.
+
+Rozróżnienie wyjaśnia też termin postkwantowy w Faraday. Określa konstrukcje kryptograficzne mające oprzeć się atakom komputerów kwantowych; użytkownicy nie muszą ich posiadać. ML-KEM opiera się na problemach kratowych, a zapowiedziany dowód wydawania na technikach haszowania. Standardowy komponent sam nie certyfikuje całej implementacji kryptowaluty. Oddzielnie oceniaj twierdzenia o algorytmach, budowie dowodów i całym portfelu.
+
+## Co dzieje się z dowodem po płatności?
+
+Propozycja rozróżnia dowód przesyłany przez sieć od zachowywanego z blokiem. Obecne liczby to około 1,4 MB na dowód wydawania i około 1 MB na połączony dowód bloku. Węzły przekazywałyby, weryfikowały i łączyły dowody, usuwając pojedyncze po osiągnięciu finalności. Są to liczby projektowe, a nie pomiary wykonane do artykułu.
+
+Łączenie dowodów podsumowuje kontrole. Wyobraź sobie kilka niezależnie sprawdzonych twierdzeń reprezentowanych dalej przez dowód ich weryfikacji. Dowód bloku służy temu innemu celowi niż pierwotny dowód pojedynczy. Zwięzły zachowany zapis nie usuwa wcześniejszego przesyłu i obliczeń: przekazywanie, tworzenie dowodu, agregacja i długoterminowe przechowywanie to oddzielne zadania.
+
+[![Pojedyncze dowody trafiają do węzłów, łączą się w dowód bloku i są usuwane po finalności zgodnie z proponowanym projektem Faraday.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Co zauważyliby użytkownicy portfela?
+
+Warto oddzielić zatwierdzenie płatności, pracę portfela nad dowodem, włączenie do bloku i oczekiwanie na dostępność otrzymanych środków. To różne części drogi płatności. Szybkie wygenerowanie dowodu samo nie wykazuje szybkiego przelewu od początku do końca.
+
+Plan proponuje dziesięciominutowe bloki i wskazuje, że większe wydatki zwiększałyby opłaty; ostateczne kwoty są nadal ustalane. Sprawdzaj podgląd opłaty w rzeczywistym portfelu, gdy pojawią się zgodne wydania. [Poradnik czasu przelewu](/pl/blog/blocknet-transfer-time/) opisuje wydaną sieć z celem pięciu minut; przyszłe czasy należą do końcowych reguł Faraday. Rozmiar płatności, pracę nad dowodem i czas bloku należy rozpatrywać łącznie przy ocenie szacunku.
+
+## Który poradnik przeczytać dalej?
+
+Zajrzyj do [co można zobaczyć o płatności](/pl/blog/blocknet-payment-visibility/) po obecne publiczne pola, zapisy portfela i świadome ujawnienia. [Istniejący poradnik Faraday](/pl/blog/blocknet-faraday-upgrade/) omawia aktywację, materiały odzyskiwania i migrację monet.
+
+Przy nowym ogłoszeniu sprawdź zmiany: dopuszczalny zbiór monet, system dowodów, wykrywanie płatności, rozmiary dowodów lub działanie portfela. Następnie ustal, czy chodzi o propozycję, wynik testu czy wydaną funkcję. Dzięki temu obecna procedura płatności odpowiada używanemu oprogramowaniu, a Ty możesz śledzić szczegóły proponowanej poprawy prywatności.
+
+<CTA target="seine" title="Kop dalej z wydaną konfiguracją" text="Używaj obecnych poradników kopania seine i zgodnych instrukcji minera oraz puli w miarę rozwoju Faraday." />

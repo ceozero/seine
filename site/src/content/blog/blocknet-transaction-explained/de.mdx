@@ -1,0 +1,68 @@
+---
+title: 'Was steckt in einer Blocknet-Transaktion?'
+description: 'Verfolge eine Blocknet-Zahlung von Inputs zu Empfänger-Outputs, Wechselgeld, Gebühr und Bestätigung. Erfahre, warum eine Zahlung mehrere Outputs haben kann.'
+tags: ['Blocknet', 'Wallet', 'Zahlungen']
+faq:
+  - q: 'Warum hat meine Blocknet-Zahlung zwei Outputs?'
+    a: 'Eine Zahlung mit festem Betrag kann einen Output für den Empfänger und einen weiteren erstellen, der ungenutzten Input-Wert als Wechselgeld an deine Wallet zurückgibt. Möglich sind auch mehrere Empfänger, aufgeteiltes Wechselgeld oder kein Wechselgeld. Die Output-Anzahl allein verrät nicht, wie viele Menschen bezahlt wurden.'
+  - q: 'Muss ich vor dem Senden eine Wechselgeldadresse kopieren?'
+    a: 'Der untersuchte Transaktionsgenerator der Wallet erstellt Wechselgeld mit den öffentlichen Schlüsseln deiner eigenen Wallet. Du gibst die gewünschten Empfängerdaten ein; die Wallet verwaltet ihren Wechselgeld-Output. Dieser gehört der sendenden Wallet und wird nach den üblichen Bestätigungs- und Reiferegeln ausgebbar.'
+  - q: 'Gibt ein Input-Ring Geld aller Mitglieder aus?'
+    a: 'Jeder Input gibt einen echten Output aus, der dem Sender gehört. Andere Ringmitglieder dienen als mögliche Quellen für den Datenschutzbeweis; ihr Wert wird der Zahlung nicht hinzugefügt. Eine Transaktion kann mehrere echte Inputs verwenden, jeweils mit eigenem Ring und Schlüsselbild.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Verfolge eine Blocknet-Zahlung durch die Bestandteile, die deine Wallet erstellt: vorhandenes Guthaben, neue Outputs, Wechselgeld und Netzwerkgebühr. Dieser Ablauf erklärt, warum eine Zahlung an eine Person mehrere Outputs haben kann und warum das Ausgeben eines Wallet-Outputs nicht bedeutet, seinen gesamten Wert dem Empfänger zu geben. Das Rechenbeispiel nutzt erfundene Beträge; als Implementierungsreferenz dient die veröffentlichte Wallet von core v0.22.0.
+
+## Wie bewegt eine Blocknet-Transaktion dein Guthaben?
+
+<Answer>
+Deine Wallet wählt eigene ausgebbare Outputs, verwendet sie als Inputs und erstellt neue Outputs für Empfänger und mögliches Wechselgeld. Der gewählte Wert deckt Empfängerbetrag und Netzwerkgebühr. Datenschutzbeweise ermöglichen der Netzwerkseite die Prüfung der Zahlung, während deine Wallet die neuen Outputs erkennt, die dir gehören.
+</Answer>
+
+## Beginne mit den Outputs deiner Wallet
+
+Ein Output ist ein Wertanteil aus einer früheren Transaktion. Solange er unausgegeben ist und die Reiferegeln erfüllt, kann deine Wallet ihn für eine neue Zahlung auswählen. Das Guthaben kann mehrere solche Anteile aus früheren Eingängen, Mining-Auszahlungen oder Wechselgeld enthalten. Normalerweise musst du sie nicht selbst auswählen.
+
+Angenommen, deine Wallet wählt einen Output über `10 BNT` für eine Zahlung von `3 BNT`. Sie gibt diesen vorhandenen Output vollständig aus. Die neue Transaktion verteilt seinen Wert auf Empfänger, Wechselgeld und Gebühr. Andere Outputs deiner Wallet können unberührt bleiben; die gewählte Summe ist nicht zwingend dein gesamtes Guthaben.
+
+Auch mehrere kleinere Outputs können eine Zahlung finanzieren. Der [veröffentlichte Transaktionsgenerator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) wählt genug gereiftes Guthaben für Empfängerbetrag und Gebühr. Input-Auswahl und größenabhängige Gebührenschätzung beeinflussen einander, weshalb die aktuelle Wallet-Vorschau wichtig ist. Der [Leitfaden zu Transaktionsgebühren](/de/blog/blocknet-transaction-fees/) erklärt diese Berechnung und wo du sie nachsiehst.
+
+[![Beispieltransaktion: 1 wählt 10 BNT; 2 sendet 3 BNT an den Empfänger; 3 gibt 6,9995 BNT als Wechselgeld zurück; 4 berücksichtigt 0,0005 BNT Netzwerkgebühr.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Lies das Diagramm als Wallet-Abrechnung: **1** ist der gewählte Input, **2** der Empfänger-Output, **3** dein Wechselgeld-Output und **4** die Gebühr. Die Zahlen dienen der Veranschaulichung; die Gebühr ist angenommen und kein Angebot. Die Pfeile zeigen Eigentum und Wertverteilung, keine öffentlich sichtbaren Verknüpfungen im Explorer.
+
+## Warum entstehen aus einer Zahlung mehrere Outputs?
+
+In diesem Beispiel gilt: `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Der Empfänger erhält `3 BNT`, deine Wallet erhält `6.9995 BNT` Wechselgeld und die Transaktion zahlt die angenommene Gebühr von `0.0005 BNT`. Es entstehen zwei neue Wallet-Outputs, obwohl du nur eine Person bezahlen wolltest. Die Gebühr ist ein eigenes Transaktionsfeld und kein dritter Empfänger-Output.
+
+Zwei Outputs sind ein nützliches Beispiel, keine Regel für jede Zahlung. Der Generator unterstützt mehrere Empfänger; seine erweiterte Input-Auswahl kann Wechselgeld auf mehrere Outputs verteilen. Deckt der gewählte Wert Empfänger und Gebühr genau, ist kein Wechselgeld-Output nötig. Beim Senden des gesamten Betrags wird hingegen die Gebühr von der ausgewählten ausgebbaren Summe abgezogen, um den Empfängerbetrag zu berechnen.
+
+Die Output-Anzahl beschreibt also die Transaktionsstruktur. Sie zählt keine Kunden, Rechnungen oder unterschiedlichen Wallets. Mehrere Outputs können derselben Wallet gehören, und eine Transaktion mit mehreren Inputs kann trotzdem nur einen Empfänger bezahlen. Beachte diese Unterschiede beim Vergleich eines Wallet-Zahlungseintrags mit der kürzeren Strukturübersicht im Explorer.
+
+## Wohin geht das Wechselgeld?
+
+Die Wallet erstellt Wechselgeld für ihre eigenen Schlüssel. Im Beispiel wird der ursprüngliche Output über `10 BNT` verbraucht, und die `6.9995 BNT` Wechselgeld sind ein neuer Output, den dieselbe Wallet erkennen kann. Im normalen Sendeablauf musst du weder einen zweiten Empfänger eingeben noch eine Wechselgeldadresse manuell kopieren.
+
+Empfänger-Outputs und Wechselgeld verwenden einmalige Output-Schlüssel. Die öffentliche Transaktion stellt deine bekannte Empfangsadresse nicht neben eine Kennzeichnung „Wechselgeld“. Deine Wallet besitzt die privaten Informationen, um ihre Outputs zu erkennen. Der [Leitfaden zu Stealth-Adressen](/de/blog/stealth-addresses-explained/) erklärt den Zusammenhang zwischen diesen einmaligen Schlüsseln und einer wiederverwendbaren Empfangsadresse.
+
+Auch Wechselgeld folgt den Regeln für neu erstellte Outputs. Nach dem Senden wartet ein Teil deines Guthabens möglicherweise auf Bestätigung oder Reife, obwohl er dir weiterhin gehört. Ein unberührter, gereifter Output kann verfügbar bleiben, während neues Wechselgeld noch aussteht. Prüfe vor einer weiteren Zahlung das ausgebbare Guthaben; der [Leitfaden zur Übertragungsdauer](/de/blog/blocknet-transfer-time/) erklärt die Schritte von der Verbreitung bis zur Ausgebbarkeit.
+
+## Was prüft das Netzwerk, was zeigt ein Explorer?
+
+Jeder echte Input besitzt einen Datenschutzbeweis, der ihn unter möglichen früheren Outputs einordnet. Die übrigen Ringmitglieder sind Köder: Sie steuern keine Gelder ihrer Eigentümer zu deiner Zahlung bei. Ein Schlüsselbild ermöglicht dem Netzwerk, wiederholtes Ausgeben zu erkennen, ohne das tatsächlich genutzte Ringmitglied zu veröffentlichen. Mehr dazu unter [Ringsignaturen](/de/blog/ring-signatures-explained/).
+
+Das Netzwerk prüft außerdem Betrags-Commitments und Beweise, einschließlich des Wertausgleichs der Transaktion mit ihrer Gebühr. Der [Leitfaden zu Bereichsbeweisen](/de/blog/bulletproofs-explained/) erklärt diese Prüfungen bei verborgenen Beträgen. Öffentliche Transaktionsdaten umfassen Transaktionshash, Input- und Output-Struktur sowie Gebühr. Das Einfügen des Hashs im Explorer legt die private Abrechnung des Beispiels nicht einfach offen.
+
+Nutze deine Wallet, um eigene Eingänge und Wechselgeld zu erkennen. Nutze den [Explorer](/de/blog/blocknet-explorer-guide/) für den öffentlichen Transaktions- und Blockstatus. Der [Leitfaden zur Zahlungssichtbarkeit](/de/blog/blocknet-payment-visibility/) vergleicht, was Sender, Empfänger und Dritte erfahren können und welche Möglichkeiten zum bewussten Teilen bestehen.
+
+## Verfolge die Zahlung bis zur Bestätigung
+
+Lies vor dem Bestätigen eines geplanten Versands Empfängerdaten, Empfängerbetrag, Gebühr und Wechselgeld zusammen. Nach der Übermittlung kennzeichnet der Transaktionshash die gesamte Transaktion samt allen Inputs und Outputs. Er ist weder eine Empfangsadresse noch nur die Kennung des Empfänger-Outputs.
+
+Verbreitung, Aufnahme in einen Block und Ausgebbarkeit sind getrennte Schritte. Die Wallet des Empfängers sucht Outputs für ihre Schlüssel, während deine Wallet ihr Wechselgeld erkennt. Bestätigung und Reife bestimmen, wann die neuen Outputs für spätere Transaktionen nutzbar sind. Der [Leitfaden zum Senden und Empfangen](/de/blog/send-receive-blocknet/) behandelt die tatsächlichen Wallet-Schritte.
+
+Beginne bei einer Zahlungsfrage mit dem beabsichtigten Betrag und dem Wallet-Eintrag und prüfe danach den Transaktionsstatus. So lässt sich die Zahlung sinnvoll lesen: was gewählt wurde, was der Empfänger erhielt, was als Wechselgeld zurückkam und was noch aussteht. Das funktioniert unabhängig davon, ob das Guthaben ursprünglich von einer anderen Person oder aus einer [Mining-Pool-Auszahlung](https://bntpool.com/blog/pool-payout-missing-from-wallet/) stammt.
+
+<CTA target="seine" title="Blocknet mit seine minen" text="Nutze seine mit bntpool.com, um Blocknet zu minen und Auszahlungen in deiner Wallet zu erhalten." />

@@ -1,0 +1,76 @@
+---
+title: 'Chuyển Blocknet mất bao lâu?'
+description: 'Theo dõi chuyển Blocknet từ lúc phát giao dịch đến số dư có thể chi tiêu. Hiểu số xác nhận, cách đọc thời gian ước tính của ví và nơi kiểm tra tiến độ.'
+tags: ['Blocknet', 'Ví', 'Thanh toán']
+faq:
+  - q: 'Có thể chi tiêu khoản Blocknet ngay sau xác nhận đầu tiên không?'
+    a: 'Trong core v0.22.0 đã kiểm tra, ví cho phép chi tiêu output nhận thông thường khi đỉnh chuỗi vượt khối chứa nó mười khối. Chi tiết giao dịch có thể đã gọi giao dịch là được xác nhận ngay khi vào khối. Hãy kiểm tra Spendable Balance sau khi đồng bộ và quét ví hoàn tất trước khi gửi tiếp số tiền đó.'
+  - q: 'Đóng ví có làm chậm khoản thanh toán của người gửi không?'
+    a: 'Mạng có thể đưa khoản thanh toán đến địa chỉ của bạn vào khối khi ví đóng. Khi mở lại, node và ví cần bắt kịp để khoản nhận và số dư hiển thị được cập nhật. Giữ ví mở giúp theo dõi tiến độ, nhưng các khối của mạng quyết định độ sâu xác nhận.'
+  - q: 'Chuyển khoản thông thường có cần chờ 60 khối như phần thưởng đào không?'
+    a: 'Chuyển khoản thông thường dùng quy tắc độ sâu mười khối của ví trong bản đã kiểm tra. Output coinbase mới đào có quy tắc trưởng thành riêng là 60 khối. Khoản thanh toán từ pool là giao dịch sau đó, khi pool đã xử lý sổ sách phần thưởng. Sau khi pool gửi, hãy theo dõi chính giao dịch thanh toán ấy.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Theo dõi khoản thanh toán Blocknet qua các giai đoạn quan trọng với người gửi và người nhận: gửi giao dịch, đưa vào khối và số dư ví có thể chi tiêu. Hướng dẫn giải thích thời gian hiển thị trong core và ví máy tính v0.22.0 đã phát hành, được kiểm tra ngày 27 tháng 10 năm 2026. Giữ mã băm giao dịch để cả hai cùng theo dõi một khoản chuyển.
+
+## Chuyển Blocknet mất bao lâu?
+
+<Answer>
+Blocknet đặt mục tiêu mỗi khối năm phút. Khi khoản thanh toán thông thường vào khối, ví đã phát hành chờ thêm mười khối rồi mới cho phép chi tiêu: khoảng 50 phút theo nhịp mục tiêu, cộng thời gian chờ vào khối trước đó. Thời gian khối thực tế thay đổi. Theo dõi giao dịch và số dư có thể chi tiêu thay vì một hạn chót cố định.
+</Answer>
+
+## Theo dõi ba giai đoạn thanh toán
+
+Trước tiên, người gửi xem lại và xác nhận thanh toán trong ví. Giữ mã băm được trả về cho lần gửi đó. Giao dịch trong mempool của node đã được node ấy nhận và đang chờ vào khối. Có mặt ở đó không hứa rằng khối tiếp theo sẽ chứa nó. [Hướng dẫn gửi và nhận](/vi/blog/send-receive-blocknet/) trình bày việc chuẩn bị và phê duyệt thanh toán.
+
+Tiếp theo, giao dịch vào một khối được chấp nhận. Chi tiết có thể hiện `Confirmed`, chiều cao khối và số xác nhận. Đây là bằng chứng hữu ích về việc đã vào khối. Ví người nhận xác định output đến thuộc mình khi quét chuỗi.
+
+Cuối cùng, đủ khối tiếp theo xuất hiện để output có thể chi tiêu theo quy tắc ví. Người nhận có thể dùng số tiền trong `Spendable Balance`. Trước khi vào khối, bảng điều khiển có thể hiện thông báo riêng về thanh toán chưa xác nhận khi ví cục bộ phát hiện khoản đến trong mempool. Ảnh dưới dùng giao diện thực đã phát hành với dữ liệu minh họa cục bộ có nhãn.
+
+[![Bảng điều khiển Blocknet đã phát hành hiển thị khoản nhận minh họa 1,25 BNT chưa xác nhận trước khi vào khối.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Vì sao đã xác nhận nhưng vẫn chờ?
+
+[Kiểm tra trưởng thành của ví đã phát hành](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) lấy chiều cao chuỗi hiện tại trừ chiều cao khối chứa output. Output thông thường chưa chi tiêu trưởng thành ở độ sâu mười khối. Khoản thanh toán trong khối `100,000` đạt độ sâu đó khi đỉnh chuỗi tới `100,010`. Các chiều cao này minh họa quy tắc, không phải báo cáo thanh toán trực tiếp.
+
+[API chi tiết giao dịch](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) tính khối chứa giao dịch là xác nhận đầu tiên. Phép tính khả năng chi tiêu của ví bắt đầu ở độ sâu không trong chính khối đó. Vì thế chi tiết có thể hiện mười một xác nhận khi output thông thường đạt yêu cầu độ sâu mười khối của ví. Dùng số dư có thể chi tiêu trên bảng điều khiển để biết tiền nhận đã sẵn sàng dùng chưa.
+
+Trong ví dụ dưới, khoản thanh toán đã vào khối và có thêm bốn khối sau đó. Chi tiết giao dịch sẽ hiện năm xác nhận, còn bảng điều khiển giữ 1,25 BNT minh họa trong `Pending` và báo còn khoảng sáu khối. Hai màn hình mô tả cùng một khoản thanh toán theo các mức sẵn sàng khác nhau.
+
+[![Bảng điều khiển Blocknet có khoản nhận minh họa 1,25 BNT đang chờ, số dư chi tiêu bằng không và còn khoảng sáu khối.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Đọc thời gian ước tính thế nào?
+
+Mười khối nhân mục tiêu năm phút cho khoảng 50 phút sau khi vào khối. Thời gian chờ giao dịch vào khối diễn ra trước đó. Phép tính này giải thích quy mô thời gian, không phải trung bình đo từ mẫu thanh toán hay thời gian nhận được bảo đảm.
+
+Bảng điều khiển đã phát hành cũng đổi số khối còn lại thành thời gian gần đúng. Với sáu khối còn lại, sáu nhân năm là khoảng 30 phút. Chuỗi vẫn cần tạo ra các khối ấy. Đếm ngược tới không tự nó không thêm khối hay làm output chi tiêu được. Hãy kiểm tra lại tiến độ chuỗi và số dư hiện tại.
+
+Thông báo khoản đến có thể hiện trước khi giao dịch vào khối. Xem ước tính là chỉ dẫn tiến độ, rồi theo dõi khối chứa giao dịch và số dư có thể chi tiêu. Đồng bộ và quét ví cũng ảnh hưởng lúc màn hình cục bộ phản ánh những gì mạng đã thực hiện.
+
+## Người gửi và người nhận kiểm tra ở đâu?
+
+Người gửi nên mở `History`, tìm khoản đi và giữ `TX Hash`. Người nhận có thể dùng cùng mã băm để nhận diện khoản chuyển đến. Khi hai người trao đổi về khoản thanh toán, khớp mã băm giúp tránh nhầm với lần gửi khác tới cùng địa chỉ.
+
+[Hướng dẫn trình khám phá Blocknet](/vi/blog/blocknet-explorer-guide/) chỉ cách tra giao dịch và khối chứa nó. Tra cứu công khai giúp kiểm tra việc vào khối trên mạng. Ví người nhận cung cấp chi tiết riêng tư về khoản nhận và số dư thuộc các khóa của họ. Hãy dùng ví để kiểm tra số tiền nhận được.
+
+Trên máy người nhận, mở đúng ví và so `Your Address` trong `Receive` với đích người gửi đã dùng. Sau đó kiểm tra đồng bộ node và quét ví trước khi kết luận thiếu bản ghi. Ví từng đóng có thể cần thời gian phát hiện các khoản thanh toán đã tiến triển trên chuỗi.
+
+## Khi nào có thể gửi tiếp BNT đã nhận?
+
+Chờ khoản nhận góp vào `Spendable Balance` trên `Dashboard` đã đồng bộ. Bạn cũng có thể xem `Pending` và `Total` để hiểu cách ví chia số tiền ghi nhận. Nếu đã có tiền khác, một phần số dư có thể chi tiêu trong khi khoản nhận này vẫn chờ. Dùng bản ghi lịch sử tương ứng khi theo dõi một khoản chuyển.
+
+Ảnh cho thấy cùng khoản thanh toán minh họa sau khi mười khối đã được thêm sau khối chứa nó. 1,25 BNT giờ có thể chi tiêu và số tiền chờ là không. Các ảnh minh họa giao diện đã phát hành, không đo thời gian thực của một khoản chuyển. Khi chuẩn bị thanh toán tiếp theo, xem lại số tiền và phí trong ví trước khi phê duyệt.
+
+[![Bảng điều khiển Blocknet đã phát hành cho thấy cùng khoản thanh toán minh họa thành số dư có thể chi tiêu 1,25 BNT khi đạt độ sâu mười khối.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Cần kiểm tra gì nếu chưa thấy thanh toán?
+
+Dựa vào giai đoạn bạn có thể xác minh. Xin người gửi mã băm giao dịch hiện có, kiểm tra việc vào khối và so đích nhận. Sau đó làm theo [kiểm tra đồng bộ và quét ví](/vi/blog/blocknet-wallet-not-syncing/) nếu lịch sử hay số dư cục bộ chưa cập nhật. Giữ bản ghi giao dịch ban đầu khi kiểm tra; tạo lần gửi khác là một khoản thanh toán riêng.
+
+Với thu nhập đào coin, trước tiên phân biệt phần thưởng pool kiếm được với khoản thanh toán đã gửi tới địa chỉ. [Hướng dẫn xác nhận phần thưởng đào](https://bntpool.com/blog/vi/block-confirmations-mining-rewards/) giải thích giai đoạn trưởng thành riêng 60 khối của coin mới đào. Khi pool gửi giao dịch thanh toán thông thường, theo dõi việc vào khối và khả năng chi tiêu riêng của giao dịch đó. [Hướng dẫn khoản thanh toán bị thiếu](https://bntpool.com/blog/vi/pool-payout-missing-from-wallet/) nối bản ghi pool với ví nhận.
+
+Kiểm tra hoàn tất rất đơn giản: xác định đúng ví, khớp mã băm thanh toán và kiểm tra số dư có thể chi tiêu sau đồng bộ và quét. Hướng dẫn này mô tả quy tắc hiện đã phát hành. [Hướng dẫn Faraday](/vi/blog/blocknet-faraday-upgrade/) theo dõi riêng các thay đổi mạng tương lai đã công bố.
+
+<CTA target="seine" title="Đào về ví Blocknet của bạn" text="Dùng seine với địa chỉ nhận công khai và theo dõi khoản thanh toán pool về cùng ví." />

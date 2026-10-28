@@ -1,0 +1,60 @@
+---
+title: 'Que peut-on voir d’un paiement Blocknet ?'
+description: 'Découvrez ce que voient expéditeur, destinataire, explorateur et détenteur d’un accès en lecture, et l’effet des preuves et données partagées sur la vie privée.'
+tags: ['Blocknet', 'Confidentialité', 'Paiements']
+faq:
+  - q: 'Le hash d’une transaction Blocknet révèle-t-il le montant payé ?'
+    a: 'Un hash permet de retrouver une transaction publique. Sa page habituelle dans l’explorateur affiche notamment les frais, le bloc et le nombre de confirmations, tandis que les montants restent masqués. Le destinataire peut lire son propre encaissement dans son portefeuille. Des données supplémentaires, comme la clé de transaction et l’adresse du destinataire, permettent une vérification volontaire du paiement.'
+  - q: 'Peut-on voir mon solde avec mon adresse de réception ?'
+    a: 'Une adresse de réception ne fournit pas de page publique de solde comme on pourrait l’attendre d’une chaîne transparente. Les paiements utilisent des adresses de sortie à usage unique et des montants masqués. Quelqu’un connaissant votre adresse peut néanmoins savoir qu’elle vous appartient grâce à une facture, un profil ou une conversation. Distinguez ce contexte extérieur des données publiées par la chaîne.'
+  - q: 'Un portefeuille en lecture seule révèle-t-il des données privées ?'
+    a: 'Oui. L’accès en lecture permet d’identifier les sorties entrantes et de lire leurs montants et mémos récupérables. Il ne donne pas le droit de dépenser. Une copie de consultation contient donc des informations privées, même utilisée uniquement pour la surveillance. Utilisez une preuve propre à une transaction si c’est ce justificatif que vous voulez partager.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Examinez un paiement Blocknet sous quatre angles : son expéditeur, son destinataire, le lecteur de l’explorateur public et la personne disposant d’un accès en lecture. Ce guide décrit core v0.22.0 publié, vérifié le 27 octobre 2026. Il aide à choisir les données à partager pour recevoir de l’argent, vérifier un paiement ou demander de l’aide.
+
+## Que garde Blocknet confidentiel ?
+
+<Answer>
+Blocknet utilise des signatures en anneau pour l’entrée dépensée, des adresses furtives à usage unique pour les destinataires et des engagements avec preuves d’intervalle pour les montants. La transaction publique conserve un hash, des frais et une structure. Votre portefeuille fournit les détails privés associés à vos clés. Partager un reçu, une preuve de paiement ou un accès en lecture donne des renseignements supplémentaires au destinataire.
+</Answer>
+
+## Que peut voir tout le monde dans l’explorateur ?
+
+Ouvrez une transaction dans l’[explorateur Blocknet](/fr/blog/blocknet-explorer-guide/). Son enregistrement public comprend le hash, le bloc qui la contient, les confirmations, les frais, les anneaux d’entrée et les données de sortie. Un observateur peut constater son existence et examiner sa structure. Le montant engagé dans chaque sortie et le texte de son mémo chiffré ne figurent pas dans les champs publics ordinaires.
+
+La [présentation de la confidentialité](/fr/blog/blocknet-privacy-features/) explique l’articulation des couches. Chaque entrée possède aujourd’hui un anneau de 16 membres : la sortie réelle et 15 leurres. Une signature en anneau prouve qu’un membre a autorisé la dépense sans préciser lequel. L’adresse à usage unique d’une sortie diffère de l’adresse de réception donnée au payeur.
+
+[![L’enregistrement public montre hash, bloc et frais, tandis que le portefeuille du destinataire révèle le montant et le mémo de son propre encaissement.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## Que savent l’expéditeur et le destinataire ?
+
+L’expéditeur connaît la destination, le montant et le mémo saisis. Son historique d’envoi peut les associer au hash. Le portefeuille du destinataire reconnaît ses sorties entrantes et récupère le montant et le mémo. Consultez le [guide d’envoi et de réception](/fr/blog/send-receive-blocknet/) pour retrouver ces enregistrements.
+
+Une transaction privée ne fournit pas automatiquement une identité réelle vérifiée de l’expéditeur. Le destinataire peut savoir qui a payé parce qu’il a émis une facture, discuté du paiement ou reçu son hash. Cette connaissance vient de l’échange. Un commerçant peut conserver la commande et l’adresse de livraison avec votre paiement.
+
+Par exemple, vous envoyez le montant convenu d’une commande et inscrivez sa référence dans un mémo. Le commerçant peut relier l’encaissement à la commande. Un visiteur de l’explorateur voit la structure de la transaction sans recevoir automatiquement les détails de la commande. Si l’une des personnes publie une capture du portefeuille avec montant, note et hash, elle fournit des données absentes de la page publique ordinaire.
+
+## Que change le partage d’une preuve ou d’une clé de lecture ?
+
+Une [preuve de paiement](/fr/blog/blocknet-payment-proof/) utilise une clé propre à la transaction avec le hash et l’adresse du destinataire pour vérifier les sorties correspondantes. Dans l’API de vérification publiée, ces champs peuvent révéler le montant correspondant et le mémo récupérable. Les partager permet de prouver volontairement un paiement précis. Le serveur recevant la demande reçoit aussi les champs envoyés.
+
+Un [portefeuille en lecture seule](/fr/blog/blocknet-view-only-wallet/) offre un accès plus large aux enregistrements entrants du portefeuille concerné. Son détenteur peut identifier les encaissements et lire leurs détails privés, tandis que le portefeuille complet garde le pouvoir de dépenser. Cet accès ne démontre pas que chaque enregistrement sortant ou décision actuelle sur le solde disponible soit reproduit. Utilisez le portefeuille complet pour décider des dépenses. Changer le mot de passe du fichier de consultation ne révoque pas une clé déjà copiée.
+
+[![Une preuve propre à une transaction identifie un paiement à vérifier ; l’accès en lecture couvre les entrées du portefeuille et reste distinct du pouvoir de dépenser.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## Et les noms publics et les données réseau ?
+
+Un [nom Blocknet ID](/fr/blog/blocknet-id-pay-by-name/) permet à un payeur de trouver publiquement une destination de réception. L’afficher sur un profil peut l’associer à vous. Le paiement utilise toujours les adresses de sortie à usage unique et les montants masqués du protocole. Publier un nom et publier un accès privé au portefeuille sont des choix différents.
+
+La confidentialité réseau possède sa propre couche. [Dandelion++](/fr/blog/dandelion-plus-plus-explained/) relaie une nouvelle transaction par une phase de tige avant sa diffusion générale, réduisant le lien direct entre son origine et les premiers pairs qui la reçoivent. Ce mécanisme n’efface ni facture, ni message, ni données transmises à un site. L’opérateur de l’explorateur reçoit votre recherche ; un vérificateur distant reçoit les champs de preuve soumis.
+
+## Comment choisir les données à partager ?
+
+Pour recevoir un paiement, partagez l’adresse prévue ou le nom public. Pour vérifier son entrée dans un bloc, utilisez son hash. Pour démontrer un encaissement précis, suivez la procédure de preuve et tenez compte du montant et du mémo révélés. Pour surveiller durablement les paiements entrants, accordez volontairement un accès en lecture. Ces choix répondent à des questions différentes.
+
+Avant de publier une capture, inspectez adresse, hash, solde, notes et clés visibles. Ne publiez pas de mots de récupération, de clés de dépense ou de secrets de lecture couvrant tout le portefeuille dans les messages d’assistance publics. Le [guide de sauvegarde](/fr/blog/blocknet-wallet-backup-restore/) explique les éléments de récupération. Pour suivre l’évolution proposée, consultez [les changements de confidentialité de Faraday](/fr/blog/blocknet-faraday-privacy/) concernant le futur design ; ce guide décrit le format de paiement publié aujourd’hui.
+
+<CTA target="seine" title="Recevez les paiements de minage dans votre portefeuille" text="Utilisez seine avec votre adresse de réception et suivez vos versements dans les enregistrements de portefeuille que vous choisissez de partager." />

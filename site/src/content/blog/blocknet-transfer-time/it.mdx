@@ -1,0 +1,76 @@
+---
+title: 'Quanto tempo richiede un trasferimento Blocknet?'
+description: 'Segui un trasferimento Blocknet dall’invio al saldo spendibile. Scopri cosa indicano le conferme, come leggere la stima del wallet e dove controllare.'
+tags: ['Blocknet', 'Wallet', 'Pagamenti']
+faq:
+  - q: 'Un pagamento Blocknet è spendibile dopo la prima conferma?'
+    a: 'In core v0.22.0, la versione esaminata, il wallet rende spendibile un normale output ricevuto quando la punta della catena supera di dieci blocchi quello che lo contiene. Il dettaglio della transazione può già indicarlo come confermato all’inclusione. Controlla Spendable Balance dopo la sincronizzazione e la scansione prima di inviare quei fondi.'
+  - q: 'Chiudere il wallet ritarda il pagamento del mittente?'
+    a: 'La rete può includere un pagamento al tuo indirizzo mentre il wallet è chiuso. Quando lo riapri, nodo e wallet devono aggiornarsi prima di mostrare ricezione e saldo correnti. Tenerlo aperto aiuta a seguire i progressi, ma sono i blocchi della rete a determinare la profondità di conferma.'
+  - q: 'Un normale trasferimento richiede l’attesa di 60 blocchi della ricompensa di mining?'
+    a: 'Nella versione esaminata, un normale trasferimento segue la regola del wallet di dieci blocchi di profondità. Gli output coinbase appena minati hanno una maturità separata di 60 blocchi. Un pagamento del pool è una transazione successiva, dopo la contabilizzazione delle ricompense. Una volta inviato, segui quella transazione.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Segui un pagamento Blocknet nelle fasi importanti per mittente e destinatario: invio, inclusione in un blocco e saldo spendibile nel wallet. Questa guida spiega i tempi mostrati da core e dal wallet desktop v0.22.0, verificati il 27 ottobre 2026. Conserva l’hash della transazione affinché entrambe le persone seguano lo stesso trasferimento.
+
+## Quanto tempo richiede un trasferimento Blocknet?
+
+<Answer>
+Blocknet punta a un blocco ogni cinque minuti. Dopo l’inclusione di un normale pagamento in un blocco, il wallet pubblicato attende altri dieci blocchi prima di rendere spendibili i fondi: circa 50 minuti all’intervallo obiettivo, oltre all’attesa iniziale per l’inclusione. I tempi effettivi variano. Segui la transazione e il saldo spendibile anziché una scadenza fissa.
+</Answer>
+
+## Le tre fasi del pagamento
+
+Prima il mittente controlla e conferma il pagamento nel proprio wallet. Conserva l’hash restituito per quell’invio. Una transazione nel mempool del nodo è stata ricevuta da quel nodo e attende di entrare in un blocco. La sua presenza non garantisce l’inclusione nel blocco successivo. La [guida a invio e ricezione](/it/blog/send-receive-blocknet/) spiega come preparare e approvare il pagamento.
+
+Poi la transazione entra in un blocco accettato. Il dettaglio può mostrare `Confirmed`, l’altezza del blocco e il numero di conferme. Questo permette di verificare l’inclusione. Il wallet del destinatario identifica il proprio output in entrata durante la scansione della catena.
+
+Infine arrivano abbastanza blocchi successivi perché l’output diventi spendibile secondo le regole del wallet. Il destinatario può quindi usare l’importo in `Spendable Balance`. Prima dell’inclusione, la dashboard può mostrare un avviso separato di pagamento non confermato se il wallet locale rileva un ingresso nel mempool. Lo screenshot seguente usa l’interfaccia reale pubblicata con dati locali di esempio chiaramente indicati.
+
+[![Dashboard Blocknet pubblicata con un pagamento dimostrativo in entrata di 1,25 BNT non confermato, prima dell’inclusione in un blocco.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Perché un pagamento confermato può essere ancora in attesa?
+
+Il [controllo di maturità del wallet pubblicato](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) sottrae l’altezza del blocco contenente l’output dall’altezza corrente della catena. Un normale output non speso matura a dieci blocchi di profondità. Un pagamento incluso nel blocco `100,000` raggiunge tale profondità quando la punta arriva a `100,010`. Queste altezze illustrano la regola e non descrivono un pagamento reale.
+
+L’[API del dettaglio delle transazioni](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) conta il blocco contenente come prima conferma. Il calcolo di spendibilità del wallet parte da profondità zero nello stesso blocco. Il dettaglio può quindi mostrare undici conferme quando l’output ordinario raggiunge i dieci blocchi richiesti dal wallet. Consulta il saldo spendibile nella dashboard per sapere se puoi utilizzare i fondi.
+
+Nell’esempio seguente, il pagamento è incluso e sono arrivati quattro blocchi successivi. Il dettaglio mostrerebbe cinque conferme, mentre la dashboard mantiene gli 1,25 BNT illustrativi in `Pending` e indica circa sei blocchi rimanenti. Le due schermate descrivono lo stesso pagamento con criteri di disponibilità diversi.
+
+[![Dashboard Blocknet con la ricezione dimostrativa di 1,25 BNT in Pending, zero fondi spendibili e circa sei blocchi rimanenti.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Come si legge la stima del tempo?
+
+Dieci blocchi moltiplicati per l’obiettivo di cinque minuti danno circa 50 minuti dopo l’inclusione. Prima viene l’attesa per entrare in un blocco. Il calcolo spiega l’ordine di grandezza; non è una media misurata su pagamenti né un tempo di consegna garantito.
+
+La dashboard pubblicata converte anche i blocchi rimanenti in un tempo approssimativo. Con sei blocchi mancanti, sei per cinque dà circa 30 minuti. La catena deve ancora produrre quei blocchi. Un conto alla rovescia che arriva a zero non aggiunge da solo un blocco e non rende spendibile un output. Ricontrolla il progresso della catena e il saldo.
+
+Un avviso di pagamento in entrata può apparire prima dell’inclusione. Usa la stima come orientamento, poi segui il blocco contenente e il saldo spendibile. Anche sincronizzazione e scansione influenzano il momento in cui la schermata locale riflette quanto già avvenuto sulla rete.
+
+## Dove controllano mittente e destinatario?
+
+Il mittente deve aprire `History`, trovare il pagamento in uscita e conservare il suo `TX Hash`. Il destinatario può usare lo stesso hash per identificare il trasferimento in entrata. Confrontarlo evita di confondere quel pagamento con un altro invio allo stesso indirizzo.
+
+La [guida al block explorer di Blocknet](/it/blog/blocknet-explorer-guide/) mostra come cercare una transazione e il suo blocco. La ricerca pubblica aiuta a verificare l’inclusione nella rete. Il wallet del destinatario fornisce i dettagli privati di ricezione e saldo associati alle sue chiavi. Usa il wallet per controllare l’importo ricevuto.
+
+Sul computer ricevente, apri il wallet corretto e confronta `Your Address`, sotto `Receive`, con la destinazione usata dal mittente. Controlla poi sincronizzazione del nodo e scansione prima di considerare mancante una voce. Un wallet rimasto chiuso può impiegare tempo a scoprire pagamenti già avanzati sulla catena.
+
+## Quando posso inviare nuovamente i BNT ricevuti?
+
+Attendi che la ricezione contribuisca a `Spendable Balance` in una `Dashboard` sincronizzata. Puoi anche leggere `Pending` e `Total` per vedere la suddivisione dei fondi registrati. Se avevi già altri fondi, parte del saldo può essere spendibile mentre questa ricezione resta in attesa. Per seguire un singolo trasferimento, usa la voce corrispondente della cronologia.
+
+Lo screenshot mostra lo stesso pagamento dimostrativo dopo l’aggiunta di dieci blocchi successivi a quello che lo contiene. Gli 1,25 BNT sono ora spendibili e l’importo in attesa è zero. Le immagini illustrano il frontend pubblicato; non misurano la durata di un trasferimento reale. Prima di approvare il prossimo pagamento, controlla importo e commissione nel wallet.
+
+[![Dashboard Blocknet pubblicata con lo stesso pagamento dimostrativo come 1,25 BNT di Spendable Balance dopo dieci blocchi di profondità.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Cosa controllo se il pagamento non compare?
+
+Parti dalla fase verificabile. Chiedi al mittente l’hash esistente, controlla l’inclusione e confronta la destinazione. Segui i [controlli di sincronizzazione e scansione del wallet](/it/blog/blocknet-wallet-not-syncing/) se cronologia o saldo locale non sono aggiornati. Conserva il riferimento originale mentre verifichi: un altro invio sarebbe un pagamento separato.
+
+Per i ricavi del mining, distingui prima una ricompensa guadagnata nel pool da un pagamento già inviato al tuo indirizzo. La [guida alle conferme delle ricompense](https://bntpool.com/blog/it/block-confirmations-mining-rewards/) spiega la fase separata di maturità di 60 blocchi per le monete appena minate. Dopo l’invio di una normale transazione di pagamento del pool, segui la sua inclusione e spendibilità nel wallet. La [guida ai pagamenti mancanti](https://bntpool.com/blog/it/pool-payout-missing-from-wallet/) collega il registro del pool al wallet ricevente.
+
+La verifica finale è semplice: identifica il wallet corretto, confronta l’hash del pagamento e controlla il saldo spendibile dopo sincronizzazione e scansione. Questa guida descrive le regole attualmente pubblicate. La [guida Faraday](/it/blog/blocknet-faraday-upgrade/) segue separatamente le modifiche future annunciate per la rete.
+
+<CTA target="seine" title="Mina verso il tuo wallet Blocknet" text="Usa seine con il tuo indirizzo pubblico di ricezione e segui i pagamenti del pool nello stesso wallet." />

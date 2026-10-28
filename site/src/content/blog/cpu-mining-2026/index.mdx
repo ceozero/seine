@@ -2,7 +2,7 @@
 title: "CPU mining in 2026: what to mine with a CPU"
 description: CPU mining in 2026 explained. Learn why memory-hard coins like Blocknet favor ordinary computers, what makes a CPU fast, and how to start mining with seine.
 date: 2026-10-25
-updated: 2026-10-26
+updated: 2026-10-27
 tags: [CPU mining, Argon2id, Mining guide, Hardware]
 faq:
   - q: Which coins can you mine with a CPU in 2026?
@@ -57,9 +57,9 @@ Blocknet answers all four. It is a privacy coin with [privacy by default](/blog/
 
 Three things decide how many hashes per second (H/s) a processor produces on Blocknet.
 
-**RAM capacity.** Each mining thread needs its own 2 GiB block for every hash, so divide your RAM by two for the most threads that fit. A 32 GB computer holds 16 blocks on paper. Seine keeps 5% of RAM in reserve and leaves room for the operating system, which brings that machine to about 14 threads. RAM often limits the thread count before the core count does. The guide to [mining on an old PC or laptop](/blog/mine-crypto-on-old-pc-or-laptop/) works through 4-16 GB machines.
+**RAM capacity.** Each mining thread needs its own 2 GiB block for every hash, so divide your RAM by two for the most threads that fit. A 32 GB computer holds 16 blocks on paper. Seine keeps 5% (at most 1 GiB by default) of RAM in reserve and leaves room for the operating system, which brings that machine to about 14 threads. RAM often limits the thread count before the core count does. The guide to [mining on an old PC or laptop](/blog/mine-crypto-on-old-pc-or-laptop/) works through 4-16 GB machines.
 
-**Memory bandwidth.** Every hash moves gigabytes through the memory system. At 77.1 H/s, the fastest machine measured with seine writes about 154.2 GiB of fresh memory blocks every second (77.1 × 2 GiB). Processors with more memory channels and faster memory pull ahead.
+**Memory bandwidth.** Every hash moves gigabytes through the memory system. At 85.1 H/s, the fastest machine measured with seine writes about 170.2 GiB of fresh memory blocks every second (85.1 × 2 GiB). Processors with more memory channels and faster memory pull ahead.
 
 **The right kernel.** Seine carries several Argon2id kernels: AVX2, AVX-512 and a streaming kernel on x86, and NEON with a SHA3 fast path on Arm. On the same chip the kernel makes a large difference. On AWS Graviton4, the SHA3 kernel with prefetching mines 56% faster than plain NEON (13.80 to 21.50 H/s), and on the AMD EPYC 9R45 the streaming kernel mines 30% faster than AVX2 (34.47 to 44.74 H/s at 24 threads). Seine compares kernels while it mines and keeps the faster one.
 
@@ -67,13 +67,13 @@ Measured hardware configurations:
 
 | Hardware | Exact chip | Threads | Hashrate |
 |---|---|---|---|
-| AMD EPYC · Zen 5 | EPYC 9355P server | 64 | 77.1 H/s |
+| AMD EPYC · Zen 5 | EPYC 9375F server | 64 | 85.1 H/s |
 | Arm server | AWS Graviton4 | 32 | 39.3 H/s |
 | AMD EPYC · Zen 4 | EPYC 9R14 server | 32 | 38.2 H/s |
 | Apple M4 Max | 48 GB MacBook Pro | 16 | 30.9 H/s |
 | Intel Xeon | Sapphire Rapids 8488C | 32 | 26.0 H/s |
 
-The fastest configuration in these measurements is an AMD EPYC 9355P at 77.1 H/s: 64 mining threads, 192 GiB of RAM and manually prepared 1 GiB huge pages on Linux.
+The fastest configuration in these measurements is an AMD EPYC 9375F at 85.1 H/s: 64 mining threads, 384 GiB of RAM and manually prepared 1 GiB huge pages on Linux.
 
 The Apple M4 Max row is a laptop, which shows how well a strong memory system suits Argon2id. The other server rows ran on AWS machines with 2 MiB huge pages. The [Blocknet mining hardware guide](/blog/blocknet-mining-hardware-hashrate/) covers buying advice and RAM sizing in depth, and the [Mac guide](/blog/mine-blocknet-on-mac/) covers Apple Silicon.
 

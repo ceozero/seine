@@ -1,6 +1,6 @@
 ---
 title: 'Cách đào Blocknet trên Windows'
-description: 'Đào Blocknet trên Windows bằng seine. Chọn ZIP, kiểm tra bản tải, nhập địa chỉ và kiểm tra share được chấp nhận khi đào đồng thời bằng CPU và NVIDIA.'
+description: 'Đào Blocknet trên Windows bằng seine. Chọn ZIP, giải nén tệp, nhập địa chỉ và kiểm tra share được chấp nhận khi đào đồng thời bằng CPU và NVIDIA.'
 tags: ['Hướng dẫn đào coin', 'Windows', 'NVIDIA']
 faq:
   - q: 'Tôi có cần CUDA Toolkit để đào Blocknet trên Windows không?'
@@ -9,11 +9,11 @@ faq:
     a: 'Theo mặc định, seine lưu địa chỉ nhận thưởng, pool và tên máy đào trong seine-data/seine.config.json, bên dưới thư mục bạn dùng để khởi chạy. Hãy chạy từ cùng thư mục đã giải nén để dùng lại các thiết lập đó. Tùy chọn data-dir cho phép chọn thư mục khác khi cần.'
   - q: 'Tôi có cần bật large pages của Windows trước khi bắt đầu đào không?'
     a: 'Không. seine tự động thử dùng large pages và dùng trang thông thường khi không khả dụng. Bạn có thể bắt đầu đào với thiết lập mặc định. Để tùy chọn thiết lập large pages, hãy cấp quyền Lock pages in memory cho tài khoản đào, rồi đăng xuất và đăng nhập lại trước khi khởi động lại seine.'
-sourceHash: '40744a186c8a'
+sourceHash: '1b3fa78c3bfe'
 translation: draft
 ---
 
-Hướng dẫn này đưa bạn từ bước tải ZIP cho Windows đến khi có share được chấp nhận trên bntpool.com. Bạn sẽ kiểm tra tệp nén, giải nén, nhập địa chỉ nhận thưởng và xác nhận CPU cùng các card NVIDIA được hỗ trợ đang đào. Các lệnh dưới đây dùng PowerShell chạy trực tiếp trên Windows.
+Hướng dẫn này đưa bạn từ bước tải ZIP cho Windows đến khi có share được chấp nhận trên bntpool.com. Bạn sẽ giải nén tệp, nhập địa chỉ nhận thưởng và xác nhận CPU cùng các card NVIDIA được hỗ trợ đang đào. Các lệnh dưới đây dùng PowerShell chạy trực tiếp trên Windows.
 
 ## Làm thế nào để bắt đầu đào Blocknet trên Windows?
 
@@ -25,20 +25,11 @@ Chuẩn bị sẵn địa chỉ nhận thưởng công khai trước khi mở ph
 
 Mỗi luồng đào CPU dùng một khối bộ nhớ 2 GiB. seine kiểm tra RAM khả dụng và số lõi, chừa bộ nhớ dự phòng rồi chọn số luồng ban đầu cho bạn. Bạn có thể bắt đầu với thiết lập mặc định trên máy bàn hoặc laptop; không cần tính số luồng hay chọn kernel CPU trước.
 
-## Bước 1: tải và kiểm tra tệp nén cho Windows
+## Bước 1: tải tệp nén cho Windows
 
-Mở [mục tải xuống](/vi/#download) và chọn Windows x86_64. Tệp nén có tên `seine-windows-x86_64.zip`. Tải `SHA256SUMS.txt` từ cùng [bản phát hành](https://github.com/zpalmtree/seine/releases/latest) nếu muốn kiểm tra ZIP trước khi giải nén. Tệp nén và tệp checksum phải thuộc cùng phiên bản phát hành.
+Mở [mục tải xuống](/vi/#download) và chọn Windows x86_64. Tệp nén có tên `seine-windows-x86_64.zip`.
 
 ![ZIP cho Windows trong bảng tải xuống chính thức của seine](/assets/blog/windows-download.png)
-
-Trong PowerShell, chuyển đến thư mục Downloads rồi tính mã băm SHA-256 của tệp nén:
-
-```powershell
-cd "$HOME\Downloads"
-Get-FileHash .\seine-windows-x86_64.zip -Algorithm SHA256
-```
-
-So sánh mã băm hiển thị với mục của đúng tệp ZIP đó trong `SHA256SUMS.txt`. Chữ hoa hay chữ thường không quan trọng; mọi chữ số thập lục phân phải khớp. [Tài liệu Get-FileHash của Microsoft](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash) hướng dẫn kiểm tra tệp nằm trong thư mục khác. Checksum xác nhận tệp nén khớp với bản phát hành đã công bố; hãy tải cả hai tệp từ trang phát hành chính thức.
 
 ## Bước 2: giải nén toàn bộ ZIP
 

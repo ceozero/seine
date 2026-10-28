@@ -11,7 +11,7 @@ faq:
     a: 'Sim. Inicie o seine com --api-server ou --service e ele serve métricas Prometheus em /metrics na sua API de controle local, que escuta em 127.0.0.1 na porta 9977 por padrão. As métricas mostram se o minerador está rodando, seu estado de ciclo de vida, as soluções enviadas, aceitas e obsoletas (stale) e as quarentenas de backend. As coletas enviam o token bearer da API.'
   - q: 'Por que a API de controle do seine pede um token?'
     a: 'Desde o seine v0.2.23, todo endpoint da API de controle, exceto a verificação de saúde, exige um token bearer, o que impede que sites que você visita alterem seu endereço de pagamento ou suas configurações. O seine grava um token novo em control-api.cookie no seu diretório de dados a cada inicialização, ou você pode definir um fixo com --api-token.'
-sourceHash: 186b1dc3c49e
+sourceHash: 747f36a1fe6d
 translation: reviewed
 ---
 
@@ -49,7 +49,7 @@ Para conferir o efeito na sua máquina, compare `auto` com `os` com o mesmo núm
 
 ### Folga de memória em servidores compartilhados
 
-O dimensionamento automático de threads mantém 5% da RAM total livre, além de qualquer reserva para GPU. Altere isso com `--cpu-memory-reserve-percent`. Se outros serviços começarem a usar memória, as threads automáticas do seine liberam suas arenas e voltam quando a memória fica livre de novo, então a mineração se encaixa no restante da máquina. Os resultados do ajuste ficam em cache por máquina, e o cache é zerado quando o conjunto de CPUs permitido ou o layout de NUMA e L3 muda, como depois de redimensionar uma VM.
+O dimensionamento automático de threads mantém 5% (no máximo 1 GiB por padrão) da RAM total livre, além de qualquer reserva para GPU. Altere isso com `--cpu-memory-reserve-percent`. Se outros serviços começarem a usar memória, as threads automáticas do seine liberam suas arenas e voltam quando a memória fica livre de novo, então a mineração se encaixa no restante da máquina. Os resultados do ajuste ficam em cache por máquina, e o cache é zerado quando o conjunto de CPUs permitido ou o layout de NUMA e L3 muda, como depois de redimensionar uma VM. Na v0.2.43, a reserva padrão é limitada a 1 GiB; uma porcentagem definida explicitamente não tem esse limite.
 
 ## Como rodar o seine headless?
 

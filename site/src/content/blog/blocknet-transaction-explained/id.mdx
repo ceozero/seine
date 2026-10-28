@@ -1,0 +1,68 @@
+---
+title: 'Apa yang terjadi di dalam transaksi Blocknet?'
+description: 'Ikuti pembayaran Blocknet dari input terpilih hingga output penerima, kembalian, biaya dan konfirmasi. Pahami mengapa satu pembayaran memiliki beberapa output.'
+tags: ['Blocknet', 'Dompet', 'Pembayaran']
+faq:
+  - q: 'Mengapa pembayaran Blocknet saya memiliki dua output?'
+    a: 'Pembayaran dengan jumlah tetap dapat membuat satu output untuk penerima dan satu lagi yang mengembalikan nilai input yang tidak terpakai ke dompet Anda sebagai kembalian. Bentuk lain juga mungkin: beberapa penerima, kembalian yang dibagi, atau tanpa kembalian. Jumlah output saja tidak menunjukkan berapa orang yang dibayar.'
+  - q: 'Apakah saya perlu menyalin alamat kembalian sebelum mengirim?'
+    a: 'Pembentuk transaksi dompet yang diperiksa membuat kembalian menggunakan kunci publik dompet Anda sendiri. Anda memasukkan detail penerima yang dituju; dompet menangani output kembaliannya. Output tersebut milik dompet pengirim dan dapat dibelanjakan sesuai aturan konfirmasi dan kematangan biasa.'
+  - q: 'Apakah ring input membelanjakan uang dari setiap anggotanya?'
+    a: 'Setiap input membelanjakan satu output asli milik pengirim. Anggota ring lainnya menyediakan kemungkinan sumber untuk bukti privasi; nilainya tidak ditambahkan ke pembayaran. Transaksi dapat menggunakan beberapa input asli, masing-masing dengan ring dan key image sendiri.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Ikuti satu pembayaran Blocknet melalui bagian-bagian yang dibangun dompet: dana yang ada, output baru, kembalian dan biaya jaringan. Panduan ini menjelaskan mengapa pembayaran kepada satu orang dapat memiliki beberapa output dan mengapa membelanjakan satu output dompet tidak berarti memberikan seluruh nilainya kepada penerima. Contoh pembukuan memakai jumlah rekaan, dengan dompet core v0.22.0 yang telah dirilis sebagai acuan implementasi.
+
+## Bagaimana transaksi Blocknet memindahkan dana Anda?
+
+<Answer>
+Dompet memilih output miliknya yang dapat dibelanjakan, memakainya sebagai input dan membuat output baru untuk penerima serta kembalian. Nilai terpilih menutup jumlah untuk penerima beserta biaya jaringan. Bukti privasi memungkinkan jaringan memvalidasi pembayaran, sementara dompet mengenali output baru milik Anda.
+</Answer>
+
+## Mulai dari output yang sudah dimiliki dompet
+
+Output adalah bagian nilai yang dibuat transaksi sebelumnya. Selama belum dibelanjakan dan memenuhi aturan kematangan, dompet dapat memilihnya untuk pembayaran baru. Saldo dompet bisa mencakup beberapa bagian seperti ini dari penerimaan sebelumnya, pembayaran penambangan atau kembalian. Biasanya Anda tidak perlu memilihnya sendiri.
+
+Misalkan dompet memilih output senilai `10 BNT` untuk pembayaran `3 BNT`. Dompet membelanjakan seluruh output yang sudah ada itu. Transaksi baru kemudian mengalokasikan nilainya kepada penerima, kembalian dan biaya. Output lain di dompet dapat tetap tidak tersentuh; total terpilih belum tentu seluruh saldo Anda.
+
+Beberapa output yang lebih kecil juga dapat mendanai satu pembayaran. [Pembentuk transaksi dompet yang dirilis](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) memilih dana matang yang cukup untuk menutup jumlah penerima dan biaya. Pemilihan input dan perkiraan biaya berdasarkan ukuran saling memengaruhi, sehingga pratinjau terkini dompet penting. [Panduan biaya transaksi](/id/blog/blocknet-transaction-fees/) menjelaskan perhitungan tersebut dan tempat memeriksanya.
+
+[![Ilustrasi transaksi: 1 memilih 10 BNT; 2 mengirim 3 BNT kepada penerima; 3 mengembalikan 6,9995 BNT sebagai kembalian; 4 memperhitungkan biaya jaringan 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Baca diagram sebagai pembukuan dompet: **1** adalah input terpilih, **2** output penerima, **3** output kembalian Anda dan **4** biaya. Angkanya hanya ilustrasi; biaya diasumsikan, bukan penawaran. Panah menunjukkan kepemilikan dan alokasi nilai, bukan hubungan yang terlihat publik di penjelajah.
+
+## Mengapa satu pembayaran bisa membuat beberapa output?
+
+Dalam contoh ini, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Penerima mendapatkan `3 BNT`, dompet Anda menerima kembalian `6.9995 BNT`, dan transaksi membayar biaya asumsi `0.0005 BNT`. Ada dua output dompet baru, meskipun Anda hanya ingin membayar satu orang. Biaya adalah kolom transaksi tersendiri, bukan output penerima ketiga.
+
+Dua output merupakan contoh yang berguna, bukan aturan untuk setiap pembayaran. Pembentuk transaksi mendukung beberapa penerima, dan jalur pemilihan input lanjutannya dapat membagi kembalian ke beberapa output. Jika nilai terpilih tepat menutup penerima dan biaya, output kembalian tidak diperlukan. Operasi kirim-semua menghitung jumlah penerima setelah mengurangi biaya dari total terpilih yang dapat dibelanjakan.
+
+Jadi, jumlah output menggambarkan struktur transaksi. Angka ini tidak menghitung pelanggan, faktur atau dompet berbeda. Beberapa output dapat dimiliki dompet yang sama, dan transaksi dengan beberapa input masih bisa membayar satu penerima. Ingat perbedaan ini saat membandingkan catatan pembayaran dompet dengan ringkasan struktur yang lebih singkat di penjelajah.
+
+## Ke mana kembalian dikirim?
+
+Dompet membuat kembalian untuk kuncinya sendiri. Dalam contoh, output awal `10 BNT` dihabiskan dan kembalian `6.9995 BNT` menjadi output baru yang dapat dikenali dompet yang sama. Dalam alur pengiriman biasa, Anda tidak perlu memasukkan penerima kedua atau menyalin alamat kembalian secara manual.
+
+Output penerima dan kembalian menggunakan kunci output sekali pakai. Transaksi publik tidak menaruh alamat penerimaan yang Anda kenal di samping label “kembalian”. Dompet memiliki informasi privat yang diperlukan untuk mengenali outputnya sendiri. [Panduan alamat stealth](/id/blog/stealth-addresses-explained/) menjelaskan hubungan kunci sekali pakai tersebut dengan alamat penerimaan yang dapat digunakan kembali.
+
+Kembalian juga mengikuti aturan output yang baru dibuat. Setelah mengirim, sebagian saldo mungkin menunggu konfirmasi atau kematangan meskipun tetap milik Anda. Output matang yang tidak tersentuh dapat tetap tersedia sementara kembalian baru masih tertunda. Periksa saldo yang dapat dibelanjakan saat menyiapkan pembayaran berikutnya; [panduan waktu transfer](/id/blog/blocknet-transfer-time/) menjelaskan tahap dari penyiaran hingga dana dapat dibelanjakan.
+
+## Apa yang diperiksa jaringan dan ditampilkan penjelajah?
+
+Setiap input asli memiliki bukti privasi yang menempatkannya di antara kemungkinan output sebelumnya. Anggota ring lainnya adalah pengalih: mereka tidak menyumbangkan dana pemiliknya ke pembayaran Anda. Key image memungkinkan jaringan mendeteksi pembelanjaan berulang tanpa memublikasikan anggota ring yang menjadi sumber asli. Lihat [tanda tangan ring](/id/blog/ring-signatures-explained/) untuk mekanisme tersebut.
+
+Jaringan juga memverifikasi komitmen jumlah dan bukti, termasuk keseimbangan transaksi beserta biayanya. [Panduan bukti rentang](/id/blog/bulletproofs-explained/) menjelaskan cara pemeriksaan itu bekerja dengan jumlah tersembunyi. Data transaksi publik mencakup hash transaksi, struktur input dan output, serta biaya. Menempelkan hash ke penjelajah tidak begitu saja mengungkap pembukuan privat dalam contoh.
+
+Gunakan dompet untuk mengenali penerimaan dan kembalian Anda sendiri. Gunakan [penjelajah](/id/blog/blocknet-explorer-guide/) untuk status transaksi dan blok yang publik. Untuk memahami apa yang dapat diketahui pengirim, penerima atau pihak ketiga, [panduan visibilitas pembayaran](/id/blog/blocknet-payment-visibility/) membandingkan pandangan mereka dan pilihan berbagi secara sengaja.
+
+## Ikuti pembayaran melalui konfirmasi
+
+Sebelum menyetujui pengiriman, baca detail penerima, jumlah penerima, biaya dan kembalian bersama-sama. Setelah dikirim, hash transaksi mengidentifikasi seluruh transaksi, termasuk semua input dan outputnya. Hash bukan alamat penerimaan atau pengenal output penerima saja.
+
+Penyiaran, pencantuman dalam blok dan kemampuan dibelanjakan adalah tahap terpisah. Dompet penerima memindai output milik kuncinya, sementara dompet Anda mengenali kembaliannya. Konfirmasi dan kematangan menentukan kapan output baru dapat dipakai dalam transaksi berikutnya. [Panduan mengirim dan menerima](/id/blog/send-receive-blocknet/) membahas langkah dompet yang sebenarnya.
+
+Untuk pertanyaan pembayaran, mulai dari jumlah yang dimaksud dan catatan dompet, lalu periksa status transaksi. Ini memberi cara yang berguna untuk membaca pembayaran: apa yang dipilih, apa yang diterima penerima, apa yang kembali sebagai kembalian dan apa yang masih tertunda. Cara ini berlaku baik dana awal berasal dari orang lain maupun [pembayaran pool penambangan](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Tambang Blocknet dengan seine" text="Gunakan seine bersama bntpool.com untuk menambang Blocknet dan menerima pembayaran di dompet Anda." />

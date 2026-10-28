@@ -1,0 +1,68 @@
+---
+title: 'Bir Blocknet işleminin içinde neler olur?'
+description: 'Blocknet ödemesini girdilerden alıcı çıktılarına, para üstüne, ücrete ve onaya kadar izleyin. Tek bir ödemenin neden birden fazla çıktısı olabileceğini öğrenin.'
+tags: ['Blocknet', 'Cüzdan', 'Ödemeler']
+faq:
+  - q: 'Blocknet ödememde neden iki çıktı var?'
+    a: 'Sabit tutarlı ödeme, alıcı için bir çıktı ve kullanılmayan girdi değerini para üstü olarak cüzdanınıza döndüren başka bir çıktı oluşturabilir. Birden fazla alıcı, bölünmüş para üstü veya para üstü olmaması da mümkündür. Yalnızca çıktı sayısı kaç kişiye ödeme yapıldığını söylemez.'
+  - q: 'Göndermeden önce para üstü adresini kopyalamam gerekiyor mu?'
+    a: 'İncelenen cüzdan işlem oluşturucusu, para üstünü kendi cüzdanınızın açık anahtarlarıyla oluşturur. Hedef alıcının bilgilerini girersiniz; para üstü çıktısını cüzdan yönetir. Bu çıktı gönderen cüzdana aittir ve normal onay ile olgunlaşma kurallarına göre harcanabilir hale gelir.'
+  - q: 'Bir girdi halkası her üyenin parasını harcar mı?'
+    a: 'Her girdi, gönderene ait bir gerçek çıktıyı harcar. Diğer halka üyeleri gizlilik kanıtı için olası kaynaklar sunar; değerleri ödemeye eklenmez. Bir işlem, her biri kendi halkasına ve anahtar imgesine sahip birden fazla gerçek girdi kullanabilir.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Bir Blocknet ödemesini cüzdanınızın oluşturduğu parçalar üzerinden izleyin: mevcut fonlar, yeni çıktılar, para üstü ve ağ ücreti. Bu anlatım, tek kişiye ödemenin neden birden fazla çıktısı olabileceğini ve bir cüzdan çıktısını harcamanın neden tüm değerini alıcıya vermek anlamına gelmediğini açıklar. Muhasebe örneği uydurma tutarlar kullanır; uygulama referansı yayımlanmış core v0.22.0 cüzdanıdır.
+
+## Blocknet işlemi fonlarınızı nasıl taşır?
+
+<Answer>
+Cüzdanınız sahip olduğu harcanabilir çıktıları seçer, bunları girdi olarak kullanır ve alıcıyla varsa para üstü için yeni çıktılar oluşturur. Seçilen değer, alıcı tutarını ve ağ ücretini karşılar. Gizlilik kanıtları ağın ödemeyi doğrulamasını sağlarken cüzdanınız size ait yeni çıktıları tanır.
+</Answer>
+
+## Cüzdanınızın zaten sahip olduğu çıktılarla başlayın
+
+Çıktı, önceki bir işlemin oluşturduğu değer parçasıdır. Harcanmamış kaldığı ve olgunlaşma kurallarını karşıladığı sürece cüzdanınız onu yeni bir ödeme için seçebilir. Cüzdan bakiyesi, önceki alımlardan, madencilik ödemelerinden veya para üstünden gelen böyle birkaç parçayı içerebilir. Normalde bunları kendiniz seçmeniz gerekmez.
+
+Cüzdanınızın `3 BNT` ödeme için `10 BNT` değerinde bir çıktı seçtiğini varsayalım. Mevcut çıktının tamamını harcar. Yeni işlem daha sonra değeri alıcıya, para üstüne ve ücrete dağıtır. Cüzdandaki diğer çıktılar dokunulmadan kalabilir; seçilen toplam mutlaka tüm bakiyeniz değildir.
+
+Daha küçük birkaç çıktı da tek bir ödemeyi finanse edebilir. [Yayımlanan cüzdan oluşturucusu](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go), alıcı tutarıyla ücreti karşılayacak kadar olgunlaşmış fon seçer. Girdi seçimi ve boyuta dayalı ücret tahmini birbirini etkiler; bu nedenle cüzdanın güncel önizlemesi önemlidir. [İşlem ücreti rehberi](/tr/blog/blocknet-transaction-fees/), hesaplamayı ve nereden inceleneceğini açıklar.
+
+[![Örnek işlem: 1, 10 BNT seçer; 2, alıcıya 3 BNT gönderir; 3, 6,9995 BNT para üstü döndürür; 4, 0,0005 BNT ağ ücretini hesaba katar.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Şemayı cüzdan muhasebesi olarak okuyun: **1** seçilen girdi, **2** alıcı çıktısı, **3** para üstü çıktınız ve **4** ücrettir. Sayılar örnektir; ücret varsayılmıştır, fiyat teklifi değildir. Oklar, gezginde herkese açık bağlantıları değil, sahipliği ve değer dağılımını gösterir.
+
+## Tek ödeme neden birden fazla çıktı oluşturabilir?
+
+Bu örnekte `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Alıcı `3 BNT` alır, cüzdanınız `6.9995 BNT` para üstü alır ve işlem varsayımsal `0.0005 BNT` ücretini öder. Yalnızca bir kişiye ödeme yapmak istemenize rağmen iki yeni cüzdan çıktısı vardır. Ücret ayrı bir işlem alanıdır, üçüncü bir alıcı çıktısı değildir.
+
+İki çıktı yararlı bir örnektir; her ödeme için kural değildir. Oluşturucu birden fazla alıcıyı destekler; gelişmiş girdi seçimi yolu para üstünü birkaç çıktıya bölebilir. Seçilen değer alıcıları ve ücreti tam karşılıyorsa para üstü çıktısı gerekmez. Tümünü gönder işlemi ise seçilen harcanabilir toplamdan ücreti düşürerek alıcı tutarını hesaplar.
+
+Dolayısıyla çıktı sayısı işlem yapısını anlatır. Müşteri, fatura veya farklı cüzdan sayısını vermez. Birkaç çıktı aynı cüzdana ait olabilir ve birkaç girdili bir işlem yine tek alıcıya ödeme yapabilir. Cüzdan ödeme kaydını gezgindeki daha kısa yapısal özetle karşılaştırırken bu ayrımları unutmayın.
+
+## Para üstü nereye gider?
+
+Cüzdan para üstünü kendi anahtarları için oluşturur. Örnekte ilk `10 BNT` çıktısı tüketilir ve `6.9995 BNT` para üstü aynı cüzdanın tanıyabildiği yeni bir çıktıdır. Normal gönderim akışında ikinci bir alıcı girmeniz veya para üstü adresini elle kopyalamanız gerekmez.
+
+Alıcı çıktıları ve para üstü tek kullanımlık çıktı anahtarları kullanır. Herkese açık işlem, bildiğiniz alım adresini “para üstü” etiketiyle yan yana koymaz. Cüzdanınız kendi çıktılarını tanımak için gereken özel bilgilere sahiptir. [Gizli adres rehberi](/tr/blog/stealth-addresses-explained/), bu tek kullanımlık anahtarların yeniden kullanılabilen alım adresiyle ilişkisini açıklar.
+
+Para üstü de yeni oluşturulan çıktıların kurallarını izler. Gönderimden sonra bakiyenizin bir kısmı size ait olmaya devam ederken onay veya olgunlaşma bekleyebilir. Yeni para üstü beklemedeyken dokunulmamış olgun bir çıktı kullanılabilir kalabilir. Başka bir ödemeye hazırlanırken harcanabilir bakiyeyi kontrol edin; [transfer süresi rehberi](/tr/blog/blocknet-transfer-time/), yayından harcanabilirliğe kadar aşamaları açıklar.
+
+## Ağ neyi kontrol eder, gezgin neyi gösterebilir?
+
+Her gerçek girdinin, onu olası önceki çıktılar arasına yerleştiren bir gizlilik kanıtı vardır. Diğer halka üyeleri şaşırtıcı öğelerdir: sahiplerinin fonlarını ödemenize katmazlar. Anahtar imgesi, hangi halka üyesinin gerçek kaynak olduğunu yayımlamadan ağın tekrar harcamayı tespit etmesini sağlar. Bu mekanizma için [halka imzalarına](/tr/blog/ring-signatures-explained/) bakın.
+
+Ağ ayrıca tutar taahhütlerini ve kanıtları, işlemin ücretiyle birlikte dengelendiğini de doğrular. [Aralık kanıtı rehberi](/tr/blog/bulletproofs-explained/), bu kontrollerin gizli tutarlarla nasıl çalıştığını açıklar. Herkese açık işlem verileri işlem özetini, girdi ve çıktı yapısını ve ücreti içerir. Özeti gezgine yapıştırmak, örnekteki özel muhasebeyi kendiliğinden açığa çıkarmaz.
+
+Kendi alımlarınızı ve para üstünüzü belirlemek için cüzdanınızı kullanın. İşlemlerin ve blokların herkese açık durumu için [gezgini](/tr/blog/blocknet-explorer-guide/) kullanın. [Ödeme görünürlüğü rehberi](/tr/blog/blocknet-payment-visibility/), gönderenin, alıcının veya üçüncü tarafın neler öğrenebildiğini ve bilinçli paylaşım seçeneklerini karşılaştırır.
+
+## Ödemeyi onay sürecinde izleyin
+
+Bir gönderimi onaylamadan önce alıcı bilgilerini, alıcı tutarını, ücreti ve para üstünü birlikte okuyun. Gönderildikten sonra işlem özeti, tüm girdiler ve çıktılar dahil bütün işlemi tanımlar. Bir alım adresi veya yalnızca alıcı çıktısının tanımlayıcısı değildir.
+
+Yayın, bloğa dahil edilme ve harcanabilirlik ayrı aşamalardır. Alıcının cüzdanı kendi anahtarlarına ait çıktıları tararken sizin cüzdanınız para üstünü tanır. Onay ve olgunlaşma, yeni çıktıların sonraki işlemde ne zaman kullanılabileceğini belirler. [Gönderme ve alma rehberi](/tr/blog/send-receive-blocknet/), cüzdandaki gerçek adımları anlatır.
+
+Ödemeyle ilgili bir soruda hedef tutar ve cüzdan kaydıyla başlayın, ardından işlem durumunu kontrol edin. Böylece ödemeyi anlamlı biçimde okuyabilirsiniz: ne seçildi, alıcı ne aldı, ne para üstü olarak döndü ve ne bekliyor. Fonların başka bir kişiden veya [madencilik havuzu ödemesinden](https://bntpool.com/blog/pool-payout-missing-from-wallet/) gelmesi bunu değiştirmez.
+
+<CTA target="seine" title="seine ile Blocknet madenciliği yapın" text="Blocknet madenciliği yapmak ve ödemeleri cüzdanınıza almak için seine ile bntpool.com kullanın." />

@@ -1,0 +1,62 @@
+---
+title: 'Wie Faraday Blocknets Privatsphäre verändert'
+description: 'Verstehe Faradays Datenschutzdesign: Ausgabenbeweise über die gesamte Menge, ML-KEM-Zahlungserkennung, Beweisaggregation und geplante Folgen für Wallet-Nutzer.'
+tags: ['Blocknet', 'Faraday', 'Privatsphäre']
+faq:
+  - q: 'Bedeutet kettenweite Privatsphäre, dass Faraday bereits alle historischen Outputs schützt?'
+    a: 'Die ausführliche Ankündigung beschreibt die gesamte Menge der Faraday-Coins. Sie wächst, wenn Coins in das neue Format wechseln. Heutige Ringtransaktionen und die Migration ins vorgeschlagene Format sind zu unterscheiden. Faraday wird noch entwickelt; das neue Design ist im heute veröffentlichten Netzwerk nicht aktiv.'
+  - q: 'Erstellt ML-KEM Faradays Ausgabenbeweise?'
+    a: 'ML-KEM ist ein Mechanismus zur Schlüsselkapselung, mit dem ein gemeinsames Geheimnis hergestellt wird. Das Projekt sieht ihn für die Zahlungserkennung vor. Ausgabenbeweise erfüllen eine andere Aufgabe: Das Netzwerk kann Ausgaben prüfen, während private Informationen geschützt bleiben. Faraday schlägt dafür hashbasierte Beweise mit Plonky3 vor.'
+  - q: 'Stehen Faradays Beweisgrößen, Gebühren und Zeiten fest?'
+    a: 'Nein. Die offizielle Ankündigung stellt ein Design vor, das noch gebaut und getestet wird. Beweisgrößen und Zielzeiten beschreiben den aktuellen Plan; endgültige Gebühren sind noch offen. Nutze die Faraday implementierende Version für Betriebsparameter und den bestehenden Upgrade-Leitfaden für Migrationsinformationen.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Verfolge die zwei Datenschutzfragen hinter Faraday: Wie prüft das Netzwerk eine Ausgabe, ohne ihre Quelle zu identifizieren, und wie erkennt deine Wallet eingehende Zahlungen? Dieser Artikel erklärt vorgeschlagene Mechanismen und praktische Folgen. Laut [offizieller Ankündigung vom 27. Oktober](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) ist das Design weiter in Entwicklung. Nutze für das heutige Netzwerk Anleitungen veröffentlichter Wallets.
+
+## Was würde Faraday an der Zahlungsprivatsphäre ändern?
+
+<Answer>
+Faraday schlägt vor, heutige Input-Ringe mit 16 Mitgliedern durch Ausgabenbeweise über die Menge der Faraday-Coins zu ersetzen. Hashbasierte Beweise würden Ausgaben schützen, ML-KEM würde die Zahlungserkennung unterstützen. Die Mechanismen haben verschiedene Aufgaben. Faraday zielt auf breitere Ausgabenprivatsphäre und Post-Quanten-Schutz im neuen Coin-Format.
+</Answer>
+
+## Vom 16er-Ring zur Menge der Faraday-Coins
+
+Heute nennt eine Ausgabe einen Ring aus dem echten Input-Output und 15 Ködern. Die Signatur lässt das Netzwerk die Berechtigung prüfen, während das echte Mitglied verborgen bleibt. Der [Ringsignatur-Leitfaden](/de/blog/ring-signatures-explained/) erklärt diesen aktuellen Mechanismus. Die Kandidatenmenge ist der zu diesem Input mitgelieferte Ring.
+
+Der vorgeschlagene Faraday-Beweis würde zeigen, dass der ausgegebene Coin irgendwo zur zulässigen Faraday-Menge gehört, ohne das konkrete Mitglied zu veröffentlichen. Das ist der sinnvolle Gehalt der Mitgliedschaft in der gesamten Menge: Der Prüfer kontrolliert Zugehörigkeit und Gültigkeit, während die verborgene Auswahl privat bleibt. Gemeint ist nicht, sämtliche privaten Wallet-Einträge anderer Personen herunterzuladen oder deren Guthaben offenzulegen.
+
+Die ausführliche Ankündigung nennt Faraday-Coins. Die wachsende Menge muss deshalb von allen historischen Outputs im alten Format unterschieden werden. Das Diagramm zeigt diesen Unterschied; seine Punkte sind ein konzeptionelles Beispiel, keine aktuelle Coin-Zählung. Der [Upgrade-Leitfaden](/de/blog/blocknet-faraday-upgrade/) behandelt die vorgeschlagene Migration bestehender Coins ins neue Format.
+
+[![Ein heutiger Input-Ring umfasst 16 Kandidaten. Der vorgeschlagene Faraday-Beweis bezieht sich auf eine wachsende Menge im Faraday-Format; alte Outputs bleiben bis zur Migration außerhalb dieser dargestellten Menge.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Warum Ausgabenbeweis und Zahlungserkennung getrennt sind
+
+Ein Ausgabenbeweis beantwortet eine Validierungsfrage: Erfüllt diese Ausgabe die erforderlichen Regeln? Die Sender-Wallet erzeugt den Beweis, die Nodes prüfen ihn. Das Projekt schlägt hashbasierte Beweise mit [Plonky3](https://github.com/Plonky3/Plonky3) vor, einem Werkzeugkasten für Beweissysteme. Er liefert Bausteine; Blocknets konkrete Regeln und ihre Implementierung bestimmen weiterhin, was der Prüfer akzeptiert.
+
+Zahlungserkennung beantwortet eine Wallet-Frage: Welche Outputs gehören mir? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) ist ein standardisierter Mechanismus zur Schlüsselkapselung für ein gemeinsames Geheimnis. Der Faraday-Plan ordnet ihn der Empfangsseite zu. Er ist weder ein anderer Name für den Ausgabenbeweis noch ein Signaturalgorithmus.
+
+Die Trennung erklärt auch den Begriff Post-Quanten bei Faraday. Er bezeichnet kryptografische Designs, die Angriffen mit Quantencomputern standhalten sollen; Nutzer müssen selbst keinen besitzen. ML-KEM beruht auf Gitterproblemen, der angekündigte Ausgabenbeweis auf hashbasierten Techniken. Eine standardisierte Komponente zertifiziert allein noch keine vollständige Kryptowährungsimplementierung. Beurteile Aussagen über Algorithmen, Beweiskonstruktion und die gesamte Wallet getrennt.
+
+## Was geschieht nach der Zahlung mit dem Beweis?
+
+Der Vorschlag unterscheidet den durchs Netzwerk gesendeten Beweis vom mit dem Block gespeicherten Beweis. Aktuell sind etwa 1,4 MB je Ausgabenbeweis und etwa 1 MB für einen kombinierten Blockbeweis vorgesehen. Nodes würden Ausgabenbeweise weiterleiten, prüfen, kombinieren und einzelne Beweise nach Finalität verwerfen. Das sind Designangaben des Projekts, keine Messungen dieses Artikels.
+
+Die Kombination fasst Prüfungen zusammen. Stell dir mehrere unabhängig geprüfte Aussagen vor, deren Prüfung wiederum durch einen Beweis weitergetragen wird. Der Blockbeweis erfüllt diesen anderen Zweck als der ursprüngliche Einzelbeweis. Ein kompakter gespeicherter Datensatz lässt frühere Übertragung und Berechnung nicht verschwinden: Weiterleitung, Beweiserstellung, Aggregation und langfristige Speicherung bleiben getrennte Aufgaben.
+
+[![Einzelne Ausgabenbeweise gelangen zu Nodes, werden zu einem Blockbeweis kombiniert und nach Finalität gemäß dem vorgeschlagenen Faraday-Design verworfen.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Was würden Wallet-Nutzer bemerken?
+
+Beim Lesen des Vorschlags hilft es, Zahlungsfreigabe, Beweisvorbereitung durch die Wallet, Blockaufnahme und Wartezeit bis zur Ausgebbarkeit empfangener Mittel zu trennen. Das sind verschiedene Teile des Ablaufs. Ein schnelles Ergebnis bei der Beweiserstellung belegt allein noch keinen schnellen Transfer von Anfang bis Ende.
+
+Der Plan schlägt ein Blockziel von zehn Minuten vor und nennt höhere Gebühren durch größere Ausgaben; endgültige Beträge werden noch erarbeitet. Prüfe die tatsächliche Gebührenvorschau der Wallet, sobald kompatible Versionen erscheinen. Der [Leitfaden zur Transferdauer](/de/blog/blocknet-transfer-time/) beschreibt das veröffentlichte Netzwerk mit Fünf-Minuten-Ziel; künftige Zeiten richten sich nach den endgültigen Faraday-Regeln. Zahlungsgröße, Beweisaufwand und Blockzeit sind bei Schätzungen gemeinsam zu betrachten.
+
+## Welcher Leitfaden folgt als Nächstes?
+
+Nutze [was jemand über eine Zahlung sehen kann](/de/blog/blocknet-payment-visibility/) für heutige öffentliche Transaktionsfelder, Wallet-Einträge und bewusste Offenlegungen. Der [bestehende Faraday-Upgrade-Leitfaden](/de/blog/blocknet-faraday-upgrade/) behandelt Aktivierungspläne, Wiederherstellungsmaterial und Coin-Migration.
+
+Prüfe bei neuen Ankündigungen, was sich geändert hat: zulässige Coin-Menge, Beweissystem, Zahlungserkennung, Beweisgrößen oder Wallet-Verhalten. Prüfe dann, ob es um einen Vorschlag, ein Testergebnis oder eine veröffentlichte Funktion geht. So passt dein heutiger Zahlungsablauf zur tatsächlich verwendeten Software, während du das vorgeschlagene Datenschutzupgrade im Detail verfolgen kannst.
+
+<CTA target="seine" title="Mit der veröffentlichten Einrichtung weiter minen" text="Nutze die aktuellen Mining-Leitfäden von seine und befolge kompatible Miner- und Pool-Anweisungen während Faradays Entwicklung." />

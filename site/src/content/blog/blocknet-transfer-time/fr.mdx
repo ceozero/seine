@@ -1,0 +1,76 @@
+---
+title: 'Combien de temps prend un transfert Blocknet ?'
+description: 'Suivez un transfert Blocknet de son envoi au solde disponible. Comprenez les confirmations, l’estimation du portefeuille et les vérifications utiles.'
+tags: ['Blocknet', 'Portefeuille', 'Paiements']
+faq:
+  - q: 'Un paiement Blocknet est-il utilisable dès sa première confirmation ?'
+    a: 'Dans core v0.22.0, la version examinée, le portefeuille rend une sortie reçue ordinaire utilisable quand le sommet de la chaîne dépasse de dix blocs celui qui la contient. Le détail peut déjà indiquer que la transaction est confirmée dès son inclusion. Vérifiez Spendable Balance après la synchronisation et l’analyse du portefeuille avant de réutiliser ces fonds.'
+  - q: 'Fermer mon portefeuille retarde-t-il le paiement de l’expéditeur ?'
+    a: 'Le réseau peut inclure un paiement vers votre adresse lorsque votre portefeuille est fermé. À la réouverture, le nœud et le portefeuille doivent rattraper leur retard pour afficher la réception et le solde actuels. Garder le portefeuille ouvert facilite le suivi, mais ce sont les blocs du réseau qui déterminent la profondeur de confirmation.'
+  - q: 'Un transfert ordinaire doit-il attendre les 60 blocs d’une récompense de minage ?'
+    a: 'Un transfert ordinaire suit la règle de profondeur de dix blocs du portefeuille dans la version examinée. Les sorties coinbase nouvellement minées ont une maturité distincte de 60 blocs. Un paiement de pool est une transaction ultérieure, après le traitement des récompenses par le pool. Une fois envoyé, suivez cette transaction de paiement.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Suivez un paiement Blocknet à travers les étapes utiles à l’expéditeur et au destinataire : soumission, inclusion dans un bloc et solde utilisable dans le portefeuille. Ce guide explique les délais affichés par core et le portefeuille de bureau v0.22.0, vérifiés le 27 octobre 2026. Conservez le hash de la transaction pour suivre tous deux le même transfert.
+
+## Combien de temps prend un transfert Blocknet ?
+
+<Answer>
+Blocknet vise un bloc toutes les cinq minutes. Une fois un paiement ordinaire inclus dans un bloc, le portefeuille publié attend dix blocs supplémentaires avant de rendre les fonds utilisables : environ 50 minutes au rythme cible, plus l’attente préalable à l’inclusion. Les durées réelles varient. Suivez la transaction et le solde disponible plutôt qu’une échéance fixe.
+</Answer>
+
+## Les trois étapes du paiement
+
+D’abord, l’expéditeur vérifie et confirme le paiement dans son portefeuille. Conservez le hash renvoyé pour cet envoi. Une transaction présente dans le mempool du nœud a été reçue par ce nœud et attend son inclusion dans un bloc. Sa présence ne garantit pas qu’elle figurera dans le prochain bloc. Le [guide d’envoi et de réception](/fr/blog/send-receive-blocknet/) explique comment préparer et approuver le paiement.
+
+Ensuite, la transaction entre dans un bloc accepté. Son détail peut afficher `Confirmed`, une hauteur de bloc et un nombre de confirmations. Cela permet de vérifier l’inclusion. Le portefeuille du destinataire identifie sa propre sortie entrante en analysant la chaîne.
+
+Enfin, suffisamment de blocs ultérieurs arrivent pour rendre cette sortie utilisable selon les règles du portefeuille. Le destinataire peut alors employer le montant de `Spendable Balance`. Avant l’inclusion, le tableau de bord peut afficher un avis distinct de paiement non confirmé si le portefeuille local détecte une entrée dans le mempool. La capture ci-dessous utilise la véritable interface publiée avec des données locales de démonstration explicitement signalées.
+
+[![Tableau de bord Blocknet publié affichant un paiement entrant de démonstration de 1,25 BNT non confirmé, avant son inclusion dans un bloc.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## Pourquoi un paiement confirmé peut-il rester en attente ?
+
+Le [contrôle de maturité du portefeuille publié](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) soustrait la hauteur du bloc contenant la sortie à la hauteur actuelle de la chaîne. Une sortie ordinaire non dépensée devient mature à une profondeur de dix blocs. Un paiement inclus dans le bloc `100,000` atteint cette profondeur au sommet `100,010`. Ces hauteurs illustrent la règle et ne décrivent pas un paiement réel.
+
+L’[API de détail des transactions](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) compte le bloc contenant la transaction comme première confirmation. Le calcul de disponibilité du portefeuille commence à zéro dans ce même bloc. Le détail peut donc afficher onze confirmations lorsque la sortie ordinaire atteint la profondeur requise de dix blocs. Consultez le solde disponible du tableau de bord pour savoir si les fonds sont utilisables.
+
+Dans l’exemple suivant, le paiement est inclus et quatre blocs supplémentaires sont arrivés. Le détail afficherait cinq confirmations, tandis que le tableau de bord conserve les 1,25 BNT illustratifs dans `Pending` et indique environ six blocs restants. Les deux écrans décrivent le même paiement selon des critères différents de disponibilité.
+
+[![Tableau de bord Blocknet avec la réception de démonstration de 1,25 BNT dans Pending, aucun fonds utilisable et environ six blocs restants.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## Comment lire l’estimation de temps ?
+
+Dix blocs multipliés par l’objectif de cinq minutes donnent environ 50 minutes après l’inclusion. L’attente préalable à l’entrée dans un bloc vient avant. Ce calcul indique un ordre de grandeur ; ce n’est ni une moyenne mesurée sur des paiements ni un délai garanti.
+
+Le tableau de bord publié convertit aussi les blocs restants en durée approximative. Avec six blocs restants, six fois cinq donne environ 30 minutes. La chaîne doit encore produire ces blocs. Un compte à rebours à zéro n’ajoute pas de bloc et ne rend pas une sortie utilisable à lui seul. Vérifiez de nouveau la progression de la chaîne et le solde.
+
+Un avis de paiement entrant peut apparaître avant l’inclusion. Prenez son estimation comme une indication, puis suivez le bloc contenant la transaction et le solde disponible. La synchronisation et l’analyse du portefeuille influencent aussi le moment où votre écran reflète les progrès déjà réalisés par le réseau.
+
+## Où l’expéditeur et le destinataire doivent-ils vérifier ?
+
+L’expéditeur doit ouvrir `History`, trouver le paiement sortant et conserver son `TX Hash`. Le destinataire peut utiliser le même hash pour identifier le transfert entrant. En le comparant, vous évitez de confondre ce paiement avec un autre envoi à la même adresse.
+
+Le [guide de l’explorateur Blocknet](/fr/blog/blocknet-explorer-guide/) explique comment retrouver une transaction et son bloc. La recherche publique aide à vérifier l’inclusion dans le réseau. Le portefeuille du destinataire fournit les détails privés de réception et de solde liés à ses clés. Utilisez-le pour vérifier le montant reçu.
+
+Sur l’ordinateur destinataire, ouvrez le bon portefeuille et comparez `Your Address`, dans `Receive`, à la destination utilisée par l’expéditeur. Vérifiez ensuite la synchronisation du nœud et l’analyse du portefeuille avant de conclure qu’une entrée manque. Un portefeuille précédemment fermé peut avoir besoin de temps pour découvrir des paiements déjà avancés sur la chaîne.
+
+## Quand puis-je envoyer à nouveau les BNT reçus ?
+
+Attendez que la réception contribue à `Spendable Balance` dans un `Dashboard` synchronisé. Consultez aussi `Pending` et `Total` pour voir la répartition des fonds enregistrés. Si vous aviez déjà d’autres fonds, une partie du solde peut être utilisable alors que cette réception reste en attente. Suivez l’entrée correspondante de l’historique pour observer un transfert précis.
+
+La capture montre le même paiement de démonstration après l’ajout de dix blocs suivant celui qui le contient. Ses 1,25 BNT sont désormais utilisables et le montant en attente est nul. Ces captures illustrent le frontend publié ; elles ne mesurent pas la durée d’un transfert réel. Avant d’approuver votre prochain paiement, vérifiez le montant et les frais dans le portefeuille.
+
+[![Tableau de bord Blocknet publié montrant le même paiement de démonstration comme 1,25 BNT de Spendable Balance après dix blocs de profondeur.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## Que vérifier si le paiement n’apparaît pas ?
+
+Partez de l’étape vérifiable. Demandez à l’expéditeur le hash existant, vérifiez l’inclusion et comparez la destination. Suivez ensuite les [vérifications de synchronisation et d’analyse](/fr/blog/blocknet-wallet-not-syncing/) si l’historique ou le solde local n’est pas à jour. Conservez l’enregistrement d’origine pendant vos recherches ; un nouvel envoi serait un paiement distinct.
+
+Pour les revenus de minage, distinguez d’abord une récompense acquise dans le pool d’un paiement déjà envoyé à votre adresse. Le [guide des confirmations des récompenses](https://bntpool.com/blog/fr/block-confirmations-mining-rewards/) explique la maturité distincte de 60 blocs des coins nouvellement minés. Quand le pool envoie une transaction de paiement ordinaire, suivez sa propre inclusion et sa disponibilité dans le portefeuille. Le [guide des paiements manquants](https://bntpool.com/blog/fr/pool-payout-missing-from-wallet/) relie le relevé du pool au portefeuille destinataire.
+
+La vérification finale est simple : identifiez le bon portefeuille, comparez le hash du paiement et consultez le solde disponible après synchronisation et analyse. Ce guide décrit les règles actuellement publiées. Le [guide Faraday](/fr/blog/blocknet-faraday-upgrade/) suit séparément les évolutions futures annoncées pour le réseau.
+
+<CTA target="seine" title="Minez vers votre portefeuille Blocknet" text="Utilisez seine avec votre adresse publique de réception et suivez les paiements du pool dans ce même portefeuille." />

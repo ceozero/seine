@@ -1,0 +1,60 @@
+---
+title: 'Was lässt sich über eine Blocknet-Zahlung sehen?'
+description: 'Erfahre, was Absender, Empfänger, Explorer und Inhaber eines Ansichtsschlüssels sehen und wie Zahlungsbelege und geteilte Daten die Privatsphäre beeinflussen.'
+tags: ['Blocknet', 'Privatsphäre', 'Zahlungen']
+faq:
+  - q: 'Verrät der Transaktionshash einer Blocknet-Zahlung ihren Betrag?'
+    a: 'Ein Transaktionshash führt zu einer öffentlichen Transaktion. Die normale Explorer-Seite zeigt etwa Gebühr, Block und Bestätigungszahl; Zahlungsbeträge bleiben verborgen. Empfänger können ihren eigenen Zahlungseingang in der Wallet lesen. Zusätzliche Angaben wie Transaktionsschlüssel und Empfängeradresse ermöglichen eine bewusste Zahlungsprüfung.'
+  - q: 'Kann jemand anhand meiner Empfangsadresse mein Guthaben sehen?'
+    a: 'Eine Empfangsadresse bietet keine öffentliche Guthabenseite, wie man sie von transparenten Blockchains erwarten könnte. Zahlungen verwenden einmalige Output-Adressen und verborgene Beträge. Wer deine Adresse kennt, kann aus Rechnung, Profil oder Gespräch trotzdem wissen, dass sie dir gehört. Trenne diesen äußeren Kontext von den veröffentlichten Blockchain-Daten.'
+  - q: 'Offenbart eine Wallet mit Lesezugriff private Zahlungsdaten?'
+    a: 'Ja. Mit Lesezugriff lassen sich eingehende Outputs erkennen sowie ihre Beträge und wiederherstellbaren Memos lesen. Er erlaubt keine Ausgaben. Eine Ansichtskopie enthält deshalb private Informationen, auch wenn sie nur zur Überwachung dient. Nutze einen transaktionsbezogenen Zahlungsnachweis, wenn du genau diesen Beleg teilen möchtest.'
+sourceHash: 'efc84ed6120c'
+translation: draft
+---
+
+Betrachte eine Blocknet-Zahlung aus vier Perspektiven: Absender, Empfänger, Leser des öffentlichen Explorers und Personen mit Lesezugriff. Dieser Leitfaden beschreibt das veröffentlichte core v0.22.0, geprüft am 27. Oktober 2026. Er hilft dir zu entscheiden, welche Informationen du beim Geldempfang, bei Zahlungsprüfungen oder Hilfsanfragen teilst.
+
+## Was hält Blocknet privat?
+
+<Answer>
+Blocknet nutzt Ringsignaturen für den ausgegebenen Input, einmalige Stealth-Adressen für Empfänger und Commitments mit Bereichsnachweisen für Beträge. Die öffentliche Transaktion hat weiterhin Hash, Gebühr und Struktur. Deine Wallet liefert die privaten Details zu deinen Schlüsseln. Ein geteilter Zahlungsbeleg, Zahlungsnachweis oder Lesezugriff gibt dem Empfänger zusätzliche Informationen.
+</Answer>
+
+## Was kann jeder im Explorer sehen?
+
+Öffne eine Transaktion im [Blocknet-Explorer](/de/blog/blocknet-explorer-guide/). Ihr öffentlicher Datensatz enthält Transaktionshash, zugehörigen Block, Bestätigungszahl, Gebühr, Input-Ringe und Output-Daten. Beobachter sehen, dass eine Transaktion existiert, und können ihre Struktur prüfen. Der im jeweiligen Output gebundene Betrag und der Text des verschlüsselten Memos erscheinen nicht als gewöhnliche öffentliche Felder.
+
+Der [Überblick zur Privatsphäre](/de/blog/blocknet-privacy-features/) erklärt das Zusammenspiel der Schichten. Jeder Input hat heute einen Ring mit 16 Mitgliedern: dem echten Output und 15 Ködern. Eine Ringsignatur beweist die Autorisierung durch ein Mitglied, ohne dieses zu nennen. Die einmalige Adresse eines Outputs unterscheidet sich von der Empfangsadresse, die du dem Zahler gegeben hast.
+
+[![Ein öffentlicher Transaktionsdatensatz zeigt Hash, Block und Gebühr; die Empfänger-Wallet offenbart Betrag und Memo ihres eigenen Zahlungseingangs.](/assets/blog/blocknet-payment-visibility-public.svg)](/assets/blog/blocknet-payment-visibility-public.svg)
+
+## Was wissen Absender und Empfänger?
+
+Der Absender kennt das eingegebene Ziel, den Betrag und das Memo. Sein Sendeprotokoll kann diese Angaben mit einem Transaktionshash verknüpfen. Die Empfänger-Wallet erkennt eigene eingehende Outputs und stellt Betrag und Memo wieder her. Der [Leitfaden zum Senden und Empfangen](/de/blog/send-receive-blocknet/) hilft, die entsprechenden Wallet-Einträge zu finden.
+
+Eine private Transaktion liefert nicht automatisch einen überprüften bürgerlichen Namen des Absenders. Empfänger können wissen, wer bezahlt hat, weil sie eine Rechnung ausgestellt, die Zahlung besprochen oder ihren Hash erhalten haben. Dieses Wissen stammt aus der Interaktion. Ein Händler kann Bestellung und Lieferadresse zusammen mit deiner Zahlung speichern.
+
+Du sendest beispielsweise den vereinbarten Betrag einer Bestellung und trägst ihre Referenz ins Memo ein. Der Händler kann den Eingang der Bestellung zuordnen. Ein Besucher des öffentlichen Explorers sieht die Transaktionsstruktur, erhält aber nicht automatisch die Bestelldetails. Veröffentlicht eine der Personen einen Wallet-Screenshot mit Betrag, Notiz und Hash, ergänzt dieser Beitrag Angaben, die auf der normalen öffentlichen Transaktionsseite fehlten.
+
+## Was ändert ein geteilter Nachweis oder Ansichtsschlüssel?
+
+Ein [Zahlungsnachweis](/de/blog/blocknet-payment-proof/) prüft passende Outputs mit einem transaktionsbezogenen Schlüssel, Hash und Empfängeradresse. In der veröffentlichten Prüf-API können diese Felder den passenden Betrag und das wiederherstellbare Memo offenlegen. Sie zu teilen ist eine bewusste Möglichkeit, eine bestimmte Zahlung nachzuweisen. Der Server der Prüfanfrage erhält ebenfalls die übermittelten Felder.
+
+Eine [Wallet mit Lesezugriff](/de/blog/blocknet-view-only-wallet/) bietet breiteren Zugriff auf eingehende Einträge der zugehörigen Wallet. Ihr Inhaber kann Eingänge erkennen und private Zahlungsdetails lesen; die volle Wallet behält die Ausgabeberechtigung. Lesezugriff belegt nicht, dass jeder ausgehende Eintrag oder jede aktuelle Entscheidung über verfügbares Guthaben gespiegelt wird. Nutze die volle Wallet für Ausgabenentscheidungen. Ein neues Passwort für die Ansichtsdatei widerruft keinen bereits kopierten Schlüssel.
+
+[![Ein transaktionsbezogener Nachweis identifiziert eine Zahlung zur Prüfung; Wallet-Lesezugriff umfasst eingehende Einträge und bleibt von der Ausgabeberechtigung getrennt.](/assets/blog/blocknet-payment-visibility-access.svg)](/assets/blog/blocknet-payment-visibility-access.svg)
+
+## Was ist mit öffentlichen Namen und Netzwerkdaten?
+
+Ein [Blocknet-ID-Name](/de/blog/blocknet-id-pay-by-name/) ist ein öffentlicher Weg, ein Empfangsziel zu finden. Ein Name im Profil kann mit dir verknüpft werden. Die Zahlung verwendet weiterhin einmalige Output-Adressen und verborgene Beträge des Protokolls. Einen Namen oder privaten Wallet-Zugriff zu veröffentlichen sind unterschiedliche Freigaben.
+
+Netzwerkprivatsphäre hat eine eigene Schicht. [Dandelion++](/de/blog/dandelion-plus-plus-explained/) leitet neue Transaktionen vor der breiten Verteilung durch eine Stammphase und verringert so die direkte Verbindung zwischen Ursprung und den zuerst informierten Peers. Das löscht keine Rechnung, Chatnachricht oder an eine Website gesendete Information. Ein Explorer-Betreiber erhält deine Suchanfrage; ein entfernter Nachweisprüfer erhält die eingereichten Nachweisfelder.
+
+## Wie entscheidest du, was du teilst?
+
+Zum Zahlungsempfang teilst du die gewünschte Empfangsadresse oder den öffentlichen Namen. Zur Prüfung der Blockaufnahme nutzt du den Hash. Für einen bestimmten Zahlungseingang folgst du dem Nachweisverfahren und beachtest den offengelegten Betrag und das Memo. Für laufende Überwachung eingehender Zahlungen erteilst du bewusst Lesezugriff. Diese Optionen beantworten unterschiedliche Fragen.
+
+Prüfe vor einem Screenshot-Upload Adresse, Hash, Guthaben, Notizen und sichtbare Schlüssel. Wiederherstellungswörter, Ausgabeschlüssel und walletweite Ansichtsgeheimnisse gehören nicht in öffentliche Supportnachrichten. Der [Wallet-Backup-Leitfaden](/de/blog/blocknet-wallet-backup-restore/) erklärt Wiederherstellungsmaterial. Für das vorgeschlagene Upgrade beschreibt [Faradays Änderung der Privatsphäre](/de/blog/blocknet-faraday-privacy/) das künftige Design; dieser Leitfaden behandelt das heute veröffentlichte Zahlungsformat.
+
+<CTA target="seine" title="Mining-Zahlungen in deiner eigenen Wallet empfangen" text="Nutze seine mit deiner Empfangsadresse und verfolge Auszahlungen anhand der Wallet-Einträge, die du teilen möchtest." />

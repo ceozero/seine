@@ -1,17 +1,17 @@
 ---
 title: Phần cứng tốt nhất để đào Blocknet
-description: "So sánh phần cứng đào Blocknet bằng kết quả đo: EPYC 9355P đạt 77,1 H/s. Xem chính xác RAM, số luồng, thiết lập trang nhớ và dữ liệu benchmark."
+description: "So sánh phần cứng đào Blocknet bằng kết quả đo: EPYC 9375F đạt 85,1 H/s. Xem chính xác RAM, số luồng, thiết lập trang nhớ và dữ liệu benchmark."
 tags: [Phần cứng, Hashrate, Hướng dẫn đào coin, Argon2id, NVIDIA]
 faq:
   - q: 'PC chơi game có đào được Blocknet không?'
     a: 'Có. Trên Windows và Linux, seine đào trên bộ xử lý và mọi card đồ họa NVIDIA trong máy cùng lúc, và hashrate được cộng dồn. Nó chọn số luồng theo RAM của bạn, nên một PC chơi game 32 GB chạy được tối đa khoảng 14 luồng, và nó tự động tinh chỉnh bộ xử lý và từng card trong khi đào.'
   - q: '32 GB RAM chạy được bao nhiêu luồng đào Blocknet?'
-    a: 'Khoảng 14. Mỗi luồng cần một khối bộ nhớ 2 GiB cho mỗi lần băm, nên trên lý thuyết 32 GB chứa được 16 khối. seine giữ lại 5% RAM dự phòng và chừa chỗ cho hệ điều hành, nên một máy 32 GB chạy được khoảng 14 luồng. Nó tự tính toán việc này cho bạn khi khởi động.'
+    a: 'Khoảng 14. Mỗi luồng cần một khối bộ nhớ 2 GiB cho mỗi lần băm, nên trên lý thuyết 32 GB chứa được 16 khối. seine giữ lại 5% (mặc định tối đa 1 GiB) RAM dự phòng và chừa chỗ cho hệ điều hành, nên một máy 32 GB chạy được khoảng 14 luồng. Nó tự tính toán việc này cho bạn khi khởi động.'
   - q: 'seine dùng card đồ họa nào để đào Blocknet?'
     a: 'seine đào trên card đồ họa NVIDIA với bản tải cho Windows và Linux, dùng mọi card nó phát hiện được cùng với bộ xử lý. Trên Windows, CUDA runtime đã được kèm sẵn, nên bạn chỉ cần driver NVIDIA. Trên Linux, hãy cài driver và các thư viện NVRTC. Lần chạy đầu tiên tinh chỉnh từng card và ghi nhớ kết quả.'
   - q: 'Vì sao băng thông bộ nhớ quan trọng khi đào Blocknet?'
     a: 'Mỗi lần băm Blocknet ghi trọn một khối bộ nhớ 2 GiB và đọc lại dữ liệu từ khắp khối đó, lớn hơn rất nhiều so với dung lượng cache của bất kỳ bộ xử lý nào. Vì thế hashrate phụ thuộc vào tốc độ hệ thống bộ nhớ chuyển dữ liệu. Những máy có băng thông bộ nhớ cao hơn và đủ RAM cho nhiều luồng sẽ đào nhanh nhất.'
-sourceHash: '005a847e85db'
+sourceHash: 666371e468ff
 translation: draft
 ---
 
@@ -22,10 +22,10 @@ Hướng dẫn này cho bạn biết máy nào đào Blocknet nhanh nhất với
 ## Phần cứng tốt nhất để đào Blocknet là gì?
 
 <Answer>
-Cấu hình nhanh nhất trong các phép đo này là AMD EPYC 9355P đạt 77,1 H/s: 64 luồng đào, 192 GiB RAM và huge pages 1 GiB được chuẩn bị thủ công trên Linux. Đào Blocknet hưởng lợi từ băng thông bộ nhớ và đủ RAM cho 2 GiB mỗi luồng. Card NVIDIA có thể cộng thêm tốc độ băm cùng CPU.
+Cấu hình nhanh nhất trong các phép đo này là AMD EPYC 9375F đạt 85,1 H/s: 64 luồng đào, 384 GiB RAM và huge pages 1 GiB được chuẩn bị thủ công trên Linux. Đào Blocknet hưởng lợi từ băng thông bộ nhớ và đủ RAM cho 2 GiB mỗi luồng. Card NVIDIA có thể cộng thêm tốc độ băm cùng CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 77.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/headline-20261027/README.md#epyc-9355p-rebenchmark)
+[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
 
 Proof of Work của Blocknet là Argon2id với một khối bộ nhớ 2 GiB cho mỗi lần băm. Điều đó khiến nó [memory-hard](/vi/blog/argon2id-proof-of-work-explained/): hashrate phụ thuộc vào băng thông và độ trễ bộ nhớ nhiều như vào số nhân, và vào việc RAM chứa được bao nhiêu khối 2 GiB cùng lúc. Một hệ thống bộ nhớ mạnh là điểm chung của những máy đứng đầu bảng dưới đây.
 
@@ -77,19 +77,19 @@ Ba điều rút ra khi bạn chọn phần cứng:
 ## Mỗi luồng đào cần bao nhiêu RAM?
 
 <Answer>
-Mỗi luồng đào cần khoảng 2 GB RAM, vì mỗi lần băm lấp đầy khối bộ nhớ 2 GiB của riêng nó. Chia dung lượng RAM cho hai để biết số luồng tối đa có thể chạy, rồi trừ đi một chút cho hệ điều hành. seine tự làm phép tính này cho bạn và giữ lại 5% RAM dự phòng.
+Mỗi luồng đào cần khoảng 2 GB RAM, vì mỗi lần băm lấp đầy khối bộ nhớ 2 GiB của riêng nó. Chia dung lượng RAM cho hai để biết số luồng tối đa có thể chạy, rồi trừ đi một chút cho hệ điều hành. seine tự làm phép tính này cho bạn và giữ lại 5% (mặc định tối đa 1 GiB) RAM dự phòng.
 </Answer>
 
-Đây là phép tính cho các dung lượng phổ biến. “Trên lý thuyết” là RAM ÷ 2 GiB. Cột cuối trừ đi 5% dự phòng của seine và khoảng 2-3 GB cho hệ điều hành, nên hãy coi đó là con số ước lượng. Với laptop và PC cũ có 4-12 GB, xem hướng dẫn [đào coin trên PC cũ hoặc laptop](/vi/blog/mine-crypto-on-old-pc-or-laptop/).
+Đây là phép tính cho các dung lượng phổ biến. “Trên lý thuyết” là RAM ÷ 2 GiB. Cột cuối trừ đi 5% (mặc định tối đa 1 GiB) dự phòng của seine và khoảng 2-3 GB cho hệ điều hành, nên hãy coi đó là con số ước lượng. Với laptop và PC cũ có 4-12 GB, xem hướng dẫn [đào coin trên PC cũ hoặc laptop](/vi/blog/mine-crypto-on-old-pc-or-laptop/).
 
 | RAM | Số khối bộ nhớ trên lý thuyết | Số luồng seine chạy được, ước lượng |
 |---|---|---|
 | 16 GB | 8 | 6 |
 | 32 GB | 16 | 14 |
-| 64 GB | 32 | 29 |
-| 128 GB | 64 | 59 |
+| 64 GB | 32 | 30 |
+| 128 GB | 64 | 62 |
 
-seine cũng giới hạn số luồng ở số nhân logic của bộ xử lý, nên giới hạn thực tế là thứ nào hết trước. Lấy ví dụ một bộ xử lý desktop 16 nhân với 32 luồng phần cứng. Với 32 GB RAM, nó chạy khoảng 14 luồng đào, và với 64 GB thì khoảng 29. Để chạy 32 luồng, bạn cần 64 GiB chỉ riêng cho các khối bộ nhớ cộng thêm phần dư cho hệ thống, đó là lý do kết quả Zen 5 với 32 luồng đến từ một máy có 128 GiB.
+seine cũng giới hạn số luồng ở số nhân logic của bộ xử lý, nên giới hạn thực tế là thứ nào hết trước. Lấy ví dụ một bộ xử lý desktop 16 nhân với 32 luồng phần cứng. Với 32 GB RAM, nó chạy khoảng 14 luồng đào, và với 64 GB thì khoảng 30. Để chạy 32 luồng, bạn cần 64 GiB chỉ riêng cho các khối bộ nhớ cộng thêm phần dư cho hệ thống, đó là lý do kết quả Zen 5 với 32 luồng đến từ một máy có 128 GiB.
 
 Nếu bạn mua RAM để đào, hãy chọn theo số luồng bạn muốn: khoảng 2 GB mỗi luồng, cộng thêm vài gigabyte cho hệ thống.
 
@@ -110,7 +110,7 @@ Trên [máy Mac Apple Silicon](/vi/blog/mine-blocknet-on-mac/), seine đào bằ
 - **Chọn số luồng** theo RAM và số nhân của bạn, rồi so sánh các số luồng trên công việc đào thực tế và giữ số tốt nhất.
 - **Chọn kernel CPU**, chẳng hạn AVX2, AVX-512, kernel streaming trên EPYC Zen 5 hoặc SHA3 trên Arm, chỉ chuyển đổi sau hai lần xác nhận có cải thiện.
 - **Phân bổ luồng trên máy chủ lớn.** Trên Linux, nó trải luồng trên các node NUMA và nhóm cache L3, giúp tăng 16,7% trên một máy EPYC 8434P thuê ngoài ở 24 luồng. [Hướng dẫn đào trên máy chủ](/vi/blog/mine-blocknet-on-servers/) có chi tiết.
-- **Bảo vệ bộ nhớ của bạn.** Nó giữ 5% dự phòng, tạm dừng luồng nếu RAM sắp hết và cho chúng chạy lại khi bộ nhớ được giải phóng.
+- **Bảo vệ bộ nhớ của bạn.** Nó giữ 5% (mặc định tối đa 1 GiB) dự phòng, tạm dừng luồng nếu RAM sắp hết và cho chúng chạy lại khi bộ nhớ được giải phóng.
 - **Ghi nhớ thiết lập hiệu quả**, nên lần khởi động sau bắt đầu từ các thiết lập đã tinh chỉnh.
 
 Không bước nào trong số này cần kết nối lại pool, nên việc tinh chỉnh không làm bạn mất thời gian đào. [Hướng dẫn tự tinh chỉnh](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) giải thích từng bước.

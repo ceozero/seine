@@ -1,0 +1,68 @@
+---
+title: 'O que acontece dentro de uma transação Blocknet?'
+description: 'Acompanhe um pagamento Blocknet das entradas às saídas, troco, taxa e confirmação. Entenda por que um pagamento pode criar várias saídas na sua carteira.'
+tags: ['Blocknet', 'Carteira', 'Pagamentos']
+faq:
+  - q: 'Por que meu pagamento Blocknet tem duas saídas?'
+    a: 'Um pagamento de valor fixo pode criar uma saída para o destinatário e outra que devolve à carteira o valor não utilizado das entradas como troco. Outras formas são possíveis: vários destinatários, troco dividido ou nenhum troco. Só a quantidade de saídas não revela quantas pessoas receberam.'
+  - q: 'Preciso copiar um endereço de troco antes de enviar?'
+    a: 'O construtor de transações da carteira analisado cria o troco usando as chaves públicas da sua própria carteira. Você informa os dados do destinatário; a carteira cuida da saída de troco. Essa saída pertence à carteira remetente e pode ser gasta conforme as regras normais de confirmação e maturidade.'
+  - q: 'Um anel de entrada gasta dinheiro de todos os membros?'
+    a: 'Cada entrada gasta uma saída real pertencente ao remetente. Os demais membros do anel oferecem possíveis origens para a prova de privacidade; seu valor não é somado ao pagamento. Uma transação pode usar várias entradas reais, cada uma com seu próprio anel e imagem de chave.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Acompanhe um pagamento Blocknet pelas partes que sua carteira constrói: fundos existentes, novas saídas, troco e taxa de rede. Este passo a passo explica por que um pagamento a uma pessoa pode ter várias saídas e por que gastar uma saída da carteira não significa entregar todo o seu valor ao destinatário. O exemplo contábil usa valores inventados e toma a carteira lançada de core v0.22.0 como referência de implementação.
+
+## Como uma transação Blocknet move seus fundos?
+
+<Answer>
+Sua carteira seleciona saídas próprias disponíveis para gasto, usa-as como entradas e cria novas saídas para o destinatário e o eventual troco. O valor selecionado cobre o montante do destinatário mais a taxa de rede. As provas de privacidade permitem à rede validar o pagamento, enquanto sua carteira reconhece as novas saídas que pertencem a você.
+</Answer>
+
+## Comece pelas saídas que sua carteira já possui
+
+Uma saída é uma parcela de valor criada por uma transação anterior. Enquanto não for gasta e cumprir as regras de maturidade, sua carteira pode escolhê-la para um novo pagamento. O saldo pode incluir várias parcelas de recebimentos anteriores, pagamentos de mineração ou troco. Normalmente você não precisa escolhê-las.
+
+Suponha que sua carteira selecione uma saída de `10 BNT` para um pagamento de `3 BNT`. Ela gasta toda essa saída existente. A nova transação então distribui o valor entre destinatário, troco e taxa. Outras saídas da carteira podem ficar intactas; o total selecionado não é necessariamente todo o seu saldo.
+
+Várias saídas menores também podem financiar um pagamento. O [construtor da carteira lançada](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) seleciona fundos maduros suficientes para cobrir o valor do destinatário e a taxa. A seleção de entradas e a estimativa da taxa pelo tamanho interagem, por isso a prévia atual da carteira importa. O [guia de taxas de transação](/pt-br/blog/blocknet-transaction-fees/) explica esse cálculo e onde consultá-lo.
+
+[![Transação ilustrativa: 1 seleciona 10 BNT; 2 envia 3 BNT ao destinatário; 3 devolve 6,9995 BNT de troco; 4 contabiliza uma taxa de rede de 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Leia o diagrama como a contabilidade da carteira: **1** é a entrada selecionada, **2** a saída do destinatário, **3** sua saída de troco e **4** a taxa. Os números são ilustrativos; a taxa é presumida, não uma cotação. As setas mostram propriedade e distribuição de valor, não vínculos públicos visíveis em um explorador.
+
+## Por que um pagamento pode criar várias saídas?
+
+Neste exemplo, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. O destinatário recebe `3 BNT`, sua carteira recebe `6.9995 BNT` de troco e a transação paga a taxa presumida de `0.0005 BNT`. São duas novas saídas de carteira, embora você pretendesse pagar apenas uma pessoa. A taxa é um campo separado da transação, não uma terceira saída de destinatário.
+
+Duas saídas são um exemplo útil, não uma regra para todos os pagamentos. O construtor aceita vários destinatários e seu caminho avançado de seleção de entradas pode dividir o troco entre várias saídas. Se o valor selecionado cobrir exatamente destinatários e taxa, não é necessária uma saída de troco. Já uma operação de enviar tudo calcula o montante do destinatário descontando a taxa do total selecionado disponível para gasto.
+
+A quantidade de saídas descreve, portanto, a estrutura da transação. Ela não conta clientes, faturas ou carteiras diferentes. Várias saídas podem pertencer à mesma carteira, e uma transação com várias entradas ainda pode pagar um único destinatário. Lembre-se dessas diferenças ao comparar o registro de pagamento da carteira com o resumo estrutural mais curto do explorador.
+
+## Para onde vai o troco?
+
+A carteira cria o troco para suas próprias chaves. No exemplo, a saída original de `10 BNT` é consumida e o troco de `6.9995 BNT` é uma nova saída que a mesma carteira reconhece. No envio normal, você não precisa informar um segundo destinatário nem copiar manualmente um endereço de troco.
+
+As saídas do destinatário e o troco usam chaves de saída de uso único. A transação pública não coloca seu endereço habitual de recebimento ao lado de um rótulo “troco”. Sua carteira tem as informações privadas necessárias para reconhecer suas próprias saídas. O [guia de endereços furtivos](/pt-br/blog/stealth-addresses-explained/) explica a relação dessas chaves de uso único com um endereço de recebimento reutilizável.
+
+O troco também segue as regras das saídas recém-criadas. Após enviar, parte do saldo pode aguardar confirmação ou maturidade mesmo continuando a pertencer a você. Uma saída madura intacta pode seguir disponível enquanto o novo troco está pendente. Consulte o saldo disponível para gasto ao preparar outro pagamento; o [guia de tempo de transferência](/pt-br/blog/blocknet-transfer-time/) explica as etapas da transmissão até a disponibilidade para gasto.
+
+## O que a rede verifica e o explorador mostra?
+
+Cada entrada real tem uma prova de privacidade que a coloca entre possíveis saídas anteriores. Os outros membros do anel são chamarizes: não contribuem com os fundos de seus donos para seu pagamento. Uma imagem de chave permite à rede detectar um gasto repetido sem publicar qual membro era a origem real. Veja [assinaturas em anel](/pt-br/blog/ring-signatures-explained/) para esse mecanismo.
+
+A rede também verifica compromissos de valor e provas, incluindo se a transação fecha com sua taxa. O [guia de provas de intervalo](/pt-br/blog/bulletproofs-explained/) explica como essas verificações funcionam com valores ocultos. Os dados públicos incluem o hash da transação, a estrutura de entradas e saídas e a taxa. Colar o hash no explorador não revela, por si só, a contabilidade privada do exemplo.
+
+Use sua carteira para identificar seus recebimentos e troco. Use o [explorador](/pt-br/blog/blocknet-explorer-guide/) para consultar o estado público de transações e blocos. O [guia de visibilidade de pagamentos](/pt-br/blog/blocknet-payment-visibility/) compara o que remetente, destinatário ou terceiros podem saber e as opções de compartilhamento deliberado.
+
+## Acompanhe o pagamento durante a confirmação
+
+Antes de confirmar um envio pretendido, leia juntos os dados do destinatário, seu valor, a taxa e o troco. Depois do envio, o hash identifica toda a transação, com todas as entradas e saídas. Ele não é um endereço de recebimento nem o identificador exclusivo da saída do destinatário.
+
+Transmissão, inclusão em bloco e disponibilidade para gasto são etapas distintas. A carteira do destinatário busca saídas para suas chaves, enquanto a sua reconhece o troco. Confirmação e maturidade determinam quando essas novas saídas podem ser usadas em outra transação. O [guia de envio e recebimento](/pt-br/blog/send-receive-blocknet/) apresenta os passos reais na carteira.
+
+Para uma dúvida sobre um pagamento, comece pelo valor pretendido e pelo registro da carteira, depois confira o estado da transação. Assim você pode ler o pagamento: o que foi selecionado, o que o destinatário recebeu, o que voltou como troco e o que continua pendente. Isso funciona tanto para fundos vindos de outra pessoa quanto de um [pagamento de pool de mineração](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Minere Blocknet com seine" text="Use seine com bntpool.com para minerar Blocknet e receber pagamentos na sua carteira." />

@@ -1,0 +1,68 @@
+---
+title: 'Co dzieje się wewnątrz transakcji Blocknet?'
+description: 'Prześledź płatność Blocknet od wejść do wyjść, reszty, opłaty i potwierdzenia. Dowiedz się, dlaczego jedna płatność może tworzyć kilka wyjść w portfelu.'
+tags: ['Blocknet', 'Portfel', 'Płatności']
+faq:
+  - q: 'Dlaczego moja płatność Blocknet ma dwa wyjścia?'
+    a: 'Płatność o stałej kwocie może utworzyć jedno wyjście dla odbiorcy i drugie, zwracające niewykorzystaną wartość wejść do portfela jako resztę. Możliwe są też inne układy: wielu odbiorców, podzielona reszta lub brak reszty. Sama liczba wyjść nie mówi, ilu osobom zapłacono.'
+  - q: 'Czy przed wysłaniem trzeba skopiować adres reszty?'
+    a: 'Sprawdzony konstruktor transakcji portfela tworzy resztę przy użyciu kluczy publicznych twojego portfela. Podajesz dane zamierzonego odbiorcy; portfel obsługuje wyjście reszty. Należy ono do portfela nadawcy i staje się dostępne do wydania zgodnie ze zwykłymi zasadami potwierdzeń i dojrzewania.'
+  - q: 'Czy pierścień wejścia wydaje pieniądze wszystkich członków?'
+    a: 'Każde wejście wydaje jedno prawdziwe wyjście należące do nadawcy. Pozostali członkowie pierścienia stanowią możliwe źródła dla dowodu prywatności; ich wartość nie jest dodawana do płatności. Transakcja może użyć kilku prawdziwych wejść, każdego z własnym pierścieniem i obrazem klucza.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Prześledź płatność Blocknet przez elementy budowane przez portfel: istniejące środki, nowe wyjścia, resztę i opłatę sieciową. Ten opis wyjaśnia, dlaczego płatność jednej osobie może mieć kilka wyjść i dlaczego wydanie wyjścia portfela nie oznacza przekazania odbiorcy całej jego wartości. Przykład rozliczenia używa wymyślonych kwot, a odniesieniem implementacyjnym jest wydany portfel core v0.22.0.
+
+## Jak transakcja Blocknet przenosi twoje środki?
+
+<Answer>
+Portfel wybiera należące do niego wyjścia dostępne do wydania, używa ich jako wejść i tworzy nowe wyjścia dla odbiorcy oraz ewentualnej reszty. Wybrana wartość pokrywa kwotę odbiorcy i opłatę sieciową. Dowody prywatności pozwalają sieci zweryfikować płatność, a portfel rozpoznaje nowe wyjścia należące do ciebie.
+</Answer>
+
+## Zacznij od wyjść już należących do portfela
+
+Wyjście to część wartości utworzona przez wcześniejszą transakcję. Dopóki pozostaje niewydane i spełnia zasady dojrzewania, portfel może wybrać je do nowej płatności. Saldo może obejmować kilka takich części z wcześniejszych wpływów, wypłat za kopanie lub reszty. Zwykle nie musisz wybierać ich samodzielnie.
+
+Załóżmy, że portfel wybiera wyjście warte `10 BNT` do płatności `3 BNT`. Wydaje całe istniejące wyjście. Nowa transakcja rozdziela następnie wartość między odbiorcę, resztę i opłatę. Inne wyjścia mogą pozostać nietknięte; wybrana suma nie musi oznaczać całego salda.
+
+Kilka mniejszych wyjść również może sfinansować jedną płatność. [Konstruktor wydanego portfela](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) wybiera dość dojrzałych środków, by pokryć kwotę odbiorcy i opłatę. Dobór wejść i szacowanie opłaty według rozmiaru wpływają na siebie, dlatego ważny jest aktualny podgląd w portfelu. [Poradnik opłat transakcyjnych](/pl/blog/blocknet-transaction-fees/) wyjaśnia obliczenia i miejsce ich sprawdzenia.
+
+[![Przykładowa transakcja: 1 wybiera 10 BNT; 2 wysyła odbiorcy 3 BNT; 3 zwraca 6,9995 BNT reszty; 4 uwzględnia opłatę sieciową 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Czytaj diagram jako rozliczenie portfela: **1** to wybrane wejście, **2** wyjście odbiorcy, **3** twoje wyjście reszty, a **4** opłata. Liczby są ilustracyjne; opłatę założono, nie jest to wycena. Strzałki pokazują własność i podział wartości, a nie publiczne powiązania widoczne w eksploratorze.
+
+## Dlaczego jedna płatność tworzy kilka wyjść?
+
+W tym przykładzie `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Odbiorca dostaje `3 BNT`, twój portfel otrzymuje `6.9995 BNT` reszty, a transakcja płaci założoną opłatę `0.0005 BNT`. Powstają dwa nowe wyjścia portfeli, choć zamierzasz zapłacić tylko jednej osobie. Opłata jest oddzielnym polem transakcji, nie trzecim wyjściem odbiorcy.
+
+Dwa wyjścia to przydatny przykład, a nie reguła dla każdej płatności. Konstruktor obsługuje wielu odbiorców, a zaawansowana ścieżka doboru wejść może dzielić resztę na kilka wyjść. Gdy wybrana wartość dokładnie pokrywa odbiorców i opłatę, wyjście reszty nie jest potrzebne. Operacja wysłania wszystkiego oblicza kwotę odbiorcy po odjęciu opłaty od wybranej sumy dostępnej do wydania.
+
+Liczba wyjść opisuje zatem strukturę transakcji. Nie liczy klientów, faktur ani różnych portfeli. Kilka wyjść może należeć do jednego portfela, a transakcja z kilkoma wejściami nadal może płacić jednemu odbiorcy. Pamiętaj o tych różnicach, porównując zapis płatności w portfelu z krótszym podsumowaniem struktury w eksploratorze.
+
+## Gdzie trafia reszta?
+
+Portfel tworzy resztę dla własnych kluczy. W przykładzie pierwotne wyjście `10 BNT` zostaje zużyte, a reszta `6.9995 BNT` to nowe wyjście rozpoznawalne przez ten sam portfel. W zwykłym procesie wysyłania nie trzeba podawać drugiego odbiorcy ani ręcznie kopiować adresu reszty.
+
+Wyjścia odbiorcy i reszty używają jednorazowych kluczy wyjść. Publiczna transakcja nie umieszcza znanego ci adresu odbiorczego obok etykiety „reszta”. Portfel posiada prywatne informacje potrzebne do rozpoznania własnych wyjść. [Poradnik adresów stealth](/pl/blog/stealth-addresses-explained/) wyjaśnia związek jednorazowych kluczy z wielokrotnie używanym adresem odbiorczym.
+
+Reszta podlega też zasadom dla nowo utworzonych wyjść. Po wysłaniu część salda może czekać na potwierdzenie lub dojrzałość, choć nadal należy do ciebie. Nietknięte dojrzałe wyjście może pozostać dostępne, gdy nowa reszta jeszcze czeka. Przed kolejną płatnością sprawdź saldo dostępne do wydania; [poradnik czasu przelewu](/pl/blog/blocknet-transfer-time/) opisuje etapy od rozgłoszenia do możliwości wydania.
+
+## Co sprawdza sieć, a co pokazuje eksplorator?
+
+Każde prawdziwe wejście ma dowód prywatności umieszczający je wśród możliwych wcześniejszych wyjść. Pozostali członkowie pierścienia są przynętami: nie dokładają środków swoich właścicieli do twojej płatności. Obraz klucza pozwala sieci wykryć ponowne wydanie bez ujawniania, który członek pierścienia był rzeczywistym źródłem. Mechanizm opisują [podpisy pierścieniowe](/pl/blog/ring-signatures-explained/).
+
+Sieć weryfikuje też zobowiązania kwotowe i dowody, w tym bilans transakcji z opłatą. [Poradnik dowodów zakresu](/pl/blog/bulletproofs-explained/) wyjaśnia te kontrole przy ukrytych kwotach. Publiczne dane obejmują hash transakcji, strukturę wejść i wyjść oraz opłatę. Samo wklejenie hasha w eksploratorze nie ujawnia prywatnego rozliczenia z przykładu.
+
+Do identyfikacji własnych wpływów i reszty używaj portfela. Do publicznego statusu transakcji i bloków używaj [eksploratora](/pl/blog/blocknet-explorer-guide/). [Poradnik widoczności płatności](/pl/blog/blocknet-payment-visibility/) porównuje, czego mogą dowiedzieć się nadawca, odbiorca i osoby trzecie oraz jak świadomie udostępniać informacje.
+
+## Śledź płatność podczas potwierdzania
+
+Przed zatwierdzeniem wysyłki przeczytaj razem dane odbiorcy, kwotę, opłatę i resztę. Po wysłaniu hash identyfikuje całą transakcję ze wszystkimi wejściami i wyjściami. Nie jest adresem odbiorczym ani identyfikatorem samego wyjścia odbiorcy.
+
+Rozgłoszenie, włączenie do bloku i możliwość wydania to odrębne etapy. Portfel odbiorcy skanuje wyjścia należące do jego kluczy, a twój rozpoznaje resztę. Potwierdzenie i dojrzewanie określają, kiedy nowych wyjść można użyć w kolejnej transakcji. [Poradnik wysyłania i odbierania](/pl/blog/send-receive-blocknet/) opisuje rzeczywiste kroki w portfelu.
+
+Rozpatrując pytanie o płatność, zacznij od zamierzonej kwoty i zapisu w portfelu, a potem sprawdź status transakcji. Pozwala to odczytać płatność: co wybrano, co otrzymał odbiorca, co wróciło jako reszta i co nadal czeka. Działa to zarówno dla środków od innej osoby, jak i z [wypłaty puli wydobywczej](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Kop Blocknet z seine" text="Używaj seine z bntpool.com, aby kopać Blocknet i otrzymywać wypłaty do swojego portfela." />

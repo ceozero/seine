@@ -207,19 +207,22 @@ fn initial_threads(
     }
 }
 
-// Cold start for CPUs whose cohort mines on a streaming kernel (AMD Zen 2-5).
-// Native hosts reach or plateau near their peak by the physical core count
-// (Ryzen 7 9700X, EPYC 7443P/7R32/9R14), while the generic midpoint estimate
-// started a 32-core Zen 5 host at 14 of 28 workers and took ~16 minutes and
-// ~20% of early hashrate to climb. Repeated count trials still decide.
-fn cohort_cold_start(cfg: &Config, host: &CpuAutotuneHostFingerprint) -> Option<usize> {
-    // Unit tests stay host-independent; `initial_threads` covers the policy.
-    (!cfg!(test)
-        && cfg.cpu_profile != CpuPerformanceProfile::Efficiency
-        && super::adaptive_kernel::cohort_kernel().is_some())
-    .then_some(host.physical_cores)
-    .flatten()
-    .filter(|&cores| cores > 0)
+// Cold start for CPUs whose cohort mines on a streaming kernel. Zen 4/5
+// (AVX-512 streaming) start at every allowed logical CPU that fits in RAM: SMT
+// hides memory latency on many-channel servers (EPYC 9355 mined 58.0 H/s at 32
+// workers, 74.7 at 64; 15 min live +4.7% vs a physical-core start). Zen 2/3
+// (AVX2 streaming) plateau by the physical core count, where a full-logical
+// start measured -3.3% live on EPYC 7R13. Count trials still decide afterwards.
+fn cohort_cold_start(cfg: &Config, host: &CpuAutotuneHostFingerprint, max: usize) -> Option<usize> {
+    if cfg!(test) || cfg.cpu_profile == CpuPerformanceProfile::Efficiency {
+        // Unit tests stay host-independent; `initial_threads` covers the policy.
+        return None;
+    }
+    match super::adaptive_kernel::cohort_kernel()? {
+        CpuKernel::Avx2Stream => host.physical_cores,
+        _ => Some(max),
+    }
+    .filter(|&workers| workers > 0)
 }
 
 // Threads already running (including the API's Tokio worker pool) are charged
@@ -328,7 +331,7 @@ fn prepare_with_resources(
         ));
     let cohort_start = seed
         .is_none()
-        .then(|| cohort_cold_start(cfg, &cpu_autotune_host_fingerprint()))
+        .then(|| cohort_cold_start(cfg, &cpu_autotune_host_fingerprint(), max))
         .flatten();
     let threads = initial_threads(
         seed.as_ref(),
@@ -358,7 +361,7 @@ fn prepare_with_resources(
     } else if seed.is_some() {
         "cached starting point"
     } else if cohort_start.is_some() && !full_count {
-        "physical cores for this CPU family"
+        "validated starting count for this CPU family"
     } else {
         "initial estimate"
     };
@@ -1054,8 +1057,16 @@ impl Policy {
                 let better = stable
                     && candidate <= cap
                     && if candidate < base {
-                        candidate_sample.hps
-                            >= self.peak_hps * cpu_autotune_peak_floor_frac(self.profile)
+                        let floor = cpu_autotune_peak_floor_frac(self.profile);
+                        // Fewer workers must beat the baseline's own window-to-window
+                        // spread: ties inside noise moved 14 -> 13 (Windows Zen 5),
+                        // 64 -> 62 (Turin) and 256 -> 254 (EPYC 9754) while mining.
+                        let noise = if floor >= 1.0 {
+                            (before.hps - sample.hps).abs()
+                        } else {
+                            0.0
+                        };
+                        candidate_sample.hps >= self.peak_hps * floor + noise
                     } else {
                         // Highest hashrate is the default objective: a higher
                         // count wins on any measured gain over a stable baseline.
@@ -1243,7 +1254,13 @@ impl Controller {
                 thread::Builder::new()
                     .name("cpu-autotune".into())
                     .spawn(move || {
-                        let (min, max, available) = limits(&cfg, 0);
+                        // Arenas already exist when the controller starts. Use
+                        // the same owned-memory accounting as subsequent ticks,
+                        // so a large cached count does not look like newly
+                        // recovered capacity and postpone kernel selection.
+                        let owned = backends.iter().map(|b| b.adaptive_snapshot())
+                            .filter(|s| s.running).map(|s| s.committed_bytes).sum();
+                        let (min, max, available) = limits(&cfg, owned);
                         let slots = backends.iter().filter(|b| b.adaptive_snapshot().running)
                             .map(|b| b.worker_capacity()).min().unwrap_or(0);
                         let current = backends.iter().filter(|b| b.adaptive_snapshot().running)

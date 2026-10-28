@@ -1,0 +1,62 @@
+---
+title: 'Hoe Faraday de privacy van Blocknet verandert'
+description: 'Begrijp Faradays privacy: spend proofs over de volledige set, betalingsdetectie met ML-KEM, bewijsaggregatie en de voorgestelde gevolgen voor walletgebruikers.'
+tags: ['Blocknet', 'Faraday', 'Privacy']
+faq:
+  - q: 'Betekent privacy over de hele blockchain dat elke historische output al door Faraday wordt beschermd?'
+    a: 'De uitgebreide aankondiging beschrijft de volledige set Faraday-coins. Die set groeit wanneer coins het nieuwe formaat binnengaan. De huidige ringtransacties moeten worden onderscheiden van de migratie naar het voorgestelde formaat. Faraday is nog in ontwikkeling; het nieuwe ontwerp is niet actief op het huidige uitgebrachte netwerk.'
+  - q: 'Maakt ML-KEM de spend proofs van Faraday?'
+    a: 'ML-KEM is een mechanisme voor sleutelinkapseling waarmee een gedeeld geheim wordt vastgesteld. Het project gebruikt dit voor betalingsdetectie. Spend proofs hebben een aparte rol: het netwerk een besteding laten controleren terwijl privégegevens beschermd blijven. Voor die rol stelt Faraday hashgebaseerde bewijzen voor die met Plonky3 worden gebouwd.'
+  - q: 'Staan Faradays bewijsgroottes, fees en tijden vast?'
+    a: 'Nee. De officiële aankondiging beschrijft een ontwerp dat nog wordt gebouwd en getest. De bewijsgroottes en beoogde tijden horen bij het huidige plan; definitieve fees zijn nog niet vastgesteld. Volg de release die Faraday implementeert voor operationele instellingen en de bestaande upgradegids voor informatie over de migratie.'
+sourceHash: 'de4994a9fc4f'
+translation: draft
+---
+
+Volg de twee privacyvragen achter Faraday: hoe het netwerk een besteding controleert zonder de bron te identificeren, en hoe je wallet een inkomende betaling herkent. Dit artikel legt de voorgestelde mechanismen en praktische gevolgen uit. De [officiële aankondiging van 27 oktober](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) zegt dat het ontwerp nog in ontwikkeling is; gebruik de instructies van de uitgebrachte wallet voor het huidige netwerk.
+
+## Wat zou Faraday veranderen aan de privacy van betalingen?
+
+<Answer>
+Faraday stelt voor de huidige inputringen van 16 leden te vervangen door spend proofs die de set Faraday-coins omvatten. Hashgebaseerde bewijzen zouden bestedingen beschermen, terwijl ML-KEM betalingsdetectie zou ondersteunen. Deze mechanismen hebben verschillende taken. Het beoogde resultaat is bredere bestedingsprivacy en postkwantumbescherming binnen het nieuwe coinformaat.
+</Answer>
+
+## Van een ring van 16 naar de set Faraday-coins
+
+Vandaag wijst een besteding een ring aan met de echte input-output en 15 decoys. Met de handtekening kan het netwerk de autorisatie controleren terwijl het echte lid verborgen blijft. De [gids over ringhandtekeningen](/nl/blog/ring-signatures-explained/) legt dit huidige mechanisme uit. De kandidaten zijn de leden van de ring die bij die input is opgenomen.
+
+Het voorgestelde Faraday-bewijs zou aantonen dat de bestede coin ergens tot de geldige Faraday-set behoort, zonder het specifieke lid te publiceren. Dat is de bruikbare betekenis van lidmaatschap van de volledige set: de verificateur controleert lidmaatschap en geldigheid terwijl de verborgen keuze privé blijft. Het betekent niet dat je alle privérecords van andermans wallets downloadt of hun saldi onthult.
+
+De uitgebreide aankondiging noemt Faraday-coins, dus de groeiende set moet worden onderscheiden van alle historische outputs in het oude formaat. Het diagram illustreert dat onderscheid; de stippen zijn een conceptueel voorbeeld, geen actuele telling van coins. De [upgradegids](/nl/blog/blocknet-faraday-upgrade/) behandelt de voorgestelde migratie die bestaande coins naar het nieuwe formaat verplaatst.
+
+[![Een huidige inputring heeft 16 kandidaten, terwijl het voorgestelde Faraday-bewijs verwijst naar een groeiende set coins in Faraday-formaat; oude outputs blijven tot migratie buiten die afgebeelde set.](/assets/blog/blocknet-faraday-privacy-set.svg)](/assets/blog/blocknet-faraday-privacy-set.svg)
+
+## Waarom spend proofs en betalingsdetectie aparte taken zijn
+
+Een spend proof beantwoordt een vraag over netwerkvalidatie: voldoet deze besteding aan de vereiste regels? De wallet van de verzender maakt het bewijs en nodes controleren het. Het project stelt hashgebaseerde bewijzen voor met [Plonky3](https://github.com/Plonky3/Plonky3), een toolkit voor het bouwen van bewijssystemen. De toolkit levert bouwstenen; de concrete regels van Blocknet en hun implementatie bepalen nog steeds wat de verificateur accepteert.
+
+Betalingsdetectie beantwoordt een walletvraag: welke outputs horen bij mij? [ML-KEM](https://csrc.nist.gov/pubs/fips/203/final) is een gestandaardiseerd mechanisme voor sleutelinkapseling om een gedeeld geheim vast te stellen. Het Faraday-plan gebruikt dit aan de ontvangende kant. Lees het niet als een andere naam voor het spend proof of als een handtekeningalgoritme.
+
+Het onderscheid verklaart ook de term postkwantum. Die beschrijft cryptografische ontwerpen die bestand moeten zijn tegen aanvallen met kwantumcomputers; gebruikers hoeven er zelf geen te bezitten. ML-KEM steunt op roosterproblemen, terwijl het aangekondigde spend proof hashgebaseerde technieken gebruikt. Een gestandaardiseerd onderdeel gebruiken certificeert niet vanzelf een volledige cryptocurrency-implementatie. Lees claims over algoritmen, bewijsconstructie en de volledige wallet als afzonderlijke claims.
+
+## Wat gebeurt er na een betaling met het bewijs?
+
+Het voorstel maakt onderscheid tussen het bewijs dat door het netwerk wordt verstuurd en het bewijs dat bij een blok wordt bewaard. De huidige cijfers zijn ongeveer 1,4 MB per spend proof en ongeveer 1 MB voor een gecombineerd blokbewijs. Nodes zouden spend proofs doorgeven, controleren en combineren, en individuele bewijzen na finaliteit weggooien. Dit zijn ontwerpcijfers van het project, geen metingen voor dit artikel.
+
+Bewijzen combineren is een manier om controles samen te vatten. Stel je meerdere onafhankelijk gecontroleerde uitspraken voor die verder worden vertegenwoordigd door een bewijs van hun verificatie. Het blokbewijs dient dat andere doel dan het oorspronkelijke individuele bewijs. Een compact bewaard record laat eerdere netwerkoverdracht en berekeningen niet verdwijnen; doorgifte, bewijsaanmaak, aggregatie en langdurige opslag zijn aparte taken.
+
+[![Individuele spend proofs gaan naar nodes, worden gecombineerd tot één blokbewijs en worden na finaliteit weggegooid volgens het voorgestelde Faraday-ontwerp.](/assets/blog/blocknet-faraday-privacy-flow.svg)](/assets/blog/blocknet-faraday-privacy-flow.svg)
+
+## Wat zouden walletgebruikers merken?
+
+Een nuttige manier om het voorstel te lezen is onderscheid maken tussen het moment waarop je een betaling goedkeurt, het werk van je wallet om het bewijs voor te bereiden, opname in een blok en het wachten tot ontvangen geld uitgeefbaar wordt. Dat zijn verschillende onderdelen van het betaalproces. Een snelle bewijsaanmaak alleen toont geen snelle overdracht van begin tot eind aan.
+
+Het plan stelt een blokdoel van tien minuten voor en zegt dat grotere bestedingen de fees zouden verhogen, terwijl de definitieve bedragen nog worden uitgewerkt. Controleer de feevoorvertoning in de echte wallet zodra compatibele releases beschikbaar zijn. De [gids over overdrachtstijden](/nl/blog/blocknet-transfer-time/) beschrijft het uitgebrachte netwerk met een doel van vijf minuten; toekomstige tijden horen bij de definitieve Faraday-regels. Lees betalingsgrootte, bewijswerk en bloktijd samen wanneer je een schatting beoordeelt.
+
+## Welke gids kun je hierna gebruiken?
+
+Lees [wat iemand van een betaling kan zien](/nl/blog/blocknet-payment-visibility/) voor de huidige openbare transactievelden, walletrecords en bewuste onthullingen. Gebruik de [bestaande Faraday-upgradegids](/nl/blog/blocknet-faraday-upgrade/) voor activeringsplannen, herstelmateriaal en coinmigratie.
+
+Controleer bij een nieuwe aankondiging wat er veranderd is: de geldige coinset, het bewijssysteem, betalingsdetectie, bewijsgroottes of walletgedrag. Controleer daarna of het om een voorstel, een testresultaat of een uitgebrachte functie gaat. Zo blijft je huidige betaalprocedure aansluiten op de software die je daadwerkelijk draait, terwijl je de voorgestelde privacyupgrade in detail kunt volgen.
+
+<CTA target="seine" title="Blijf minen met de uitgebrachte configuratie" text="Gebruik de huidige mininggidsen van seine en volg compatibele instructies voor miner en pool terwijl Faraday verder wordt ontwikkeld." />

@@ -1,0 +1,68 @@
+---
+title: 'Điều gì diễn ra trong một giao dịch Blocknet?'
+description: 'Theo dõi thanh toán Blocknet từ đầu vào đến đầu ra, tiền thừa, phí và xác nhận. Hiểu vì sao một khoản thanh toán có thể tạo nhiều đầu ra trong ví của bạn.'
+tags: ['Blocknet', 'Ví', 'Thanh toán']
+faq:
+  - q: 'Vì sao khoản thanh toán Blocknet của tôi có hai đầu ra?'
+    a: 'Thanh toán số tiền cố định có thể tạo một đầu ra cho người nhận và một đầu ra trả phần giá trị đầu vào chưa dùng về ví dưới dạng tiền thừa. Cũng có thể có nhiều người nhận, tiền thừa chia nhỏ hoặc không có tiền thừa. Chỉ số lượng đầu ra không cho biết bao nhiêu người được trả tiền.'
+  - q: 'Tôi có cần sao chép địa chỉ tiền thừa trước khi gửi không?'
+    a: 'Bộ tạo giao dịch ví đã được kiểm tra tạo tiền thừa bằng khóa công khai của chính ví bạn. Bạn nhập thông tin người nhận dự định; ví xử lý đầu ra tiền thừa. Đầu ra đó thuộc ví gửi và có thể chi tiêu theo quy tắc xác nhận và trưởng thành thông thường.'
+  - q: 'Vòng của đầu vào có chi tiền của mọi thành viên không?'
+    a: 'Mỗi đầu vào chi tiêu một đầu ra thật thuộc người gửi. Các thành viên khác trong vòng cung cấp nguồn khả dĩ cho bằng chứng riêng tư; giá trị của họ không cộng vào khoản thanh toán. Một giao dịch có thể dùng nhiều đầu vào thật, mỗi đầu vào có vòng và ảnh khóa riêng.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Theo dõi một khoản thanh toán Blocknet qua các phần mà ví tạo: tiền hiện có, đầu ra mới, tiền thừa và phí mạng. Bài hướng dẫn giải thích vì sao trả tiền cho một người có thể có nhiều đầu ra và vì sao chi tiêu một đầu ra không đồng nghĩa đưa toàn bộ giá trị cho người nhận. Ví dụ kế toán dùng số tiền giả định, lấy ví core v0.22.0 đã phát hành làm tham chiếu triển khai.
+
+## Giao dịch Blocknet di chuyển tiền của bạn thế nào?
+
+<Answer>
+Ví chọn các đầu ra thuộc sở hữu và có thể chi tiêu, dùng chúng làm đầu vào rồi tạo đầu ra mới cho người nhận và tiền thừa nếu có. Giá trị đã chọn bao gồm số tiền người nhận cộng phí mạng. Bằng chứng riêng tư cho phép mạng xác thực thanh toán, trong khi ví nhận diện đầu ra mới thuộc về bạn.
+</Answer>
+
+## Bắt đầu từ đầu ra mà ví đã sở hữu
+
+Đầu ra là một phần giá trị được giao dịch trước tạo ra. Khi chưa được chi tiêu và đáp ứng quy tắc trưởng thành, ví có thể chọn nó cho thanh toán mới. Số dư có thể gồm nhiều phần từ các lần nhận trước, tiền trả từ đào coin hoặc tiền thừa. Thông thường bạn không cần tự chọn.
+
+Giả sử ví chọn đầu ra trị giá `10 BNT` để thanh toán `3 BNT`. Ví chi tiêu toàn bộ đầu ra hiện có đó. Giao dịch mới sau đó phân bổ giá trị cho người nhận, tiền thừa và phí. Các đầu ra khác có thể giữ nguyên; tổng được chọn không nhất thiết là toàn bộ số dư.
+
+Nhiều đầu ra nhỏ cũng có thể cấp tiền cho một khoản thanh toán. [Bộ tạo giao dịch ví đã phát hành](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) chọn đủ tiền đã trưởng thành để trả số tiền người nhận và phí. Việc chọn đầu vào và ước tính phí theo kích thước tác động lẫn nhau, nên bản xem trước hiện tại của ví rất quan trọng. [Hướng dẫn phí giao dịch](/vi/blog/blocknet-transaction-fees/) giải thích phép tính và nơi kiểm tra.
+
+[![Giao dịch minh họa: 1 chọn 10 BNT; 2 gửi 3 BNT cho người nhận; 3 trả lại 6,9995 BNT tiền thừa; 4 tính phí mạng 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Đọc sơ đồ như sổ kế toán của ví: **1** là đầu vào đã chọn, **2** đầu ra người nhận, **3** đầu ra tiền thừa của bạn và **4** phí. Các con số chỉ để minh họa; phí là giả định, không phải báo giá. Mũi tên thể hiện quyền sở hữu và phân bổ giá trị, không phải liên kết công khai trên trình khám phá.
+
+## Vì sao một khoản thanh toán tạo nhiều đầu ra?
+
+Trong ví dụ này, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Người nhận được `3 BNT`, ví bạn nhận `6.9995 BNT` tiền thừa và giao dịch trả phí giả định `0.0005 BNT`. Có hai đầu ra ví mới dù bạn chỉ định trả cho một người. Phí là trường riêng của giao dịch, không phải đầu ra người nhận thứ ba.
+
+Hai đầu ra là ví dụ hữu ích, không phải quy tắc cho mọi thanh toán. Bộ tạo hỗ trợ nhiều người nhận, và nhánh chọn đầu vào nâng cao có thể chia tiền thừa thành nhiều đầu ra. Nếu giá trị đã chọn vừa đủ trả người nhận và phí, không cần đầu ra tiền thừa. Thao tác gửi tất cả tính số tiền người nhận bằng cách trừ phí khỏi tổng đã chọn có thể chi tiêu.
+
+Vì vậy, số lượng đầu ra mô tả cấu trúc giao dịch. Nó không đếm khách hàng, hóa đơn hay các ví khác nhau. Nhiều đầu ra có thể thuộc cùng một ví và giao dịch nhiều đầu vào vẫn có thể trả cho một người nhận. Nhớ các khác biệt này khi so sánh bản ghi thanh toán trong ví với tóm tắt cấu trúc ngắn hơn trên trình khám phá.
+
+## Tiền thừa đi đâu?
+
+Ví tạo tiền thừa cho khóa của chính nó. Trong ví dụ, đầu ra ban đầu `10 BNT` bị tiêu thụ và tiền thừa `6.9995 BNT` là đầu ra mới mà cùng ví đó nhận diện được. Trong luồng gửi thông thường, bạn không cần nhập người nhận thứ hai hay tự sao chép địa chỉ tiền thừa.
+
+Đầu ra người nhận và tiền thừa dùng khóa đầu ra một lần. Giao dịch công khai không đặt địa chỉ nhận quen thuộc của bạn cạnh nhãn “tiền thừa”. Ví có thông tin riêng tư cần để nhận diện đầu ra của mình. [Hướng dẫn địa chỉ ẩn](/vi/blog/stealth-addresses-explained/) giải thích quan hệ giữa các khóa một lần và địa chỉ nhận có thể dùng lại.
+
+Tiền thừa cũng tuân theo quy tắc cho đầu ra mới. Sau khi gửi, một phần số dư có thể đợi xác nhận hoặc trưởng thành dù vẫn thuộc về bạn. Đầu ra trưởng thành chưa bị đụng đến có thể vẫn sẵn dùng khi tiền thừa mới còn chờ. Kiểm tra số dư có thể chi tiêu trước khoản thanh toán tiếp theo; [hướng dẫn thời gian chuyển tiền](/vi/blog/blocknet-transfer-time/) giải thích các bước từ phát tán đến khả năng chi tiêu.
+
+## Mạng kiểm tra gì, trình khám phá hiển thị gì?
+
+Mỗi đầu vào thật có bằng chứng riêng tư đặt nó giữa các đầu ra trước đó có thể là nguồn. Thành viên khác trong vòng là mồi nhử: không góp tiền của chủ sở hữu vào thanh toán của bạn. Ảnh khóa cho phép mạng phát hiện chi tiêu lặp mà không công bố thành viên nào là nguồn thật. Xem [chữ ký vòng](/vi/blog/ring-signatures-explained/) để hiểu cơ chế.
+
+Mạng còn xác minh cam kết số tiền và bằng chứng, bao gồm việc giao dịch cân bằng cùng phí. [Hướng dẫn bằng chứng phạm vi](/vi/blog/bulletproofs-explained/) giải thích cách kiểm tra khi số tiền bị ẩn. Dữ liệu công khai gồm mã băm giao dịch, cấu trúc đầu vào và đầu ra, cùng phí. Dán mã băm vào trình khám phá không tự tiết lộ kế toán riêng tư trong ví dụ.
+
+Dùng ví để nhận diện khoản nhận và tiền thừa của bạn. Dùng [trình khám phá](/vi/blog/blocknet-explorer-guide/) cho trạng thái giao dịch và khối công khai. [Hướng dẫn mức độ hiển thị thanh toán](/vi/blog/blocknet-payment-visibility/) so sánh những gì người gửi, người nhận hoặc bên thứ ba biết được và các lựa chọn chủ động chia sẻ.
+
+## Theo dõi thanh toán qua xác nhận
+
+Trước khi xác nhận gửi, đọc cùng lúc thông tin người nhận, số tiền người nhận, phí và tiền thừa. Sau khi gửi, mã băm xác định toàn bộ giao dịch, gồm mọi đầu vào và đầu ra. Nó không phải địa chỉ nhận hay mã định danh riêng của đầu ra người nhận.
+
+Phát tán, được đưa vào khối và có thể chi tiêu là các giai đoạn riêng. Ví người nhận quét đầu ra thuộc khóa của mình, còn ví bạn nhận diện tiền thừa. Xác nhận và trưởng thành quyết định khi nào đầu ra mới được dùng trong giao dịch sau. [Hướng dẫn gửi và nhận](/vi/blog/send-receive-blocknet/) trình bày các bước thực tế trong ví.
+
+Khi có câu hỏi về thanh toán, bắt đầu từ số tiền dự định và bản ghi trong ví rồi kiểm tra trạng thái giao dịch. Cách này giúp đọc thanh toán: đã chọn gì, người nhận nhận gì, phần nào trở lại làm tiền thừa và phần nào còn chờ. Điều đó áp dụng dù tiền ban đầu đến từ người khác hay từ [khoản trả của pool đào](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Đào Blocknet với seine" text="Dùng seine với bntpool.com để đào Blocknet và nhận tiền trả vào ví của bạn." />

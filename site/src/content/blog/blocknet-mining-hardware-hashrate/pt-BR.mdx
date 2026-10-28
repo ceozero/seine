@@ -1,17 +1,17 @@
 ---
 title: Melhor hardware para minerar Blocknet
-description: "Compare hardware de mineração Blocknet com resultados medidos: EPYC 9355P chega a 77,1 H/s. Veja RAM, threads, páginas e os dados do benchmark."
+description: "Compare hardware de mineração Blocknet com resultados medidos: EPYC 9375F chega a 85,1 H/s. Veja RAM, threads, páginas e os dados do benchmark."
 tags: [Hardware, Hashrate, Guia de mineração, Argon2id, NVIDIA]
 faq:
   - q: 'Um PC gamer consegue minerar Blocknet?'
     a: 'Sim. No Windows e no Linux, o seine minera com o processador e todas as placas de vídeo NVIDIA do PC ao mesmo tempo, e os hashrates se somam. Ele dimensiona o número de threads de acordo com a sua RAM, então um PC gamer com 32 GB roda até cerca de 14 threads, e ajusta o processador e cada placa automaticamente enquanto minera.'
   - q: 'Quantas threads de mineração de Blocknet 32 GB de RAM conseguem rodar?'
-    a: 'Cerca de 14. Cada thread precisa de um bloco de 2 GiB de memória para cada hash, então 32 GB comportam 16 deles no papel. O seine mantém 5% da RAM em reserva e deixa espaço para o sistema operacional, o que leva uma máquina com 32 GB a cerca de 14 threads. Ele faz essa conta para você ao iniciar.'
+    a: 'Cerca de 14. Cada thread precisa de um bloco de 2 GiB de memória para cada hash, então 32 GB comportam 16 deles no papel. O seine mantém 5% (no máximo 1 GiB por padrão) da RAM em reserva e deixa espaço para o sistema operacional, o que leva uma máquina com 32 GB a cerca de 14 threads. Ele faz essa conta para você ao iniciar.'
   - q: 'Quais placas de vídeo o seine usa para minerar Blocknet?'
     a: 'O seine minera com placas de vídeo NVIDIA nos downloads para Windows e Linux, usando todas as placas que detecta junto com o processador. No Windows, o runtime CUDA está incluído, então você só precisa do driver NVIDIA. No Linux, instale o driver e as bibliotecas NVRTC. A primeira execução ajusta cada placa e lembra o resultado.'
   - q: 'Por que a largura de banda da memória importa na mineração de Blocknet?'
     a: 'Cada hash do Blocknet grava um bloco inteiro de 2 GiB de memória e lê dados de volta de todo ele, muito mais do que qualquer cache de processador comporta. Por isso o hashrate depende da velocidade com que o sistema de memória movimenta os dados. Máquinas com mais largura de banda de memória e RAM suficiente para muitas threads mineram mais rápido.'
-sourceHash: '005a847e85db'
+sourceHash: 666371e468ff
 translation: draft
 ---
 
@@ -22,10 +22,10 @@ Este guia mostra quais máquinas mineram Blocknet mais rápido com o seine, quan
 ## Qual é o melhor hardware para minerar Blocknet?
 
 <Answer>
-A configuração mais rápida nestas medições é um AMD EPYC 9355P a 77,1 H/s: 64 threads de mineração, 192 GiB de RAM e huge pages de 1 GiB preparadas manualmente no Linux. A mineração de Blocknet se beneficia da largura de banda da memória e de RAM suficiente para 2 GiB por thread. Placas NVIDIA podem somar seu hashrate ao da CPU.
+A configuração mais rápida nestas medições é um AMD EPYC 9375F a 85,1 H/s: 64 threads de mineração, 384 GiB de RAM e huge pages de 1 GiB preparadas manualmente no Linux. A mineração de Blocknet se beneficia da largura de banda da memória e de RAM suficiente para 2 GiB por thread. Placas NVIDIA podem somar seu hashrate ao da CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 77.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/headline-20261027/README.md#epyc-9355p-rebenchmark)
+[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
 
 A prova de trabalho do Blocknet é o Argon2id com um bloco de memória de 2 GiB por hash. Isso a torna [memory-hard](/pt-br/blog/argon2id-proof-of-work-explained/): o hashrate depende tanto da largura de banda e da latência da memória quanto do número de núcleos, e de quantos desses blocos de 2 GiB cabem na RAM ao mesmo tempo. Um sistema de memória forte é o que as melhores máquinas da tabela abaixo têm em comum.
 
@@ -77,19 +77,19 @@ Daí saem três pontos na hora de escolher hardware:
 ## De quanta RAM você precisa para cada thread de mineração?
 
 <Answer>
-Cada thread de mineração precisa de cerca de 2 GB de RAM, porque cada hash preenche seu próprio bloco de 2 GiB de memória. Divida sua RAM por dois para saber o máximo de threads que cabem e depois desconte um pouco para o sistema operacional. O seine faz essa conta para você e mantém 5% da RAM em reserva.
+Cada thread de mineração precisa de cerca de 2 GB de RAM, porque cada hash preenche seu próprio bloco de 2 GiB de memória. Divida sua RAM por dois para saber o máximo de threads que cabem e depois desconte um pouco para o sistema operacional. O seine faz essa conta para você e mantém 5% (no máximo 1 GiB por padrão) da RAM em reserva.
 </Answer>
 
-Veja a conta para os tamanhos mais comuns. "No papel" é RAM ÷ 2 GiB. A última coluna desconta a reserva de 5% do seine e cerca de 2-3 GB para o sistema operacional, então use-a como referência aproximada. Para notebooks e PCs mais antigos com 4-12 GB, veja o guia de [mineração em um PC antigo ou notebook](/pt-br/blog/mine-crypto-on-old-pc-or-laptop/).
+Veja a conta para os tamanhos mais comuns. "No papel" é RAM ÷ 2 GiB. A última coluna desconta a reserva de 5% (no máximo 1 GiB por padrão) do seine e cerca de 2-3 GB para o sistema operacional, então use-a como referência aproximada. Para notebooks e PCs mais antigos com 4-12 GB, veja o guia de [mineração em um PC antigo ou notebook](/pt-br/blog/mine-crypto-on-old-pc-or-laptop/).
 
 | RAM | Blocos de memória no papel | Threads que o seine consegue rodar, aproximadamente |
 |---|---|---|
 | 16 GB | 8 | 6 |
 | 32 GB | 16 | 14 |
-| 64 GB | 32 | 29 |
-| 128 GB | 64 | 59 |
+| 64 GB | 32 | 30 |
+| 128 GB | 64 | 62 |
 
-O seine também limita as threads ao número de núcleos lógicos do processador, então o limite real é o que acabar primeiro. Considere um processador de desktop de 16 núcleos com 32 threads de hardware. Com 32 GB de RAM, ele roda cerca de 14 threads de mineração, e com 64 GB, cerca de 29. Para rodar 32 threads você precisa de 64 GiB só para os blocos de memória, mais uma folga, e é por isso que o resultado do Zen 5 com 32 threads veio de uma máquina com 128 GiB.
+O seine também limita as threads ao número de núcleos lógicos do processador, então o limite real é o que acabar primeiro. Considere um processador de desktop de 16 núcleos com 32 threads de hardware. Com 32 GB de RAM, ele roda cerca de 14 threads de mineração, e com 64 GB, cerca de 30. Para rodar 32 threads você precisa de 64 GiB só para os blocos de memória, mais uma folga, e é por isso que o resultado do Zen 5 com 32 threads veio de uma máquina com 128 GiB.
 
 Se você vai comprar RAM para minerar, dimensione-a de acordo com as threads que quer: cerca de 2 GB por thread, mais alguns gigabytes para o sistema.
 
@@ -110,7 +110,7 @@ Para minerar no dia a dia, execute o seine, cole seu endereço ou `@name` e acei
 - **Dimensiona o número de threads** de acordo com a sua RAM e os seus núcleos, depois compara números de threads em trabalho real de mineração e fica com o melhor.
 - **Escolhe o kernel de CPU**, como AVX2, AVX-512, o kernel de streaming no EPYC Zen 5 ou SHA3 no Arm, trocando só depois de dois ganhos confirmados.
 - **Distribui as threads em servidores grandes.** No Linux, ele espalha as threads entre nós NUMA e grupos de cache L3, o que rendeu 16,7% a mais em um EPYC 8434P alugado com 24 threads. O [guia de mineração em servidores](/pt-br/blog/mine-blocknet-on-servers/) traz os detalhes.
-- **Protege sua memória.** Ele mantém uma reserva de 5%, pausa threads se a RAM ficar apertada e as traz de volta quando ela é liberada.
+- **Protege sua memória.** Ele mantém uma reserva de 5% (no máximo 1 GiB por padrão), pausa threads se a RAM ficar apertada e as traz de volta quando ela é liberada.
 - **Lembra o que funcionou**, então a próxima inicialização começa com as configurações já ajustadas.
 
 Nada disso reconecta ao pool, então o ajuste não custa tempo de mineração. O [guia de ajuste automático](https://github.com/zpalmtree/seine/blob/master/docs/guides/autotuning.md) explica cada etapa.

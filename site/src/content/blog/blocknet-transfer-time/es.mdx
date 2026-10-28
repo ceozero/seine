@@ -1,0 +1,76 @@
+---
+title: '¿Cuánto tarda una transferencia de Blocknet?'
+description: 'Sigue una transferencia de Blocknet desde el envío hasta el saldo disponible. Entiende las confirmaciones, la estimación de la billetera y cómo ver su avance.'
+tags: ['Blocknet', 'Billetera', 'Pagos']
+faq:
+  - q: '¿Se puede gastar un pago de Blocknet tras su primera confirmación?'
+    a: 'En core v0.22.0, la versión revisada, la billetera permite gastar una salida recibida ordinaria cuando la punta de la cadena está diez bloques después del bloque que la contiene. El detalle de la transacción puede marcarla como confirmada desde su inclusión. Consulta Spendable Balance cuando terminen la sincronización y el escaneo antes de reenviar esos fondos.'
+  - q: '¿Cerrar mi billetera retrasa el pago del remitente?'
+    a: 'La red puede incluir un pago a tu dirección aunque tu billetera esté cerrada. Al abrirla de nuevo, el nodo y la billetera deben ponerse al día para mostrar la recepción y el saldo actualizados. Mantenerla abierta permite seguir el avance, pero los bloques de la red determinan la profundidad de confirmación.'
+  - q: '¿Una transferencia ordinaria necesita esperar los 60 bloques de una recompensa de minería?'
+    a: 'En la versión revisada, una transferencia ordinaria sigue la regla de profundidad de diez bloques de la billetera. Las salidas coinbase recién minadas tienen una madurez independiente de 60 bloques. El pago de un pool es una transacción posterior, una vez que el pool procesa sus recompensas. Cuando lo envíe, sigue esa transacción de pago.'
+sourceHash: '29e86fdc5954'
+translation: draft
+---
+
+Sigue un pago de Blocknet por las etapas que interesan al remitente y al destinatario: envío, inclusión en un bloque y saldo disponible para gastar. Esta guía explica los tiempos que muestran core y la billetera de escritorio v0.22.0, revisados el 27 de octubre de 2026. Conserva el hash de la transacción para que ambas personas sigan la misma transferencia.
+
+## ¿Cuánto tarda una transferencia de Blocknet?
+
+<Answer>
+Blocknet tiene un intervalo objetivo de cinco minutos por bloque. Después de que un pago ordinario entra en un bloque, la billetera publicada espera diez bloques más antes de permitir gastar los fondos: unos 50 minutos al intervalo objetivo, además de la espera previa a la inclusión. Los tiempos reales varían. Sigue la transacción y el saldo disponible de tu billetera, sin depender de un plazo fijo.
+</Answer>
+
+## Sigue las tres etapas del pago
+
+Primero, el remitente revisa y confirma el pago en su billetera. Conserva el hash que devuelve ese envío. Una transacción en el mempool del nodo ha llegado a ese nodo y espera entrar en un bloque. Su presencia allí no garantiza que aparezca en el siguiente bloque. La [guía para enviar y recibir](/es/blog/send-receive-blocknet/) explica cómo preparar y aprobar el pago.
+
+Después, la transacción entra en un bloque aceptado. Su detalle puede mostrar `Confirmed`, la altura del bloque y un número de confirmaciones. Esto sirve para comprobar la inclusión. La billetera del destinatario identifica su propia salida entrante al escanear la cadena.
+
+Por último, llegan suficientes bloques posteriores para que esa salida se pueda gastar según las reglas de la billetera. El destinatario puede usar el importe de `Spendable Balance`. Antes de la inclusión, el panel puede mostrar un aviso independiente de pago sin confirmar si la billetera local detecta una entrada en el mempool. La captura siguiente usa la interfaz publicada real con datos locales de demostración identificados como tales.
+
+[![Panel de Blocknet publicado que muestra un pago entrante de demostración de 1,25 BNT sin confirmar, antes de su inclusión en un bloque.](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)](/assets/blog/blocknet-transfer-time-unconfirmed.jpg)
+
+## ¿Por qué un pago confirmado puede seguir pendiente?
+
+La [comprobación de madurez de la billetera publicada](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/wallet.go#L713-L738) resta la altura del bloque que contiene la salida a la altura actual de la cadena. Una salida ordinaria sin gastar madura a una profundidad de diez bloques. Un pago incluido en el bloque `100,000` alcanza esa profundidad cuando la punta llega a `100,010`. Estas alturas ilustran la regla; no informan de un pago real.
+
+La [API de detalle de transacciones](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/api_handlers.go#L134) cuenta el bloque contenedor como primera confirmación. El cálculo de disponibilidad de la billetera parte de cero en ese mismo bloque. Por eso, el detalle puede mostrar once confirmaciones cuando la salida ordinaria cumple el requisito de profundidad de diez bloques. Consulta el saldo disponible del panel para saber si ya puedes usar los fondos.
+
+En el ejemplo siguiente, el pago está incluido y han llegado cuatro bloques posteriores. El detalle mostraría cinco confirmaciones, mientras que el panel mantiene los 1,25 BNT ilustrativos en `Pending` e indica que faltan unos seis bloques. Ambas pantallas describen el mismo pago con criterios de disponibilidad distintos.
+
+[![Panel de Blocknet con la recepción de demostración de 1,25 BNT en Pending, cero fondos disponibles y unos seis bloques restantes.](/assets/blog/blocknet-transfer-time-pending.jpg)](/assets/blog/blocknet-transfer-time-pending.jpg)
+
+## ¿Cómo interpreto la estimación de tiempo?
+
+Diez bloques multiplicados por el objetivo de cinco minutos dan unos 50 minutos después de la inclusión. Antes está la espera para entrar en un bloque. Este cálculo explica la escala temporal; no es un promedio medido de pagos ni un plazo garantizado.
+
+El panel publicado también convierte los bloques restantes en un tiempo aproximado. Con seis bloques pendientes, seis por cinco da unos 30 minutos. La cadena aún debe producir esos bloques. Que una cuenta regresiva llegue a cero no añade por sí solo un bloque ni habilita una salida para gastar. Revisa el avance actual de la cadena y el saldo.
+
+Puede aparecer un aviso de pago entrante antes de su inclusión. Usa su estimación como orientación y sigue después el bloque contenedor y el saldo disponible. La sincronización y el escaneo también influyen en cuándo tu pantalla refleja lo que la red ya ha hecho.
+
+## ¿Dónde deben consultar el remitente y el destinatario?
+
+El remitente debe abrir `History`, buscar el pago saliente y conservar su `TX Hash`. El destinatario puede usar ese mismo hash para identificar la transferencia entrante. Compararlo evita confundirla con otro envío a la misma dirección.
+
+La [guía del explorador de Blocknet](/es/blog/blocknet-explorer-guide/) muestra cómo buscar una transacción y el bloque que la contiene. La consulta pública ayuda a comprobar la inclusión en la red. La billetera del destinatario aporta los detalles privados de recepción y saldo asociados a sus claves. Usa la billetera para comprobar el importe recibido.
+
+En la computadora receptora, abre la billetera correcta y compara `Your Address`, en `Receive`, con el destino usado por el remitente. Comprueba después la sincronización del nodo y el escaneo antes de concluir que falta una entrada. Una billetera que estaba cerrada puede tardar en descubrir pagos que ya avanzaron en la cadena.
+
+## ¿Cuándo puedo volver a enviar los BNT recibidos?
+
+Espera a que la recepción se sume a `Spendable Balance` en un `Dashboard` sincronizado. También puedes consultar `Pending` y `Total` para ver cómo se divide el saldo registrado. Si ya tenías otros fondos, parte del saldo puede estar disponible mientras esta recepción sigue pendiente. Sigue la entrada correspondiente del historial para consultar una transferencia concreta.
+
+La captura muestra el mismo pago de demostración una vez añadidos diez bloques después del bloque que lo contiene. Sus 1,25 BNT ya se pueden gastar y el saldo pendiente es cero. Estas imágenes ilustran el frontend publicado; no miden la duración de una transferencia real. Antes de aprobar tu próximo pago, revisa el importe y la comisión en la billetera.
+
+[![Panel de Blocknet publicado que muestra el mismo pago de demostración como 1,25 BNT de Spendable Balance tras alcanzar diez bloques de profundidad.](/assets/blog/blocknet-transfer-time-spendable.jpg)](/assets/blog/blocknet-transfer-time-spendable.jpg)
+
+## ¿Qué compruebo si el pago no aparece?
+
+Parte de la etapa que puedas verificar. Pide al remitente el hash existente, comprueba la inclusión y compara el destino receptor. Si el historial o saldo local no está al día, sigue las [comprobaciones de sincronización y escaneo](/es/blog/blocknet-wallet-not-syncing/). Conserva el registro original durante la consulta; hacer otro envío es un pago independiente.
+
+Para ingresos de minería, distingue primero una recompensa ganada en el pool de un pago ya enviado a tu dirección. La [guía de confirmaciones de recompensas](https://bntpool.com/blog/es/block-confirmations-mining-rewards/) explica la madurez independiente de 60 bloques de las monedas recién minadas. Cuando el pool envíe una transacción de pago ordinaria, sigue su inclusión y disponibilidad en la billetera. La [guía de pagos que no aparecen](https://bntpool.com/blog/es/pool-payout-missing-from-wallet/) conecta el registro del pool con la billetera receptora.
+
+La comprobación final es sencilla: identifica la billetera correcta, compara el hash del pago y consulta el saldo disponible tras la sincronización y el escaneo. Esta guía describe las reglas publicadas actuales. La [guía de Faraday](/es/blog/blocknet-faraday-upgrade/) sigue por separado los cambios futuros anunciados para la red.
+
+<CTA target="seine" title="Mina hacia tu billetera de Blocknet" text="Usa seine con tu dirección pública de recepción y sigue los pagos del pool en esa misma billetera." />

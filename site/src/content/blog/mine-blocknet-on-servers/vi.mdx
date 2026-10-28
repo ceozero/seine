@@ -11,7 +11,7 @@ faq:
     a: 'Có. Chạy seine với --api-server hoặc --service, nó sẽ cung cấp số liệu Prometheus tại /metrics trên API điều khiển cục bộ, mặc định lắng nghe ở 127.0.0.1 cổng 9977. Số liệu cho biết trình đào có đang chạy không, trạng thái vòng đời, số lời giải đã gửi, được chấp nhận và stale, cùng các lần backend bị cách ly. Các lượt thu thập gửi kèm bearer token của API.'
   - q: 'Vì sao API điều khiển của seine yêu cầu token?'
     a: 'Từ seine v0.2.23, mọi endpoint của API điều khiển trừ kiểm tra tình trạng đều cần bearer token, giúp ngăn các trang web bạn truy cập thay đổi địa chỉ nhận thanh toán hay thiết lập của bạn. seine ghi một token mới vào control-api.cookie trong thư mục dữ liệu mỗi lần khởi động, hoặc bạn có thể đặt token cố định bằng --api-token.'
-sourceHash: 186b1dc3c49e
+sourceHash: 747f36a1fe6d
 translation: reviewed
 ---
 
@@ -49,7 +49,7 @@ Cách xếp luồng và huge pages cộng dồn với nhau, như hàng thứ hai
 
 ### Bộ nhớ dự phòng trên máy chủ dùng chung
 
-Cơ chế tự chọn số luồng chừa 5% tổng RAM, cộng thêm phần dành cho GPU nếu có. Thay đổi mức này bằng `--cpu-memory-reserve-percent`. Nếu các dịch vụ khác bắt đầu dùng bộ nhớ, các luồng tự động của seine sẽ giải phóng vùng nhớ và quay lại khi bộ nhớ trống trở lại, nên việc đào luôn vừa vặn với phần còn lại của máy. Kết quả tinh chỉnh được lưu đệm theo từng máy, và bộ đệm được đặt lại khi tập CPU được phép hoặc bố cục NUMA và L3 thay đổi, chẳng hạn sau khi đổi cấu hình máy ảo.
+Cơ chế tự chọn số luồng chừa 5% (mặc định tối đa 1 GiB) tổng RAM, cộng thêm phần dành cho GPU nếu có. Thay đổi mức này bằng `--cpu-memory-reserve-percent`. Nếu các dịch vụ khác bắt đầu dùng bộ nhớ, các luồng tự động của seine sẽ giải phóng vùng nhớ và quay lại khi bộ nhớ trống trở lại, nên việc đào luôn vừa vặn với phần còn lại của máy. Kết quả tinh chỉnh được lưu đệm theo từng máy, và bộ đệm được đặt lại khi tập CPU được phép hoặc bố cục NUMA và L3 thay đổi, chẳng hạn sau khi đổi cấu hình máy ảo. Trong v0.2.43, phần dự phòng mặc định bị giới hạn ở 1 GiB; tỷ lệ đặt rõ ràng không chịu giới hạn này.
 
 ## Làm sao chạy seine không giao diện?
 

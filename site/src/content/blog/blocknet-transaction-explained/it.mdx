@@ -1,0 +1,68 @@
+---
+title: 'Cosa succede dentro una transazione Blocknet?'
+description: 'Segui un pagamento Blocknet dagli input agli output, al resto, alla commissione e alla conferma. Scopri perché un pagamento può generare diversi output.'
+tags: ['Blocknet', 'Wallet', 'Pagamenti']
+faq:
+  - q: 'Perché il mio pagamento Blocknet ha due output?'
+    a: 'Un pagamento a importo fisso può creare un output per il destinatario e un altro che restituisce al wallet il valore inutilizzato degli input come resto. Sono possibili altre forme: più destinatari, resto suddiviso o nessun resto. Il solo numero di output non indica quante persone sono state pagate.'
+  - q: 'Devo copiare un indirizzo per il resto prima di inviare?'
+    a: 'Il costruttore di transazioni esaminato crea il resto usando le chiavi pubbliche del tuo wallet. Inserisci i dati del destinatario desiderato; il wallet gestisce il proprio output di resto. Tale output appartiene al wallet mittente e diventa spendibile secondo le normali regole di conferma e maturazione.'
+  - q: 'Un anello di input spende i fondi di tutti i membri?'
+    a: 'Ogni input spende un output reale appartenente al mittente. Gli altri membri dell’anello offrono possibili origini per la prova di riservatezza; il loro valore non viene aggiunto al pagamento. Una transazione può usare diversi input reali, ognuno con il proprio anello e la propria immagine della chiave.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Segui un pagamento Blocknet attraverso gli elementi costruiti dal wallet: fondi esistenti, nuovi output, resto e commissione di rete. Questo percorso spiega perché pagare una persona può generare più output e perché spendere un output del wallet non significa darne tutto il valore al destinatario. L’esempio contabile usa importi inventati e prende come riferimento di implementazione il wallet pubblicato di core v0.22.0.
+
+## Come sposta i fondi una transazione Blocknet?
+
+<Answer>
+Il wallet seleziona output spendibili che possiede, li usa come input e crea nuovi output per il destinatario e l’eventuale resto. Il valore selezionato copre l’importo del destinatario più la commissione di rete. Le prove di riservatezza consentono alla rete di convalidare il pagamento, mentre il wallet riconosce i nuovi output che ti appartengono.
+</Answer>
+
+## Parti dagli output già posseduti dal wallet
+
+Un output è una porzione di valore creata da una transazione precedente. Finché resta non speso e rispetta le regole di maturazione, il wallet può selezionarlo per un nuovo pagamento. Il saldo può includere più porzioni derivanti da precedenti incassi, pagamenti di mining o resto. Normalmente non devi sceglierle personalmente.
+
+Supponiamo che il wallet scelga un output di `10 BNT` per pagare `3 BNT`. Spende tutto quell’output esistente. La nuova transazione ripartisce poi il valore fra destinatario, resto e commissione. Altri output possono restare intatti; il totale scelto non coincide necessariamente con tutto il saldo.
+
+Anche più output piccoli possono finanziare un pagamento. Il [costruttore del wallet pubblicato](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) sceglie fondi maturi sufficienti per importo del destinatario e commissione. Selezione degli input e stima della commissione basata sulle dimensioni interagiscono: per questo conta l’anteprima attuale del wallet. La [guida alle commissioni di transazione](/it/blog/blocknet-transaction-fees/) spiega il calcolo e dove consultarlo.
+
+[![Transazione illustrativa: 1 seleziona 10 BNT; 2 invia 3 BNT al destinatario; 3 restituisce 6,9995 BNT di resto; 4 contabilizza una commissione di rete di 0,0005 BNT.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Leggi il diagramma come contabilità del wallet: **1** è l’input selezionato, **2** l’output del destinatario, **3** il tuo output di resto e **4** la commissione. I numeri sono illustrativi; la commissione è ipotizzata, non un preventivo. Le frecce mostrano proprietà e ripartizione del valore, non collegamenti pubblici visibili in un explorer.
+
+## Perché un pagamento può creare più output?
+
+In questo esempio, `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. Il destinatario riceve `3 BNT`, il tuo wallet riceve `6.9995 BNT` di resto e la transazione paga la commissione ipotizzata di `0.0005 BNT`. Ci sono due nuovi output di wallet, benché volessi pagare una sola persona. La commissione è un campo separato della transazione, non un terzo output per un destinatario.
+
+Due output sono un esempio utile, non una regola universale. Il costruttore supporta più destinatari e il percorso avanzato di selezione degli input può suddividere il resto tra diversi output. Se il valore scelto copre esattamente destinatari e commissione, non serve un output di resto. L’operazione di invio totale calcola invece l’importo del destinatario sottraendo la commissione dal totale spendibile selezionato.
+
+Il numero di output descrive dunque la struttura della transazione. Non conta clienti, fatture o wallet diversi. Più output possono appartenere allo stesso wallet e una transazione con diversi input può comunque pagare un solo destinatario. Ricorda queste differenze confrontando il pagamento registrato nel wallet con il riepilogo strutturale più breve dell’explorer.
+
+## Dove va il resto?
+
+Il wallet costruisce il resto per le proprie chiavi. Nell’esempio, l’output originale di `10 BNT` viene consumato e il resto di `6.9995 BNT` è un nuovo output riconoscibile dallo stesso wallet. Nel normale invio non devi inserire un secondo destinatario né copiare manualmente un indirizzo per il resto.
+
+Gli output del destinatario e del resto usano chiavi di output monouso. La transazione pubblica non affianca il tuo consueto indirizzo di ricezione a un’etichetta “resto”. Il wallet dispone delle informazioni private per riconoscere i propri output. La [guida agli indirizzi stealth](/it/blog/stealth-addresses-explained/) spiega la relazione fra queste chiavi monouso e un indirizzo di ricezione riutilizzabile.
+
+Anche il resto segue le regole dei nuovi output. Dopo l’invio, parte del saldo può attendere conferma o maturazione pur continuando ad appartenerti. Un output maturo intatto può restare disponibile mentre il nuovo resto è ancora in attesa. Controlla il saldo spendibile prima di un altro pagamento; la [guida ai tempi di trasferimento](/it/blog/blocknet-transfer-time/) spiega le fasi dalla diffusione alla spendibilità.
+
+## Cosa controlla la rete e cosa mostra un explorer?
+
+Ogni input reale ha una prova di riservatezza che lo colloca fra possibili output precedenti. Gli altri membri dell’anello sono esche: non apportano fondi dei loro proprietari al tuo pagamento. Un’immagine della chiave permette alla rete di rilevare una spesa ripetuta senza pubblicare quale membro fosse la vera origine. Vedi le [firme ad anello](/it/blog/ring-signatures-explained/) per questo meccanismo.
+
+La rete verifica anche impegni sugli importi e prove, compreso il bilanciamento della transazione con la commissione. La [guida alle prove di intervallo](/it/blog/bulletproofs-explained/) spiega questi controlli con importi nascosti. I dati pubblici includono hash della transazione, struttura degli input e output e commissione. Incollare l’hash nell’explorer non rivela di per sé la contabilità privata dell’esempio.
+
+Usa il wallet per identificare i tuoi incassi e il resto. Usa l’[explorer](/it/blog/blocknet-explorer-guide/) per lo stato pubblico di transazioni e blocchi. La [guida alla visibilità dei pagamenti](/it/blog/blocknet-payment-visibility/) confronta ciò che mittente, destinatario o terzi possono sapere e le opzioni di condivisione volontaria.
+
+## Segui il pagamento durante la conferma
+
+Prima di confermare un invio, leggi insieme dati del destinatario, importo, commissione e resto. Dopo l’invio, l’hash identifica l’intera transazione con tutti gli input e output. Non è un indirizzo di ricezione né l’identificatore del solo output del destinatario.
+
+Diffusione, inclusione in un blocco e spendibilità sono fasi distinte. Il wallet del destinatario cerca gli output per le sue chiavi, mentre il tuo riconosce il resto. Conferma e maturazione determinano quando i nuovi output potranno essere usati in una transazione successiva. La [guida a invio e ricezione](/it/blog/send-receive-blocknet/) descrive i passaggi reali nel wallet.
+
+Per una domanda su un pagamento, parti dall’importo previsto e dalla registrazione del wallet, poi controlla lo stato della transazione. Così puoi leggere il pagamento: cosa è stato selezionato, cosa ha ricevuto il destinatario, cosa è tornato come resto e cosa resta in attesa. Vale sia per fondi provenienti da un’altra persona sia per un [pagamento di un pool di mining](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Usa seine con bntpool.com per minare Blocknet e ricevere i pagamenti nel tuo wallet." />

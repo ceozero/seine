@@ -1,0 +1,68 @@
+---
+title: 'Wat gebeurt er in een Blocknet-transactie?'
+description: 'Volg een Blocknet-betaling van inputs naar outputs, wisselgeld, kosten en bevestiging. Leer waarom één betaling meerdere outputs in je wallet kan opleveren.'
+tags: ['Blocknet', 'Wallet', 'Betalingen']
+faq:
+  - q: 'Waarom heeft mijn Blocknet-betaling twee outputs?'
+    a: 'Een betaling met een vast bedrag kan één output voor de ontvanger maken en een andere die ongebruikte inputwaarde als wisselgeld terugstuurt naar je wallet. Andere vormen zijn ook mogelijk: meerdere ontvangers, verdeeld wisselgeld of geen wisselgeld. Alleen het aantal outputs zegt niet hoeveel mensen zijn betaald.'
+  - q: 'Moet ik vóór verzending een wisselgeldadres kopiëren?'
+    a: 'De onderzochte transactiebouwer maakt wisselgeld met de publieke sleutels van je eigen wallet. Je voert de gegevens van de bedoelde ontvanger in; de wallet regelt zijn wisselgeldoutput. Die output behoort aan de verzendende wallet en wordt besteedbaar volgens de normale regels voor bevestiging en rijping.'
+  - q: 'Besteedt een inputring geld van alle leden?'
+    a: 'Elke input besteedt één echte output die de verzender bezit. Andere ringleden bieden mogelijke bronnen voor het privacybewijs; hun waarde wordt niet aan de betaling toegevoegd. Een transactie kan meerdere echte inputs gebruiken, elk met een eigen ring en sleutelbeeld.'
+sourceHash: 'e2fd47579f05'
+translation: draft
+---
+
+Volg één Blocknet-betaling door de onderdelen die je wallet bouwt: bestaande middelen, nieuwe outputs, wisselgeld en netwerkkosten. Deze uitleg laat zien waarom een betaling aan één persoon meerdere outputs kan hebben en waarom het besteden van een walletoutput niet betekent dat de ontvanger de volledige waarde krijgt. Het rekenvoorbeeld gebruikt verzonnen bedragen, met de uitgebrachte wallet van core v0.22.0 als implementatiereferentie.
+
+## Hoe verplaatst een Blocknet-transactie je geld?
+
+<Answer>
+Je wallet kiest besteedbare outputs die hij bezit, gebruikt ze als inputs en maakt nieuwe outputs voor de ontvanger en eventueel wisselgeld. De gekozen waarde dekt het bedrag voor de ontvanger plus de netwerkkosten. Privacybewijzen laten het netwerk de betaling valideren, terwijl je wallet de nieuwe outputs herkent die van jou zijn.
+</Answer>
+
+## Begin met de outputs die je wallet al bezit
+
+Een output is een stuk waarde dat door een eerdere transactie is gemaakt. Zolang het onbesteed blijft en aan de rijpingsregels voldoet, kan je wallet het voor een nieuwe betaling kiezen. Het saldo kan meerdere zulke delen bevatten uit eerdere ontvangsten, mininguitbetalingen of wisselgeld. Meestal hoef je ze niet zelf te kiezen.
+
+Stel dat je wallet een output van `10 BNT` kiest voor een betaling van `3 BNT`. Hij besteedt die hele bestaande output. De nieuwe transactie verdeelt de waarde vervolgens over ontvanger, wisselgeld en kosten. Andere outputs kunnen onaangeroerd blijven; het geselecteerde totaal is niet noodzakelijk je volledige saldo.
+
+Ook meerdere kleinere outputs kunnen één betaling financieren. De [uitgebrachte walletbouwer](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/wallet/builder.go) kiest genoeg gerijpte middelen voor het bedrag van de ontvanger en de kosten. Inputselectie en de op grootte gebaseerde kostenschatting beïnvloeden elkaar, dus het actuele betalingsoverzicht in je wallet is belangrijk. De [gids voor transactiekosten](/nl/blog/blocknet-transaction-fees/) legt de berekening uit en waar je die bekijkt.
+
+[![Voorbeeldtransactie: 1 kiest 10 BNT; 2 stuurt 3 BNT naar de ontvanger; 3 geeft 6,9995 BNT terug als wisselgeld; 4 rekent 0,0005 BNT netwerkkosten mee.](/assets/blog/blocknet-transaction-explained-flow.svg)](/assets/blog/blocknet-transaction-explained-flow.svg)
+
+Lees het diagram als walletboekhouding: **1** is de gekozen input, **2** de output van de ontvanger, **3** je wisselgeldoutput en **4** de kosten. De getallen zijn illustratief; de kosten zijn aangenomen, geen prijsopgave. De pijlen tonen eigendom en waardeverdeling, geen openbaar zichtbare verbanden in een explorer.
+
+## Waarom kan één betaling meerdere outputs maken?
+
+In dit voorbeeld geldt `10 BNT = 3 BNT + 6.9995 BNT + 0.0005 BNT`. De ontvanger krijgt `3 BNT`, je wallet krijgt `6.9995 BNT` wisselgeld en de transactie betaalt de aangenomen kosten van `0.0005 BNT`. Er zijn twee nieuwe walletoutputs, hoewel je maar één persoon wilde betalen. De kosten vormen een apart transactieveld, geen derde ontvangersoutput.
+
+Twee outputs zijn een bruikbaar voorbeeld, geen regel voor elke betaling. De bouwer ondersteunt meerdere ontvangers, en zijn geavanceerde inputselectie kan wisselgeld over meerdere outputs verdelen. Dekt de gekozen waarde precies de ontvangers en kosten, dan is geen wisselgeldoutput nodig. Bij alles verzenden wordt het bedrag voor de ontvanger juist berekend door de kosten van het geselecteerde besteedbare totaal af te trekken.
+
+Het aantal outputs beschrijft dus de transactiestructuur. Het telt geen klanten, facturen of verschillende wallets. Meerdere outputs kunnen bij dezelfde wallet horen en een transactie met meerdere inputs kan nog steeds één ontvanger betalen. Houd dit onderscheid in gedachten wanneer je een walletbetaling vergelijkt met de kortere structurele samenvatting in een explorer.
+
+## Waar gaat het wisselgeld heen?
+
+De wallet maakt wisselgeld voor zijn eigen sleutels. In het voorbeeld wordt de oorspronkelijke output van `10 BNT` verbruikt en is het wisselgeld van `6.9995 BNT` een nieuwe output die dezelfde wallet herkent. Bij normaal verzenden hoef je geen tweede ontvanger in te voeren of handmatig een wisselgeldadres te kopiëren.
+
+Outputs voor ontvangers en wisselgeld gebruiken eenmalige outputsleutels. De openbare transactie plaatst je vertrouwde ontvangstadres niet naast een label “wisselgeld”. Je wallet heeft de privégegevens om eigen outputs te herkennen. De [gids voor stealth-adressen](/nl/blog/stealth-addresses-explained/) legt uit hoe deze eenmalige sleutels samenhangen met een herbruikbaar ontvangstadres.
+
+Wisselgeld volgt ook de regels voor nieuw gemaakte outputs. Na verzending kan een deel van je saldo op bevestiging of rijping wachten, terwijl het nog steeds van jou is. Een onaangeroerde gerijpte output kan beschikbaar blijven terwijl nieuw wisselgeld wacht. Controleer het besteedbare saldo vóór een volgende betaling; de [gids voor overdrachtstijd](/nl/blog/blocknet-transfer-time/) legt de stappen uit van verspreiding tot besteedbaarheid.
+
+## Wat controleert het netwerk en toont een explorer?
+
+Elke echte input heeft een privacybewijs dat hem tussen mogelijke eerdere outputs plaatst. Andere ringleden zijn afleiders: ze dragen geen geld van hun eigenaren bij aan je betaling. Een sleutelbeeld laat het netwerk herhaald besteden herkennen zonder te publiceren welk ringlid de echte bron was. Zie [ringhandtekeningen](/nl/blog/ring-signatures-explained/) voor dat mechanisme.
+
+Het netwerk controleert ook bedragstoezeggingen en bewijzen, waaronder of de transactie met haar kosten in balans is. De [gids voor bereikbewijzen](/nl/blog/bulletproofs-explained/) legt uit hoe die controles met verborgen bedragen werken. Openbare gegevens omvatten de transactiehash, de structuur van inputs en outputs en de kosten. Alleen de hash in een explorer plakken onthult niet de privéboekhouding uit het voorbeeld.
+
+Gebruik je wallet om eigen ontvangsten en wisselgeld te herkennen. Gebruik de [explorer](/nl/blog/blocknet-explorer-guide/) voor de openbare status van transacties en blokken. De [gids voor zichtbaarheid van betalingen](/nl/blog/blocknet-payment-visibility/) vergelijkt wat verzender, ontvanger en derden kunnen weten en welke opties er zijn om bewust informatie te delen.
+
+## Volg de betaling tijdens bevestiging
+
+Lees vóór het bevestigen van een verzending de ontvangergegevens, het bedrag, de kosten en het wisselgeld samen. Na indiening identificeert de hash de hele transactie, inclusief alle inputs en outputs. Het is geen ontvangstadres of identificatie van alleen de ontvangersoutput.
+
+Verspreiding, opname in een blok en besteedbaarheid zijn aparte stappen. De wallet van de ontvanger scant op outputs voor zijn sleutels, terwijl jouw wallet het wisselgeld herkent. Bevestiging en rijping bepalen wanneer de nieuwe outputs voor een volgende transactie bruikbaar zijn. De [gids voor verzenden en ontvangen](/nl/blog/send-receive-blocknet/) beschrijft de echte walletstappen.
+
+Begin bij een betalingsvraag met het bedoelde bedrag en de walletregistratie en controleer daarna de transactiestatus. Zo lees je de betaling zinvol: wat werd gekozen, wat kreeg de ontvanger, wat kwam terug als wisselgeld en wat wacht nog? Dat werkt zowel voor middelen van een andere persoon als voor een [uitbetaling van een miningpool](https://bntpool.com/blog/pool-payout-missing-from-wallet/).
+
+<CTA target="seine" title="Mine Blocknet met seine" text="Gebruik seine met bntpool.com om Blocknet te minen en uitbetalingen in je wallet te ontvangen." />
