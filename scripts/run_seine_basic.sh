@@ -88,6 +88,17 @@ apt-get install -y tmux
 if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
     echo "发现已有 tmux 会话 ${TMUX_SESSION}；先关闭旧会话后重建。"
     tmux kill-session -t "$TMUX_SESSION" || die "无法关闭已有 tmux 会话 ${TMUX_SESSION}。"
+    # 等待 seine 进程彻底退出以释放 HugeTLB 页
+    echo "等待 seine 进程退出..."
+    waited=0
+    while pgrep -x seine >/dev/null 2>&1; do
+        sleep 1
+        waited=$((waited + 1))
+        if ((waited >= 30)); then
+            die "seine 进程在 30 秒内未退出，请手动终止后重试。"
+        fi
+    done
+    echo "seine 进程已退出（等待 ${waited} 秒）。"
 fi
 
 remove_grub_hugepage_settings
