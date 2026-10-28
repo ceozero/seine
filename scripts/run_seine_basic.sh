@@ -72,7 +72,8 @@ restore_hugetlb_pages() {
         echo "HugeTLB nr_hugepages 已恢复为 0。"
     fi
 }
-
+printf '3\n' >/proc/sys/vm/drop_caches || die "无法释放页缓存。"
+printf '1\n' >/proc/sys/vm/compact_memory || die "无法整理内存碎片。"
 if ((EUID != 0)); then
     die "此脚本需要 root 权限，请使用 sudo bash $0 运行。"
 fi
