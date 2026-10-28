@@ -82,6 +82,14 @@ if ! command -v apt-get >/dev/null 2>&1; then
     die "仅支持带 apt-get 的 Debian/Ubuntu 系统。"
 fi
 
+echo "安装 tmux..."
+apt-get install -y tmux
+
+if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    echo "发现已有 tmux 会话 ${TMUX_SESSION}；先关闭旧会话后重建。"
+    tmux kill-session -t "$TMUX_SESSION" || die "无法关闭已有 tmux 会话 ${TMUX_SESSION}。"
+fi
+
 remove_grub_hugepage_settings
 restore_hugetlb_pages
 
@@ -96,14 +104,6 @@ case "$(uname -m)" in
         die "不支持的 CPU 架构: $(uname -m)（仅支持 amd64 和 arm64）。"
         ;;
 esac
-
-echo "安装 tmux..."
-apt-get install -y tmux
-
-if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
-    echo "发现已有 tmux 会话 ${TMUX_SESSION}；先关闭旧会话后重建。"
-    tmux kill-session -t "$TMUX_SESSION" || die "无法关闭已有 tmux 会话 ${TMUX_SESSION}。"
-fi
 
 archive="seine-linux-${release_arch}.tar.gz"
 checksum_file="SHA256SUMS.txt"
