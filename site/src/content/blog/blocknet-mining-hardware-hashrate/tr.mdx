@@ -1,6 +1,6 @@
 ---
 title: Blocknet madenciliği için en iyi donanım
-description: "Blocknet madencilik donanımlarını ölçümlerle karşılaştırın: EPYC 9375F 85,1 H/s’ye ulaşıyor. RAM, iş parçacıkları, sayfa ayarları ve test verilerini inceleyin."
+description: "Blocknet madencilik donanımlarını ölçümlerle karşılaştırın: EPYC 9355P varsayılan ayarlarla 97,1 H/s’ye ulaşıyor. RAM, iş parçacıkları ve test verilerini inceleyin."
 tags: [Donanım, Hashrate, Madencilik rehberi, Argon2id, NVIDIA]
 faq:
   - q: 'Bir oyun bilgisayarı Blocknet madenciliği yapabilir mi?'
@@ -11,7 +11,7 @@ faq:
     a: 'seine, Windows ve Linux indirmeleriyle NVIDIA ekran kartlarında madencilik yapar ve algıladığı her kartı işlemciyle birlikte kullanır. Windows''ta CUDA çalışma zamanı dahildir, bu yüzden yalnızca NVIDIA sürücüsüne ihtiyacınız olur. Linux''ta sürücüyü ve NVRTC kütüphanelerini kurun. İlk açılışta her kart ayarlanır ve sonuç hatırlanır.'
   - q: 'Blocknet madenciliğinde bellek bant genişliği neden önemlidir?'
     a: 'Her Blocknet hash''i 2 GiB''lık bir bellek bloğunun tamamını yazar ve bloğun her yerinden veri geri okur; bu, herhangi bir işlemci önbelleğinin tutabileceğinden çok daha fazladır. Bu yüzden hashrate, bellek sisteminin veriyi ne kadar hızlı taşıdığına bağlıdır. Bellek bant genişliği yüksek ve çok sayıda iş parçacığına yetecek RAM''e sahip makineler en hızlı madencilik yapar.'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ Bu rehber, seine ile hangi makinelerin Blocknet madenciliğini en hızlı yaptı
 ## Blocknet madenciliği için en iyi donanım hangisi?
 
 <Answer>
-Bu ölçümlerdeki en hızlı yapılandırma, 85,1 H/s ile AMD EPYC 9375F’dir: 64 madencilik iş parçacığı, 384 GiB RAM ve Linux’ta elle hazırlanmış 1 GiB huge pages. Blocknet madenciliği, bellek bant genişliğinden ve iş parçacığı başına 2 GiB sağlayacak yeterli RAM’den yararlanır. NVIDIA kartları, CPU’nun yanına kendi hash güçlerini ekleyebilir.
+Bu ölçümlerdeki en hızlı yapılandırma, 97,1 H/s ile AMD EPYC 9355P’dir: Linux’ta seine’in varsayılan ayarlarıyla 64 madencilik iş parçacığı ve 192 GiB RAM. Blocknet madenciliği, bellek bant genişliğinden ve iş parçacığı başına 2 GiB sağlayacak yeterli RAM’den yararlanır. NVIDIA kartları, CPU’nun yanına kendi hash güçlerini ekleyebilir.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Blocknet'in iş kanıtı, hash başına 2 GiB'lık bir bellek bloğu kullanan Argon2id'dir. Bu onu [bellek yoğun](/tr/blog/argon2id-proof-of-work-explained/) kılar: hashrate, çekirdek sayısı kadar bellek bant genişliğine ve gecikmesine, ayrıca bu 2 GiB'lık bloklardan kaçının aynı anda RAM'e sığdığına bağlıdır. Aşağıdaki tablodaki en iyi makinelerin ortak noktası güçlü bir bellek sistemidir.
 
 ## Fiziksel sunucuda yeni ölçüm: EPYC 9355P
 
-25 Ekim 2026 tarihinde, 32 çekirdekli/64 iş parçacıklı ve on iki DDR5-4800 bellek kanalına dağıtılmış 192 GiB belleğe sahip bir EPYC 9355P, **68,256 H/s** değerine, yuvarlandığında **68,3 H/s** değerine ulaştı. Bu sabit elle yapılandırmada 64 madencilik iş parçacığı, streaming kernel, 1 GiB huge pages ve 280 W paket güç sınırı kullanıldı. Hız, başlangıç ve kapanış dahil olmak üzere her biri 120 saniyelik dört yeni çalıştırmada tamamlanan toplam hash sayısının geçen toplam süreye bölünmesiyle hesaplandı.
+28 Ekim 2026 tarihinde, 32 çekirdekli/64 iş parçacıklı ve 192 GiB RAM’e sahip bir EPYC 9355P, seine’in varsayılan ayarlarıyla 15 dakika boyunca madencilik yaptı: hiçbir bayrak kullanılmadı; iş parçacığı sayısı, CPU kernel’i ve bellek sayfaları otomatik olarak seçildi. **97,1 H/s** hızla madencilik yaptı.
 
-[Sayfa boyutu deneyi](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md), kaynak kodunun tam revizyonunu, çalıştırılabilir dosyanın SHA-256 değerini, sayfa ayırma kontrollerini ve ölçüm yöntemini kaydeder. [Makine tarafından okunabilir kayıtlar](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json), yapılandırmayı ve ham pay ile payda değerlerini korur. Burada tam bir soket elle yapılandırılmıştır; aşağıdaki bulut ve Mac ölçümleri kendi makinelerini ve ayarlarını açıklar.
+[Ölçüm kaydı](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md), kaynak kodunun revizyonunu ve çalıştırmanın her dakikasındaki hash gücünü listeler. Aşağıdaki bulut ve Mac ölçümleri kendi makinelerini ve ayarlarını açıklar.
 
 ## Testimizde RTX 5090 ne kadar hızlıydı?
 

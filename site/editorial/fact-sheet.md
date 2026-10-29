@@ -10,7 +10,7 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
   - `blocknet-core@upstream/master` is commit 514a8cf, the public `blocknetprivacy/core` master.
   - `blocknet@master` is commit 973e56e (2026-03-11).
   - `blocknet-pool@master` is commit 9bf4eb6.
-  - Original `seine@master` research used d20f253, the v0.2.22 line. The current reviewed release is `seine@v0.2.26` (`899ff7ea8bd547163ae48d636f569a0a8c7e25bb`).
+  - Original `seine@master` research used d20f253, the v0.2.22 line. The initial platform review used `seine@v0.2.26` (`899ff7ea8bd547163ae48d636f569a0a8c7e25bb`).
   - Seine and blocknet-pool were read from `master` with `git show`, because their working checkouts sit on feature branches.
 - **"Live"** means fetched from a public endpoint on 2026-10-25 at about 00:26 EDT. Live values can change.
 - **"Derived"** means computed by this sheet from the cited code. The math is shown so it can be checked.
@@ -271,8 +271,8 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
 
 ## 4. seine (the miner)
 - Seine is the external miner for Blocknet. License BSD-3-Clause. Repo: github.com/zpalmtree/seine.
-  - Latest reviewed release **v0.2.36**, published October 26, 2026 at 11:34:54 AM EDT.
-  - Source: GitHub latest-release API and `seine@v0.2.36:Cargo.toml`; rechecked October 26, 2026. `release-facts.json` records the immutable source and release assets.
+  - Latest reviewed release **v0.2.45**, published October 28, 2026 at 3:45:27 PM EDT.
+  - Source: GitHub latest-release API and `seine@v0.2.45:Cargo.toml`; rechecked October 28, 2026. `release-facts.json` records the immutable source and release assets.
 - Name styling: the wordmark is always lowercase, `seine.` with a lime full stop. README prose capitalizes "Seine" at sentence start.
   - Source: `seine@master:docs/BRAND.md:43-44`, `README.md:24` (checked 2026-10-25)
 - **Historical released miner fee (v0.2.26):** 1% of mining time on bntpool.com and its subdomains; 2.5% on other pools and in solo mode. The current calculator now uses v0.2.36's 2% fee and names that version.
@@ -728,3 +728,20 @@ The detailed official October 27 Faraday post describes the complete set of **Fa
 ## Transaction anatomy and change (October 27, 2026)
 
 Released core v0.22.0's ordinary Transfer selects mature inputs, accounts for recipient total plus fee and returns positive remainder as change using the sending wallet's keys. TransferWithInputs can split change; zero remainder creates no change output. TransferAll deducts the fee from selected spendable funds and creates a recipient output. Output count does not count distinct people. The public fee is a separate transaction field. The illustrative 10 = 3 + 6.9995 + 0.0005 BNT example is assumed arithmetic, not a fee quote or observed transaction. Source and exact reader-job boundaries: [transaction walkthrough research](batches/2026-10-transaction-walkthrough/research.md).
+
+## Currency and privacy by default (October 28, 2026)
+
+Released core v0.22.0 (`5a0a5b510c1dce46f4eeb12c33a291052e44e7b3`) uses 8,640-block schedule months and reaches its 2 BNT/block tail at height 414,720 (48 × 8,640). Approximately 100 million BNT is an initial-distribution/progress reference, not a hard cap; cumulative issuance continues. At the current five-minute target the tail corresponds to 288 × 2 = 576 BNT/day, or 210,240 BNT over 365 target-paced days. These are derived target rates, not guaranteed production or circulating-supply quotes. Cumulative issuance starts at height 1; the genesis block has no coinbase. Ordinary transfers, fees, maturity and pool payouts do not mint the block reward again. Fee destination is not asserted.
+
+The official October 27 Faraday proposal describes continuity of chain/history/balances and a paired five-to-ten-minute target change with doubled reward at the corresponding stage. The matched-stage arithmetic is 288 × R = 144 × (2 × R). Its approximately 343/685 BNT block rewards and roughly 98,700 BNT/day are rounded illustrations; no final future tail amount is inferred. Dates/parameters remain proposals.
+
+Privacy claims here concern ordinary spending. Coinbase has a separate validation path and no spending inputs. Normal inputs require ring size16; one-time output keys, hidden amounts and encrypted memos support ordinary payment privacy. Public structure/fees and participants' records remain. Relay reduces origin exposure without guaranteeing hidden IP addresses in every situation. Deliberate sharing can disclose payment details. Fungibility is a conceptual currency property supported by reduced public payment-history information; no universal acceptance, stable price or return is promised. Detailed evidence: [currency/privacy research](batches/2026-10-currency-privacy/research.md).
+
+## Currency rule enforcement and hidden-amount verification (October 28, 2026)
+
+Released core v0.22.0 (`5a0a5b510c1dce46f4eeb12c33a291052e44e7b3`) validates candidate blocks before accumulated-work fork choice (`block.go:1741–1805`); work, wallet balance or publishing a repository change is not a substitute for validation. Coinbase output commitment and encoded amount must match the height-based reward using publicly derived blinding (`block.go:543–574`). Ordinary spending separately verifies authorization and signed binding, valid amount ranges and commitment balance, and key-image non-reuse (`transaction.go:1002–1090`). Optional trusted-checkpoint fast sync can skip expensive historical PoW/signature/range-proof re-verification; do not claim that every local node rechecks every historical proof. A 64-bit range runs from zero through 2^64 − 1 inclusive. Payment proofs or viewing access may deliberately disclose ordinary payment information. Full source references, deployment-policy scope and intent boundaries: `batches/2026-10-currency-trust/research.md`.
+
+## Generic atomic swaps and the public VEIL announcement (October 28, 2026)
+
+- Generic HTLC examples connect conditional transfers through a shared hash/preimage and different refund deadlines; the claim branch also requires the intended recipient's signature. Refund conditions make a spend eligible, rather than broadcasting a refund automatically. BIP 199 is a closed explanatory proposal, not a Blocknet specification. Sources: https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki, https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki and https://arxiv.org/abs/1801.09515. See batch research for claim/sequence boundaries.
+- The official Blocknet overview names VEIL atomic swaps and presents their post-quantum redesign as part of proposed Faraday. This public statement does not establish a currently usable pair, command, service or specific swap protocol. Only the announcement is described; the new general HTLC diagram must not be represented as VEIL's design. Source: https://blocknetcrypto.com/#faraday (checked October 28).

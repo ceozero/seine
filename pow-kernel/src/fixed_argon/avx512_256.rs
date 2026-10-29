@@ -515,6 +515,7 @@ pub(super) unsafe fn compress_into_mid_prefetch_ring<const RING: usize>(
     memory_blocks_base: *const PowBlock,
     ring_base: *const PowBlock,
     next_index: usize,
+    skip_from: usize,
 ) {
     use std::arch::x86_64::{
         __m128i, __m256i, _mm256_castsi128_si256, _mm256_castsi256_si128, _mm256_extracti128_si256,
@@ -621,7 +622,11 @@ pub(super) unsafe fn compress_into_mid_prefetch_ring<const RING: usize>(
     // overlap with the DRAM fetch.
     {
         let rand = *dst_ptr;
-        let next_ref = reference_index(next_ref_area_size, rand);
+        let mut next_ref = reference_index(next_ref_area_size, rand);
+        if super::store_skipped(next_ref, skip_from) {
+            // Rebuilt from its stored predecessor, so fetch that instead.
+            next_ref -= 1;
+        }
         if next_index - next_ref < RING {
             prefetch_pow_block::<{ super::ISA_AVX512_256_STREAM }>(
                 &*ring_base.add(next_ref & (RING - 1)),

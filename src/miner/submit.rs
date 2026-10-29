@@ -311,6 +311,10 @@ pub(super) fn process_submit_request(
     let template_height = request.template.template_height();
     let mut payload = SubmitAttemptPayload::from_request(&request);
     let mut attempts = 0u32;
+    super::block_latency::record(
+        super::block_latency::SOLO_FOUND_TO_SUBMIT,
+        solution.found_at.elapsed(),
+    );
 
     loop {
         attempts = attempts.saturating_add(1);
@@ -781,6 +785,7 @@ mod tests {
             share_binding_id: 0,
             backend_id: 1,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         }
     }
 
@@ -1079,6 +1084,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             backend_label: "cpu#1".to_string(),
             template_height: Some(10),
@@ -1109,6 +1115,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             backend_label: "cpu#1".to_string(),
             template_height: Some(10),
@@ -1138,6 +1145,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 9,
                 backend: "nvidia",
+                found_at: std::time::Instant::now(),
             },
             backend_label: "nvidia#1".to_string(),
             template_height: Some(100),

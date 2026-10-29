@@ -1,0 +1,74 @@
+---
+title: 'Blocknet atomic swaps explained: what is VEIL?'
+description: 'Understand atomic swaps, conditional claims and refunds, what each participant can see, and what Blocknet has publicly announced about VEIL and Faraday.'
+date: 2026-10-28
+tags: [Blocknet, Payments, Privacy]
+faq:
+  - q: 'Can I use this guide to start a VEIL swap?'
+    a: 'This is a general atomic-swap explainer with a section on Blocknet’s public VEIL announcement. It does not establish an available trading pair, wallet command or service. Use published release instructions for a specific implementation before treating a proposed swap feature as an available payment workflow.'
+  - q: 'Does atomic mean that both payments happen instantly?'
+    a: 'Atomic describes how the exchange is linked. In the example here, one participant’s claim reveals information that lets the other claim their side. Transactions still enter their respective chains separately. Confirmation checks, deadlines and the participants’ required actions remain part of completing the protocol.'
+  - q: 'Are atomic swaps automatically private?'
+    a: 'An atomic-swap protocol coordinates settlement. What it reveals depends on the participating chains, contracts and communication. A shared public hash can link the two sides of a basic hashlocked swap. Blocknet’s payment protections and a swap’s complete disclosure properties must therefore be evaluated separately.'
+related: [blocknet-faraday-upgrade, blocknet-payment-visibility, send-receive-blocknet, get-first-blocknet]
+image: /assets/blog/atomic-swap-flow.svg
+---
+
+Understand what an atomic swap coordinates before reading Blocknet’s VEIL announcement. This guide follows a general two-party exchange through conditional funding, successful claims and the refund path. It then separates that teaching example from the brief VEIL information on Blocknet’s public site, checked on October 28, 2026. The example describes a protocol pattern, not a verified VEIL implementation or a currently supported BNT trading pair.
+
+## What is an atomic swap?
+
+<Answer>
+An atomic swap links an exchange of assets so that participants following the protocol can complete their side or use its recovery path under the protocol’s assumptions. It replaces a simple promise to send later with enforceable conditions. The two chains still process their own transactions, and participants must follow the required sequence.
+</Answer>
+
+The reader’s question is practical: if you send one asset in exchange for another, what makes the second payment follow? A normal transfer authorizes one payment. An atomic-swap protocol connects the conditions for two transfers. Maurice Herlihy’s [atomic cross-chain swaps paper](https://arxiv.org/abs/1801.09515) formalizes this coordination problem and the importance of participants following its rules.
+
+Think of two separate ledgers with a coordinated exchange across them. Assets are spent on their respective chains; the protocol connects who can claim them. This differs from simply sending coins to a receiving address and waiting for someone to honor an agreement. The [Blocknet sending guide](/blog/send-receive-blocknet/) covers that ordinary payment procedure.
+
+## How does a hashlocked swap work?
+
+A common teaching example uses a **hashlock**, which checks a secret, and a **timelock**, which controls when a refund becomes possible. Together these are often called a hashed timelock contract, or HTLC. This section explains that general construction; it does not assert that VEIL uses it.
+
+Alice and Bob first agree on the exchange and receiving destinations. Alice creates a secret and shares its hash. The hash lets a contract check the secret later without needing Alice to publish it at the start. The contract also requires the intended recipient’s authorization: knowing the secret alone does not let any observer take the funds.
+
+The [HTLC description in BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) illustrates a claim branch requiring the secret and a recipient signature, plus a refund branch available after a timeout. BIP 199 is a closed proposal describing this construction, not a Blocknet specification.
+
+## What happens when both sides complete?
+
+Follow the numbered diagram from the funding phase into the claim phase. “Chain A” and “Chain B” are generic labels. They do not name an available pair or imply that Blocknet supports these particular contracts.
+
+1. **Alice funds the first contract.** It lets Bob claim with the secret and his authorization. Alice’s refund becomes available later.
+2. **Bob checks and funds the second contract.** It uses the same secret’s hash and lets Alice claim. Bob’s refund becomes available earlier than Alice’s.
+3. **Alice checks and claims the second side.** Her claim reveals the secret in this basic public-hashlock example.
+4. **Bob uses the revealed secret to claim the first side.** The interval between the refund deadlines gives him time to act.
+
+[![General swap example: Alice and Bob fund separate conditional contracts, Alice’s claim reveals the secret, and Bob uses it to claim; an unused contract has a timed refund path.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+The upper row shows funding on two chains. The lower row shows claims in reverse order. The curved arrows mark recovery paths for funds still locked when their refund conditions are met. This is an explanatory diagram, not a VEIL screen or a live transaction.
+
+## What if one participant stops?
+
+Recovery depends on where the exchange stopped. If Alice funds the first contract and Bob never funds the second, Alice can recover her still-locked funds through the refund branch once it becomes valid. If both contracts were funded but Alice never reveals the secret, the participants can use the respective refund paths for unspent funds.
+
+A timelock makes a refund spend eligible; it does not itself broadcast and confirm that transaction. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) explains time-based spending conditions and non-interactive refund construction. A concrete application must manage the claim or refund transactions and the information needed to authorize them.
+
+Once Alice claims the second side and reveals the secret, Bob must follow the claim path on the first side in time. This is why the sequence and staggered deadlines matter. Closing an application is not the same as canceling a funded exchange. The implementation’s recovery instructions determine how its state is resumed.
+
+## What can participants and observers see?
+
+Settlement and privacy answer different questions. Participants know the terms they agreed to and the receiving information they exchanged. In the basic example, the same public hash appears on both chains and the claim reveals its secret. Those shared values can provide an observer with a connection between the two sides.
+
+The exact disclosure depends on the protocol and the chains involved. A private payment format does not, by itself, specify what another chain publishes or what a trading interface records. Likewise, completing an exchange does not erase the messages in which the participants negotiated it.
+
+For ordinary Blocknet payments, the [payment-visibility guide](/blog/blocknet-payment-visibility/) separates public transaction fields from sender, recipient and granted viewing access. That is the foundation for understanding BNT payment privacy. A swap-specific privacy claim needs evidence about the complete swap, including its other asset and communication steps.
+
+## What has Blocknet announced about VEIL?
+
+The [official Blocknet site](https://blocknetcrypto.com/#faraday) names VEIL in its atomic-swap comparison and describes a planned redesign using post-quantum primitives as part of Faraday. That public statement establishes the project’s direction. It does not specify trading pairs, swap commands, refund deadlines or an end-user service that this guide can verify.
+
+Keep the scope of that announcement clear when reading the example above. The HTLC walkthrough explains atomic-swap coordination in general. It is not a description of VEIL’s internal protocol. The [Faraday guide](/blog/blocknet-faraday-upgrade/) covers the announced network transition; implementation-specific swap instructions should come from a published release and its documentation.
+
+For receiving BNT now, the [first-coins guide](/blog/get-first-blocknet/) covers ordinary transfers and mining. Those are established user journeys with their own wallet and payment steps. This article gives you the concepts to understand a future public swap release without mistaking an announcement for instructions to deposit funds.
+
+<CTA target="seine" title="Receive BNT through mining" text="Use seine with bntpool.com and receive mining payments in your own Blocknet wallet." />

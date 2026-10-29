@@ -66,6 +66,9 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--sub-round-rebalance-ms` | integer `>=0`, default `0` | Optional in-round adaptive rebalance interval (`0` disables). |
 | `--disable-sse` | bool flag (default `false`) | Disables daemon tip SSE; miner falls back to refresh timer only. |
 | `--disable-update-check` | bool flag (default `false`) | Disables the startup and 12-hourly GitHub check for newer seine releases. |
+| `--self-update` | bool flag (default `false`) | Replaces this executable with the newest stable release for the platform (archive SHA-256 checked against the release's `SHA256SUMS.txt`), then exits without mining. Needs no other flags. |
+| `--auto-update` | bool flag (default `true`) | When the update check finds a newer stable release, installs it the same way (release signature and checksum verified), stops mining cleanly and restarts with the same arguments. Ignored with `--disable-update-check`. |
+| `--no-auto-update` | bool flag (default `false`) | Keeps mining the current version; a newer release is only logged. |
 | `--refresh-on-same-height` | bool flag (default `false`) | Refresh on same-height `new_block` hash change events. |
 | `--ui` | `auto`, `tui`, `plain`; default `auto` | Output mode selection. |
 

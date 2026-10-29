@@ -14,8 +14,18 @@ pub(crate) fn requested() -> Option<ShutdownRequest> {
         2 => Some(ShutdownRequest::ConsoleClose),
         3 => Some(ShutdownRequest::Logoff),
         4 => Some(ShutdownRequest::SystemShutdown),
+        5 => Some(ShutdownRequest::AutoUpdate),
         _ => None,
     }
+}
+
+/// `--auto-update` installed a newer release: stop mining the way an interrupt
+/// does, so `main` can restart the updated executable with the same arguments.
+pub(crate) fn request_auto_update(shutdown: &Arc<AtomicBool>) {
+    REQUEST
+        .compare_exchange(0, 5, Ordering::AcqRel, Ordering::Acquire)
+        .ok();
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 pub(crate) struct Guard;

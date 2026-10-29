@@ -1,0 +1,66 @@
+---
+title: 'Siapa yang mengendalikan Blocknet?'
+description: 'Pahami siapa yang menegakkan aturan Blocknet: peran pengembang, penambang, node dan pemilik koin, penerimaan blok, serta penerapan pembaruan jaringan.'
+tags: ['Blocknet', 'Konsensus', 'Mata uang']
+faq:
+  - q: 'Bisakah penambang membuat BNT melebihi imbalan yang diizinkan?'
+    a: 'Menurut aturan yang dirilis, node memeriksa imbalan blok terhadap jumlah yang diwajibkan pada ketinggian tersebut. Menemukan bukti kerja yang valid tidak melewati pemeriksaan itu. Imbalan dengan komitmen berbeda ditolak, sehingga daya komputasi penambang tidak menentukan jadwal penerbitan koin.'
+  - q: 'Apakah memiliki BNT memberi saya suara dalam protokol?'
+    a: 'Saldo dompet memberi Anda dana untuk dibelanjakan sesuai aturan jaringan. Jalur validasi bukti kerja yang dirilis tidak membobot penerimaan blok berdasarkan kepemilikan koin. Menjalankan perangkat lunak, menghasilkan blok, dan mengizinkan pembayaran sendiri adalah peran terpisah; saldo besar tidak membuat transaksi yang tidak valid menjadi valid.'
+  - q: 'Apakah menerbitkan kode baru langsung mengubah Blocknet?'
+    a: 'Perubahan kode memengaruhi konsensus ketika perangkat lunak yang menerapkannya berjalan di jaringan dan syarat aktivasinya berlaku. Pengumuman atau commit repositori tidak dengan sendirinya menggantikan aturan node yang sedang berjalan. Ikuti panduan pembaruan resmi dan periksa kebijakan pembaruan perangkat lunak Anda.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Pahami siapa melakukan apa sebelum menentukan makna mengendalikan Blocknet. Menulis perangkat lunak, menemukan blok, memeriksanya, dan membelanjakan koin merupakan kewenangan berbeda. Panduan ini menelusuri batas tersebut pada core v0.22.0 yang dirilis, lalu menjelaskan bagaimana usulan pembaruan mencapai perangkat lunak yang digunakan. Fokusnya adalah tanggung jawab validasi, bukan pengukuran persebaran penambangan atau pengembangan.
+
+## Siapa yang menegakkan aturan Blocknet?
+
+<Answer>
+Node menegakkan aturan dalam perangkat lunaknya saat memvalidasi blok dan transaksi masuk. Penambang menghasilkan calon blok, pengembang memelihara implementasi, dan pemilik dompet mengizinkan pembayaran. Setiap peran berkontribusi pada jaringan, tetapi menerbitkan kode, memiliki BNT, atau menemukan bukti kerja saja belum memenuhi pemeriksaan validasi lainnya.
+</Answer>
+
+Bayangkan pembayaran melewati tanggung jawab ini. Dompet menyusun dan mengizinkannya; penambang memasukkannya ke blok usulan; node memeriksa apakah usulan mengikuti aturannya. Penerimaan bergantung pada pemeriksaan tersebut. Nama proyek yang dikenal, saldo dompet besar, atau identitas peer pengirim tidak menggantikannya.
+
+[![Empat peran bernomor: pengembang menerbitkan perangkat lunak, penambang mengusulkan blok, node memvalidasinya, dan pemilik dompet mengizinkan pembayaran sendiri.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Diagram memisahkan tanggung jawab: 1 mengembangkan perangkat lunak; 2 menghasilkan usulan blok; 3 memeriksanya berdasarkan aturan yang berjalan; 4 mengizinkan pembayaran dompet sendiri. Nomor peran bukan hitungan suara atau pengukuran peserta jaringan.
+
+## Apa yang dapat diubah pengembang?
+
+Pengembang dapat mengusulkan perubahan, menulis implementasi, meninjau kode, dan menerbitkan rilis. Kegiatan ini penting karena perangkat lunak memuat aturan yang dijalankan node. [Kode sumber core yang terbuka](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) memungkinkan pembaca memeriksa jalur validasi sebenarnya. Dokumentasi menjelaskan tujuannya; kode yang dirilis menunjukkan perilaku yang diterapkan versi tertentu.
+
+Commit dalam repositori tidak menulis ulang program yang sedang berjalan. Perubahan mencapai node lewat proses pembaruan perangkat lunak dan, bila berlaku, logika aktivasi. Peserta membutuhkan perangkat lunak yang kompatibel dengan aturan jaringan yang hendak diikuti. Ini merupakan koordinasi perangkat lunak yang diterapkan, tanpa jaminan setiap usulan menjadi aturan jaringan.
+
+Kebijakan pembaruan adalah bagian dari hubungan itu. CLI pengelola dapat menjadwalkan pembaruan untuk core yang mengikuti rilis terbaru, sedangkan versi yang dipatok memiliki kebijakan berbeda. [Panduan node](/id/blog/run-blocknet-node/) menjelaskan perbedaannya. Baca kebijakan instalasi Anda daripada menganggap semua pembaruan menunggu konfirmasi manual.
+
+## Apa yang dapat diputuskan penambang?
+
+Penambangan menghasilkan calon blok dan bukti kerja yang diperlukan untuk penerimaannya. Dalam penambangan langsung, seine menerima pekerjaan dari node; dalam pool, pool mengoordinasikan pekerjaan dan menyerahkan blok yang ditemukan ke node hulu. Keduanya membantu membangun rantai. [Penjelasan penambangan](/id/blog/how-crypto-mining-works/) membahas proses serta perbedaan share pool dan blok penuh.
+
+Bukti kerja yang berhasil diselesaikan adalah satu dari beberapa syarat. [Validator blok yang dirilis](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) juga memeriksa konteks blok, kesulitan, validitas transaksi, dan imbalan yang diwajibkan. Jika imbalan usulan berbeda dari jumlah yang diizinkan pada ketinggian itu, komitmennya gagal dalam pemeriksaan. Daya komputasi tambahan tidak mengubah perbandingan tersebut.
+
+Misalnya, mengubah kolom imbalan di perangkat lunak penambangan tidak mengubah harapan node lain. Node penerima menghitung imbalan yang diharapkan dari ketinggian dan membandingkan output yang diajukan dengannya. [Panduan pasokan](/id/blog/blocknet-supply/) menjelaskan jadwal penerbitan; tugas penambang adalah menghasilkan blok yang memenuhinya.
+
+## Bagaimana node menentukan rantai yang diikuti?
+
+Core yang dirilis memvalidasi calon blok sebelum menerapkan logika pemilihan rantai. Core mencatat kerja terakumulasi dan dapat beralih ke cabang valid dengan kerja lebih besar sesuai aturan reorganisasinya. Menghitung blok saja melewatkan perbedaan itu. Kerja membantu memilih riwayat yang dapat diterima tanpa menggantikan pemeriksaan blok di dalamnya.
+
+Pengaturan verifikasi juga penting saat menjelaskan pemeriksaan riwayat node. Sinkronisasi opsional memakai checkpoint tepercaya dapat melewati pengulangan verifikasi kriptografi dan bukti kerja untuk blok historis yang tercakup. Validasi ujung rantai saat ini dan sinkronisasi riwayat dengan checkpoint adalah jalur berbeda. Memiliki node lokal saja tidak menunjukkan kebijakan sinkronisasi yang digunakan.
+
+Karena itu, pertanyaan yang berguna harus spesifik: perangkat lunak, aturan, dan mode validasi apa yang digunakan? [Panduan peran perangkat lunak](/id/blog/blocknet-wallet-node-miner/) membantu memilih aplikasi, sedangkan panduan node membahas pengoperasian. Jumlah peer atau tangkapan layar ketinggian blok tidak menetapkan berapa orang independen yang mengendalikan jaringan.
+
+## Apa yang dikendalikan pemilik koin?
+
+Dengan kunci privat yang diperlukan, pemilik dompet dapat mengizinkan pembelanjaan output miliknya. Jaringan memeriksa izin tersebut dan aturan transaksi lainnya. Memiliki lebih banyak BNT tidak mengubah sistem bukti kerja yang dirilis menjadi pemungutan suara berbobot saldo untuk menerima transaksi orang lain yang tidak valid.
+
+Kepemilikan juga berbeda dari memilih informasi yang diungkap. Anda dapat menggunakan fitur tampilan dan bukti pembayaran yang didukung dompet untuk membagikan informasi tentang dana atau pembayaran sendiri. Itu tidak memberi izin membuat koin tambahan. [Panduan verifikasi jumlah tersembunyi](/id/blog/bulletproofs-explained/) menjelaskan bagaimana pemeriksaan pembukuan tetap mungkin dengan jumlah pembayaran privat.
+
+## Bagaimana membaca usulan pembaruan?
+
+Pisahkan pengumuman, rilis yang mengimplementasikannya, dan aturan aktivasi. Pengumuman menjelaskan perubahan yang diinginkan; perangkat lunak kompatibel menerapkan pemeriksaan; aktivasi menentukan kapan pemeriksaan berlaku. Dengan begitu Anda memiliki hal konkret untuk diverifikasi, tanpa memperlakukan pernyataan peta jalan sebagai perilaku yang sudah aktif.
+
+Untuk Faraday, [pengumuman resmi](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) menjelaskan usulan yang masih dikembangkan dan diuji. [Panduan pembaruan](/id/blog/blocknet-faraday-upgrade/) kami mengikuti persiapan pengguna, sedangkan [panduan kebijakan moneter](/id/blog/blocknet-faraday-monetary-policy/) memisahkan usulan perubahan penerbitan dari aturan saat ini. Gunakan sumber bertanggal tersebut sebelum mengambil keputusan tentang transisi mendatang.
+
+<CTA target="seine" title="Tambang Blocknet dengan seine" text="Gunakan seine bersama bntpool.com untuk menyumbang pekerjaan penambangan dan menerima BNT di dompet Anda." />

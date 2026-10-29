@@ -35,7 +35,7 @@ thin keyword-permutation pages, which Google's scaled-content policy penalizes.
    closest matches: low wording overlap can still mean duplicate intent.
 5. **Review.** Re-read every number and claim against the fact sheet and check each link.
    Preview with `npm run dev` (drafts are hidden; remove `draft: true` locally to see one) and
-   look at the social card at `/blog/og/en/<slug>.jpg`.
+   follow the [cover standard](cover-system.md), assign a cover in `scripts/blog-covers.mjs`, and look at the social image at `/blog/og/en/<slug>.jpg`.
 6. **Translate** (step 3 of the translation section below) once the English is approved.
 7. **Publish.** Remove `draft: true`, add the post's row to `keyword-map.md`, remove it from
    `backlog.md`, and commit everything together. The build refuses a published post without a
@@ -109,8 +109,8 @@ Interface strings live in `src/i18n/messages/<locale>.json`; a missing key fails
 ## What the build does for SEO
 
 For every page in every locale: canonical URL, `hreflang` alternates (plus `x-default`),
-title and description, Open Graph and Twitter tags with a generated 1200x630 card per post
-and locale, and JSON-LD that matches the visible page (`Organization`, `WebSite`,
+title and description, Open Graph and Twitter tags with a generated 1200x675 cover per post,
+and JSON-LD that matches the visible page (`Organization`, `WebSite`,
 `SoftwareApplication`, `Blog`, `BlogPosting`, `BreadcrumbList`, and `FAQPage` when a post has
 an FAQ). Also `sitemap.xml` with alternates and `lastmod`, an RSS feed per locale, `robots.txt`,
 `llms.txt`, responsive AVIF/WebP images, and self-hosted fonts (Google Fonts is blocked in
@@ -147,3 +147,9 @@ introductory guides use the documented 68.3 H/s EPYC 9355P measurement with its 
 1 GiB page/64-thread/192 GiB conditions. Older 9R45 measurements remain historical.
 Translations were updated in place and remain marked draft; no independent
 linguistic review is claimed.
+
+## Shared planning and artwork
+
+Read the [cross-site publishing plan](cross-site-publishing-plan.md) before selecting work.
+Use the [cover system](cover-system.md) for article-specific list and social artwork; instructional
+figures remain separate. Both sites receive editorial and main-site SEO work.

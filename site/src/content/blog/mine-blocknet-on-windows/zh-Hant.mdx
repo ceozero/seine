@@ -9,7 +9,7 @@ faq:
     a: '預設情況下，seine 將收款地址、礦池和礦機名稱儲存在啟動目錄下的 seine-data/seine.config.json。從同一個解壓縮目錄執行即可沿用這些設定。需要其他目錄時，可以使用 data-dir 選項指定。'
   - q: '開始挖礦前需要啟用 Windows 大型分頁嗎？'
     a: '不需要。seine 會自動嘗試使用大型分頁，無法使用時則採用一般分頁。你可以直接使用預設設定開始挖礦。如需進行選用的大型分頁設定，請為挖礦帳戶授予「鎖定記憶體分頁」權限，然後登出並重新登入，再重新啟動 seine。'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ translation: draft
 
 每個 CPU 挖礦執行緒使用一個 2 GiB 的記憶體區塊。seine 會檢查可用 RAM 和核心數，保留記憶體餘裕，並為你選擇初始執行緒數。桌上型電腦或筆記型電腦都可以從預設設定開始，不必預先計算執行緒數或選擇 CPU 運算核心程式。
 
-## 第 1 步：下載 Windows 壓縮檔
+## 第 1 步：下載適合的版本
 
 開啟[下載區域](/zh-hant/#download)，選擇 Windows x86_64。壓縮檔名為 `seine-windows-x86_64.zip`。
 
-![seine 官方下載清單中的 Windows ZIP](/assets/blog/windows-download.png)
+![seine 官方下載清單中的 Windows ZIP](/assets/blog/setup-download.webp)
 
-## 第 2 步：完整解壓縮 ZIP
+## 第 2 步：解壓縮並啟動
 
 在檔案總管中，以滑鼠右鍵按一下下載的 ZIP，選擇**全部解壓縮**。選擇有寫入權限的資料夾，然後開啟解壓縮後的資料夾。將 `seine.exe` 與附帶的 DLL 放在一起：Windows 壓縮檔包含礦工程式使用的 NVIDIA 執行階段程式庫。
 
@@ -43,29 +43,37 @@ translation: draft
 
 `./` 或 `.\` 前置字元會告訴 shell 執行目前目錄中的可執行檔。從解壓縮後的資料夾執行，也能讓 seine 在固定位置儲存設定。之後啟動時使用同一資料夾，程式就能找到你輸入過的地址和礦池。
 
-## 第 3 步：輸入地址和礦池
+## 第 3 步：輸入錢包地址
 
-在首次提示時，貼上 Blocknet 收款地址或已註冊的 `@name`，然後確認。接受預設礦池 URL：`stratum+tcp://bntpool.com:3333`。如果提示設定礦機名稱，請使用容易辨認的礦池名稱，以便將這台 Windows PC 與挖向同一地址的其他電腦區分開。
+貼上你的公開 Blocknet 收款地址或已註冊的 `@name`，然後按 Enter 接受 `stratum+tcp://bntpool.com:3333`。[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)說明了在哪裡找到地址。seine 不需要復原詞組或支出金鑰，並會自動分配礦池礦機名稱。
 
-[設定指南](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)介紹了這些提示和儲存的設定。預設位置是相對於啟動目錄的 `seine-data/seine.config.json`。後續啟動時，seine 會沿用這些設定。每次開始新的執行時，都會重新解析短名。
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="首次啟動時的地址和礦池提示。請將範例替換為你自己的地址或已註冊名稱。" loading="lazy" />
+  </picture>
+  <figcaption>首次啟動時的地址和礦池提示。請將範例替換為你自己的地址或已註冊名稱。</figcaption>
+</figure>
 
-你也可以直接在 PowerShell 中指定已註冊的短名：
+seine 會自動選擇執行緒並調校。之後從同一資料夾啟動，即可重用 `seine-data/seine.config.json`。
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-將 `@name` 換成你已註冊的短名。不設定 CPU 執行緒和運算核心程式參數，即可讓 seine 自動選擇。跨作業系統的通用設定請參閱[如何挖 Blocknet](/zh-hant/blog/how-to-mine-blocknet/)。
-
-## 如何確認挖礦正在運作？
+## 第 4 步：查看已接受的份額
 
 <Answer>
 檢查 seine 儀表板是否顯示雜湊率和已接受的份額，然後在 bntpool.com 的 My Stats 頁面查詢同一收款地址。儀表板顯示礦工程式目前的工作；礦池記錄提交的份額與獎勵。比較速率或修改設定前，請先等待自動調校穩定下來。
 </Answer>
 
-[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)介紹了雜湊率、挖礦狀態和礦池面板。運作中的雜湊率表示本機正在計算雜湊；已接受的份額則確認工作已送達礦池。開啟 [My Stats](https://bntpool.com/stats)，輸入相同的地址或短名，即可追蹤這台礦機的份額和餘額。
+[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)介紹了雜湊率、挖礦狀態和礦池面板。運作中的雜湊率表示本機正在計算雜湊；已接受的份額則確認工作已送達礦池。開啟 [My Stats](https://bntpool.com/stats?lang=zh-hant)，輸入相同的地址或短名，即可追蹤這台礦機的份額和餘額。
 
 檢查新設定時，請區分已接受的份額與付款。份額參與礦池獎勵分配；付款則遵循礦池的確認與餘額規則。[PPLNS 指南](https://bntpool.com/blog/how-pplns-payouts-work/)解釋了這個流程。不必等待首次付款，就能立即檢查連線。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="使用範例資料繪製的 seine 實際儀表板。請留意 Accepted；這些數字不是效能測試結果。" loading="lazy" />
+  </picture>
+  <figcaption>使用範例資料繪製的 seine 實際儀表板。請留意 Accepted；這些數字不是效能測試結果。</figcaption>
+</figure>
 
 ## 在同一台 PC 上使用 CPU 和 NVIDIA 挖礦
 
@@ -79,6 +87,6 @@ seine 預設同時使用 CPU 和支援的 NVIDIA 顯示卡。安裝目前版本�
 
 [大型分頁指南](/zh-hant/blog/huge-pages-blocknet-mining/)詳細介紹了這項選用設定。重新登入後，照常啟動 seine，並查看啟動記錄中的分頁模式。建立第一個可正常運作的設定時，保持預設自動模式；之後若修改分頁設定，請在同一台 PC 上比較測量結果。
 
-[Windows 封鎖挖礦程式？驗證下載檔案](/zh-hant/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="下載 Windows 版 seine" text="解壓縮 ZIP，輸入收款地址，即可在 bntpool.com 開始挖礦，CPU 和 NVIDIA 都會自動調校。" />
+
+開啟[我的統計](https://bntpool.com/stats?lang=zh-hant)，輸入相同的地址或已註冊名稱，即可查看礦機、份額和餘額。

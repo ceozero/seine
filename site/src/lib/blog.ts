@@ -1,6 +1,7 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { DEFAULT_LOCALE, localizePath, type Locale } from '../i18n/locales';
 import { SITE_URL } from './site';
+import covers from '../generated/blog-covers.json';
 
 export type Post = {
     slug: string;
@@ -52,7 +53,8 @@ export async function getPosts(locale: Locale): Promise<Post[]> {
         const date = source.data.date;
         if (!date) throw new Error(`${slug}: front matter needs a date`);
         const path = localizePath(`/blog/${slug}/`, locale);
-        const image = source.data.image;
+        const cover = covers[slug as keyof typeof covers];
+        if (!cover) throw new Error(`Missing generated cover for ${slug}; run npm run prebuild`);
         return {
             slug,
             locale,
@@ -65,8 +67,8 @@ export async function getPosts(locale: Locale): Promise<Post[]> {
             tags: entry.data.tags,
             faq: entry.data.faq,
             related: source.data.related,
-            thumbnail: image ?? `/blog/og/${cardLocale(locale)}/${slug}-card.jpg`,
-            image: image ? new URL(image, SITE_URL).href : `${SITE_URL}/blog/og/${cardLocale(locale)}/${slug}.jpg`,
+            thumbnail: cover.small,
+            image: new URL(cover.social, SITE_URL).href,
             path,
             url: SITE_URL + path,
             readingMinutes: readingMinutes(entry.body ?? ''),

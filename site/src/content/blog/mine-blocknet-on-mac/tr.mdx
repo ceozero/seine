@@ -1,6 +1,6 @@
 ---
 title: Mac'te Blocknet madenciliği nasıl yapılır
-description: seine ile Apple Silicon Mac'te Blocknet madenciliği yapın. Terminal'de kurun, M4 Max ile ölçülen 30,9 H/s sonucunu görün ve Mac'inizin kaç iş parçacığı çalıştırabileceğini öğrenin.
+description: "macOS: Seine’ı indirin, arşivi çıkarın, Blocknet adresinizi girin ve bntpool.com üzerinde kabul edilen payları kontrol edin. Otomatik ayarlarla başlayın; performans önerileri kurulumdan sonra gelir."
 tags: [Madencilik rehberi, macOS, Apple Silicon, seine]
 faq:
   - q: 'MacBook Air ile Blocknet madenciliği yapılabilir mi?'
@@ -8,22 +8,70 @@ faq:
   - q: 'seine, Mac''te Blocknet madenciliği yaparken GPU''yu kullanır mı?'
     a: 'seine, Apple Silicon''da varsayılan olarak CPU ile madencilik yapar, çünkü en hızlı seçenek budur. CPU ve grafik çekirdekleri aynı birleşik belleği paylaşır ve Blocknet''in Argon2id iş kanıtı bellek bant genişliğine bağlıdır. M4 Max''te yalnızca CPU ile madencilik en yüksek hashrate''i verdi, bu yüzden seine onu otomatik olarak kullanır.'
   - q: 'Blocknet madenciliği için Mac''te ne kadar bellek gerekir?'
-    a: 'Her madencilik iş parçacığı 2 GiB''lık bir bellek bloğu üzerinde çalışır, bu yüzden iş parçacığı başına yaklaşık 2 GB hesaplayın. 16 GB''lık bir Mac yedi, 32 GB''lık bir Mac 15 ve 64 GB''lık bir Mac 30 iş parçacığına kadar çalıştırabilir. seine boştaki belleği sayar ve iş parçacıklarını çekirdeklerinize de göre ayarlar.'
+    a: 'Her madencilik iş parçacığı 2 GiB''lık bir bellek bloğu üzerinde çalışır, bu yüzden iş parçacığı başına yaklaşık 2 GB hesaplayın. 16 GB''lık bir Mac yedi, 32 GB''lık bir Mac 15 ve 64 GB''lık bir Mac 31 iş parçacığına kadar çalıştırabilir. seine boştaki belleği sayar ve iş parçacıklarını çekirdeklerinize de göre ayarlar.'
   - q: 'Intel Mac ile Blocknet madenciliği yapılabilir mi?'
     a: 'Evet. seine, Intel Mac''ler için ayrı bir arşiv olan seine-macos-x86_64.tar.gz''yi yayınlar ve adımlar Apple Silicon''dakiyle aynıdır. İndirin, Terminal''de arşivden çıkarın, ./seine komutunu çalıştırın ve Blocknet adresinizi veya @name adınızı yapıştırın. seine iş parçacıklarını belleğinize göre boyutlandırır ve varsayılan olarak bntpool.com''da madenciliğe başlar.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: draft
 ---
-
-Bu rehber, **seine** ile Apple Silicon Mac'te nasıl Blocknet madenciliği yapacağınızı gösteriyor: M serisi çiplerin Blocknet'in iş kanıtına neden uygun olduğu, bir M4 Max'in ölçülen sonucu, Mac'inizin belleğinin kaç iş parçacığı taşıyabileceği ve bntpool.com'da madenciliğe başlamak için tam Terminal adımları.
 
 ## Mac'te Blocknet madenciliği yapılabilir mi?
 
 <Answer>
-Evet. Apple Silicon Mac'ler güçlü Blocknet madencileridir, çünkü birleşik bellekleri bellek yoğun Argon2id iş kanıtına bol bant genişliği sağlar. `seine-macos-aarch64.tar.gz` dosyasını indirin, Terminal'de arşivden çıkarın, `./seine` komutunu çalıştırın ve adresinizi yapıştırın. 48 GB'lık bir M4 Max yalnızca CPU'suyla 30,9 H/s ölçtü.
+Seine’ı indirin, arşivi çıkarın, Blocknet adresinizi girin ve bntpool.com üzerinde kabul edilen payları kontrol edin. Otomatik ayarlarla başlayın; performans önerileri kurulumdan sonra gelir.
 </Answer>
 
-seine, Mac'e özgü kurulumu kendisi halleder. CPU ile madencilik yapar, iş parçacıklarını önce performans çekirdeklerine yerleştirir ve iş parçacığı sayısını belleğinize göre boyutlandırır; bu yüzden çoğu kişi için düz bir `./seine` yeterlidir.
+## 1. adım: doğru sürümü indirin
+
+Apple menüsü → Bu Mac Hakkında bölümünden çipi veya işlemciyi kontrol edin. [İndirme bölümünde](/tr/#download) Apple Silicon için `seine-macos-aarch64.tar.gz`, Intel için `seine-macos-x86_64.tar.gz` seçin.
+
+## 2. adım: çıkarın ve başlatın
+
+Terminal’i açın. Bu komutlar arşivin Downloads klasöründe olduğunu varsayar; farklıysa gerçek konumu kullanın. Intel Mac’te `seine-macos-aarch64.tar.gz` yerine `seine-macos-x86_64.tar.gz` kullanın. Seine’ı ev klasörünüze çıkarıp başlatırlar:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## 3. adım: cüzdan adresinizi girin
+
+Herkese açık Blocknet alma adresinizi veya kayıtlı `@name` adınızı yapıştırın, ardından `stratum+tcp://bntpool.com:3333` adresini kabul etmek için Enter’a basın. [Cüzdan rehberi](/tr/blog/blocknet-wallet-for-mining/) adresinizi nerede bulacağınızı gösterir. Seine, kurtarma ifadenizi veya harcama anahtarlarınızı istemez. Havuz işçisi adını otomatik atar.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="İlk açılıştaki adres ve havuz soruları. Örneği kendi adresiniz veya kayıtlı adınızla değiştirin." loading="lazy" />
+  </picture>
+  <figcaption>İlk açılıştaki adres ve havuz soruları. Örneği kendi adresiniz veya kayıtlı adınızla değiştirin.</figcaption>
+</figure>
+
+Seine iş parçacıklarını seçer ve otomatik ayar yapar. Sonraki açılışlarda `seine-data/seine.config.json` dosyasını yeniden kullanmak için aynı klasörden başlatın.
+
+## 4. adım: kabul edilen payları kontrol edin
+
+[Panelde](/tr/blog/seine-dashboard-explained/) hashrate değerini ve artan **Accepted** sayacını arayın. Kabul edilen bir pay, havuzun çalışmanızı aldığını doğrular; ödeme yapıldığı anlamına gelmez. Durdurmak için `q` veya `Ctrl+C` kullanın.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Örnek verilerle seine’ın gerçek paneli. Accepted sayacına bakın; bu sayılar performans ölçümü değildir." loading="lazy" />
+  </picture>
+  <figcaption>Örnek verilerle seine’ın gerçek paneli. Accepted sayacına bakın; bu sayılar performans ölçümü değildir.</figcaption>
+</figure>
+
+[İstatistiklerim](https://bntpool.com/stats?lang=tr) sayfasını açıp aynı adresi veya kayıtlı adı girerek işçinizi, paylarınızı ve bakiyenizi bulun.
+
+## macOS ilk başlatmayı engellerse
+
+macOS sürümü ad-hoc imzalıdır. macOS ilk açılışı durdurursa Sistem Ayarları'nı açın, Gizlilik ve Güvenlik'e gidin ve `seine`'e izin verin. İndirme işaretini Terminal'den de kaldırıp programı yeniden çalıştırabilirsiniz:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Apple Silicon Mac'ler neden Blocknet madenciliğinde iyidir?
 
@@ -66,43 +114,6 @@ Son sayıyı Mac'inize tam uyacak hale iki şey getirir:
 
 Bunların hiçbirini hesaplamanız gerekmez. seine başladığında iş parçacığı sayısını seçer ve madencilik yaparken yakın sayıları test etmeye devam eder.
 
-## macOS'ta adım adım kurulum
-
-### 1. adım: bir Blocknet adresi edinin
-
-Resmi Blocknet cüzdanını, yani [komut satırı cüzdanını](https://github.com/blocknetprivacy/blocknet/releases/latest) veya [masaüstü cüzdanını](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) kurun ve adresinizi kopyalayın. [blocknet.id](https://blocknet.id) üzerinden bir Blocknet ID kısa adınız varsa bunun yerine `@name` adresine madencilik yapabilirsiniz.
-
-### 2. adım: Apple Silicon için seine'i indirin
-
-[İndirme bölümünden](/tr/#download) `seine-macos-aarch64.tar.gz` dosyasını alın. İçinde `seine` programı, benioku ve lisans dosyaları ve indirmeyi kontrol etmek için bir `SHA256SUMS.txt` dosyası bulunur.
-
-### 3. adım: Terminal'de arşivden çıkarın
-
-Terminal'i açın (Uygulamalar, ardından İzlenceler içinde) ve bu komutları çalıştırın. Ana klasörünüzde bir `seine` klasörü oluşturur ve arşivi içine açarlar:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### 4. adım: seine'i çalıştırın
-
-```sh
-./seine
-```
-
-macOS sürümü ad-hoc imzalıdır. macOS ilk açılışı durdurursa Sistem Ayarları'nı açın, Gizlilik ve Güvenlik'e gidin ve `seine`'e izin verin. İndirme işaretini Terminal'den de kaldırıp programı yeniden çalıştırabilirsiniz:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### 5. adım: adresinizi girin ve madenciliğe başlayın
-
-seine önce ödeme adresinizi veya `@shortname` adınızı, ardından bir havuz sorar. Varsayılanı, yani `stratum+tcp://bntpool.com:3333` adresini kabul etmek için Return tuşuna basın. Ardından [panel](/tr/blog/seine-dashboard-explained/) hashrate'inizi ve kabul edilen ilk share'lerinizi gösterir. bntpool.com havuzu bakiyeniz 0,1 BNT'ye ulaştığında onu adresinize gönderir; adresinizi aratarak [bntpool.com](https://bntpool.com) üzerinden takip edebilirsiniz.
-
 ## seine Mac'te neden yalnızca CPU ile madencilik yapar?
 
 Apple Silicon'da CPU ve grafik çekirdekleri tek bir birleşik bellek havuzunu paylaşır. Argon2id bellek bant genişliğine bağlıdır, bu yüzden CPU ve grafik çekirdekleri aynı bant genişliği için yarışırdı. seine'in M4 Max üzerindeki testlerinde yalnızca CPU ile madencilik en yüksek hashrate'i verdi, bu yüzden seine bunu her Apple Silicon Mac'te otomatik olarak seçer. Hiçbir bayrak ayarlamadan en hızlı kurulumu elde edersiniz.
@@ -129,3 +140,5 @@ Bu sonuçlar Blocknet'in mevcut Argon2id iş kanıtını yansıtır. [blocknetcr
 </Note>
 
 <CTA target="seine" title="macOS için seine'i indirin" text="Apple Silicon sürümü Mac'inizin CPU'suyla madencilik yapar ve iş parçacığı sayısını otomatik olarak seçer." />
+
+[İstatistiklerim](https://bntpool.com/stats?lang=tr) sayfasını açıp aynı adresi veya kayıtlı adı girerek işçinizi, paylarınızı ve bakiyenizi bulun.

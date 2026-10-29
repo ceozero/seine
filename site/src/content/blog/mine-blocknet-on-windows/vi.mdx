@@ -9,7 +9,7 @@ faq:
     a: 'Theo mặc định, seine lưu địa chỉ nhận thưởng, pool và tên máy đào trong seine-data/seine.config.json, bên dưới thư mục bạn dùng để khởi chạy. Hãy chạy từ cùng thư mục đã giải nén để dùng lại các thiết lập đó. Tùy chọn data-dir cho phép chọn thư mục khác khi cần.'
   - q: 'Tôi có cần bật large pages của Windows trước khi bắt đầu đào không?'
     a: 'Không. seine tự động thử dùng large pages và dùng trang thông thường khi không khả dụng. Bạn có thể bắt đầu đào với thiết lập mặc định. Để tùy chọn thiết lập large pages, hãy cấp quyền Lock pages in memory cho tài khoản đào, rồi đăng xuất và đăng nhập lại trước khi khởi động lại seine.'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ Chuẩn bị sẵn địa chỉ nhận thưởng công khai trước khi mở ph
 
 Mỗi luồng đào CPU dùng một khối bộ nhớ 2 GiB. seine kiểm tra RAM khả dụng và số lõi, chừa bộ nhớ dự phòng rồi chọn số luồng ban đầu cho bạn. Bạn có thể bắt đầu với thiết lập mặc định trên máy bàn hoặc laptop; không cần tính số luồng hay chọn kernel CPU trước.
 
-## Bước 1: tải tệp nén cho Windows
+## Bước 1: tải đúng phiên bản
 
 Mở [mục tải xuống](/vi/#download) và chọn Windows x86_64. Tệp nén có tên `seine-windows-x86_64.zip`.
 
-![ZIP cho Windows trong bảng tải xuống chính thức của seine](/assets/blog/windows-download.png)
+![ZIP cho Windows trong bảng tải xuống chính thức của seine](/assets/blog/setup-download.webp)
 
-## Bước 2: giải nén toàn bộ ZIP
+## Bước 2: giải nén và chạy
 
 Trong File Explorer, nhấp chuột phải vào ZIP vừa tải và chọn **Extract All (Giải nén tất cả)**. Chọn thư mục bạn có quyền ghi rồi mở thư mục đã giải nén. Giữ `seine.exe` cùng các DLL đi kèm: tệp nén cho Windows chứa các thư viện thời gian chạy NVIDIA mà phần mềm đào sử dụng.
 
@@ -43,29 +43,37 @@ Nhấp đúp `seine.exe` trong thư mục đã giải nén. Nếu thích termina
 
 Tiền tố `./` hoặc `.\` yêu cầu shell chạy tệp thực thi trong thư mục hiện tại. Chạy từ thư mục đã giải nén cũng giúp seine có vị trí cố định để lưu thiết lập. Dùng lại thư mục đó ở các lần khởi chạy sau để phần mềm tìm được địa chỉ và pool bạn đã nhập.
 
-## Bước 3: nhập địa chỉ và pool
+## Bước 3: nhập địa chỉ ví
 
-Ở lời nhắc đầu tiên, dán địa chỉ nhận Blocknet hoặc `@name` đã đăng ký rồi xác nhận. Chấp nhận URL pool mặc định, `stratum+tcp://bntpool.com:3333`. Nếu được hỏi, hãy đặt tên dễ nhận biết cho máy đào trên pool để phân biệt PC Windows này với máy khác đang đào về cùng địa chỉ.
+Dán địa chỉ nhận Blocknet công khai hoặc `@name` đã đăng ký, rồi nhấn Enter để chấp nhận `stratum+tcp://bntpool.com:3333`. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) chỉ nơi tìm địa chỉ. Seine không cần cụm từ khôi phục hay khóa chi tiêu của bạn. Chương trình tự động đặt tên worker trong pool.
 
-[Hướng dẫn cấu hình](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) mô tả các lời nhắc và thiết lập đã lưu. Theo mặc định, chúng nằm trong `seine-data/seine.config.json` tính từ thư mục khởi chạy. seine dùng lại chúng ở các lần khởi chạy tiếp theo. Tên ngắn được phân giải lại mỗi khi bắt đầu một lần chạy mới.
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn." loading="lazy" />
+  </picture>
+  <figcaption>Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn.</figcaption>
+</figure>
 
-Bạn cũng có thể cung cấp trực tiếp tên ngắn đã đăng ký trong PowerShell:
+Seine tự chọn luồng và tinh chỉnh hiệu năng. Ở những lần chạy sau, hãy mở từ cùng thư mục để dùng lại `seine-data/seine.config.json`.
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-Thay `@name` bằng tên ngắn đã đăng ký của bạn. Để trống các cờ số luồng và kernel CPU để seine tự chọn. Để xem thiết lập chung cho các hệ điều hành, đọc [cách đào Blocknet](/vi/blog/how-to-mine-blocknet/).
-
-## Làm sao biết quá trình đào đang hoạt động?
+## Bước 4: kiểm tra share được chấp nhận
 
 <Answer>
 Kiểm tra bảng điều khiển seine có hiển thị tốc độ băm và share được chấp nhận, rồi tra cùng địa chỉ nhận thưởng trên trang My Stats của bntpool.com. Bảng điều khiển mô tả công việc hiện tại của phần mềm đào; pool ghi nhận share đã gửi và phần thưởng. Hãy chờ quá trình tự động tinh chỉnh ổn định trước khi so sánh tốc độ hoặc đổi thiết lập.
 </Answer>
 
-[Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích tốc độ băm, trạng thái đào và các bảng thông tin pool. Tốc độ băm đang chạy thể hiện hoạt động băm cục bộ; share được chấp nhận xác nhận công việc đã đến pool. Mở [My Stats](https://bntpool.com/stats), nhập cùng địa chỉ hoặc tên ngắn để theo dõi share và số dư của máy đào này.
+[Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích tốc độ băm, trạng thái đào và các bảng thông tin pool. Tốc độ băm đang chạy thể hiện hoạt động băm cục bộ; share được chấp nhận xác nhận công việc đã đến pool. Mở [My Stats](https://bntpool.com/stats?lang=vi), nhập cùng địa chỉ hoặc tên ngắn để theo dõi share và số dư của máy đào này.
 
 Khi kiểm tra thiết lập mới, hãy phân biệt share được chấp nhận với khoản thanh toán. Share đóng góp vào phần thưởng pool; khoản thanh toán tuân theo quy tắc xác nhận và số dư của pool. [Hướng dẫn PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) giải thích trình tự đó. Bạn có thể kiểm tra kết nối ngay mà không chờ khoản thanh toán đầu tiên.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark.</figcaption>
+</figure>
 
 ## Đào bằng CPU và NVIDIA trên cùng một PC
 
@@ -79,6 +87,6 @@ Khi khởi chạy bình thường, phần mềm đã thử dùng large pages và
 
 [Hướng dẫn large pages](/vi/blog/huge-pages-blocknet-mining/) trình bày chi tiết thiết lập tùy chọn này. Sau khi đăng nhập lại, chạy seine như thường và xem nhật ký khởi động để biết chế độ trang được chọn. Giữ chế độ tự động mặc định khi thiết lập lần đầu cho hoạt động, rồi so sánh số đo trên cùng PC nếu bạn đổi thiết lập trang.
 
-[Windows chặn phần mềm đào? Kiểm tra bản tải xuống](/vi/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="Tải seine cho Windows" text="Giải nén ZIP, nhập địa chỉ nhận thưởng và bắt đầu đào trên bntpool.com với CPU và NVIDIA được tự động tinh chỉnh." />
+
+Mở [Thống kê của tôi](https://bntpool.com/stats?lang=vi) và nhập cùng địa chỉ hoặc tên đã đăng ký để tìm worker, share và số dư.

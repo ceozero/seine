@@ -1,6 +1,6 @@
 ---
 title: Blocknet マイニングに最適なハードウェア
-description: "Blocknetのマイニング用ハードウェアを実測で比較。EPYC 9375Fは85.1 H/sを記録。RAM、スレッド数、ページ設定とベンチマークの根拠を確認できます。"
+description: "Blocknetのマイニング用ハードウェアを実測で比較。EPYC 9355Pはデフォルト設定で97.1 H/sを記録。RAM、スレッド数とベンチマークの根拠を確認できます。"
 tags: [ハードウェア, ハッシュレート, マイニングガイド, Argon2id, NVIDIA]
 faq:
   - q: 'ゲーミング PC で Blocknet をマイニングできますか？'
@@ -11,7 +11,7 @@ faq:
     a: 'seine は Windows 版と Linux 版で NVIDIA グラフィックカードを使ってマイニングし、検出したすべてのカードをプロセッサーと並行して使います。Windows では CUDA ランタイムが同梱されているので、NVIDIA ドライバーだけが必要です。Linux ではドライバーと NVRTC ライブラリをインストールしてください。初回起動時に各カードを調整し、その結果を記憶します。'
   - q: 'Blocknet のマイニングでメモリ帯域幅が重要なのはなぜですか？'
     a: 'Blocknet のハッシュは 1 回ごとに 2 GiB のメモリブロックを丸ごと書き込み、その全体からデータを読み戻します。これはどのプロセッサーのキャッシュよりもはるかに大きな量です。そのためハッシュレートは、メモリシステムがデータを動かす速さで決まります。メモリ帯域幅が大きく、多くのスレッドを動かせるだけの RAM を持つマシンが最も速くマイニングできます。'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ translation: draft
 ## Blocknet マイニングに最適なハードウェアは？
 
 <Answer>
-これらの測定で最も速い構成はAMD EPYC 9375Fの85.1 H/sです。マイニングスレッド64本、RAM 384 GiB、Linuxで手動準備した1 GiBのヒュージページを使用しています。Blocknetのマイニングにはメモリ帯域幅と、1スレッドあたり2 GiBを確保できるRAM容量が役立ちます。NVIDIAカードはCPUにハッシュレートを加算できます。
+これらの測定で最も速い構成はAMD EPYC 9355Pの97.1 H/sです。マイニングスレッド64本、RAM 192 GiBを使い、Linux上でseineのデフォルト設定のまま動作させました。Blocknetのマイニングにはメモリ帯域幅と、1スレッドあたり2 GiBを確保できるRAM容量が役立ちます。NVIDIAカードはCPUにハッシュレートを加算できます。
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Blocknet のプルーフ・オブ・ワークは、ハッシュごとに 2 GiB のメモリブロックを使う Argon2id です。そのため[メモリハード](/ja/blog/argon2id-proof-of-work-explained/)であり、ハッシュレートはコア数と同じくらいメモリ帯域幅とレイテンシー、そして 2 GiB のブロックを RAM に同時にいくつ収められるかに左右されます。下の表の上位マシンに共通しているのは、強力なメモリシステムです。
 
 ## 新しい物理サーバーでの測定：EPYC 9355P
 
-2026年10月25日、32コア／64ハードウェアスレッドのEPYC 9355Pに、12本のDDR5-4800メモリチャネルで192 GiBを搭載した構成が、**68.256 H/s**、丸めて**68.3 H/s**を記録しました。この固定の手動構成では、マイニングスレッド64本、streamingカーネル、1 GiBのヒュージページ、280 Wのパッケージ電力上限を使用しました。速度は、起動と終了を含む120秒の新規実行4回について、完了したハッシュの合計を経過時間の合計で割った値です。
+2026年10月28日、32コア／64スレッドのEPYC 9355PにRAM 192 GiBを搭載したマシンで、seineのデフォルト設定のまま15分間マイニングしました。フラグは指定せず、スレッド数、CPUカーネル、メモリページは自動で選択されました。結果は**97.1 H/s**でした。
 
-[ページサイズの実験](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md)には、正確なソースリビジョン、実行ファイルのSHA-256、ページ割り当ての確認結果、測定方法が記録されています。[機械可読の記録](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json)には、構成と生の分子・分母が保存されています。これはソケット全体を手動設定した結果です。以下のクラウドとMacの測定は、それぞれ固有のマシンと設定を示しています。
+[測定記録](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)には、ソースリビジョンと、実行中の1分ごとのハッシュレートが記載されています。以下のクラウドとMacの測定は、それぞれ固有のマシンと設定を示しています。
 
 ## テストでのRTX 5090の速度は？
 

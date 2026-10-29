@@ -1,0 +1,68 @@
+---
+title: 'Podaż, emisja i emisja ogonowa Blocknet'
+description: 'Poznaj podaż Blocknet: emisję BNT z nagród za bloki, cel około 100 milionów oraz różnicę między emisją ogonową, płatnościami i opłatami transakcyjnymi.'
+tags: ['Blocknet', 'Podaż', 'Kopanie']
+faq:
+  - q: 'Czy maksymalna podaż Blocknet wynosi 100 milionów BNT?'
+    a: 'Opublikowany harmonogram opisuje około 100 milionów BNT przed ciągłą emisją ogonową. To punkt odniesienia, a nie sztywny limit. Obecne reguły emitują w ogonie 2 BNT na blok od wysokości 414 720, więc łączna emisja rośnie wraz z dodawaniem bloków.'
+  - q: 'Czy emisja ogonowa oznacza zawsze tę samą inflację procentową?'
+    a: 'Stała liczba nowych monet na blok nie oznacza stałego procentowego wzrostu podaży. Procent zależy od emisji w wybranym okresie i podaży przyjętej jako mianownik. Przy większej podaży początkowej i takiej samej dodatkowej ilości wzrost procentowy jest mniejszy.'
+  - q: 'Czy wypłata z puli ponownie tworzy BNT?'
+    a: 'Nie. Emisja następuje przy nagrodzie za blok. Późniejsza wypłata przesyła środki uczestniczącym górnikom według zasad księgowych puli. Dojrzewanie zmienia moment, kiedy można je wydać, a wypłata zmienia właściciela. Żaden z tych etapów nie tworzy tych samych monet ponownie.'
+sourceHash: dbc22b3cb15a
+translation: draft
+---
+
+Czytaj dane o podaży Blocknet, odróżniając nowe BNT od środków przesyłanych między portfelami. Ten poradnik wyjaśnia przybliżony cel, malejące nagrody i ciągłą emisję ogonową w wydanym core v0.22.0. Pokazuje też, jak czytać procentowy wzrost bez mylenia go z saldem lub prognozą ceny. Przyszłe propozycje Faraday są oznaczone oddzielnie od wydanych reguł.
+
+## Czy podaż Blocknet jest ograniczona do 100 milionów BNT?
+
+<Answer>
+Wydany harmonogram przewiduje około 100 milionów BNT przed ciągłą emisją ogonową. Cel służy do pomiaru postępu, nie jako sztywny limit. Obecne reguły emitują 2 BNT na blok od wysokości 414 720, więc skumulowana ilość nadal zwiększa się z nowymi blokami.
+</Answer>
+
+## Zacznij od tego, co mierzy podaż
+
+Emisja tworzy nowe BNT przez nagrody blokowe. Skumulowana emisja sumuje te nagrody do określonej wysokości łańcucha. Opublikowane [obliczenie podaży](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/miner.go#L383-L431) zaczyna od wysokości 1, bo blok genezy nie ma nagrody. Odczyt przypisany do wysokości odpowiada zatem dokładnie, ile harmonogram wyemitował do tego bloku.
+
+To inna miara niż saldo jednego portfela. Portfel rozpoznaje wyjścia swoich kluczy i odróżnia środki dostępne od oczekujących. Łączna emisja nie sprawdza dostępu każdego posiadacza do kluczy ani nie mówi, ile BNT aktywnie zmienia właściciela. Porównując strony, zachowaj nazwę i zakres miary.
+
+[Poradnik uczciwego startu](https://bntpool.com/blog/blocknet-fair-launch/) opisuje początek dystrybucji. Tutaj chodzi o późniejszą księgowość: każdy zaakceptowany blok zwiększa wysokość i dodaje zaplanowaną emisję do sumy.
+
+[![Emisja Blocknet według wydanych reguł: 1 pokazuje malejące nagrody według etapów wysokości; 2 pokazuje ciągły ogon 2 BNT na blok.](/assets/blog/blocknet-supply.svg)](/assets/blog/blocknet-supply.svg)
+
+**1** oznacza malejące etapy nagród; **2** ciągłą emisję ogonową. Słupki są ilustracją reguł, a nie pomiarem podaży czy dokładnymi datami. Obie części opisują nowo emitowane BNT.
+
+## Kiedy Blocknet osiąga emisję ogonową?
+
+Obecny docelowy odstęp między blokami to pięć minut. Kod grupuje wysokości w miesiące harmonogramu po 8640 bloków, odpowiadające 30 dniom przy tym tempie. W jednym takim miesiącu nagroda jest stała. W następnym maleje według opublikowanego obliczenia zaniku. Okresy wynikają z wysokości, nie z nazw miesięcy kalendarzowych.
+
+Po 48 miesiącach harmonogramu ogon zaczyna się na wysokości 414 720. Od tej wysokości wydana reguła stosuje 2 BNT na blok. [Harmonogram nagród](https://bntpool.com/blog/blocknet-block-reward-schedule/) zawiera tabelę miesięczną i dokładną sumę przed ogonem. Możesz sprawdzić etap bez przekształcania tego poradnika podaży w kolejny kalkulator nagród.
+
+Około 100 milionów opisuje skalę początkowej dystrybucji. To również odniesienie dla wskaźnika postępu emisji w kodzie. Osiągnięcie końca tej miary nie wyłącza ogona. Czytaj procent wraz ze wskazanym celem, zamiast uznawać pełny pasek za stwierdzenie, że nie można już emitować BNT.
+
+Ciągła nagroda daje górnikom BNT tworzone przez protokół za zaakceptowane bloki po początkowej dystrybucji. Zachowuje zachętę do wnoszenia pracy przy każdym kolejnym bloku. [Poradnik proof of work](/pl/blog/how-crypto-mining-works/) wyjaśnia związek znajdowania prawidłowych bloków i otrzymywania planowych nagród.
+
+## Co ogon oznacza dla wzrostu podaży
+
+Przy obecnym celu pięciu minut doba zawiera 288 docelowych odstępów. Pomnożone przez wydaną nagrodę ogonową dają 576 BNT dziennie lub 210 240 BNT przez 365 dni. To projekcje arytmetyczne z interwału i nagrody. Rzeczywiste czasy bloków są zmienne, więc obliczenie opisuje tempo docelowe, nie gwarantowaną dzienną liczbę.
+
+Ogon dodaje stałą ilość na blok, a zgromadzona podaż rośnie. Aby obliczyć procent, wybierz okres, zsumuj nową emisję, podziel przez podaż początkową i pomnóż przez 100. Podaj zastosowaną miarę podaży. Przy większej ilości początkowej i niezmienionym dodatku procent jest mniejszy.
+
+Tutaj inflacja oznacza wzrost podaży monet. Nie przewiduje siły nabywczej BNT ani cen towarów. Obliczenie nie zawiera ceny rynkowej czy koszyka zakupowego. Rozdzielenie tych pytań ułatwia porównania reguł między okresami bez nieuzasadnionych twierdzeń o tym, co można kupić.
+
+## Dlaczego transfery, opłaty i dojrzałość są osobne
+
+Płatność wydaje istniejące środki i tworzy wyjścia odbiorcy oraz reszty. Nowe zapisy przypisują istniejącą wartość na nowo; nie emitują ponownie płaconej kwoty. Opłata także pochodzi z istniejących środków, więc jej dodanie nie tworzy BNT. [Omówienie transakcji](/pl/blog/blocknet-transaction-explained/) śledzi wejścia, wyjścia, resztę i opłatę.
+
+To samo dotyczy puli. Nagroda tworzy zaplanowane monety, a późniejsza wypłata rozdziela środki według księgowości. Dojrzewanie dotyczy możliwości wydania, wypłata własności. Przy podaży licz emisję bloku tylko raz. [Poradnik wypłat PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) opisuje podział pracy i płatności w puli.
+
+## Czytaj podaż wraz z wysokością i wersją reguł
+
+Sprawdzając twierdzenie, zachowaj trzy dane: wysokość łańcucha, znaczenie liczby i wersję reguł. Wyemitowana podaż, procent postępu i dostępne saldo mogą być poprawne, odpowiadając na różne pytania. [Poradnik eksploratora](/pl/blog/blocknet-explorer-guide/) pokazuje publiczne informacje o blokach i sieci.
+
+W projekcjach zachowaj docelowy odstęp wraz z założeniami nagrody. Gdy zmieni się którykolwiek, przelicz miarę czasową zamiast kopiować dawną dzienną prognozę. [Poradnik polityki pieniężnej Faraday](/pl/blog/blocknet-faraday-monetary-policy/) omawia proponowane zmiany i oddziela ogłoszone plany od wydanego harmonogramu.
+
+Możesz wtedy czytać podaż spójnie: nagrody dodają BNT, ogon kontynuuje emisję, a transfery przesuwają istniejącą wartość. Aby pomagać w produkcji bloków, skorzystaj z [poradnika kopania z seine](/pl/blog/how-to-mine-blocknet/); bntpool.com oferuje pulę oraz śledzenie wypłat.
+
+<CTA target="seine" title="Kop Blocknet z seine" text="Używaj seine z bntpool.com, aby wnosić pracę i śledzić wypłaty do swojego portfela." />

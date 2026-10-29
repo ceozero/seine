@@ -1,6 +1,6 @@
 ---
 title: El mejor hardware para minar Blocknet
-description: "Compara hardware para minar Blocknet con mediciones: EPYC 9375F alcanza 85,1 H/s. Consulta RAM, hilos, páginas y los datos de cada prueba."
+description: "Compara hardware para minar Blocknet con mediciones: EPYC 9355P alcanza 97,1 H/s con ajustes predeterminados. Consulta RAM, hilos y los datos de cada prueba."
 tags: [Hardware, Tasa de hash, Guía de minería, Argon2id, NVIDIA]
 faq:
   - q: '¿Se puede minar Blocknet con un PC gamer?'
@@ -11,7 +11,7 @@ faq:
     a: 'seine mina con tarjetas gráficas NVIDIA en las descargas para Windows y Linux, y usa todas las tarjetas que detecta junto con el procesador. En Windows se incluye el runtime de CUDA, así que solo necesitas el controlador de NVIDIA. En Linux, instala el controlador y las bibliotecas NVRTC. El primer inicio ajusta cada tarjeta y recuerda el resultado.'
   - q: '¿Por qué importa el ancho de banda de memoria para minar Blocknet?'
     a: 'Cada hash de Blocknet escribe un bloque de memoria completo de 2 GiB y vuelve a leer datos de todo él, mucho más de lo que cabe en cualquier caché de procesador. Por eso la tasa de hash depende de lo rápido que el sistema de memoria mueve los datos. Los equipos con más ancho de banda de memoria y RAM suficiente para muchos hilos son los que más rápido minan.'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ Esta guía muestra qué equipos minan Blocknet más rápido con seine, cuántos 
 ## ¿Cuál es el mejor hardware para minar Blocknet?
 
 <Answer>
-La configuración más rápida de estas mediciones es un AMD EPYC 9375F a 85,1 H/s: 64 hilos de minería, 384 GiB de RAM y huge pages de 1 GiB preparadas manualmente en Linux. La minería de Blocknet aprovecha el ancho de banda de memoria y 2 GiB de RAM por hilo. Las tarjetas NVIDIA pueden sumar su tasa de hash a la CPU.
+La configuración más rápida de estas mediciones es un AMD EPYC 9355P a 97,1 H/s: 64 hilos de minería y 192 GiB de RAM en Linux con los ajustes predeterminados de seine. La minería de Blocknet aprovecha el ancho de banda de memoria y 2 GiB de RAM por hilo. Las tarjetas NVIDIA pueden sumar su tasa de hash a la CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 La prueba de trabajo de Blocknet es Argon2id con un bloque de memoria de 2 GiB por hash. Eso la hace [intensiva en memoria](/es/blog/argon2id-proof-of-work-explained/): la tasa de hash depende tanto del ancho de banda y la latencia de la memoria como del número de núcleos, y de cuántos de esos bloques de 2 GiB caben a la vez en la RAM. Un sistema de memoria potente es lo que tienen en común los mejores equipos de la tabla siguiente.
 
 ## Nueva medición en servidor físico: EPYC 9355P
 
-El 25 de octubre de 2026, un EPYC 9355P de 32 núcleos y 64 hilos, con 192 GiB repartidos entre doce canales DDR5-4800, completó **68,256 H/s**, redondeados a **68,3 H/s**. Esta configuración manual fija utilizó 64 hilos de minería, el kernel streaming, huge pages de 1 GiB y un límite de potencia del paquete de 280 W. La tasa divide los hashes completados totales entre el tiempo total de cuatro invocaciones nuevas de 120 segundos, incluidos el arranque y el cierre.
+El 28 de octubre de 2026, un EPYC 9355P de 32 núcleos y 64 hilos con 192 GiB de RAM minó durante 15 minutos con los ajustes predeterminados de seine: sin flags, con el número de hilos, el kernel de CPU y las páginas de memoria elegidos automáticamente. Minó a **97,1 H/s**.
 
-El [experimento de tamaño de página](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) documenta la revisión exacta del código, el SHA-256 del ejecutable, las comprobaciones de asignación y el método. Sus [registros procesables](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) conservan la configuración y los numeradores y denominadores originales. Es un socket completo configurado manualmente; las mediciones de nube y Mac que siguen tienen sus propios equipos y ajustes.
+El [registro de la medición](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md) indica la revisión del código y la tasa de hash de cada minuto de la ejecución. Las mediciones de nube y Mac que siguen tienen sus propios equipos y ajustes.
 
 ## ¿Qué velocidad alcanzó la RTX 5090 en nuestra prueba?
 

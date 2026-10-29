@@ -1,97 +1,64 @@
 ---
-title: How Blocknet keeps payments private
-description: Blocknet keeps every payment private by default with rings of 16, one-time stealth addresses, hidden amounts, Dandelion++ relay and encrypted memos.
+title: 'How Blocknet makes ordinary payments private by default'
+description: 'Learn how Blocknet applies privacy to ordinary payments with ring signatures, one-time keys, hidden amounts and encrypted memos, and proposed Faraday changes.'
 date: 2026-10-25
-updated: 2026-10-27
-tags: [Privacy, Blocknet, Ring signatures, Stealth addresses, Memos]
+updated: 2026-10-28
+tags: ['Blocknet', 'Privacy', 'Payments']
 faq:
-  - q: Is Blocknet private by default?
-    a: "Yes. Every Blocknet transaction uses a ring signature over 16 outputs, a one-time stealth address for each receiver, hidden amounts with Bulletproofs range proofs and a 128-byte encrypted memo on every output. The transaction format has no transparent mode, so there is no setting to turn on and no way for a payment to skip these protections."
-  - q: What ring size does Blocknet use?
-    a: "Every input in a Blocknet transaction is signed with a CLSAG ring of exactly 16 outputs: the real one and 15 decoys taken from the chain. Consensus rejects any other size, and each ring member must be a real output already on the chain. Because every input uses the same size, ring size can never single out a wallet."
-  - q: Who can read a Blocknet memo?
-    a: "Only the sender and the receiver. Each memo is encrypted with the secret the two wallets share for that output, and it always takes exactly 128 bytes on the chain, with room for up to 124 bytes of text. Short or empty memos are filled with random padding, so nobody else can tell which payments carry a note."
-  - q: Can people see how much my Blocknet address has received?
-    a: "No. Every payment to your address lands on a fresh one-time stealth address, so payments can't be grouped under the address you shared. Amounts are stored as Pedersen commitments with range proofs, so the chain never shows what each output holds. Only your wallet, using your private view key, finds and totals your payments."
-  - q: Does Blocknet use the same cryptography as Monero?
-    a: "Blocknet uses the same proven cryptography family as Monero: CLSAG ring signatures with a ring of 16, one-time stealth addresses, Pedersen commitments with Bulletproofs range proofs, and Dandelion++ transaction relay. On top of that it adds payment by name through Blocknet ID shortnames and an encrypted 128-byte memo on every output."
-related: [blocknet-explorer-guide, blocknet-faraday-upgrade, blocknet-payment-visibility, blocknet-faraday-privacy]
+  - q: 'Is privacy automatic when I pay with Blocknet?'
+    a: 'Yes. The released wallet builds ordinary payments with ring signatures, one-time output keys, hidden amounts and encrypted memos. You do not select a separate private payment mode. Public transaction structure still exists, and the sender and recipient know their own payment details. This describes normal spending; block-reward creation follows its own transaction rules.'
+  - q: 'Why does a Blocknet input have 16 ring members?'
+    a: 'A normal input uses one real output and 15 decoys from the chain. Its ring signature proves authorization without identifying the real member. Consensus fixes the ring size at 16, so users do not choose different sizes for individual payments. Decoys do not contribute their owners’ funds, and key images help detect repeated spending.'
+  - q: 'Does Faraday already replace the current privacy system?'
+    a: 'No. Faraday remains a proposed upgrade. The official October 27 explanation describes hash-based spend proofs over the set of Faraday coins and a separate ML-KEM mechanism for receiving payments. That set would grow as coins enter the new format. Today’s released payment rules remain the reference until an applicable upgrade is activated.'
+related: [blocknet-fungibility, blocknet-payment-visibility, blocknet-faraday-privacy, blocknet-transaction-explained]
+image: /assets/blog/blocknet-privacy-default.svg
 ---
 
-This post goes deeper than the privacy summary in [What is Blocknet?](/blog/what-is-blocknet/) and walks through each privacy layer in a Blocknet transaction: what it hides, how it works, and what it means the next time you send or receive BNT.
+Paying someone should not require publishing your spending record to everyone who can read a blockchain. Blocknet applies its privacy mechanisms as part of ordinary wallet payments. This guide explains what the wallet protects automatically, how the network still checks a payment, and where your own records fit. Current behavior refers to released core v0.22.0; the Faraday section describes a proposal.
 
-## How does Blocknet keep payments private?
-
-<Answer>
-Blocknet hides the sender with CLSAG ring signatures over 16 outputs, the receiver with one-time stealth addresses, and the amount with Pedersen commitments and Bulletproofs range proofs. Dandelion++ relay hides where a transaction entered the network, and every output carries an encrypted 128-byte memo. All of it is mandatory, with no transparent mode.
-</Answer>
-
-Blocknet uses the same proven cryptography family as Monero: ring signatures, stealth addresses and Bulletproofs range proofs, built on the Ristretto group over Curve25519. On top of that it adds payment by name and encrypted memos. Each layer covers a different part of a payment, and together they leave someone reading the chain with very little to go on.
-
-## Ring signatures hide who paid
-
-When you spend coins, your wallet signs for a group of 16 outputs: the one you own and 15 others picked from the chain as decoys. The signature is a [CLSAG ring signature](/blog/ring-signatures-explained/). Anyone can verify that one member of the ring signed, and the signature doesn't reveal which one.
-
-Consensus enforces the ring size. Every input must carry exactly 16 ring members, each one a real output already on the chain, and the network rejects anything else. Because every input on the network uses the same size, ring size can't single out a transaction or the wallet that built it. The daemon's code fixes the size "to prevent information leakage from variable ring sizes".
-
-To stop the same coins being spent twice, each input also carries a key image. It is unique to the real output being spent but doesn't reveal which ring member that is. If a key image appears a second time, the network rejects the transaction as a double spend.
-
-## Stealth addresses hide who got paid
-
-A Blocknet address holds two public keys, a spend key and a view key. When someone pays you, their wallet combines your keys with a fresh random number to make a [one-time address](/blog/stealth-addresses-explained/) used for that output only. The address you shared never appears on the chain.
-
-Your wallet uses your private view key to scan new transactions and spot the outputs that belong to you, and your spend key to spend them later. Ten payments to the same address land on ten unrelated one-time addresses, so an observer can't add up what an address has received or tell that two payments went to the same person.
-
-The same holds for [Blocknet ID names](/blog/blocknet-id-pay-by-name/). A shortname like `@name` is public by design, because a sender looks it up at [blocknet.id](https://blocknet.id) to pay you. Payments to it still go to fresh one-time addresses, so the name says nothing about what you've received.
-
-## How does Blocknet hide transaction amounts?
-
-Amounts are stored as Pedersen commitments. A commitment locks in a number without showing it, and commitments can be added together. That lets every node check that a transaction's inputs equal its outputs plus the fee without learning any of the amounts.
-
-A commitment on its own could hide a negative amount, which would create coins from nothing. Each output therefore comes with a [Bulletproofs range proof](/blog/bulletproofs-explained/) that its amount lies within a 64-bit range starting at zero. The proof convinces every node the amount is valid and reveals nothing else about it.
-
-The receiver still sees the real figure. Their wallet recovers it with the same shared secret it uses to find the output, so the amount is visible to the two people in the payment and to nobody else.
-
-## Dandelion++ hides where a transaction started
-
-If a node announced its own transaction to all of its peers at once, someone watching many nodes could guess where it came from by noting who heard it first. Blocknet relays transactions with [Dandelion++](/blog/dandelion-plus-plus-explained/) to prevent that.
-
-A new transaction first travels along a "stem", passed from one peer to a single next peer. At each hop there is a 90% chance it continues along the stem; otherwise it "fluffs" and spreads to the whole network from that point. By the time most nodes see the transaction, it appears to come from a node that may be many hops away from yours. Stem routes are reshuffled every 10 minutes.
-
-## Who can read a Blocknet memo?
-
-Every output carries a 128-byte encrypted memo with room for up to 124 bytes of text. It is encrypted with the same secret the sender and receiver share for that output, so only the two of you can read it. Use it for an invoice number, an order reference or a short note to the person you're paying. The [guide to encrypted memos](/blog/blocknet-encrypted-memos/) shows how to add one and where to find the memos you receive.
-
-The memo is always the same size, whether you write a full note or nothing at all. When a memo is short or empty, the wallet fills the rest with random padding before encrypting it, so an output with a note looks exactly like one without. Memos never stand out, and nobody else can even tell which payments carry a message.
-
-## Is privacy optional on Blocknet?
+## What does private by default mean for a Blocknet payment?
 
 <Answer>
-No. Privacy is mandatory on Blocknet. The transaction format has no transparent mode, and consensus requires every input to carry a ring of exactly 16 members, so every payment uses rings, stealth addresses, hidden amounts and an encrypted memo. Since nobody can opt out, private payments look like every other payment on the chain.
+Blocknet’s ordinary payments use ring signatures for spent inputs, one-time keys for recipients, and commitments with range proofs for amounts. Memos are encrypted, and Dandelion++ reduces exposure of the transaction’s network origin. The wallet applies these layers without a separate privacy switch, while public transaction structure and participants’ own records remain.
 </Answer>
 
-When privacy is a setting, the people who switch it on form a small group that is easier to pick out. On Blocknet every transaction is built the same way, so each one blends in with all the others, and you never have to remember to protect a payment.
+## How does the default protect the money you spend?
 
-## What this means when you pay someone
+When you enter a recipient and amount, the wallet constructs a payment in the normal private format. You do not need to choose between a public transfer and a protected one. This makes privacy part of using BNT as currency: paying a person or business uses the same core protections as another ordinary payment. It also avoids making the decision to enable privacy a distinguishing choice.
 
-When you send BNT to an address or an `@name`, your wallet handles every step for you, with nothing to switch on:
+Each normal input uses a CLSAG ring of 16 outputs: one real output you own and 15 decoys from the chain. The [released validation rules](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L1013) enforce that size and require real on-chain ring members. The signature proves that the spend is authorized without identifying which member supplied it. Decoys provide possible sources for the proof; they do not fund your payment. A key image lets the network detect repeated spending. The [ring-signature guide](/blog/ring-signatures-explained/) explains the mechanism.
 
-1. It picks 15 decoys from the chain and signs your input with a ring of 16.
-2. It makes a fresh one-time address for the receiver.
-3. It commits to the amount and attaches a range proof.
-4. It encrypts your memo, or random padding if you leave the memo empty.
-5. It hands the transaction to Dandelion++ for relay.
+[![Three protections within an ordinary Blocknet payment: 1, a ring of 16 possible sources; 2, a one-time recipient output key; 3, a hidden amount commitment.](/assets/blog/blocknet-privacy-default.svg)](/assets/blog/blocknet-privacy-default.svg)
 
-Someone reading the chain sees inputs that each point at 16 possible outputs, outputs sent to one-time addresses nobody has seen before, commitments in place of amounts, and a memo field of random-looking bytes. The person you paid sees the payment, the amount and your note in their own wallet.
+The diagram groups three transaction protections: **1** authorization among ring members, **2** the receiving output and **3** its hidden amount. No ring member is marked as the real source. This conceptual view does not depict a live transaction.
 
-If you'd like to earn your first BNT, you can mine it on your own computer. The [mining guide](/blog/how-to-mine-blocknet/) gets seine running on bntpool.com in a few minutes, and you can mine straight to your address or your `@name`.
+## How are the recipient and payment note protected?
 
-## What comes next with the Faraday upgrade
+Your receiving address lets a payer construct an output for you. The wallet derives a one-time output key rather than placing that familiar receiving address beside every payment on the chain. Your wallet uses its private viewing information to recognize incoming outputs. You can reuse a receiving address while the payments use their own output keys. The [stealth-address guide](/blog/stealth-addresses-explained/) explains that relationship.
 
-Faraday is a proposed upgrade to the existing chain. The [official October 27 explanation](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) describes a design still being built and tested, targeting February 2027. Today’s released transactions continue to use the privacy mechanisms described above.
+A public [Blocknet ID name](/blog/blocknet-id-pay-by-name/) provides a convenient way to find the receiving destination. Someone may associate the published name with you, but an ordinary payment to that destination still uses the same output construction. Publishing a receiving name does not publish the wallet’s private viewing keys.
 
-The planned spend proof would cover the full set of Faraday coins, which grows as coins enter the new format. That is more precise than treating every historical output as already part of the new set. Spending would use hash-based proofs, while ML-KEM would support payment detection. [How Faraday changes privacy](/blog/blocknet-faraday-privacy/) explains these separate roles and the proposed proof lifecycle.
+You can also attach an invoice reference or a short note. The wallet encrypts the memo using a shared secret for that output. The memo field occupies 128 bytes and supports up to 124 bytes of text; shorter or empty content receives random padding before encryption. Its fixed field size therefore does not announce the note’s length. Sender and recipient can know the note, and deliberately shared verification or viewing information can disclose it. The [memo guide](/blog/blocknet-encrypted-memos/) covers writing and reading notes.
 
-The chain’s history would continue, with a separate coin-migration step for holders. The [Faraday upgrade guide](/blog/blocknet-faraday-upgrade/) tracks the announced migration window, recovery-word changes and preparation steps. Follow the final compatible release for operating instructions; the announcement’s dates, figures and design can change.
+## How can the network check hidden amounts?
 
-<CTA target="seine" title="Earn BNT by mining" text="Mine Blocknet with seine and receive private payments straight to your address or @name." />
+Ordinary payment outputs carry Pedersen commitments instead of publishing their amounts as readable values. Nodes check that the transaction balances, including its public fee, through these commitments and the associated proofs. Bulletproofs range proofs establish that output amounts are within the permitted range. Together, the checks validate the money movement while keeping the payment amounts out of the ordinary public record.
+
+Your wallet can still show the amount you receive. The [range-proof guide](/blog/bulletproofs-explained/) explains the cryptography, while the [transaction walkthrough](/blog/blocknet-transaction-explained/) follows selected inputs, recipient outputs and change. Change uses new outputs belonging to the sending wallet; privacy does not remove the need to account for what was spent and what returned.
+
+Public records retain a transaction hash, input and output structure, the fee, and block status when included. A private payment therefore remains a verifiable transaction. This explanation concerns ordinary spending: the special coinbase transaction that creates a block reward has no spending inputs and follows separate validation rules. Distinguishing those cases keeps “private by default” tied to the payment behavior it describes.
+
+## What happens beyond the public transaction?
+
+[Dandelion++](/blog/dandelion-plus-plus-explained/) addresses network relay. A new transaction first travels along a stem before wider broadcast, reducing the direct connection between its origin and the peers that announce it broadly. It is an additional layer alongside the transaction cryptography. It does not promise to conceal an IP address in every network situation.
+
+The people participating in a payment also have records. A sender knows the destination and amount entered; the recipient recognizes their receipt. An invoice, conversation or shared screenshot can connect those details to a person or order. That outside information is separate from what the transaction format publishes. The [payment-visibility guide](/blog/blocknet-payment-visibility/) compares public, sender, recipient and granted viewing access, including deliberate payment proofs. For ordinary currency use, keep the distinction clear: the network validates the transfer while each participant retains the details needed for their own accounting.
+
+## What would the proposed Faraday upgrade change?
+
+The [official October 27 explanation](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) describes Faraday as a design still being built and tested. Faraday would replace the current spending proof with hash-based proofs covering the full set of Faraday coins. That set would grow as coins enter the new format; it does not mean every historical output is already included. The Faraday proposal would use ML-KEM for receiving and payment detection, a separate job from proving a spend.
+
+The [Faraday privacy guide](/blog/blocknet-faraday-privacy/) explains those planned mechanisms. The proposal’s design and timing can change, and current wallet behavior should be read from the released rules until the applicable upgrade. For currency use today, privacy by default means the ordinary payment format protects sensitive details without an extra mode to select. Its relationship to interchangeable units is explained in [Blocknet and fungibility](/blog/blocknet-fungibility/); practical sending steps remain in the [payment guide](/blog/send-receive-blocknet/).
+
+<CTA target="seine" title="Mine Blocknet with seine" text="Use seine with bntpool.com to mine Blocknet and receive payments in your own wallet." />

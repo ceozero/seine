@@ -1,0 +1,66 @@
+---
+title: 'Wie beheert Blocknet?'
+description: 'Ontdek wie de regels van Blocknet handhaaft: wat ontwikkelaars, miners, nodes en bezitters doen, hoe blokken worden aanvaard en hoe netwerkupdates werken.'
+tags: ['Blocknet', 'Consensus', 'Valuta']
+faq:
+  - q: 'Kan een miner meer BNT maken dan de beloning toestaat?'
+    a: 'Volgens de gepubliceerde regels vergelijkt een node de blokbeloning met het vereiste bedrag op die hoogte. Een geldig werkbewijs vinden omzeilt die controle niet. Een beloning met een afwijkende commitment wordt afgewezen. De rekenkracht van de miner bepaalt dus niet het uitgifteschema.'
+  - q: 'Geeft BNT bezitten mij een stem over het protocol?'
+    a: 'Een walletsaldo geeft je geld om volgens de netwerkregels te besteden. De gepubliceerde proof-of-work-validatie weegt blokacceptatie niet op basis van muntbezit. Software draaien, blokken produceren en eigen betalingen autoriseren zijn aparte rollen; een groot saldo maakt een ongeldige transactie niet geldig.'
+  - q: 'Verandert nieuwe code publiceren Blocknet meteen?'
+    a: 'Een codewijziging wordt relevant voor consensus wanneer software die haar implementeert op het netwerk draait en de activeringsvoorwaarden gelden. Een aankondiging of repositorycommit vervangt niet vanzelf de regels in draaiende nodes. Volg officiële upgrade-instructies en controleer het updatebeleid van je software.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Begrijp wie wat doet voordat je bepaalt wat controle over Blocknet betekent. Software schrijven, een blok vinden, dat blok controleren en munten uitgeven zijn verschillende bevoegdheden. Deze gids volgt die grenzen in de gepubliceerde core v0.22.0 en legt uit hoe een voorgestelde upgrade de gebruikte software bereikt. Hij beschrijft validatieverantwoordelijkheden, zonder de spreiding van mining of ontwikkeling te meten.
+
+## Wie handhaaft de regels van Blocknet?
+
+<Answer>
+Nodes handhaven de regels in hun software wanneer ze inkomende blokken en transacties valideren. Miners produceren kandidaatblokken, ontwikkelaars onderhouden implementaties en walleteigenaren autoriseren betalingen. Elke rol draagt bij aan het netwerk, maar code publiceren, BNT bezitten of een werkbewijs vinden voldoet op zichzelf niet aan de overige validatiecontroles.
+</Answer>
+
+Volg een betaling langs deze verantwoordelijkheden. Een wallet maakt en autoriseert haar; een miner neemt haar op in een voorgesteld blok; een node controleert of dat voorstel zijn regels volgt. Acceptatie hangt van die controles af. Een bekende projectnaam, een groot walletsaldo of de identiteit van de verzendende peer vervangt ze niet.
+
+[![Vier genummerde rollen: ontwikkelaars publiceren software, miners stellen blokken voor, nodes valideren ze en walleteigenaren autoriseren hun betalingen.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Het diagram scheidt verantwoordelijkheden: 1 ontwikkelt software; 2 produceert een blokvoorstel; 3 toetst dat aan de draaiende regels; 4 autoriseert een eigen walletbetaling. De nummers vormen geen stemmentelling of meting van netwerkdeelnemers.
+
+## Wat kunnen ontwikkelaars veranderen?
+
+Ontwikkelaars kunnen wijzigingen voorstellen, implementaties schrijven, code beoordelen en versies publiceren. Dat is belangrijk omdat software de regels bevat die nodes uitvoeren. Met de [openbare core-broncode](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) kun je de werkelijke validatiepaden bekijken. Documentatie legt hun doel uit; gepubliceerde code bepaalt het gedrag van een specifieke versie.
+
+Een commit in een repository herschrijft geen draaiend programma. Een wijziging bereikt een node via het software-updateproces en, waar van toepassing, activeringslogica. Deelnemers hebben daarom software nodig die past bij de netwerkregels die ze willen volgen. Die afstemming rond uitgerolde software garandeert niet dat ieder voorstel een netwerkregel wordt.
+
+Updatebeleid hoort bij die relatie. De beheer-CLI kan updates plannen voor een core die de nieuwste versie volgt, terwijl vastgezette versies een ander beleid hebben. De [nodegids](/nl/blog/run-blocknet-node/) legt dit verschil uit. Lees het beleid van je installatie in plaats van aan te nemen dat iedere update op handmatige bevestiging wacht.
+
+## Wat kunnen miners beslissen?
+
+Mining produceert kandidaatblokken en het werkbewijs dat voor acceptatie nodig is. Bij direct mining ontvangt seine werk van een node; bij poolmining coördineert de pool het werk en dient opgeloste blokken bij de achterliggende node in. Beide routes bouwen de keten op. De [mininguitleg](/nl/blog/how-crypto-mining-works/) beschrijft het proces en het verschil tussen een poolshare en een volledig blok.
+
+Een opgelost werkbewijs is één van meerdere vereisten. De [gepubliceerde blokvalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) controleert ook blokcontext, moeilijkheid, geldigheid van transacties en de vereiste beloning. Wijkt de voorgestelde beloning af van het toegestane bedrag op die hoogte, dan faalt de commitment bij die controle. Meer rekenkracht verandert die vergelijking niet.
+
+Het beloningsveld in miningsoftware aanpassen verandert bijvoorbeeld niet wat een andere node verwacht. De ontvangende node berekent de verwachte beloning uit de hoogte en vergelijkt de ingediende output daarmee. De [aanbodgids](/nl/blog/blocknet-supply/) legt het uitgifteschema uit; de miner moet een blok produceren dat eraan voldoet.
+
+## Hoe beslissen nodes welke keten ze volgen?
+
+De gepubliceerde core valideert een kandidaat voordat hij ketenselectie toepast. Hij houdt het verzamelde werk bij en kan volgens zijn reorganisatieregels overstappen naar een geldige tak met meer werk. Alleen blokken tellen mist dat onderscheid. Werk helpt kiezen tussen aanvaardbare geschiedenissen, maar vervangt de controles van hun blokken niet.
+
+Ook verificatie-instellingen zijn van belang voor historische controles. Optionele synchronisatie met vertrouwde checkpoints kan herhaalde cryptografische en werkbewijsverificatie overslaan voor de gedekte historische blokken. Validatie aan de huidige ketentop en zulke historische synchronisatie volgen verschillende paden. Een lokale node hebben zegt op zichzelf niet welk synchronisatiebeleid is gebruikt.
+
+De nuttige vraag is daarom concreet: welke software, regels en validatiemodus worden gebruikt? De [gids over softwarerollen](/nl/blog/blocknet-wallet-node-miner/) helpt toepassingen kiezen, en de nodegids behandelt het beheer. Een peeraantal of schermafbeelding van een blokhoogte stelt niet vast hoeveel onafhankelijke mensen het netwerk beheersen.
+
+## Wat bepalen muntbezitters?
+
+Met de vereiste privésleutels kan een walleteigenaar het uitgeven van zijn eigen outputs autoriseren. Het netwerk controleert die autorisatie en de overige transactieregels. Meer BNT bezitten verandert het gepubliceerde proof-of-work-systeem niet in een saldo-gewogen stemming over het accepteren van andermans ongeldige transactie.
+
+Bezit verschilt ook van kiezen wat je onthult. Met de ondersteunde inzage- en betalingsbewijsfuncties van de wallet kun je informatie over je eigen geld of betaling delen. Dat geeft geen toestemming om extra munten te maken. De [gids over verificatie van verborgen bedragen](/nl/blog/bulletproofs-explained/) legt uit hoe boekhoudkundige controles mogelijk blijven met private betalingsbedragen.
+
+## Hoe lees je een voorgestelde upgrade?
+
+Onderscheid de aankondiging, de implementerende versie en de activeringsregels. Een aankondiging beschrijft een beoogde wijziging; compatibele software implementeert de controles; activering bepaalt wanneer die gelden. Zo krijg je concrete zaken om te controleren, in plaats van een roadmapverklaring als al werkend gedrag te behandelen.
+
+Voor Faraday beschrijft de [officiële aankondiging](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) een voorstel dat nog wordt ontwikkeld en getest. Onze [upgradegids](/nl/blog/blocknet-faraday-upgrade/) volgt de voorbereiding voor gebruikers, terwijl de [gids over monetair beleid](/nl/blog/blocknet-faraday-monetary-policy/) voorgestelde uitgiftewijzigingen scheidt van de huidige regels. Gebruik die gedateerde bronnen voordat je over een toekomstige overgang beslist.
+
+<CTA target="seine" title="Mine Blocknet met seine" text="Gebruik seine met bntpool.com om miningwerk bij te dragen en BNT in je wallet te ontvangen." />

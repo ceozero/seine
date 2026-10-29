@@ -1,6 +1,6 @@
 ---
 title: Mac で Blocknet をマイニングする方法
-description: Apple シリコン搭載 Mac と seine で Blocknet をマイニング。ターミナルでの設定、M4 Max の実測 30.9 H/s、動かせるスレッド数を解説します。
+description: "macOS: seineをダウンロードして展開し、Blocknetアドレスを入力して、bntpool.comでシェアの受理を確認します。まず自動設定で始めましょう。性能調整の説明はセットアップの後にあります。"
 tags: [マイニングガイド, macOS, Apple シリコン, seine]
 faq:
   - q: 'MacBook Air で Blocknet をマイニングできますか？'
@@ -8,22 +8,70 @@ faq:
   - q: 'Mac で Blocknet をマイニングするとき、seine は GPU を使いますか？'
     a: 'Apple シリコンでは、seine はデフォルトで CPU でマイニングします。それが最も速い選択だからです。CPU とグラフィックスコアは同じユニファイドメモリを共有しており、Blocknet の Argon2id プルーフ・オブ・ワークはメモリ帯域幅に左右されます。M4 Max では CPU のみのマイニングが最も高いハッシュレートを出したため、seine は自動でそれを使います。'
   - q: 'Blocknet をマイニングするには Mac にどれくらいのメモリが必要ですか？'
-    a: '各マイニングスレッドは 2 GiB のメモリブロックを使って処理するので、1 スレッドあたり約 2 GB を見込んでください。16 GB の Mac なら最大 7 スレッド、32 GB なら最大 15 スレッド、64 GB なら最大 30 スレッドです。seine は空きメモリを数え、スレッド数をコア数にも合わせます。'
+    a: '各マイニングスレッドは 2 GiB のメモリブロックを使って処理するので、1 スレッドあたり約 2 GB を見込んでください。16 GB の Mac なら最大 7 スレッド、32 GB なら最大 15 スレッド、64 GB なら最大 31 スレッドです。seine は空きメモリを数え、スレッド数をコア数にも合わせます。'
   - q: 'Intel Mac で Blocknet をマイニングできますか？'
     a: 'はい。seine は Intel Mac 向けに別のアーカイブ seine-macos-x86_64.tar.gz を公開しており、手順は Apple シリコンと同じです。ダウンロードしてターミナルで展開し、./seine を実行して Blocknet アドレスまたは @name を貼り付けます。seine はメモリに合わせてスレッド数を決め、デフォルトで bntpool.com でマイニングを始めます。'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: reviewed
 ---
-
-このガイドでは、**seine** を使って Apple シリコン搭載 Mac で Blocknet をマイニングする方法を説明します。M シリーズのチップが Blocknet のプルーフ・オブ・ワークに向いている理由、M4 Max の実測結果、Mac のメモリで動かせるスレッド数、そして bntpool.com でマイニングを始めるためのターミナルでの具体的な手順を紹介します。
 
 ## Mac で Blocknet をマイニングできますか？
 
 <Answer>
-はい。Apple シリコン搭載 Mac は Blocknet のマイニングに強いマシンです。ユニファイドメモリが、メモリハードな Argon2id プルーフ・オブ・ワークに十分な帯域幅を提供するからです。`seine-macos-aarch64.tar.gz` をダウンロードし、ターミナルで展開して `./seine` を実行し、アドレスを貼り付けます。48 GB の M4 Max は CPU だけで 30.9 H/s を記録しました。
+seineをダウンロードして展開し、Blocknetアドレスを入力して、bntpool.comでシェアの受理を確認します。まず自動設定で始めましょう。性能調整の説明はセットアップの後にあります。
 </Answer>
 
-Mac 特有の設定は seine が自分で行います。CPU でマイニングし、スレッドをまず高性能コアに割り当て、スレッド数をメモリに合わせて決めるので、ほとんどの人は `./seine` を実行するだけで済みます。
+## ステップ1：適切なビルドをダウンロード
+
+Appleメニュー → このMacについてで、チップまたはプロセッサを確認します。[ダウンロード欄](/ja/#download)で、Apple Siliconなら`seine-macos-aarch64.tar.gz`、Intelなら`seine-macos-x86_64.tar.gz`を選びます。
+
+## ステップ2：展開して起動
+
+ターミナルを開きます。以下のコマンドはアーカイブがDownloadsフォルダにある前提です。異なる場合は実際の場所に変更してください。Intel Macでは`seine-macos-aarch64.tar.gz`を`seine-macos-x86_64.tar.gz`に置き換えます。ホームフォルダ内にseineを展開して起動します。
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## ステップ3：ウォレットアドレスを入力
+
+公開用のBlocknet受取アドレスまたは登録済みの`@name`を貼り付け、Enterを押して`stratum+tcp://bntpool.com:3333`を選びます。アドレスの確認方法は[ウォレットガイド](/ja/blog/blocknet-wallet-for-mining/)をご覧ください。seineにリカバリーフレーズや支出鍵は不要です。プールのワーカー名は自動で設定されます。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。" loading="lazy" />
+  </picture>
+  <figcaption>初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。</figcaption>
+</figure>
+
+seineはスレッド数を選び、自動で調整します。次回からも同じフォルダから起動すると、`seine-data/seine.config.json`を再利用できます。
+
+## ステップ4：受理されたシェアを確認
+
+[ダッシュボード](/ja/blog/seine-dashboard-explained/)でハッシュレートと増加する**Accepted**カウンターを確認します。シェアの受理はプールが作業を受け取ったことを示し、支払いの完了を意味するものではありません。停止するには`q`または`Ctrl+C`を押します。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。" loading="lazy" />
+  </picture>
+  <figcaption>seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。</figcaption>
+</figure>
+
+[マイ統計](https://bntpool.com/stats?lang=ja)を開き、同じアドレスまたは登録済みの名前を入力して、ワーカー、シェア、残高を確認します。
+
+## macOSが初回起動をブロックする場合
+
+macOS 版はアドホック署名されています。初回起動時に macOS が実行を止めた場合は、「システム設定」の「プライバシーとセキュリティ」で `seine` を許可します。ターミナルからダウンロードフラグを消して、もう一度実行することもできます。
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Apple シリコン搭載 Mac が Blocknet のマイニングに向いているのはなぜですか？
 
@@ -66,43 +114,6 @@ M4 Max チップを搭載した 48 GB の MacBook Pro は、CPU だけで 16 ス
 
 これらを自分で計算する必要はありません。seine は起動時にスレッド数を決め、マイニングしながら近いスレッド数を試し続けます。
 
-## macOS での設定手順
-
-### ステップ 1：Blocknet アドレスを用意する
-
-公式の Blocknet ウォレット、つまり[コマンドライン版ウォレット](https://github.com/blocknetprivacy/blocknet/releases/latest)または[デスクトップ版ウォレット](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)をインストールし、アドレスをコピーします。[blocknet.id](https://blocknet.id) で取得した Blocknet ID のショートネームがあれば、代わりに `@name` 宛てにマイニングできます。
-
-### ステップ 2：Apple シリコン版 seine をダウンロードする
-
-[ダウンロードセクション](/ja/#download)から `seine-macos-aarch64.tar.gz` を入手します。中には `seine` プログラム、readme とライセンス、ダウンロードを確認するための `SHA256SUMS.txt` ファイルが入っています。
-
-### ステップ 3：ターミナルで展開する
-
-ターミナル（「アプリケーション」→「ユーティリティ」にあります）を開き、次のコマンドを実行します。ホームフォルダに `seine` フォルダを作り、そこにアーカイブを展開します。
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### ステップ 4：seine を実行する
-
-```sh
-./seine
-```
-
-macOS 版はアドホック署名されています。初回起動時に macOS が実行を止めた場合は、「システム設定」の「プライバシーとセキュリティ」で `seine` を許可します。ターミナルからダウンロードフラグを消して、もう一度実行することもできます。
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### ステップ 5：アドレスを入力してマイニングを始める
-
-seine は受け取りアドレスまたは `@shortname` を尋ね、次にプールを尋ねます。return キーを押すと、デフォルトの `stratum+tcp://bntpool.com:3333` が選ばれます。続いて[ダッシュボード](/ja/blog/seine-dashboard-explained/)にハッシュレートと最初に受理されたシェアが表示されます。bntpool.com プールは残高が 0.1 BNT に達するとアドレスに送金し、[bntpool.com](https://bntpool.com) でアドレスを検索すれば残高を確認できます。
-
 ## Mac では seine が CPU だけでマイニングするのはなぜですか？
 
 Apple シリコンでは、CPU とグラフィックスコアが 1 つのユニファイドメモリを共有しています。Argon2id はメモリ帯域幅に左右されるため、CPU とグラフィックスコアは同じ帯域幅を奪い合うことになります。M4 Max での seine のテストでは CPU のみのマイニングが最も高いハッシュレートを出したため、seine はすべての Apple シリコン搭載 Mac でそれを自動的に選びます。フラグを設定しなくても最速の構成になります。
@@ -129,3 +140,5 @@ Apple シリコンでは、CPU とグラフィックスコアが 1 つのユニ�
 </Note>
 
 <CTA target="seine" title="macOS 版 seine をダウンロード" text="Apple シリコン版は Mac の CPU でマイニングし、スレッド数を自動で選びます。" />
+
+[マイ統計](https://bntpool.com/stats?lang=ja)を開き、同じアドレスまたは登録済みの名前を入力して、ワーカー、シェア、残高を確認します。

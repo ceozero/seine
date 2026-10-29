@@ -1,0 +1,73 @@
+---
+title: 'Swapy atomowe Blocknet: czym jest VEIL?'
+description: 'Poznaj swapy atomowe, warunkowy odbiór i zwroty, informacje widoczne dla uczestników oraz publiczne zapowiedzi Blocknet dotyczące VEIL i aktualizacji Faraday.'
+tags: [Blocknet, Płatności, Prywatność]
+faq:
+  - q: 'Czy mogę użyć tego poradnika do rozpoczęcia swapu VEIL?'
+    a: 'To ogólne wyjaśnienie swapów atomowych z sekcją o publicznej zapowiedzi VEIL przez Blocknet. Nie potwierdza dostępności pary handlowej, polecenia portfela ani usługi. Zanim uznasz proponowaną funkcję swapu za dostępny sposób płatności, skorzystaj z opublikowanych instrukcji wydania dla konkretnej implementacji.'
+  - q: 'Czy atomowy oznacza, że obie płatności następują natychmiast?'
+    a: 'Atomowy opisuje sposób powiązania wymiany. W tym przykładzie odbiór środków przez jednego uczestnika ujawnia informację, która pozwala drugiemu odebrać swoją część. Transakcje nadal trafiają do swoich łańcuchów oddzielnie. Sprawdzanie potwierdzeń, terminy i wymagane działania uczestników pozostają częścią ukończenia protokołu.'
+  - q: 'Czy swapy atomowe automatycznie zapewniają prywatność?'
+    a: 'Protokół swapu atomowego koordynuje rozliczenie. Ujawniane informacje zależą od uczestniczących łańcuchów, kontraktów i komunikacji. Wspólny publiczny hash może łączyć dwie strony podstawowego swapu z hashlockiem. Zabezpieczenia płatności Blocknet i pełne właściwości ujawniania informacji w swapie należy więc oceniać oddzielnie.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Zrozum, co koordynuje swap atomowy, zanim przeczytasz zapowiedź VEIL od Blocknet. Ten poradnik śledzi ogólną wymianę między dwiema stronami: od warunkowego zasilenia kontraktów, przez pomyślny odbiór, po ścieżkę zwrotu. Następnie oddziela ten przykład edukacyjny od krótkich informacji o VEIL na publicznej stronie Blocknet, sprawdzonych 28 października 2026 r. Przykład opisuje wzorzec protokołu, a nie zweryfikowaną implementację VEIL ani obecnie obsługiwaną parę handlową BNT.
+
+## Czym jest swap atomowy?
+
+<Answer>
+Swap atomowy wiąże wymianę aktywów tak, aby uczestnicy przestrzegający protokołu mogli ukończyć swoją część lub skorzystać ze ścieżki odzyskiwania przy założeniach protokołu. Zastępuje prostą obietnicę późniejszej wysyłki warunkami, które można wyegzekwować. Oba łańcuchy nadal przetwarzają własne transakcje, a uczestnicy muszą zachować wymaganą kolejność.
+</Answer>
+
+Pytanie czytelnika jest praktyczne: jeśli wysyłasz jeden składnik aktywów w zamian za drugi, co sprawia, że następuje druga płatność? Zwykły przelew autoryzuje jedną płatność. Protokół swapu atomowego łączy warunki dwóch przelewów. [Praca o atomowych swapach między łańcuchami](https://arxiv.org/abs/1801.09515) Maurice’a Herlihy’ego formalizuje ten problem koordynacji i znaczenie przestrzegania jego reguł przez uczestników.
+
+Wyobraź sobie dwa oddzielne rejestry ze skoordynowaną wymianą między nimi. Aktywa są wydawane na swoich łańcuchach; protokół wiąże ze sobą to, kto może je odebrać. Różni się to od samego wysłania monet na adres odbiorczy i oczekiwania, że ktoś dotrzyma umowy. [Poradnik wysyłania Blocknet](/pl/blog/send-receive-blocknet/) omawia tę zwykłą procedurę płatności.
+
+## Jak działa swap z hashlockiem?
+
+Typowy przykład edukacyjny wykorzystuje **hashlock**, który sprawdza sekret, oraz **timelock**, który kontroluje, kiedy możliwy staje się zwrot. Razem są one często nazywane kontraktem z blokadą hashem i czasem, czyli HTLC. Ta sekcja wyjaśnia tę ogólną konstrukcję; nie twierdzi, że korzysta z niej VEIL.
+
+Alice i Bob najpierw uzgadniają wymianę i miejsca odbioru. Alice tworzy sekret i udostępnia jego hash. Hash pozwala kontraktowi później sprawdzić sekret bez konieczności publikowania go przez Alice na początku. Kontrakt wymaga również autoryzacji zamierzonego odbiorcy: sama znajomość sekretu nie pozwala dowolnemu obserwatorowi zabrać środków.
+
+[Opis HTLC w BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) pokazuje gałąź odbioru wymagającą sekretu i podpisu odbiorcy oraz gałąź zwrotu dostępną po upływie czasu. BIP 199 jest zamkniętą propozycją opisującą tę konstrukcję, a nie specyfikacją Blocknet.
+
+## Co się dzieje, gdy obie strony kończą wymianę?
+
+Prześledź ponumerowany schemat od etapu zasilenia kontraktów do etapu odbioru. „Chain A” i „Chain B” to ogólne etykiety. Nie określają dostępnej pary ani nie sugerują, że Blocknet obsługuje te konkretne kontrakty.
+
+1. **Alice zasila pierwszy kontrakt.** Pozwala on Bobowi odebrać środki przy użyciu sekretu i jego autoryzacji. Zwrot Alice staje się dostępny później.
+2. **Bob sprawdza i zasila drugi kontrakt.** Wykorzystuje on hash tego samego sekretu i pozwala Alice odebrać środki. Zwrot Boba staje się dostępny wcześniej niż zwrot Alice.
+3. **Alice sprawdza i odbiera środki z drugiej strony.** Jej odbiór ujawnia sekret w tym podstawowym przykładzie z publicznym hashlockiem.
+4. **Bob używa ujawnionego sekretu, aby odebrać środki z pierwszej strony.** Odstęp między terminami zwrotu daje mu czas na działanie.
+
+[![Ogólny przykład swapu: Alice i Bob zasilają oddzielne kontrakty warunkowe, odbiór Alice ujawnia sekret, a Bob używa go do odbioru; niewykorzystany kontrakt ma ścieżkę zwrotu zależną od czasu.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+Górny rząd pokazuje zasilanie na dwóch łańcuchach. Dolny rząd pokazuje odbiór w odwrotnej kolejności. Zakrzywione strzałki oznaczają ścieżki odzyskiwania środków, które pozostają zablokowane po spełnieniu warunków zwrotu. To schemat objaśniający, a nie ekran VEIL ani rzeczywista transakcja w toku.
+
+## Co jeśli jeden uczestnik się zatrzyma?
+
+Odzyskiwanie zależy od etapu, na którym zatrzymała się wymiana. Jeśli Alice zasili pierwszy kontrakt, a Bob nigdy nie zasili drugiego, Alice może odzyskać wciąż zablokowane środki przez gałąź zwrotu, gdy stanie się ona ważna. Jeśli oba kontrakty zostały zasilone, ale Alice nigdy nie ujawni sekretu, uczestnicy mogą użyć odpowiednich ścieżek zwrotu dla niewydanych środków.
+
+Timelock sprawia, że wydanie środków w ramach zwrotu staje się dopuszczalne; sam nie rozgłasza ani nie potwierdza tej transakcji. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) wyjaśnia warunki wydawania oparte na czasie i konstrukcję nieinteraktywnych zwrotów. Konkretna aplikacja musi zarządzać transakcjami odbioru lub zwrotu oraz informacjami potrzebnymi do ich autoryzacji.
+
+Gdy Alice odbierze środki z drugiej strony i ujawni sekret, Bob musi na czas skorzystać ze ścieżki odbioru na pierwszej stronie. Dlatego kolejność i przesunięte terminy mają znaczenie. Zamknięcie aplikacji nie jest tym samym co anulowanie wymiany, której kontrakty zostały zasilone. Instrukcje odzyskiwania danej implementacji określają, jak wznowić jej stan.
+
+## Co widzą uczestnicy i obserwatorzy?
+
+Rozliczenie i prywatność odpowiadają na różne pytania. Uczestnicy znają uzgodnione warunki i wymienione informacje odbiorcze. W podstawowym przykładzie ten sam publiczny hash pojawia się na obu łańcuchach, a odbiór ujawnia jego sekret. Te wspólne wartości mogą wskazać obserwatorowi powiązanie między dwiema stronami.
+
+Dokładny zakres ujawniania zależy od protokołu i uczestniczących łańcuchów. Prywatny format płatności sam w sobie nie określa, co publikuje inny łańcuch ani co zapisuje interfejs handlowy. Podobnie ukończenie wymiany nie usuwa wiadomości, w których uczestnicy ją negocjowali.
+
+W przypadku zwykłych płatności Blocknet [poradnik widoczności płatności](/pl/blog/blocknet-payment-visibility/) oddziela publiczne pola transakcji od dostępu nadawcy, odbiorcy i osób z przyznanym prawem podglądu. To podstawa zrozumienia prywatności płatności BNT. Twierdzenie o prywatności konkretnego swapu wymaga dowodów dotyczących całego swapu, w tym drugiego aktywa i etapów komunikacji.
+
+## Co Blocknet ogłosił na temat VEIL?
+
+[Oficjalna strona Blocknet](https://blocknetcrypto.com/#faraday) wymienia VEIL w porównaniu swapów atomowych i opisuje planowaną przebudowę z wykorzystaniem prymitywów postkwantowych w ramach Faraday. To publiczne oświadczenie określa kierunek projektu. Nie podaje par handlowych, poleceń swapu, terminów zwrotów ani usługi dla użytkownika końcowego, które ten poradnik mógłby zweryfikować.
+
+Pamiętaj o zakresie tego ogłoszenia, czytając powyższy przykład. Opis HTLC wyjaśnia koordynację swapów atomowych w ogólności. Nie opisuje wewnętrznego protokołu VEIL. [Poradnik Faraday](/pl/blog/blocknet-faraday-upgrade/) omawia zapowiedzianą zmianę sieci; instrukcje swapu dla konkretnej implementacji powinny pochodzić z opublikowanego wydania i jego dokumentacji.
+
+Aby otrzymać BNT już teraz, [poradnik pierwszych monet](/pl/blog/get-first-blocknet/) omawia zwykłe przelewy i kopanie. To ustalone ścieżki użytkownika z własnymi krokami dotyczącymi portfela i płatności. Ten artykuł przedstawia pojęcia potrzebne do zrozumienia przyszłego publicznego wydania swapów bez mylenia zapowiedzi z instrukcją wpłacania środków.
+
+<CTA target="seine" title="Otrzymuj BNT przez kopanie" text="Używaj seine z bntpool.com i otrzymuj wypłaty z kopania we własnym portfelu Blocknet." />

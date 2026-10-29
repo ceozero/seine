@@ -1,6 +1,6 @@
 ---
 title: วิธีขุด Blocknet บน Mac
-description: ขุด Blocknet บน Mac ที่ใช้ Apple Silicon ด้วย seine ตั้งค่าผ่าน Terminal ดูผล M4 Max ที่ 30.9 H/s และจำนวนเธรดที่หน่วยความจำของ Mac รองรับ
+description: "macOS: ดาวน์โหลด seine แตกไฟล์ ใส่ที่อยู่ Blocknet แล้วตรวจสอบ share ที่ยอมรับบน bntpool.com เริ่มด้วยการตั้งค่าอัตโนมัติ ส่วนคำแนะนำด้านประสิทธิภาพอยู่หลังขั้นตอนติดตั้ง"
 tags: [คู่มือการขุด, macOS, Apple Silicon, seine]
 faq:
   - q: 'ขุด Blocknet บน MacBook Air ได้หรือไม่?'
@@ -8,22 +8,70 @@ faq:
   - q: 'seine ใช้ GPU ขณะขุด Blocknet บน Mac หรือไม่?'
     a: 'seine ขุดด้วย CPU บน Apple Silicon โดยค่าเริ่มต้น เพราะเป็นตัวเลือกที่เร็วที่สุด CPU และคอร์กราฟิกใช้หน่วยความจำแบบ unified memory ร่วมกัน และ Proof of Work แบบ Argon2id ของ Blocknet ขึ้นอยู่กับแบนด์วิดท์หน่วยความจำ บน M4 Max การขุดด้วย CPU อย่างเดียวให้แฮชเรตสูงสุด seine จึงเลือกใช้โดยอัตโนมัติ'
   - q: 'Mac ต้องมีหน่วยความจำเท่าไรจึงจะขุด Blocknet ได้?'
-    a: 'แต่ละเธรดขุดประมวลผลบล็อกหน่วยความจำ 2 GiB จึงควรเผื่อประมาณ 2 GB ต่อเธรด Mac 16 GB รองรับได้สูงสุดเจ็ดเธรด รุ่น 32 GB สูงสุด 15 เธรด และรุ่น 64 GB สูงสุด 30 เธรด seine นับหน่วยความจำที่ว่างและปรับจำนวนเธรดให้ตรงกับคอร์ด้วย'
+    a: 'แต่ละเธรดขุดประมวลผลบล็อกหน่วยความจำ 2 GiB จึงควรเผื่อประมาณ 2 GB ต่อเธรด Mac 16 GB รองรับได้สูงสุดเจ็ดเธรด รุ่น 32 GB สูงสุด 15 เธรด และรุ่น 64 GB สูงสุด 31 เธรด seine นับหน่วยความจำที่ว่างและปรับจำนวนเธรดให้ตรงกับคอร์ด้วย'
   - q: 'ขุด Blocknet บน Mac ที่ใช้ Intel ได้หรือไม่?'
     a: 'ได้ seine มีไฟล์แยกสำหรับ Mac ที่ใช้ Intel คือ seine-macos-x86_64.tar.gz และขั้นตอนเหมือนบน Apple Silicon ดาวน์โหลด แตกไฟล์ใน Terminal เรียก ./seine แล้ววางที่อยู่ Blocknet หรือ @name ของคุณ seine ปรับจำนวนเธรดตามหน่วยความจำและเริ่มขุดบน bntpool.com โดยค่าเริ่มต้น'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: draft
 ---
-
-คู่มือนี้แสดงวิธีขุด Blocknet บน Mac ที่ใช้ Apple Silicon ด้วย **seine** ว่าทำไมชิปตระกูล M จึงเหมาะกับ Proof of Work ของ Blocknet ผลวัด M4 Max เป็นอย่างไร หน่วยความจำของ Mac รองรับกี่เธรด และขั้นตอนใน Terminal เพื่อเริ่มขุดบน bntpool.com
 
 ## ขุด Blocknet บน Mac ได้หรือไม่?
 
 <Answer>
-ได้ Mac ที่ใช้ Apple Silicon ขุด Blocknet ได้ดี เพราะ unified memory ให้แบนด์วิดท์มากสำหรับ Proof of Work แบบ Argon2id ที่ใช้หน่วยความจำมาก ดาวน์โหลด `seine-macos-aarch64.tar.gz` แตกไฟล์ใน Terminal เรียก `./seine` แล้ววางที่อยู่ของคุณ M4 Max ขนาด 48 GB วัดได้ 30.9 H/s ด้วย CPU เพียงอย่างเดียว
+ดาวน์โหลด seine แตกไฟล์ ใส่ที่อยู่ Blocknet แล้วตรวจสอบ share ที่ยอมรับบน bntpool.com เริ่มด้วยการตั้งค่าอัตโนมัติ ส่วนคำแนะนำด้านประสิทธิภาพอยู่หลังขั้นตอนติดตั้ง
 </Answer>
 
-seine จัดการการตั้งค่าเฉพาะ Mac เอง โดยขุดด้วย CPU จัดเธรดลงคอร์ประสิทธิภาพสูงก่อน และปรับจำนวนเธรดตามหน่วยความจำ คนส่วนใหญ่จึงใช้เพียง `./seine`
+## ขั้นตอนที่ 1: ดาวน์โหลดรุ่นที่ตรงกับเครื่อง
+
+ในเมนู Apple → เกี่ยวกับ Mac เครื่องนี้ ให้ดูชิปหรือโปรเซสเซอร์ ที่[ส่วนดาวน์โหลด](/th/#download) เลือก `seine-macos-aarch64.tar.gz` สำหรับ Apple Silicon หรือ `seine-macos-x86_64.tar.gz` สำหรับ Intel
+
+## ขั้นตอนที่ 2: แตกไฟล์และเปิดโปรแกรม
+
+เปิด Terminal คำสั่งเหล่านี้สมมติว่าไฟล์บีบอัดอยู่ในโฟลเดอร์ Downloads หากอยู่ที่อื่นให้ใช้ตำแหน่งจริง บน Mac Intel ให้เปลี่ยน `seine-macos-aarch64.tar.gz` เป็น `seine-macos-x86_64.tar.gz` คำสั่งจะแตกไฟล์ seine ลงในโฟลเดอร์บ้านแล้วเปิดโปรแกรม:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## ขั้นตอนที่ 3: ใส่ที่อยู่กระเป๋าเงิน
+
+วางที่อยู่รับ Blocknet สาธารณะหรือ `@name` ที่ลงทะเบียนไว้ แล้วกด Enter เพื่อใช้ `stratum+tcp://bntpool.com:3333` [คู่มือกระเป๋าเงิน](/th/blog/blocknet-wallet-for-mining/) อธิบายวิธีหาที่อยู่ seine ไม่ต้องใช้วลีกู้คืนหรือคีย์ใช้จ่าย และจะตั้งชื่อ worker ในพูลให้โดยอัตโนมัติ
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="หน้าจอถามที่อยู่และพูลเมื่อเปิดครั้งแรก เปลี่ยนตัวอย่างเป็นที่อยู่หรือชื่อที่ลงทะเบียนของคุณ" loading="lazy" />
+  </picture>
+  <figcaption>หน้าจอถามที่อยู่และพูลเมื่อเปิดครั้งแรก เปลี่ยนตัวอย่างเป็นที่อยู่หรือชื่อที่ลงทะเบียนของคุณ</figcaption>
+</figure>
+
+seine เลือกจำนวนเธรดและปรับแต่งโดยอัตโนมัติ ครั้งต่อไปให้เปิดจากโฟลเดอร์เดิมเพื่อใช้ `seine-data/seine.config.json` ซ้ำ
+
+## ขั้นตอนที่ 4: ตรวจสอบ share ที่ยอมรับ
+
+ดูค่า hashrate และตัวนับ **Accepted** ที่เพิ่มขึ้นใน[แดชบอร์ด](/th/blog/seine-dashboard-explained/) share ที่ยอมรับยืนยันว่าพูลได้รับงานของคุณ แต่ไม่ได้หมายความว่ามีการจ่ายเงินแล้ว กด `q` หรือ `Ctrl+C` เพื่อหยุด
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="แดชบอร์ดจริงของ seine พร้อมข้อมูลตัวอย่าง ให้ดู Accepted ตัวเลขเหล่านี้ไม่ใช่ผล benchmark" loading="lazy" />
+  </picture>
+  <figcaption>แดชบอร์ดจริงของ seine พร้อมข้อมูลตัวอย่าง ให้ดู Accepted ตัวเลขเหล่านี้ไม่ใช่ผล benchmark</figcaption>
+</figure>
+
+เปิด[สถิติของฉัน](https://bntpool.com/stats?lang=th) แล้วใส่ที่อยู่หรือชื่อที่ลงทะเบียนเดิมเพื่อดู worker, share และยอดคงเหลือ
+
+## หาก macOS บล็อกการเปิดครั้งแรก
+
+บิลด์ macOS ลงลายเซ็นแบบ ad-hoc หาก macOS หยุดการเปิดครั้งแรก ให้เปิด System Settings ไปที่ Privacy & Security และอนุญาต `seine` คุณยังล้างแฟล็กดาวน์โหลดจาก Terminal แล้วเรียกใหม่ได้:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## ทำไม Mac ที่ใช้ Apple Silicon จึงขุด Blocknet ได้ดี?
 
@@ -66,43 +114,6 @@ MacBook Pro 48 GB ที่ใช้ชิป M4 Max ขุด Blocknet ได�
 
 คุณไม่ต้องคำนวณเอง seine เลือกจำนวนเธรดตอนเริ่มทำงานและทดสอบจำนวนใกล้เคียงต่อระหว่างขุด
 
-## ขั้นตอนตั้งค่าบน macOS
-
-### ขั้นตอน 1: รับที่อยู่ Blocknet
-
-ติดตั้งกระเป๋าเงิน Blocknet อย่างเป็นทางการ ไม่ว่าจะเป็น[กระเป๋าเงินแบบบรรทัดคำสั่ง](https://github.com/blocknetprivacy/blocknet/releases/latest) หรือ[แอปกระเป๋าเงินบนเดสก์ท็อป](https://github.com/blocknetprivacy/blocknet-gui/releases/latest) แล้วคัดลอกที่อยู่ หากมีชื่อสั้น Blocknet ID จาก [blocknet.id](https://blocknet.id) คุณขุดเข้าชื่อ `@name` แทนได้
-
-### ขั้นตอน 2: ดาวน์โหลด seine สำหรับ Apple Silicon
-
-จาก[ส่วนดาวน์โหลด](/th/#download) รับไฟล์ `seine-macos-aarch64.tar.gz` ซึ่งมีโปรแกรม `seine` ไฟล์ readme สัญญาอนุญาต และไฟล์ `SHA256SUMS.txt` สำหรับตรวจสอบไฟล์ที่ดาวน์โหลด
-
-### ขั้นตอน 3: แตกไฟล์ใน Terminal
-
-เปิด Terminal (ใน Applications แล้วเลือก Utilities) และเรียกคำสั่งเหล่านี้ เพื่อสร้างโฟลเดอร์ `seine` ในโฟลเดอร์บ้านของคุณและแตกไฟล์ลงไป:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### ขั้นตอน 4: เรียกใช้ seine
-
-```sh
-./seine
-```
-
-บิลด์ macOS ลงลายเซ็นแบบ ad-hoc หาก macOS หยุดการเปิดครั้งแรก ให้เปิด System Settings ไปที่ Privacy & Security และอนุญาต `seine` คุณยังล้างแฟล็กดาวน์โหลดจาก Terminal แล้วเรียกใหม่ได้:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### ขั้นตอน 5: ใส่ที่อยู่และเริ่มขุด
-
-seine ขอที่อยู่รับเงินหรือ `@shortname` แล้วถามพูล กด Return เพื่อใช้ค่าเริ่มต้น `stratum+tcp://bntpool.com:3333` จากนั้น[แดชบอร์ด](/th/blog/seine-dashboard-explained/) จะแสดงแฮชเรตและแชร์แรกที่ได้รับการยอมรับ พูล bntpool.com ส่งยอดคงเหลือเข้าที่อยู่ของคุณเมื่อถึง 0.1 BNT และคุณติดตามได้ที่ [bntpool.com](https://bntpool.com) โดยค้นหาที่อยู่ของคุณ
-
 ## ทำไม seine จึงขุดด้วย CPU อย่างเดียวบน Mac?
 
 บน Apple Silicon นั้น CPU และคอร์กราฟิกใช้พูล unified memory เดียวกัน Argon2id ขึ้นอยู่กับแบนด์วิดท์หน่วยความจำ ดังนั้น CPU และคอร์กราฟิกจะแย่งแบนด์วิดท์เดียวกัน การทดสอบของ seine บน M4 Max พบว่าการขุดด้วย CPU อย่างเดียวให้แฮชเรตสูงสุด seine จึงเลือกให้อัตโนมัติบน Mac ที่ใช้ Apple Silicon ทุกเครื่อง คุณได้การตั้งค่าที่เร็วที่สุดโดยไม่ต้องตั้งแฟล็ก
@@ -129,3 +140,5 @@ seine ขอที่อยู่รับเงินหรือ `@shortname` 
 </Note>
 
 <CTA target="seine" title="ดาวน์โหลด seine สำหรับ macOS" text="บิลด์ Apple Silicon ขุดด้วย CPU ของ Mac และเลือกจำนวนเธรดให้อัตโนมัติ" />
+
+เปิด[สถิติของฉัน](https://bntpool.com/stats?lang=th) แล้วใส่ที่อยู่หรือชื่อที่ลงทะเบียนเดิมเพื่อดู worker, share และยอดคงเหลือ

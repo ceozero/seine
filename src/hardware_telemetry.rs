@@ -28,6 +28,10 @@ pub(crate) struct Options {
     pub endpoint: String,
     pub installation_id: String,
     pub state_path: PathBuf,
+    /// Explicit `--threads` value (schema 9); filled in by `start` from the config.
+    pub requested_threads: Option<u32>,
+    /// Whether automatic worker-count tuning is active (schema 9).
+    pub cpu_autotune_threads: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,6 +138,8 @@ fn resolve_with_default(
         endpoint,
         installation_id: preferences.installation_id.unwrap(),
         state_path: path,
+        requested_threads: None,
+        cpu_autotune_threads: None,
     }))
 }
 
@@ -415,7 +421,7 @@ impl Drop for Worker {
     }
 }
 
-fn hardware() -> Hardware {
+fn hardware(options: &Options) -> Hardware {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
     sys.refresh_cpu_all();
@@ -427,6 +433,8 @@ fn hardware() -> Hardware {
             available_parallelism: thread::available_parallelism().ok().map(|v| v.get() as u32),
             effective_memory_gib,
             available_memory_gib,
+            requested_threads: options.requested_threads,
+            cpu_autotune_threads: options.cpu_autotune_threads,
         }),
         os: std::env::consts::OS.into(),
         os_version: sysinfo::System::os_version(),
@@ -442,7 +450,9 @@ fn hardware() -> Hardware {
         cpu_model_id: identity.model,
         logical_cpus: sys.cpus().len() as u32,
         physical_cores: sys.physical_core_count().map(|v| v as u32),
+        numa_nodes: numa_node_count(),
         memory_gib: sys.total_memory().div_ceil(1024 * 1024 * 1024) as u32,
+        memory_setup: crate::memory_modules::host_memory_setup(),
         supported_cpu_kernels: blocknet_pow_kernel::CpuKernel::ALL
             .into_iter()
             .filter(|k| k.is_supported())
@@ -483,7 +493,14 @@ fn send_report(
 }
 
 pub(crate) fn start(options: &Options, cfg: &crate::config::Config) -> Result<(Recorder, Worker)> {
-    start_with_context(options, crate::diagnostics::context(cfg))
+    let options = Options {
+        requested_threads: cfg
+            .cpu_threads_explicit
+            .map(|threads| u32::try_from(threads).unwrap_or(u32::MAX)),
+        cpu_autotune_threads: Some(cfg.cpu_autotune_threads),
+        ..options.clone()
+    };
+    start_with_context(&options, crate::diagnostics::context(cfg))
 }
 
 fn start_with_context(
@@ -626,7 +643,7 @@ fn start_with_context(
                         }
                     },
                     debug_build: cfg!(debug_assertions),
-                    hardware: hardware(),
+                    hardware: hardware(&options),
                     window_secs,
                     backends,
                     diagnostics: Some(diagnostic_snapshot),
@@ -686,9 +703,65 @@ fn start_with_context(
     ))
 }
 
+/// NUMA nodes on the host, independent of this process's cpuset.
+#[cfg(target_os = "linux")]
+fn numa_node_count() -> Option<u32> {
+    count_id_list(&std::fs::read_to_string("/sys/devices/system/node/online").ok()?)
+}
+
+#[cfg(target_os = "windows")]
+fn numa_node_count() -> Option<u32> {
+    let mut highest = 0u32;
+    // SAFETY: the call only writes its out-parameter.
+    let ok =
+        unsafe { windows_sys::Win32::System::Threading::GetNumaHighestNodeNumber(&mut highest) };
+    (ok != 0).then(|| highest + 1)
+}
+
+#[cfg(target_os = "macos")]
+fn numa_node_count() -> Option<u32> {
+    Some(1)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+fn numa_node_count() -> Option<u32> {
+    None
+}
+
+/// Number of ids in a sysfs list such as `0-1,3`.
+#[cfg(any(target_os = "linux", test))]
+fn count_id_list(raw: &str) -> Option<u32> {
+    let mut total = 0u32;
+    for part in raw.trim().split(',').filter(|p| !p.is_empty()) {
+        total += match part.split_once('-') {
+            Some((lo, hi)) => {
+                hi.parse::<u32>()
+                    .ok()?
+                    .checked_sub(lo.parse::<u32>().ok()?)?
+                    + 1
+            }
+            None => {
+                part.parse::<u32>().ok()?;
+                1
+            }
+        };
+    }
+    (total > 0).then_some(total)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sysfs_id_lists_count_ranges() {
+        assert_eq!(count_id_list("0\n"), Some(1));
+        assert_eq!(count_id_list("0-1"), Some(2));
+        assert_eq!(count_id_list("0-1,4-5,7"), Some(5));
+        assert_eq!(count_id_list(""), None);
+        assert_eq!(count_id_list("3-1"), None);
+        assert_eq!(count_id_list("x"), None);
+    }
     use crate::diagnostics::TEST_LOCK as WORKER_TEST;
 
     fn trial_fixture() -> TrialOutcome {

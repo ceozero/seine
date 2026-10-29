@@ -1,84 +1,68 @@
 ---
 title: 'Cách đào Blocknet trên Linux'
-description: 'Thiết lập đào Blocknet trên Linux với seine: chọn x86_64 hoặc ARM64, xác minh tệp nén, kiểm tra glibc và thư viện NVIDIA, rồi xác nhận share được chấp nhận.'
+description: "Linux: Tải seine, giải nén, nhập địa chỉ Blocknet và xác nhận share được chấp nhận trên bntpool.com. Bắt đầu bằng cài đặt tự động; hướng dẫn hiệu năng nằm sau phần thiết lập."
 tags: ['Hướng dẫn đào coin', 'Linux', 'NVIDIA']
 faq:
   - q: 'Tôi nên tải tệp Linux nào?'
-    a: 'Chạy uname -m trong terminal. Chọn tệp x86_64 nếu kết quả là x86_64, hoặc tệp aarch64 nếu là aarch64. Các tệp thực thi Linux v0.2.26 đã kiểm tra yêu cầu glibc 2.39 trở lên. Gói x86_64 hỗ trợ CPU và NVIDIA; gói ARM64 chỉ hỗ trợ CPU.'
+    a: "Mở mục tải xuống. Chạy uname -m: chọn seine-linux-x86_64.tar.gz cho x86_64 hoặc seine-linux-aarch64.tar.gz cho aarch64. Các bản Linux yêu cầu glibc 2.39 trở lên. Bản x86_64 hỗ trợ CPU và NVIDIA; ARM64 hỗ trợ đào bằng CPU."
   - q: 'Có cần chạy seine bằng sudo không?'
     a: 'Chạy phần mềm đào bình thường bằng tài khoản của bạn từ thư mục có quyền ghi. Giải nén, cấp quyền thực thi cho chủ sở hữu nếu cần, rồi chạy ./seine. Dành trước huge pages là thao tác quản trị riêng; khởi động thông thường có thể dùng trang bộ nhớ thường.'
   - q: 'Vì sao Linux báo thiếu thư viện NVRTC?'
     a: 'Backend NVIDIA trên Linux cần trình điều khiển tương thích và các thư viện chạy NVRTC, gồm thư viện builtins khớp phiên bản. Cài chúng qua bản phân phối hoặc các gói được NVIDIA hỗ trợ. Tệp nén Linux không kèm DLL Windows. Bạn có thể chọn CPU trong khi chuẩn bị GPU.'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-Hướng dẫn này giúp chạy seine trên máy tính hoặc máy chủ Linux, từ chọn tệp nén đến kiểm tra share được pool chấp nhận. Bản phát hành chính thức v0.2.26 là ví dụ đã xác minh. Hãy chuẩn bị địa chỉ nhận Blocknet; [hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) giải thích cách tìm. Bạn nhập địa chỉ công khai hoặc `@name` đã đăng ký, tuyệt đối không nhập cụm từ khôi phục ví.
 
 ## Bắt đầu đào Blocknet trên Linux như thế nào?
 
 <Answer>
-Chọn tệp Linux phù hợp với bộ xử lý, xác minh mã kiểm SHA-256 rồi giải nén vào thư mục có quyền ghi. Chạy `./seine`, nhập địa chỉ nhận thanh toán và chấp nhận kết nối mặc định tới bntpool.com. seine tự chọn số luồng CPU và cũng có thể dùng card NVIDIA được hỗ trợ trên Linux x86_64 khi đã cài các thư viện chạy cần thiết.
+Tải seine, giải nén, nhập địa chỉ Blocknet và xác nhận share được chấp nhận trên bntpool.com. Bắt đầu bằng cài đặt tự động; hướng dẫn hiệu năng nằm sau phần thiết lập.
 </Answer>
 
-## Bước 1: kiểm tra kiến trúc và glibc
+## Bước 1: tải đúng phiên bản
 
-Mở terminal và chạy hai lệnh kiểm tra chỉ đọc này. Lệnh đầu xác định kiến trúc máy; lệnh sau hiển thị phiên bản thư viện GNU C trên hệ thống dùng glibc. Chúng không bắt đầu đào hoặc thay đổi cấu hình máy tính.
+Mở [mục tải xuống](/vi/#download). Chạy `uname -m`: chọn `seine-linux-x86_64.tar.gz` cho `x86_64` hoặc `seine-linux-aarch64.tar.gz` cho `aarch64`. Các bản Linux yêu cầu glibc 2.39 trở lên. Bản x86_64 hỗ trợ CPU và NVIDIA; ARM64 hỗ trợ đào bằng CPU.
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="Bảng tải xuống chính thức với các tệp Linux và Linux ARM64" loading="lazy" />
 
-Đối chiếu kiến trúc với tệp nén bên dưới. Cả hai gói Linux v0.2.26 đều yêu cầu glibc 2.39 trở lên. Kiểm tra lại yêu cầu khi cài bản mới hơn. Nếu hệ thống dùng thư viện C khác hoặc glibc cũ hơn, hãy dùng môi trường phân phối tương thích hoặc làm theo [hướng dẫn biên dịch từ mã nguồn](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+## Bước 2: giải nén và chạy
 
-| Kết quả lệnh | Tệp nén phát hành | Backend |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU và NVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-Mỗi luồng đào CPU cần một khối bộ nhớ 2 GiB. seine chọn số luồng ban đầu theo bộ nhớ và tài nguyên CPU còn trống, rồi điều chỉnh trong khi đào. Lần đầu hãy để trống các tùy chọn ép số luồng và kernel; thiết lập kết nối hoạt động trước khi đổi cài đặt hiệu năng.
-
-## Bước 2: tải và xác minh tệp nén
-
-Chọn Linux hoặc Linux ARM64 trong [mục tải xuống](/vi/#download). Từ cùng [bản phát hành chính thức](https://github.com/zpalmtree/seine/releases/latest), tải thêm tệp riêng `SHA256SUMS.txt`. Giữ tệp nén và mã kiểm của cùng phiên bản cạnh nhau. Ví dụ dùng x86_64; trên ARM64, thay `seine-linux-x86_64.tar.gz` bằng `seine-linux-aarch64.tar.gz` trong các lệnh.
-
-<img src="/assets/blog/linux-download.png" alt="Bảng tải xuống chính thức với các tệp Linux và Linux ARM64" width="1200" height="900" loading="lazy" />
-
-Trong terminal, mở thư mục trình duyệt đã lưu tệp rồi tính mã kiểm của tệp nén. Ví dụ giả định có thư mục Downloads trong thư mục cá nhân; hãy dùng đường dẫn tải xuống thực tế nếu tên khác.
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-So sánh toàn bộ mã băm thập lục phân với dòng của đúng tệp nén đó trong `SHA256SUMS.txt` đã tải. Mọi chữ số phải khớp trước khi giải nén hoặc chạy. Dùng tệp mã kiểm được phát hành riêng: bên trong tệp nén còn có danh mục mã kiểm cho các tệp đã giải nén. Mã kiểm khớp xác minh tệp với giá trị công bố; hãy tải cả hai từ nguồn chính thức.
-
-## Bước 3: giải nén và kiểm tra tệp thực thi
-
-Tạo thư mục riêng trong thư mục cá nhân, giải nén vào đó và yêu cầu chương trình hiển thị trợ giúp. Tệp nén v0.2.26 chứa `./seine` ở cấp gốc, nên các lệnh này đặt chương trình trực tiếp vào thư mục mới. Lệnh trợ giúp thoát mà không bắt đầu phiên đào.
+Mở Terminal. Các lệnh này giả định tệp nén nằm trong thư mục Downloads; hãy dùng đường dẫn thực tế nếu khác. Trên ARM64, thay `seine-linux-x86_64.tar.gz` bằng `seine-linux-aarch64.tar.gz`. Chúng giải nén seine vào thư mục cá nhân rồi chạy chương trình:
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-Thực hiện bằng tài khoản của bạn. `chmod u+x` cấp quyền thực thi cho chủ sở hữu tệp; không cần cài cho toàn hệ thống. Tiền tố `./` yêu cầu shell chạy tệp trong thư mục hiện tại. Giữ các tệp tài liệu và giấy phép đã giải nén cùng chương trình.
-
-## Bước 4: nhập địa chỉ và kết nối
-
-Khởi động từ thư mục đã giải nén:
-
-```sh
 ./seine
 ```
 
-Nhập địa chỉ nhận hoặc `@name` đã đăng ký, chấp nhận `stratum+tcp://bntpool.com:3333` và chọn tên máy dễ nhận biết khi được hỏi. Những lần sau, seine dùng lại `seine-data/seine.config.json` theo thư mục làm việc. Khởi động từ cùng thư mục giúp dễ tìm các cài đặt đó. [Tài liệu cấu hình](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) mô tả các câu hỏi và thư mục dữ liệu.
+## Bước 3: nhập địa chỉ ví
 
-Theo dõi hashrate và bộ đếm share được chấp nhận. Sau đó mở [My Stats](https://bntpool.com/stats) và tra cùng địa chỉ nhận. Share được chấp nhận xác nhận pool đang nhận công việc; thanh toán theo quy trình thưởng và chi trả riêng. [Hướng dẫn bảng điều khiển](/vi/blog/seine-dashboard-explained/) giải thích các ô của phần mềm đào. Nhấn `q` hoặc `Ctrl+C` để dừng đúng cách.
+Dán địa chỉ nhận Blocknet công khai hoặc `@name` đã đăng ký, rồi nhấn Enter để chấp nhận `stratum+tcp://bntpool.com:3333`. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) chỉ nơi tìm địa chỉ. Seine không cần cụm từ khôi phục hay khóa chi tiêu của bạn. Chương trình tự động đặt tên worker trong pool.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn." loading="lazy" />
+  </picture>
+  <figcaption>Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn.</figcaption>
+</figure>
+
+Seine tự chọn luồng và tinh chỉnh hiệu năng. Ở những lần chạy sau, hãy mở từ cùng thư mục để dùng lại `seine-data/seine.config.json`.
+
+## Bước 4: kiểm tra share được chấp nhận
+
+Tìm hashrate và bộ đếm **Accepted** tăng dần trên [bảng điều khiển](/vi/blog/seine-dashboard-explained/). Share được chấp nhận xác nhận pool đã nhận công việc của bạn; điều đó không có nghĩa là đã thanh toán. Nhấn `q` hoặc `Ctrl+C` để dừng.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark.</figcaption>
+</figure>
+
+Mở [Thống kê của tôi](https://bntpool.com/stats?lang=vi) và nhập cùng địa chỉ hoặc tên đã đăng ký để tìm worker, share và số dư.
 
 ## Cần gì để đào bằng NVIDIA trên Linux?
 
@@ -94,7 +78,7 @@ Lựa chọn này chỉ dùng CPU cho lần chạy đó. Để chọn thiết b�
 
 ## Cách xử lý lỗi khởi động trên Linux?
 
-Dựa vào thông báo lỗi đầu tiên để chọn bước kiểm tra tiếp theo. Lỗi kiến trúc hoặc môi trường chạy xảy ra trước khi có share được chấp nhận; đổi địa chỉ pool hay số luồng không sửa được giai đoạn đó. Giữ tệp nén đã xác minh trong khi kiểm tra chương trình và môi trường.
+Dựa vào thông báo lỗi đầu tiên để chọn bước kiểm tra tiếp theo:
 
 | Thông báo hoặc biểu hiện | Điều cần kiểm tra |
 |---|---|
@@ -105,4 +89,6 @@ Dựa vào thông báo lỗi đầu tiên để chọn bước kiểm tra tiếp
 
 Khi share đã được chấp nhận, [hướng dẫn huge pages](/vi/blog/huge-pages-blocknet-mining/) trình bày thiết lập trang bộ nhớ tùy chọn trên Linux. [Hướng dẫn máy chủ](/vi/blog/mine-blocknet-on-servers/) nói về chạy không giao diện đồ họa và bố trí NUMA. Cả hai đều không bắt buộc cho lần chạy đầu này; thay đổi từng phần để nhận biết tác động trên máy của bạn.
 
-<CTA target="seine" title="Tải seine cho Linux" text="Chọn tệp Linux, xác minh và kết nối tới bntpool.com với khả năng tự điều chỉnh CPU." />
+<CTA target="seine" title="Tải seine cho Linux" text="Giải nén bản tải cho Linux, nhập địa chỉ và bắt đầu đào với tính năng tự động tinh chỉnh CPU." />
+
+Mở [Thống kê của tôi](https://bntpool.com/stats?lang=vi) và nhập cùng địa chỉ hoặc tên đã đăng ký để tìm worker, share và số dư.

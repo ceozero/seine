@@ -1,0 +1,73 @@
+---
+title: 'Giải thích hoán đổi nguyên tử Blocknet: VEIL là gì?'
+description: 'Tìm hiểu hoán đổi nguyên tử, nhận tiền có điều kiện, hoàn tiền, thông tin người tham gia thấy được và công bố của Blocknet về VEIL và Faraday.'
+tags: [Blocknet, Thanh toán, Quyền riêng tư]
+faq:
+  - q: 'Tôi có thể dùng hướng dẫn này để bắt đầu một giao dịch hoán đổi VEIL không?'
+    a: 'Đây là bài giải thích chung về hoán đổi nguyên tử, có một phần nói về công bố VEIL trên các nguồn công khai của Blocknet. Bài viết không xác nhận một cặp giao dịch, lệnh ví hay dịch vụ đang khả dụng. Hãy dùng hướng dẫn phát hành đã công bố cho một triển khai cụ thể trước khi coi tính năng hoán đổi được đề xuất là một quy trình thanh toán sẵn có.'
+  - q: 'Nguyên tử có nghĩa là cả hai khoản thanh toán diễn ra ngay lập tức không?'
+    a: 'Nguyên tử mô tả cách trao đổi được liên kết. Trong ví dụ ở đây, thao tác nhận tiền của một người tham gia tiết lộ thông tin cho phép người kia nhận phần của mình. Các giao dịch vẫn được đưa vào từng chuỗi tương ứng một cách riêng biệt. Kiểm tra xác nhận, thời hạn và các hành động bắt buộc của người tham gia vẫn là một phần của việc hoàn tất giao thức.'
+  - q: 'Hoán đổi nguyên tử có tự động bảo đảm quyền riêng tư không?'
+    a: 'Giao thức hoán đổi nguyên tử điều phối việc quyết toán. Thông tin bị tiết lộ phụ thuộc vào các chuỗi, hợp đồng và quá trình liên lạc liên quan. Một giá trị băm công khai dùng chung có thể liên kết hai phía của một giao dịch hoán đổi dùng khóa băm cơ bản. Vì vậy, các biện pháp bảo vệ thanh toán của Blocknet và toàn bộ đặc tính tiết lộ thông tin của một giao dịch hoán đổi phải được đánh giá riêng.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Hãy hiểu hoán đổi nguyên tử điều phối những gì trước khi đọc công bố VEIL của Blocknet. Hướng dẫn này theo dõi một cuộc trao đổi chung giữa hai bên qua các bước cấp vốn có điều kiện, nhận tiền thành công và đường hoàn tiền. Sau đó, bài viết phân biệt ví dụ minh họa này với thông tin ngắn gọn về VEIL trên trang công khai của Blocknet, được kiểm tra ngày 28 tháng 10 năm 2026. Ví dụ mô tả một mẫu giao thức, không phải một triển khai VEIL đã được xác minh hay một cặp giao dịch BNT hiện được hỗ trợ.
+
+## Hoán đổi nguyên tử là gì?
+
+<Answer>
+Hoán đổi nguyên tử liên kết việc trao đổi tài sản để người tham gia tuân thủ giao thức có thể hoàn thành phía của mình hoặc sử dụng đường khôi phục theo các giả định của giao thức. Nó thay lời hứa đơn giản sẽ gửi sau bằng những điều kiện có thể thực thi. Hai chuỗi vẫn xử lý giao dịch của riêng mình, và người tham gia phải tuân theo trình tự bắt buộc.
+</Answer>
+
+Câu hỏi của người đọc rất thực tế: nếu bạn gửi một tài sản để đổi lấy tài sản khác, điều gì khiến khoản thanh toán thứ hai được thực hiện? Một giao dịch chuyển thông thường cho phép thực hiện một khoản thanh toán. Giao thức hoán đổi nguyên tử kết nối các điều kiện của hai giao dịch chuyển. [Bài nghiên cứu về hoán đổi nguyên tử xuyên chuỗi](https://arxiv.org/abs/1801.09515) của Maurice Herlihy mô hình hóa vấn đề điều phối này và tầm quan trọng của việc người tham gia tuân thủ các quy tắc.
+
+Hãy hình dung hai sổ cái riêng biệt với một cuộc trao đổi được điều phối giữa chúng. Tài sản được chi tiêu trên chuỗi tương ứng; giao thức liên kết quyền nhận chúng của các bên. Điều này khác với việc chỉ gửi coin đến địa chỉ nhận rồi chờ ai đó thực hiện thỏa thuận. [Hướng dẫn gửi Blocknet](/vi/blog/send-receive-blocknet/) trình bày quy trình thanh toán thông thường đó.
+
+## Hoán đổi dùng khóa băm hoạt động như thế nào?
+
+Một ví dụ minh họa phổ biến sử dụng **hashlock**, tức khóa băm để kiểm tra một bí mật, và **timelock**, tức khóa thời gian để kiểm soát khi nào có thể hoàn tiền. Kết hợp này thường được gọi là hợp đồng khóa băm và thời gian, hay HTLC. Phần này giải thích cấu trúc chung đó; không khẳng định VEIL sử dụng nó.
+
+Alice và Bob trước tiên thống nhất việc trao đổi và các đích nhận tiền. Alice tạo một bí mật và chia sẻ giá trị băm của nó. Giá trị băm cho phép hợp đồng kiểm tra bí mật về sau mà không cần Alice công bố ngay từ đầu. Hợp đồng cũng yêu cầu sự cho phép của người nhận được chỉ định: chỉ biết bí mật không cho phép bất kỳ người quan sát nào lấy tiền.
+
+[Mô tả HTLC trong BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) minh họa một nhánh nhận tiền yêu cầu bí mật và chữ ký của người nhận, cùng với nhánh hoàn tiền khả dụng sau một thời hạn. BIP 199 là một đề xuất đã đóng mô tả cấu trúc này, không phải đặc tả của Blocknet.
+
+## Điều gì xảy ra khi cả hai bên hoàn tất?
+
+Theo dõi sơ đồ đánh số từ giai đoạn cấp vốn sang giai đoạn nhận tiền. “Chain A” và “Chain B” là các nhãn chung. Chúng không chỉ một cặp đang khả dụng hay ngụ ý rằng Blocknet hỗ trợ các hợp đồng cụ thể này.
+
+1. **Alice cấp vốn cho hợp đồng thứ nhất.** Hợp đồng cho phép Bob nhận tiền bằng bí mật và sự cho phép của mình. Khoản hoàn tiền của Alice khả dụng muộn hơn.
+2. **Bob kiểm tra và cấp vốn cho hợp đồng thứ hai.** Hợp đồng dùng giá trị băm của cùng bí mật và cho phép Alice nhận tiền. Khoản hoàn tiền của Bob khả dụng sớm hơn của Alice.
+3. **Alice kiểm tra và nhận tiền ở phía thứ hai.** Thao tác nhận tiền của cô tiết lộ bí mật trong ví dụ cơ bản dùng khóa băm công khai này.
+4. **Bob dùng bí mật đã được tiết lộ để nhận tiền ở phía thứ nhất.** Khoảng cách giữa hai thời hạn hoàn tiền cho anh thời gian hành động.
+
+[![Ví dụ hoán đổi chung: Alice và Bob cấp vốn cho các hợp đồng có điều kiện riêng biệt, thao tác nhận tiền của Alice tiết lộ bí mật và Bob dùng nó để nhận tiền; hợp đồng chưa được sử dụng có đường hoàn tiền theo thời hạn.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+Hàng trên thể hiện việc cấp vốn trên hai chuỗi. Hàng dưới thể hiện các thao tác nhận tiền theo thứ tự ngược lại. Các mũi tên cong đánh dấu đường khôi phục cho tiền còn bị khóa khi điều kiện hoàn tiền được đáp ứng. Đây là sơ đồ giải thích, không phải màn hình VEIL hay một giao dịch đang diễn ra.
+
+## Nếu một người tham gia dừng lại thì sao?
+
+Việc khôi phục phụ thuộc vào giai đoạn cuộc trao đổi dừng lại. Nếu Alice cấp vốn cho hợp đồng thứ nhất còn Bob không bao giờ cấp vốn cho hợp đồng thứ hai, Alice có thể lấy lại số tiền còn bị khóa qua nhánh hoàn tiền khi nhánh đó có hiệu lực. Nếu cả hai hợp đồng đã được cấp vốn nhưng Alice không bao giờ tiết lộ bí mật, các bên có thể dùng đường hoàn tiền tương ứng cho phần tiền chưa được chi tiêu.
+
+Khóa thời gian làm cho giao dịch chi tiền để hoàn trả đủ điều kiện thực hiện; bản thân nó không phát tán và xác nhận giao dịch đó. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) giải thích các điều kiện chi tiêu dựa trên thời gian và cấu trúc hoàn tiền không tương tác. Một ứng dụng cụ thể phải quản lý các giao dịch nhận tiền hoặc hoàn tiền và thông tin cần thiết để cho phép thực hiện chúng.
+
+Khi Alice nhận tiền ở phía thứ hai và tiết lộ bí mật, Bob phải kịp thời thực hiện đường nhận tiền ở phía thứ nhất. Đó là lý do trình tự và các thời hạn lệch nhau có ý nghĩa. Đóng một ứng dụng không giống như hủy một cuộc trao đổi đã được cấp vốn. Hướng dẫn khôi phục của triển khai quyết định cách tiếp tục trạng thái của nó.
+
+## Người tham gia và người quan sát có thể thấy gì?
+
+Quyết toán và quyền riêng tư trả lời các câu hỏi khác nhau. Người tham gia biết các điều khoản đã thống nhất và thông tin nhận tiền họ đã trao đổi. Trong ví dụ cơ bản, cùng một giá trị băm công khai xuất hiện trên cả hai chuỗi và thao tác nhận tiền tiết lộ bí mật của nó. Những giá trị dùng chung này có thể giúp người quan sát liên kết hai phía.
+
+Thông tin cụ thể được tiết lộ phụ thuộc vào giao thức và các chuỗi liên quan. Một định dạng thanh toán riêng tư tự nó không quy định chuỗi khác công bố gì hay giao diện giao dịch ghi lại gì. Tương tự, hoàn tất một cuộc trao đổi không xóa các tin nhắn mà người tham gia đã dùng để thương lượng.
+
+Đối với thanh toán Blocknet thông thường, [hướng dẫn về khả năng nhìn thấy thông tin thanh toán](/vi/blog/blocknet-payment-visibility/) phân biệt các trường giao dịch công khai với quyền truy cập của người gửi, người nhận và những người được cấp quyền xem. Đây là nền tảng để hiểu quyền riêng tư của thanh toán BNT. Một khẳng định về quyền riêng tư dành riêng cho hoán đổi cần bằng chứng về toàn bộ giao dịch hoán đổi, bao gồm tài sản còn lại và các bước liên lạc.
+
+## Blocknet đã công bố gì về VEIL?
+
+[Trang chính thức của Blocknet](https://blocknetcrypto.com/#faraday) nêu tên VEIL trong phần so sánh hoán đổi nguyên tử và mô tả kế hoạch thiết kế lại bằng các thành phần mật mã hậu lượng tử trong khuôn khổ Faraday. Tuyên bố công khai đó xác định định hướng của dự án. Nó không nêu các cặp giao dịch, lệnh hoán đổi, thời hạn hoàn tiền hay dịch vụ cho người dùng cuối mà hướng dẫn này có thể xác minh.
+
+Hãy giữ rõ phạm vi của công bố đó khi đọc ví dụ phía trên. Phần minh họa HTLC giải thích cách điều phối hoán đổi nguyên tử nói chung. Nó không mô tả giao thức nội bộ của VEIL. [Hướng dẫn Faraday](/vi/blog/blocknet-faraday-upgrade/) trình bày quá trình chuyển đổi mạng đã được công bố; hướng dẫn hoán đổi dành cho một triển khai cụ thể nên đến từ bản phát hành đã công bố và tài liệu của nó.
+
+Để nhận BNT ngay bây giờ, [hướng dẫn nhận những đồng coin đầu tiên](/vi/blog/get-first-blocknet/) trình bày việc chuyển tiền thông thường và đào coin. Đây là các quy trình sử dụng đã có, với những bước riêng về ví và thanh toán. Bài viết này cung cấp các khái niệm để bạn hiểu một bản phát hành hoán đổi công khai trong tương lai mà không nhầm một thông báo với hướng dẫn nạp tiền.
+
+<CTA target="seine" title="Nhận BNT thông qua đào coin" text="Dùng seine với bntpool.com và nhận tiền đào coin trong ví Blocknet của chính bạn." />

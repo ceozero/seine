@@ -1,6 +1,6 @@
 ---
 title: Jak kopać Blocknet na Macu
-description: Kop Blocknet na Macu z Apple Silicon za pomocą seine. Skonfiguruj go w Terminalu, zobacz zmierzony wynik 30,9 H/s na M4 Max i sprawdź, ile wątków udźwignie Twój Mac.
+description: "macOS: Pobierz seine, rozpakuj go, wpisz swój adres Blocknet i sprawdź zaakceptowane udziały na bntpool.com. Zacznij od ustawień automatycznych; wskazówki dotyczące wydajności znajdziesz po instrukcji konfiguracji."
 tags: [Poradnik kopania, macOS, Apple Silicon, seine]
 faq:
   - q: 'Czy można kopać Blocknet na MacBooku Air?'
@@ -8,22 +8,70 @@ faq:
   - q: 'Czy seine używa GPU podczas kopania Blocknetu na Macu?'
     a: 'Na Apple Silicon seine domyślnie kopie na CPU, bo to najszybszy wybór. CPU i rdzenie graficzne korzystają z tej samej pamięci zunifikowanej, a dowód pracy Argon2id w Blocknecie zależy od przepustowości pamięci. Na M4 Max kopanie tylko na CPU dało najwyższy hashrate, więc seine wybiera je automatycznie.'
   - q: 'Ile pamięci potrzebuje Mac do kopania Blocknetu?'
-    a: 'Każdy wątek kopiący przetwarza blok pamięci o rozmiarze 2 GiB, więc licz około 2 GB na wątek. Mac z 16 GB pomieści do siedmiu wątków, Mac z 32 GB do 15, a Mac z 64 GB do 30. seine liczy wolną pamięć i dopasowuje też liczbę wątków do Twoich rdzeni.'
+    a: 'Każdy wątek kopiący przetwarza blok pamięci o rozmiarze 2 GiB, więc licz około 2 GB na wątek. Mac z 16 GB pomieści do siedmiu wątków, Mac z 32 GB do 15, a Mac z 64 GB do 31. seine liczy wolną pamięć i dopasowuje też liczbę wątków do Twoich rdzeni.'
   - q: 'Czy można kopać Blocknet na Macu z procesorem Intel?'
     a: 'Tak. seine publikuje osobne archiwum dla Maców z procesorem Intel, seine-macos-x86_64.tar.gz, a kroki są takie same jak na Apple Silicon. Pobierz je, rozpakuj w Terminalu, uruchom ./seine i wklej swój adres Blocknet lub @name. seine dobiera liczbę wątków do Twojej pamięci i domyślnie zaczyna kopać na bntpool.com.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: draft
 ---
-
-Ten poradnik pokazuje, jak kopać Blocknet na Macu z Apple Silicon za pomocą **seine**: dlaczego układy z serii M dobrze pasują do dowodu pracy Blocknetu, co zmierzono na M4 Max, ile wątków zmieści pamięć Twojego Maca i jakie dokładnie kroki wykonać w Terminalu, aby zacząć kopać na bntpool.com.
 
 ## Czy można kopać Blocknet na Macu?
 
 <Answer>
-Tak. Maki z Apple Silicon to mocne koparki Blocknetu, bo ich pamięć zunifikowana daje wymagającemu dużo pamięci dowodowi pracy Argon2id dużą przepustowość. Pobierz `seine-macos-aarch64.tar.gz`, rozpakuj go w Terminalu, uruchom `./seine` i wklej swój adres. M4 Max z 48 GB osiągnął 30,9 H/s na samym CPU.
+Pobierz seine, rozpakuj go, wpisz swój adres Blocknet i sprawdź zaakceptowane udziały na bntpool.com. Zacznij od ustawień automatycznych; wskazówki dotyczące wydajności znajdziesz po instrukcji konfiguracji.
 </Answer>
 
-seine sam zajmuje się konfiguracją specyficzną dla Maca. Kopie na CPU, przydziela wątki najpierw rdzeniom wydajnościowym i dobiera ich liczbę do Twojej pamięci, więc większości osób wystarczy zwykłe `./seine`.
+## Krok 1: pobierz właściwą wersję
+
+W menu Apple → Ten Mac sprawdź czip lub procesor. W [sekcji pobierania](/pl/#download) wybierz `seine-macos-aarch64.tar.gz` dla Apple Silicon lub `seine-macos-x86_64.tar.gz` dla Intela.
+
+## Krok 2: rozpakuj i uruchom
+
+Otwórz Terminal. Polecenia zakładają, że archiwum znajduje się w katalogu Downloads; w razie potrzeby podaj właściwą ścieżkę. Na Macu z Intelem zamień `seine-macos-aarch64.tar.gz` na `seine-macos-x86_64.tar.gz`. Rozpakują seine w katalogu domowym i go uruchomią:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## Krok 3: wpisz adres portfela
+
+Wklej publiczny adres odbiorczy Blocknet lub zarejestrowaną nazwę `@name`, a następnie naciśnij Enter, aby zaakceptować `stratum+tcp://bntpool.com:3333`. [Poradnik portfela](/pl/blog/blocknet-wallet-for-mining/) pokazuje, gdzie znaleźć adres. Seine nie potrzebuje frazy odzyskiwania ani kluczy wydawania. Automatycznie nadaje nazwę workerowi w puli.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Pytania o adres i pulę przy pierwszym uruchomieniu. Zastąp przykład swoim adresem lub zarejestrowaną nazwą." loading="lazy" />
+  </picture>
+  <figcaption>Pytania o adres i pulę przy pierwszym uruchomieniu. Zastąp przykład swoim adresem lub zarejestrowaną nazwą.</figcaption>
+</figure>
+
+Seine sam wybiera wątki i dostraja wydajność. Przy kolejnych uruchomieniach używaj tego samego katalogu, aby ponownie korzystać z `seine-data/seine.config.json`.
+
+## Krok 4: sprawdź zaakceptowane udziały
+
+W [panelu](/pl/blog/seine-dashboard-explained/) sprawdź hashrate i rosnący licznik **Accepted**. Zaakceptowany udział potwierdza otrzymanie pracy przez pulę; nie oznacza jeszcze wypłaty. Naciśnij `q` lub `Ctrl+C`, aby zakończyć.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Rzeczywisty panel seine z przykładowymi danymi. Znajdź Accepted; te wartości nie są wynikami benchmarku." loading="lazy" />
+  </picture>
+  <figcaption>Rzeczywisty panel seine z przykładowymi danymi. Znajdź Accepted; te wartości nie są wynikami benchmarku.</figcaption>
+</figure>
+
+Otwórz [Moje statystyki](https://bntpool.com/stats?lang=pl) i wpisz ten sam adres lub zarejestrowaną nazwę, aby znaleźć swojego workera, udziały i saldo.
+
+## Jeśli macOS blokuje pierwsze uruchomienie
+
+Wersja dla macOS ma podpis ad hoc. Jeśli macOS zatrzyma pierwsze uruchomienie, otwórz Ustawienia systemowe, przejdź do sekcji Prywatność i ochrona i zezwól na `seine`. Możesz też usunąć znacznik pobrania w Terminalu i uruchomić program ponownie:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Dlaczego Maki z Apple Silicon dobrze kopią Blocknet?
 
@@ -66,43 +114,6 @@ Dwie rzeczy dopasowują ostateczną liczbę do Twojego Maca:
 
 Nie musisz nic z tego liczyć. seine wybiera liczbę wątków przy starcie i podczas kopania dalej testuje sąsiednie wartości.
 
-## Konfiguracja w systemie macOS krok po kroku
-
-### Krok 1: zdobądź adres Blocknet
-
-Zainstaluj oficjalny portfel Blocknet, [portfel wiersza poleceń](https://github.com/blocknetprivacy/blocknet/releases/latest) albo [portfel desktopowy](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), i skopiuj swój adres. Jeśli masz krótką nazwę Blocknet ID z [blocknet.id](https://blocknet.id), możesz zamiast tego kopać na `@name`.
-
-### Krok 2: pobierz seine dla Apple Silicon
-
-W [sekcji pobierania](/pl/#download) pobierz `seine-macos-aarch64.tar.gz`. Zawiera program `seine`, jego plik readme i licencję oraz plik `SHA256SUMS.txt` do sprawdzenia pobranego archiwum.
-
-### Krok 3: rozpakuj go w Terminalu
-
-Otwórz Terminal (w folderze Aplikacje, a potem Narzędzia) i uruchom te polecenia. Tworzą one folder `seine` w Twoim folderze domowym i rozpakowują do niego archiwum:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### Krok 4: uruchom seine
-
-```sh
-./seine
-```
-
-Wersja dla macOS ma podpis ad hoc. Jeśli macOS zatrzyma pierwsze uruchomienie, otwórz Ustawienia systemowe, przejdź do sekcji Prywatność i ochrona i zezwól na `seine`. Możesz też usunąć znacznik pobrania w Terminalu i uruchomić program ponownie:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### Krok 5: wpisz swój adres i zacznij kopać
-
-seine pyta o Twój adres do wypłat lub `@shortname`, a potem o pulę. Naciśnij Return, aby zaakceptować domyślną, `stratum+tcp://bntpool.com:3333`. [Panel](/pl/blog/seine-dashboard-explained/) pokaże wtedy Twój hashrate i pierwsze zaakceptowane udziały. Pula bntpool.com wysyła saldo na Twój adres, gdy osiągnie ono 0,1 BNT, a śledzić je możesz na [bntpool.com](https://bntpool.com), wyszukując swój adres.
-
 ## Dlaczego seine kopie na Macu tylko na CPU?
 
 Na Apple Silicon CPU i rdzenie graficzne dzielą jedną pulę pamięci zunifikowanej. Argon2id zależy od przepustowości pamięci, więc CPU i rdzenie graficzne konkurowałyby o tę samą przepustowość. W testach seine na M4 Max kopanie tylko na CPU dało najwyższy hashrate, więc seine wybiera je automatycznie na każdym Macu z Apple Silicon. Dostajesz najszybszą konfigurację bez ustawiania żadnych flag.
@@ -129,3 +140,5 @@ Te wyniki dotyczą obecnego dowodu pracy Argon2id w Blocknecie. Według [blockne
 </Note>
 
 <CTA target="seine" title="Pobierz seine dla macOS" text="Wersja dla Apple Silicon kopie na CPU Twojego Maca i sama dobiera liczbę wątków." />
+
+Otwórz [Moje statystyki](https://bntpool.com/stats?lang=pl) i wpisz ten sam adres lub zarejestrowaną nazwę, aby znaleźć swojego workera, udziały i saldo.

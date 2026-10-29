@@ -180,7 +180,9 @@ function checkTranslation(src, locale) {
     if (headings(t.body).length !== headings(src.body).length) errors.push(tag('heading count differs from the source'));
     if (ctaCount(t.body) !== ctaCount(src.body)) errors.push(tag('<CTA> count differs from the source'));
     // The pool's translated articles use /blog/<locale>/, not /<locale>/blog/.
-    const samePoolArticle = (url) => url.replace(`https://bntpool.com/blog/${locale.path}/`, 'https://bntpool.com/blog/');
+    const samePoolArticle = (url) => url
+        .replace(`https://bntpool.com/blog/${locale.path}/`, 'https://bntpool.com/blog/')
+        .replace(new RegExp(`^https://bntpool\\.com/stats\\?lang=${locale.path}$`), 'https://bntpool.com/stats');
     const ext = (b) => links(b).filter((l) => !l.startsWith('/')).map(samePoolArticle).sort().join(' ');
     if (ext(t.body) !== ext(src.body)) errors.push(tag('external links must match the source'));
     if (/^# /m.test(stripCode(t.body))) errors.push(tag('the body has an H1'));

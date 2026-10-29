@@ -1,0 +1,68 @@
+---
+title: 'Blocknet arzı, ihraç ve kuyruk emisyonu'
+description: 'Blocknet arzını anlayın: blok ödüllerinin BNT üretmesi, yaklaşık 100 milyon hedefi ve sürekli kuyruk emisyonunun ödemelerden ve ücretlerden farkı.'
+tags: ['Blocknet', 'Arz', 'Madencilik']
+faq:
+  - q: 'Blocknet arzı en fazla 100 milyon BNT mi?'
+    a: 'Yayımlanan takvim, sürekli kuyruk emisyonundan önce yaklaşık 100 milyon BNT öngörür. Bu bir referans hedeftir, kesin üst sınır değildir. Mevcut kurallarda 414.720 yüksekliğinden itibaren blok başına 2 BNT üretilir; dolayısıyla bloklar eklendikçe toplam ihraç büyümeye devam eder.'
+  - q: 'Kuyruk emisyonu sonsuza dek aynı enflasyon yüzdesi mi demektir?'
+    a: 'Blok başına sabit miktarda yeni coin, arzda sabit yüzdesel büyüme anlamına gelmez. Yüzde, seçilen dönemin ihracına ve payda olarak kullanılan arza bağlıdır. Başlangıç stoku daha büyük ve eklenen miktar aynıysa yüzdesel büyüme daha küçüktür.'
+  - q: 'Havuz ödemesi almak yeniden BNT üretir mi?'
+    a: 'Hayır. İhraç olayı blok ödülüdür. Daha sonraki havuz ödemesi, havuzun muhasebe kurallarıyla katılan madencilere fon aktarır. Olgunlaşmayı beklemek fonların ne zaman harcanacağını, ödeme ise sahibini değiştirir. Bu aşamaların hiçbiri aynı coinleri yeniden oluşturmaz.'
+sourceHash: dbc22b3cb15a
+translation: draft
+---
+
+Blocknet arz verilerini okurken yeni üretilen BNT ile cüzdanlar arasında taşınan fonları ayırın. Bu rehber yayımlanmış core v0.22.0 içindeki yaklaşık hedefi, azalan ödülleri ve sürekli kuyruk emisyonunu açıklar. Arz büyüme yüzdesini bakiye veya fiyat tahminiyle karıştırmadan okumayı da gösterir. Gelecekteki Faraday önerileri mevcut kurallardan ayrı etiketlenir.
+
+## Blocknet arzı 100 milyon BNT ile sınırlı mı?
+
+<Answer>
+Yayımlanmış takvim, sürekli kuyruk emisyonundan önce yaklaşık 100 milyon BNT hedefler. Hedef ilerlemeyi ölçer; kesin üst sınır değildir. Mevcut kurallar 414.720 yüksekliğinden itibaren blok başına 2 BNT üretir, dolayısıyla toplam ihraç yeni bloklarla artmayı sürdürür.
+</Answer>
+
+## Arz sayısının neyi ölçtüğüyle başlayın
+
+İhraç, blok ödülleri yoluyla yeni BNT oluşturulmasıdır. Toplam ihraç edilmiş arz bu ödülleri belirli bir yüksekliğe kadar toplar. Yayımlanmış [arz hesabı](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/miner.go#L383-L431), genesis bloğunda ödül olmadığından 1 yüksekliğinde başlar. Yüksekliğe bağlı bir değer, takvimin o bloğa kadar ne kadar ürettiğini kesin olarak yanıtlar.
+
+Bu, tek bir cüzdan bakiyesinden farklıdır. Cüzdan kendi anahtarlarına ait çıktıları tanır ve harcanabilir fonları bekleyenlerden ayırır. Toplam ihraç her sahibin anahtarlara erişimini denetlemez veya kaç BNT’nin aktif el değiştirdiğini söylemez. Farklı sayfaları karşılaştırırken etiket ve kapsamı koruyun.
+
+[Adil başlangıç rehberi](https://bntpool.com/blog/blocknet-fair-launch/) dağıtımın başlangıcını anlatır. Burada sonraki muhasebeye odaklanılır: kabul edilen her blok yüksekliği artırır ve planlı ihracını toplam miktara ekler.
+
+[![Yayımlanmış Blocknet ihracı: 1 yüksekliğe bağlı aşamalarda azalan ödülleri; 2 blok başına sürekli 2 BNT kuyruk ödülünü gösterir.](/assets/blog/blocknet-supply.svg)](/assets/blog/blocknet-supply.svg)
+
+**1** azalan ödül aşamalarını, **2** sürekli kuyruğu temsil eder. Çubuklar kuralların kavramsal anlatımıdır; ölçülmüş arz veya kesin takvim tarihleri değildir. Her iki kısım yeni üretilen BNT’yi anlatır.
+
+## Blocknet kuyruk emisyonuna ne zaman ulaşır?
+
+Mevcut hedef blok aralığı beş dakikadır. Kod, bu aralıkta 30 günlük ayı kullanarak yükseklikleri 8.640 blokluk takvim aylarına ayırır. Bir takvim ayı boyunca blok ödülü sabit kalır. Sonraki ayda yayımlanmış azalma hesabına göre düşer. Bunlar takvimdeki isimli aylar değil, yüksekliğe dayalı dönemlerdir.
+
+48 takvim ayından sonra kuyruk 414.720 yüksekliğinde başlar. Bu yükseklikten itibaren yayımlanmış kural blok başına 2 BNT kullanır. [Blok ödülü takvimi](https://bntpool.com/blog/blocknet-block-reward-schedule/) ayrıntılı aylık tabloyu ve kuyruk öncesi tam toplamı içerir; böylece bu arz rehberini ikinci bir ödül hesaplayıcısına çevirmeden bir aşamaya bakabilirsiniz.
+
+Yaklaşık 100 milyon, ilk dağıtımın ölçeğini özetler. Kodun ihraç ilerleme göstergesi de bunu referans alır. Ölçünün sonuna ulaşılması kuyruğu kapatmaz. Dolu bir çubuğu daha fazla BNT üretilemeyeceği şeklinde yorumlamak yerine, yüzdeyi belirtilen hedefiyle okuyun.
+
+Sürekli ödül, ilk dağıtım aşamalarından sonra da kabul edilen blokları üreten madencilere protokol kaynaklı BNT sağlar. Her yeni bloğa iş katkısı için teşvik bağlı kalır. [İş ispatı rehberi](/tr/blog/how-crypto-mining-works/), geçerli blok bulmakla planlı ödülü almak arasındaki bağlantıyı açıklar.
+
+## Kuyruk emisyonu arz büyümesi için ne ifade eder?
+
+Mevcut beş dakikalık hedefte bir gün 288 hedef aralık içerir. Yayımlanmış kuyruk ödülüyle çarpınca günlük 576 BNT veya 365 günde 210.240 BNT eder. Bunlar aralık ve ödülden türetilen aritmetik projeksiyonlardır. Gerçek blok zamanları değişir; hesap garanti günlük sayıyı değil hedef tempoyu anlatır.
+
+Kuyruk her blokta sabit miktar eklerken birikmiş stok büyür. Büyümeyi yüzdeyle belirtmek için dönem seçin, yeni ihracı toplayın, başlangıç arzına bölüp 100 ile çarpın. Hangi arz ölçüsünü kullandığınızı belirtin. Başlangıç stoku artar ve eklenen miktar aynı kalırsa yüzde azalır.
+
+Burada enflasyon coin arzının büyümesi demektir. BNT’nin alım gücünü veya ürün fiyatlarını tahmin etmez. Arz hesabında piyasa fiyatı veya tüketim sepeti yoktur. Bu soruları ayırmak, sahibinin ne satın alabileceğine dair dayanağı olmayan iddialar eklemeden dönemler arası kural karşılaştırmasını kolaylaştırır.
+
+## Transferler, ücretler ve olgunlaşma neden ayrıdır?
+
+Ödeme mevcut fonları harcar ve alıcı ile para üstü için yeni çıktılar oluşturur. Bu kayıtlar var olan değeri yeniden dağıtır; ödenen tutarı yeniden ihraç etmez. İşlem ücreti de mevcut fonlardan ödenir; ücret eklemek BNT yaratmaz. [İşlem rehberi](/tr/blog/blocknet-transaction-explained/) girdileri, çıktıları, para üstünü ve ücreti izler.
+
+Aynı ayrım havuzda geçerlidir. Blok ödülü planlı coinleri yaratır; sonraki ödeme havuz muhasebesine göre fon dağıtır. Olgunlaşma harcanabilirlikle, ödeme sahiplikle ilgilidir. Arzı değerlendirirken blok ihracını bir kez sayın. [PPLNS ödeme rehberi](https://bntpool.com/blog/how-pplns-payouts-work/) havuzun iş ve ödeme dağılımını açıklar.
+
+## Arz rakamlarını yükseklik ve kural sürümüyle okuyun
+
+Bir arz iddiasını kontrol ederken üç bilgiyi koruyun: zincir yüksekliği, sayının anlamı ve kural sürümü. Üretilmiş arz, ilerleme yüzdesi ve harcanabilir bakiye farklı soruları yanıtladıkları hâlde doğru olabilir. [Gezgin rehberi](/tr/blog/blocknet-explorer-guide/) halka açık blok ve ağ bilgilerinin incelenmesini anlatır.
+
+Projeksiyonlarda hedef aralığı ödül varsayımlarıyla birlikte tutun. Biri değişirse eski günlük tahmini kopyalamak yerine zaman bazlı sayıyı yeniden hesaplayın. [Faraday para politikası rehberi](/tr/blog/blocknet-faraday-monetary-policy/) önerilen zaman ve ödül değişikliklerini ele alır, ilan edilmiş planları mevcut takvimden ayırır.
+
+Böylece arzı tutarlı okuyabilirsiniz: ödüller BNT ekler, kuyruk ihracı sürdürür, cüzdan transferleri mevcut değeri taşır. Blok üretimine katkı için [seine madencilik rehberi](/tr/blog/how-to-mine-blocknet/) kurulumu anlatır; bntpool.com havuz madenciliği ve ödeme takibi sunar.
+
+<CTA target="seine" title="seine ile Blocknet kazın" text="Madencilik işine katkı vermek ve cüzdanınıza gönderilen ödemeleri izlemek için seine ile bntpool.com kullanın." />

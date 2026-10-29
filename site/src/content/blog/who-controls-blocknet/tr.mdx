@@ -1,0 +1,66 @@
+---
+title: 'Blocknet’i kim kontrol ediyor?'
+description: 'Blocknet kurallarını kimin uyguladığını öğrenin: geliştiriciler, madenciler, düğümler ve coin sahipleri ne yapar, bloklar ve ağ güncellemeleri nasıl kabul edilir?'
+tags: ['Blocknet', 'Uzlaşma', 'Para birimi']
+faq:
+  - q: 'Bir madenci ödülün izin verdiğinden fazla BNT üretebilir mi?'
+    a: 'Yayımlanan kurallara göre bir düğüm, blok ödülünü o yükseklikte gerekli tutarla karşılaştırır. Geçerli bir iş kanıtı bulmak bu kontrolü atlatmaz. Farklı bir taahhüt içeren ödül reddedilir; dolayısıyla madencinin hesaplama gücü para biriminin ihraç takvimini belirlemez.'
+  - q: 'BNT sahibi olmak bana protokolde oy hakkı verir mi?'
+    a: 'Cüzdan bakiyesi, ağ kuralları uyarınca harcayabileceğiniz fon sağlar. Yayımlanan iş kanıtı doğrulaması, blok kabulünü sahip olunan coin miktarına göre ağırlıklandırmaz. Yazılım çalıştırmak, blok üretmek ve kendi ödemelerinizi yetkilendirmek ayrı rollerdir; büyük bir bakiye geçersiz işlemi geçerli yapmaz.'
+  - q: 'Yeni kod yayımlamak Blocknet’i hemen değiştirir mi?'
+    a: 'Bir kod değişikliği, onu uygulayan yazılım ağda çalıştığında ve etkinleştirme koşulları geçerli olduğunda uzlaşmayı etkiler. Bir duyuru veya depo commit’i, çalışan düğümlerin kurallarını tek başına değiştirmez. Resmî yükseltme yönergelerini izleyin ve kullandığınız yazılımın güncelleme politikasını kontrol edin.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Blocknet’i kontrol etmenin ne anlama geldiğine karar vermeden önce kimin ne yaptığını anlayın. Yazılım yazmak, blok bulmak, bloğu kontrol etmek ve coin harcamak farklı yetkilerdir. Bu rehber, yayımlanan core v0.22.0 içindeki sınırları izler ve önerilen yükseltmenin kullanılan yazılıma nasıl ulaştığını açıklar. Madenciliğin veya geliştirmenin dağılımını ölçmeden doğrulama sorumluluklarını anlatır.
+
+## Blocknet kurallarını kim uygular?
+
+<Answer>
+Düğümler, gelen blokları ve işlemleri doğrularken yazılımlarında uygulanan kuralları yürütür. Madenciler aday bloklar üretir, geliştiriciler uygulamaları sürdürür ve cüzdan sahipleri ödemeleri yetkilendirir. Her rol ağa katkı sağlar; ancak kod yayımlamak, BNT sahibi olmak veya iş kanıtı bulmak diğer doğrulama kontrollerini tek başına karşılamaz.
+</Answer>
+
+Bir ödemenin bu sorumluluklardan geçtiğini düşünün. Cüzdan ödemeyi oluşturur ve yetkilendirir; madenci önerilen bloğa ekler; düğüm önerinin kendi kurallarına uyduğunu kontrol eder. Kabul bu kontrollere bağlıdır. Bilinen bir proje adı, yüksek cüzdan bakiyesi veya gönderen eşin kimliği bunların yerini tutmaz.
+
+[![Numaralı dört rol: geliştiriciler yazılım yayımlar, madenciler blok önerir, düğümler doğrular ve cüzdan sahipleri kendi ödemelerini yetkilendirir.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Şema sorumlulukları ayırır: 1 yazılım geliştirir; 2 blok önerisi üretir; 3 öneriyi çalışan kurallara göre kontrol eder; 4 kendi cüzdanının ödemesini yetkilendirir. Numaralar oy sayımı veya ağ katılımcılarının ölçümü değildir.
+
+## Geliştiriciler neleri değiştirebilir?
+
+Geliştiriciler değişiklik önerebilir, uygulama yazabilir, kod inceleyebilir ve sürüm yayımlayabilir. Yazılım, düğümlerin yürüttüğü kuralları içerdiği için bu işler önemlidir. [Herkese açık core kaynak kodu](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3), gerçek doğrulama yollarını incelemeyi sağlar. Belgeler amaçlarını açıklar; yayımlanan kod belirli bir sürümün uyguladığı davranışı gösterir.
+
+Depodaki bir commit, çalışan yürütülebilir dosyayı yeniden yazmaz. Değişiklik düğüme yazılım güncelleme süreci ve gerektiğinde etkinleştirme mantığı üzerinden ulaşır. Katılımcıların izlemek istedikleri ağ kurallarıyla uyumlu yazılıma ihtiyacı vardır. Bu, kullanılan yazılımın eşgüdümüdür; her önerinin ağ kuralına dönüşeceği anlamına gelmez.
+
+Güncelleme politikası bu ilişkinin bir parçasıdır. Yönetim CLI’si son sürümü izleyen core için güncellemeler planlayabilirken sabitlenmiş sürümlerin politikası farklıdır. [Düğüm rehberi](/tr/blog/run-blocknet-node/) bu ayrımı açıklar. Her güncellemenin elle onay beklediğini varsaymak yerine kurulumunuzun politikasını okuyun.
+
+## Madenciler neye karar verebilir?
+
+Madencilik, aday blokları ve kabul için gereken iş kanıtını üretir. Doğrudan madencilikte seine işi düğümden alır; havuz madenciliğinde havuz işi koordine eder ve çözülen blokları üst düğüme gönderir. Her iki yol da zinciri oluşturur. [Madencilik açıklaması](/tr/blog/how-crypto-mining-works/), süreci ve havuz payıyla tam blok arasındaki farkı anlatır.
+
+Çözülmüş bir iş kanıtı birkaç koşuldan biridir. [Yayımlanan blok doğrulayıcısı](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) blok bağlamını, zorluğu, işlemlerin geçerliliğini ve gerekli ödülü de kontrol eder. Önerilen ödül o yükseklikte izin verilen tutardan farklıysa taahhüdü ödül kontrolünden geçemez. Ek hesaplama gücü bu karşılaştırmayı değiştirmez.
+
+Örneğin madencilik yazılımındaki ödül alanını değiştirmek, başka bir düğümün beklentisini değiştirmez. Alıcı düğüm yükseklikten beklenen ödülü hesaplar ve gönderilen çıktıyı bununla karşılaştırır. [Arz rehberi](/tr/blog/blocknet-supply/) ihraç takvimini açıklar; madencinin görevi bu takvime uyan blok üretmektir.
+
+## Düğümler hangi zinciri izleyeceklerine nasıl karar verir?
+
+Yayımlanan core, zincir seçme mantığını uygulamadan önce adayı doğrular. Birikmiş işi takip eder ve yeniden düzenleme kuralları çerçevesinde daha fazla işe sahip geçerli bir dala geçebilir. Yalnızca blok saymak bu ayrımı kaçırır. İş, kabul edilebilir geçmişler arasında seçime yardım eder; blokların kontrollerinin yerini almaz.
+
+Geçmiş kontrollerini anlatırken düğümün doğrulama ayarları da önemlidir. İsteğe bağlı güvenilir kontrol noktası eşitlemesi, kapsanan tarihsel blokların kriptografik ve iş kanıtı doğrulamalarını tekrarlamayı atlayabilir. Güncel zincir ucunun doğrulanmasıyla bu tarihsel eşitleme ayrı yollardır. Yerel bir düğümün varlığı tek başına kullanılan eşitleme politikasını göstermez.
+
+Bu nedenle yararlı soru somuttur: hangi yazılım, kurallar ve doğrulama modu kullanılıyor? [Yazılım rolleri rehberi](/tr/blog/blocknet-wallet-node-miner/) gerekli uygulamaları seçmeye yardımcı olur; düğüm rehberi işletimi anlatır. Eş sayısı veya blok yüksekliği ekran görüntüsü, ağı kaç bağımsız kişinin kontrol ettiğini belirlemez.
+
+## Coin sahipleri neyi kontrol eder?
+
+Gerekli özel anahtarlara sahip cüzdan sahibi, kendi çıktılarının harcanmasını yetkilendirebilir. Ağ bu yetkilendirmeyi ve diğer işlem kurallarını kontrol eder. Daha fazla BNT sahibi olmak, yayımlanan iş kanıtı sistemini başkasının geçersiz işlemini kabul etmek için bakiyeye göre ağırlıklı bir oylamaya dönüştürmez.
+
+Sahiplik, neyi açıklayacağını seçmekten de farklıdır. Cüzdanın desteklediği görüntüleme ve ödeme kanıtı özellikleriyle kendi fonlarınız veya ödemeniz hakkında bilgi paylaşabilirsiniz. Bu, ek coin yaratma izni vermez. [Gizli tutarları doğrulama rehberi](/tr/blog/bulletproofs-explained/), özel ödeme tutarlarıyla muhasebe kontrollerinin nasıl mümkün kaldığını açıklar.
+
+## Önerilen yükseltmeyi nasıl okumalı?
+
+Duyuruyu, uygulayan sürümü ve etkinleştirme kurallarını ayırın. Duyuru amaçlanan değişikliği anlatır; uyumlu yazılım kontrolleri uygular; etkinleştirme bunların ne zaman geçerli olacağını belirler. Böylece yol haritasındaki ifadeyi zaten çalışan bir davranış saymak yerine doğrulanacak somut unsurlarınız olur.
+
+Faraday için [resmî duyuru](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/), hâlâ geliştirilen ve test edilen bir öneriyi anlatır. [Yükseltme rehberimiz](/tr/blog/blocknet-faraday-upgrade/) kullanıcı hazırlığını takip eder; [para politikası rehberi](/tr/blog/blocknet-faraday-monetary-policy/) önerilen ihraç değişikliklerini bugünkü kurallardan ayırır. Gelecekteki geçiş hakkında karar vermeden önce bu tarihli kaynakları kullanın.
+
+<CTA target="seine" title="seine ile Blocknet kazın" text="Madencilik işine katkıda bulunmak ve cüzdanınıza BNT almak için seine ile bntpool.com kullanın." />

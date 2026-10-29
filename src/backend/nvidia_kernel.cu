@@ -479,7 +479,7 @@ __device__ __forceinline__ void compress_block_coop(
     scratch_r[tid + 96U] = r3;  scratch_q[tid + 96U] = r3;
     coop_sync();
 
-    // G-rounds with warp-shuffle fusion (A82).
+    // G-rounds with warp-shuffle fusion.
     // Fuse row-columns → row-diagonals and col-columns → col-diagonals
     // by passing values between lanes via __shfl_sync instead of shared
     // memory round-trips. Saves 2 coop_sync + 16 smem accesses.
@@ -541,7 +541,7 @@ __device__ __forceinline__ void compress_block_coop(
     coop_sync();
 
     // Unrolled final store: read all shared-memory values into registers
-    // first, then issue all global stores to maximize MLP (A78).
+    // first, then issue all global stores to maximize MLP.
     {
         const unsigned long long m0 = scratch_q[tid]       ^ scratch_r[tid];
         const unsigned long long m1 = scratch_q[tid + 32U] ^ scratch_r[tid + 32U];
@@ -803,9 +803,8 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
                     // Codegen hint: the prefetch.global.L2 instruction is dropped
                     // by PTXAS on sm_120+ (Blackwell), but the address-computation
                     // arithmetic changes NVRTC's instruction scheduling for the
-                    // surrounding compression loop, adding +8.5% on top of the
-                    // unrolled-load optimization in compress_block_coop (A77).
-                    // See A73/A77 in NVIDIA_OPTIMIZATION_LOG.md.
+                    // surrounding compression loop on top of the unrolled-load
+                    // optimization in compress_block_coop.
                     if (data_independent && block + 1U < segment_length) {
                         const unsigned int next_addr_idx = (block + 1U) & 127U;
                         // Skip when the address_block boundary would require an

@@ -5,7 +5,8 @@
 //! flagged in the dashboard header. Failures are silent; the next interval
 //! retries.
 
-use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -41,7 +42,7 @@ pub(crate) struct DashboardUpdate {
     pub log_message: Option<String>,
 }
 
-pub(crate) fn spawn() {
+pub(crate) fn spawn(auto_update: bool, shutdown: Arc<AtomicBool>) {
     let current = crate::version::release_version();
     // Untagged development builds have nothing meaningful to compare.
     if parse_version(current).is_none() {
@@ -52,9 +53,37 @@ pub(crate) fn spawn() {
         .spawn(move || loop {
             if let Ok(tag) = fetch_latest_tag() {
                 record_latest(current, &tag);
+                if auto_update && is_newer(&tag, current) && apply_update(&shutdown) {
+                    return;
+                }
             }
             thread::sleep(CHECK_INTERVAL);
         });
+}
+
+/// `--auto-update`: install the newer release, then stop mining so `main` can
+/// restart the updated executable with the same arguments. A failed attempt is
+/// retried at the next check.
+fn apply_update(shutdown: &Arc<AtomicBool>) -> bool {
+    match crate::self_update::run() {
+        Ok(crate::self_update::Outcome::Updated { from, to, .. }) => {
+            ui::info(
+                "UPDATE",
+                format!("installed seine {to} (was {from}); restarting with the same arguments"),
+            );
+            crate::self_update::request_restart();
+            crate::shutdown::request_auto_update(shutdown);
+            true
+        }
+        Ok(crate::self_update::Outcome::UpToDate { .. }) => false,
+        Err(err) => {
+            ui::warn(
+                "UPDATE",
+                format!("automatic update failed: {err:#}; retrying at the next check"),
+            );
+            false
+        }
+    }
 }
 
 /// The newer release for a dashboard being built, plus its log line if it was
@@ -114,7 +143,7 @@ fn fetch_latest_tag() -> Result<String> {
     Ok(release.tag_name)
 }
 
-fn is_newer(candidate: &str, current: &str) -> bool {
+pub(crate) fn is_newer(candidate: &str, current: &str) -> bool {
     match (parse_version(candidate), parse_version(current)) {
         (Some(candidate), Some(current)) => candidate > current,
         _ => false,

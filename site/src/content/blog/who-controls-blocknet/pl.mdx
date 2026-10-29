@@ -1,0 +1,66 @@
+---
+title: 'Kto kontroluje Blocknet?'
+description: 'Dowiedz się, kto egzekwuje reguły Blocknet: co robią programiści, górnicy, węzły i właściciele monet, jak przyjmowane są bloki i jak wdraża się aktualizacje.'
+tags: ['Blocknet', 'Konsensus', 'Waluta']
+faq:
+  - q: 'Czy górnik może stworzyć więcej BNT, niż pozwala nagroda?'
+    a: 'Według opublikowanych reguł węzeł porównuje nagrodę za blok z kwotą wymaganą na danej wysokości. Znalezienie poprawnego dowodu pracy nie omija tego sprawdzenia. Nagroda z innym zobowiązaniem zostaje odrzucona, więc moc obliczeniowa górnika nie ustala harmonogramu emisji waluty.'
+  - q: 'Czy posiadanie BNT daje mi głos w sprawie protokołu?'
+    a: 'Saldo portfela daje środki do wydania zgodnie z regułami sieci. Opublikowana walidacja proof of work nie waży przyjmowania bloków według posiadanych monet. Uruchamianie oprogramowania, tworzenie bloków i autoryzowanie własnych płatności to odrębne role; duże saldo nie czyni niepoprawnej transakcji poprawną.'
+  - q: 'Czy opublikowanie nowego kodu od razu zmienia Blocknet?'
+    a: 'Zmiana kodu ma znaczenie dla konsensusu, gdy oprogramowanie, które ją implementuje, działa w sieci i obowiązują warunki aktywacji. Ogłoszenie lub commit w repozytorium sam nie zastępuje reguł działających węzłów. Śledź oficjalne instrukcje aktualizacji i sprawdź politykę aktualizacji używanego oprogramowania.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Zrozum, kto za co odpowiada, zanim określisz, co oznacza kontrolowanie Blocknet. Pisanie oprogramowania, znalezienie bloku, sprawdzenie go i wydawanie monet to różne uprawnienia. Ten przewodnik śledzi ich granice w wydanym core v0.22.0, a następnie wyjaśnia, jak proponowana aktualizacja trafia do używanego oprogramowania. Opisuje odpowiedzialność za walidację, bez mierzenia rozproszenia wydobycia lub rozwoju.
+
+## Kto egzekwuje reguły Blocknet?
+
+<Answer>
+Węzły egzekwują reguły swojego oprogramowania podczas walidacji przychodzących bloków i transakcji. Górnicy tworzą kandydatów na bloki, programiści utrzymują implementacje, a właściciele portfeli autoryzują płatności. Każda rola wnosi wkład w sieć, lecz samo opublikowanie kodu, posiadanie BNT lub znalezienie dowodu pracy nie spełnia pozostałych kontroli walidacji.
+</Answer>
+
+Prześledź płatność przez te obowiązki. Portfel ją tworzy i autoryzuje; górnik umieszcza ją w proponowanym bloku; węzeł sprawdza zgodność propozycji ze swoimi regułami. Przyjęcie zależy od tych kontroli. Znana nazwa projektu, duże saldo portfela lub tożsamość wysyłającego peera nie zastępują ich.
+
+[![Cztery ponumerowane role: programiści publikują oprogramowanie, górnicy proponują bloki, węzły je walidują, a właściciele portfeli autoryzują własne płatności.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Schemat oddziela obowiązki: 1 rozwija oprogramowanie; 2 tworzy propozycję bloku; 3 sprawdza ją według działających reguł; 4 autoryzuje płatność własnego portfela. Numery nie są liczbą głosów ani pomiarem uczestników sieci.
+
+## Co mogą zmienić programiści?
+
+Programiści mogą proponować zmiany, pisać implementacje, przeglądać kod i publikować wydania. To ważne, ponieważ oprogramowanie zawiera reguły wykonywane przez węzły. [Publiczny kod core](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) pozwala prześledzić rzeczywiste ścieżki walidacji. Dokumentacja wyjaśnia ich cel; wydany kod określa zachowanie implementowane przez konkretną wersję.
+
+Commit w repozytorium nie przepisuje działającego programu. Zmiana dociera do węzła przez proces aktualizacji oprogramowania i, gdy ma to zastosowanie, logikę aktywacji. Uczestnicy potrzebują więc oprogramowania zgodnego z regułami sieci, których chcą przestrzegać. To koordynacja wdrożonego oprogramowania, bez gwarancji, że każda propozycja stanie się regułą sieci.
+
+Polityka aktualizacji jest częścią tej relacji. Zarządzająca CLI może planować aktualizacje core śledzącego najnowsze wydanie, natomiast przypięte wersje mają inną politykę. [Przewodnik po węzłach](/pl/blog/run-blocknet-node/) wyjaśnia tę różnicę. Przeczytaj politykę swojej instalacji zamiast zakładać, że każda aktualizacja czeka na ręczne potwierdzenie.
+
+## O czym mogą decydować górnicy?
+
+Wydobycie tworzy kandydatów na bloki i dowód pracy potrzebny do ich przyjęcia. Przy wydobyciu bezpośrednim seine otrzymuje pracę od węzła; w puli to pula koordynuje pracę i przekazuje rozwiązane bloki do nadrzędnego węzła. Obie drogi budują łańcuch. [Wyjaśnienie wydobycia](/pl/blog/how-crypto-mining-works/) omawia proces i różnicę między udziałem puli a pełnym blokiem.
+
+Rozwiązany dowód pracy to jeden z kilku wymogów. [Wydany walidator bloków](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) sprawdza też kontekst, trudność, poprawność transakcji i wymaganą nagrodę. Jeśli proponowana nagroda różni się od kwoty dozwolonej na danej wysokości, jej zobowiązanie nie przejdzie kontroli. Większa moc obliczeniowa nie zmienia tego porównania.
+
+Na przykład zmiana pola nagrody w oprogramowaniu wydobywczym nie zmienia oczekiwań innego węzła. Węzeł odbierający oblicza oczekiwaną nagrodę z wysokości i porównuje z nią przesłane wyjście. [Przewodnik po podaży](/pl/blog/blocknet-supply/) wyjaśnia harmonogram emisji; zadaniem górnika jest stworzenie zgodnego z nim bloku.
+
+## Jak węzły wybierają łańcuch?
+
+Wydany core waliduje kandydata przed zastosowaniem logiki wyboru łańcucha. Śledzi skumulowaną pracę i zgodnie z regułami reorganizacji może przejść na poprawną gałąź o większej pracy. Samo liczenie bloków pomija tę różnicę. Praca pomaga wybrać spośród akceptowalnych historii, ale nie zastępuje kontroli tworzących je bloków.
+
+Ustawienia weryfikacji też mają znaczenie przy opisie kontroli historii. Opcjonalna synchronizacja z zaufanymi punktami kontrolnymi może pominąć ponowne sprawdzanie kryptografii i dowodu pracy objętych nimi historycznych bloków. Walidacja bieżącego końca łańcucha i taka synchronizacja historii są różnymi ścieżkami. Samo posiadanie lokalnego węzła nie mówi, jaką politykę synchronizacji zastosowano.
+
+Dlatego użyteczne pytanie jest konkretne: jakie oprogramowanie, reguły i tryb walidacji są używane? [Przewodnik po rolach oprogramowania](/pl/blog/blocknet-wallet-node-miner/) pomaga wybrać aplikacje, a przewodnik po węzłach opisuje obsługę. Liczba peerów lub zrzut wysokości bloku nie ustala, ile niezależnych osób kontroluje sieć.
+
+## Co kontrolują właściciele monet?
+
+Mając wymagane klucze prywatne, właściciel portfela może autoryzować wydanie swoich wyjść. Sieć sprawdza tę autoryzację i pozostałe reguły transakcji. Posiadanie większej liczby BNT nie zmienia opublikowanego systemu proof of work w głosowanie ważone saldem nad przyjęciem cudzej niepoprawnej transakcji.
+
+Własność różni się też od wyboru ujawnianych informacji. Obsługiwane przez portfel funkcje podglądu i dowodu płatności pozwalają udostępniać informacje o własnych środkach lub płatnościach. Nie daje to prawa do tworzenia dodatkowych monet. [Przewodnik po weryfikacji ukrytych kwot](/pl/blog/bulletproofs-explained/) wyjaśnia, jak kontrole rachunkowe pozostają możliwe przy prywatnych kwotach płatności.
+
+## Jak czytać propozycję aktualizacji?
+
+Oddziel ogłoszenie, wydanie implementujące zmianę i reguły aktywacji. Ogłoszenie opisuje zamierzony kierunek; zgodne oprogramowanie implementuje kontrole; aktywacja określa, kiedy obowiązują. Daje to konkretne elementy do sprawdzenia, zamiast traktowania deklaracji z planu rozwoju jako już działającego zachowania.
+
+W przypadku Faraday [oficjalne ogłoszenie](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) opisuje propozycję wciąż rozwijaną i testowaną. Nasz [przewodnik po aktualizacji](/pl/blog/blocknet-faraday-upgrade/) śledzi przygotowania użytkownika, a [przewodnik po polityce monetarnej](/pl/blog/blocknet-faraday-monetary-policy/) oddziela proponowane zmiany emisji od obecnych reguł. Korzystaj z tych datowanych źródeł przed decyzjami o przyszłym przejściu.
+
+<CTA target="seine" title="Wydobywaj Blocknet z seine" text="Użyj seine z bntpool.com, aby wnosić pracę wydobywczą i otrzymywać BNT do swojego portfela." />

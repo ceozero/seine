@@ -1,0 +1,68 @@
+---
+title: 'Oferta, emisión y emisión de cola de Blocknet'
+description: 'Entiende la oferta de Blocknet: cómo las recompensas emiten BNT, por qué unos 100 millones son un objetivo y cómo la cola se distingue de pagos y comisiones.'
+tags: ['Blocknet', 'Oferta', 'Minería']
+faq:
+  - q: '¿Tiene Blocknet una oferta máxima de 100 millones de BNT?'
+    a: 'El calendario publicado describe aproximadamente 100 millones de BNT antes de la emisión de cola continua. Es una referencia, no un máximo absoluto. Con las reglas publicadas actuales, la cola emite 2 BNT por bloque desde la altura 414.720, por lo que la emisión acumulada sigue creciendo al añadirse bloques.'
+  - q: '¿La emisión de cola implica el mismo porcentaje de inflación para siempre?'
+    a: 'Una cantidad fija de monedas nuevas por bloque no implica un aumento porcentual fijo de la oferta. El porcentaje depende de lo emitido durante el periodo elegido y de la oferta usada como denominador. Con un saldo inicial mayor y la misma cantidad añadida, el crecimiento porcentual es menor.'
+  - q: '¿Recibir un pago del pool vuelve a crear BNT?'
+    a: 'No. La recompensa del bloque es el momento de emisión. Un pago posterior del pool transfiere fondos a los mineros según sus reglas contables. Esperar la madurez cambia cuándo pueden gastarse; recibir el pago cambia su propietario. Ningún paso vuelve a crear esas mismas monedas.'
+sourceHash: dbc22b3cb15a
+translation: draft
+---
+
+Interpreta las cifras de oferta de Blocknet separando los BNT recién emitidos de los fondos que pasan entre monederos. Esta guía explica el objetivo aproximado, las recompensas decrecientes y la cola continua de core v0.22.0 publicado. También permite leer un porcentaje de crecimiento sin confundirlo con un saldo o una previsión de precio. Las propuestas futuras de Faraday se identifican aparte de estas reglas.
+
+## ¿Está limitada la oferta de Blocknet a 100 millones de BNT?
+
+<Answer>
+El calendario publicado de Blocknet apunta a unos 100 millones de BNT antes de una cola continua. El objetivo sirve de referencia para el progreso, no de máximo absoluto. Las reglas actuales emiten 2 BNT por bloque desde la altura 414.720, así que la cantidad acumulada sigue aumentando con nuevos bloques.
+</Answer>
+
+## Empieza por lo que mide la cifra de oferta
+
+La emisión crea BNT nuevos mediante recompensas de bloque. La oferta emitida acumulada suma esas recompensas hasta una altura concreta de la cadena. El [cálculo de oferta publicado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/miner.go#L383-L431) comienza en la altura 1 porque el génesis no contiene recompensa. Una lectura vinculada a una altura responde, por tanto, cuánto ha emitido el calendario hasta ese bloque.
+
+Es una medida distinta del saldo de un monedero. Este reconoce las salidas de sus claves y separa los fondos disponibles de los pendientes. La emisión acumulada no comprueba si cada titular conserva acceso a sus claves ni cuánto BNT cambia de manos activamente. Conserva la etiqueta y el alcance al comparar cifras de distintas páginas.
+
+La [guía del lanzamiento justo](https://bntpool.com/blog/blocknet-fair-launch/) explica cómo empezó la distribución. Aquí interesa la contabilidad posterior: cada bloque aceptado hace avanzar la altura y añade su emisión programada al total acumulado.
+
+[![Emisión de Blocknet según las reglas publicadas: 1 representa recompensas decrecientes por etapas de altura; 2 representa la cola continua de 2 BNT por bloque.](/assets/blog/blocknet-supply.svg)](/assets/blog/blocknet-supply.svg)
+
+**1** representa las etapas de recompensa decreciente; **2**, la cola continua. Las barras ilustran el concepto de las reglas publicadas, no una oferta medida ni fechas exactas. Ambas partes describen BNT recién emitidos.
+
+## ¿Cuándo alcanza Blocknet la emisión de cola?
+
+El intervalo objetivo actual es de cinco minutos. El código agrupa las alturas en meses de 8.640 bloques, usando un mes de 30 días a ese ritmo. Dentro de cada mes del calendario, la recompensa por bloque permanece constante. Después disminuye para el siguiente según el cálculo de decaimiento publicado. Son periodos basados en altura, no meses con nombre del calendario civil.
+
+Tras 48 meses del calendario, la cola empieza en la altura 414.720. Desde ahí, la regla publicada emplea 2 BNT por bloque. El [calendario de recompensas](https://bntpool.com/blog/blocknet-block-reward-schedule/) contiene la tabla mensual detallada y la suma exacta anterior a la cola; permite consultar una etapa sin convertir esta guía de oferta en otra calculadora de recompensas.
+
+La cifra aproximada de 100 millones resume la escala de distribución inicial. También es la referencia del indicador de progreso de emisión del código. Llegar al final de esa medida no desactiva la cola. Lee el porcentaje junto con su objetivo indicado, sin interpretar una barra completa como que no puede emitirse más BNT.
+
+La recompensa continua ofrece a los mineros BNT emitidos por el protocolo por producir bloques aceptados tras las etapas iniciales. Mantiene un incentivo para aportar trabajo asociado a cada bloque nuevo. La [guía de prueba de trabajo](/es/blog/how-crypto-mining-works/) explica la relación entre encontrar bloques válidos y recibir sus recompensas programadas.
+
+## Qué significa la cola para el crecimiento de la oferta
+
+Con el objetivo actual de cinco minutos, un día contiene 288 intervalos objetivo. Al multiplicarlos por la recompensa de cola publicada resultan 576 BNT diarios o 210.240 BNT en 365 días. Son proyecciones aritméticas del intervalo y la recompensa. Los bloques reales llegan a tiempos variables: el cálculo describe el ritmo objetivo, no un recuento diario garantizado.
+
+La cola añade una cantidad fija por bloque mientras crece el total acumulado. Para expresar el crecimiento como porcentaje, elige un periodo, suma la emisión nueva, divide por la oferta inicial y multiplica por 100. Indica qué medida de oferta usas. Si el total inicial es mayor y la cantidad añadida no cambia, el porcentaje disminuye.
+
+Aquí inflación significa crecimiento de la oferta de monedas. No predice el poder adquisitivo de BNT ni el precio de los bienes. El cálculo no contiene un precio de mercado ni una cesta de consumo. Separar estas cuestiones permite comparar las reglas de emisión entre periodos sin añadir afirmaciones sin respaldo sobre lo que puede comprar un titular.
+
+## Por qué transferencias, comisiones y madurez son distintos
+
+Un pago gasta fondos existentes y crea salidas para el destinatario y el cambio. Esos nuevos registros representan una reasignación de valor existente, no otra emisión del importe pagado. La comisión también procede de fondos existentes; añadirla no crea BNT. El [recorrido de una transacción](/es/blog/blocknet-transaction-explained/) explica entradas, salidas, cambio y comisión.
+
+Lo mismo sucede al minar en un pool. La recompensa crea las monedas programadas; un pago posterior distribuye fondos según la contabilidad del pool. Esperar la madurez afecta a la disponibilidad para gastar, y el pago afecta a la propiedad. Cuenta la emisión del bloque una sola vez al analizar la oferta. La [guía de pagos PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) explica el reparto del trabajo y los pagos.
+
+## Lee las cifras con su altura y versión de reglas
+
+Al revisar una afirmación de oferta, conserva tres datos: altura de la cadena, significado de la cifra y versión de reglas. La oferta emitida, el progreso porcentual y el saldo gastable de un monedero pueden ser correctos y responder a preguntas diferentes. La [guía del explorador](/es/blog/blocknet-explorer-guide/) explica cómo consultar información pública de bloques y red.
+
+Para proyecciones, acompaña las hipótesis de recompensa con el intervalo objetivo. Si cualquiera cambia, recalcula la cifra temporal en vez de copiar una estimación diaria antigua. La [guía de política monetaria de Faraday](/es/blog/blocknet-faraday-monetary-policy/) aborda los cambios de tiempo y recompensa propuestos y separa los planes anunciados del calendario publicado.
+
+Así puedes interpretar la oferta coherentemente: las recompensas añaden BNT, la cola mantiene la emisión y las transferencias mueven valor existente. Para participar en la producción de bloques, la [guía de minería con seine](/es/blog/how-to-mine-blocknet/) explica la instalación, y bntpool.com ofrece minería en pool y seguimiento de pagos.
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Usa seine con bntpool.com para aportar trabajo de minería y seguir los pagos enviados a tu monedero." />

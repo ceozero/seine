@@ -65,6 +65,3 @@ Offline benchmarks run without a daemon or pool:
 ```bash
 ./seine --bench --bench-kind backend --backend cpu --threads 1 --bench-secs 20 --bench-rounds 3
 ```
-
-The paired A/B harness and lab controller are documented in
-[benchmarks.md](benchmarks.md).

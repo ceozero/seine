@@ -1,6 +1,6 @@
 ---
 title: Cách đào Blocknet trên máy Mac
-description: Đào Blocknet trên Mac Apple Silicon bằng seine. Thiết lập trong Terminal, xem kết quả đo 30,9 H/s của M4 Max và biết Mac của bạn chạy được bao nhiêu luồng.
+description: "macOS: Tải seine, giải nén, nhập địa chỉ Blocknet và xác nhận share được chấp nhận trên bntpool.com. Bắt đầu bằng cài đặt tự động; hướng dẫn hiệu năng nằm sau phần thiết lập."
 tags: [Hướng dẫn đào coin, macOS, Apple Silicon, seine]
 faq:
   - q: 'Có thể đào Blocknet trên MacBook Air không?'
@@ -8,22 +8,70 @@ faq:
   - q: 'seine có dùng GPU khi đào Blocknet trên Mac không?'
     a: 'Trên Apple Silicon, seine mặc định đào bằng CPU vì đó là lựa chọn nhanh nhất. CPU và các nhân đồ họa dùng chung bộ nhớ hợp nhất, còn Proof of Work Argon2id của Blocknet phụ thuộc vào băng thông bộ nhớ. Trên M4 Max, đào chỉ bằng CPU cho hashrate cao nhất, nên seine tự động dùng cách này.'
   - q: 'Mac cần bao nhiêu bộ nhớ để đào Blocknet?'
-    a: 'Mỗi luồng đào xử lý một vùng nhớ 2 GiB, nên hãy tính khoảng 2 GB cho mỗi luồng. Mac 16 GB chạy được tối đa bảy luồng, Mac 32 GB tối đa 15 và Mac 64 GB tối đa 30. seine tính bộ nhớ còn trống và đồng thời khớp số luồng với số nhân của bạn.'
+    a: 'Mỗi luồng đào xử lý một vùng nhớ 2 GiB, nên hãy tính khoảng 2 GB cho mỗi luồng. Mac 16 GB chạy được tối đa bảy luồng, Mac 32 GB tối đa 15 và Mac 64 GB tối đa 31. seine tính bộ nhớ còn trống và đồng thời khớp số luồng với số nhân của bạn.'
   - q: 'Có thể đào Blocknet trên Mac Intel không?'
     a: 'Có. seine phát hành một gói riêng cho Mac Intel, seine-macos-x86_64.tar.gz, và các bước giống hệt trên Apple Silicon. Tải về, giải nén trong Terminal, chạy ./seine rồi dán địa chỉ Blocknet hoặc @name của bạn. seine chọn số luồng theo bộ nhớ của bạn và mặc định bắt đầu đào trên bntpool.com.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: reviewed
 ---
-
-Bài hướng dẫn này chỉ cho bạn cách đào Blocknet trên máy Mac Apple Silicon bằng **seine**: vì sao chip dòng M phù hợp với Proof of Work của Blocknet, M4 Max đo được bao nhiêu, bộ nhớ của Mac chạy được bao nhiêu luồng, và các bước cụ thể trong Terminal để bắt đầu đào trên bntpool.com.
 
 ## Có thể đào Blocknet trên Mac không?
 
 <Answer>
-Có. Mac Apple Silicon là máy đào Blocknet mạnh vì bộ nhớ hợp nhất mang lại nhiều băng thông cho Proof of Work Argon2id vốn memory-hard (tốn nhiều bộ nhớ). Tải `seine-macos-aarch64.tar.gz`, giải nén trong Terminal, chạy `./seine` rồi dán địa chỉ của bạn. Một chiếc M4 Max 48 GB đo được 30,9 H/s chỉ với CPU.
+Tải seine, giải nén, nhập địa chỉ Blocknet và xác nhận share được chấp nhận trên bntpool.com. Bắt đầu bằng cài đặt tự động; hướng dẫn hiệu năng nằm sau phần thiết lập.
 </Answer>
 
-seine tự lo phần thiết lập riêng cho Mac. Nó đào bằng CPU, ưu tiên xếp luồng lên các nhân hiệu năng và chọn số luồng theo bộ nhớ của bạn, nên với hầu hết mọi người, chỉ cần `./seine` là đủ.
+## Bước 1: tải đúng phiên bản
+
+Trong menu Apple → Giới thiệu về máy Mac này, kiểm tra chip hoặc bộ xử lý. Tại [mục tải xuống](/vi/#download), chọn `seine-macos-aarch64.tar.gz` cho Apple Silicon hoặc `seine-macos-x86_64.tar.gz` cho Intel.
+
+## Bước 2: giải nén và chạy
+
+Mở Terminal. Các lệnh này giả định tệp nén nằm trong thư mục Downloads; hãy dùng đường dẫn thực tế nếu khác. Trên máy Mac Intel, thay `seine-macos-aarch64.tar.gz` bằng `seine-macos-x86_64.tar.gz`. Chúng giải nén seine vào thư mục cá nhân rồi chạy chương trình:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## Bước 3: nhập địa chỉ ví
+
+Dán địa chỉ nhận Blocknet công khai hoặc `@name` đã đăng ký, rồi nhấn Enter để chấp nhận `stratum+tcp://bntpool.com:3333`. [Hướng dẫn ví](/vi/blog/blocknet-wallet-for-mining/) chỉ nơi tìm địa chỉ. Seine không cần cụm từ khôi phục hay khóa chi tiêu của bạn. Chương trình tự động đặt tên worker trong pool.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn." loading="lazy" />
+  </picture>
+  <figcaption>Lời nhắc nhập địa chỉ và pool ở lần chạy đầu. Thay ví dụ bằng địa chỉ hoặc tên đã đăng ký của bạn.</figcaption>
+</figure>
+
+Seine tự chọn luồng và tinh chỉnh hiệu năng. Ở những lần chạy sau, hãy mở từ cùng thư mục để dùng lại `seine-data/seine.config.json`.
+
+## Bước 4: kiểm tra share được chấp nhận
+
+Tìm hashrate và bộ đếm **Accepted** tăng dần trên [bảng điều khiển](/vi/blog/seine-dashboard-explained/). Share được chấp nhận xác nhận pool đã nhận công việc của bạn; điều đó không có nghĩa là đã thanh toán. Nhấn `q` hoặc `Ctrl+C` để dừng.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Bảng điều khiển thật của seine với dữ liệu minh họa. Tìm Accepted; các số liệu này không phải kết quả benchmark.</figcaption>
+</figure>
+
+Mở [Thống kê của tôi](https://bntpool.com/stats?lang=vi) và nhập cùng địa chỉ hoặc tên đã đăng ký để tìm worker, share và số dư.
+
+## Nếu macOS chặn lần chạy đầu
+
+Bản macOS được ký ad-hoc. Nếu macOS chặn lần chạy đầu tiên, hãy mở System Settings, vào Privacy & Security và cho phép `seine`. Bạn cũng có thể xóa cờ tải xuống từ Terminal rồi chạy lại:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Vì sao Mac Apple Silicon đào Blocknet tốt?
 
@@ -66,43 +114,6 @@ Hai yếu tố đưa con số cuối cùng về mức phù hợp với Mac của
 
 Bạn không cần tự tính bất kỳ điều gì ở đây. seine chọn số luồng khi khởi động và tiếp tục thử các số luồng lân cận trong lúc đào.
 
-## Thiết lập từng bước trên macOS
-
-### Bước 1: tạo địa chỉ Blocknet
-
-Cài ví Blocknet chính thức, có thể là [ví dòng lệnh](https://github.com/blocknetprivacy/blocknet/releases/latest) hoặc [ví desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), rồi sao chép địa chỉ của bạn. Nếu bạn có tên ngắn Blocknet ID từ [blocknet.id](https://blocknet.id), bạn có thể đào về `@name` thay cho địa chỉ.
-
-### Bước 2: tải seine cho Apple Silicon
-
-Từ [mục tải xuống](/vi/#download), tải `seine-macos-aarch64.tar.gz`. Gói này chứa chương trình `seine`, tệp readme và giấy phép, cùng tệp `SHA256SUMS.txt` để kiểm tra bản tải về.
-
-### Bước 3: giải nén trong Terminal
-
-Mở Terminal (trong Applications, rồi Utilities) và chạy các lệnh sau. Chúng tạo một thư mục `seine` trong thư mục người dùng của bạn và giải nén gói vào đó:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### Bước 4: chạy seine
-
-```sh
-./seine
-```
-
-Bản macOS được ký ad-hoc. Nếu macOS chặn lần chạy đầu tiên, hãy mở System Settings, vào Privacy & Security và cho phép `seine`. Bạn cũng có thể xóa cờ tải xuống từ Terminal rồi chạy lại:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### Bước 5: nhập địa chỉ và bắt đầu đào
-
-seine hỏi địa chỉ nhận thanh toán hoặc `@shortname` của bạn, rồi hỏi pool. Nhấn Return để chấp nhận pool mặc định, `stratum+tcp://bntpool.com:3333`. Sau đó [bảng điều khiển](/vi/blog/seine-dashboard-explained/) hiển thị hashrate và những share đầu tiên được chấp nhận. Pool bntpool.com gửi số dư về địa chỉ của bạn khi đạt 0,1 BNT, và bạn có thể theo dõi trên [bntpool.com](https://bntpool.com) bằng cách tra địa chỉ của mình.
-
 ## Vì sao seine chỉ đào bằng CPU trên Mac?
 
 Trên Apple Silicon, CPU và các nhân đồ họa dùng chung một khối bộ nhớ hợp nhất. Argon2id phụ thuộc vào băng thông bộ nhớ, nên CPU và các nhân đồ họa sẽ tranh nhau cùng một băng thông. Trong thử nghiệm của seine trên M4 Max, đào chỉ bằng CPU cho hashrate cao nhất, nên seine tự động chọn cách này trên mọi máy Mac Apple Silicon. Bạn có thiết lập nhanh nhất mà không cần đặt cờ nào.
@@ -129,3 +140,5 @@ Các kết quả này mô tả Proof of Work Argon2id hiện tại của Blockne
 </Note>
 
 <CTA target="seine" title="Tải seine cho macOS" text="Bản Apple Silicon đào bằng CPU của Mac và tự động chọn số luồng." />
+
+Mở [Thống kê của tôi](https://bntpool.com/stats?lang=vi) và nhập cùng địa chỉ hoặc tên đã đăng ký để tìm worker, share và số dư.

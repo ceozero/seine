@@ -1,6 +1,6 @@
 ---
 title: Blocknet auf dem Mac minen
-description: 'Mine Blocknet mit seine auf einem Mac mit Apple Silicon: Einrichtung im Terminal, die gemessenen 30,9 H/s des M4 Max und wie viele Threads dein Mac schafft.'
+description: "macOS: Lade seine herunter, entpacke es, gib deine Blocknet-Adresse ein und prüfe akzeptierte Shares auf bntpool.com. Beginne mit den automatischen Einstellungen; Tipps zur Optimierung folgen nach der Einrichtung."
 tags: [Mining-Anleitung, macOS, Apple Silicon, seine]
 faq:
   - q: 'Kann man Blocknet auf einem MacBook Air minen?'
@@ -8,22 +8,70 @@ faq:
   - q: 'Nutzt seine beim Blocknet-Mining auf dem Mac die GPU?'
     a: 'seine mint auf Apple Silicon standardmäßig mit der CPU, weil das die schnellste Wahl ist. CPU und Grafikkerne teilen sich denselben gemeinsamen Arbeitsspeicher, und der Argon2id-Proof-of-Work von Blocknet hängt von der Speicherbandbreite ab. Auf dem M4 Max brachte reines CPU-Mining die höchste Hashrate, deshalb nutzt seine es automatisch.'
   - q: 'Wie viel Arbeitsspeicher braucht ein Mac, um Blocknet zu minen?'
-    a: 'Jeder Mining-Thread arbeitet einen 2-GiB-Speicherblock durch, rechne also mit etwa 2 GB pro Thread. Ein Mac mit 16 GB schafft bis zu sieben Threads, einer mit 32 GB bis zu 15 und einer mit 64 GB bis zu 30. seine zählt den freien Speicher und stimmt die Threads außerdem auf deine Kerne ab.'
+    a: 'Jeder Mining-Thread arbeitet einen 2-GiB-Speicherblock durch, rechne also mit etwa 2 GB pro Thread. Ein Mac mit 16 GB schafft bis zu sieben Threads, einer mit 32 GB bis zu 15 und einer mit 64 GB bis zu 31. seine zählt den freien Speicher und stimmt die Threads außerdem auf deine Kerne ab.'
   - q: 'Kann man Blocknet auf einem Intel-Mac minen?'
     a: 'Ja. seine veröffentlicht ein eigenes Archiv für Intel-Macs, seine-macos-x86_64.tar.gz, und die Schritte sind dieselben wie bei Apple Silicon. Lade es herunter, entpacke es im Terminal, starte ./seine und füge deine Blocknet-Adresse oder deinen @name ein. seine richtet die Threads nach deinem Speicher aus und mint standardmäßig auf bntpool.com.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: reviewed
 ---
-
-Diese Anleitung zeigt dir, wie du Blocknet mit **seine** auf einem Mac mit Apple Silicon minst: warum Chips der M-Serie gut zum Proof of Work von Blocknet passen, was ein M4 Max gemessen hat, wie viele Threads der Arbeitsspeicher deines Macs aufnehmen kann und mit welchen Schritten im Terminal du auf bntpool.com mit dem Mining beginnst.
 
 ## Kann man Blocknet auf dem Mac minen?
 
 <Answer>
-Ja. Macs mit Apple Silicon sind starke Blocknet-Miner, weil ihr gemeinsamer Arbeitsspeicher dem speicherintensiven Argon2id-Proof-of-Work viel Bandbreite bietet. Lade `seine-macos-aarch64.tar.gz` herunter, entpacke es im Terminal, starte `./seine` und füge deine Adresse ein. Ein M4 Max mit 48 GB erreichte allein mit der CPU 30,9 H/s.
+Lade seine herunter, entpacke es, gib deine Blocknet-Adresse ein und prüfe akzeptierte Shares auf bntpool.com. Beginne mit den automatischen Einstellungen; Tipps zur Optimierung folgen nach der Einrichtung.
 </Answer>
 
-seine erledigt die Mac-spezifische Einrichtung selbst. Es mint mit der CPU, verteilt die Threads zuerst auf die Performance-Kerne und richtet die Thread-Anzahl nach deinem Speicher aus. Den meisten reicht deshalb ein einfaches `./seine`.
+## Schritt 1: die passende Version herunterladen
+
+Prüfe unter Apple-Menü → Über diesen Mac den Chip oder Prozessor. Wähle im [Downloadbereich](/de/#download) `seine-macos-aarch64.tar.gz` für Apple Silicon oder `seine-macos-x86_64.tar.gz` für Intel.
+
+## Schritt 2: entpacken und starten
+
+Öffne Terminal. Diese Befehle setzen voraus, dass das Archiv im Ordner Downloads liegt; passe den Pfad bei Bedarf an. Ersetze auf einem Intel-Mac `seine-macos-aarch64.tar.gz` durch `seine-macos-x86_64.tar.gz`. Sie entpacken seine in deinen Benutzerordner und starten es:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## Schritt 3: deine Wallet-Adresse eingeben
+
+Füge deine öffentliche Blocknet-Empfangsadresse oder deinen registrierten `@name` ein und drücke Enter, um `stratum+tcp://bntpool.com:3333` zu übernehmen. Der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) zeigt, wo du die Adresse findest. Seine benötigt weder deine Wiederherstellungsphrase noch deine Ausgabeschlüssel. Der Pool-Worker erhält automatisch einen Namen.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen." loading="lazy" />
+  </picture>
+  <figcaption>Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen.</figcaption>
+</figure>
+
+Seine wählt die Threads und optimiert automatisch. Starte es später aus demselben Ordner, um `seine-data/seine.config.json` wiederzuverwenden.
+
+## Schritt 4: akzeptierte Shares prüfen
+
+Achte im [Dashboard](/de/blog/seine-dashboard-explained/) auf eine Hashrate und einen steigenden **Accepted**-Zähler. Ein akzeptierter Share bestätigt, dass der Pool deine Arbeit erhalten hat; er bedeutet noch keine Auszahlung. Mit `q` oder `Ctrl+C` beendest du den Miner.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark.</figcaption>
+</figure>
+
+Öffne [Meine Statistik](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben registrierten Namen ein, um deinen Worker, Shares und Kontostand zu sehen.
+
+## Wenn macOS den ersten Start blockiert
+
+Der macOS-Build ist ad hoc signiert. Blockiert macOS den ersten Start, öffne die Systemeinstellungen, gehe zu Datenschutz & Sicherheit und erlaube `seine`. Du kannst auch die Download-Markierung im Terminal entfernen und es erneut starten:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Warum minen Macs mit Apple Silicon Blocknet so gut?
 
@@ -66,43 +114,6 @@ Zwei Dinge passen die endgültige Zahl an deinen Mac an:
 
 Nichts davon musst du selbst ausrechnen. seine wählt die Thread-Anzahl beim Start und testet während des Minens weiter benachbarte Werte.
 
-## Einrichtung unter macOS Schritt für Schritt
-
-### Schritt 1: eine Blocknet-Adresse besorgen
-
-Installiere die offizielle Blocknet-Wallet, entweder die [Kommandozeilen-Wallet](https://github.com/blocknetprivacy/blocknet/releases/latest) oder die [Desktop-Wallet](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), und kopiere deine Adresse. Hast du einen Blocknet-ID-Kurznamen von [blocknet.id](https://blocknet.id), kannst du stattdessen auf `@name` minen.
-
-### Schritt 2: seine für Apple Silicon herunterladen
-
-Lade im [Download-Bereich](/de/#download) die Datei `seine-macos-aarch64.tar.gz` herunter. Sie enthält das Programm `seine`, Readme und Lizenz sowie eine Datei `SHA256SUMS.txt` zum Prüfen des Downloads.
-
-### Schritt 3: im Terminal entpacken
-
-Öffne das Terminal (unter Programme, dann Dienstprogramme) und führe diese Befehle aus. Sie legen in deinem Benutzerordner einen Ordner `seine` an und entpacken das Archiv dorthin:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### Schritt 4: seine starten
-
-```sh
-./seine
-```
-
-Der macOS-Build ist ad hoc signiert. Blockiert macOS den ersten Start, öffne die Systemeinstellungen, gehe zu Datenschutz & Sicherheit und erlaube `seine`. Du kannst auch die Download-Markierung im Terminal entfernen und es erneut starten:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### Schritt 5: Adresse eingeben und mit dem Mining beginnen
-
-seine fragt nach deiner Auszahlungsadresse oder deinem `@shortname` und danach nach einem Pool. Drücke Return, um den Standard `stratum+tcp://bntpool.com:3333` zu übernehmen. [Das Dashboard](/de/blog/seine-dashboard-explained/) zeigt dann deine Hashrate und deine ersten akzeptierten Shares. Der Pool bntpool.com sendet dein Guthaben an deine Adresse, sobald es 0,1 BNT erreicht, und auf [bntpool.com](https://bntpool.com) kannst du es verfolgen, indem du deine Adresse nachschlägst.
-
 ## Warum mint seine auf dem Mac nur mit der CPU?
 
 Auf Apple Silicon teilen sich CPU und Grafikkerne einen gemeinsamen Arbeitsspeicher. Argon2id hängt von der Speicherbandbreite ab, also würden CPU und Grafikkerne um dieselbe Bandbreite konkurrieren. In den Tests von seine auf dem M4 Max brachte reines CPU-Mining die höchste Hashrate, deshalb wählt seine es auf jedem Mac mit Apple Silicon automatisch. Du bekommst die schnellste Einrichtung, ohne ein Flag setzen zu müssen.
@@ -129,3 +140,5 @@ Diese Ergebnisse beziehen sich auf den aktuellen Argon2id-Proof-of-Work von Bloc
 </Note>
 
 <CTA target="seine" title="seine für macOS herunterladen" text="Der Build für Apple Silicon mint mit der CPU deines Macs und wählt die Thread-Anzahl automatisch." />
+
+Öffne [Meine Statistik](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben registrierten Namen ein, um deinen Worker, Shares und Kontostand zu sehen.

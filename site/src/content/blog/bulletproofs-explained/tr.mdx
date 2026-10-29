@@ -8,19 +8,19 @@ faq:
   - q: 'Bir Bulletproofs aralık kanıtı ne kadar büyüktür?'
     a: 'Tek bir 64 bitlik Bulletproof 2 × log2(64) + 9 = 21 öğe içerir. Ristretto grubunda her öğe 32 bayt kaplar, bu yüzden her kanıt 672 bayttır ve Blocknet gezgini her çıktı için tam olarak bunu gösterir. Boyut aralığın logaritmasıyla büyür, bu yüzden bit uzunluğunu iki katına çıkarmak yalnızca iki öğe ekler.'
   - q: 'Bir Blocknet işleminin tutarını kim görebilir?'
-    a: 'Yalnızca gönderen ve alıcı. Zincir her çıktı için bir Pedersen taahhüdü ve bir aralık kanıtı, ayrıca iki cüzdanın paylaştığı sırla şifrelenmiş tutarı saklar. Alıcının cüzdanı onu özel görüntüleme anahtarıyla çözer. Ağ ücreti tek açık sayıdır, böylece düğümler onu bakiye kontrolüne ekleyebilir.'
+    a: "Normal bir ödemede gönderen tutarı bilir; alıcının cüzdanı da gelen tutarı elde eder. Bilerek paylaşılan ödeme kanıtları veya görüntüleme erişimi, tutarı başkalarına açıklayabilir. Herkese açık işlem verileri ücret ve yapıyı içermeye devam eder. Coinbase ödülleri farklıdır: izin verilen tutar ve kodlaması, blok yüksekliği ile işlem verilerinden herkesçe türetilebilir."
   - q: 'Tutarlar gizliyse düğümler hiç coin yaratılmadığını nasıl bilir?'
-    a: 'Her düğüm her işlem için iki şeyi kontrol eder. Pedersen taahhütlerinin toplamı tutmalıdır, yani girdiler çıktılara ücret eklenmiş haline eşit olmalıdır; ve her çıktı, tutarının 0 ile 2^64 arasında olduğunu gösteren geçerli bir aralık kanıtı taşımalıdır. Bu ikisi birlikte, tek bir tutarı bile açığa çıkarmadan gizli enflasyonu dışarıda bırakır.'
-sourceHash: e02793933862
+    a: "Normal ödemelerde aralık kanıtları her çıktıyı 0 ile 2^64−1 arasında sınırlar; taahhüt dengesi de ücret dahil değer korunumunu denetler. Tam doğrulama ayrıca harcama yetkisini, halka bağını ve anahtar görüntülerinin yeniden kullanımını kontrol eder. Yeni arz, izin verilen blok ödülüne karşı ayrı bir coinbase denetiminden geçer. Bunlar farklı kontrollerdir; aralık kanıtı tek başına tüm işlem kurallarının sağlandığını göstermez."
+sourceHash: 3be778e9122b
 translation: draft
 ---
 
-Bulletproofs, bir kripto paranın her işlem tutarını gizlerken her düğümün yine de hiç coin yaratılmadığını kontrol etmesini sağlayan kısa sıfır bilgi aralık kanıtlarıdır. Bu rehber Pedersen taahhütlerini, gizli tutarların neden aralık kanıtlarına ihtiyaç duyduğunu, Bulletproofs'un bu kanıtları nasıl küçük tuttuğunu ve Blocknet'in onları her çıktıda nasıl kullandığını açıklar.
+Bulletproofs, gizli ödeme tutarlarını doğrulamaya yardımcı olan kısa sıfır bilgi aralık kanıtlarıdır. Bu rehber Pedersen taahhütlerini, tutarların neden sınırlandırıldığını ve Bulletproofs’un nasıl küçük kaldığını açıklar. Blocknet’te aralık kanıtları; yetkilendirme, denge, tekrarlı harcama ve coinbase kontrolleriyle birlikte çalışır. Birlikte, normal ödeme gizliliğinin para hareketi ve yeni arz doğrulamasıyla nasıl bağdaştığını gösterirler.
 
 ## Bulletproofs nedir?
 
 <Answer>
-Bulletproofs, Bünz, Bootle, Boneh, Poelstra, Wuille ve Maxwell tarafından 2018'de yayımlanan kısa sıfır bilgi kanıtlarıdır. Kripto paralarda gizli bir tutarın 0 ile 2^64 gibi geçerli bir aralıkta olduğunu, tutarı açığa çıkarmadan kanıtlarlar. Güvenilir kurulum gerektirmezler ve boyutları yalnızca aralığın logaritmasıyla büyür.
+Bulletproofs, Bünz, Bootle, Boneh, Poelstra, Wuille ve Maxwell tarafından 2018'de yayımlanan kısa sıfır bilgi kanıtlarıdır. Kripto paralarda gizli bir tutarın 0 ile 2^64−1 gibi geçerli bir aralıkta olduğunu, tutarı açığa çıkarmadan kanıtlarlar. Güvenilir kurulum gerektirmezler ve boyutları yalnızca aralığın logaritmasıyla büyür.
 </Answer>
 
 [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) makalesi 2018'de IEEE Symposium on Security and Privacy'de yayımlandı. Yazarlar onları, bir blok zincirindeki tutarların yerini taahhütlerin aldığı gizli işlemler (confidential transactions) için tasarladı. Böyle bir kanıta neden gerek olduğunu görmek için taahhütle başlayalım.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Pedersen taahhütleri toplanabilir. İki taahhüdün toplamı, tutarlarının toplamına yapılmış bir taahhüttür ve körleme faktörleri de toplanır. Bir düğüm bir işlemin girdi taahhütlerini ve çıktı taahhütleri ile ücreti toplar ve iki toplamın eşleştiğini kontrol eder; böylece hiçbir tutarı görmeden bakiyeyi doğrular.
 </Answer>
 
-İki taahhüdü toplamak `(v1 + v2)·G + (r1 + r2)·H` verir ve bu da kendi başına `v1 + v2` için bir taahhüttür. Gönderen, körleme faktörlerini girdilerin toplam körlemesi çıktılarınkine eşit olacak şekilde ayarlar. Tutarlar da dengeliyse girdi toplamı ile çıktı toplamı arasındaki fark tam olarak sıfırdır ve herhangi bir düğüm bunu doğrulayabilir.
+İki taahhüdü toplamak `(v1 + v2)·G + (r1 + r2)·H` sonucunu verir; bu da `v1 + v2` için bir taahhüttür. Gönderen, körleme çarpanlarını girdilerin toplam körlemesi çıktıların toplamına eşit olacak şekilde ayarlar. Tutarlar dengeliyse girdi toplamından çıktı taahhütlerini ve ücret taahhüdünü çıkarmak sıfır verir.
 
-Ağ ücreti, bir işlemdeki tek açık sayıdır. Düğümler onu sıfır körleme faktörlü bir taahhüde dönüştürür ve çıktılar tarafına ekler, böylece kontrol şöyle okunur: girdiler = çıktılar + ücret.
+Ağ ücreti; özet ve girdi/çıktı yapısı gibi diğer işlem verileriyle birlikte herkese açıktır. Düğümler ücreti sıfır körlemeli bir taahhüde dönüştürüp çıktı tarafına ekler. Normal ödemede korunum kontrolü girdiler = çıktılar + ücret şeklindedir.
 
 ## Gizli tutarlar neden aralık kanıtlarına ihtiyaç duyar?
 
 Taahhüt aritmetiği çok büyük bir sayıya, yaklaşık 2^252 olan eğri grubunun mertebesine göre modüler çalışır. Bu aritmetikte “negatif” bir tutar sadece çok büyük pozitif bir sayıdır. Biri 10 coin değerinde bir girdiyi harcayıp biri 11, diğeri “eksi 1” değerinde iki çıktı oluşturabilirdi. Taahhütler kusursuz biçimde dengelenir ve her gözlemciden gizlenmiş olarak yoktan 1 coin ortaya çıkardı.
 
-Aralık kanıtı bu açığı kapatır. Bir taahhüdün içindeki tutarın ne olduğunu söylemeden 0 ile 2^64 arasında olduğunu kanıtlar. Her çıktı bu şekilde sınırlandırıldığında birkaç çıktı asla grup mertebesini aşıp başa saracak kadar büyük bir sayıya ulaşamaz; böylece dengeli taahhütler dengeli tutarlar anlamına gelir.
+Aralık kanıtı bu açığı kapatır. Bir taahhüdün içindeki tutarın ne olduğunu söylemeden 0 ile 2^64−1 arasında olduğunu kanıtlar. Her çıktı bu şekilde sınırlandırıldığında birkaç çıktı asla grup mertebesini aşıp başa saracak kadar büyük bir sayıya ulaşamaz; böylece dengeli taahhütler dengeli tutarlar anlamına gelir.
 
 Daha önceki gizli işlem tasarımları, bit sayısıyla doğrusal olarak büyüyen aralık kanıtları kullanıyordu. Bulletproofs ise yalnızca logaritmayla büyür; bu da 64 bitlik bir kanıtı birkaç yüz bayta indirir.
 
@@ -74,24 +74,38 @@ Kanıt etkileşimsizdir. Canlı bir doğrulayıcının meydan okuma göndermesi 
 
 Monero, işlem boyutlarını küçültmek için Bulletproofs'u 18 Ekim 2018'deki ağ yükseltmesinde (v0.13.0 sürümü) etkinleştirdi. dalek-cryptography projesinin [Rust bulletproofs kütüphanesi](https://github.com/dalek-cryptography/bulletproofs) onları Curve25519'un Ristretto grubu üzerinde uygular ve Blocknet'in kriptografi kütüphanesi bunun üzerine kuruludur.
 
-## Blocknet her tutarı nasıl gizler?
+## Blocknet gizli ödemeleri nasıl doğrular?
 
-Blocknet'te her işlemin her çıktısı, tutar yerine bir Pedersen taahhüdü tutar ve her çıktı kendi 64 bitlik Bulletproof'unu taşır. Gizlilik, şeffaf bir modu olmayan işlem formatının bir parçasıdır, bu yüzden görünür tutarlı bir ödeme göndermenin bir yolu yoktur.
+Yayımlanmış core v0.22.0 sürümünde normal ödeme çıktıları Pedersen taahhütleri, şifrelenmiş tutarlar ve ayrı ayrı 64 bit Bulletproofs taşır. Tutarları normal herkese açık kayıtta gizlidir. Özel coinbase işlemi blok ödülünü oluşturur ve ayrı, herkesçe doğrulanabilen bir arz yoluna sahiptir.
 
-Bir düğüm bir işlemi kabul etmeden önce şunları kontrol eder:
+Normal bir ödemenin tam kriptografik doğrulaması, [yayımlanmış işlem doğrulayıcısında](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960) şu ayrı kontrolleri içerir:
 
-- **Her aralık kanıtı.** Her çıktının Bulletproof'u kendi taahhüdüne karşı doğrulanmalı ve tutarın 0 ile 2^64 arasında olduğunu kanıtlamalıdır. Kanıtlar, her kanıtı Blocknet'e bağlayan "Blocknet Range Proof" etiketli bir döküm kullanır.
-- **Bakiye.** Her girdi bir sözde çıktı (pseudo-output) taahhüdü taşır ve halka imza, bunun harcanan gerçek coinle aynı tutara taahhütte bulunduğunu, hangi halka üyesinin gerçek olduğunu açığa çıkarmadan kanıtlar. Düğüm ardından sözde çıktıların toplamının çıktılara ücret eklenmiş haline eşit olduğunu kontrol eder.
-- **Yeni coinler.** Bir bloğun ödülü açık bir programı izler; bu yüzden kazılan çıktı için düğüm, o yükseklikte beklediği taahhüdü yeniden oluşturur ve eşleştiğini kontrol eder.
+- **Yetki ve bağlama.** Her girdi zincirdeki 16 kanonik halka üyesini kullanmalıdır. RingCT sahipliği ve tutar eşitliğini kanıtlar. Doğrulayıcı ayrıca anahtar görüntüsü ile sözde çıktı taahhüdünün imzalı kanıtla eşleştiğini kontrol eder.
+- **Aralık ve denge.** Her çıktının Bulletproof kanıtı taahhüdüne karşı doğrulanır ve tutarı 0 ile 2^64−1 arasında sınırlar. Transkript "Blocknet Range Proof" etiketini kullanır. İmzalı sözde çıktıların toplamı, çıktılar ile ücretin toplamına eşit olmalıdır. Bu, korunumu denetler; yetkilendirmenin yerini tutmaz.
+- **Tekrarlı harcama.** İşlem içindeki anahtar görüntüleri birbirinden farklı olmalı ve daha önce harcanmış olarak kaydedilmemiş olmalıdır.
+
+[![Dört ayrı doğrulama görevi: 1 harcama yetkisi ve halka bağı; 2 tutar aralığı ve taahhüt dengesi; 3 anahtar görüntüsünün daha önce harcanmamış olması; 4 ayrı bir yolda izin verilen coinbase arzı.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+**1–3** numaralı kontroller normal harcamayı ilgilendirir. **4** numaralı kontrol blok ödülünü oluşturan özel işlemi ilgilendirir. Şema görevlerini ayırır; canlı bir işlemi göstermez ve blok doğrulamasının diğer bölümlerinin yerini almaz.
+
+## Ağ tekrarlı harcamayı nasıl saptar?
+
+Geçerli bir aralık kanıtı, tutarın sınırlar içinde olduğunu söyler. Sahibinin çıktıyı daha önce harcamadığını söylemez. Anahtar görüntüsü, gerçek halka üyesini belirlemeden bu ayrı ilişkilendirme kontrolünü sağlar. Doğrulama, tek işlemde yinelenen görüntüleri ve kabul edilen zincirde daha önce harcanmış görüntüleri reddeder. Görüntünün imzalı RingCT kanıtına bağlanması, bağımsız olarak değiştirilmesini önler. [Blocknet’i kim kontrol ediyor](/tr/blog/who-controls-blocknet/), bu kuralların onları uygulayan düğümlerle ilişkisini açıklar.
+
+## Cüzdan bakiyeleri okunmadan arz nasıl denetlenir?
+
+Bir bloğun coinbase işleminde harcama girdileri yoktur. [Yayımlanmış blok doğrulayıcısı](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543), yükseklik için izin verilen ödülü hesaplar ve herkesçe türetilebilen körlemeyi kullanarak beklenen taahhüdü ve kodlanmış tutarı yeniden oluşturur. İkisi de eşleşmelidir. Dolayısıyla tutar, normal ödemelerin gizli tutarlarından farklı olarak herkesçe türetilebilir.
+
+Birikimli arz, yükseklik 1’den başlayarak planlanmış ödüllerin toplanmasıyla hesaplanır; genesis bloğunda coinbase yoktur. Bu toplam özel cüzdan bakiyelerini toplayarak elde edilmez ve şu anda ne kadarının harcanabilir veya dolaşımda olduğunu belirtmez. [Arz rehberi](/tr/blog/blocknet-supply/) bu ayrımı açıklarken [işlem örneği](/tr/blog/blocknet-transaction-explained/), ödülü yeniden üretmeyen transferleri ve para üstünü ele alır.
 
 Bunu [Blocknet gezgininde](https://explorer.blocknetcrypto.com) görebilirsiniz. Bir işlem sayfası tutarlarını "hidden · Pedersen commitments" olarak listeler ve her çıktı kendi taahhüdünü, şifreli bir memo'yu ve "672 bytes · Bulletproof" şeklinde bir aralık kanıtını gösterir; bu, yukarıdaki hesabın öngördüğü boyuttur.
 
-Alıcı yine de gerçek rakamı görür. Her çıktı, gönderenin ve alıcının cüzdanlarının paylaştığı sırla şifrelenmiş tutarı taşır ve alıcının cüzdanı onu özel görüntüleme anahtarıyla çözer. Tutar ödemedeki iki kişiye görünür, başka hiç kimseye görünmez.
+Normal ödemelerde alıcının cüzdanı kendi çıktılarını tanır ve özel görüntüleme bilgileriyle şifrelenmiş tutarlarını elde eder. Gönderen girdiği tutarı bilir. Bilerek paylaşılan ödeme kanıtları veya görüntüleme erişimi başkalarına ek bilgi verebilir. Bu açıklama tercihleri ağın taahhüt ve kanıt kontrollerini değiştirmez.
 
-Gizli tutarlar Blocknet'in diğer katmanlarıyla birlikte çalışır: 16 çıktı üzerinde [halka imzalar](/tr/blog/ring-signatures-explained/) göndereni, [tek kullanımlık gizli adresler](/tr/blog/stealth-addresses-explained/) alıcıyı gizler ve [Dandelion++](/tr/blog/dandelion-plus-plus-explained/) bir işlemin ağa nereden girdiğini gizler. [Blocknet'in gizlilik özellikleri rehberi](/tr/blog/blocknet-privacy-features/) her birini ele alır.
+Normal ödemelerin gizli tutarları Blocknet’in diğer katmanlarıyla birlikte çalışır: 16 çıktı üzerindeki [halka imzaları](/tr/blog/ring-signatures-explained/) harcanan kaynağı, [tek kullanımlık gizli adresler](/tr/blog/stealth-addresses-explained/) alıcı hedefini korur; [Dandelion++](/tr/blog/dandelion-plus-plus-explained/) ise ağ kaynağının açığa çıkmasını azaltır. [Gizlilik rehberi](/tr/blog/blocknet-privacy-features/) her katmanı açıklar. Bu kontroller tam doğrulamayı anlatır; hızlı eşitleme, yayımlanmış uygulamada belirtildiği üzere bazı maliyetli imza ve aralık kanıtı kontrolleri için güvenilen tarihsel kontrol noktalarına dayanabilir.
 
 ## Kendinize ait gizli BNT edinin
 
-Gizli tutarlı coin edinmenin basit bir yolu onları kazmaktır. Blocknet, sıradan bir bilgisayarda kazabileceğiniz bellek yoğun bir [Argon2id iş kanıtı](/tr/blog/argon2id-proof-of-work-explained/) kullanır ve seine onu CPU'nuzda, varsa NVIDIA GPU'larınızla birlikte kazar ve hiçbir kurulum gerektirmeden kendini ayarlar. bntpool.com'un size gönderdiği her ödeme, bir taahhüt ve bir Bulletproof içeren gizli bir çıktı olarak gelir. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) sizi indirmeden kabul edilen share'lere birkaç dakikada ulaştırır.
+Cüzdanınıza normal BNT ödemeleri almak için havuz üzerinden madencilik yapabilirsiniz. Blocknet bellek gereksinimi yüksek [Argon2id iş kanıtını](/tr/blog/argon2id-proof-of-work-explained/) kullanır; seine, çalışmasını ayarlarken CPU’nuz ve desteklenen NVIDIA GPU’larıyla madencilik yapar. bntpool.com’un gönderdiği ödemeler, blok coinbase ödülünden ayrı olarak taahhütler ve aralık kanıtları içeren normal transferlerdir. [Madencilik rehberi](/tr/blog/how-to-mine-blocknet/) kurulumu ve kabul edilen payları anlatır.
 
-<CTA target="seine" title="seine ile gizli BNT kazın" text="seine'i indirin, adresinizi veya @name adınızı yapıştırın ve zincirdeki her tutarı gizli olarak Blocknet kazanmaya başlayın." />
+<CTA target="seine" title="seine ile BNT madenciliği yapın" text="seine’ı bntpool.com ile kullanın ve normal havuz ödemelerini kendi Blocknet cüzdanınıza alın." />

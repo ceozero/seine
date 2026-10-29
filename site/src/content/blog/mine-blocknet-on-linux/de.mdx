@@ -1,84 +1,68 @@
 ---
 title: 'Blocknet unter Linux minen'
-description: 'Richte Blocknet-Mining unter Linux mit seine ein: x86_64 oder ARM64 wählen, Archiv prüfen, glibc und NVIDIA-Bibliotheken testen und akzeptierte Shares sehen.'
+description: "Linux: Lade seine herunter, entpacke es, gib deine Blocknet-Adresse ein und prüfe akzeptierte Shares auf bntpool.com. Beginne mit den automatischen Einstellungen; Tipps zur Optimierung folgen nach der Einrichtung."
 tags: ['Mining-Anleitung', 'Linux', 'NVIDIA']
 faq:
   - q: 'Welches Linux-Archiv soll ich herunterladen?'
-    a: 'Führe uname -m im Terminal aus. Bei x86_64 wählst du das x86_64-Archiv, bei aarch64 das aarch64-Archiv. Die geprüften Linux-Binärdateien von v0.2.26 benötigen mindestens glibc 2.39. Das x86_64-Paket unterstützt CPU und NVIDIA, das ARM64-Paket ausschließlich CPU.'
+    a: "Öffne den Downloadbereich. Führe uname -m aus: Wähle seine-linux-x86_64.tar.gz für x86_64 oder seine-linux-aarch64.tar.gz für aarch64. Die Linux-Versionen benötigen glibc 2.39 oder neuer. Die x86_64-Version unterstützt CPU und NVIDIA, ARM64 unterstützt CPU-Mining."
   - q: 'Muss ich seine mit sudo starten?'
     a: 'Starte den normalen Miner als eigener Benutzer aus einem beschreibbaren Ordner. Entpacke das Archiv, erteile dem Besitzer bei Bedarf Ausführungsrechte und starte mit ./seine. Reservierte Huge Pages einzurichten ist eine separate Verwaltungsaufgabe; für den normalen Start reichen gewöhnliche Speicherseiten.'
   - q: 'Warum meldet Linux eine fehlende NVRTC-Bibliothek?'
     a: 'Das NVIDIA-Backend unter Linux benötigt einen kompatiblen Treiber und NVRTC-Laufzeitbibliotheken einschließlich der passenden Builtins-Bibliothek. Installiere sie über deine Distribution oder unterstützte NVIDIA-Pakete. Das Linux-Archiv enthält keine Windows-DLLs. Während du die GPU-Unterstützung vorbereitest, kannst du das CPU-Backend auswählen.'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-Diese Anleitung bringt seine auf einem Linux-Desktop oder -Server zum Laufen: vom passenden Archiv bis zu akzeptierten Pool-Shares. Als geprüftes Beispiel dient die offizielle Version v0.2.26. Halte deine Blocknet-Empfangsadresse bereit; der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) zeigt, wo du sie findest. Gib eine öffentliche Adresse oder einen registrierten `@name` ein, niemals eine Wiederherstellungsphrase.
 
 ## Wie startet man Blocknet-Mining unter Linux?
 
 <Answer>
-Wähle das Linux-Archiv für deinen Prozessor, prüfe seine SHA-256-Prüfsumme und entpacke es in einen beschreibbaren Ordner. Starte `./seine`, gib deine Auszahlungsadresse ein und bestätige die voreingestellte Verbindung zu bntpool.com. seine legt CPU-Threads automatisch fest und kann unter Linux x86_64 zusätzlich unterstützte NVIDIA-Karten nutzen, wenn deren Laufzeitbibliotheken installiert sind.
+Lade seine herunter, entpacke es, gib deine Blocknet-Adresse ein und prüfe akzeptierte Shares auf bntpool.com. Beginne mit den automatischen Einstellungen; Tipps zur Optimierung folgen nach der Einrichtung.
 </Answer>
 
-## Schritt 1: Architektur und glibc prüfen
+## Schritt 1: die passende Version herunterladen
 
-Öffne ein Terminal und führe diese beiden rein lesenden Prüfungen aus. Die erste ermittelt die Rechnerarchitektur, die zweite zeigt auf einem glibc-System die Version der GNU-C-Bibliothek. Sie starten kein Mining und ändern keine Computereinstellungen.
+Öffne den [Downloadbereich](/de/#download). Führe `uname -m` aus: Wähle `seine-linux-x86_64.tar.gz` für `x86_64` oder `seine-linux-aarch64.tar.gz` für `aarch64`. Die Linux-Versionen benötigen glibc 2.39 oder neuer. Die x86_64-Version unterstützt CPU und NVIDIA, ARM64 unterstützt CPU-Mining.
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="Offizielle Downloadtabelle mit Archiven für Linux und Linux ARM64" loading="lazy" />
 
-Ordne die Architektur dem Archiv in der Tabelle zu. Beide Linux-Pakete von v0.2.26 benötigen glibc 2.39 oder neuer. Prüfe die Anforderungen erneut, wenn du eine spätere Version installierst. Nutzt dein System eine andere C-Bibliothek oder eine ältere glibc, verwende eine kompatible Distributionsumgebung oder die [Anleitung zum Bauen aus dem Quellcode](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+## Schritt 2: entpacken und starten
 
-| Befehlsausgabe | Release-Archiv | Backends |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU und NVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-Jeder CPU-Mining-Thread benötigt einen Speicherblock von 2 GiB. seine wählt anhand des verfügbaren Speichers und der CPU-Ressourcen eine anfängliche Threadzahl und optimiert während des Minings weiter. Lass manuelle Thread- und Kernel-Vorgaben beim ersten Start weg; stelle zuerst eine funktionierende Verbindung her, bevor du Leistungseinstellungen änderst.
-
-## Schritt 2: Archiv herunterladen und prüfen
-
-Wähle Linux oder Linux ARM64 im [Downloadbereich](/de/#download). Lade von derselben [offiziellen Veröffentlichung](https://github.com/zpalmtree/seine/releases/latest) auch die separate Datei `SHA256SUMS.txt` herunter. Bewahre Archiv und Prüfsummendatei derselben Version zusammen auf. Die Beispiele verwenden x86_64; ersetze auf ARM64 in den Befehlen `seine-linux-x86_64.tar.gz` durch `seine-linux-aarch64.tar.gz`.
-
-<img src="/assets/blog/linux-download.png" alt="Offizielle Downloadtabelle mit Archiven für Linux und Linux ARM64" width="1200" height="900" loading="lazy" />
-
-Wechsle im Terminal in das Verzeichnis, in dem dein Browser die Dateien gespeichert hat, und berechne die Archiv-Prüfsumme. Das Beispiel setzt einen Ordner Downloads in deinem Home-Verzeichnis voraus; verwende deinen tatsächlichen Downloadordner, falls er anders heißt.
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-Vergleiche den vollständigen hexadezimalen Hash mit der Zeile für genau dieses Archiv in der heruntergeladenen `SHA256SUMS.txt`. Vor dem Entpacken oder Ausführen muss jede Stelle übereinstimmen. Nutze dafür die separate Prüfsummendatei der Veröffentlichung: Das Archiv enthält zusätzlich ein Verzeichnis der entpackten Dateien. Eine passende Prüfsumme bestätigt die Übereinstimmung mit dem veröffentlichten Wert; beziehe beide Downloads aus der offiziellen Quelle.
-
-## Schritt 3: Entpacken und Programm prüfen
-
-Erstelle einen eigenen Ordner in deinem Home-Verzeichnis, entpacke das Archiv dort und lasse die Binärdatei ihre Hilfe ausgeben. Das Archiv von v0.2.26 enthält `./seine` direkt auf der obersten Ebene. Die Befehle legen das Programm daher unmittelbar im neuen Ordner ab. Der Hilfebefehl beendet sich, ohne Mining zu starten.
+Öffne Terminal. Diese Befehle setzen voraus, dass das Archiv im Ordner Downloads liegt; passe den Pfad bei Bedarf an. Ersetze auf ARM64 `seine-linux-x86_64.tar.gz` durch `seine-linux-aarch64.tar.gz`. Sie entpacken seine in deinen Benutzerordner und starten es:
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-Führe die Schritte unter deinem eigenen Benutzerkonto aus. `chmod u+x` gibt dem Dateibesitzer Ausführungsrechte; eine systemweite Installation ist nicht nötig. Das Präfix `./` weist die Shell an, die Datei im aktuellen Verzeichnis auszuführen. Bewahre die entpackte Dokumentation und die Lizenzdateien beim Programm auf.
-
-## Schritt 4: Adresse eingeben und verbinden
-
-Starte aus dem entpackten Ordner:
-
-```sh
 ./seine
 ```
 
-Gib deine Empfangsadresse oder deinen registrierten `@name` ein, bestätige `stratum+tcp://bntpool.com:3333` und wähle bei der Abfrage einen erkennbaren Rechnernamen. Bei späteren Starts verwendet seine `seine-data/seine.config.json` relativ zum Arbeitsverzeichnis erneut. Starte immer im selben Ordner, damit diese Einstellungen leicht zu finden sind. Die [Konfigurationsreferenz](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) beschreibt Abfragen und Datenverzeichnis.
+## Schritt 3: deine Wallet-Adresse eingeben
 
-Beobachte Hashrate und Zähler akzeptierter Shares. Öffne anschließend [My Stats](https://bntpool.com/stats) und suche dieselbe Empfangsadresse. Akzeptierte Shares bestätigen, dass Arbeit beim Pool ankommt; eine Zahlung folgt dem separaten Belohnungs- und Auszahlungsverfahren. Der [Dashboard-Leitfaden](/de/blog/seine-dashboard-explained/) erklärt die Anzeigen. Mit `q` oder `Ctrl+C` beendest du den Miner sauber.
+Füge deine öffentliche Blocknet-Empfangsadresse oder deinen registrierten `@name` ein und drücke Enter, um `stratum+tcp://bntpool.com:3333` zu übernehmen. Der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) zeigt, wo du die Adresse findest. Seine benötigt weder deine Wiederherstellungsphrase noch deine Ausgabeschlüssel. Der Pool-Worker erhält automatisch einen Namen.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen." loading="lazy" />
+  </picture>
+  <figcaption>Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen.</figcaption>
+</figure>
+
+Seine wählt die Threads und optimiert automatisch. Starte es später aus demselben Ordner, um `seine-data/seine.config.json` wiederzuverwenden.
+
+## Schritt 4: akzeptierte Shares prüfen
+
+Achte im [Dashboard](/de/blog/seine-dashboard-explained/) auf eine Hashrate und einen steigenden **Accepted**-Zähler. Ein akzeptierter Share bestätigt, dass der Pool deine Arbeit erhalten hat; er bedeutet noch keine Auszahlung. Mit `q` oder `Ctrl+C` beendest du den Miner.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark.</figcaption>
+</figure>
+
+Öffne [Meine Statistik](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben registrierten Namen ein, um deinen Worker, Shares und Kontostand zu sehen.
 
 ## Was braucht NVIDIA-Mining unter Linux?
 
@@ -94,7 +78,7 @@ Diese Auswahl nutzt bei diesem Aufruf ausschließlich die CPU. Geräteeinstellun
 
 ## Wie behebt man einen Linux-Startfehler?
 
-Richte die nächste Prüfung nach der ersten Fehlermeldung aus. Architektur- oder Laufzeitfehler treten vor akzeptierten Shares auf; andere Pool-Adressen oder Threadzahlen beheben diese Phase nicht. Behalte das geprüfte Archiv, während du Programm und Umgebung überprüfst.
+Wähle anhand der ersten Fehlermeldung die nächste Prüfung:
 
 | Meldung oder Symptom | Was prüfen? |
 |---|---|
@@ -105,4 +89,6 @@ Richte die nächste Prüfung nach der ersten Fehlermeldung aus. Architektur- ode
 
 Sobald Shares akzeptiert werden, erklärt der [Huge-Pages-Leitfaden](/de/blog/huge-pages-blocknet-mining/) die optionale Einrichtung unter Linux. Der [Server-Leitfaden](/de/blog/mine-blocknet-on-servers/) behandelt Betrieb ohne grafische Oberfläche und NUMA-Platzierung. Beides ist für diesen ersten Start nicht erforderlich; führe Änderungen einzeln durch, damit du ihre Auswirkungen auf deinen Rechner erkennst.
 
-<CTA target="seine" title="seine für Linux herunterladen" text="Wähle dein Linux-Archiv, prüfe es und verbinde dich mit bntpool.com mit automatischer CPU-Optimierung." />
+<CTA target="seine" title="seine für Linux herunterladen" text="Entpacke deinen Linux-Download, gib deine Adresse ein und starte mit automatischer CPU-Optimierung." />
+
+Öffne [Meine Statistik](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben registrierten Namen ein, um deinen Worker, Shares und Kontostand zu sehen.

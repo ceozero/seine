@@ -1,6 +1,6 @@
 ---
 title: 挖 Blocknet 用什么硬件最好
-description: "用实测结果比较 Blocknet 挖矿硬件：EPYC 9375F 达到 85.1 H/s。查看准确的 RAM、线程数、页设置和基准测试证据，了解各项结果的测量配置。"
+description: "用实测结果比较 Blocknet 挖矿硬件：EPYC 9355P 使用默认设置达到 97.1 H/s。查看准确的 RAM、线程数和基准测试证据，了解各项结果的测量配置。"
 tags: [硬件, 算力, 挖矿指南, Argon2id, NVIDIA]
 faq:
   - q: '游戏电脑能挖 Blocknet 吗？'
@@ -11,7 +11,7 @@ faq:
     a: 'seine 的 Windows 和 Linux 版本使用 NVIDIA 显卡挖矿，会在处理器之外同时使用检测到的每一张显卡。在 Windows 上已内置 CUDA 运行库，只需安装 NVIDIA 驱动。在 Linux 上需安装驱动和 NVRTC 库。首次启动时会为每张显卡调优并记住结果。'
   - q: '为什么内存带宽对挖 Blocknet 很重要？'
     a: '每次 Blocknet 哈希都要写满一整块 2 GiB 的内存，并从其中各处读回数据，远远超出任何处理器缓存的容量。因此算力取决于内存系统搬运数据的速度。内存带宽更高、内存足够运行更多线程的机器挖得最快。'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ translation: draft
 ## 挖 Blocknet 用什么硬件最好？
 
 <Answer>
-这些测量中最快的配置是达到 85.1 H/s 的 AMD EPYC 9375F：64 个挖矿线程、384 GiB RAM，以及在 Linux 上手动准备的 1 GiB 大页。Blocknet 挖矿受益于内存带宽，以及足够为每个线程提供 2 GiB 的 RAM。NVIDIA 显卡可以在 CPU 之外叠加自身哈希率。
+这些测量中最快的配置是达到 97.1 H/s 的 AMD EPYC 9355P：64 个挖矿线程、192 GiB RAM，在 Linux 上使用 seine 的默认设置。Blocknet 挖矿受益于内存带宽，以及足够为每个线程提供 2 GiB 的 RAM。NVIDIA 显卡可以在 CPU 之外叠加自身哈希率。
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Blocknet 的工作量证明是 Argon2id，每次哈希使用一块 2 GiB 的内存。这让它成为[内存密集型](/zh-hans/blog/argon2id-proof-of-work-explained/)算法：算力既取决于核心数，也同样取决于内存带宽和延迟，以及内存中能同时容纳多少个 2 GiB 内存块。下表中排名靠前的机器，共同点就是强大的内存系统。
 
 ## 新增物理服务器测量：EPYC 9355P
 
-2026年10月25日，一颗 32 核心／64 硬件线程的 EPYC 9355P，搭配十二通道 DDR5-4800、共 192 GiB 内存，测得 **68.256 H/s**，四舍五入为 **68.3 H/s**。这一固定的手动配置使用 64 个挖矿线程、streaming 计算内核、1 GiB 大页和 280 W 封装功耗上限。速率由四次各 120 秒的全新运行中完成的哈希总数除以总耗时得出，包含启动和退出时间。
+2026年10月28日，一颗 32 核心／64 线程、配备 192 GiB RAM 的 EPYC 9355P 使用 seine 的默认设置挖矿 15 分钟：不加任何参数，线程数、CPU 计算内核和内存页均自动选择。挖矿速度为 **97.1 H/s**。
 
-[页大小实验](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md)记录了准确的源码修订版本、可执行文件 SHA-256、页分配检查和测量方法。[机器可读记录](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json)保留了配置以及原始分子和分母。这是手动配置整个处理器插槽的结果；下方云服务器和 Mac 的测量各有自己的机器与设置。
+[测量记录](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)列出了源码修订版本以及运行期间每一分钟的哈希率。下方云服务器和 Mac 的测量各有自己的机器与设置。
 
 ## RTX 5090 在我们的测试中有多快？
 

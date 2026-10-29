@@ -43,11 +43,7 @@ other's results.
 Native Windows is about 9% faster than WSL2 on the same RTX 5090 because it avoids
 WSL's job-boundary latency.
 
-Blackwell / RTX 5090 tuning notes and the measured benchmark frontier:
-[NVIDIA 5090 tuning](../NVIDIA_5090_TUNING.md). Kernel history:
-[NVIDIA optimization log](../../NVIDIA_OPTIMIZATION_LOG.md).
-
 ## AMD GPUs
 
 An experimental HIP backend exists for RDNA3 (wave32) GPUs in builds with
-`--features amd`; it is never auto-selected. See [AMD bring-up](../AMD_BRINGUP.md).
+`--features amd`; it is never auto-selected.

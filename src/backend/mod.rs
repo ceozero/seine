@@ -3,6 +3,13 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+pub use blocknet_pow_spec::PowAlgorithm;
+
+/// Network whose BLAKE2b personalization the miner uses. No Faraday testnet
+/// exists yet; make this configurable alongside testnet activation rules.
+pub const MINING_POW_NETWORK: blocknet_pow_spec::PowNetwork =
+    blocknet_pow_spec::PowNetwork::Mainnet;
+
 use anyhow::{anyhow, bail, Result};
 #[cfg(any(
     feature = "nvidia",
@@ -461,6 +468,8 @@ pub struct WorkTemplate {
     pub work_id: u64,
     pub epoch: u64,
     pub header_base: Arc<[u8]>,
+    /// Chosen from the template height; backends hash with this algorithm.
+    pub pow: PowAlgorithm,
     pub target: [u8; 32],
     pub dynamic_share_target: Option<Arc<DynamicShareTarget>>,
     /// When true, the backend should stop or supersede the current assignment after the first
@@ -513,6 +522,9 @@ pub struct MiningSolution {
     pub share_binding_id: ShareBindingId,
     pub backend_id: BackendInstanceId,
     pub backend: &'static str,
+    /// When the backend produced this solution; the start of the
+    /// found → submitted latency.
+    pub found_at: std::time::Instant,
 }
 
 #[cfg(any(
@@ -1104,6 +1116,13 @@ pub trait PowBackend: Send + Sync {
         Ok(BackendCallStatus::Complete)
     }
 
+    /// Marks the work in flight as stale (the chain tip moved), so the next
+    /// cancel may abandon hashes part-way instead of finishing them. Without
+    /// it a cancel lets in-flight hashes complete, since a same-height job
+    /// refresh still accepts their shares. Backends that cannot abandon a
+    /// hash ignore it.
+    fn abandon_in_flight_work(&self) {}
+
     /// Request the backend to stop processing the current assignment.
     fn cancel_work(&self) -> Result<()> {
         Err(anyhow!(
@@ -1178,6 +1197,12 @@ pub trait PowBackend: Send + Sync {
 
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::default()
+    }
+
+    /// Whether this backend can hash templates of `pow`. The runtime
+    /// quarantines a backend handed a template it cannot hash.
+    fn supports_pow(&self, pow: PowAlgorithm) -> bool {
+        pow == PowAlgorithm::Argon2id
     }
 
     fn bench_backend(&self) -> Option<&dyn BenchBackend> {

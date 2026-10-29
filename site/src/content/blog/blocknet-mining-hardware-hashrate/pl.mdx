@@ -1,6 +1,6 @@
 ---
 title: Najlepszy sprzęt do kopania Blocknet
-description: "Porównaj sprzęt do kopania Blocknet na podstawie pomiarów: EPYC 9375F osiąga 85,1 H/s. Sprawdź RAM, wątki, ustawienia stron i dane benchmarku."
+description: "Porównaj sprzęt do kopania Blocknet na podstawie pomiarów: EPYC 9355P osiąga 97,1 H/s na ustawieniach domyślnych. Sprawdź RAM, wątki i dane benchmarku."
 tags: [Sprzęt, Hashrate, Poradnik kopania, Argon2id, NVIDIA]
 faq:
   - q: 'Czy komputer do gier może kopać Blocknet?'
@@ -11,7 +11,7 @@ faq:
     a: 'W wersjach dla systemów Windows i Linux seine kopie na kartach graficznych NVIDIA, używając każdej wykrytej karty razem z procesorem. W systemie Windows środowisko uruchomieniowe CUDA jest dołączone, więc potrzebujesz tylko sterownika NVIDIA. W systemie Linux zainstaluj sterownik i biblioteki NVRTC. Przy pierwszym uruchomieniu seine dostraja każdą kartę i zapamiętuje wynik.'
   - q: 'Dlaczego przepustowość pamięci ma znaczenie przy kopaniu Blocknet?'
     a: 'Każdy hash Blocknet zapisuje pełny blok pamięci 2 GiB i odczytuje dane z całego tego obszaru, znacznie więcej, niż mieści jakakolwiek pamięć podręczna procesora. Hashrate zależy więc od tego, jak szybko system pamięci przesyła dane. Najszybciej kopią komputery z większą przepustowością pamięci i wystarczającą ilością RAM na wiele wątków.'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ Ten poradnik pokazuje, które komputery kopią Blocknet najszybciej z seine, ile
 ## Jaki jest najlepszy sprzęt do kopania Blocknet?
 
 <Answer>
-Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9375F osiągający 85,1 H/s: 64 wątki kopania, 384 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie. Kopanie Blocknet korzysta z przepustowości pamięci i wystarczającej ilości RAM na 2 GiB na wątek. Karty NVIDIA mogą dodawać swoją moc obliczeniową do CPU.
+Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9355P osiągający 97,1 H/s: 64 wątki kopania i 192 GiB RAM w Linuksie przy domyślnych ustawieniach seine. Kopanie Blocknet korzysta z przepustowości pamięci i wystarczającej ilości RAM na 2 GiB na wątek. Karty NVIDIA mogą dodawać swoją moc obliczeniową do CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Proof of work Blocknet to Argon2id z blokiem pamięci 2 GiB na każdy hash. To sprawia, że jest [wymagający dużo pamięci](/pl/blog/argon2id-proof-of-work-explained/): hashrate zależy w takim samym stopniu od przepustowości i opóźnień pamięci, jak od liczby rdzeni, a także od tego, ile takich bloków 2 GiB mieści się naraz w RAM. Mocny system pamięci to cecha wspólna najlepszych komputerów z poniższej tabeli.
 
 ## Nowy pomiar na serwerze fizycznym: EPYC 9355P
 
-25 października 2026 r. EPYC 9355P z 32 rdzeniami i 64 wątkami oraz 192 GiB pamięci w dwunastu kanałach DDR5-4800 osiągnął **68,256 H/s**, po zaokrągleniu **68,3 H/s**. Ta stała konfiguracja ręczna korzystała z 64 wątków kopania, kernela streaming, stron huge pages o rozmiarze 1 GiB i limitu mocy pakietu procesora 280 W. Wynik to łączna liczba ukończonych hashy podzielona przez całkowity czas czterech nowych uruchomień po 120 sekund, z uwzględnieniem rozruchu i zamykania.
+28 października 2026 r. EPYC 9355P z 32 rdzeniami i 64 wątkami oraz 192 GiB RAM kopał przez 15 minut na domyślnych ustawieniach seine: bez flag, z automatycznie wybraną liczbą wątków, kernelem CPU i stronami pamięci. Osiągnął **97,1 H/s**.
 
-[Eksperyment z rozmiarem stron](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) dokumentuje dokładną rewizję kodu źródłowego, SHA-256 pliku wykonywalnego, kontrole alokacji stron i metodę pomiaru. [Rekordy w formacie do odczytu maszynowego](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) zachowują konfigurację oraz surowe liczniki i mianowniki. Jest to cały procesor w jednym gnieździe skonfigurowany ręcznie; poniższe pomiary chmurowe i Mac opisują własne maszyny i ustawienia.
+[Zapis pomiaru](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md) podaje rewizję kodu źródłowego i moc obliczeniową dla każdej minuty przebiegu. Poniższe pomiary chmurowe i Mac opisują własne maszyny i ustawienia.
 
 ## Jak szybka była RTX 5090 w naszym teście?
 

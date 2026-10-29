@@ -1,6 +1,6 @@
 ---
 title: Como minerar Blocknet no Mac
-description: Minere Blocknet em um Mac com Apple Silicon usando o seine. Configure no Terminal, veja os 30,9 H/s medidos no M4 Max e quantas threads seu Mac consegue rodar.
+description: "macOS: Baixe o seine, extraia os arquivos, informe seu endereço Blocknet e confirme as shares aceitas no bntpool.com. Comece com os ajustes automáticos; as dicas de desempenho vêm depois da configuração."
 tags: [Guia de mineração, macOS, Apple Silicon, seine]
 faq:
   - q: 'Dá para minerar Blocknet em um MacBook Air?'
@@ -8,22 +8,70 @@ faq:
   - q: 'O seine usa a GPU para minerar Blocknet no Mac?'
     a: 'No Apple Silicon, o seine minera na CPU por padrão, porque essa é a opção mais rápida. A CPU e os núcleos gráficos compartilham a mesma memória unificada, e a prova de trabalho Argon2id do Blocknet depende da largura de banda da memória. No M4 Max, minerar só na CPU deu o maior hashrate, então o seine usa esse modo automaticamente.'
   - q: 'Quanta memória um Mac precisa para minerar Blocknet?'
-    a: 'Cada thread de mineração percorre um bloco de 2 GiB de memória, então conte com cerca de 2 GB por thread. Um Mac de 16 GB comporta até sete threads, um de 32 GB até 15 e um de 64 GB até 30. O seine conta a memória livre e também ajusta as threads aos seus núcleos.'
+    a: 'Cada thread de mineração percorre um bloco de 2 GiB de memória, então conte com cerca de 2 GB por thread. Um Mac de 16 GB comporta até sete threads, um de 32 GB até 15 e um de 64 GB até 31. O seine conta a memória livre e também ajusta as threads aos seus núcleos.'
   - q: 'Dá para minerar Blocknet em um Mac com Intel?'
     a: 'Sim. O seine publica um arquivo separado para Macs com Intel, o seine-macos-x86_64.tar.gz, e os passos são os mesmos do Apple Silicon. Baixe, extraia no Terminal, rode ./seine e cole seu endereço Blocknet ou @name. O seine dimensiona as threads de acordo com a sua memória e começa a minerar no bntpool.com por padrão.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: reviewed
 ---
-
-Este guia mostra como minerar Blocknet em um Mac com Apple Silicon usando o **seine**: por que os chips da série M combinam com a prova de trabalho do Blocknet, quanto um M4 Max mediu, quantas threads a memória do seu Mac comporta e os passos exatos no Terminal para começar a minerar no bntpool.com.
 
 ## Dá para minerar Blocknet no Mac?
 
 <Answer>
-Sim. Macs com Apple Silicon são ótimos mineradores de Blocknet porque a memória unificada dá bastante largura de banda à prova de trabalho Argon2id, que usa memória de forma intensiva. Baixe o `seine-macos-aarch64.tar.gz`, extraia no Terminal, rode `./seine` e cole seu endereço. Um M4 Max de 48 GB mediu 30,9 H/s só com a CPU.
+Baixe o seine, extraia os arquivos, informe seu endereço Blocknet e confirme as shares aceitas no bntpool.com. Comece com os ajustes automáticos; as dicas de desempenho vêm depois da configuração.
 </Answer>
 
-O seine cuida sozinho da configuração específica do Mac. Ele minera na CPU, coloca suas threads primeiro nos núcleos de desempenho e dimensiona o número de threads de acordo com a sua memória, então um simples `./seine` é tudo de que a maioria das pessoas precisa.
+## Passo 1: baixe a versão certa
+
+No menu Apple → Sobre Este Mac, veja o chip ou processador. Na [seção de downloads](/pt-br/#download), escolha `seine-macos-aarch64.tar.gz` para Apple Silicon ou `seine-macos-x86_64.tar.gz` para Intel.
+
+## Passo 2: extraia e execute
+
+Abra o Terminal. Estes comandos pressupõem que o arquivo está na pasta Downloads; use o caminho real se for diferente. Em um Mac Intel, substitua `seine-macos-aarch64.tar.gz` por `seine-macos-x86_64.tar.gz`. Eles extraem o seine para sua pasta pessoal e o executam:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## Passo 3: informe o endereço da carteira
+
+Cole seu endereço público de recebimento Blocknet ou seu `@name` registrado e pressione Enter para aceitar `stratum+tcp://bntpool.com:3333`. O [guia da carteira](/pt-br/blog/blocknet-wallet-for-mining/) mostra onde encontrar o endereço. O seine não precisa da sua frase de recuperação nem das chaves de gasto. Ele atribui automaticamente um nome ao worker no pool.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Perguntas de endereço e pool no primeiro início. Substitua o exemplo pelo seu endereço ou nome registrado." loading="lazy" />
+  </picture>
+  <figcaption>Perguntas de endereço e pool no primeiro início. Substitua o exemplo pelo seu endereço ou nome registrado.</figcaption>
+</figure>
+
+O seine escolhe as threads e faz o ajuste automaticamente. Nos próximos inícios, execute-o da mesma pasta para reutilizar `seine-data/seine.config.json`.
+
+## Passo 4: confira as shares aceitas
+
+Procure uma taxa de hash e um contador **Accepted** aumentando no [painel](/pt-br/blog/seine-dashboard-explained/). Uma share aceita confirma que o pool recebeu seu trabalho; não significa que já houve um pagamento. Pressione `q` ou `Ctrl+C` para parar.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Painel real do seine com dados de exemplo. Procure Accepted; estes números não são um benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Painel real do seine com dados de exemplo. Procure Accepted; estes números não são um benchmark.</figcaption>
+</figure>
+
+Abra [Minhas estatísticas](https://bntpool.com/stats?lang=pt-br) e informe o mesmo endereço ou nome registrado para encontrar seu worker, shares e saldo.
+
+## Se o macOS bloquear a primeira execução
+
+A versão para macOS tem assinatura ad hoc. Se o macOS bloquear a primeira execução, abra os Ajustes do Sistema, vá em Privacidade e Segurança e permita o `seine`. Você também pode remover a marca de download pelo Terminal e rodar de novo:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## Por que Macs com Apple Silicon mineram bem Blocknet?
 
@@ -66,43 +114,6 @@ Duas coisas levam o número final ao ajuste certo para o seu Mac:
 
 Você não precisa calcular nada disso. O seine escolhe o número de threads ao iniciar e continua testando números próximos enquanto minera.
 
-## Configuração passo a passo no macOS
-
-### Passo 1: tenha um endereço Blocknet
-
-Instale a carteira oficial do Blocknet, seja a [carteira de linha de comando](https://github.com/blocknetprivacy/blocknet/releases/latest) ou a [carteira para desktop](https://github.com/blocknetprivacy/blocknet-gui/releases/latest), e copie seu endereço. Se você tem um shortname (nome curto) do Blocknet ID em [blocknet.id](https://blocknet.id), pode minerar para `@name`.
-
-### Passo 2: baixe o seine para Apple Silicon
-
-Na [seção de download](/pt-br/#download), baixe o `seine-macos-aarch64.tar.gz`. Ele contém o programa `seine`, o readme e a licença, e um arquivo `SHA256SUMS.txt` para conferir o download.
-
-### Passo 3: extraia no Terminal
-
-Abra o Terminal (em Aplicativos, depois Utilitários) e rode estes comandos. Eles criam uma pasta `seine` na sua pasta pessoal e descompactam o arquivo nela:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### Passo 4: rode o seine
-
-```sh
-./seine
-```
-
-A versão para macOS tem assinatura ad hoc. Se o macOS bloquear a primeira execução, abra os Ajustes do Sistema, vá em Privacidade e Segurança e permita o `seine`. Você também pode remover a marca de download pelo Terminal e rodar de novo:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### Passo 5: digite seu endereço e comece a minerar
-
-O seine pede seu endereço de pagamento ou `@shortname` e, depois, um pool. Pressione Return para aceitar o padrão, `stratum+tcp://bntpool.com:3333`. [O painel](/pt-br/blog/seine-dashboard-explained/) então mostra seu hashrate e seus primeiros shares aceitos. O pool bntpool.com envia seu saldo para o seu endereço quando ele chega a 0,1 BNT, e você pode acompanhá-lo no [bntpool.com](https://bntpool.com) pesquisando seu endereço.
-
 ## Por que o seine minera só na CPU no Mac?
 
 No Apple Silicon, a CPU e os núcleos gráficos compartilham um único pool de memória unificada. O Argon2id depende da largura de banda da memória, então a CPU e os núcleos gráficos disputariam a mesma largura de banda. Nos testes do seine no M4 Max, minerar só na CPU deu o maior hashrate, por isso o seine escolhe esse modo automaticamente em todo Mac com Apple Silicon. Você tem a configuração mais rápida sem nenhuma flag para definir.
@@ -129,3 +140,5 @@ Esses resultados se referem à prova de trabalho Argon2id atual do Blocknet. O B
 </Note>
 
 <CTA target="seine" title="Baixe o seine para macOS" text="A versão para Apple Silicon minera na CPU do seu Mac e escolhe o número de threads automaticamente." />
+
+Abra [Minhas estatísticas](https://bntpool.com/stats?lang=pt-br) e informe o mesmo endereço ou nome registrado para encontrar seu worker, shares e saldo.

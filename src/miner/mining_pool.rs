@@ -16,12 +16,13 @@ use crate::config::{Config, WorkAllocation};
 use crate::daemon_api::{is_unauthorized_error, ApiClient};
 use crate::dev_fee::{DevFeeTracker, DEV_ADDRESS};
 use crate::pool::{
-    PoolClient, PoolEvent, PoolJob, PoolSubmitAck, PoolSubmitRetry,
+    PoolClient, PoolEvent, PoolJob, PoolSubmitAck, PoolSubmitRetry, SubmitTiming,
     POOL_NOTIFICATION_MINER_BLOCK_FOUND, POOL_NOTIFICATION_POOL_BLOCK_SOLVED,
 };
 use crate::types::{decode_hex, difficulty_to_target, parse_target};
 
 use super::auth::{refresh_api_token_from_cookie, TokenRefreshOutcome};
+use super::block_latency;
 use super::mining::MiningRuntimeBackends;
 use super::mining_tui::{
     init_tui_display, render_tui_now, set_tui_dev_fee_active, set_tui_pending_nvidia,
@@ -42,6 +43,10 @@ const POOL_WAIT_POLL: Duration = Duration::from_millis(200);
 const POOL_EVENT_IDLE_SLEEP: Duration = Duration::from_millis(5);
 const POOL_JOB_STOP_AT_HORIZON: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 const POOL_MAX_INFLIGHT_SUBMITS: usize = 16;
+// A job change cannot interrupt a CPU hash, so the hash in flight finishes on the
+// replaced job. bntpool accepts work on a superseded assignment for 8 s
+// (stale_submit_grace); submit it under the replaced job id for 5 s, leaving margin.
+const REPLACED_JOB_SUBMIT_WINDOW: Duration = Duration::from_secs(5);
 const POOL_MAX_DEFERRED_SUBMITS: usize = 4096;
 const POOL_SUBMIT_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 const POOL_SUBMIT_ACK_WARN_THRESHOLD: usize = 4;
@@ -147,6 +152,9 @@ struct ActivePoolJob {
     share_bindings: HashMap<ShareBindingId, PoolShareBinding>,
     next_nonce: u64,
     dispatch_nonce: u64,
+    dispatch_exhausted: bool,
+    range_completed: bool,
+    refill_requested: bool,
     epoch: u64,
     height: String,
     round_start: Instant,
@@ -159,6 +167,13 @@ struct ActivePoolJob {
     recent_stale_submit_acks: VecDeque<Instant>,
     job_received_at: Instant,
     last_assignment_timing: Option<PoolAssignmentTiming>,
+    /// Job received → backends assigned, reported on the next submit.
+    pending_job_switch: Option<Duration>,
+    /// When this job stopped being mined (replaced, or parked for a fee round).
+    retired_at: Option<Instant>,
+    /// The job this one replaced, kept so hashes in flight at the switch can
+    /// still be submitted within `REPLACED_JOB_SUBMIT_WINDOW`.
+    replaced: Option<Box<ActivePoolJob>>,
 }
 
 #[derive(Debug, Clone)]
@@ -273,6 +288,9 @@ impl ActivePoolJob {
             share_bindings,
             next_nonce,
             dispatch_nonce,
+            dispatch_exhausted: false,
+            range_completed: false,
+            refill_requested: false,
             job,
             epoch,
             round_start: now,
@@ -285,7 +303,17 @@ impl ActivePoolJob {
             recent_stale_submit_acks: VecDeque::new(),
             job_received_at: now,
             last_assignment_timing: None,
+            pending_job_switch: None,
+            retired_at: None,
+            replaced: None,
         }
+    }
+
+    fn accepts_late_solution(&self, epoch: u64) -> bool {
+        self.epoch == epoch
+            && self
+                .retired_at
+                .is_some_and(|at| at.elapsed() <= REPLACED_JOB_SUBMIT_WINDOW)
     }
 
     fn has_share_binding_job_id(&self, job_id: &str) -> bool {
@@ -352,6 +380,7 @@ fn rebind_active_pool_job(
     active_job.share_difficulty = job.difficulty;
     active_job.height = job.height.to_string();
     active_job.job_received_at = now;
+    active_job.refill_requested = false;
     active_job.register_share_binding(job.job_id.clone(), target);
     active_job.job = job.clone();
 
@@ -434,7 +463,24 @@ enum PoolShareSubmitOutcome {
 }
 
 fn should_resume_pool_assignment(job: &ActivePoolJob, has_pending_work: bool) -> bool {
-    !has_pending_work && job.next_nonce <= job.job.nonce_end
+    !has_pending_work && !job.range_completed && job.next_nonce <= job.job.nonce_end
+}
+
+fn settle_idle_pool_assignment(job: &mut ActivePoolJob, pending_work: bool, events_empty: bool) {
+    if pending_work || !events_empty {
+        return;
+    }
+    // Retire the reserved span, not just the prefix up to the last solution.
+    // A completed window can have no solutions at all. Never hash it again.
+    job.next_nonce = job.next_nonce.max(job.dispatch_nonce);
+    job.range_completed = job.dispatch_exhausted;
+}
+
+fn should_refill_pool_job(job: &ActivePoolJob) -> bool {
+    job.range_completed
+        && !job.refill_requested
+        && job.pending_submit_nonces.is_empty()
+        && job.deferred_submits.is_empty()
 }
 
 fn advance_pool_nonce_cursor(job: &mut ActivePoolJob, solved_nonce: u64) {
@@ -530,6 +576,7 @@ fn maybe_log_pool_submit_timing(
         .submitted_at
         .saturating_duration_since(pending_submit.found_at);
     let submit_to_ack = acknowledged_at.saturating_duration_since(pending_submit.submitted_at);
+    block_latency::record(block_latency::POOL_SUBMIT_TO_ACK, submit_to_ack);
     if queued_for < POOL_TIMING_SLOW_QUEUE_THRESHOLD
         && submit_to_ack < POOL_TIMING_SLOW_ACK_THRESHOLD
     {
@@ -834,10 +881,14 @@ pub(super) fn run_pool_mining_loop(
                             );
                         }
                     }
+                    let mut parked = active_job.take();
+                    if let Some(job) = parked.as_mut() {
+                        job.retired_at = Some(Instant::now());
+                    }
                     if active_mode == PoolConnectionMode::Dev {
-                        dev_session.resume_job = active_job.take();
+                        dev_session.resume_job = parked;
                     } else {
-                        user_session.resume_job = active_job.take();
+                        user_session.resume_job = parked;
                     }
                     if let Err(err) =
                         super::cancel_backend_slots(backends, RuntimeMode::Mining, backend_executor)
@@ -883,6 +934,7 @@ pub(super) fn run_pool_mining_loop(
                     };
 
                     if let Some(mut resume) = resumed_job.take() {
+                        resume.retired_at = None;
                         if cached_job.as_ref().is_some_and(|cached| {
                             rebind_parked_pool_job(active_mode, &mut resume, cached)
                         }) {
@@ -1264,6 +1316,29 @@ pub(super) fn run_pool_mining_loop(
                             ),
                         };
                         if matches!(submit_outcome, PoolShareSubmitOutcome::StaleEpoch) {
+                            // A hash in flight across a fee-round switch belongs to the
+                            // parked session's job.
+                            for (mode, session) in [
+                                (PoolConnectionMode::User, &mut user_session),
+                                (PoolConnectionMode::Dev, &mut dev_session),
+                            ] {
+                                if session
+                                    .resume_job
+                                    .as_ref()
+                                    .is_some_and(|job| job.accepts_late_solution(solution.epoch))
+                                {
+                                    submit_pool_solution(
+                                        mode,
+                                        &session.client,
+                                        &mut session.resume_job,
+                                        &solution,
+                                        &backend_label,
+                                        &mut session.recent_submit_lookup,
+                                        &stats,
+                                    );
+                                    break;
+                                }
+                            }
                             continue;
                         }
                     }
@@ -1328,8 +1403,24 @@ pub(super) fn run_pool_mining_loop(
             if let Some(active_job) = active_job.as_mut() {
                 let has_pending_work =
                     collect_pool_backend_samples(backends, backend_executor, &stats, active_job);
+                let events_empty = backend_events.is_empty();
+                settle_idle_pool_assignment(active_job, has_pending_work, events_empty);
                 should_resume_assignment =
-                    should_resume_pool_assignment(active_job, has_pending_work);
+                    events_empty && should_resume_pool_assignment(active_job, has_pending_work);
+                if should_refill_pool_job(active_job) {
+                    active_job.refill_requested = true;
+                    match active_mode {
+                        PoolConnectionMode::Dev => dev_session
+                            .client
+                            .request_nonce_refill(&active_job.job.job_id),
+                        PoolConnectionMode::User => user_session
+                            .client
+                            .request_nonce_refill(&active_job.job.job_id),
+                    }
+                    if active_mode.is_user() {
+                        info("JOB", "nonce range finished; requesting fresh work");
+                    }
+                }
                 update_tui(
                     &mut tui,
                     &stats,
@@ -1978,6 +2069,11 @@ fn assign_pool_job(
     stats: &Stats,
     tui: &mut Option<TuiDisplay>,
 ) -> Result<()> {
+    let handled_at = Instant::now();
+    // Returning an error exits the mining loop through normal backend teardown.
+    // Merely ignoring this job would leave workers hashing the previous template.
+    blocknet_pow_spec::ensure_supported_pow(job.height, super::provisional_faraday_pow_allowed())
+        .map_err(|reason| anyhow::anyhow!(reason))?;
     let nonce_count = job.nonce_count();
     if nonce_count == 0 {
         if mode.is_user() {
@@ -1995,6 +2091,8 @@ fn assign_pool_job(
             return Ok(());
         }
     };
+    blocknet_pow_spec::validate_header_length(header_base.len())
+        .map_err(|reason| anyhow::anyhow!(reason))?;
 
     if let Some(current) = active_job.as_mut() {
         if same_pool_template_identity(current, &job, header_base.as_ref(), network_target.as_ref())
@@ -2008,6 +2106,16 @@ fn assign_pool_job(
 
     let mut cancel_latency = None;
     if cancel_prior_work {
+        // A new height makes every hash in flight worthless; a same-height
+        // refresh still takes their shares, so those finish.
+        if active_job
+            .as_ref()
+            .is_some_and(|current| current.job.height != job.height)
+        {
+            for slot in backends.iter() {
+                slot.backend.abandon_in_flight_work();
+            }
+        }
         let cancel_started = Instant::now();
         if let Err(err) =
             super::cancel_backend_slots(backends, RuntimeMode::Mining, backend_executor)
@@ -2026,13 +2134,14 @@ fn assign_pool_job(
         .difficulty
         .map(|difficulty| difficulty.to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    *active_job = Some(ActivePoolJob::new(
-        job,
-        0,
-        header_base,
-        target,
-        network_target,
-    ));
+    let replaced = active_job.take().map(|mut previous| {
+        previous.retired_at = Some(handled_at);
+        previous.replaced = None;
+        Box::new(previous)
+    });
+    let mut next_job = ActivePoolJob::new(job, 0, header_base, target, network_target);
+    next_job.replaced = replaced;
+    *active_job = Some(next_job);
 
     if mode.is_user() {
         info(
@@ -2051,7 +2160,21 @@ fn assign_pool_job(
             backend_weights,
             job,
         )?;
-        record_pool_assignment_timing(job, "new-job", cancel_latency, assign_started.elapsed());
+        let assign_latency = assign_started.elapsed();
+        record_pool_assignment_timing(job, "new-job", cancel_latency, assign_latency);
+        if let Some(cancel_latency) = cancel_latency {
+            block_latency::record(block_latency::POOL_JOB_CANCEL, cancel_latency);
+        }
+        block_latency::record(block_latency::POOL_JOB_ASSIGN, assign_latency);
+        if let Some(received_at) = job.job.received_at {
+            block_latency::record(
+                block_latency::POOL_JOB_RECEIVED_TO_HANDLED,
+                handled_at.saturating_duration_since(received_at),
+            );
+            let switch = received_at.elapsed();
+            block_latency::record(block_latency::POOL_JOB_SWITCH, switch);
+            job.pending_job_switch = Some(switch);
+        }
     }
     set_tui_state_label(tui, "working");
     render_tui_now(tui);
@@ -2069,7 +2192,11 @@ fn restart_pool_assignment(
     backend_weights: &mut BTreeMap<u64, f64>,
     active_job: &mut ActivePoolJob,
 ) -> Result<()> {
+    if active_job.range_completed {
+        return Ok(());
+    }
     active_job.dispatch_nonce = active_job.next_nonce;
+    active_job.dispatch_exhausted = false;
     assign_pool_continuation(
         cfg,
         work_id_cursor,
@@ -2119,6 +2246,7 @@ fn assign_pool_continuation(
             epoch,
             work_id,
             header_base: Arc::clone(&active_job.header_base),
+            pow: crate::backend::PowAlgorithm::for_height(active_job.job.height),
             target: active_job.target,
             dynamic_share_target: Some(Arc::clone(&active_job.dynamic_share_target)),
             pause_on_solution: false,
@@ -2134,6 +2262,7 @@ fn assign_pool_continuation(
         },
         backend_executor,
     )?;
+    active_job.dispatch_exhausted = distribution.consumed_span >= remaining_span;
     active_job.dispatch_nonce = active_job
         .dispatch_nonce
         .saturating_add(distribution.consumed_span);
@@ -2166,7 +2295,7 @@ fn maybe_hot_rebalance_active_pool_job(
     let Some(job) = active_job.as_ref() else {
         return Ok(());
     };
-    if job.next_nonce > job.job.nonce_end || backends.is_empty() {
+    if job.range_completed || job.next_nonce > job.job.nonce_end || backends.is_empty() {
         return Ok(());
     }
 
@@ -2225,12 +2354,13 @@ fn service_pool_submit_backlog(
         mode,
         job,
         stats,
-        |job_id, nonce, claimed_hash, backend_label| {
-            pool_client.submit_share_with_backend(
+        |job_id, nonce, claimed_hash, backend_label, timing| {
+            pool_client.submit_share_with_timing(
                 job_id.to_string(),
                 nonce,
                 claimed_hash,
                 Some(backend_label),
+                Some(timing),
             )
         },
         recent_submit_lookup,
@@ -2244,7 +2374,7 @@ fn service_pool_submit_backlog_with_submitter<F>(
     mut submitter: F,
     recent_submit_lookup: &mut RecentPendingSubmitLookup,
 ) where
-    F: FnMut(&str, u64, Option<[u8; 32]>, &str) -> Result<()>,
+    F: FnMut(&str, u64, Option<[u8; 32]>, &str, SubmitTiming) -> Result<()>,
 {
     let now = Instant::now();
     let timed_out = reap_timed_out_pending_submits(job, now);
@@ -2325,7 +2455,7 @@ fn flush_deferred_pool_submits<F>(
     recent_submit_lookup: &mut RecentPendingSubmitLookup,
 ) -> (u64, bool)
 where
-    F: FnMut(&str, u64, Option<[u8; 32]>, &str) -> Result<()>,
+    F: FnMut(&str, u64, Option<[u8; 32]>, &str, SubmitTiming) -> Result<()>,
 {
     let mut flushed = 0u64;
     let mut submit_failed = false;
@@ -2337,11 +2467,16 @@ where
             stats.add_dropped(1);
             continue;
         };
+        let timing = SubmitTiming {
+            found_at: deferred.found_at,
+            job_switch: job.pending_job_switch.take(),
+        };
         match submitter(
             binding.job_id.as_str(),
             deferred.nonce,
             deferred.claimed_hash,
             &deferred.backend_label,
+            timing,
         ) {
             Ok(()) => {
                 job.pending_submit_nonces.insert(
@@ -2390,12 +2525,13 @@ fn submit_pool_solution(
         solution,
         backend_label,
         stats,
-        |job_id, nonce, claimed_hash, backend_label| {
-            pool_client.submit_share_with_backend(
+        |job_id, nonce, claimed_hash, backend_label, timing| {
+            pool_client.submit_share_with_timing(
                 job_id.to_string(),
                 nonce,
                 claimed_hash,
                 Some(backend_label),
+                Some(timing),
             )
         },
         recent_submit_lookup,
@@ -2412,15 +2548,22 @@ fn submit_pool_solution_with_submitter<F>(
     recent_submit_lookup: &mut RecentPendingSubmitLookup,
 ) -> PoolShareSubmitOutcome
 where
-    F: FnMut(&str, u64, Option<[u8; 32]>, &str) -> Result<()>,
+    F: FnMut(&str, u64, Option<[u8; 32]>, &str, SubmitTiming) -> Result<()>,
 {
-    let Some(job) = active_job.as_mut() else {
+    let Some(active) = active_job.as_mut() else {
         return PoolShareSubmitOutcome::StaleEpoch;
     };
-    let found_at = Instant::now();
-    if solution.epoch != job.epoch {
-        return PoolShareSubmitOutcome::StaleEpoch;
-    }
+    let found_at = solution.found_at;
+    block_latency::record(block_latency::POOL_FOUND_TO_LOOP, found_at.elapsed());
+    let replaced_job = solution.epoch != active.epoch;
+    let job = if replaced_job {
+        match active.replaced.as_deref_mut() {
+            Some(previous) if previous.accepts_late_solution(solution.epoch) => previous,
+            _ => return PoolShareSubmitOutcome::StaleEpoch,
+        }
+    } else {
+        active
+    };
     let Some(binding) = job.share_binding(solution.share_binding_id).cloned() else {
         return PoolShareSubmitOutcome::StaleEpoch;
     };
@@ -2430,8 +2573,8 @@ where
         mode,
         job,
         stats,
-        |job_id, nonce, claimed_hash, backend_label| {
-            submitter(job_id, nonce, claimed_hash, backend_label)
+        |job_id, nonce, claimed_hash, backend_label, timing| {
+            submitter(job_id, nonce, claimed_hash, backend_label, timing)
         },
         recent_submit_lookup,
     );
@@ -2439,7 +2582,9 @@ where
         return PoolShareSubmitOutcome::Duplicate;
     }
 
-    if job.pending_submit_nonces.len() >= POOL_MAX_INFLIGHT_SUBMITS {
+    // Late hashes from a replaced job are at most one per lane; never defer them,
+    // since only the current job's backlog is serviced.
+    if !replaced_job && job.pending_submit_nonces.len() >= POOL_MAX_INFLIGHT_SUBMITS {
         if !enqueue_deferred_pool_submit(
             mode,
             job,
@@ -2455,11 +2600,16 @@ where
         return PoolShareSubmitOutcome::Deferred;
     }
 
+    let job_switch = job.pending_job_switch.take();
     if submitter(
         binding.job_id.as_str(),
         solution.nonce,
         solution.hash,
         backend_label,
+        SubmitTiming {
+            found_at,
+            job_switch,
+        },
     )
     .is_ok()
     {
@@ -2487,6 +2637,7 @@ where
         }
         PoolShareSubmitOutcome::Submitted
     } else {
+        job.pending_job_switch = job_switch;
         job.submitted_nonces.remove(&solution.nonce);
         if mode.is_user() {
             warn(
@@ -3011,6 +3162,7 @@ mod tests {
                 height: 1,
                 nonce_start: 0,
                 nonce_end: 1_000,
+                received_at: None,
             },
             epoch,
             Arc::<[u8]>::from(vec![0u8; 1]),
@@ -3066,7 +3218,7 @@ mod tests {
                 &solution,
                 "cpu#1",
                 &stats,
-                |job_id, nonce, _, _| {
+                |job_id, nonce, _, _, _timing| {
                     submitted.push((job_id.to_string(), nonce));
                     Ok(())
                 },
@@ -3079,6 +3231,78 @@ mod tests {
             }
         }
         assert_eq!(submitted, vec![("job-2".to_string(), 600)]);
+    }
+
+    #[test]
+    fn late_hash_from_replaced_job_is_submitted_under_its_job_id() {
+        let mut previous = test_active_job(7);
+        // Its in-flight submits must not defer the late hash.
+        for nonce in 0..POOL_MAX_INFLIGHT_SUBMITS as u64 {
+            previous.pending_submit_nonces.insert(
+                ("job-1".to_string(), nonce),
+                PendingPoolSubmit {
+                    found_at: Instant::now(),
+                    submitted_at: Instant::now(),
+                    backend_label: "cpu#1".to_string(),
+                },
+            );
+        }
+        previous.retired_at = Some(Instant::now());
+        let mut current = test_active_job(8);
+        current.job.job_id = "job-2".to_string();
+        current.share_bindings.get_mut(&1).unwrap().job_id = "job-2".to_string();
+        current.replaced = Some(Box::new(previous));
+        let mut active = Some(current);
+        let mut lookup = RecentPendingSubmitLookup::default();
+        let stats = Stats::new();
+        let mut submitted = Vec::new();
+        let mut submit = |epoch: u64, nonce: u64, active: &mut Option<ActivePoolJob>| {
+            submit_pool_solution_with_submitter(
+                PoolConnectionMode::User,
+                active,
+                &test_solution(epoch, nonce),
+                "cpu#1",
+                &stats,
+                |job_id, nonce, _, _, _timing| {
+                    submitted.push((job_id.to_string(), nonce));
+                    Ok(())
+                },
+                &mut lookup,
+            )
+        };
+        assert!(matches!(
+            submit(7, 900, &mut active),
+            PoolShareSubmitOutcome::Submitted
+        ));
+        assert!(matches!(
+            submit(7, 900, &mut active),
+            PoolShareSubmitOutcome::Duplicate
+        ));
+        assert!(matches!(
+            submit(8, 5, &mut active),
+            PoolShareSubmitOutcome::Submitted
+        ));
+        // Older epochs, and the replaced job once its window has passed, stay stale.
+        assert!(matches!(
+            submit(6, 1, &mut active),
+            PoolShareSubmitOutcome::StaleEpoch
+        ));
+        active
+            .as_mut()
+            .unwrap()
+            .replaced
+            .as_mut()
+            .unwrap()
+            .retired_at =
+            Some(Instant::now() - super::REPLACED_JOB_SUBMIT_WINDOW - Duration::from_millis(1));
+        assert!(matches!(
+            submit(7, 901, &mut active),
+            PoolShareSubmitOutcome::StaleEpoch
+        ));
+        assert_eq!(
+            submitted,
+            vec![("job-1".to_string(), 900), ("job-2".to_string(), 5)]
+        );
     }
 
     #[test]
@@ -3165,6 +3389,7 @@ mod tests {
             share_binding_id: 1,
             backend_id: 1,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         }
     }
 
@@ -3426,6 +3651,54 @@ mod tests {
     }
 
     #[test]
+    fn completed_range_waits_for_events_and_submissions_before_refill() {
+        let mut job = test_active_job(13);
+        job.dispatch_nonce = job.job.nonce_end + 1;
+        job.dispatch_exhausted = true;
+        let original = job.next_nonce;
+        super::settle_idle_pool_assignment(&mut job, true, true);
+        assert_eq!(job.next_nonce, original);
+        super::settle_idle_pool_assignment(&mut job, false, false);
+        assert!(
+            !job.range_completed,
+            "last solution is still in the runtime queue"
+        );
+        super::settle_idle_pool_assignment(&mut job, false, true);
+        assert!(job.range_completed);
+        assert!(
+            !should_resume_pool_assignment(&job, false),
+            "must not rehash a completed window"
+        );
+        job.pending_submit_nonces.insert(
+            ("job".into(), 5),
+            PendingPoolSubmit {
+                found_at: Instant::now(),
+                submitted_at: Instant::now(),
+                backend_label: "cpu".into(),
+            },
+        );
+        assert!(!super::should_refill_pool_job(&job));
+        job.pending_submit_nonces.clear();
+        assert!(super::should_refill_pool_job(&job));
+        job.refill_requested = true;
+        assert!(!super::should_refill_pool_job(&job), "request exactly once");
+    }
+
+    #[test]
+    fn completed_range_needs_no_solution_and_handles_maximum_nonce() {
+        let mut job = test_active_job(13);
+        job.job.nonce_start = u64::MAX - 100;
+        job.job.nonce_end = u64::MAX;
+        job.next_nonce = job.job.nonce_start;
+        job.dispatch_nonce = u64::MAX;
+        job.dispatch_exhausted = true;
+        super::settle_idle_pool_assignment(&mut job, false, true);
+        assert!(job.submitted_nonces.is_empty());
+        assert!(super::should_refill_pool_job(&job));
+        assert!(!should_resume_pool_assignment(&job, false));
+    }
+
+    #[test]
     fn nonce_cursor_advances_to_solution_nonce_plus_one() {
         let mut job = test_active_job(21);
         job.next_nonce = 10;
@@ -3473,7 +3746,7 @@ mod tests {
             &test_solution(7, 99),
             "cpu#1",
             &stats,
-            |_job_id, _nonce, _hash, _backend| {
+            |_job_id, _nonce, _hash, _backend, _timing| {
                 submit_calls = submit_calls.saturating_add(1);
                 Ok(())
             },
@@ -3506,7 +3779,7 @@ mod tests {
             &test_solution(9, 42),
             "cpu#1",
             &stats,
-            |_job_id, nonce, _hash, _backend| {
+            |_job_id, nonce, _hash, _backend, _timing| {
                 submitted_nonces.push(nonce);
                 Ok(())
             },
@@ -3518,7 +3791,7 @@ mod tests {
             &test_solution(9, 42),
             "cpu#1",
             &stats,
-            |_job_id, nonce, _hash, _backend| {
+            |_job_id, nonce, _hash, _backend, _timing| {
                 submitted_nonces.push(nonce);
                 Ok(())
             },
@@ -3599,7 +3872,7 @@ mod tests {
             PoolConnectionMode::Dev,
             &mut job,
             &stats,
-            |_job_id, nonce, _hash, _backend| {
+            |_job_id, nonce, _hash, _backend, _timing| {
                 submitted.push(nonce);
                 Ok(())
             },

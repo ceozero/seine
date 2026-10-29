@@ -1,0 +1,66 @@
+---
+title: 'Wer kontrolliert Blocknet?'
+description: 'Wer setzt die Regeln von Blocknet durch? Erfahre, was Entwickler, Miner, Nodes und Coin-Besitzer tun, wie Blöcke gültig werden und wie Upgrades ankommen.'
+tags: ['Blocknet', 'Konsens', 'Währung']
+faq:
+  - q: 'Kann ein Miner mehr BNT erzeugen, als die Belohnung erlaubt?'
+    a: 'Nach den veröffentlichten Regeln prüft ein Node die Blockbelohnung gegen den für diese Höhe vorgeschriebenen Betrag. Ein gültiger Arbeitsnachweis umgeht diese Prüfung nicht. Eine Belohnung mit abweichendem Commitment wird abgelehnt. Die Rechenleistung des Miners bestimmt daher nicht den Emissionsplan der Währung.'
+  - q: 'Gibt mir der Besitz von BNT eine Protokollstimme?'
+    a: 'Ein Wallet-Guthaben erlaubt dir, Mittel gemäß den Netzwerkregeln auszugeben. Der veröffentlichte Proof-of-Work-Validierungspfad gewichtet die Blockannahme nicht nach Coin-Besitz. Software auszuführen, Blöcke zu erzeugen und eigene Zahlungen zu autorisieren sind getrennte Rollen; ein großes Guthaben macht eine ungültige Transaktion nicht gültig.'
+  - q: 'Ändert die Veröffentlichung neuen Codes Blocknet sofort?'
+    a: 'Eine Codeänderung wird für den Konsens relevant, wenn Software mit dieser Änderung im Netzwerk läuft und ihre Aktivierungsbedingungen gelten. Eine Ankündigung oder ein Repository-Commit ersetzt nicht von selbst die Regeln laufender Nodes. Folge offiziellen Upgrade-Hinweisen und prüfe die Update-Richtlinie deiner Software.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Verstehe zunächst die Zuständigkeiten, bevor du entscheidest, was Kontrolle über Blocknet bedeutet. Software zu schreiben, einen Block zu finden, ihn zu prüfen und Coins auszugeben sind unterschiedliche Befugnisse. Dieser Leitfaden verfolgt diese Grenzen im veröffentlichten core v0.22.0 und erklärt, wie ein vorgeschlagenes Upgrade die eingesetzte Software erreicht. Er beschreibt Validierungsaufgaben, ohne die Verteilung von Mining oder Entwicklung zu messen.
+
+## Wer setzt die Regeln von Blocknet durch?
+
+<Answer>
+Nodes setzen die Regeln ihrer Software durch, wenn sie eingehende Blöcke und Transaktionen validieren. Miner erzeugen Blockkandidaten, Entwickler pflegen Implementierungen und Wallet-Besitzer autorisieren Zahlungen. Jede Rolle trägt zum Netzwerk bei. Code zu veröffentlichen, BNT zu besitzen oder einen Arbeitsnachweis zu finden erfüllt jedoch allein noch nicht die übrigen Validierungsprüfungen.
+</Answer>
+
+Verfolge eine Zahlung durch diese Zuständigkeiten. Ein Wallet erstellt und autorisiert sie; ein Miner nimmt sie in einen vorgeschlagenen Block auf; ein Node prüft den Vorschlag anhand seiner Regeln. Die Annahme hängt von diesen Prüfungen ab. Ein bekannter Projektname, ein hohes Guthaben oder die Identität des sendenden Peers ersetzt sie nicht.
+
+[![Vier nummerierte Rollen: Entwickler veröffentlichen Software, Miner schlagen Blöcke vor, Nodes validieren sie und Wallet-Besitzer autorisieren ihre Zahlungen.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Das Diagramm trennt Zuständigkeiten: 1 entwickelt Software; 2 erzeugt einen Blockvorschlag; 3 prüft ihn anhand der laufenden Regeln; 4 autorisiert eine eigene Wallet-Zahlung. Die Nummern sind weder eine Stimmenzählung noch eine Messung der Netzwerkteilnehmer.
+
+## Was können Entwickler ändern?
+
+Entwickler können Änderungen vorschlagen, Implementierungen schreiben, Code prüfen und Versionen veröffentlichen. Das ist wichtig, weil Software die von Nodes ausgeführten Regeln enthält. Im [öffentlichen Core-Quellcode](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) lassen sich die tatsächlichen Validierungspfade nachvollziehen. Die Dokumentation erklärt ihren Zweck; veröffentlichter Code zeigt das Verhalten einer bestimmten Version.
+
+Ein Repository-Commit schreibt kein laufendes Programm um. Eine Änderung erreicht einen Node über dessen Software-Update-Prozess und gegebenenfalls über Aktivierungslogik. Teilnehmer brauchen daher Software, die mit den Netzwerkregeln kompatibel ist, denen sie folgen wollen. Diese Abstimmung eingesetzter Software garantiert nicht, dass jeder Vorschlag zur Netzwerkregel wird.
+
+Die Update-Richtlinie gehört zu diesem Zusammenhang. Die verwaltende CLI kann Updates für einen Core planen, der der neuesten Version folgt; fest angeheftete Versionen haben eine andere Richtlinie. Der [Node-Leitfaden](/de/blog/run-blocknet-node/) erklärt diesen Unterschied. Lies die Richtlinie deiner Installation, statt anzunehmen, dass jedes Update auf manuelle Bestätigung wartet.
+
+## Was können Miner entscheiden?
+
+Mining erzeugt Blockkandidaten und den für ihre Annahme benötigten Arbeitsnachweis. Beim direkten Mining erhält seine Arbeit von einem Node; beim Pool-Mining koordiniert der Pool die Arbeit und reicht gelöste Blöcke an den vorgelagerten Node weiter. Beide Wege bauen die Kette auf. Die [Mining-Erklärung](/de/blog/how-crypto-mining-works/) behandelt den Ablauf und den Unterschied zwischen einem Pool-Share und einem vollständigen Block.
+
+Ein gelöster Arbeitsnachweis ist eine von mehreren Voraussetzungen. Der [veröffentlichte Blockvalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) prüft außerdem Blockkontext, Schwierigkeit, Transaktionsgültigkeit und vorgeschriebene Belohnung. Weicht die vorgeschlagene Belohnung vom für diese Höhe erlaubten Betrag ab, besteht ihr Commitment die Prüfung nicht. Mehr Rechenleistung ändert diesen Vergleich nicht.
+
+Eine Änderung des Belohnungsfeldes in der Mining-Software ändert beispielsweise nicht, was ein anderer Node erwartet. Der empfangende Node berechnet die erwartete Belohnung aus der Höhe und prüft den eingereichten Output dagegen. Der [Leitfaden zur Geldmenge](/de/blog/blocknet-supply/) erklärt den Emissionsplan; der Miner muss einen Block erzeugen, der ihn erfüllt.
+
+## Wie entscheiden Nodes, welcher Kette sie folgen?
+
+Der veröffentlichte Core validiert einen Kandidaten, bevor er die Kettenauswahl anwendet. Er erfasst die aufsummierte Arbeit und kann unter seinen Reorganisationsregeln zu einem gültigen Zweig mit mehr Arbeit wechseln. Bloßes Zählen von Blöcken übersieht diesen Unterschied. Arbeit hilft, zwischen akzeptablen Historien zu wählen, ersetzt aber nicht die Prüfung ihrer Blöcke.
+
+Bei historischen Prüfungen sind auch die Verifizierungseinstellungen eines Nodes wichtig. Optionale Synchronisierung mit vertrauenswürdigen Checkpoints kann wiederholte Arbeitsnachweis- und Kryptografieprüfungen für die abgedeckten historischen Blöcke überspringen. Die Validierung an der aktuellen Spitze und checkpointgestützte historische Synchronisierung sind unterschiedliche Pfade. Ein lokaler Node allein verrät nicht, welche Synchronisierungsrichtlinie verwendet wurde.
+
+Die hilfreiche Frage ist deshalb konkret: Welche Software, Regeln und welcher Validierungsmodus werden verwendet? Der [Leitfaden zu Software-Rollen](/de/blog/blocknet-wallet-node-miner/) hilft bei der Auswahl der Anwendungen, der Node-Leitfaden beim Betrieb. Eine Peer-Anzahl oder ein Screenshot der Blockhöhe belegt nicht, wie viele unabhängige Personen das Netzwerk kontrollieren.
+
+## Was kontrollieren Coin-Besitzer?
+
+Mit den erforderlichen privaten Schlüsseln kann ein Wallet-Besitzer das Ausgeben seiner Outputs autorisieren. Das Netzwerk prüft diese Autorisierung und die übrigen Transaktionsregeln. Mehr BNT zu besitzen verwandelt das veröffentlichte Proof-of-Work-System nicht in eine nach Guthaben gewichtete Abstimmung darüber, ob eine ungültige Transaktion eines anderen akzeptiert werden soll.
+
+Besitz unterscheidet sich auch von der Entscheidung, was man offenlegt. Mit den unterstützten Ansichtsfunktionen und Zahlungsnachweisen des Wallets kannst du Informationen über eigene Mittel oder Zahlungen teilen. Das erlaubt keine Erzeugung zusätzlicher Coins. Der [Leitfaden zur Prüfung verborgener Beträge](/de/blog/bulletproofs-explained/) erklärt, wie die Buchhaltungsprüfungen bei privaten Zahlungsbeträgen möglich bleiben.
+
+## Wie solltest du einen Upgrade-Vorschlag lesen?
+
+Trenne Ankündigung, implementierende Version und Aktivierungsregeln. Eine Ankündigung beschreibt eine beabsichtigte Änderung; kompatible Software implementiert die Prüfungen; die Aktivierung legt fest, wann sie gelten. So erhältst du konkrete Prüfpunkte, statt eine Roadmap-Aussage als bereits aktives Verhalten zu behandeln.
+
+Bei Faraday beschreibt die [offizielle Ankündigung](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) eine vorgeschlagene Änderung, die noch entwickelt und getestet wird. Unser [Upgrade-Leitfaden](/de/blog/blocknet-faraday-upgrade/) verfolgt die Vorbereitung für Nutzer, während der [Leitfaden zur Geldpolitik](/de/blog/blocknet-faraday-monetary-policy/) vorgeschlagene Emissionsänderungen von heutigen Regeln trennt. Nutze diese datierten Quellen vor Entscheidungen zu einem zukünftigen Übergang.
+
+<CTA target="seine" title="Blocknet mit seine minen" text="Nutze seine mit bntpool.com, um Mining-Arbeit beizutragen und BNT in deinem Wallet zu erhalten." />

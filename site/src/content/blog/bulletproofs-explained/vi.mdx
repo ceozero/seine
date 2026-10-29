@@ -8,19 +8,19 @@ faq:
   - q: 'Một range proof Bulletproofs lớn bao nhiêu?'
     a: 'Một Bulletproof 64 bit chứa 2 × log2(64) + 9 = 21 phần tử. Trên nhóm Ristretto, mỗi phần tử chiếm 32 byte, nên mỗi bằng chứng dài 672 byte, và trình khám phá khối Blocknet hiển thị đúng con số đó cho mỗi output. Kích thước tăng theo logarit của phạm vi, nên tăng gấp đôi độ dài bit chỉ thêm hai phần tử.'
   - q: 'Ai thấy được số tiền của một giao dịch Blocknet?'
-    a: 'Chỉ người gửi và người nhận. Chuỗi lưu một Pedersen commitment và một range proof cho mỗi output, cùng với số tiền được mã hóa bằng bí mật mà hai ví chia sẻ. Ví của người nhận giải mã nó bằng view key riêng. Phí mạng lưới là con số công khai duy nhất, để các node có thể đưa nó vào phép kiểm tra cân bằng.'
+    a: "Với khoản thanh toán thông thường, người gửi biết số tiền và ví nhận khôi phục số tiền nhận được. Bằng chứng thanh toán hoặc quyền xem được chủ động chia sẻ có thể tiết lộ số tiền cho người khác. Dữ liệu giao dịch công khai vẫn bao gồm phí và cấu trúc. Phần thưởng coinbase thì khác: số tiền được phép và cách mã hóa có thể được suy ra công khai từ độ cao khối và dữ liệu giao dịch."
   - q: 'Nếu số tiền bị ẩn, làm sao node biết không có coin nào được tạo ra?'
-    a: 'Mọi node kiểm tra hai điều cho mỗi giao dịch. Các Pedersen commitment phải cộng lại khớp nhau, nghĩa là đầu vào bằng output cộng phí, và mọi output phải mang một range proof hợp lệ cho thấy số tiền của nó nằm giữa 0 và 2^64. Kết hợp lại, hai điều này loại trừ lạm phát ẩn mà không tiết lộ bất kỳ số tiền nào.'
-sourceHash: e02793933862
+    a: "Với thanh toán thông thường, bằng chứng phạm vi giới hạn mỗi đầu ra từ 0 đến 2^64−1, còn cân bằng cam kết kiểm tra bảo toàn giá trị, gồm cả phí. Xác thực đầy đủ còn kiểm tra quyền chi tiêu, ràng buộc vòng và việc tái sử dụng ảnh khóa. Phát hành mới có kiểm tra coinbase riêng đối chiếu với phần thưởng khối được phép. Đây là các kiểm tra khác nhau; chỉ bằng chứng phạm vi không xác lập mọi quy tắc giao dịch."
+sourceHash: 3be778e9122b
 translation: draft
 ---
 
-Bulletproofs là các range proof zero-knowledge ngắn gọn, cho phép một đồng tiền mã hóa che giấu mọi số tiền giao dịch trong khi mỗi node vẫn kiểm tra được rằng không có coin nào được tạo ra. Hướng dẫn này giải thích Pedersen commitment, vì sao số tiền ẩn cần range proof, cách Bulletproofs giữ cho các bằng chứng đó nhỏ gọn, và cách Blocknet dùng chúng trên mọi output.
+Bulletproofs là các bằng chứng phạm vi không tiết lộ tri thức có kích thước ngắn, giúp xác minh số tiền thanh toán bị ẩn. Hướng dẫn này giải thích cam kết Pedersen, vì sao số tiền cần giới hạn và cách Bulletproofs giữ kích thước nhỏ. Trong Blocknet, bằng chứng phạm vi hoạt động cùng kiểm tra quyền, cân bằng, chi tiêu lặp lại và coinbase. Chúng cùng giải thích cách quyền riêng tư của thanh toán thông thường đi đôi với xác thực luồng tiền và phát hành mới.
 
 ## Bulletproofs là gì?
 
 <Answer>
-Bulletproofs là các bằng chứng zero-knowledge ngắn gọn, được Bünz, Bootle, Boneh, Poelstra, Wuille và Maxwell công bố năm 2018. Trong tiền mã hóa, chúng chứng minh rằng một số tiền ẩn nằm trong một phạm vi hợp lệ, chẳng hạn từ 0 đến 2^64, mà không tiết lộ số tiền đó. Chúng không cần trusted setup, và kích thước chỉ tăng theo logarit của phạm vi.
+Bulletproofs là các bằng chứng zero-knowledge ngắn gọn, được Bünz, Bootle, Boneh, Poelstra, Wuille và Maxwell công bố năm 2018. Trong tiền mã hóa, chúng chứng minh rằng một số tiền ẩn nằm trong một phạm vi hợp lệ, chẳng hạn từ 0 đến 2^64−1, mà không tiết lộ số tiền đó. Chúng không cần trusted setup, và kích thước chỉ tăng theo logarit của phạm vi.
 </Answer>
 
 Bài báo [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) được trình bày tại IEEE Symposium on Security and Privacy năm 2018. Các tác giả thiết kế Bulletproofs cho giao dịch bảo mật, trong đó số tiền trên blockchain được thay bằng commitment. Để hiểu vì sao cần đến một bằng chứng như vậy, hãy bắt đầu từ commitment.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Pedersen commitment có thể cộng với nhau. Tổng của hai commitment là commitment cho tổng hai số tiền, với các blinding factor cũng được cộng lại. Một node cộng các commitment đầu vào của giao dịch và các commitment output cộng phí, rồi kiểm tra hai tổng có khớp nhau không, nhờ đó xác nhận sự cân bằng mà không thấy bất kỳ số tiền nào.
 </Answer>
 
-Cộng hai commitment cho `(v1 + v2)·G + (r1 + r2)·H`, bản thân nó là một commitment cho `v1 + v2`. Người gửi sắp xếp các blinding factor sao cho tổng blinding của đầu vào bằng tổng của output. Nếu số tiền cũng cân bằng, hiệu giữa tổng đầu vào và tổng output đúng bằng không, và bất kỳ node nào cũng có thể xác minh điều đó.
+Cộng hai cam kết cho kết quả `(v1 + v2)·G + (r1 + r2)·H`, cũng là cam kết cho `v1 + v2`. Người gửi sắp xếp các hệ số làm mù sao cho tổng của đầu vào bằng tổng của đầu ra. Nếu số tiền cân bằng, lấy tổng cam kết đầu vào trừ các cam kết đầu ra và cam kết phí sẽ bằng không.
 
-Phí mạng lưới là con số công khai duy nhất trong một giao dịch. Các node biến nó thành một commitment với blinding factor bằng không và cộng vào phía output, nên phép kiểm tra trở thành: đầu vào = output + phí.
+Phí mạng là công khai, cùng các dữ liệu giao dịch khác như mã băm và cấu trúc đầu vào/đầu ra. Các nút chuyển phí thành cam kết có hệ số làm mù bằng không rồi cộng vào phía đầu ra. Với thanh toán thông thường, kiểm tra bảo toàn là đầu vào = đầu ra + phí.
 
 ## Vì sao số tiền ẩn cần range proof?
 
 Phép tính trên commitment được thực hiện theo modulo một số rất lớn, tức bậc của nhóm đường cong, vào khoảng 2^252. Trong phép tính đó, một số tiền “âm” chỉ là một số dương khổng lồ. Ai đó có thể chi tiêu một đầu vào trị giá 10 coin và tạo hai output, một trị giá 11 và một trị giá “âm 1”. Các commitment sẽ cân bằng hoàn hảo, và 1 coin sẽ xuất hiện từ hư không, ẩn khỏi mọi người quan sát.
 
-Range proof bịt kín lỗ hổng đó. Nó chứng minh rằng số tiền bên trong commitment nằm giữa 0 và 2^64 mà không nói đó là bao nhiêu. Khi mọi output đều bị giới hạn như vậy, một vài output không bao giờ có thể cộng lại thành một số đủ lớn để vòng qua bậc của nhóm, nên commitment cân bằng nghĩa là số tiền cân bằng.
+Range proof bịt kín lỗ hổng đó. Nó chứng minh rằng số tiền bên trong commitment nằm giữa 0 và 2^64−1 mà không nói đó là bao nhiêu. Khi mọi output đều bị giới hạn như vậy, một vài output không bao giờ có thể cộng lại thành một số đủ lớn để vòng qua bậc của nhóm, nên commitment cân bằng nghĩa là số tiền cân bằng.
 
 Các thiết kế giao dịch bảo mật trước đây dùng range proof tăng tuyến tính theo số bit. Bulletproofs chỉ tăng theo logarit, giúp đưa một bằng chứng 64 bit xuống còn vài trăm byte.
 
@@ -74,24 +74,38 @@ Bằng chứng này không cần tương tác. Thay vì một bên xác minh tr�
 
 Monero bật Bulletproofs trong bản nâng cấp mạng lưới ngày 18 tháng 10 năm 2018 (bản phát hành v0.13.0) để giảm kích thước giao dịch. [Thư viện bulletproofs viết bằng Rust](https://github.com/dalek-cryptography/bulletproofs) của dự án dalek-cryptography triển khai chúng trên nhóm Ristretto của Curve25519, và thư viện mật mã của Blocknet được xây dựng trên thư viện này.
 
-## Blocknet che giấu mọi số tiền như thế nào?
+## Blocknet xác thực thanh toán riêng tư thế nào?
 
-Trên Blocknet, mọi output của mọi giao dịch chứa một Pedersen commitment thay cho số tiền, và mọi output mang một Bulletproof 64 bit riêng. Quyền riêng tư là một phần của định dạng giao dịch, không có chế độ minh bạch, nên không có cách nào gửi một khoản thanh toán với số tiền hiển thị công khai.
+Trong bản core v0.22.0 đã phát hành, đầu ra thanh toán thông thường chứa cam kết Pedersen, số tiền được mã hóa và từng Bulletproof 64 bit riêng. Số tiền bị ẩn khỏi bản ghi công khai thông thường. Giao dịch coinbase đặc biệt tạo phần thưởng khối và có một đường phát hành riêng có thể kiểm tra công khai.
 
-Đây là những gì một node kiểm tra trước khi chấp nhận giao dịch:
+Xác thực mật mã đầy đủ cho thanh toán thông thường gồm các kiểm tra riêng sau trong [bộ xác thực giao dịch đã phát hành](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960):
 
-- **Từng range proof.** Bulletproof của mọi output phải xác minh được với commitment của nó, chứng minh số tiền nằm giữa 0 và 2^64. Các bằng chứng dùng bản ghi được gắn nhãn "Blocknet Range Proof", gắn mỗi bằng chứng với Blocknet.
-- **Sự cân bằng.** Mỗi đầu vào mang một commitment pseudo-output, và chữ ký vòng chứng minh nó cam kết cùng số tiền với coin thật đang được chi tiêu mà không tiết lộ đó là thành viên vòng nào. Sau đó node kiểm tra rằng các pseudo-output cộng lại bằng output cộng phí.
-- **Coin mới.** Phần thưởng của một khối theo một lịch trình công khai, nên với output được đào, node dựng lại commitment mà nó dự kiến cho độ cao khối đó và kiểm tra xem có khớp không.
+- **Quyền và ràng buộc.** Mỗi đầu vào phải dùng 16 thành viên vòng chính tắc trên chuỗi. RingCT chứng minh quyền sở hữu và sự bằng nhau của số tiền. Bộ xác minh cũng kiểm tra ảnh khóa và cam kết đầu ra giả khớp với bằng chứng đã ký.
+- **Phạm vi và cân bằng.** Bulletproof của mỗi đầu ra được xác minh theo cam kết của nó và giới hạn số tiền từ 0 đến 2^64−1. Bản ghi chứng minh dùng nhãn "Blocknet Range Proof". Tổng các đầu ra giả đã ký phải bằng đầu ra cộng phí. Đây là kiểm tra bảo toàn, không thay thế việc kiểm tra quyền.
+- **Chi tiêu lặp lại.** Các ảnh khóa phải khác nhau trong giao dịch và chưa được ghi nhận là đã chi tiêu.
+
+[![Bốn nhiệm vụ xác thực riêng: 1 quyền chi tiêu và ràng buộc vòng; 2 phạm vi số tiền và cân bằng cam kết; 3 ảnh khóa chưa được chi tiêu; 4 phát hành coinbase được phép trên đường riêng.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+Các kiểm tra **1–3** liên quan đến chi tiêu thông thường. Kiểm tra **4** liên quan đến giao dịch đặc biệt tạo phần thưởng khối. Sơ đồ phân biệt vai trò của chúng; không mô tả giao dịch đang diễn ra hay thay thế phần còn lại của xác thực khối.
+
+## Mạng phát hiện chi tiêu lặp lại thế nào?
+
+Bằng chứng phạm vi hợp lệ cho biết số tiền nằm trong giới hạn. Nó không cho biết chủ sở hữu chưa chi tiêu đầu ra. Ảnh khóa cung cấp kiểm tra khả năng liên kết riêng đó mà không xác định thành viên vòng thực. Xác thực từ chối ảnh trùng trong một giao dịch và ảnh đã chi tiêu trên chuỗi được chấp nhận. Ràng buộc ảnh với bằng chứng RingCT đã ký ngăn việc thay thế ảnh độc lập. [Ai kiểm soát Blocknet](/vi/blog/who-controls-blocknet/) giải thích quan hệ giữa các quy tắc này và các nút áp dụng chúng.
+
+## Kiểm tra phát hành mà không đọc số dư ví ra sao?
+
+Coinbase của một khối không có đầu vào chi tiêu. [Bộ xác thực khối đã phát hành](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543) tính phần thưởng được phép ở độ cao đó và dựng lại cam kết cùng số tiền mã hóa dự kiến bằng hệ số làm mù được suy ra công khai. Cả hai phải khớp. Vì vậy, số tiền có thể được suy ra công khai, khác với số tiền bị ẩn trong thanh toán thông thường.
+
+Phát hành tích lũy được tính bằng tổng phần thưởng theo lịch từ độ cao 1; khối khởi nguyên không có coinbase. Tổng này không được tính bằng cách cộng số dư ví riêng tư và không cho biết bao nhiêu hiện có thể chi tiêu hoặc đang lưu hành. [Hướng dẫn về nguồn cung](/vi/blog/blocknet-supply/) giải thích sự khác biệt, còn [ví dụ giao dịch](/vi/blog/blocknet-transaction-explained/) trình bày chuyển tiền và tiền thừa không phát hành lại phần thưởng.
 
 Bạn có thể thấy điều này trên [trình khám phá khối Blocknet](https://explorer.blocknetcrypto.com). Trang giao dịch liệt kê số tiền là "hidden · Pedersen commitments", và mỗi output hiển thị commitment, một memo được mã hóa và một range proof "672 bytes · Bulletproof", đúng kích thước mà phép tính ở trên dự đoán.
 
-Người nhận vẫn thấy con số thật. Mỗi output mang số tiền được mã hóa bằng bí mật mà ví của người gửi và người nhận chia sẻ, và ví của người nhận giải mã nó bằng view key riêng. Số tiền chỉ hai người trong khoản thanh toán thấy được, ngoài ra không ai khác.
+Với thanh toán thông thường, ví nhận nhận diện đầu ra của mình và khôi phục số tiền mã hóa bằng thông tin xem riêng tư. Người gửi biết số tiền đã nhập. Bằng chứng thanh toán hoặc quyền xem được chủ động chia sẻ có thể cung cấp thêm thông tin cho người khác. Những lựa chọn tiết lộ này không thay đổi kiểm tra cam kết và bằng chứng của mạng.
 
-Số tiền ẩn hoạt động cùng các lớp khác của Blocknet: [chữ ký vòng](/vi/blog/ring-signatures-explained/) trên 16 output che giấu người gửi, [địa chỉ ẩn dùng một lần](/vi/blog/stealth-addresses-explained/) che giấu người nhận, và [Dandelion++](/vi/blog/dandelion-plus-plus-explained/) che giấu nơi giao dịch đi vào mạng lưới. [Hướng dẫn về các tính năng riêng tư của Blocknet](/vi/blog/blocknet-privacy-features/) trình bày lần lượt từng lớp.
+Số tiền bị ẩn trong thanh toán thông thường hoạt động cùng các lớp khác của Blocknet: [chữ ký vòng](/vi/blog/ring-signatures-explained/) trên 16 đầu ra bảo vệ nguồn được chi tiêu, [địa chỉ ẩn dùng một lần](/vi/blog/stealth-addresses-explained/) bảo vệ đích nhận và [Dandelion++](/vi/blog/dandelion-plus-plus-explained/) giảm lộ nguồn mạng. [Hướng dẫn quyền riêng tư](/vi/blog/blocknet-privacy-features/) giải thích từng lớp. Các kiểm tra này mô tả xác thực đầy đủ; đồng bộ nhanh có thể dựa vào điểm kiểm tra lịch sử đáng tin cậy cho một số kiểm tra chữ ký và bằng chứng phạm vi tốn tài nguyên, như triển khai đã phát hành quy định.
 
 ## Tự sở hữu BNT riêng tư
 
-Một cách đơn giản để có coin với số tiền ẩn là tự đào. Blocknet dùng [Proof of Work Argon2id](/vi/blog/argon2id-proof-of-work-explained/) memory-hard mà bạn có thể đào trên một máy tính thông thường, và seine đào nó trên CPU của bạn, cùng với mọi GPU NVIDIA đi kèm, và tự tinh chỉnh mà không cần thiết lập. Mọi khoản thanh toán bntpool.com gửi cho bạn đều đến dưới dạng một output riêng tư với commitment và Bulletproof. [Hướng dẫn đào coin](/vi/blog/how-to-mine-blocknet/) đưa bạn từ lúc tải về đến những share được chấp nhận chỉ trong vài phút.
+Để nhận thanh toán BNT thông thường vào ví, bạn có thể đào qua pool. Blocknet dùng [bằng chứng công việc Argon2id](/vi/blog/argon2id-proof-of-work-explained/) cần nhiều bộ nhớ, còn seine đào bằng CPU và GPU NVIDIA được hỗ trợ trong khi điều chỉnh hoạt động. Khoản thanh toán từ bntpool.com là chuyển tiền thông thường có cam kết và bằng chứng phạm vi, khác với phần thưởng coinbase của khối. [Hướng dẫn đào](/vi/blog/how-to-mine-blocknet/) trình bày thiết lập và các share được chấp nhận.
 
-<CTA target="seine" title="Đào BNT riêng tư với seine" text="Tải seine, dán địa chỉ hoặc @name của bạn, và bắt đầu kiếm Blocknet với mọi số tiền được che giấu trên chuỗi." />
+<CTA target="seine" title="Đào BNT với seine" text="Dùng seine với bntpool.com và nhận các khoản thanh toán pool thông thường vào ví Blocknet của riêng bạn." />

@@ -49,7 +49,6 @@ A read taking over 25 ms is discarded and followed by 30 seconds of unknown cont
 without further reads; the first slow OS read cannot be interrupted by this budget.
 The reporting worker's existing opt-out check disables probes and discards queued
 trials when it observes opt-out or exits. Costs and tuning decisions are unchanged.
-See [native validation and overhead limits](../docs/validation/trial-placement-20261026.md).
 
 Completed trials contain three or six ordered counted windows: baseline/candidate/
 baseline, optionally repeated. Each records hashes, elapsed milliseconds, arm,

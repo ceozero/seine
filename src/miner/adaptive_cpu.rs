@@ -97,8 +97,8 @@ fn seed_threads(
         .clamp(floor, max.min(available))
 }
 
-// Validated cold-start policy for native Linux/Windows 32-core/128 GiB
-// EPYC 9R14 hosts. Keep off other identities, topologies and profiles.
+// Cold-start policy for one exact Linux/Windows 32-core/128 GiB Zen 4 host
+// context. Keep off other identities, topologies and profiles.
 // This changes only the initial count; normal resource shedding and repeated
 // count/kernel comparisons still decide the sustained setting.
 pub(super) fn full_count_cold_start(
@@ -129,7 +129,7 @@ pub(super) fn full_count_cold_start(
         && memory_capacity >= 32
 }
 
-// Native cold-start comparison validated this exact Sapphire Rapids context.
+// Cold-start policy for this exact Sapphire Rapids context.
 // Keep neighboring hosts, manual settings and efficiency mode unchanged.
 pub(super) fn sapphire_full_count_cold_start(
     cfg: &Config,
@@ -159,7 +159,8 @@ pub(super) fn sapphire_full_count_cold_start(
         && memory_capacity >= 32
 }
 
-// Native 9R45 cold pair: +12.77% with streaming startup and THP prefault order.
+// Cold-start policy for this exact Turin context: streaming startup and THP
+// prefault order.
 // Keep neighboring hosts, manual settings and efficiency mode unchanged.
 pub(super) fn turin_full_count_cold_start(
     cfg: &Config,
@@ -209,10 +210,9 @@ fn initial_threads(
 
 // Cold start for CPUs whose cohort mines on a streaming kernel. Zen 4/5
 // (AVX-512 streaming) start at every allowed logical CPU that fits in RAM: SMT
-// hides memory latency on many-channel servers (EPYC 9355 mined 58.0 H/s at 32
-// workers, 74.7 at 64; 15 min live +4.7% vs a physical-core start). Zen 2/3
-// (AVX2 streaming) plateau by the physical core count, where a full-logical
-// start measured -3.3% live on EPYC 7R13. Count trials still decide afterwards.
+// hides memory latency on many-channel servers. Zen 2/3 (AVX2 streaming) plateau
+// by the physical core count, so they start there. Count trials still decide
+// afterwards.
 fn cohort_cold_start(cfg: &Config, host: &CpuAutotuneHostFingerprint, max: usize) -> Option<usize> {
     if cfg!(test) || cfg.cpu_profile == CpuPerformanceProfile::Efficiency {
         // Unit tests stay host-independent; `initial_threads` covers the policy.
@@ -1059,8 +1059,7 @@ impl Policy {
                     && if candidate < base {
                         let floor = cpu_autotune_peak_floor_frac(self.profile);
                         // Fewer workers must beat the baseline's own window-to-window
-                        // spread: ties inside noise moved 14 -> 13 (Windows Zen 5),
-                        // 64 -> 62 (Turin) and 256 -> 254 (EPYC 9754) while mining.
+                        // spread, so ties inside noise don't shed workers.
                         let noise = if floor >= 1.0 {
                             (before.hps - sample.hps).abs()
                         } else {
@@ -1069,9 +1068,8 @@ impl Policy {
                         candidate_sample.hps >= self.peak_hps * floor + noise
                     } else {
                         // Highest hashrate is the default objective: a higher
-                        // count wins on any measured gain over a stable baseline.
-                        // A 2% step margin stalled at the foot of flat plateaus
-                        // (Ryzen 7 9700X stayed at 8 of 16 workers, ~1.5% short).
+                        // count wins on any measured gain over a stable baseline;
+                        // a step margin stalls at the foot of flat plateaus.
                         candidate_sample.hps > baseline.hps
                             // Discover the peak initially, then retain fewer
                             // workers when they already satisfy the profile.
@@ -1666,6 +1664,7 @@ mod tests {
                         work_id: 1,
                         epoch: 1,
                         header_base: Arc::from(vec![0; blocknet_pow_spec::POW_HEADER_BASE_LEN]),
+                        pow: crate::backend::PowAlgorithm::Argon2id,
                         target: [0; 32],
                         dynamic_share_target: None,
                         pause_on_solution: false,

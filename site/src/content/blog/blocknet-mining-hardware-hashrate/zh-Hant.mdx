@@ -1,6 +1,6 @@
 ---
 title: 挖 Blocknet 用什麼硬體最好
-description: "用實測結果比較 Blocknet 挖礦硬體：EPYC 9375F 達到 85.1 H/s。查看準確的 RAM、執行緒數、分頁設定和基準測試證據，了解各項結果的測量配置。"
+description: "用實測結果比較 Blocknet 挖礦硬體：EPYC 9355P 使用預設設定達到 97.1 H/s。查看準確的 RAM、執行緒數和基準測試證據，了解各項結果的測量配置。"
 tags: [硬體, 算力, 挖礦指南, Argon2id, NVIDIA]
 faq:
   - q: '遊戲電腦能挖 Blocknet 嗎？'
@@ -11,7 +11,7 @@ faq:
     a: 'seine 的 Windows 與 Linux 版本使用 NVIDIA 顯示卡挖礦，會在處理器之外同時使用偵測到的每一張顯示卡。在 Windows 上已內建 CUDA 執行環境，只需安裝 NVIDIA 驅動程式。在 Linux 上需安裝驅動程式與 NVRTC 函式庫。首次啟動時會為每張顯示卡調校並記住結果。'
   - q: '為什麼記憶體頻寬對挖 Blocknet 很重要？'
     a: '每次 Blocknet 雜湊都要寫滿一整塊 2 GiB 的記憶體，並從其中各處讀回資料，遠遠超出任何處理器快取的容量。因此算力取決於記憶體系統搬運資料的速度。記憶體頻寬較高、記憶體足以執行更多執行緒的電腦挖得最快。'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ translation: draft
 ## 挖 Blocknet 用什麼硬體最好？
 
 <Answer>
-這些測量中最快的配置是達到 85.1 H/s 的 AMD EPYC 9375F：64 個挖礦執行緒、384 GiB RAM，以及在 Linux 上手動準備的 1 GiB 大型分頁。Blocknet 挖礦受益於記憶體頻寬，以及足夠為每個執行緒提供 2 GiB 的 RAM。NVIDIA 顯示卡可以在 CPU 之外加上自身雜湊率。
+這些測量中最快的配置是達到 97.1 H/s 的 AMD EPYC 9355P：64 個挖礦執行緒、192 GiB RAM，在 Linux 上使用 seine 的預設設定。Blocknet 挖礦受益於記憶體頻寬，以及足夠為每個執行緒提供 2 GiB 的 RAM。NVIDIA 顯示卡可以在 CPU 之外加上自身雜湊率。
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Blocknet 的工作量證明是 Argon2id，每次雜湊使用一塊 2 GiB 的記憶體。這讓它成為[記憶體密集型](/zh-hant/blog/argon2id-proof-of-work-explained/)演算法：算力既取決於核心數，也同樣取決於記憶體頻寬與延遲，以及記憶體中能同時容納多少個 2 GiB 記憶體區塊。下表中排名在前的電腦，共同點就是強大的記憶體系統。
 
 ## 新增實體伺服器測量：EPYC 9355P
 
-2026年10月25日，一顆 32 核心／64 硬體執行緒的 EPYC 9355P，搭配十二通道 DDR5-4800、共 192 GiB 記憶體，測得 **68.256 H/s**，四捨五入為 **68.3 H/s**。這項固定的手動配置使用 64 個挖礦執行緒、streaming 運算核心程式、1 GiB 大型分頁和 280 W 封裝功耗上限。速率由四次各 120 秒的全新執行中完成的雜湊總數除以總耗時得出，包含啟動和結束時間。
+2026年10月28日，一顆 32 核心／64 執行緒、配備 192 GiB RAM 的 EPYC 9355P 使用 seine 的預設設定挖礦 15 分鐘：不加任何參數，執行緒數、CPU 運算核心程式和記憶體分頁皆自動選擇。挖礦速度為 **97.1 H/s**。
 
-[分頁大小實驗](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md)記錄了準確的原始碼修訂版本、可執行檔 SHA-256、分頁配置檢查和測量方法。[機器可讀記錄](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json)保留了配置以及原始分子和分母。這是手動設定整個處理器插槽的結果；下方雲端伺服器和 Mac 的測量各有自己的機器與設定。
+[測量記錄](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)列出了原始碼修訂版本以及執行期間每一分鐘的雜湊率。下方雲端伺服器和 Mac 的測量各有自己的機器與設定。
 
 ## RTX 5090 在我們的測試中有多快？
 

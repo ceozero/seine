@@ -1,0 +1,73 @@
+---
+title: 'Blocknet atomic swaps uitgelegd: wat is VEIL?'
+description: 'Begrijp atomic swaps, voorwaardelijke claims en terugbetalingen, wat deelnemers kunnen zien en wat Blocknet publiek heeft aangekondigd over VEIL en Faraday.'
+tags: [Blocknet, Betalingen, Privacy]
+faq:
+  - q: 'Kan ik met deze handleiding een VEIL-swap starten?'
+    a: 'Dit is een algemene uitleg van atomic swaps met een gedeelte over Blocknets openbare VEIL-aankondiging. De handleiding stelt geen beschikbaar handelspaar, walletcommando of dienst vast. Gebruik gepubliceerde release-instructies voor een specifieke implementatie voordat je een voorgestelde swapfunctie als een beschikbare betaalprocedure beschouwt.'
+  - q: 'Betekent atomic dat beide betalingen onmiddellijk plaatsvinden?'
+    a: 'Atomic beschrijft hoe de uitwisseling is gekoppeld. In dit voorbeeld onthult de claim van de ene deelnemer informatie waarmee de andere zijn kant kan claimen. Transacties komen nog steeds afzonderlijk op hun eigen chains terecht. Bevestigingscontroles, deadlines en de vereiste handelingen van de deelnemers blijven onderdeel van het voltooien van het protocol.'
+  - q: 'Zijn atomic swaps automatisch privé?'
+    a: 'Een atomic-swapprotocol coördineert de afwikkeling. Wat het onthult, hangt af van de betrokken chains, contracten en communicatie. Een gedeelde openbare hash kan de twee kanten van een eenvoudige swap met hashlock verbinden. De betalingsbescherming van Blocknet en de volledige openbaarmakingseigenschappen van een swap moeten daarom afzonderlijk worden beoordeeld.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Begrijp wat een atomic swap coördineert voordat je Blocknets VEIL-aankondiging leest. Deze handleiding volgt een algemene uitwisseling tussen twee partijen via voorwaardelijke financiering, geslaagde claims en het terugbetalingspad. Daarna maakt ze onderscheid tussen dit lesvoorbeeld en de beknopte VEIL-informatie op de openbare site van Blocknet, gecontroleerd op 28 oktober 2026. Het voorbeeld beschrijft een protocolpatroon, geen geverifieerde VEIL-implementatie of een momenteel ondersteund BNT-handelspaar.
+
+## Wat is een atomic swap?
+
+<Answer>
+Een atomic swap koppelt een uitwisseling van activa zodat deelnemers die het protocol volgen hun kant kunnen voltooien of het herstelpad kunnen gebruiken onder de aannames van het protocol. Het vervangt een eenvoudige belofte om later te sturen door afdwingbare voorwaarden. De twee chains verwerken nog steeds hun eigen transacties en deelnemers moeten de vereiste volgorde volgen.
+</Answer>
+
+De vraag van de lezer is praktisch: als je het ene activum verstuurt in ruil voor het andere, wat zorgt er dan voor dat de tweede betaling volgt? Een gewone overdracht autoriseert één betaling. Een atomic-swapprotocol verbindt de voorwaarden voor twee overdrachten. Maurice Herlihy’s [artikel over atomic cross-chain swaps](https://arxiv.org/abs/1801.09515) formaliseert dit coördinatieprobleem en het belang van deelnemers die de regels volgen.
+
+Denk aan twee afzonderlijke grootboeken met een gecoördineerde uitwisseling ertussen. Activa worden op hun eigen chains uitgegeven; het protocol koppelt wie ze kan claimen. Dit verschilt van simpelweg munten naar een ontvangstadres sturen en wachten tot iemand een afspraak nakomt. De [handleiding voor Blocknet versturen](/nl/blog/send-receive-blocknet/) behandelt die gewone betaalprocedure.
+
+## Hoe werkt een swap met hashlock?
+
+Een veelgebruikt lesvoorbeeld gebruikt een **hashlock**, die een geheim controleert, en een **timelock**, die bepaalt wanneer een terugbetaling mogelijk wordt. Samen worden ze vaak een hashed timelock contract of HTLC genoemd. Dit gedeelte legt die algemene constructie uit; het beweert niet dat VEIL deze gebruikt.
+
+Alice en Bob spreken eerst de uitwisseling en de ontvangstbestemmingen af. Alice maakt een geheim en deelt de hash ervan. Met de hash kan een contract het geheim later controleren zonder dat Alice het meteen moet publiceren. Het contract vereist ook de autorisatie van de bedoelde ontvanger: alleen het geheim kennen geeft niet iedere waarnemer de mogelijkheid het geld te nemen.
+
+De [HTLC-beschrijving in BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) toont een claimtak die het geheim en een handtekening van de ontvanger vereist, plus een terugbetalingstak die na een tijdslimiet beschikbaar is. BIP 199 is een gesloten voorstel dat deze constructie beschrijft, geen Blocknet-specificatie.
+
+## Wat gebeurt er als beide kanten voltooien?
+
+Volg het genummerde diagram van de financieringsfase naar de claimfase. “Chain A” en “Chain B” zijn algemene labels. Ze noemen geen beschikbaar paar en impliceren niet dat Blocknet deze specifieke contracten ondersteunt.
+
+1. **Alice financiert het eerste contract.** Daarmee kan Bob claimen met het geheim en zijn autorisatie. Alices terugbetaling wordt later beschikbaar.
+2. **Bob controleert en financiert het tweede contract.** Het gebruikt de hash van hetzelfde geheim en laat Alice claimen. Bobs terugbetaling wordt eerder beschikbaar dan die van Alice.
+3. **Alice controleert en claimt de tweede kant.** Haar claim onthult het geheim in dit eenvoudige voorbeeld met een openbare hashlock.
+4. **Bob gebruikt het onthulde geheim om de eerste kant te claimen.** Het interval tussen de terugbetalingsdeadlines geeft hem tijd om te handelen.
+
+[![Algemeen swapvoorbeeld: Alice en Bob financieren afzonderlijke voorwaardelijke contracten, Alices claim onthult het geheim en Bob gebruikt het om te claimen; een ongebruikt contract heeft een terugbetalingspad met tijdsvoorwaarde.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+De bovenste rij toont financiering op twee chains. De onderste rij toont claims in omgekeerde volgorde. De gebogen pijlen geven herstelpaden aan voor geld dat nog vaststaat wanneer aan de terugbetalingsvoorwaarden is voldaan. Dit is een verklarend diagram, geen VEIL-scherm of live transactie.
+
+## Wat als een deelnemer stopt?
+
+Herstel hangt af van waar de uitwisseling is gestopt. Als Alice het eerste contract financiert en Bob het tweede nooit financiert, kan Alice haar nog vaststaande geld via de terugbetalingstak terughalen zodra die geldig wordt. Als beide contracten zijn gefinancierd maar Alice het geheim nooit onthult, kunnen de deelnemers hun eigen terugbetalingspaden gebruiken voor onuitgegeven geld.
+
+Een timelock maakt een terugbetalingsuitgave toegestaan; hij verzendt en bevestigt die transactie niet zelf. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) legt tijdgebonden bestedingsvoorwaarden en de constructie van niet-interactieve terugbetalingen uit. Een concrete toepassing moet de claim- of terugbetalingstransacties beheren en de informatie die nodig is om ze te autoriseren.
+
+Zodra Alice de tweede kant claimt en het geheim onthult, moet Bob tijdig het claimpad aan de eerste kant volgen. Daarom zijn de volgorde en de gespreide deadlines belangrijk. Een toepassing sluiten is niet hetzelfde als een gefinancierde uitwisseling annuleren. De herstelinstructies van de implementatie bepalen hoe de toestand wordt hervat.
+
+## Wat kunnen deelnemers en waarnemers zien?
+
+Afwikkeling en privacy beantwoorden verschillende vragen. Deelnemers kennen de afgesproken voorwaarden en de ontvangstinformatie die ze hebben uitgewisseld. In het eenvoudige voorbeeld verschijnt dezelfde openbare hash op beide chains en onthult de claim het geheim. Die gedeelde waarden kunnen een waarnemer een verband tussen de twee kanten bieden.
+
+De precieze openbaarmaking hangt af van het protocol en de betrokken chains. Een privébetalingsformaat bepaalt op zichzelf niet wat een andere chain publiceert of wat een handelsinterface vastlegt. Evenmin wist het voltooien van een uitwisseling de berichten waarin deelnemers erover onderhandelden.
+
+Voor gewone Blocknet-betalingen onderscheidt de [handleiding over betalingszichtbaarheid](/nl/blog/blocknet-payment-visibility/) openbare transactievelden van de toegang van verzender, ontvanger en personen met verleende inzage. Dat is de basis om de privacy van BNT-betalingen te begrijpen. Een swap-specifieke privacyclaim vereist bewijs over de volledige swap, inclusief het andere activum en de communicatiestappen.
+
+## Wat heeft Blocknet over VEIL aangekondigd?
+
+De [officiële Blocknet-site](https://blocknetcrypto.com/#faraday) noemt VEIL in de vergelijking van atomic swaps en beschrijft een gepland herontwerp met postkwantumprimitieven als onderdeel van Faraday. Die openbare verklaring geeft de richting van het project aan. Ze specificeert geen handelsparen, swapcommando’s, terugbetalingsdeadlines of een eindgebruikersdienst die deze handleiding kan verifiëren.
+
+Houd de reikwijdte van die aankondiging duidelijk wanneer je het bovenstaande voorbeeld leest. De HTLC-uitleg beschrijft de coördinatie van atomic swaps in het algemeen. Het is geen beschrijving van het interne protocol van VEIL. De [Faraday-handleiding](/nl/blog/blocknet-faraday-upgrade/) behandelt de aangekondigde netwerkovergang; implementatiespecifieke swapinstructies horen uit een gepubliceerde release en de bijbehorende documentatie te komen.
+
+Om nu BNT te ontvangen, behandelt de [handleiding voor je eerste munten](/nl/blog/get-first-blocknet/) gewone overdrachten en minen. Dat zijn gevestigde gebruiksprocedures met hun eigen wallet- en betaalstappen. Dit artikel geeft je de begrippen om een toekomstige openbare swaprelease te begrijpen zonder een aankondiging aan te zien voor instructies om geld te storten.
+
+<CTA target="seine" title="Ontvang BNT door te minen" text="Gebruik seine met bntpool.com en ontvang miningbetalingen in je eigen Blocknet-wallet." />

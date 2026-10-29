@@ -9,7 +9,7 @@ faq:
     a: 'Por defecto, seine guarda la dirección de pago, el pool y el nombre del rig en seine-data/seine.config.json, dentro de la carpeta desde la que lo ejecutas. Ejecútalo desde la misma carpeta extraída para reutilizar esos ajustes. La opción data-dir permite elegir otro directorio cuando lo necesites.'
   - q: '¿Necesito las páginas grandes de Windows antes de empezar a minar?'
     a: 'No. seine intenta usar páginas grandes automáticamente y utiliza páginas normales si no están disponibles. Puedes empezar a minar con los ajustes predeterminados. Para configurar páginas grandes de forma opcional, concede a tu cuenta de minería el permiso Bloquear páginas en la memoria y después cierra y vuelve a iniciar sesión antes de reiniciar seine.'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ Ten preparada tu dirección pública de pago antes de abrir el minero. La [guía
 
 Cada hilo de minería de CPU utiliza un bloque de memoria de 2 GiB. seine comprueba la RAM disponible y el número de núcleos, deja margen de memoria y elige por ti el número inicial de hilos. Puedes empezar con los valores predeterminados en un equipo de escritorio o portátil; no hace falta calcular el número de hilos ni elegir primero un kernel de CPU.
 
-## Paso 1: descarga el archivo para Windows
+## Paso 1: descarga la versión adecuada
 
 Abre la [sección de descargas](/es/#download) y elige Windows x86_64. El archivo se llama `seine-windows-x86_64.zip`.
 
-![ZIP de Windows en la tabla oficial de descargas de seine](/assets/blog/windows-download.png)
+![ZIP de Windows en la tabla oficial de descargas de seine](/assets/blog/setup-download.webp)
 
-## Paso 2: extrae el ZIP completo
+## Paso 2: extrae y ejecuta
 
 En el Explorador de archivos, haz clic con el botón derecho en el ZIP descargado y selecciona **Extraer todo**. Elige una carpeta en la que puedas escribir y abre la carpeta extraída. Conserva juntos `seine.exe` y las DLL que lo acompañan: el archivo para Windows incluye las bibliotecas de ejecución de NVIDIA que utiliza el minero.
 
@@ -43,29 +43,37 @@ Haz doble clic en `seine.exe` desde la carpeta extraída. Si prefieres una termi
 
 El prefijo `./` o `.\` indica al intérprete que ejecute el programa del directorio actual. Ejecutarlo desde una carpeta extraída también proporciona a seine un lugar fijo donde guardar sus ajustes. Usa esa misma carpeta en los siguientes arranques para que encuentre la dirección y el pool que introdujiste.
 
-## Paso 3: introduce tu dirección y el pool
+## Paso 3: introduce la dirección de tu monedero
 
-En el primer mensaje, pega tu dirección de recepción de Blocknet o tu `@name` registrado y confírmalo. Acepta la URL predeterminada del pool, `stratum+tcp://bntpool.com:3333`. Si se solicita, asigna al rig un nombre reconocible en el pool para distinguir este PC con Windows de otro equipo que mine a la misma dirección.
+Pega tu dirección pública de recepción de Blocknet o tu `@name` registrado y pulsa Intro para aceptar `stratum+tcp://bntpool.com:3333`. La [guía del monedero](/es/blog/blocknet-wallet-for-mining/) explica dónde encontrar la dirección. Seine no necesita tu frase de recuperación ni tus claves de gasto. Asigna automáticamente un nombre al equipo en el pool.
 
-La [guía de configuración](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) describe estos mensajes y los ajustes guardados. Por defecto están en `seine-data/seine.config.json`, con una ruta relativa a la carpeta desde la que ejecutas el programa. En los siguientes arranques, seine los reutiliza. Los nombres cortos se resuelven de nuevo al iniciar cada ejecución.
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Preguntas de dirección y pool del primer inicio. Sustituye el ejemplo por tu dirección o nombre registrado." loading="lazy" />
+  </picture>
+  <figcaption>Preguntas de dirección y pool del primer inicio. Sustituye el ejemplo por tu dirección o nombre registrado.</figcaption>
+</figure>
 
-También puedes indicar directamente un nombre corto registrado en PowerShell:
+Seine elige los hilos y se ajusta automáticamente. En futuros inicios, ejecútalo desde la misma carpeta para reutilizar `seine-data/seine.config.json`.
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-Sustituye `@name` por tu propio nombre corto registrado. Si dejas sin configurar los parámetros de hilos y kernel de CPU, seine los elige automáticamente. Para la configuración general en distintos sistemas operativos, consulta [cómo minar Blocknet](/es/blog/how-to-mine-blocknet/).
-
-## ¿Cómo sabes que la minería funciona?
+## Paso 4: comprueba las participaciones aceptadas
 
 <Answer>
 Comprueba que el panel de seine muestra una tasa de hash y shares aceptados, y después busca la misma dirección de pago en la página My Stats de bntpool.com. El panel describe el trabajo actual del minero; el pool registra los shares enviados y las recompensas. Deja que el ajuste automático se estabilice antes de comparar tasas o cambiar ajustes.
 </Answer>
 
-La [guía del panel](/es/blog/seine-dashboard-explained/) explica la tasa de hash, el estado de minería y los paneles del pool. Una tasa de hash activa indica actividad de cálculo local; un share aceptado confirma que el trabajo ha llegado al pool. Abre [My Stats](https://bntpool.com/stats) e introduce la misma dirección o nombre corto para seguir los shares y el saldo de este rig.
+La [guía del panel](/es/blog/seine-dashboard-explained/) explica la tasa de hash, el estado de minería y los paneles del pool. Una tasa de hash activa indica actividad de cálculo local; un share aceptado confirma que el trabajo ha llegado al pool. Abre [My Stats](https://bntpool.com/stats?lang=es) e introduce la misma dirección o nombre corto para seguir los shares y el saldo de este rig.
 
 Distingue entre shares aceptados y pagos al comprobar una configuración nueva. Los shares contribuyen a las recompensas del pool; los pagos siguen sus reglas de confirmación y saldo. La [guía de PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) explica esa secuencia. Puedes comprobar la conexión de inmediato sin esperar al primer pago.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Panel real de seine con datos de ejemplo. Busca Accepted; estas cifras no son una prueba de rendimiento." loading="lazy" />
+  </picture>
+  <figcaption>Panel real de seine con datos de ejemplo. Busca Accepted; estas cifras no son una prueba de rendimiento.</figcaption>
+</figure>
 
 ## Minería con CPU y NVIDIA en el mismo PC
 
@@ -79,6 +87,6 @@ El arranque normal ya intenta usar páginas grandes y recurre a páginas normale
 
 La [guía de páginas grandes](/es/blog/huge-pages-blocknet-mining/) detalla esta configuración opcional. Después de volver a iniciar sesión, ejecuta seine normalmente y comprueba en el registro de arranque el modo de páginas seleccionado. Mantén el modo automático predeterminado mientras consigues tu primera configuración funcional y compara después las mediciones en el mismo PC si cambias los ajustes de páginas.
 
-[¿Windows bloqueó tu minero? Verifica la descarga](/es/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="Descarga seine para Windows" text="Extrae el ZIP, introduce tu dirección de pago y empieza a minar en bntpool.com con ajuste automático de CPU y NVIDIA." />
+
+Abre [Mis estadísticas](https://bntpool.com/stats?lang=es) e introduce la misma dirección o nombre registrado para ver tu equipo, participaciones y saldo.

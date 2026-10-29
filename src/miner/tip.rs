@@ -23,6 +23,9 @@ pub(super) struct TipSignal {
     last_new_block: Arc<Mutex<Option<LastNewBlock>>>,
     sequence: Arc<AtomicU64>,
     refresh_on_same_height: bool,
+    /// When the first unserved new-tip event arrived; cleared once a
+    /// template building on that tip is prepared.
+    stale_since: Arc<Mutex<Option<Instant>>>,
 }
 
 struct LastNewBlock {
@@ -38,6 +41,7 @@ impl TipSignal {
             last_new_block: Arc::new(Mutex::new(None)),
             sequence: Arc::new(AtomicU64::new(0)),
             refresh_on_same_height,
+            stale_since: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -66,6 +70,37 @@ impl TipSignal {
         };
         if should_clear_stale {
             self.stale.store(false, Ordering::Release);
+        }
+        self.note_template_prepared(height);
+    }
+
+    /// Records tip event → template prepared once a template builds above the
+    /// last new-block height.
+    fn note_template_prepared(&self, template_height: u64) {
+        let event_height = self
+            .last_new_block
+            .lock()
+            .ok()
+            .and_then(|last| last.as_ref().and_then(|last| last.height));
+        if event_height.is_some_and(|height| template_height <= height) {
+            return;
+        }
+        let since = self
+            .stale_since
+            .lock()
+            .ok()
+            .and_then(|mut since| since.take());
+        if let Some(since) = since {
+            super::block_latency::record(
+                super::block_latency::SOLO_TIP_TO_TEMPLATE,
+                since.elapsed(),
+            );
+        }
+    }
+
+    fn note_stale_since(&self) {
+        if let Ok(mut since) = self.stale_since.lock() {
+            since.get_or_insert_with(Instant::now);
         }
     }
 
@@ -110,12 +145,14 @@ impl TipSignal {
             changed = true;
         }
         if changed {
+            self.note_stale_since();
             self.stale.store(true, Ordering::Release);
             self.sequence.fetch_add(1, Ordering::AcqRel);
         }
     }
 
     fn mark_stale_on_unparsed_event(&self) {
+        self.note_stale_since();
         self.stale.store(true, Ordering::Release);
         self.sequence.fetch_add(1, Ordering::AcqRel);
     }

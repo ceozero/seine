@@ -38,4 +38,21 @@ incomplete replay has a null work ratio, not an estimated completed result.
 Reported residency is block storage plus a separately reported reference-table
 size. It excludes implementation-specific allocation, index and policy metadata.
 This is not a reduced-memory hashing implementation, an optimal tradeoff search,
-or a prediction of CPU throughput. See the [full-size experiment](../experiments/cpu-research-20261024/README.md).
+or a prediction of CPU throughput.
+
+## Faraday BLAKE2b-512 PoW
+
+`Blake2bPowMidstate` implements the Faraday fork hash
+(`BLAKE2b-512(personal; header_base || nonce_le)`, target check on the first
+32 output bytes read big-endian). It compresses the template prefix once, so
+the 156-byte v2 header costs one compression per nonce. The reference lives in
+`blocknet-pow-spec` (`blake2b_pow_hash`). Its vectors come from Python's
+`hashlib.blake2b` until upstream publishes official ones; the kernel is
+checked against the reference for every header length from 0 to 300 bytes.
+
+The miner does not use it yet. Portable scalar rate on one 9950X3D core:
+about 8 MH/s (14 MH/s with `-C target-cpu=native`).
+
+```bash
+cargo +1.93.0 run --release --locked -p blocknet-pow-kernel --example blake2b_pow_rate -- 3
+```

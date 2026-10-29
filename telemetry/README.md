@@ -4,6 +4,22 @@ Seine hardware and performance reporting, with a separate Rust/Axum
 collector and PostgreSQL database. Pool Stratum, wallet and daemon contracts are
 unchanged. A collector outage drops reports without stopping mining.
 
+Schema 10 adds `hardware.memory_setup`: the populated memory module count, DDR
+type, whether the modules are registered, and the lowest rated and configured
+speed in MT/s, read from SMBIOS (Windows always, Linux only as root; absent
+otherwise). It sizes single-channel and below-rated-speed desktop setups. Deploy
+the schema-10 collector before releasing schema-10 miners; schemas 1-9 remain
+accepted, with no SQL storage migration.
+
+Schema 9 adds `hardware.resources.requested_threads` (the explicit `--threads`
+value, absent when sized automatically) and `hardware.resources.cpu_autotune_threads`,
+so fleet analysis can separate operator choices from automatic sizing, the host's
+`hardware.numa_nodes` (so multi-socket placement work can be sized against the
+fleet), plus the `auto_update` shutdown-request origin written when
+`--auto-update` restarts the miner. Deploy the schema-9 collector before releasing schema-9 miners: a schema-8
+collector rejects their reports. Schemas 1-8 remain accepted; no SQL storage
+migration or alert-threshold change is required.
+
 Schema 8 adds fixed API-stop, API-restart, TUI-quit and TUI-thread-change origins,
 plus the last entered cleanup step. Current-run reports and interrupted-run
 checkpoints retain these independently. Cleanup transitions are saved directly,
@@ -35,8 +51,7 @@ close now permits up to four seconds of normal cleanup, and a completed run clea
 its marker before final HTTP delivery. Ordinary checkpoints remain five seconds;
 the reporting worker checks for a shutdown request every second, subject to ongoing
 IO. Abrupt termination can still beat a checkpoint. Windows automatic large-page
-fallbacks now retain their numeric error at the source. See the
-[investigation and validation](../docs/validation/reliability-followup-20261027.md).
+fallbacks now retain their numeric error at the source.
 
 Schema 6 adds [paired CPU trial evidence](TUNING.md), including inconclusive and
 aborted comparisons, bounded delivery and installation-weighted research hints.
@@ -44,8 +59,7 @@ The productive CPU kernel tuner emits these trials when telemetry is enabled.
 Worker-count and joint producers are still pending. Kernel records can qualify
 with complete, stable measured CPU masks and topology on supported Linux and
 single-processor-group Windows hosts. Unknown or changed context remains coverage
-only. Missing trials do not imply no gain. See the [runtime validation scope](../docs/validation/runtime-kernel-trials-20261026.md)
-and [placement observations and limits](../docs/validation/trial-placement-20261026.md).
+only. Missing trials do not imply no gain.
 
 ## Miner preferences and collection
 
@@ -302,8 +316,6 @@ After the first backup succeeds, install and enable
 HTTPS, database connectivity, retention, disk headroom, backup freshness and
 performance-sample completeness;
 failures appear in systemd/journald. It does not send external notifications.
-The current host and maintenance commands are in
-[the production runbook](deploy/PRODUCTION.md).
 
 ## Analysis
 
@@ -353,8 +365,7 @@ Send the user a concise interpretation and next action rather than raw SQL outpu
 The command is invoked during agent work; it does not schedule unattended agent
 runs or notifications. Existing service health checks continue every five minutes.
 It neither modifies miner settings nor deploys changes. Backups remain local and
-a separate stateful Discord alert timer handles fleet incidents, as described in
-the [production runbook](deploy/PRODUCTION.md#discord-fleet-alerts).
+a separate stateful Discord alert timer handles fleet incidents.
 
 ### Manual SQL
 
@@ -398,8 +409,7 @@ to that database's connection string, then run `python3 telemetry/test_integrati
 It writes synthetic reports and checks validation, throttling, legacy uploads,
 storage, cohort separation, duplicate-device weighting and data-quality detection/recovery.
 Do not run it against production. Set `TELEMETRY_TEST_TRIAL_FIXTURE` to the runtime
-Monitor artifact to also verify producer-to-collector-to-SQL qualification; see
-[the reproduction steps](../docs/validation/trial-placement-20261026.md).
+Monitor artifact to also verify producer-to-collector-to-SQL qualification.
 
 Run the real collector against that disposable DB:
 

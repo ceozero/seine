@@ -1877,6 +1877,7 @@ async fn get_metrics(State(state): State<AppState>) -> String {
         "seine_miner_backend_quarantines_total {}\n",
         snapshot.metrics.backend_quarantines
     ));
+    crate::miner::block_latency::render_prometheus(&mut output);
     output
 }
 

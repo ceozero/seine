@@ -9,7 +9,7 @@ faq:
     a: 'デフォルトでは、seineは起動したフォルダー内のseine-data/seine.config.jsonに受取アドレス、プール、リグ名を保存します。同じ展開先フォルダーから実行すると、その設定を再利用できます。必要な場合はdata-dirオプションで別のディレクトリを指定できます。'
   - q: 'マイニングを始める前にWindowsのラージページが必要ですか？'
     a: 'いいえ。seineはラージページを自動的に試し、利用できない場合は通常のページを使います。デフォルト設定でマイニングを始められます。任意でラージページを設定する場合は、マイニング用アカウントに「メモリ内のページのロック」権限を与え、サインアウトして再びサインインした後にseineを再起動してください。'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ translation: draft
 
 CPUマイニングの各スレッドは2 GiBのメモリブロックを使います。seineは利用可能なRAMとコア数を確認し、メモリに余裕を残して初期スレッド数を選びます。デスクトップでもノートPCでもデフォルト設定で始められます。最初にスレッド数を計算したり、CPUカーネルを選んだりする必要はありません。
 
-## ステップ1：Windows版アーカイブをダウンロードする
+## ステップ1：適切なビルドをダウンロード
 
 [ダウンロードセクション](/ja/#download)を開き、Windows x86_64を選びます。アーカイブ名は`seine-windows-x86_64.zip`です。
 
-![seine公式ダウンロード一覧のWindows版ZIP](/assets/blog/windows-download.png)
+![seine公式ダウンロード一覧のWindows版ZIP](/assets/blog/setup-download.webp)
 
-## ステップ2：ZIP全体を展開する
+## ステップ2：展開して起動
 
 エクスプローラーでダウンロードしたZIPを右クリックし、**すべて展開**を選びます。書き込み可能なフォルダーを指定し、展開先フォルダーを開きます。`seine.exe`と付属のDLLは一緒に保存してください。Windows版アーカイブにはマイナーが使うNVIDIAランタイムライブラリが含まれています。
 
@@ -43,29 +43,37 @@ CPUマイニングの各スレッドは2 GiBのメモリブロックを使いま
 
 `./`または`.\`という接頭辞は、現在のディレクトリにある実行ファイルを起動するようシェルに伝えます。展開先フォルダーから実行すれば、seineの設定の保存先も一定になります。次回以降も同じフォルダーを使うことで、入力済みのアドレスとプールを読み込めます。
 
-## ステップ3：アドレスとプールを入力する
+## ステップ3：ウォレットアドレスを入力
 
-最初の入力欄にBlocknetの受取アドレスまたは登録済みの`@name`を貼り付けて確定します。デフォルトのプールURLである`stratum+tcp://bntpool.com:3333`をそのまま使います。リグ名を求められた場合は、同じアドレスにマイニングする別のマシンと区別できるよう、このWindows PCに分かりやすいプール上の名前を付けてください。
+公開用のBlocknet受取アドレスまたは登録済みの`@name`を貼り付け、Enterを押して`stratum+tcp://bntpool.com:3333`を選びます。アドレスの確認方法は[ウォレットガイド](/ja/blog/blocknet-wallet-for-mining/)をご覧ください。seineにリカバリーフレーズや支出鍵は不要です。プールのワーカー名は自動で設定されます。
 
-[設定ガイド](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md)に、これらの入力と保存される設定の説明があります。デフォルトの保存先は、起動したフォルダーを基準とする`seine-data/seine.config.json`です。次回以降の起動時にはseineが再利用します。短縮名は、新しく起動するたびに再解決されます。
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。" loading="lazy" />
+  </picture>
+  <figcaption>初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。</figcaption>
+</figure>
 
-登録済みの短縮名をPowerShellで直接指定することもできます。
+seineはスレッド数を選び、自動で調整します。次回からも同じフォルダから起動すると、`seine-data/seine.config.json`を再利用できます。
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-`@name`を自分の登録済み短縮名に置き換えてください。CPUのスレッド数とカーネルのフラグを指定しなければ、seineが自動で選びます。各OSに共通する設定は、[Blocknetのマイニング方法](/ja/blog/how-to-mine-blocknet/)を参照してください。
-
-## マイニングが動作しているか確認するには？
+## ステップ4：受理されたシェアを確認
 
 <Answer>
 seineのダッシュボードにハッシュレートと承認されたシェアが表示されていることを確認し、bntpool.comのMy Statsページで同じ受取アドレスを検索します。ダッシュボードはマイナーの現在の作業を示し、プールは送信されたシェアと報酬を記録します。速度の比較や設定の変更は、自動調整が落ち着くまで待ってください。
 </Answer>
 
-[ダッシュボードガイド](/ja/blog/seine-dashboard-explained/)では、ハッシュレート、マイニング状態、プールのパネルを説明しています。稼働中のハッシュレートはローカルでのハッシュ計算を示し、承認されたシェアは作業がプールに届いたことを確認するものです。[My Stats](https://bntpool.com/stats)を開いて同じアドレスまたは短縮名を入力すると、このリグのシェアと残高を追跡できます。
+[ダッシュボードガイド](/ja/blog/seine-dashboard-explained/)では、ハッシュレート、マイニング状態、プールのパネルを説明しています。稼働中のハッシュレートはローカルでのハッシュ計算を示し、承認されたシェアは作業がプールに届いたことを確認するものです。[My Stats](https://bntpool.com/stats?lang=ja)を開いて同じアドレスまたは短縮名を入力すると、このリグのシェアと残高を追跡できます。
 
 新しい設定を確認するときは、承認されたシェアと支払いを区別してください。シェアはプール報酬に寄与し、支払いはプールの承認と残高のルールに従います。この流れは[PPLNSガイド](https://bntpool.com/blog/how-pplns-payouts-work/)で説明しています。最初の支払いを待たずに、接続をすぐ確認できます。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。" loading="lazy" />
+  </picture>
+  <figcaption>seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。</figcaption>
+</figure>
 
 ## 同じPCでCPUとNVIDIAを使ってマイニングする
 
@@ -79,6 +87,6 @@ seineはデフォルトでCPUと対応NVIDIAカードを同時に使います。
 
 [ラージページガイド](/ja/blog/huge-pages-blocknet-mining/)では、この任意の設定を詳しく説明しています。再サインイン後は通常どおりseineを起動し、起動ログで選択されたページモードを確認します。最初の動作する設定を整える間はデフォルトの自動モードを維持し、ページ設定を変える場合は同じPCで測定結果を比較してください。
 
-[Windowsがマイナーをブロックしたら](/ja/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="Windows版seineをダウンロード" text="ZIPを展開して受取アドレスを入力し、CPUとNVIDIAの自動調整でbntpool.comのマイニングを始めましょう。" />
+
+[マイ統計](https://bntpool.com/stats?lang=ja)を開き、同じアドレスまたは登録済みの名前を入力して、ワーカー、シェア、残高を確認します。

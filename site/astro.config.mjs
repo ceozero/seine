@@ -5,7 +5,8 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
     site: 'https://seineminer.com',
     trailingSlash: 'always',
-    build: { format: 'directory' },
+    // The complete styles are small; avoid a blocking round trip before first paint.
+    build: { format: 'directory', inlineStylesheets: 'always' },
     integrations: [mdx()],
     markdown: { shikiConfig: { theme: 'github-dark-dimmed' } },
 });

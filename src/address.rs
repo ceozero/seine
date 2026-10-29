@@ -4,11 +4,15 @@ use sha3::{Digest, Sha3_256};
 const STEALTH_ADDRESS_CHECKSUM_TAG: &[u8] = b"blocknet_stealth_address_checksum";
 const NETWORK_ID_MAINNET: &str = "blocknet_mainnet";
 const NETWORK_ID_TESTNET: &str = "blocknet_testnet";
+const MAX_ENCODED_ADDRESS_LEN: usize = 2048;
 
 pub(crate) fn validate_mining_address(address: &str) -> Result<(), String> {
     let trimmed = address.trim();
     if trimmed.is_empty() {
         return Err("address is required".to_string());
+    }
+    if trimmed.len() > MAX_ENCODED_ADDRESS_LEN {
+        return Err("address exceeds 2048 characters".to_string());
     }
 
     let decoded = bs58::decode(trimmed)
@@ -16,6 +20,7 @@ pub(crate) fn validate_mining_address(address: &str) -> Result<(), String> {
         .map_err(|_| "invalid base58 address".to_string())?;
 
     match decoded.len() {
+        1253 => Err("Faraday PQ address validation is not supported by this build".to_string()),
         68 => {
             let payload = &decoded[..64];
             let checksum = &decoded[64..];
@@ -74,6 +79,14 @@ fn address_checksum(payload: &[u8], network_id: &str) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pq_sized_addresses_fail_explicitly_until_spec_is_implemented() {
+        let address = bs58::encode(vec![0x73; 1253]).into_string();
+        assert!(super::validate_mining_address(&address)
+            .unwrap_err()
+            .contains("Faraday"));
+        assert!(super::validate_mining_address(&"1".repeat(2049)).is_err());
+    }
     use super::*;
     use crate::dev_fee::DEV_ADDRESS;
 

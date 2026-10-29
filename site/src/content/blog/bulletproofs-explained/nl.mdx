@@ -8,19 +8,19 @@ faq:
   - q: 'Hoe groot is een range proof van Bulletproofs?'
     a: 'Eén Bulletproof van 64 bits bevat 2 × log2(64) + 9 = 21 elementen. In de Ristretto-groep neemt elk element 32 bytes in, dus elk bewijs is 672 bytes, en de Blocknet-explorer toont precies dat voor elke output. De grootte groeit met de logaritme van het bereik, dus een verdubbeling van het aantal bits voegt maar twee elementen toe.'
   - q: 'Wie kan het bedrag van een Blocknet-transactie zien?'
-    a: 'Alleen de verzender en de ontvanger. De chain slaat voor elke output een Pedersen-commitment en een range proof op, plus het bedrag, versleuteld met het geheim dat de twee wallets delen. De wallet van de ontvanger ontsleutelt het met de privé view key. De netwerkfee is het enige openbare getal, zodat nodes hem kunnen meenemen in de controle van de balans.'
+    a: "Bij een gewone betaling kent de afzender het bedrag en achterhaalt de ontvangende wallet het binnengekomen bedrag. Bewust gedeelde betalingsbewijzen of leestoegang kunnen het aan anderen onthullen. Openbare transactiegegevens bevatten nog steeds de vergoeding en structuur. Coinbase-beloningen zijn anders: het toegestane bedrag en de codering zijn openbaar af te leiden uit de blokhoogte en transactiegegevens."
   - q: 'Hoe weten nodes dat er geen munten zijn bijgemaakt als bedragen verborgen zijn?'
-    a: 'Elke node controleert voor elke transactie twee dingen. De Pedersen-commitments moeten kloppen, dus de inputs zijn gelijk aan de outputs plus de fee, en elke output moet een geldige range proof hebben die laat zien dat het bedrag tussen 0 en 2^64 ligt. Samen sluiten die verborgen inflatie uit zonder één bedrag te onthullen.'
-sourceHash: e02793933862
+    a: "Bij gewone betalingen begrenzen bereikbewijzen elke uitvoer tot 0 tot en met 2^64−1, en controleert de commitmentbalans het waardebehoud inclusief vergoeding. Volledige validatie controleert ook de bestedingsbevoegdheid, ringbinding en hergebruik van sleutelbeelden. Nieuwe uitgifte volgt een afzonderlijke coinbase-controle tegen de toegestane blokbeloning. Dit zijn verschillende controles; een bereikbewijs alleen stelt niet vast dat aan alle transactieregels is voldaan."
+sourceHash: 3be778e9122b
 translation: draft
 ---
 
-Bulletproofs zijn de korte zero-knowledge range proofs waarmee een cryptovaluta elk transactiebedrag kan verbergen terwijl elke node toch controleert dat er geen munten zijn bijgemaakt. Deze gids legt Pedersen-commitments uit, waarom verborgen bedragen range proofs nodig hebben, hoe Bulletproofs die bewijzen klein houden en hoe Blocknet ze op elke output gebruikt.
+Bulletproofs zijn korte zero-knowledge-bereikbewijzen die verborgen betalingsbedragen helpen verifiëren. Deze gids legt Pedersen-commitments uit, waarom bedragen grenzen nodig hebben en hoe Bulletproofs klein blijven. In Blocknet werken bereikbewijzen samen met controles op bevoegdheid, balans, herhaalde besteding en coinbase. Samen verklaren ze hoe privacy bij gewone betalingen samengaat met validatie van geldbewegingen en nieuwe uitgifte.
 
 ## Wat zijn Bulletproofs?
 
 <Answer>
-Bulletproofs zijn korte zero-knowledge proofs, in 2018 gepubliceerd door Bünz, Bootle, Boneh, Poelstra, Wuille en Maxwell. In cryptovaluta bewijzen ze dat een verborgen bedrag binnen een geldig bereik ligt, zoals 0 tot 2^64, zonder het te onthullen. Ze hebben geen trusted setup nodig, en hun grootte groeit alleen met de logaritme van het bereik.
+Bulletproofs zijn korte zero-knowledge proofs, in 2018 gepubliceerd door Bünz, Bootle, Boneh, Poelstra, Wuille en Maxwell. In cryptovaluta bewijzen ze dat een verborgen bedrag binnen een geldig bereik ligt, zoals 0 tot 2^64−1, zonder het te onthullen. Ze hebben geen trusted setup nodig, en hun grootte groeit alleen met de logaritme van het bereik.
 </Answer>
 
 Het artikel, [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066), verscheen in 2018 op het IEEE Symposium on Security and Privacy. De auteurs ontwierpen ze voor vertrouwelijke transacties, waarbij bedragen op een blockchain worden vervangen door commitments. Om te zien waarom zo'n bewijs überhaupt nodig is, begin je bij de commitment.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Pedersen-commitments kunnen bij elkaar worden opgeteld. De som van twee commitments is een commitment op de som van hun bedragen, waarbij ook de blinding factors worden opgeteld. Een node telt de input-commitments van een transactie op, en ook de output-commitments plus de fee, en controleert of de twee totalen gelijk zijn. Zo bevestigt hij de balans zonder een bedrag te zien.
 </Answer>
 
-Twee commitments optellen geeft `(v1 + v2)·G + (r1 + r2)·H`, wat zelf een commitment op `v1 + v2` is. De verzender kiest de blinding factors zo dat de totale blinding van de inputs gelijk is aan die van de outputs. Kloppen de bedragen ook, dan is het verschil tussen de som van de inputs en de som van de outputs precies nul, en elke node kan dat controleren.
+Het optellen van twee commitments geeft `(v1 + v2)·G + (r1 + r2)·H`, zelf een commitment voor `v1 + v2`. De afzender kiest de blindingsfactoren zo dat hun totaal bij de invoeren gelijk is aan dat bij de uitvoeren. Als de bedragen kloppen, geeft het aftrekken van de uitvoercommitments en het vergoedingscommitment van de invoersom nul.
 
-De netwerkfee is het enige openbare getal in een transactie. Nodes maken er een commitment van met een blinding factor van nul en tellen die op bij de kant van de outputs, dus de controle luidt: inputs = outputs + fee.
+De netwerkvergoeding is openbaar, net als andere transactiegegevens zoals de hash en invoer-/uitvoerstructuur. Nodes zetten de vergoeding om in een commitment met blinding nul en voegen die aan de uitvoerkant toe. Voor een gewone betaling luidt de behoudscontrole: invoeren = uitvoeren + vergoeding.
 
 ## Waarom hebben verborgen bedragen range proofs nodig?
 
 Rekenen met commitments gebeurt modulo een heel groot getal, de orde van de curvegroep, die ongeveer 2^252 is. In die rekenkunde is een "negatief" bedrag gewoon een enorm positief bedrag. Iemand zou een input van 10 munten kunnen uitgeven en twee outputs kunnen maken, een van 11 en een van "min 1". De commitments zouden perfect kloppen, en er zou 1 munt uit het niets verschijnen, verborgen voor elke waarnemer.
 
-Een range proof dicht dat gat. Het bewijst dat het bedrag in een commitment tussen 0 en 2^64 ligt, zonder te zeggen wat het is. Als elke output zo begrensd is, kunnen een handvol outputs nooit optellen tot een getal dat groot genoeg is om rond de groepsorde te lopen, dus kloppende commitments betekenen kloppende bedragen.
+Een range proof dicht dat gat. Het bewijst dat het bedrag in een commitment tussen 0 en 2^64−1 ligt, zonder te zeggen wat het is. Als elke output zo begrensd is, kunnen een handvol outputs nooit optellen tot een getal dat groot genoeg is om rond de groepsorde te lopen, dus kloppende commitments betekenen kloppende bedragen.
 
 Eerdere ontwerpen voor vertrouwelijke transacties gebruikten range proofs die lineair groeiden met het aantal bits. Bulletproofs groeien alleen met de logaritme, waardoor een bewijs van 64 bits terugvalt naar een paar honderd bytes.
 
@@ -74,24 +74,38 @@ Het bewijs is niet-interactief. In plaats van een live verifier die challenges s
 
 Monero zette Bulletproofs aan bij zijn netwerkupgrade van 18 oktober 2018 (de release v0.13.0) om transacties kleiner te maken. De [Rust-bibliotheek bulletproofs](https://github.com/dalek-cryptography/bulletproofs) van het project dalek-cryptography implementeert ze over de Ristretto-groep van Curve25519, en de cryptografiebibliotheek van Blocknet is daarop gebouwd.
 
-## Hoe verbergt Blocknet elk bedrag?
+## Hoe valideert Blocknet private betalingen?
 
-Bij Blocknet bevat elke output van elke transactie een Pedersen-commitment in plaats van een bedrag, en elke output heeft een eigen Bulletproof van 64 bits. Privacy maakt deel uit van het transactieformaat, zonder transparante modus, dus er is geen manier om een betaling met een zichtbaar bedrag te versturen.
+In de uitgebrachte core v0.22.0 bevatten uitvoeren van gewone betalingen Pedersen-commitments, versleutelde bedragen en afzonderlijke 64-bits Bulletproofs. Hun bedragen zijn verborgen in de gewone openbare registratie. De speciale coinbase-transactie creëert de blokbeloning en heeft een afzonderlijk, openbaar controleerbaar uitgiftepad.
 
-Dit controleert een node voordat hij een transactie accepteert:
+Volledige cryptografische validatie van een gewone betaling omvat deze afzonderlijke controles in de [uitgebrachte transactievalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960):
 
-- **Elke range proof.** De Bulletproof van elke output moet kloppen met zijn commitment, wat bewijst dat het bedrag tussen 0 en 2^64 ligt. De bewijzen gebruiken een transcript met het label "Blocknet Range Proof", dat elk bewijs aan Blocknet koppelt.
-- **De balans.** Elke input heeft een pseudo-output-commitment, en de ringhandtekening bewijst dat die zich vastlegt op hetzelfde bedrag als de echte munt die wordt uitgegeven, zonder te onthullen welk ringlid dat is. De node controleert daarna of de pseudo-outputs optellen tot de outputs plus de fee.
-- **Nieuwe munten.** De beloning van een blok volgt een openbaar schema, dus voor de geminede output bouwt de node de commitment na die hij voor die hoogte verwacht en controleert hij of die overeenkomt.
+- **Bevoegdheid en binding.** Elke invoer moet 16 canonieke ringleden uit de keten gebruiken. RingCT bewijst eigendom en gelijkheid van bedragen. De verificateur controleert ook dat het sleutelbeeld en het pseudo-uitvoercommitment overeenkomen met het ondertekende bewijs.
+- **Bereik en balans.** De Bulletproof van elke uitvoer wordt tegen het commitment gecontroleerd en begrenst het bedrag tot 0 tot en met 2^64−1. Het transcript gebruikt het label "Blocknet Range Proof". De som van ondertekende pseudo-uitvoeren moet gelijk zijn aan de uitvoeren plus de vergoeding. Dit controleert behoud; het vervangt geen bevoegdheidscontrole.
+- **Herhaalde besteding.** Sleutelbeelden moeten binnen de transactie verschillend zijn en mogen niet al als besteed geregistreerd staan.
+
+[![Vier afzonderlijke validatietaken: 1 bestedingsbevoegdheid en ringbinding; 2 bedragbereik en commitmentbalans; 3 sleutelbeeld nog niet besteed; 4 toegestane coinbase-uitgifte via een afzonderlijk pad.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+Controles **1–3** betreffen gewone bestedingen. Controle **4** betreft de speciale transactie die de blokbeloning creëert. Het diagram scheidt hun rollen; het toont geen lopende transactie en vervangt de overige blokvalidatie niet.
+
+## Hoe ontdekt het netwerk een herhaalde besteding?
+
+Een geldig bereikbewijs zegt dat een bedrag binnen de grenzen ligt. Het zegt niet dat de eigenaar de uitvoer nog niet heeft besteed. Het sleutelbeeld levert die afzonderlijke controle op koppelbaarheid zonder het echte ringlid aan te wijzen. Validatie verwerpt dubbele beelden binnen één transactie en beelden die al op de aanvaarde keten zijn besteed. Binding van het beeld aan het ondertekende RingCT-bewijs voorkomt dat het onafhankelijk kan worden verwisseld. [Wie beheert Blocknet](/nl/blog/who-controls-blocknet/) legt uit hoe deze regels samenhangen met de nodes die ze toepassen.
+
+## Hoe wordt uitgifte gecontroleerd zonder walletsaldos te lezen?
+
+De coinbase van een blok heeft geen bestedingsinvoeren. De [uitgebrachte blokvalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543) berekent de toegestane beloning voor de hoogte en reconstrueert het verwachte commitment en gecodeerde bedrag met openbaar afgeleide blinding. Beide moeten overeenkomen. Het bedrag is dus openbaar afleidbaar, anders dan de verborgen bedragen van gewone betalingen.
+
+Cumulatieve uitgifte wordt berekend door de geplande beloningen vanaf hoogte 1 op te tellen; genesis heeft geen coinbase. Dit totaal ontstaat niet door private walletsaldos op te tellen en zegt niet hoeveel momenteel besteedbaar of in omloop is. De [gids over de geldvoorraad](/nl/blog/blocknet-supply/) verklaart dat verschil, terwijl het [transactievoorbeeld](/nl/blog/blocknet-transaction-explained/) overdrachten en wisselgeld behandelt die de beloning niet opnieuw uitgeven.
 
 Je kunt dit zien op de [Blocknet-explorer](https://explorer.blocknetcrypto.com). Een transactiepagina toont de bedragen als "hidden · Pedersen commitments", en elke output toont zijn commitment, een versleutelde memo en een range proof van "672 bytes · Bulletproof", de grootte die de berekening hierboven voorspelt.
 
-De ontvanger ziet nog steeds het echte bedrag. Elke output bevat het bedrag, versleuteld met het geheim dat de wallets van verzender en ontvanger delen, en de wallet van de ontvanger ontsleutelt het met de privé view key. Het bedrag is zichtbaar voor de twee mensen in de betaling en voor niemand anders.
+Bij gewone betalingen herkent de ontvangende wallet haar uitvoeren en achterhaalt hun versleutelde bedragen met haar private leesinformatie. De afzender kent het ingevoerde bedrag. Bewust gedeelde betalingsbewijzen of leestoegang kunnen anderen aanvullende informatie geven. Deze openbaarmakingskeuzes veranderen de commitment- en bewijscontroles van het netwerk niet.
 
-Verborgen bedragen werken samen met de andere lagen van Blocknet: [ringhandtekeningen](/nl/blog/ring-signatures-explained/) over 16 outputs verbergen de verzender, [eenmalige stealth-adressen](/nl/blog/stealth-addresses-explained/) verbergen de ontvanger, en [Dandelion++](/nl/blog/dandelion-plus-plus-explained/) verbergt waar een transactie het netwerk binnenkwam. De [gids over de privacyfuncties van Blocknet](/nl/blog/blocknet-privacy-features/) loopt ze allemaal door.
+Verborgen bedragen van gewone betalingen werken samen met de andere lagen van Blocknet: [ringhandtekeningen](/nl/blog/ring-signatures-explained/) over 16 uitvoeren beschermen de bestede bron, [eenmalige stealth-adressen](/nl/blog/stealth-addresses-explained/) beschermen de ontvangende bestemming en [Dandelion++](/nl/blog/dandelion-plus-plus-explained/) beperkt blootstelling van de netwerkoorsprong. De [privacygids](/nl/blog/blocknet-privacy-features/) legt elke laag uit. Deze controles beschrijven volledige validatie; snelle synchronisatie kan voor sommige dure handtekening- en bereikbewijscontroles steunen op vertrouwde historische controlepunten, zoals de uitgebrachte implementatie voorschrijft.
 
 ## Verdien zelf wat privé BNT
 
-Een eenvoudige manier om munten met verborgen bedragen te krijgen, is ze te minen. Blocknet gebruikt een geheugenintensieve [Argon2id-proof-of-work](/nl/blog/argon2id-proof-of-work-explained/) die je op een gewone computer kunt minen, en seine minet hem op je CPU, met eventuele NVIDIA-GPU's ernaast, en stemt zichzelf af zonder enige configuratie. Elke uitbetaling die bntpool.com je stuurt, komt binnen als privé output met een commitment en een Bulletproof. De [mininghandleiding](/nl/blog/how-to-mine-blocknet/) brengt je binnen een paar minuten van download naar geaccepteerde shares.
+Om gewone BNT-betalingen in je wallet te ontvangen, kun je via een pool minen. Blocknet gebruikt geheugenintensieve [Argon2id-proof-of-work](/nl/blog/argon2id-proof-of-work-explained/), en seine minet met je CPU en ondersteunde NVIDIA-GPU’s terwijl het zijn werking afstemt. Betalingen van bntpool.com zijn gewone overdrachten met commitments en bereikbewijzen, onderscheiden van de coinbase-beloning van het blok. De [mininggids](/nl/blog/how-to-mine-blocknet/) behandelt de installatie en geaccepteerde shares.
 
-<CTA target="seine" title="Mine privé BNT met seine" text="Download seine, plak je adres of @name en begin Blocknet te verdienen met elk bedrag verborgen op de chain." />
+<CTA target="seine" title="Mine BNT met seine" text="Gebruik seine met bntpool.com en ontvang gewone poolbetalingen in je eigen Blocknet-wallet." />

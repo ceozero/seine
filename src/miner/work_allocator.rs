@@ -57,10 +57,12 @@ pub(super) fn distribute_work(
     let mut non_quarantined_retry_attempts = 0u32;
     // Hoist template allocation outside the retry loop -- the fields are
     // invariant across retries and the Arc can be cheaply cloned.
+    retire_backends_without_pow(backends, options.pow, backend_executor)?;
     let template = Arc::new(WorkTemplate {
         work_id: options.work_id,
         epoch: options.epoch,
         header_base: Arc::clone(&options.header_base),
+        pow: options.pow,
         target: options.target,
         dynamic_share_target: options.dynamic_share_target.clone(),
         pause_on_solution: options.pause_on_solution,
@@ -81,6 +83,7 @@ pub(super) fn distribute_work(
             backends,
             options.reservation.max_iters_per_lane,
             options.backend_weights,
+            options.pow,
         );
         if options.strict_reservation {
             cap_nonce_counts_to_budget(&mut nonce_counts, remaining_reserved_span);
@@ -249,6 +252,38 @@ pub(super) fn distribute_work(
             ),
         );
     }
+}
+
+/// Quarantines backends that cannot hash `pow` (AMD and Metal have no
+/// BLAKE2b kernel yet), so they stop instead of mining a stale template.
+fn retire_backends_without_pow(
+    backends: &mut Vec<BackendSlot>,
+    pow: crate::backend::PowAlgorithm,
+    backend_executor: &backend_executor::BackendExecutor,
+) -> Result<()> {
+    if backends.iter().all(|slot| slot.backend.supports_pow(pow)) {
+        return Ok(());
+    }
+    backends.retain(|slot| {
+        if slot.backend.supports_pow(pow) {
+            return true;
+        }
+        warn(
+            "BACKEND",
+            format!(
+                "quarantined {}#{}: it cannot mine {pow:?} work",
+                slot.backend.name(),
+                slot.id
+            ),
+        );
+        backend_executor.quarantine_backend(slot.id, Arc::clone(&slot.backend));
+        false
+    });
+    backend_executor.prune(backends);
+    if backends.is_empty() {
+        bail!("no active mining backend supports {pow:?} work");
+    }
+    Ok(())
 }
 
 fn cap_nonce_counts_to_budget(nonce_counts: &mut [u64], budget: u64) {
@@ -489,6 +524,7 @@ pub(super) fn compute_backend_nonce_counts(
     backends: &[BackendSlot],
     max_iters_per_lane: u64,
     backend_weights: Option<&BTreeMap<BackendInstanceId, f64>>,
+    pow: crate::backend::PowAlgorithm,
 ) -> Vec<u64> {
     if backends.is_empty() {
         return Vec::new();
@@ -499,7 +535,15 @@ pub(super) fn compute_backend_nonce_counts(
         .iter()
         .map(|slot| {
             let lanes = slot.lanes.max(1);
-            let iters = backend_allocation_iters_per_lane(slot, max_iters_per_lane);
+            // Backend allocation hints are sized for Argon2id. A BLAKE2b GPU
+            // would finish them in milliseconds and idle for the rest of the
+            // round, so BLAKE2b work takes the whole per-lane reservation.
+            let iters = match pow {
+                crate::backend::PowAlgorithm::Argon2id => {
+                    backend_allocation_iters_per_lane(slot, max_iters_per_lane)
+                }
+                crate::backend::PowAlgorithm::Blake2b512 => max_iters_per_lane.max(1),
+            };
             lanes.saturating_mul(iters).max(lanes)
         })
         .collect();

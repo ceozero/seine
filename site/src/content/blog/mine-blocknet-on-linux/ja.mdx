@@ -1,84 +1,68 @@
 ---
 title: 'LinuxでBlocknetをマイニングする方法'
-description: 'seineでLinuxのBlocknetマイニングを設定。x86_64・ARM64の選択、アーカイブの検証、glibc・NVIDIAライブラリとシェアの受理を確認します。'
+description: "Linux: seineをダウンロードして展開し、Blocknetアドレスを入力して、bntpool.comでシェアの受理を確認します。まず自動設定で始めましょう。性能調整の説明はセットアップの後にあります。"
 tags: ['マイニングガイド', 'Linux', 'NVIDIA']
 faq:
   - q: 'どのLinuxアーカイブをダウンロードすればよいですか？'
-    a: 'ターミナルでuname -mを実行します。出力がx86_64ならx86_64アーカイブ、aarch64ならaarch64アーカイブを選びます。確認したv0.2.26のLinuxバイナリにはglibc 2.39以降が必要です。x86_64パッケージはCPUとNVIDIAでのマイニングに対応し、ARM64パッケージはCPU専用です。'
+    a: "ダウンロード欄を開きます。uname -mを実行し、x86_64ならseine-linux-x86_64.tar.gz、aarch64ならseine-linux-aarch64.tar.gzを選びます。Linux版にはglibc 2.39以降が必要です。x86_64版はCPUとNVIDIA、ARM64版はCPUマイニングに対応します。"
   - q: 'seineはsudoで実行する必要がありますか？'
     a: '通常のマイナーは、書き込み可能なフォルダーから自分のユーザーで実行します。アーカイブを展開し、必要なら所有者に実行権限を付与して、./seineで起動します。予約ヒュージページの準備は別の管理作業です。通常の起動では標準のメモリページを使用できます。'
   - q: 'LinuxでNVRTCライブラリが見つからないと表示されるのはなぜですか？'
     a: 'LinuxのNVIDIAバックエンドには、互換性のあるドライバーと、対応するbuiltinsライブラリを含むNVRTCランタイムライブラリが必要です。ディストリビューションまたはNVIDIAがサポートするパッケージからインストールしてください。LinuxアーカイブにWindowsのDLLは同梱されていません。GPUの準備中はCPUバックエンドを選べます。'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-このガイドでは、Linuxデスクトップやサーバーでseineを動かす手順を、アーカイブの選択からプールが受理したシェアの確認まで説明します。検証済みの例として公式リリースv0.2.26を使用します。Blocknetの受取アドレスを用意してください。確認方法は[ウォレットガイド](/ja/blog/blocknet-wallet-for-mining/)にあります。入力するのは公開アドレスか登録済みの`@name`であり、ウォレットのリカバリーフレーズを入力してはいけません。
 
 ## LinuxでBlocknetのマイニングを始めるには？
 
 <Answer>
-プロセッサーに合ったLinuxアーカイブを選び、SHA-256チェックサムを検証して、書き込み可能なフォルダーに展開します。`./seine`を実行し、支払い先アドレスを入力して、既定のbntpool.com接続を選びます。seineはCPUスレッド数を自動設定し、必要なランタイムライブラリがあれば、Linux x86_64で対応するNVIDIAカードも使用できます。
+seineをダウンロードして展開し、Blocknetアドレスを入力して、bntpool.comでシェアの受理を確認します。まず自動設定で始めましょう。性能調整の説明はセットアップの後にあります。
 </Answer>
 
-## 手順1：アーキテクチャとglibcを確認する
+## ステップ1：適切なビルドをダウンロード
 
-ターミナルを開き、次の読み取り専用の確認コマンドを実行します。1つ目はマシンのアーキテクチャを調べ、2つ目はglibcベースのシステムでGNU Cライブラリのバージョンを表示します。マイニングを開始したり、コンピューターの設定を変更したりすることはありません。
+[ダウンロード欄](/ja/#download)を開きます。`uname -m`を実行し、`x86_64`なら`seine-linux-x86_64.tar.gz`、`aarch64`なら`seine-linux-aarch64.tar.gz`を選びます。Linux版にはglibc 2.39以降が必要です。x86_64版はCPUとNVIDIA、ARM64版はCPUマイニングに対応します。
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="LinuxとLinux ARM64のアーカイブが並ぶ公式ダウンロード表" loading="lazy" />
 
-アーキテクチャに対応するアーカイブを次の表で確認します。v0.2.26のLinuxパッケージはいずれもglibc 2.39以降が必要です。新しいバージョンをインストールする際は、そのリリースの要件を再確認してください。別のCライブラリや古いglibcを使用するシステムでは、互換性のあるディストリビューション環境を使うか、[ソースからのビルド手順](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md)に従ってください。
+## ステップ2：展開して起動
 
-| コマンド出力 | リリースアーカイブ | バックエンド |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPUとNVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-CPUマイニングの各スレッドには2 GiBのメモリブロックが必要です。seineは利用可能なメモリとCPUリソースから初期スレッド数を選び、マイニング中に調整します。初回はスレッドやカーネルの上書き設定を指定せず、まず正常に接続できることを確認してから性能設定を変更してください。
-
-## 手順2：アーカイブをダウンロードして検証する
-
-[ダウンロード欄](/ja/#download)でLinuxまたはLinux ARM64を選びます。同じ[公式リリース](https://github.com/zpalmtree/seine/releases/latest)から、リリースの添付ファイルとして公開されている`SHA256SUMS.txt`もダウンロードしてください。同じバージョンのアーカイブとチェックサムファイルを一緒に保管します。以下の例はx86_64用です。ARM64ではコマンド内の`seine-linux-x86_64.tar.gz`を`seine-linux-aarch64.tar.gz`に置き換えてください。
-
-<img src="/assets/blog/linux-download.png" alt="LinuxとLinux ARM64のアーカイブが並ぶ公式ダウンロード表" width="1200" height="900" loading="lazy" />
-
-ターミナルでブラウザーがファイルを保存したディレクトリへ移動し、アーカイブのチェックサムを計算します。この例ではホームディレクトリ内のDownloadsフォルダーを想定しています。別の名前を使用している場合は、実際のダウンロード先を指定してください。
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-16進数のハッシュ全体を、ダウンロードした`SHA256SUMS.txt`内の該当アーカイブの行と照合します。展開や実行の前に、すべての桁が一致していることを確認してください。この照合にはリリースに別途添付されたチェックサムファイルを使います。アーカイブ内にも、展開後のファイル用のマニフェストが含まれているためです。チェックサムの一致は公開値との一致を確認するものです。両方のファイルを公式の配布元から取得してください。
-
-## 手順3：展開して実行ファイルを確認する
-
-ホームディレクトリ内に専用フォルダーを作り、アーカイブをそこへ展開して、バイナリのヘルプを表示します。v0.2.26のアーカイブにはルートに`./seine`があるため、次のコマンドで実行ファイルが新しいフォルダーの直下に配置されます。ヘルプコマンドはマイニングを開始せずに終了します。
+ターミナルを開きます。以下のコマンドはアーカイブがDownloadsフォルダにある前提です。異なる場合は実際の場所に変更してください。ARM64では`seine-linux-x86_64.tar.gz`を`seine-linux-aarch64.tar.gz`に置き換えます。ホームフォルダ内にseineを展開して起動します。
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-これらの操作は自分のアカウントで実行してください。`chmod u+x`はファイルの所有者に実行権限を与えるもので、システム全体へのインストールは不要です。`./`という接頭辞は、現在のディレクトリ内のファイルを実行するようシェルに指示します。展開したドキュメントとライセンスファイルはバイナリと一緒に保管してください。
-
-## 手順4：アドレスを入力して接続する
-
-展開先のフォルダーから起動します：
-
-```sh
 ./seine
 ```
 
-受取アドレスまたは登録済みの`@name`を入力し、`stratum+tcp://bntpool.com:3333`を選び、求められたら識別しやすいリグ名を指定します。次回以降、seineは作業ディレクトリを基準とする`seine-data/seine.config.json`を再利用します。同じフォルダーから起動すれば、設定ファイルを見つけやすくなります。入力項目とデータディレクトリについては[設定リファレンス](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md)に記載されています。
+## ステップ3：ウォレットアドレスを入力
 
-マイナーのハッシュレートと受理済みシェアのカウンターを確認します。次に[My Stats](https://bntpool.com/stats)を開き、同じ受取アドレスを検索してください。シェアの受理は、プールが計算結果を受け取っていることを示します。支払いは、別の報酬計算と支払い処理を経て行われます。マイナーの各パネルについては[ダッシュボードガイド](/ja/blog/seine-dashboard-explained/)で説明しています。正常に停止するには`q`または`Ctrl+C`を押します。
+公開用のBlocknet受取アドレスまたは登録済みの`@name`を貼り付け、Enterを押して`stratum+tcp://bntpool.com:3333`を選びます。アドレスの確認方法は[ウォレットガイド](/ja/blog/blocknet-wallet-for-mining/)をご覧ください。seineにリカバリーフレーズや支出鍵は不要です。プールのワーカー名は自動で設定されます。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。" loading="lazy" />
+  </picture>
+  <figcaption>初回起動時のアドレスとプールの入力画面。例を自分のアドレスまたは登録済みの名前に置き換えてください。</figcaption>
+</figure>
+
+seineはスレッド数を選び、自動で調整します。次回からも同じフォルダから起動すると、`seine-data/seine.config.json`を再利用できます。
+
+## ステップ4：受理されたシェアを確認
+
+[ダッシュボード](/ja/blog/seine-dashboard-explained/)でハッシュレートと増加する**Accepted**カウンターを確認します。シェアの受理はプールが作業を受け取ったことを示し、支払いの完了を意味するものではありません。停止するには`q`または`Ctrl+C`を押します。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。" loading="lazy" />
+  </picture>
+  <figcaption>seineの実際のダッシュボードにサンプルデータを表示しています。Acceptedを確認してください。数値はベンチマーク結果ではありません。</figcaption>
+</figure>
+
+[マイ統計](https://bntpool.com/stats?lang=ja)を開き、同じアドレスまたは登録済みの名前を入力して、ワーカー、シェア、残高を確認します。
 
 ## LinuxでNVIDIAマイニングを行うには何が必要？
 
@@ -94,7 +78,7 @@ Linux x86_64のGPUマイニングには、NVIDIAドライバーと互換性の�
 
 ## Linuxの起動エラーはどう解決する？
 
-最初のエラーメッセージを見て次に確認する項目を選びます。アーキテクチャやランタイムのエラーはシェアが受理される前に発生するため、プールアドレスやスレッド数を変更してもその段階の問題は解決しません。実行ファイルと環境を確認する間は、検証済みのアーカイブを手元に残してください。
+最初のエラーメッセージから、次に確認する項目を選びます。
 
 | メッセージまたは症状 | 確認する項目 |
 |---|---|
@@ -105,4 +89,6 @@ Linux x86_64のGPUマイニングには、NVIDIAドライバーと互換性の�
 
 シェアの受理を確認したら、必要に応じて[ヒュージページガイド](/ja/blog/huge-pages-blocknet-mining/)でLinuxのページ設定を確認できます。[サーバーガイド](/ja/blog/mine-blocknet-on-servers/)ではヘッドレス運用とNUMA配置を説明しています。どちらの準備も、この初回起動の手順には必須ではありません。マシン上で何が変わったか判断できるよう、変更は1つずつ行ってください。
 
-<CTA target="seine" title="Linux用seineをダウンロード" text="Linuxアーカイブを選んで検証し、CPUの自動調整でbntpool.comに接続しましょう。" />
+<CTA target="seine" title="Linux用seineをダウンロード" text="Linux版を展開してアドレスを入力し、自動CPU調整でマイニングを始めましょう。" />
+
+[マイ統計](https://bntpool.com/stats?lang=ja)を開き、同じアドレスまたは登録済みの名前を入力して、ワーカー、シェア、残高を確認します。

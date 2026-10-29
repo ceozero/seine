@@ -27,7 +27,7 @@ evidence of no gain; coverage-only records are not eligible benchmark comparison
    on incomplete topology, slow reads or unsupported hosts; record overhead before
    broadening support. The digest measures topology inputs, not per-worker residency.
    Keep OS/native-vs-WSL, runtime ISA, exact CPU identity, page backing, resource
-   limits, source/build and settings separate. See [validation](../docs/validation/trial-placement-20261026.md).
+   limits, source/build and settings separate.
 2. **Complete producer coverage.** Add worker-count and joint trials with actual
    settings per window, unsuccessful and incomplete outcomes, cache invalidation
    context, and the full acceptance/confirmation rule. Encode throughput versus

@@ -115,6 +115,32 @@ pub fn template_difficulty(block: &TemplateBlock) -> Option<u64> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn gpu_scale_difficulty_targets_match_integer_reference_vectors() {
+        // Independently generated as Python: ((1 << 256) - 1) // difficulty.
+        // Includes non-powers of two, values beyond JS exact integers, and u64::MAX.
+        for (difficulty, expected) in [
+            (
+                3,
+                "5555555555555555555555555555555555555555555555555555555555555555",
+            ),
+            (
+                1_000_000_000_000,
+                "000000000119799812dea11197f27f0f6e885c8ba7eb31f476caf7411a863387",
+            ),
+            (
+                9_007_199_254_740_993,
+                "00000000000007ffffffffffffc0000000000001fffffffffffff00000000000",
+            ),
+            (
+                u64::MAX,
+                "0000000000000001000000000000000100000000000000010000000000000001",
+            ),
+        ] {
+            assert_eq!(hex::encode(difficulty_to_target(difficulty)), expected);
+        }
+    }
     use super::*;
     use serde_json::json;
 

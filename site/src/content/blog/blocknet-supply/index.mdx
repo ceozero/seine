@@ -1,0 +1,69 @@
+---
+title: 'Blocknet supply, issuance and tail emission explained'
+description: 'Understand Blocknet supply: how block rewards issue BNT, why about 100 million is a target, and how the continuing tail differs from payments and fees.'
+date: 2026-10-28
+tags: ['Blocknet', 'Supply', 'Mining']
+faq:
+  - q: 'Does Blocknet have a maximum supply of 100 million BNT?'
+    a: 'The released schedule describes approximately 100 million BNT before its continuing tail emission. That figure is a reference target, not a hard maximum. Under the current released rules, the tail issues 2 BNT per block from height 414,720 onward, so cumulative issuance keeps growing as blocks are added.'
+  - q: 'Does tail emission mean the same inflation percentage forever?'
+    a: 'A fixed number of new coins per block does not imply a fixed percentage increase in supply. The percentage depends on how much is issued over the chosen period and the supply used as the denominator. With a larger starting stock and the same additional amount, the percentage growth is smaller.'
+  - q: 'Does receiving a mining-pool payout create BNT again?'
+    a: 'No. The block reward is the issuance event. A later pool payout transfers funds to participating miners under the pool’s accounting rules. Waiting for reward maturity changes when those funds can be spent; receiving a payout changes who owns them. Neither step repeats the creation of the same coins.'
+related: [blocknet-faraday-monetary-policy, blocknet-fungibility, what-is-blocknet, who-controls-blocknet]
+image: /assets/blog/blocknet-supply.svg
+---
+
+Use Blocknet’s supply figures by separating newly issued BNT from funds moving between wallets. This guide explains the approximate supply target, the declining reward schedule and the continuing tail in released core v0.22.0. It also shows how to read a supply-growth percentage without confusing it with a wallet balance or a price forecast. Future Faraday proposals are labeled separately from these released rules.
+
+## Is Blocknet’s supply capped at 100 million BNT?
+
+<Answer>
+Blocknet’s released schedule targets approximately 100 million BNT before a continuing tail. The target is a reference for issuance progress, not a hard maximum. The current rules issue 2 BNT per block from height 414,720 onward, so the cumulative amount issued continues to increase with new blocks.
+</Answer>
+
+## Start with what the supply figure measures
+
+Issuance is the creation of new BNT through block rewards. Cumulative issued supply adds those rewards across the chain up to a specified height. The released [supply calculation](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/miner.go#L383-L431) begins at height 1 because the genesis block carries no reward. A reading tied to a height therefore answers a precise question: how much the schedule has issued through that block.
+
+This is a different measurement from the balance in one wallet. A wallet recognizes the outputs belonging to its keys and distinguishes funds that are ready to spend from those still waiting. Cumulative issuance does not inspect each holder’s access to their keys or tell you how much BNT is actively changing hands. Keep the label and scope when comparing numbers from different pages.
+
+The [fair-launch guide](https://bntpool.com/blog/blocknet-fair-launch/) explains how distribution began. Here the focus is the accounting that continues afterward: each accepted block advances the height and adds its scheduled issuance to the cumulative total.
+
+[![Current released Blocknet issuance: 1 shows declining block rewards through the height-based schedule; 2 shows the continuing 2 BNT reward per block in the tail.](/assets/blog/blocknet-supply.svg)](/assets/blog/blocknet-supply.svg)
+
+**1** represents the declining reward stages; **2** represents the ongoing tail. The bars are a conceptual illustration of the released rules, not a chart of measured supply or exact calendar dates. Both parts describe newly issued BNT.
+
+## When does Blocknet reach tail emission?
+
+The current target block interval is five minutes. The reward code groups heights into schedule months of 8,640 blocks, using a 30-day month at that target interval. Within one schedule month, the reward per block stays constant. The reward then steps down for the next month according to the release’s decay calculation. These are height-based periods rather than named months on a calendar.
+
+After 48 schedule months, the tail begins at height 414,720. From that height, the released rule uses 2 BNT for each block. The [block-reward schedule](https://bntpool.com/blog/blocknet-block-reward-schedule/) contains the detailed monthly table and exact pre-tail sum, so you can look up a particular stage without turning this supply guide into a separate reward calculator.
+
+The approximate 100 million figure summarizes the scale of the initial distribution. It is also the reference used by the code’s issuance-progress display. Reaching the end of that progress measure does not turn off the tail. Read a progress percentage together with its named target, rather than treating a completed progress bar as a statement that no further BNT can be issued.
+
+The continuing reward gives miners protocol-issued BNT for producing accepted blocks after the initial distribution stages. It keeps an incentive to contribute mining work attached to each new block. The [proof-of-work guide](/blog/how-crypto-mining-works/) explains that connection between finding valid blocks and receiving their scheduled rewards.
+
+## What tail emission means for supply growth
+
+At the current five-minute target, a day contains 288 target intervals. Multiplying by the released tail reward gives 576 BNT per day, or 210,240 BNT over 365 days. These are arithmetic projections from the released interval and reward. Actual blocks arrive at varying times, so the calculation describes the target pace rather than a guaranteed daily count.
+
+The tail adds a fixed amount per block while the accumulated stock grows. To express supply growth as a percentage, choose a period, total the new issuance during it, divide by the starting supply and multiply by 100. State which supply measure you used. If the starting stock is larger and the added amount is unchanged, that percentage is smaller.
+
+In this discussion, inflation means growth of the coin supply. It does not predict the purchasing power of BNT or the price of goods. A supply-growth calculation contains neither a market price nor a spending basket. Keeping those questions separate makes it easier to compare the protocol’s issuance rules across periods without adding an unsupported claim about what a holder can buy.
+
+## Why transfers, fees and maturity are separate
+
+A payment spends existing funds and creates new outputs for the recipient and any change. Those new output records represent a reassignment of existing value. They are not another issuance of the amount being paid. A transaction fee is also paid from existing funds; adding a fee to a payment does not create new BNT. The [transaction walkthrough](/blog/blocknet-transaction-explained/) follows inputs, outputs, change and the fee.
+
+The same distinction applies to pool mining. A block reward creates the scheduled coins, while a later payout distributes funds under the pool’s accounting rules. Waiting for maturity concerns spendability, and a payout concerns ownership. Count the block issuance once when considering supply. Use the [PPLNS payout guide](https://bntpool.com/blog/how-pplns-payouts-work/) when you want to understand how a pool allocates its work and payments.
+
+## Read supply figures with a height and a rule version
+
+When checking a supply claim, retain three pieces of context: the chain height, the meaning of the displayed figure and the rule version behind it. An emitted-supply reading, an issuance-progress percentage and a wallet’s spendable balance can all be correct while answering different questions. The [explorer guide](/blog/blocknet-explorer-guide/) explains how to inspect public block and network information.
+
+For forward projections, keep the target block interval alongside the reward assumptions. If either changes, recalculate the time-based figure rather than copying an old daily estimate. The proposed Faraday timing and reward changes are covered in the [Faraday monetary-policy guide](/blog/blocknet-faraday-monetary-policy/), which separates announced plans from the current released schedule.
+
+You can then read Blocknet’s supply coherently: rewards add new BNT, the tail continues that issuance, and wallet transfers move existing value. If you want to participate in producing blocks, the [seine mining guide](/blog/how-to-mine-blocknet/) covers setup and bntpool.com provides pool mining and payout tracking.
+
+<CTA target="seine" title="Mine Blocknet with seine" text="Use seine with bntpool.com to contribute mining work and follow the payouts sent to your wallet." />

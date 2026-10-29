@@ -30,7 +30,9 @@ const { post, related } = Astro.props;
 const locale = post.locale;
 const t = useTranslations(locale);
 const lang = localeDef(locale).htmlLang;
-const { Content } = await render(post.entry);
+const { Content, headings } = await render(post.entry);
+const benchmarkSections = post.slug === 'blocknet-mining-hardware-hashrate'
+  ? headings.filter(heading => heading.depth === 2).slice(0, 4) : [];
 const home = localizePath('/', locale);
 const blog = localizePath('/blog/', locale);
 const topic = topicFor(post.slug);
@@ -69,6 +71,10 @@ if (post.faq.length) {
     </div>
   </header>
   <article class="prose" data-metrics-article={post.slug} data-metrics-locale={locale}>
+    {benchmarkSections.length > 0 && <nav class="benchmark-jumps" id="benchmark-results" aria-label={t('perfTitle')}>
+      <strong>{t('perfTitle')}</strong>
+      <ul>{benchmarkSections.map(heading => <li><a href={`#${heading.slug}`}>{heading.text}</a></li>)}</ul>
+    </nav>}
     <Content components={{ Answer, CTA, Note, Warning }} />
     {post.faq.length > 0 && (
       <section class="faq" id="faq" aria-labelledby="faq-title">
@@ -84,5 +90,5 @@ if (post.faq.length) {
     )}
   </article>
 </main>
-<script is:inline defer src="/article-metrics.js"></script>
+<script is:inline type="module" src="/site-events.js"></script>
 </Base>

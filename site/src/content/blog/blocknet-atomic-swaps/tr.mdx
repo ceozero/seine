@@ -1,0 +1,73 @@
+---
+title: 'Blocknet atomik takasları: VEIL nedir?'
+description: 'Atomik takasları, koşullu tahsil ve iadeleri, katılımcıların görebildiklerini ve Blocknet’in VEIL ile Faraday hakkında kamuya yaptığı duyuruları anlayın.'
+tags: [Blocknet, Ödemeler, Gizlilik]
+faq:
+  - q: 'Bu rehberle bir VEIL takası başlatabilir miyim?'
+    a: 'Bu, Blocknet’in kamuya açık VEIL duyurusunu ele alan bir bölüm içeren genel bir atomik takas açıklamasıdır. Kullanılabilir bir işlem çiftini, cüzdan komutunu veya hizmeti doğrulamaz. Önerilen bir takas özelliğini kullanılabilir bir ödeme akışı olarak kabul etmeden önce, belirli bir uygulamanın yayımlanmış sürüm talimatlarını kullanın.'
+  - q: 'Atomik, iki ödemenin de anında gerçekleşmesi anlamına mı gelir?'
+    a: 'Atomik, değişimin nasıl birbirine bağlandığını tanımlar. Buradaki örnekte, bir katılımcının tahsil işlemi diğerinin kendi tarafını tahsil etmesini sağlayan bilgiyi açığa çıkarır. İşlemler yine kendi zincirlerine ayrı ayrı girer. Onay kontrolleri, son tarihler ve katılımcıların yapması gereken eylemler, protokolü tamamlamanın bir parçası olmaya devam eder.'
+  - q: 'Atomik takaslar otomatik olarak gizli midir?'
+    a: 'Bir atomik takas protokolü mutabakatı koordine eder. Neleri açığa çıkardığı, katılan zincirlere, sözleşmelere ve iletişime bağlıdır. Ortak bir açık hash, temel bir hashlock takasının iki tarafını bağlayabilir. Bu nedenle Blocknet’in ödeme korumaları ile bir takasın tüm bilgi açığa çıkarma özellikleri ayrı ayrı değerlendirilmelidir.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Blocknet’in VEIL duyurusunu okumadan önce bir atomik takasın neyi koordine ettiğini anlayın. Bu rehber, iki taraf arasındaki genel bir değişimi koşullu fonlama, başarılı tahsil işlemleri ve iade yolu boyunca takip eder. Ardından bu öğretici örneği, Blocknet’in herkese açık sitesindeki 28 Ekim 2026 tarihinde kontrol edilen kısa VEIL bilgilerinden ayırır. Örnek, doğrulanmış bir VEIL uygulamasını veya şu anda desteklenen bir BNT işlem çiftini değil, bir protokol modelini açıklar.
+
+## Atomik takas nedir?
+
+<Answer>
+Atomik takas, protokolü izleyen katılımcıların protokolün varsayımları altında kendi taraflarını tamamlayabilmeleri veya kurtarma yolunu kullanabilmeleri için varlık değişimini birbirine bağlar. Daha sonra gönderme yönündeki basit bir sözün yerini uygulanabilir koşullar alır. İki zincir yine kendi işlemlerini işler ve katılımcıların gerekli sırayı izlemesi gerekir.
+</Answer>
+
+Okuyucunun sorusu pratiktir: Bir varlığı başka bir varlık karşılığında gönderirseniz ikinci ödemenin gelmesini ne sağlar? Normal bir transfer, tek bir ödemeye yetki verir. Atomik takas protokolü, iki transferin koşullarını birbirine bağlar. Maurice Herlihy’nin [zincirler arası atomik takas makalesi](https://arxiv.org/abs/1801.09515), bu koordinasyon sorununu ve katılımcıların kurallara uymasının önemini biçimsel olarak ele alır.
+
+Aralarında koordine edilmiş bir değişim bulunan iki ayrı kayıt defteri düşünün. Varlıklar kendi zincirlerinde harcanır; protokol, bunları kimin tahsil edebileceğini birbirine bağlar. Bu, yalnızca bir alıcı adresine coin gönderip birinin anlaşmayı yerine getirmesini beklemekten farklıdır. [Blocknet gönderme rehberi](/tr/blog/send-receive-blocknet/) bu olağan ödeme sürecini ele alır.
+
+## Hashlock kullanan bir takas nasıl çalışır?
+
+Yaygın bir öğretici örnek, bir sırrı kontrol eden **hashlock** ile iadenin ne zaman mümkün olacağını kontrol eden **timelock** kullanır. Bunlar birlikte genellikle hash ve zaman kilitli sözleşme, yani HTLC olarak adlandırılır. Bu bölüm, söz konusu genel yapıyı açıklar; VEIL’in bunu kullandığını ileri sürmez.
+
+Alice ve Bob önce değişim ve alıcı hedefleri üzerinde anlaşır. Alice bir sır oluşturur ve onun hash değerini paylaşır. Hash, Alice’in sırrı başlangıçta yayımlamasına gerek kalmadan sözleşmenin bu sırrı daha sonra kontrol etmesini sağlar. Sözleşme ayrıca hedeflenen alıcının yetkilendirmesini gerektirir: Yalnızca sırrı bilmek, herhangi bir gözlemcinin fonları almasına izin vermez.
+
+[BIP 199’daki HTLC açıklaması](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki), sır ve alıcı imzası gerektiren bir tahsil dalı ile bir süre sonunda kullanılabilen iade dalını gösterir. BIP 199, bu yapıyı açıklayan kapatılmış bir öneridir; Blocknet belirtimi değildir.
+
+## Her iki taraf da tamamladığında ne olur?
+
+Numaralı diyagramı fonlama aşamasından tahsil aşamasına doğru takip edin. “Chain A” ve “Chain B” genel etiketlerdir. Kullanılabilir bir çifti adlandırmaz veya Blocknet’in bu belirli sözleşmeleri desteklediği anlamına gelmezler.
+
+1. **Alice ilk sözleşmeye fon yatırır.** Bu sözleşme Bob’un sır ve kendi yetkilendirmesiyle tahsil etmesini sağlar. Alice’in iadesi daha sonra kullanılabilir olur.
+2. **Bob ikinci sözleşmeyi kontrol eder ve fonlar.** Bu sözleşme aynı sırrın hash değerini kullanır ve Alice’in tahsil etmesini sağlar. Bob’un iadesi Alice’inkinden önce kullanılabilir olur.
+3. **Alice ikinci tarafı kontrol eder ve tahsil eder.** Bu temel, açık hashlock örneğinde tahsil işlemi sırrı açığa çıkarır.
+4. **Bob açığa çıkan sırrı ilk tarafı tahsil etmek için kullanır.** İade son tarihleri arasındaki süre, ona harekete geçmesi için zaman verir.
+
+[![Genel takas örneği: Alice ve Bob ayrı koşullu sözleşmeleri fonlar, Alice’in tahsili sırrı açığa çıkarır ve Bob bunu tahsil için kullanır; kullanılmayan sözleşmenin zamana bağlı bir iade yolu vardır.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+Üst sıra, iki zincirde fonlamayı gösterir. Alt sıra, ters sıradaki tahsil işlemlerini gösterir. Kavisli oklar, iade koşulları karşılandığında hâlâ kilitli olan fonların kurtarma yollarını işaretler. Bu, açıklayıcı bir diyagramdır; VEIL ekranı veya canlı bir işlem değildir.
+
+## Katılımcılardan biri durursa ne olur?
+
+Kurtarma, değişimin hangi aşamada durduğuna bağlıdır. Alice ilk sözleşmeyi fonlar ve Bob ikinciyi hiç fonlamazsa Alice, iade dalı geçerli olduğunda hâlâ kilitli fonlarını bu dal üzerinden geri alabilir. Her iki sözleşme fonlanmış ancak Alice sırrı hiç açıklamamışsa katılımcılar harcanmamış fonlar için kendi iade yollarını kullanabilir.
+
+Timelock, bir iade harcamasını uygun hâle getirir; işlemi kendisi yayımlamaz ve onaylamaz. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki), zamana dayalı harcama koşullarını ve etkileşimsiz iade yapısını açıklar. Somut bir uygulama, tahsil veya iade işlemlerini ve bunlara yetki vermek için gereken bilgileri yönetmelidir.
+
+Alice ikinci tarafı tahsil edip sırrı açığa çıkardığında Bob ilk taraftaki tahsil yolunu zamanında izlemelidir. Sıranın ve kademeli son tarihlerin önemli olmasının nedeni budur. Bir uygulamayı kapatmak, fonlanmış bir değişimi iptal etmekle aynı şey değildir. Uygulamanın kurtarma talimatları, durumunun nasıl devam ettirileceğini belirler.
+
+## Katılımcılar ve gözlemciler neleri görebilir?
+
+Mutabakat ve gizlilik farklı soruları yanıtlar. Katılımcılar, anlaştıkları koşulları ve paylaştıkları alıcı bilgilerini bilir. Temel örnekte aynı açık hash her iki zincirde de görünür ve tahsil işlemi sırrını açığa çıkarır. Bu ortak değerler, bir gözlemciye iki taraf arasında bağlantı sağlayabilir.
+
+Tam olarak nelerin açığa çıktığı protokole ve ilgili zincirlere bağlıdır. Gizli bir ödeme biçimi, tek başına başka bir zincirin ne yayımladığını veya bir işlem arayüzünün ne kaydettiğini belirtmez. Aynı şekilde, bir değişimin tamamlanması katılımcıların onu müzakere ettiği mesajları silmez.
+
+Olağan Blocknet ödemeleri için [ödeme görünürlüğü rehberi](/tr/blog/blocknet-payment-visibility/), açık işlem alanlarını gönderenin, alıcının ve görüntüleme izni verilenlerin erişiminden ayırır. BNT ödeme gizliliğini anlamanın temeli budur. Takasa özel bir gizlilik iddiası, diğer varlığı ve iletişim adımları dahil olmak üzere takasın tamamı hakkında kanıt gerektirir.
+
+## Blocknet VEIL hakkında ne duyurdu?
+
+[Blocknet’in resmi sitesi](https://blocknetcrypto.com/#faraday), atomik takas karşılaştırmasında VEIL’i adlandırır ve Faraday kapsamında kuantum sonrası temel kriptografik yapı taşlarıyla planlanan bir yeniden tasarımı açıklar. Bu kamuya açık açıklama, projenin yönünü ortaya koyar. Bu rehberin doğrulayabileceği işlem çiftleri, takas komutları, iade son tarihleri veya son kullanıcı hizmeti belirtmez.
+
+Yukarıdaki örneği okurken duyurunun kapsamını net tutun. HTLC açıklaması, genel olarak atomik takas koordinasyonunu anlatır. VEIL’in iç protokolünün açıklaması değildir. [Faraday rehberi](/tr/blog/blocknet-faraday-upgrade/), duyurulan ağ geçişini ele alır; uygulamaya özgü takas talimatları yayımlanmış bir sürümden ve onun belgelerinden gelmelidir.
+
+Şimdi BNT almak için [ilk coin rehberi](/tr/blog/get-first-blocknet/), olağan transferleri ve madenciliği ele alır. Bunlar kendi cüzdan ve ödeme adımları olan yerleşik kullanıcı akışlarıdır. Bu makale, bir duyuruyu fon yatırma talimatı sanmadan gelecekte kamuya yayımlanacak bir takas sürümünü anlamanız için gereken kavramları sunar.
+
+<CTA target="seine" title="Madencilik yoluyla BNT alın" text="seine’ı bntpool.com ile kullanın ve madencilik ödemelerini kendi Blocknet cüzdanınıza alın." />

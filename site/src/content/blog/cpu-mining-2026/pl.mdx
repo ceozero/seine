@@ -11,7 +11,7 @@ faq:
     a: 'Hash wymagający dużo pamięci potrzebuje przy każdej próbie gigabajtów szybkiej pamięci, więc układ zbudowany wyłącznie do haszowania nadal potrzebowałby dużo RAM obok każdego rdzenia. Komputery stacjonarne, laptopy i serwery mają już mnóstwo RAM i szybkie kontrolery pamięci, dzięki czemu sprzęt, który ludzie już mają, jest bliski temu, czego potrzebuje algorytm.'
   - q: 'Czy można kopać jednocześnie na CPU i karcie graficznej?'
     a: 'Tak, kopiąc Blocknet z seine w systemie Windows lub Linux. seine kopie jednocześnie na procesorze i na każdej wykrytej karcie graficznej NVIDIA, a hashrate się sumuje. Procesor dostraja podczas kopania, a każdą kartę przy pierwszym uruchomieniu, więc przed startem nie trzeba niczego konfigurować.'
-sourceHash: ab5e7322d239
+sourceHash: 845e3b6a5c9d
 translation: draft
 ---
 
@@ -58,7 +58,7 @@ O tym, ile hashy na sekundę (H/s) procesor wytwarza w Blocknet, decydują trzy 
 
 **Ilość RAM.** Każdy wątek kopiący potrzebuje do każdego hasha własnego bloku 2 GiB, więc podziel swój RAM przez dwa, aby poznać maksymalną liczbę wątków, które się zmieszczą. Komputer z 32 GB teoretycznie mieści 16 bloków. seine zostawia 5% (domyślnie najwyżej 1 GiB) RAM w rezerwie i miejsce dla systemu operacyjnego, co daje na tej maszynie około 14 wątków. RAM często ogranicza liczbę wątków wcześniej niż liczba rdzeni. Poradnik o [kopaniu na starym komputerze lub laptopie](/pl/blog/mine-crypto-on-old-pc-or-laptop/) omawia komputery z 4–16 GB.
 
-**Przepustowość pamięci.** Każdy hash przesyła przez system pamięci gigabajty danych. Przy 85,1 H/s najszybsza maszyna zmierzona z seine zapisuje co sekundę około 170,2 GiB nowych bloków pamięci (85,1 × 2 GiB). Procesory z większą liczbą kanałów pamięci i szybszą pamięcią wychodzą na prowadzenie.
+**Przepustowość pamięci.** Każdy hash przesyła przez system pamięci gigabajty danych. Przy 97,1 H/s najszybsza maszyna zmierzona z seine zapisuje co sekundę około 194,2 GiB nowych bloków pamięci (97,1 × 2 GiB). Procesory z większą liczbą kanałów pamięci i szybszą pamięcią wychodzą na prowadzenie.
 
 **Właściwe jądro obliczeniowe.** seine ma kilka jąder Argon2id: AVX2, AVX-512 i jądro strumieniowe na x86 oraz NEON ze ścieżką przyspieszoną SHA3 na Arm. Na tym samym układzie jądro robi dużą różnicę. Na AWS Graviton4 jądro SHA3 z prefetchingiem kopie o 56% szybciej niż zwykły NEON (z 13,80 do 21,50 H/s), a na AMD EPYC 9R45 jądro strumieniowe kopie o 30% szybciej niż AVX2 (z 34,47 do 44,74 H/s przy 24 wątkach). seine porównuje jądra podczas kopania i zostawia szybsze.
 
@@ -66,13 +66,13 @@ Zmierzone konfiguracje sprzętowe:
 
 | Sprzęt | Dokładny układ | Wątki | Hashrate |
 |---|---|---|---|
-| AMD EPYC · Zen 5 | serwer EPYC 9375F | 64 | 85,1 H/s |
+| AMD EPYC · Zen 5 | serwer EPYC 9355P | 64 | 97,1 H/s |
 | Serwer Arm | AWS Graviton4 | 32 | 39,3 H/s |
 | AMD EPYC · Zen 4 | serwer EPYC 9R14 | 32 | 38,2 H/s |
 | Apple M4 Max | MacBook Pro 48 GB | 16 | 30,9 H/s |
 | Intel Xeon | Sapphire Rapids 8488C | 32 | 26,0 H/s |
 
-Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9375F osiągający 85,1 H/s: 64 wątki kopania, 384 GiB RAM i ręcznie przygotowane strony huge pages o rozmiarze 1 GiB w Linuksie.
+Najszybsza konfiguracja w tych pomiarach to AMD EPYC 9355P osiągający 97,1 H/s: 64 wątki kopania i 192 GiB RAM w Linuksie przy domyślnych ustawieniach seine.
 
 Wiersz Apple M4 Max to laptop, co pokazuje, jak dobrze mocny system pamięci pasuje do Argon2id. Pozostałe wiersze serwerowe zmierzono na maszynach AWS z huge pages 2 MiB. [Poradnik o sprzęcie do kopania Blocknet](/pl/blog/blocknet-mining-hardware-hashrate/) szczegółowo omawia porady zakupowe i dobór RAM, a [poradnik dla Maca](/pl/blog/mine-blocknet-on-mac/) opisuje Apple Silicon.
 

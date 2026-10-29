@@ -8,19 +8,19 @@ faq:
   - q: 'Jak duży jest dowód zakresu Bulletproofs?'
     a: 'Pojedynczy 64-bitowy Bulletproof zawiera 2 × log2(64) + 9 = 21 elementów. W grupie Ristretto każdy element zajmuje 32 bajty, więc każdy dowód ma 672 bajty i dokładnie tyle eksplorator Blocknet pokazuje dla każdego wyjścia. Rozmiar rośnie z logarytmem zakresu, więc podwojenie liczby bitów dodaje tylko dwa elementy.'
   - q: 'Kto widzi kwotę transakcji Blocknet?'
-    a: 'Tylko nadawca i odbiorca. Łańcuch przechowuje dla każdego wyjścia zobowiązanie Pedersena i dowód zakresu, a także kwotę zaszyfrowaną sekretem, który dzielą oba portfele. Portfel odbiorcy odszyfrowuje ją prywatnym kluczem podglądu. Opłata sieciowa to jedyna publiczna liczba, dzięki czemu węzły mogą uwzględnić ją w sprawdzaniu bilansu.'
+    a: "Przy zwykłej płatności nadawca zna kwotę, a portfel odbiorcy odtwarza kwotę wpływu. Celowo udostępnione dowody płatności lub dostęp do podglądu mogą ujawnić ją innym osobom. Publiczne dane transakcji nadal obejmują opłatę i strukturę. Nagrody coinbase są inne: dozwoloną kwotę i jej kodowanie można publicznie wyprowadzić z wysokości bloku oraz danych transakcji."
   - q: 'Skąd węzły wiedzą, że nie powstały nowe monety, skoro kwoty są ukryte?'
-    a: 'Każdy węzeł sprawdza dla każdej transakcji dwie rzeczy. Zobowiązania Pedersena muszą się sumować, czyli wejścia muszą być równe wyjściom plus opłata, a każde wyjście musi mieć ważny dowód zakresu pokazujący, że jego kwota leży między 0 a 2^64. Razem wykluczają one ukrytą inflację bez ujawniania choćby jednej kwoty.'
-sourceHash: e02793933862
+    a: "W zwykłych płatnościach dowody zakresu ograniczają każde wyjście do wartości od 0 do 2^64−1, a bilans zobowiązań sprawdza zachowanie wartości wraz z opłatą. Pełna walidacja sprawdza też uprawnienie do wydania, powiązanie pierścienia i ponowne użycie obrazów kluczy. Nowa emisja podlega osobnej kontroli coinbase względem dozwolonej nagrody bloku. To odrębne kontrole; sam dowód zakresu nie potwierdza wszystkich reguł transakcji."
+sourceHash: 3be778e9122b
 translation: draft
 ---
 
-Bulletproofs to krótkie dowody zakresu z wiedzą zerową, które pozwalają kryptowalucie ukryć kwotę każdej transakcji, a jednocześnie każdemu węzłowi sprawdzić, że nie powstały nowe monety. Ten poradnik wyjaśnia zobowiązania Pedersena, dlaczego ukryte kwoty potrzebują dowodów zakresu, jak Bulletproofs utrzymują te dowody w małym rozmiarze i jak Blocknet używa ich w każdym wyjściu.
+Bulletproofs to krótkie dowody zakresu z wiedzą zerową, które pomagają weryfikować ukryte kwoty płatności. Ten poradnik wyjaśnia zobowiązania Pedersena, potrzebę ograniczania kwot i niewielki rozmiar Bulletproofs. W Blocknet dowody zakresu działają obok kontroli uprawnień, bilansu, ponownego wydawania i coinbase. Razem pokazują, jak prywatność zwykłych płatności łączy się z walidacją przepływu pieniędzy i nowej emisji.
 
 ## Czym są Bulletproofs?
 
 <Answer>
-Bulletproofs to krótkie dowody z wiedzą zerową, opublikowane w 2018 roku przez Bünza, Bootle'a, Boneha, Poelstrę, Wuille'a i Maxwella. W kryptowalutach dowodzą, że ukryta kwota mieści się w prawidłowym zakresie, na przykład od 0 do 2^64, bez jej ujawniania. Nie wymagają zaufanej konfiguracji początkowej, a ich rozmiar rośnie tylko z logarytmem zakresu.
+Bulletproofs to krótkie dowody z wiedzą zerową, opublikowane w 2018 roku przez Bünza, Bootle'a, Boneha, Poelstrę, Wuille'a i Maxwella. W kryptowalutach dowodzą, że ukryta kwota mieści się w prawidłowym zakresie, na przykład od 0 do 2^64−1, bez jej ujawniania. Nie wymagają zaufanej konfiguracji początkowej, a ich rozmiar rośnie tylko z logarytmem zakresu.
 </Answer>
 
 Artykuł [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) ukazał się na IEEE Symposium on Security and Privacy w 2018 roku. Jego autorzy zaprojektowali je dla poufnych transakcji, w których kwoty w blockchainie są zastąpione zobowiązaniami. Aby zrozumieć, po co w ogóle potrzebny jest taki dowód, zacznijmy od zobowiązania.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Zobowiązania Pedersena można dodawać. Suma dwóch zobowiązań jest zobowiązaniem do sumy ich kwot, przy czym czynniki zaślepiające również się sumują. Węzeł dodaje zobowiązania wejść transakcji oraz zobowiązania jej wyjść plus opłatę i sprawdza, czy obie sumy się zgadzają, więc potwierdza bilans, nie widząc żadnej kwoty.
 </Answer>
 
-Dodanie dwóch zobowiązań daje `(v1 + v2)·G + (r1 + r2)·H`, co samo w sobie jest zobowiązaniem do `v1 + v2`. Nadawca dobiera czynniki zaślepiające tak, aby łączne zaślepienie wejść było równe łącznemu zaślepieniu wyjść. Jeśli kwoty też się bilansują, różnica między sumą wejść a sumą wyjść wynosi dokładnie zero i każdy węzeł może to sprawdzić.
+Dodanie dwóch zobowiązań daje `(v1 + v2)·G + (r1 + r2)·H`, czyli zobowiązanie do `v1 + v2`. Nadawca dobiera czynniki maskujące tak, aby ich suma dla wejść była równa sumie dla wyjść. Jeśli kwoty się bilansują, odjęcie zobowiązań wyjść i opłaty od sumy zobowiązań wejść daje zero.
 
-Opłata sieciowa to jedyna publiczna liczba w transakcji. Węzły zamieniają ją w zobowiązanie z czynnikiem zaślepiającym równym zero i dodają je po stronie wyjść, więc sprawdzenie brzmi: wejścia = wyjścia + opłata.
+Opłata sieciowa jest publiczna, podobnie jak inne dane transakcji, takie jak hash i struktura wejść oraz wyjść. Węzły zamieniają opłatę w zobowiązanie z zerowym maskowaniem i dodają je po stronie wyjść. Dla zwykłej płatności kontrola zachowania wartości ma postać: wejścia = wyjścia + opłata.
 
 ## Dlaczego ukryte kwoty potrzebują dowodów zakresu?
 
 Arytmetyka zobowiązań działa modulo bardzo duża liczba, rząd grupy krzywej, wynoszący około 2^252. W tej arytmetyce kwota „ujemna” jest po prostu ogromną liczbą dodatnią. Ktoś mógłby wydać wejście warte 10 monet i utworzyć dwa wyjścia, jedno warte 11, a drugie warte „minus 1”. Zobowiązania bilansowałyby się idealnie, a 1 moneta pojawiłaby się z niczego, ukryta przed każdym obserwatorem.
 
-Dowód zakresu (range proof) zamyka tę lukę. Dowodzi, że kwota wewnątrz zobowiązania leży między 0 a 2^64, nie mówiąc, jaka jest. Gdy każde wyjście jest w ten sposób ograniczone, kilka wyjść nigdy nie zsumuje się do liczby na tyle dużej, by „przekręcić” rząd grupy, więc zbilansowane zobowiązania oznaczają zbilansowane kwoty.
+Dowód zakresu (range proof) zamyka tę lukę. Dowodzi, że kwota wewnątrz zobowiązania leży między 0 a 2^64−1, nie mówiąc, jaka jest. Gdy każde wyjście jest w ten sposób ograniczone, kilka wyjść nigdy nie zsumuje się do liczby na tyle dużej, by „przekręcić” rząd grupy, więc zbilansowane zobowiązania oznaczają zbilansowane kwoty.
 
 Wcześniejsze konstrukcje poufnych transakcji używały dowodów zakresu, których rozmiar rósł liniowo z liczbą bitów. Bulletproofs rosną tylko z logarytmem, co zmniejsza 64-bitowy dowód do kilkuset bajtów.
 
@@ -74,24 +74,38 @@ Dowód jest nieinteraktywny. Zamiast weryfikatora wysyłającego wyzwania na ży
 
 Monero włączyło Bulletproofs w aktualizacji sieci z 18 października 2018 roku (wydanie v0.13.0), aby zmniejszyć rozmiar transakcji. [Biblioteka bulletproofs w języku Rust](https://github.com/dalek-cryptography/bulletproofs) z projektu dalek-cryptography implementuje je na grupie Ristretto krzywej Curve25519, a biblioteka kryptograficzna Blocknet jest na niej zbudowana.
 
-## Jak Blocknet ukrywa każdą kwotę?
+## Jak Blocknet weryfikuje prywatne płatności?
 
-W Blocknet każde wyjście każdej transakcji zawiera zobowiązanie Pedersena zamiast kwoty i każde wyjście ma własny 64-bitowy Bulletproof. Prywatność jest częścią formatu transakcji bez trybu jawnego, więc nie da się wysłać płatności z widoczną kwotą.
+W wydanej wersji core v0.22.0 wyjścia zwykłych płatności zawierają zobowiązania Pedersena, zaszyfrowane kwoty i osobne 64-bitowe Bulletproofs. Ich kwoty są ukryte w zwykłym publicznym zapisie. Specjalna transakcja coinbase tworzy nagrodę bloku i ma odrębną, publicznie weryfikowalną ścieżkę emisji.
 
-Oto co sprawdza węzeł, zanim zaakceptuje transakcję:
+Pełna walidacja kryptograficzna zwykłej płatności obejmuje następujące odrębne kontrole w [wydanym walidatorze transakcji](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960):
 
-- **Każdy dowód zakresu.** Bulletproof każdego wyjścia musi przejść weryfikację względem jego zobowiązania, dowodząc, że kwota leży między 0 a 2^64. Dowody używają zapisu oznaczonego etykietą „Blocknet Range Proof”, która wiąże każdy dowód z Blocknet.
-- **Bilans.** Każde wejście zawiera zobowiązanie pseudowyjścia (pseudo-output), a podpis pierścieniowy dowodzi, że dotyczy ono tej samej kwoty co prawdziwa wydawana moneta, nie ujawniając, który to członek pierścienia. Węzeł sprawdza następnie, czy pseudowyjścia sumują się do wyjść plus opłata.
-- **Nowe monety.** Nagroda za blok wynika z publicznego harmonogramu, więc dla wykopanego wyjścia węzeł odtwarza zobowiązanie, którego oczekuje dla danej wysokości, i sprawdza, czy się zgadza.
+- **Uprawnienie i powiązanie.** Każde wejście musi używać 16 kanonicznych członków pierścienia z łańcucha. RingCT dowodzi własności i równości kwot. Weryfikator sprawdza też zgodność obrazu klucza i zobowiązania pseudowyjścia z podpisanym dowodem.
+- **Zakres i bilans.** Bulletproof każdego wyjścia jest weryfikowany względem jego zobowiązania i ogranicza kwotę do przedziału od 0 do 2^64−1. Transkrypt używa etykiety "Blocknet Range Proof". Suma podpisanych pseudowyjść musi równać się wyjściom plus opłata. To kontrola zachowania wartości, a nie zastępstwo uprawnienia.
+- **Ponowne wydawanie.** Obrazy kluczy muszą być różne w obrębie transakcji i nie mogą już być zapisane jako wydane.
+
+[![Cztery odrębne zadania walidacji: 1 uprawnienie do wydania i powiązanie pierścienia; 2 zakres kwoty i bilans zobowiązań; 3 obraz klucza jeszcze niewydany; 4 dozwolona emisja coinbase osobną ścieżką.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+Kontrole **1–3** dotyczą zwykłego wydawania. Kontrola **4** dotyczy specjalnej transakcji tworzącej nagrodę bloku. Diagram rozdziela ich role; nie przedstawia bieżącej transakcji ani nie zastępuje pozostałej walidacji bloku.
+
+## Jak sieć wykrywa ponowne wydanie?
+
+Poprawny dowód zakresu mówi, że kwota mieści się w granicach. Nie mówi, że właściciel nie wydał już wyjścia. Obraz klucza zapewnia tę odrębną kontrolę powiązywalności bez wskazywania prawdziwego członka pierścienia. Walidacja odrzuca powielone obrazy w jednej transakcji oraz obrazy już wydane w zaakceptowanym łańcuchu. Powiązanie obrazu z podpisanym dowodem RingCT uniemożliwia jego niezależną podmianę. Artykuł [Kto kontroluje Blocknet](/pl/blog/who-controls-blocknet/) wyjaśnia związek tych reguł z węzłami, które je stosują.
+
+## Jak sprawdzać emisję bez odczytywania sald portfeli?
+
+Coinbase bloku nie ma wejść wydających środki. [Wydany walidator bloków](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543) oblicza dozwoloną nagrodę dla danej wysokości i odtwarza oczekiwane zobowiązanie oraz zakodowaną kwotę za pomocą publicznie wyprowadzanego maskowania. Oba muszą się zgadzać. Kwotę można więc wyprowadzić publicznie, w przeciwieństwie do ukrytych kwot zwykłych płatności.
+
+Łączną emisję oblicza się, sumując zaplanowane nagrody od wysokości 1; geneza nie ma coinbase. Nie jest to suma prywatnych sald portfeli ani informacja, ile można obecnie wydać lub ile pozostaje w obiegu. [Poradnik o podaży](/pl/blog/blocknet-supply/) wyjaśnia tę różnicę, a [przykład transakcji](/pl/blog/blocknet-transaction-explained/) opisuje przelewy i resztę, które nie emitują ponownie nagrody.
 
 Możesz to zobaczyć w [eksploratorze Blocknet](https://explorer.blocknetcrypto.com). Strona transakcji podaje jej kwoty jako „hidden · Pedersen commitments”, a każde wyjście pokazuje swoje zobowiązanie, zaszyfrowane memo i dowód zakresu o rozmiarze „672 bytes · Bulletproof”, czyli dokładnie tyle, ile przewiduje powyższy rachunek.
 
-Odbiorca nadal widzi prawdziwą wartość. Każde wyjście zawiera kwotę zaszyfrowaną sekretem, który dzielą portfele nadawcy i odbiorcy, a portfel odbiorcy odszyfrowuje ją prywatnym kluczem podglądu. Kwotę widzą dwie osoby biorące udział w płatności i nikt więcej.
+Przy zwykłych płatnościach portfel odbiorcy rozpoznaje swoje wyjścia i odtwarza zaszyfrowane kwoty dzięki prywatnym informacjom do podglądu. Nadawca zna wpisaną kwotę. Celowo udostępnione dowody płatności lub dostęp do podglądu mogą dać innym dodatkowe informacje. Te decyzje o ujawnieniu nie zmieniają sieciowych kontroli zobowiązań i dowodów.
 
-Ukryte kwoty działają razem z pozostałymi warstwami Blocknet: [podpisy pierścieniowe](/pl/blog/ring-signatures-explained/) obejmujące 16 wyjść ukrywają nadawcę, [jednorazowe adresy stealth](/pl/blog/stealth-addresses-explained/) ukrywają odbiorcę, a [Dandelion++](/pl/blog/dandelion-plus-plus-explained/) ukrywa, gdzie transakcja weszła do sieci. [Poradnik o funkcjach prywatności Blocknet](/pl/blog/blocknet-privacy-features/) omawia każdą z nich.
+Ukryte kwoty zwykłych płatności współdziałają z innymi warstwami Blocknet: [podpisy pierścieniowe](/pl/blog/ring-signatures-explained/) obejmujące 16 wyjść chronią wydawane źródło, [jednorazowe ukryte adresy](/pl/blog/stealth-addresses-explained/) chronią miejsce odbioru, a [Dandelion++](/pl/blog/dandelion-plus-plus-explained/) ogranicza ujawnianie źródła sieciowego. [Poradnik prywatności](/pl/blog/blocknet-privacy-features/) wyjaśnia każdą warstwę. Opisane kontrole dotyczą pełnej walidacji; szybka synchronizacja może opierać część kosztownych kontroli podpisów i dowodów zakresu na zaufanych historycznych punktach kontrolnych, zgodnie z wydaną implementacją.
 
 ## Zdobądź własne prywatne BNT
 
-Prostym sposobem na zdobycie monet z ukrytymi kwotami jest ich wykopanie. Blocknet używa wymagającego dużo pamięci [proof of work Argon2id](/pl/blog/argon2id-proof-of-work-explained/), który można kopać na zwykłym komputerze, a seine kopie go na Twoim CPU, razem z ewentualnymi GPU NVIDIA, i sam się dostraja bez żadnej konfiguracji. Każda wypłata, którą wysyła Ci bntpool.com, przychodzi jako prywatne wyjście ze zobowiązaniem i Bulletproofem. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) przeprowadzi Cię od pobrania do zaakceptowanych udziałów w kilka minut.
+Aby otrzymywać zwykłe płatności BNT do portfela, możesz kopać w puli. Blocknet używa wymagającego pamięci [dowodu pracy Argon2id](/pl/blog/argon2id-proof-of-work-explained/), a seine kopie na CPU i obsługiwanych GPU NVIDIA, dostrajając działanie. Płatności wysyłane przez bntpool.com są zwykłymi przelewami ze zobowiązaniami i dowodami zakresu, odrębnymi od nagrody coinbase bloku. [Poradnik kopania](/pl/blog/how-to-mine-blocknet/) opisuje konfigurację i zaakceptowane udziały.
 
-<CTA target="seine" title="Kop prywatne BNT z seine" text="Pobierz seine, wklej swój adres lub @name i zacznij zarabiać Blocknet z każdą kwotą ukrytą w łańcuchu." />
+<CTA target="seine" title="Kop BNT z seine" text="Używaj seine z bntpool.com i otrzymuj zwykłe wypłaty puli do własnego portfela Blocknet." />

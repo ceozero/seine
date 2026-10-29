@@ -1,0 +1,73 @@
+---
+title: 'Memahami atomic swap Blocknet: apa itu VEIL?'
+description: 'Pahami atomic swap, klaim bersyarat dan pengembalian dana, apa yang dapat dilihat peserta, serta pengumuman publik Blocknet tentang VEIL dan Faraday.'
+tags: [Blocknet, Pembayaran, Privasi]
+faq:
+  - q: 'Bisakah saya memakai panduan ini untuk memulai swap VEIL?'
+    a: 'Ini adalah penjelasan umum atomic swap dengan bagian tentang pengumuman publik VEIL dari Blocknet. Panduan ini tidak menetapkan pasangan perdagangan, perintah dompet, atau layanan yang tersedia. Gunakan petunjuk rilis yang dipublikasikan untuk implementasi tertentu sebelum menganggap fitur swap yang diusulkan sebagai alur pembayaran yang tersedia.'
+  - q: 'Apakah atomic berarti kedua pembayaran terjadi seketika?'
+    a: 'Atomic menjelaskan bagaimana pertukaran dihubungkan. Dalam contoh ini, klaim satu peserta mengungkap informasi yang memungkinkan peserta lain mengklaim bagiannya. Transaksi tetap masuk ke blockchain masing-masing secara terpisah. Pemeriksaan konfirmasi, tenggat, dan tindakan yang wajib dilakukan peserta tetap menjadi bagian dari penyelesaian protokol.'
+  - q: 'Apakah atomic swap otomatis bersifat privat?'
+    a: 'Protokol atomic swap mengoordinasikan penyelesaian pertukaran. Informasi yang diungkap bergantung pada blockchain, kontrak, dan komunikasi yang terlibat. Hash publik yang sama dapat menghubungkan kedua sisi swap hashlock dasar. Karena itu, perlindungan pembayaran Blocknet dan seluruh sifat pengungkapan informasi suatu swap harus dievaluasi secara terpisah.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Pahami apa yang dikoordinasikan atomic swap sebelum membaca pengumuman VEIL dari Blocknet. Panduan ini mengikuti pertukaran umum antara dua pihak melalui pendanaan bersyarat, klaim yang berhasil, dan jalur pengembalian dana. Selanjutnya, panduan ini memisahkan contoh pembelajaran tersebut dari informasi singkat VEIL di situs publik Blocknet, yang diperiksa pada 28 Oktober 2026. Contoh ini menjelaskan pola protokol, bukan implementasi VEIL yang telah diverifikasi atau pasangan perdagangan BNT yang saat ini didukung.
+
+## Apa itu atomic swap?
+
+<Answer>
+Atomic swap menghubungkan pertukaran aset agar peserta yang mengikuti protokol dapat menyelesaikan bagiannya atau menggunakan jalur pemulihan sesuai asumsi protokol. Mekanisme ini menggantikan janji sederhana untuk mengirim nanti dengan syarat yang dapat ditegakkan. Kedua blockchain tetap memproses transaksinya masing-masing, dan peserta harus mengikuti urutan yang diwajibkan.
+</Answer>
+
+Pertanyaan pembaca bersifat praktis: jika Anda mengirim satu aset untuk ditukar dengan aset lain, apa yang membuat pembayaran kedua menyusul? Transfer biasa mengizinkan satu pembayaran. Protokol atomic swap menghubungkan syarat untuk dua transfer. [Makalah atomic cross-chain swaps](https://arxiv.org/abs/1801.09515) karya Maurice Herlihy memformalkan masalah koordinasi ini dan pentingnya peserta mengikuti aturannya.
+
+Bayangkan dua buku besar terpisah dengan pertukaran yang dikoordinasikan di antara keduanya. Aset dibelanjakan di blockchain masing-masing; protokol menghubungkan siapa yang dapat mengklaimnya. Ini berbeda dari sekadar mengirim koin ke alamat penerima dan menunggu seseorang memenuhi kesepakatan. [Panduan mengirim Blocknet](/id/blog/send-receive-blocknet/) membahas prosedur pembayaran biasa tersebut.
+
+## Bagaimana swap dengan hashlock bekerja?
+
+Contoh pembelajaran yang umum memakai **hashlock**, yang memeriksa sebuah rahasia, dan **timelock**, yang mengatur kapan pengembalian dana dapat dilakukan. Gabungan keduanya sering disebut hashed timelock contract, atau HTLC. Bagian ini menjelaskan konstruksi umum tersebut; bukan menyatakan bahwa VEIL menggunakannya.
+
+Alice dan Bob terlebih dahulu menyepakati pertukaran dan tujuan penerimaan. Alice membuat sebuah rahasia dan membagikan hash-nya. Hash tersebut memungkinkan kontrak memeriksa rahasia nanti tanpa mengharuskan Alice memublikasikannya sejak awal. Kontrak juga mensyaratkan otorisasi penerima yang dituju: mengetahui rahasia saja tidak membuat sembarang pengamat dapat mengambil dana.
+
+[Deskripsi HTLC dalam BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) menggambarkan cabang klaim yang memerlukan rahasia dan tanda tangan penerima, ditambah cabang pengembalian dana yang tersedia setelah batas waktu. BIP 199 adalah proposal berstatus ditutup yang menjelaskan konstruksi ini, bukan spesifikasi Blocknet.
+
+## Apa yang terjadi saat kedua pihak menyelesaikan pertukaran?
+
+Ikuti diagram bernomor dari tahap pendanaan ke tahap klaim. “Chain A” dan “Chain B” adalah label umum. Keduanya tidak menunjukkan pasangan yang tersedia atau menyiratkan bahwa Blocknet mendukung kontrak tertentu ini.
+
+1. **Alice mendanai kontrak pertama.** Kontrak ini memungkinkan Bob mengklaim dengan rahasia dan otorisasinya. Pengembalian dana Alice tersedia lebih belakangan.
+2. **Bob memeriksa dan mendanai kontrak kedua.** Kontrak ini memakai hash dari rahasia yang sama dan memungkinkan Alice mengklaim. Pengembalian dana Bob tersedia lebih awal daripada Alice.
+3. **Alice memeriksa dan mengklaim sisi kedua.** Klaimnya mengungkap rahasia dalam contoh hashlock publik dasar ini.
+4. **Bob memakai rahasia yang terungkap untuk mengklaim sisi pertama.** Selang waktu antara tenggat pengembalian dana memberinya waktu untuk bertindak.
+
+[![Contoh swap umum: Alice dan Bob mendanai kontrak bersyarat terpisah, klaim Alice mengungkap rahasia, lalu Bob memakainya untuk mengklaim; kontrak yang belum digunakan memiliki jalur pengembalian dana berbatas waktu.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+Baris atas menunjukkan pendanaan pada dua blockchain. Baris bawah menunjukkan klaim dalam urutan terbalik. Panah melengkung menandai jalur pemulihan bagi dana yang masih terkunci saat syarat pengembalian dananya terpenuhi. Ini adalah diagram penjelasan, bukan layar VEIL atau transaksi langsung.
+
+## Bagaimana jika salah satu peserta berhenti?
+
+Pemulihan bergantung pada titik terhentinya pertukaran. Jika Alice mendanai kontrak pertama dan Bob tidak pernah mendanai kontrak kedua, Alice dapat memulihkan dana yang masih terkunci melalui cabang pengembalian dana setelah cabang itu berlaku. Jika kedua kontrak sudah didanai tetapi Alice tidak pernah mengungkap rahasia, peserta dapat memakai jalur pengembalian dana masing-masing untuk dana yang belum dibelanjakan.
+
+Timelock membuat transaksi pengembalian dana memenuhi syarat; ia tidak menyiarkan dan mengonfirmasi transaksi itu sendiri. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) menjelaskan syarat pembelanjaan berbasis waktu dan konstruksi pengembalian dana noninteraktif. Aplikasi konkret harus mengelola transaksi klaim atau pengembalian dana serta informasi yang diperlukan untuk mengotorisasinya.
+
+Setelah Alice mengklaim sisi kedua dan mengungkap rahasia, Bob harus mengikuti jalur klaim pada sisi pertama tepat waktu. Inilah sebabnya urutan dan tenggat yang berbeda penting. Menutup aplikasi tidak sama dengan membatalkan pertukaran yang sudah didanai. Petunjuk pemulihan implementasi menentukan bagaimana statusnya dilanjutkan.
+
+## Apa yang dapat dilihat peserta dan pengamat?
+
+Penyelesaian pertukaran dan privasi menjawab pertanyaan yang berbeda. Peserta mengetahui ketentuan yang mereka sepakati dan informasi penerimaan yang mereka tukarkan. Dalam contoh dasar ini, hash publik yang sama muncul pada kedua blockchain dan klaim mengungkap rahasianya. Nilai bersama tersebut dapat memberi pengamat hubungan antara kedua sisi.
+
+Pengungkapan yang tepat bergantung pada protokol dan blockchain yang terlibat. Format pembayaran privat tidak dengan sendirinya menentukan apa yang dipublikasikan blockchain lain atau apa yang dicatat antarmuka perdagangan. Demikian pula, menyelesaikan pertukaran tidak menghapus pesan tempat peserta menegosiasikannya.
+
+Untuk pembayaran Blocknet biasa, [panduan visibilitas pembayaran](/id/blog/blocknet-payment-visibility/) memisahkan bidang transaksi publik dari akses pengirim, penerima, dan akses lihat yang diberikan. Itulah dasar untuk memahami privasi pembayaran BNT. Klaim privasi khusus swap memerlukan bukti tentang keseluruhan swap, termasuk aset lain dan langkah komunikasinya.
+
+## Apa yang telah diumumkan Blocknet tentang VEIL?
+
+[Situs resmi Blocknet](https://blocknetcrypto.com/#faraday) menyebut VEIL dalam perbandingan atomic swap dan menjelaskan rencana desain ulang menggunakan primitif pascakuantum sebagai bagian dari Faraday. Pernyataan publik itu menetapkan arah proyek. Pernyataan tersebut tidak menyebutkan pasangan perdagangan, perintah swap, tenggat pengembalian dana, atau layanan pengguna akhir yang dapat diverifikasi panduan ini.
+
+Pertahankan kejelasan cakupan pengumuman tersebut saat membaca contoh di atas. Penjelasan HTLC menerangkan koordinasi atomic swap secara umum. Itu bukan deskripsi protokol internal VEIL. [Panduan Faraday](/id/blog/blocknet-faraday-upgrade/) membahas transisi jaringan yang diumumkan; petunjuk swap khusus implementasi seharusnya berasal dari rilis yang dipublikasikan dan dokumentasinya.
+
+Untuk menerima BNT sekarang, [panduan koin pertama](/id/blog/get-first-blocknet/) membahas transfer biasa dan penambangan. Keduanya adalah alur pengguna yang sudah tersedia dengan langkah dompet dan pembayaran masing-masing. Artikel ini memberi Anda konsep untuk memahami rilis swap publik di masa mendatang tanpa menyalahartikan pengumuman sebagai petunjuk menyetorkan dana.
+
+<CTA target="seine" title="Terima BNT melalui penambangan" text="Gunakan seine dengan bntpool.com dan terima pembayaran penambangan di dompet Blocknet Anda sendiri." />

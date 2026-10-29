@@ -1,96 +1,62 @@
 ---
-title: Cara Blocknet menjaga pembayaran tetap privat
-description: Blocknet menjaga setiap pembayaran tetap privat secara default dengan ring 16 anggota, stealth address sekali pakai, jumlah tersembunyi, relay Dandelion++, dan memo terenkripsi.
-tags: [Privasi, Blocknet, Ring signature, Stealth address, Memo]
+title: 'Cara Blocknet membuat pembayaran biasa privat secara otomatis'
+description: 'Pelajari privasi pembayaran Blocknet melalui tanda tangan ring, kunci sekali pakai, jumlah tersembunyi dan memo terenkripsi, serta usulan perubahan Faraday.'
+tags: ['Blocknet', 'Privasi', 'Pembayaran']
 faq:
-  - q: 'Apakah Blocknet privat secara default?'
-    a: 'Ya. Setiap transaksi Blocknet memakai ring signature atas 16 output, stealth address sekali pakai untuk setiap penerima, jumlah tersembunyi dengan range proof Bulletproofs, dan memo terenkripsi 128 byte pada setiap output. Format transaksinya tidak punya mode transparan, jadi tidak ada pengaturan yang perlu diaktifkan dan tidak ada cara bagi pembayaran untuk melewati perlindungan ini.'
-  - q: 'Berapa ukuran ring yang dipakai Blocknet?'
-    a: 'Setiap input dalam transaksi Blocknet ditandatangani dengan ring CLSAG berisi tepat 16 output: output yang asli dan 15 decoy yang diambil dari blockchain. Konsensus menolak ukuran lain, dan setiap anggota ring harus berupa output nyata yang sudah ada di blockchain. Karena setiap input memakai ukuran yang sama, ukuran ring tidak pernah bisa menandai sebuah wallet.'
-  - q: 'Siapa yang bisa membaca memo Blocknet?'
-    a: 'Hanya pengirim dan penerima. Setiap memo dienkripsi dengan rahasia yang dibagi kedua wallet untuk output tersebut, dan selalu memakan tepat 128 byte di blockchain, dengan ruang hingga 124 byte teks. Memo yang pendek atau kosong diisi dengan padding acak, jadi orang lain tidak bisa mengetahui pembayaran mana yang membawa catatan.'
-  - q: 'Bisakah orang melihat berapa banyak yang telah diterima alamat Blocknet saya?'
-    a: 'Tidak. Setiap pembayaran ke alamat Anda masuk ke stealth address sekali pakai yang baru, jadi pembayaran tidak bisa dikelompokkan di bawah alamat yang Anda bagikan. Jumlah disimpan sebagai Pedersen commitment dengan range proof, jadi blockchain tidak pernah menunjukkan isi setiap output. Hanya wallet Anda, dengan view key privat Anda, yang menemukan dan menjumlahkan pembayaran Anda.'
-  - q: 'Apakah Blocknet memakai kriptografi yang sama dengan Monero?'
-    a: 'Blocknet memakai keluarga kriptografi teruji yang sama dengan Monero: ring signature CLSAG dengan ring berisi 16, stealth address sekali pakai, Pedersen commitment dengan range proof Bulletproofs, dan relay transaksi Dandelion++. Di atas itu Blocknet menambahkan bayar dengan nama melalui nama pendek Blocknet ID dan memo terenkripsi 128 byte pada setiap output.'
-sourceHash: '87df192cde52'
+  - q: 'Apakah privasi otomatis saat saya membayar dengan Blocknet?'
+    a: 'Ya. Dompet yang dirilis membentuk pembayaran biasa dengan tanda tangan ring, kunci output sekali pakai, jumlah tersembunyi dan memo terenkripsi. Anda tidak memilih mode pembayaran privat terpisah. Struktur transaksi publik tetap ada, dan pengirim serta penerima mengetahui detail pembayaran mereka sendiri. Ini menjelaskan pembelanjaan normal; pembuatan imbalan blok mengikuti aturan transaksinya sendiri.'
+  - q: 'Mengapa input Blocknet memiliki 16 anggota ring?'
+    a: 'Input normal memakai satu output asli dan 15 pengalih dari blockchain. Tanda tangan ring membuktikan otorisasi tanpa menunjukkan anggota aslinya. Konsensus menetapkan ukuran ring 16, sehingga pengguna tidak memilih ukuran berbeda untuk setiap pembayaran. Pengalih tidak menyumbangkan dana pemiliknya, dan key image membantu mendeteksi pembelanjaan berulang.'
+  - q: 'Apakah Faraday sudah menggantikan sistem privasi saat ini?'
+    a: 'Belum. Faraday masih berupa usulan peningkatan. Penjelasan resmi 27 Oktober menggambarkan bukti pembelanjaan berbasis hash atas himpunan koin Faraday dan mekanisme ML-KEM terpisah untuk menerima pembayaran. Himpunan itu akan bertambah saat koin masuk ke format baru. Aturan pembayaran yang dirilis sekarang tetap menjadi acuan hingga peningkatan yang berlaku diaktifkan.'
+sourceHash: '64f1034d2ebb'
 translation: draft
 ---
 
-Artikel ini membahas lebih dalam dari ringkasan privasi di [Apa itu Blocknet?](/id/blog/what-is-blocknet/) dan menguraikan setiap lapisan privasi dalam transaksi Blocknet: apa yang disembunyikannya, cara kerjanya, dan artinya saat Anda mengirim atau menerima BNT berikutnya.
+Membayar seseorang seharusnya tidak mengharuskan Anda memublikasikan riwayat pengeluaran kepada semua pembaca blockchain. Blocknet menerapkan mekanisme privasinya dalam pembayaran dompet biasa. Panduan ini menjelaskan perlindungan otomatis dompet, cara jaringan tetap memeriksa pembayaran, dan peran catatan Anda sendiri. Perilaku saat ini merujuk pada core v0.22.0 yang dirilis; bagian Faraday membahas usulan.
 
-## Bagaimana Blocknet menjaga pembayaran tetap privat?
-
-<Answer>
-Blocknet menyembunyikan pengirim dengan ring signature CLSAG atas 16 output, penerima dengan stealth address sekali pakai, dan jumlah dengan Pedersen commitment dan range proof Bulletproofs. Relay Dandelion++ menyembunyikan dari mana transaksi masuk ke jaringan, dan setiap output membawa memo terenkripsi 128 byte. Semuanya wajib, tanpa mode transparan.
-</Answer>
-
-Blocknet memakai keluarga kriptografi teruji yang sama dengan Monero: ring signature, stealth address, dan range proof Bulletproofs, dibangun di atas grup Ristretto di Curve25519. Di atas itu Blocknet menambahkan bayar dengan nama dan memo terenkripsi. Setiap lapisan menutupi bagian pembayaran yang berbeda, dan bersama-sama lapisan-lapisan itu hanya menyisakan sangat sedikit petunjuk bagi orang yang membaca blockchain.
-
-## Ring signature menyembunyikan siapa yang membayar
-
-Saat Anda membelanjakan koin, wallet Anda menandatangani untuk sekelompok 16 output: output milik Anda dan 15 output lain yang dipilih dari blockchain sebagai decoy. Tanda tangannya adalah [ring signature CLSAG](/id/blog/ring-signatures-explained/). Siapa pun bisa memverifikasi bahwa salah satu anggota ring yang menandatangani, dan tanda tangan itu tidak mengungkap yang mana.
-
-Aturan konsensus menegakkan ukuran ring. Setiap input harus membawa tepat 16 anggota ring, masing-masing berupa output nyata yang sudah ada di blockchain, dan jaringan menolak yang lain. Karena setiap input di jaringan memakai ukuran yang sama, ukuran ring tidak bisa menandai sebuah transaksi atau wallet yang membuatnya. Kode daemon menetapkan ukuran itu “untuk mencegah kebocoran informasi dari ukuran ring yang bervariasi”.
-
-Untuk mencegah koin yang sama dibelanjakan dua kali, setiap input juga membawa key image. Key image unik untuk output asli yang dibelanjakan tetapi tidak mengungkap anggota ring yang mana. Jika sebuah key image muncul untuk kedua kalinya, jaringan menolak transaksi itu sebagai double spend.
-
-## Stealth address menyembunyikan siapa yang dibayar
-
-Alamat Blocknet memuat dua kunci publik, spend key dan view key. Saat seseorang membayar Anda, wallet mereka menggabungkan kunci Anda dengan angka acak baru untuk membuat [alamat sekali pakai](/id/blog/stealth-addresses-explained/) yang hanya dipakai untuk output tersebut. Alamat yang Anda bagikan tidak pernah muncul di blockchain.
-
-Wallet Anda memakai view key privat untuk memindai transaksi baru dan menemukan output milik Anda, dan spend key untuk membelanjakannya nanti. Sepuluh pembayaran ke alamat yang sama masuk ke sepuluh alamat sekali pakai yang tidak berhubungan, jadi pengamat tidak bisa menjumlahkan apa yang telah diterima sebuah alamat atau mengetahui bahwa dua pembayaran masuk ke orang yang sama.
-
-Hal yang sama berlaku untuk [nama Blocknet ID](/id/blog/blocknet-id-pay-by-name/). Nama pendek seperti `@name` memang dirancang publik, karena pengirim mencarinya di [blocknet.id](https://blocknet.id) untuk membayar Anda. Pembayaran ke nama itu tetap masuk ke alamat sekali pakai yang baru, jadi nama tersebut tidak mengungkap apa pun tentang apa yang telah Anda terima.
-
-## Bagaimana Blocknet menyembunyikan jumlah transaksi?
-
-Jumlah disimpan sebagai Pedersen commitment. Commitment mengunci sebuah angka tanpa menunjukkannya, dan commitment bisa dijumlahkan. Dengan begitu setiap node bisa memeriksa bahwa input transaksi sama dengan output ditambah biaya tanpa mengetahui satu jumlah pun.
-
-Commitment saja bisa menyembunyikan jumlah negatif, yang akan menciptakan koin dari ketiadaan. Karena itu setiap output disertai [range proof Bulletproofs](/id/blog/bulletproofs-explained/) bahwa jumlahnya berada dalam rentang 64-bit yang dimulai dari nol. Bukti itu meyakinkan setiap node bahwa jumlahnya valid dan tidak mengungkap apa pun lagi tentangnya.
-
-Penerima tetap melihat angka sebenarnya. Wallet mereka memulihkannya dengan rahasia bersama yang sama yang dipakai untuk menemukan output, jadi jumlahnya terlihat oleh dua orang dalam pembayaran itu dan tidak oleh orang lain.
-
-## Dandelion++ menyembunyikan asal transaksi
-
-Jika sebuah node mengumumkan transaksinya sendiri ke semua peer sekaligus, orang yang mengamati banyak node bisa menebak asalnya dengan mencatat siapa yang mendengarnya lebih dulu. Blocknet me-relay transaksi dengan [Dandelion++](/id/blog/dandelion-plus-plus-explained/) untuk mencegah hal itu.
-
-Transaksi baru pertama-tama berjalan di sepanjang “stem”, diteruskan dari satu peer ke satu peer berikutnya. Di setiap lompatan ada peluang 90% transaksi berlanjut di sepanjang stem; jika tidak, transaksi masuk fase “fluff” dan menyebar ke seluruh jaringan dari titik itu. Saat sebagian besar node melihat transaksi tersebut, transaksi itu tampak berasal dari node yang mungkin berjarak banyak lompatan dari node Anda. Rute stem diacak ulang setiap 10 menit.
-
-## Siapa yang bisa membaca memo Blocknet?
-
-Setiap output membawa memo terenkripsi 128 byte dengan ruang hingga 124 byte teks. Memo dienkripsi dengan rahasia yang sama yang dibagi pengirim dan penerima untuk output tersebut, jadi hanya Anda berdua yang bisa membacanya. Pakai untuk nomor invoice, referensi pesanan, atau catatan singkat untuk orang yang Anda bayar. [Panduan memo terenkripsi](/id/blog/blocknet-encrypted-memos/) menunjukkan cara menambahkannya dan di mana menemukan memo yang Anda terima.
-
-Memo selalu berukuran sama, baik Anda menulis catatan penuh maupun tidak menulis apa pun. Saat memo pendek atau kosong, wallet mengisi sisanya dengan padding acak sebelum mengenkripsinya, jadi output dengan catatan terlihat persis sama dengan output tanpa catatan. Memo tidak pernah menonjol, dan orang lain bahkan tidak bisa mengetahui pembayaran mana yang membawa pesan.
-
-## Apakah privasi bersifat opsional di Blocknet?
+## Apa arti privat secara default bagi pembayaran Blocknet?
 
 <Answer>
-Tidak. Privasi wajib di Blocknet. Format transaksinya tidak punya mode transparan, dan konsensus mewajibkan setiap input membawa ring berisi tepat 16 anggota, jadi setiap pembayaran memakai ring, stealth address, jumlah tersembunyi, dan memo terenkripsi. Karena tidak ada yang bisa memilih keluar, pembayaran privat terlihat sama seperti setiap pembayaran lain di blockchain.
+Pembayaran biasa Blocknet memakai tanda tangan ring untuk input yang dibelanjakan, kunci sekali pakai untuk penerima, serta komitmen dan bukti rentang untuk jumlah. Memo dienkripsi dan Dandelion++ mengurangi keterpaparan asal transaksi di jaringan. Dompet menerapkan lapisan ini tanpa sakelar privasi terpisah, sementara struktur transaksi publik dan catatan pribadi peserta tetap ada.
 </Answer>
 
-Ketika privasi hanyalah sebuah pengaturan, orang-orang yang mengaktifkannya membentuk kelompok kecil yang lebih mudah dikenali. Di Blocknet setiap transaksi disusun dengan cara yang sama, jadi masing-masing menyatu dengan semua transaksi lain, dan Anda tidak pernah perlu ingat untuk melindungi sebuah pembayaran.
+## Bagaimana perlindungan default menjaga uang yang dibelanjakan?
 
-## Artinya saat Anda membayar seseorang
+Saat Anda memasukkan penerima dan jumlah, dompet membentuk pembayaran dalam format privat normal. Anda tidak perlu memilih antara transfer publik dan transfer terlindungi. Dengan demikian, privasi menjadi bagian dari penggunaan BNT sebagai mata uang: membayar orang atau bisnis memakai perlindungan inti yang sama dengan pembayaran biasa lainnya. Keputusan mengaktifkan privasi pun tidak menjadi pilihan yang membedakan pembayaran.
 
-Saat Anda mengirim BNT ke sebuah alamat atau `@name`, wallet Anda menangani setiap langkah untuk Anda, tanpa ada yang perlu diaktifkan:
+Setiap input normal memakai ring CLSAG berisi 16 output: satu output asli milik Anda dan 15 pengalih dari blockchain. [Aturan validasi yang dirilis](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L1013) mewajibkan ukuran itu dan anggota ring berupa output yang benar-benar ada di blockchain. Tanda tangan membuktikan bahwa pembelanjaan diotorisasi tanpa menunjukkan anggota yang menjadi sumbernya. Pengalih menyediakan kemungkinan sumber bagi bukti; mereka tidak mendanai pembayaran Anda. Key image memungkinkan jaringan mendeteksi pembelanjaan berulang. [Panduan tanda tangan ring](/id/blog/ring-signatures-explained/) menjelaskan mekanismenya.
 
-1. Wallet memilih 15 decoy dari blockchain dan menandatangani input Anda dengan ring berisi 16.
-2. Wallet membuat alamat sekali pakai yang baru untuk penerima.
-3. Wallet membuat commitment atas jumlahnya dan melampirkan range proof.
-4. Wallet mengenkripsi memo Anda, atau padding acak jika memo dibiarkan kosong.
-5. Wallet menyerahkan transaksi ke Dandelion++ untuk di-relay.
+[![Tiga perlindungan dalam pembayaran Blocknet biasa: 1, ring berisi 16 kemungkinan sumber; 2, kunci output penerima sekali pakai; 3, komitmen jumlah tersembunyi.](/assets/blog/blocknet-privacy-default.svg)](/assets/blog/blocknet-privacy-default.svg)
 
-Orang yang membaca blockchain melihat input yang masing-masing menunjuk ke 16 kemungkinan output, output yang dikirim ke alamat sekali pakai yang belum pernah terlihat sebelumnya, commitment sebagai pengganti jumlah, dan kolom memo berisi byte yang tampak acak. Orang yang Anda bayar melihat pembayaran, jumlah, dan catatan Anda di wallet mereka sendiri.
+Diagram mengelompokkan tiga perlindungan transaksi: **1** otorisasi di antara anggota ring, **2** output penerimaan dan **3** jumlah tersembunyinya. Tidak ada anggota ring yang ditandai sebagai sumber asli. Gambaran konseptual ini bukan transaksi langsung.
 
-Jika Anda ingin mendapatkan BNT pertama, Anda bisa menambangnya di komputer Anda sendiri. [Panduan penambangan](/id/blog/how-to-mine-blocknet/) membantu Anda menjalankan seine di bntpool.com dalam beberapa menit, dan Anda bisa menambang langsung ke alamat atau `@name` Anda.
+## Bagaimana penerima dan catatan pembayaran dilindungi?
 
-## Apa selanjutnya dengan upgrade Faraday
+Alamat penerimaan memungkinkan pembayar membentuk output untuk Anda. Dompet menurunkan kunci output sekali pakai, alih-alih menaruh alamat penerimaan yang dikenal itu di samping setiap pembayaran di blockchain. Dompet memakai informasi penayangan privat untuk mengenali output masuk. Anda dapat memakai ulang alamat penerimaan sementara pembayaran menggunakan kunci output masing-masing. [Panduan alamat stealth](/id/blog/stealth-addresses-explained/) menjelaskan hubungannya.
 
-Faraday merupakan usulan peningkatan blockchain yang ada. [Penjelasan resmi 27 Oktober](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) menggambarkan rancangan yang masih dibangun dan diuji, menargetkan Februari 2027. Transaksi yang telah dirilis saat ini tetap memakai mekanisme privasi di atas.
+[Nama Blocknet ID](/id/blog/blocknet-id-pay-by-name/) yang publik menyediakan cara mudah menemukan tujuan penerimaan. Seseorang mungkin menghubungkan nama yang diterbitkan dengan Anda, tetapi pembayaran biasa ke tujuan tersebut tetap memakai pembentukan output yang sama. Menerbitkan nama penerimaan tidak memublikasikan kunci penayangan privat dompet.
 
-Bukti pembelanjaan yang direncanakan akan mencakup seluruh himpunan koin Faraday, yang tumbuh saat koin memasuki format baru. Ini lebih tepat daripada menganggap setiap output historis sudah menjadi bagian himpunan baru. Pembelanjaan akan memakai bukti berbasis hash, sedangkan ML-KEM mendukung deteksi pembayaran. [Bagaimana Faraday mengubah privasi](/id/blog/blocknet-faraday-privacy/) menjelaskan peran terpisah dan siklus bukti usulan ini.
+Anda juga dapat menyertakan referensi faktur atau catatan singkat. Dompet mengenkripsi memo memakai rahasia bersama untuk output tersebut. Kolom memo berukuran 128 byte dan mendukung teks hingga 124 byte; isi lebih pendek atau kosong mendapat isian acak sebelum dienkripsi. Jadi ukuran kolom yang tetap tidak mengumumkan panjang catatan. Pengirim dan penerima dapat mengetahui catatan itu, dan informasi verifikasi atau penayangan yang sengaja dibagikan dapat mengungkapkannya. [Panduan memo](/id/blog/blocknet-encrypted-memos/) membahas penulisan dan pembacaan catatan.
 
-Riwayat blockchain akan berlanjut, dengan langkah migrasi koin tersendiri bagi pemegang. [Panduan peningkatan Faraday](/id/blog/blocknet-faraday-upgrade/) melacak jendela migrasi yang diumumkan, perubahan kata pemulihan dan langkah persiapan. Ikuti rilis kompatibel final untuk petunjuk pengoperasian; tanggal, angka dan rancangan pengumuman dapat berubah.
+## Bagaimana jaringan memeriksa jumlah tersembunyi?
 
-<CTA target="seine" title="Dapatkan BNT dengan menambang" text="Tambang Blocknet dengan seine dan terima pembayaran privat langsung ke alamat atau @name Anda." />
+Output pembayaran biasa membawa komitmen Pedersen, bukan memublikasikan jumlahnya sebagai nilai terbaca. Node memeriksa keseimbangan transaksi, termasuk biaya publiknya, melalui komitmen dan bukti terkait. Bukti rentang Bulletproofs memastikan jumlah output berada dalam rentang yang diizinkan. Bersama-sama, pemeriksaan ini memvalidasi perpindahan uang tanpa memasukkan jumlah pembayaran ke catatan publik biasa.
+
+Dompet tetap dapat menampilkan jumlah yang Anda terima. [Panduan bukti rentang](/id/blog/bulletproofs-explained/) menjelaskan kriptografinya, sementara [penjelasan transaksi](/id/blog/blocknet-transaction-explained/) menelusuri input terpilih, output penerima dan kembalian. Kembalian memakai output baru milik dompet pengirim; privasi tidak menghilangkan kebutuhan menghitung apa yang dibelanjakan dan dikembalikan.
+
+Catatan publik tetap menyimpan hash transaksi, struktur input dan output, biaya, serta status blok setelah masuk blok. Karena itu, pembayaran privat tetap merupakan transaksi yang dapat diverifikasi. Penjelasan ini membahas pembelanjaan biasa: transaksi coinbase khusus yang membuat imbalan blok tidak memiliki input pembelanjaan dan mengikuti aturan validasi terpisah. Membedakan kedua kasus membuat istilah “privat secara default” tetap sesuai perilaku pembayaran yang dijelaskan.
+
+## Apa yang terjadi di luar transaksi publik?
+
+[Dandelion++](/id/blog/dandelion-plus-plus-explained/) menangani penerusan jaringan. Transaksi baru terlebih dahulu melewati jalur stem sebelum disiarkan lebih luas, mengurangi hubungan langsung antara asalnya dan peer yang mengumumkannya secara luas. Ini merupakan lapisan tambahan di samping kriptografi transaksi. Mekanisme ini tidak menjanjikan penyembunyian alamat IP dalam setiap situasi jaringan.
+
+Peserta pembayaran juga memiliki catatan. Pengirim mengetahui tujuan dan jumlah yang dimasukkan; penerima mengenali penerimaannya. Faktur, percakapan atau tangkapan layar yang dibagikan dapat menghubungkan detail tersebut dengan orang atau pesanan. Informasi luar ini terpisah dari apa yang diterbitkan format transaksi. [Panduan visibilitas pembayaran](/id/blog/blocknet-payment-visibility/) membandingkan akses publik, pengirim, penerima dan akses penayangan yang diberikan, termasuk bukti pembayaran yang sengaja dibagikan. Untuk penggunaan mata uang sehari-hari, bedakan keduanya: jaringan memvalidasi transfer, sedangkan setiap peserta menyimpan detail yang dibutuhkan untuk pembukuannya sendiri.
+
+## Apa yang akan diubah oleh usulan peningkatan Faraday?
+
+[Penjelasan resmi 27 Oktober](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) menyebut Faraday sebagai desain yang masih dibangun dan diuji. Faraday akan mengganti bukti pembelanjaan saat ini dengan bukti berbasis hash yang mencakup seluruh himpunan koin Faraday. Himpunan itu akan bertambah saat koin masuk format baru; ini tidak berarti setiap output historis sudah tercakup. Usulan Faraday akan memakai ML-KEM untuk penerimaan dan deteksi pembayaran, tugas yang terpisah dari pembuktian pembelanjaan.
+
+[Panduan privasi Faraday](/id/blog/blocknet-faraday-privacy/) menjelaskan mekanisme yang direncanakan itu. Desain dan jadwal usulan dapat berubah, dan perilaku dompet saat ini harus mengacu pada aturan yang dirilis sampai peningkatan terkait berlaku. Dalam penggunaan mata uang sekarang, privasi secara default berarti format pembayaran biasa melindungi detail sensitif tanpa mode tambahan yang perlu dipilih. Hubungannya dengan unit yang saling menggantikan dijelaskan dalam [Blocknet dan fungibilitas](/id/blog/blocknet-fungibility/); langkah pengiriman praktis tetap ada dalam [panduan pembayaran](/id/blog/send-receive-blocknet/).
+
+<CTA target="seine" title="Tambang Blocknet dengan seine" text="Gunakan seine bersama bntpool.com untuk menambang Blocknet dan menerima pembayaran di dompet Anda sendiri." />

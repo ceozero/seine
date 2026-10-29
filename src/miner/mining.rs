@@ -5,7 +5,6 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Result};
-use blocknet_pow_spec::POW_HEADER_BASE_LEN;
 use crossbeam_channel::Receiver;
 
 use crate::backend::{BackendEvent, MiningSolution};
@@ -74,8 +73,6 @@ const ATOMIC_UNITS_PER_BNT: u64 = 100_000_000;
 const BNT_DISPLAY_DECIMALS: usize = 4;
 const BNT_DISPLAY_SCALE_ATOMIC_UNITS: u64 = 10_000;
 const EXPLORER_HASHRATE_SAMPLE_COUNT: usize = 10;
-// Keep in sync with Blocknet daemon target interval (block.go: BlockIntervalSec = 300).
-const NETWORK_HASHRATE_TARGET_BLOCK_SECS: f64 = 300.0;
 
 #[derive(Default)]
 struct RetryTracker {
@@ -161,6 +158,7 @@ struct RoundLoopState {
 
 struct PreparedTemplate {
     header_base: Arc<[u8]>,
+    pow: crate::backend::PowAlgorithm,
     target: [u8; 32],
     height: String,
     network_hashrate: String,
@@ -243,9 +241,17 @@ fn should_use_daemon_wallet_stats_for_override(
         .is_some_and(|(configured, daemon)| configured == daemon)
 }
 
-fn format_network_hashrate_from_difficulty(difficulty: Option<u64>) -> String {
+fn format_network_hashrate_from_difficulty(
+    difficulty: Option<u64>,
+    template_height: Option<u64>,
+) -> String {
     difficulty
-        .map(|value| format_hashrate_ui(value as f64 / NETWORK_HASHRATE_TARGET_BLOCK_SECS))
+        .map(|value| {
+            format_hashrate_ui(
+                value as f64
+                    / blocknet_pow_spec::target_block_seconds(template_height.unwrap_or(0)) as f64,
+            )
+        })
         .unwrap_or_else(|| "unknown".to_string())
 }
 
@@ -258,7 +264,16 @@ fn estimate_explorer_network_hashrate_hps(
     chain_height: u64,
     difficulty: u64,
 ) -> Result<f64> {
-    // Match explorer.go: hashrate = NextDifficulty / avg(last 10 positive block-time deltas).
+    let next_height = chain_height.saturating_add(1);
+    let era_start = if next_height >= blocknet_pow_spec::FARADAY_ACTIVATION_HEIGHT {
+        blocknet_pow_spec::FARADAY_ACTIVATION_HEIGHT
+    } else {
+        0
+    };
+    if chain_height <= era_start {
+        return Ok(difficulty as f64 / blocknet_pow_spec::target_block_seconds(next_height) as f64);
+    }
+    // Sample only intervals entirely within the template's PoW era.
     if chain_height < 2 {
         return Ok(0.0);
     }
@@ -270,7 +285,7 @@ fn estimate_explorer_network_hashrate_hps(
         .map(|block| block.timestamp);
     let mut height = chain_height;
 
-    while height > 0 && count < EXPLORER_HASHRATE_SAMPLE_COUNT {
+    while height > era_start && count < EXPLORER_HASHRATE_SAMPLE_COUNT {
         let prev_ts = client
             .get_block_by_height_optional(height - 1)?
             .map(|block| block.timestamp);
@@ -381,7 +396,7 @@ impl<'a> MiningControlPlane<'a> {
                         "failed to sample explorer network hashrate ({err:#}); using fixed-interval estimate"
                     ),
                 );
-                format_network_hashrate_from_difficulty(difficulty)
+                format_network_hashrate_from_difficulty(difficulty, template_height)
             }
         };
 
@@ -823,6 +838,24 @@ fn prepare_round_template(
             return None;
         }
 
+        let Some(height) = template_height(&template.block) else {
+            warn(
+                "TEMPLATE",
+                "missing template height; cannot select a safe PoW algorithm",
+            );
+            return None;
+        };
+        let pow = match blocknet_pow_spec::ensure_supported_pow(
+            height,
+            super::provisional_faraday_pow_allowed(),
+        ) {
+            Ok(pow) => pow,
+            Err(reason) => {
+                warn("TEMPLATE", reason);
+                return None;
+            }
+        };
+
         let header_base = match decode_hex(&template.header_base, "header_base") {
             Ok(v) => v,
             Err(err) => {
@@ -836,15 +869,8 @@ fn prepare_round_template(
             }
         };
 
-        if header_base.len() != POW_HEADER_BASE_LEN {
-            warn(
-                "TEMPLATE",
-                format!(
-                    "header_base length mismatch: expected {} bytes, got {}",
-                    POW_HEADER_BASE_LEN,
-                    header_base.len()
-                ),
-            );
+        if let Err(reason) = blocknet_pow_spec::validate_header_length(header_base.len()) {
+            warn("TEMPLATE", reason);
             if !sleep_with_shutdown(shutdown, TEMPLATE_RETRY_DELAY) {
                 return None;
             }
@@ -883,6 +909,7 @@ fn prepare_round_template(
 
         return Some(PreparedTemplate {
             header_base,
+            pow,
             target,
             height,
             network_hashrate,
@@ -895,6 +922,7 @@ struct DispatchRoundInputs<'a> {
     epoch: u64,
     work_id: u64,
     header_base: &'a Arc<[u8]>,
+    pow: crate::backend::PowAlgorithm,
     target: [u8; 32],
     reservation: super::scheduler::NonceReservation,
     stop_at: Instant,
@@ -913,6 +941,7 @@ fn dispatch_round_assignments(
             epoch: inputs.epoch,
             work_id: inputs.work_id,
             header_base: Arc::clone(inputs.header_base),
+            pow: inputs.pow,
             target: inputs.target,
             dynamic_share_target: None,
             pause_on_solution: true,
@@ -942,6 +971,7 @@ struct ExecuteRoundPhase<'a, 'cp> {
     height: &'a str,
     network_hashrate: &'a str,
     header_base: &'a Arc<[u8]>,
+    pow: crate::backend::PowAlgorithm,
     target: [u8; 32],
     current_template: &'a BlockTemplateResponse,
     control_plane: &'a mut MiningControlPlane<'cp>,
@@ -974,6 +1004,7 @@ fn execute_round_phase(phase: ExecuteRoundPhase<'_, '_>) -> Result<()> {
         height,
         network_hashrate,
         header_base,
+        pow,
         target,
         current_template,
         control_plane,
@@ -1016,6 +1047,7 @@ fn execute_round_phase(phase: ExecuteRoundPhase<'_, '_>) -> Result<()> {
         height,
         network_hashrate,
         header_base,
+        pow,
         target,
     })?;
 
@@ -1410,6 +1442,7 @@ pub(super) fn run_mining_loop(
         let is_dev_round = control_plane.dev_fee_round_active();
         let PreparedTemplate {
             header_base,
+            pow,
             target,
             height,
             network_hashrate,
@@ -1429,6 +1462,7 @@ pub(super) fn run_mining_loop(
                 epoch,
                 work_id,
                 header_base: &header_base,
+                pow,
                 target,
                 reservation,
                 stop_at,
@@ -1452,6 +1486,7 @@ pub(super) fn run_mining_loop(
             height: &height,
             network_hashrate: &network_hashrate,
             header_base: &header_base,
+            pow,
             target,
             current_template: &template,
             control_plane: &mut control_plane,
@@ -1766,6 +1801,7 @@ struct RoundInput<'a> {
     height: &'a str,
     network_hashrate: &'a str,
     header_base: &'a Arc<[u8]>,
+    pow: crate::backend::PowAlgorithm,
     target: [u8; 32],
 }
 
@@ -2041,6 +2077,7 @@ impl<'a> RoundRuntime<'a> {
                 epoch: input.epoch,
                 work_id: input.work_id,
                 header_base: Arc::clone(input.header_base),
+                pow: input.pow,
                 target: input.target,
                 stop_at: input.stop_at,
                 mode: RuntimeMode::Mining,
@@ -2109,6 +2146,7 @@ impl<'a> RoundRuntime<'a> {
                 epoch: input.epoch,
                 work_id: input.work_id,
                 header_base: Arc::clone(input.header_base),
+                pow: input.pow,
                 target: input.target,
                 stop_at: input.stop_at,
                 mode: RuntimeMode::Mining,
@@ -2750,6 +2788,10 @@ mod tests {
                 assign_timeout_strikes_override: None,
             }],
             threads: 1,
+            cpu_threads_explicit: None,
+            auto_update: false,
+            cpu_side_cache_blocks: 0,
+            cpu_skip_store_permille: 0,
             cpu_auto_threads_cap: 1,
             cpu_manual_memory_check: false,
             cpu_autotune_worker_slots: None,
@@ -2849,15 +2891,43 @@ mod tests {
 
     #[test]
     fn formats_network_hashrate_from_difficulty() {
-        assert_eq!(format_network_hashrate_from_difficulty(None), "unknown");
         assert_eq!(
-            format_network_hashrate_from_difficulty(Some(300)),
+            format_network_hashrate_from_difficulty(
+                Some(600_000),
+                Some(blocknet_pow_spec::FARADAY_ACTIVATION_HEIGHT)
+            ),
+            "1.00 KH/s"
+        );
+        assert_eq!(
+            format_network_hashrate_from_difficulty(None, Some(1)),
+            "unknown"
+        );
+        assert_eq!(
+            format_network_hashrate_from_difficulty(Some(300), Some(1)),
             "1.00 H/s"
         );
         assert_eq!(
-            format_network_hashrate_from_difficulty(Some(300_000)),
+            format_network_hashrate_from_difficulty(Some(300_000), Some(1)),
             "1.00 KH/s"
         );
+    }
+
+    #[test]
+    fn faraday_network_estimate_never_samples_legacy_blocks() {
+        let server = MockServer::start();
+        let unexpected = server.mock(|when, then| {
+            when.method(GET);
+            then.status(500);
+        });
+        let client = submit_test_client(&server);
+        let height = blocknet_pow_spec::FARADAY_ACTIVATION_HEIGHT;
+        for tip in [height - 1, height] {
+            assert_eq!(
+                estimate_explorer_network_hashrate_hps(&client, tip, 600_000).unwrap(),
+                1000.0
+            );
+        }
+        unexpected.assert_hits(0);
     }
 
     #[test]
@@ -3049,6 +3119,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             backend_label: "cpu#1".to_string(),
             is_dev_fee: false,
@@ -3104,6 +3175,7 @@ mod tests {
                     share_binding_id: 0,
                     backend_id: 1,
                     backend: "cpu",
+                    found_at: std::time::Instant::now(),
                 }),
                 42,
                 &mut solved,
@@ -3152,6 +3224,7 @@ mod tests {
                     share_binding_id: 0,
                     backend_id: 1,
                     backend: "cpu",
+                    found_at: std::time::Instant::now(),
                 }),
                 42,
                 &mut solved,
@@ -3194,6 +3267,7 @@ mod tests {
                     share_binding_id: 0,
                     backend_id: 1,
                     backend: "cpu",
+                    found_at: std::time::Instant::now(),
                 }),
                 42,
                 &mut solved,
@@ -3223,6 +3297,7 @@ mod tests {
             share_binding_id: 0,
             backend_id: 1,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         });
         let mut deferred = VecDeque::new();
         let mut deferred_keys = HashSet::new();
@@ -3248,6 +3323,7 @@ mod tests {
                     share_binding_id: 0,
                     backend_id: 1,
                     backend: "cpu",
+                    found_at: std::time::Instant::now(),
                 }),
                 42,
                 &mut solved,
@@ -3289,6 +3365,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             }))
             .expect("enqueue current solution");
         event_tx
@@ -3299,6 +3376,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             }))
             .expect("enqueue stale solution");
         event_tx
@@ -3309,6 +3387,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             }))
             .expect("enqueue additional current solution");
 
@@ -3350,6 +3429,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 5,
@@ -3358,6 +3438,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 4,
@@ -3366,6 +3447,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 4,
@@ -3374,6 +3456,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 2,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 4,
@@ -3382,6 +3465,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 4,
@@ -3390,6 +3474,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
         ];
 
@@ -3412,6 +3497,7 @@ mod tests {
             share_binding_id: 0,
             backend_id: 1,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         };
         let mut deferred = vec![
             MiningSolution {
@@ -3421,6 +3507,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 5,
@@ -3429,6 +3516,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 2,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             MiningSolution {
                 epoch: 5,
@@ -3437,6 +3525,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
         ];
 
@@ -3458,6 +3547,7 @@ mod tests {
                     share_binding_id: 0,
                     backend_id: 1,
                     backend: "cpu",
+                    found_at: std::time::Instant::now(),
                 },
             );
         }
@@ -3478,6 +3568,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
         );
         push_deferred_solution(
@@ -3489,6 +3580,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 9,
                 backend: "nvidia",
+                found_at: std::time::Instant::now(),
             },
         );
 
@@ -3510,6 +3602,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             &stats,
         );
@@ -3523,6 +3616,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             &stats,
         );
@@ -3536,6 +3630,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             &stats,
         );
@@ -3552,6 +3647,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             },
             backend_label: "cpu#1".to_string(),
             template_height: Some(7),
@@ -3743,6 +3839,7 @@ mod tests {
             share_binding_id: 0,
             backend_id: 1,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         };
         let cross_backend = MiningSolution {
             epoch: 9,
@@ -3751,6 +3848,7 @@ mod tests {
             share_binding_id: 0,
             backend_id: 2,
             backend: "cpu",
+            found_at: std::time::Instant::now(),
         };
 
         remember_submitted_solution(&mut order, &mut keys, &solution);
@@ -3765,6 +3863,7 @@ mod tests {
                 share_binding_id: 0,
                 backend_id: 1,
                 backend: "cpu",
+                found_at: std::time::Instant::now(),
             };
             remember_submitted_solution(&mut order, &mut keys, &entry);
         }

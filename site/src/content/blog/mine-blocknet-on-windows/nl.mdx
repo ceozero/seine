@@ -9,7 +9,7 @@ faq:
     a: 'Standaard bewaart seine het uitbetalingsadres, de pool en de naam van de rig in seine-data/seine.config.json onder de map waaruit je het programma start. Start het vanuit dezelfde uitgepakte map om die instellingen opnieuw te gebruiken. Met de optie data-dir kun je zo nodig een andere map kiezen.'
   - q: 'Heb ik grote geheugenpagina’s in Windows nodig voordat ik begin met minen?'
     a: 'Nee. seine probeert automatisch grote geheugenpagina’s te gebruiken en gebruikt gewone pagina’s als die niet beschikbaar zijn. Je kunt met de standaardinstellingen beginnen met minen. Voor de optionele instelling van grote pagina’s geef je je miningaccount het recht Pagina’s in het geheugen vergrendelen. Meld je daarna af en weer aan voordat je seine opnieuw start.'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ Houd je openbare uitbetalingsadres bij de hand voordat je de miner opent. De [wa
 
 Elke CPU-miningthread gebruikt een geheugenblok van 2 GiB. seine controleert het beschikbare RAM en het aantal cores, houdt geheugenruimte vrij en kiest het aanvankelijke aantal threads voor je. Op een desktop of laptop kun je met de standaardinstellingen beginnen; je hoeft niet eerst een aantal threads te berekenen of een CPU-kernel te kiezen.
 
-## Stap 1: download het Windows-archief
+## Stap 1: download de juiste versie
 
 Open de [downloadsectie](/nl/#download) en kies Windows x86_64. Het archief heet `seine-windows-x86_64.zip`.
 
-![Windows-ZIP in de officiële downloadtabel van seine](/assets/blog/windows-download.png)
+![Windows-ZIP in de officiële downloadtabel van seine](/assets/blog/setup-download.webp)
 
-## Stap 2: pak de volledige ZIP uit
+## Stap 2: pak uit en start
 
 Klik in Verkenner met de rechtermuisknop op de gedownloade ZIP en kies **Alles uitpakken**. Selecteer een map waarin je kunt schrijven en open vervolgens de uitgepakte map. Houd `seine.exe` en de bijbehorende DLL’s bij elkaar: het Windows-archief bevat de NVIDIA-runtimebibliotheken die de miner gebruikt.
 
@@ -43,29 +43,37 @@ Dubbelklik op `seine.exe` vanuit de uitgepakte map. Als je liever een terminal g
 
 Het voorvoegsel `./` of `.\` vertelt de shell om het uitvoerbare bestand in de huidige map te starten. Starten vanuit een uitgepakte map geeft seine ook een vaste plek om de instellingen op te slaan. Gebruik bij latere starts dezelfde map, zodat het programma het ingevoerde adres en de pool terugvindt.
 
-## Stap 3: voer je adres en pool in
+## Stap 3: voer je walletadres in
 
-Plak bij de eerste vraag je Blocknet-ontvangstadres of geregistreerde `@name` en bevestig. Accepteer de standaard-pool-URL, `stratum+tcp://bntpool.com:3333`. Geef de rig op verzoek een herkenbare naam in de pool, zodat je deze Windows-pc kunt onderscheiden van een andere machine die naar hetzelfde adres minet.
+Plak je openbare Blocknet-ontvangstadres of geregistreerde `@name` en druk op Enter om `stratum+tcp://bntpool.com:3333` te accepteren. De [walletgids](/nl/blog/blocknet-wallet-for-mining/) laat zien waar je het adres vindt. Seine heeft je herstelzin of uitgavesleutels niet nodig. Het wijst automatisch een poolworkernaam toe.
 
-De [configuratiehandleiding](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) beschrijft deze vragen en de opgeslagen instellingen. Standaard staan ze in `seine-data/seine.config.json`, relatief aan de map waaruit je het programma start. Bij volgende starts gebruikt seine ze opnieuw. Korte namen worden bij elke nieuwe start opnieuw omgezet naar hun adres.
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="De adres- en poolvragen bij de eerste start. Vervang het voorbeeld door je eigen adres of geregistreerde naam." loading="lazy" />
+  </picture>
+  <figcaption>De adres- en poolvragen bij de eerste start. Vervang het voorbeeld door je eigen adres of geregistreerde naam.</figcaption>
+</figure>
 
-Je kunt ook direct een geregistreerde korte naam meegeven in PowerShell:
+Seine kiest de threads en stelt zichzelf automatisch af. Start het later vanuit dezelfde map om `seine-data/seine.config.json` opnieuw te gebruiken.
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-Vervang `@name` door je eigen geregistreerde korte naam. Laat de flags voor CPU-threads en kernel oningesteld, zodat seine ze automatisch kiest. Voor de algemene installatie op verschillende besturingssystemen zie je [Blocknet minen](/nl/blog/how-to-mine-blocknet/).
-
-## Hoe weet je of het minen werkt?
+## Stap 4: controleer geaccepteerde shares
 
 <Answer>
 Controleer of het dashboard van seine een hashrate en geaccepteerde shares toont en zoek vervolgens hetzelfde uitbetalingsadres op de pagina My Stats van bntpool.com. Het dashboard beschrijft het huidige werk van de miner; de pool registreert ingediende shares en beloningen. Laat de automatische afstemming tot rust komen voordat je snelheden vergelijkt of instellingen wijzigt.
 </Answer>
 
-De [dashboardhandleiding](/nl/blog/seine-dashboard-explained/) legt de hashrate, miningstatus en poolpanelen uit. Een actieve hashrate toont lokale hashingactiviteit; een geaccepteerde share bevestigt dat het werk de pool heeft bereikt. Open [My Stats](https://bntpool.com/stats) en voer hetzelfde adres of dezelfde korte naam in om de shares en het saldo van deze rig te volgen.
+De [dashboardhandleiding](/nl/blog/seine-dashboard-explained/) legt de hashrate, miningstatus en poolpanelen uit. Een actieve hashrate toont lokale hashingactiviteit; een geaccepteerde share bevestigt dat het werk de pool heeft bereikt. Open [My Stats](https://bntpool.com/stats?lang=nl) en voer hetzelfde adres of dezelfde korte naam in om de shares en het saldo van deze rig te volgen.
 
 Maak bij het controleren van een nieuwe installatie onderscheid tussen geaccepteerde shares en uitbetalingen. Shares dragen bij aan poolbeloningen; een uitbetaling volgt de bevestigings- en saldoregels van de pool. De [PPLNS-handleiding](https://bntpool.com/blog/how-pplns-payouts-work/) legt die volgorde uit. Je kunt de verbinding meteen controleren zonder op de eerste uitbetaling te wachten.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Het echte Seine-dashboard met voorbeeldgegevens. Kijk naar Accepted; deze cijfers zijn geen benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Het echte Seine-dashboard met voorbeeldgegevens. Kijk naar Accepted; deze cijfers zijn geen benchmark.</figcaption>
+</figure>
 
 ## CPU- en NVIDIA-mining op dezelfde pc
 
@@ -79,6 +87,6 @@ Bij het normale opstarten probeert het programma al grote geheugenpagina’s te 
 
 De [handleiding voor grote geheugenpagina’s](/nl/blog/huge-pages-blocknet-mining/) behandelt deze optionele instelling in detail. Start seine na het opnieuw aanmelden normaal en controleer in het opstartlogboek welke paginamodus is geselecteerd. Behoud de standaard automatische modus terwijl je je eerste werkende installatie opzet en vergelijk daarna metingen op dezelfde pc als je de pagina-instellingen wijzigt.
 
-[Windows blokkeert je miner? Controleer de download](/nl/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="Download seine voor Windows" text="Pak de ZIP uit, voer je uitbetalingsadres in en begin met minen op bntpool.com met automatische afstemming van CPU en NVIDIA." />
+
+Open [Mijn statistieken](https://bntpool.com/stats?lang=nl) en voer hetzelfde adres of dezelfde geregistreerde naam in om je worker, shares en saldo te vinden.

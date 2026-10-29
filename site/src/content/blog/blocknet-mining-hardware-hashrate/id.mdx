@@ -1,6 +1,6 @@
 ---
 title: Perangkat keras terbaik untuk menambang Blocknet
-description: "Bandingkan perangkat keras penambangan Blocknet berdasarkan pengukuran: EPYC 9375F mencapai 85,1 H/s. Lihat RAM, thread, pengaturan halaman, dan bukti benchmark."
+description: "Bandingkan perangkat keras penambangan Blocknet berdasarkan pengukuran: EPYC 9355P mencapai 97,1 H/s dengan pengaturan default. Lihat RAM, thread, dan bukti benchmark."
 tags: [Perangkat keras, Hashrate, Panduan penambangan, Argon2id, NVIDIA]
 faq:
   - q: 'Bisakah PC gaming menambang Blocknet?'
@@ -11,7 +11,7 @@ faq:
     a: 'seine menambang dengan kartu grafis NVIDIA pada unduhan Windows dan Linux, memakai setiap kartu yang terdeteksi bersama prosesor. Di Windows, runtime CUDA sudah disertakan, jadi Anda hanya butuh driver NVIDIA. Di Linux, pasang driver dan pustaka NVRTC. Peluncuran pertama menyetel setiap kartu dan mengingat hasilnya.'
   - q: 'Mengapa bandwidth memori penting untuk menambang Blocknet?'
     a: 'Setiap hash Blocknet menulis satu blok memori 2 GiB penuh dan membaca kembali data dari seluruh bagiannya, jauh lebih banyak dari yang bisa ditampung cache prosesor mana pun. Karena itu hashrate bergantung pada seberapa cepat sistem memori memindahkan data. Komputer dengan bandwidth memori lebih besar dan RAM yang cukup untuk banyak thread menambang paling cepat.'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ Panduan ini menunjukkan komputer mana yang menambang Blocknet paling cepat denga
 ## Apa perangkat keras terbaik untuk menambang Blocknet?
 
 <Answer>
-Konfigurasi tercepat dalam pengukuran ini adalah AMD EPYC 9375F pada 85,1 H/s: 64 thread penambangan, RAM 384 GiB, dan huge pages 1 GiB yang disiapkan secara manual di Linux. Penambangan Blocknet mendapat manfaat dari bandwidth memori dan RAM yang cukup untuk 2 GiB per thread. Kartu NVIDIA dapat menambahkan hashrate di samping CPU.
+Konfigurasi tercepat dalam pengukuran ini adalah AMD EPYC 9355P pada 97,1 H/s: 64 thread penambangan dan RAM 192 GiB di Linux dengan pengaturan default seine. Penambangan Blocknet mendapat manfaat dari bandwidth memori dan RAM yang cukup untuk 2 GiB per thread. Kartu NVIDIA dapat menambahkan hashrate di samping CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Proof of work Blocknet adalah Argon2id dengan blok memori 2 GiB per hash. Itu membuatnya [memory-hard](/id/blog/argon2id-proof-of-work-explained/): hashrate bergantung pada bandwidth dan latensi memori sama besarnya dengan jumlah core, dan pada berapa banyak blok 2 GiB itu yang muat di RAM sekaligus. Sistem memori yang kuat adalah kesamaan komputer-komputer teratas di tabel berikut.
 
 ## Pengukuran baru pada server fisik: EPYC 9355P
 
-Pada 25 Oktober 2026, EPYC 9355P dengan 32 inti/64 thread dan 192 GiB yang tersebar di dua belas kanal memori DDR5-4800 menghasilkan **68,256 H/s**, dibulatkan menjadi **68,3 H/s**. Konfigurasi manual tetap ini memakai 64 thread penambangan, kernel streaming, huge pages 1 GiB, dan batas daya paket 280 W. Hashrate dihitung dari total hash yang selesai dibagi total waktu berlalu dalam empat proses baru yang masing-masing berjalan selama 120 detik, termasuk startup dan shutdown.
+Pada 28 Oktober 2026, EPYC 9355P dengan 32 inti/64 thread dan RAM 192 GiB menambang selama 15 menit dengan pengaturan default seine: tanpa flag, dengan jumlah thread, kernel CPU, dan halaman memori yang dipilih secara otomatis. Mesin ini menambang pada **97,1 H/s**.
 
-[Eksperimen ukuran halaman](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) mencatat revisi kode sumber yang tepat, SHA-256 file executable, pemeriksaan alokasi halaman, dan metode pengukuran. [Catatan yang dapat dibaca mesin](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) menyimpan konfigurasi serta pembilang dan penyebut mentah. Pengukuran ini memakai satu soket penuh yang dikonfigurasi secara manual; pengukuran cloud dan Mac di bawah menjelaskan mesin dan pengaturannya masing-masing.
+[Catatan pengukuran](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md) mencantumkan revisi kode sumber dan hashrate untuk setiap menit selama proses berjalan. Pengukuran cloud dan Mac di bawah menjelaskan mesin dan pengaturannya masing-masing.
 
 ## Seberapa cepat RTX 5090 dalam pengujian kami?
 

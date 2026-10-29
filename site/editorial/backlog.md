@@ -1,5 +1,8 @@
 # Backlog
 
+Current cross-site priorities: [shared publishing plan](cross-site-publishing-plan.md).
+Its October 28 queue takes precedence over older deferred suggestions below.
+
 ## Current editorial direction — October 27, 2026
 
 Prioritize ordinary newcomer questions and broader Blocknet fundamentals: choosing software, receiving and sending, first mining setup, and understanding balances. Improve the existing owner when a question already has a guide. Defer narrow merchant/invoice workflows. Competitor comparisons and work requiring rented hardware remain on hold by owner preference.
@@ -66,3 +69,9 @@ Published October 27, 2026: `blocknet-transfer-time` answers the ordinary paymen
 Published October 27, 2026: `blocknet-payment-visibility` and `blocknet-faraday-privacy`, each in all 20 languages, with four original explanatory graphics. The existing privacy overview's Faraday section now distinguishes eligible Faraday coins from all historical outputs. User requested privacy/Faraday coverage and approved publication.
 
 Published October 28, 2026: `blocknet-transaction-explained`, all 20 languages, with an original numbered transaction-accounting diagram. User approved the proposed walkthrough with “proceed”; Android remains deferred.
+
+October 28, 2026: user approved all four currency/privacy topics. Published three new owners (`blocknet-supply`, `blocknet-fungibility`, `blocknet-faraday-monetary-policy`) and materially refreshed `blocknet-privacy-features`, each in all 20 languages. Added article-specific graphics and corrected adjacent Faraday-set wording. Android and hardware-rental work remain outside this batch.
+
+October 28, 2026: user approved currency-trust coverage. Added `who-controls-blocknet` for developer/miner/node/holder authority and rule enforcement; expanded the existing `bulletproofs-explained` owner for authorization, private amount conservation, repeated-spend rejection and separate reward issuance. Both use the 20-language pipeline and original diagrams. No hardware rental or competitor comparison.
+
+October 28, 2026: user approved `blocknet-atomic-swaps`, then explicitly chose a general atomic-swap explainer with a short public VEIL announcement section. Explains conditional funding, claims, refund paths and disclosure; generic A/B diagram is not a VEIL implementation or a supported pair. No private specification or unverified swap procedure is published. Uses the 20-language pipeline and existing topic/list presentation.

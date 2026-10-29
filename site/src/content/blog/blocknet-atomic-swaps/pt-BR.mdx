@@ -1,0 +1,73 @@
+---
+title: 'Swaps atômicos do Blocknet: o que é VEIL?'
+description: 'Entenda swaps atômicos, resgates condicionais e reembolsos, o que cada participante pode ver e o que o Blocknet anunciou publicamente sobre VEIL e Faraday.'
+tags: [Blocknet, Pagamentos, Privacidade]
+faq:
+  - q: 'Posso usar este guia para iniciar um swap VEIL?'
+    a: 'Esta é uma explicação geral de swaps atômicos com uma seção sobre o anúncio público do VEIL pelo Blocknet. Ela não estabelece um par de negociação, comando de carteira ou serviço disponível. Use as instruções de versão publicadas para uma implementação específica antes de tratar uma funcionalidade de swap proposta como um fluxo de pagamento disponível.'
+  - q: 'Atômico significa que os dois pagamentos acontecem instantaneamente?'
+    a: 'Atômico descreve como a troca é vinculada. No exemplo aqui, o resgate de um participante revela informações que permitem ao outro resgatar seu lado. As transações ainda entram em suas respectivas blockchains separadamente. As verificações de confirmação, os prazos e as ações exigidas dos participantes continuam fazendo parte da conclusão do protocolo.'
+  - q: 'Swaps atômicos são automaticamente privados?'
+    a: 'Um protocolo de swap atômico coordena a liquidação. O que ele revela depende das blockchains, dos contratos e da comunicação envolvidos. Um hash público compartilhado pode vincular os dois lados de um swap básico com hashlock. As proteções de pagamento do Blocknet e as propriedades completas de divulgação de um swap devem, portanto, ser avaliadas separadamente.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Entenda o que um swap atômico coordena antes de ler o anúncio do VEIL pelo Blocknet. Este guia acompanha uma troca genérica entre duas partes, passando pelo financiamento condicional, pelos resgates concluídos e pelo caminho de reembolso. Depois, separa esse exemplo didático das breves informações sobre VEIL no site público do Blocknet, consultadas em 28 de outubro de 2026. O exemplo descreve um padrão de protocolo, não uma implementação verificada do VEIL nem um par de negociação BNT atualmente compatível.
+
+## O que é um swap atômico?
+
+<Answer>
+Um swap atômico vincula uma troca de ativos para que participantes que seguem o protocolo possam concluir sua parte ou usar o caminho de recuperação sob as premissas do protocolo. Ele substitui uma simples promessa de enviar depois por condições que podem ser impostas. As duas blockchains continuam processando suas próprias transações, e os participantes precisam seguir a sequência exigida.
+</Answer>
+
+A pergunta do leitor é prática: se você envia um ativo em troca de outro, o que faz o segundo pagamento acontecer? Uma transferência normal autoriza um pagamento. Um protocolo de swap atômico conecta as condições de duas transferências. O [artigo sobre swaps atômicos entre blockchains](https://arxiv.org/abs/1801.09515) de Maurice Herlihy formaliza esse problema de coordenação e a importância de os participantes seguirem suas regras.
+
+Pense em dois registros separados com uma troca coordenada entre eles. Os ativos são gastos nas respectivas blockchains; o protocolo conecta quem pode resgatá-los. Isso difere de simplesmente enviar moedas a um endereço de recebimento e esperar que alguém cumpra um acordo. O [guia de envio de Blocknet](/pt-br/blog/send-receive-blocknet/) explica esse procedimento comum de pagamento.
+
+## Como funciona um swap com hashlock?
+
+Um exemplo didático comum usa um **hashlock**, que verifica um segredo, e um **timelock**, que controla quando um reembolso se torna possível. Juntos, eles costumam ser chamados de contrato com bloqueio por hash e tempo, ou HTLC. Esta seção explica essa construção genérica; ela não afirma que o VEIL a utiliza.
+
+Alice e Bob primeiro combinam a troca e os destinos de recebimento. Alice cria um segredo e compartilha seu hash. O hash permite que um contrato verifique o segredo depois, sem exigir que Alice o publique no início. O contrato também exige a autorização do destinatário previsto: conhecer apenas o segredo não permite que qualquer observador pegue os fundos.
+
+A [descrição de HTLC no BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) ilustra um caminho de resgate que exige o segredo e a assinatura do destinatário, além de um caminho de reembolso disponível após um prazo. O BIP 199 é uma proposta encerrada que descreve essa construção, não uma especificação do Blocknet.
+
+## O que acontece quando os dois lados concluem?
+
+Siga o diagrama numerado da fase de financiamento até a fase de resgate. “Chain A” e “Chain B” são rótulos genéricos. Eles não nomeiam um par disponível nem implicam que o Blocknet suporte esses contratos específicos.
+
+1. **Alice financia o primeiro contrato.** Ele permite que Bob resgate com o segredo e sua autorização. O reembolso de Alice fica disponível mais tarde.
+2. **Bob verifica e financia o segundo contrato.** Ele usa o hash do mesmo segredo e permite que Alice resgate. O reembolso de Bob fica disponível antes do de Alice.
+3. **Alice verifica e resgata o segundo lado.** Seu resgate revela o segredo neste exemplo básico com hashlock público.
+4. **Bob usa o segredo revelado para resgatar o primeiro lado.** O intervalo entre os prazos de reembolso dá a ele tempo para agir.
+
+[![Exemplo genérico de swap: Alice e Bob financiam contratos condicionais separados, o resgate de Alice revela o segredo e Bob o usa para resgatar; um contrato não utilizado tem um caminho de reembolso sujeito a prazo.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+A linha superior mostra o financiamento em duas blockchains. A linha inferior mostra os resgates na ordem inversa. As setas curvas indicam caminhos de recuperação para fundos ainda bloqueados quando suas condições de reembolso são atendidas. Este é um diagrama explicativo, não uma tela do VEIL nem uma transação ao vivo.
+
+## E se um participante parar?
+
+A recuperação depende de onde a troca parou. Se Alice financiar o primeiro contrato e Bob nunca financiar o segundo, Alice poderá recuperar seus fundos ainda bloqueados pelo caminho de reembolso assim que ele se tornar válido. Se ambos os contratos forem financiados, mas Alice nunca revelar o segredo, os participantes poderão usar os respectivos caminhos de reembolso para os fundos não gastos.
+
+Um timelock torna um gasto de reembolso elegível; ele não transmite nem confirma essa transação por conta própria. O [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) explica condições de gasto baseadas em tempo e a construção de reembolsos não interativos. Uma aplicação concreta precisa gerenciar as transações de resgate ou reembolso e as informações necessárias para autorizá-las.
+
+Depois que Alice resgata o segundo lado e revela o segredo, Bob precisa seguir a tempo o caminho de resgate do primeiro lado. Por isso a sequência e os prazos escalonados importam. Fechar uma aplicação não é o mesmo que cancelar uma troca já financiada. As instruções de recuperação da implementação determinam como seu estado é retomado.
+
+## O que participantes e observadores podem ver?
+
+Liquidação e privacidade respondem a perguntas diferentes. Os participantes conhecem os termos combinados e as informações de recebimento que trocaram. No exemplo básico, o mesmo hash público aparece nas duas blockchains e o resgate revela seu segredo. Esses valores compartilhados podem oferecer a um observador uma conexão entre os dois lados.
+
+A divulgação exata depende do protocolo e das blockchains envolvidos. Um formato de pagamento privado não especifica, por si só, o que outra blockchain publica ou o que uma interface de negociação registra. Da mesma forma, concluir uma troca não apaga as mensagens nas quais os participantes a negociaram.
+
+Para pagamentos comuns do Blocknet, o [guia de visibilidade dos pagamentos](/pt-br/blog/blocknet-payment-visibility/) separa os campos públicos das transações do acesso do remetente, do destinatário e de quem recebeu permissão de visualização. Essa é a base para entender a privacidade dos pagamentos em BNT. Uma afirmação de privacidade específica de um swap precisa de evidências sobre o swap completo, incluindo o outro ativo e as etapas de comunicação.
+
+## O que o Blocknet anunciou sobre VEIL?
+
+O [site oficial do Blocknet](https://blocknetcrypto.com/#faraday) cita VEIL em sua comparação de swaps atômicos e descreve uma reformulação planejada com primitivas pós-quânticas como parte do Faraday. Essa declaração pública estabelece a direção do projeto. Ela não especifica pares de negociação, comandos de swap, prazos de reembolso nem um serviço para usuários finais que este guia possa verificar.
+
+Mantenha claro o alcance desse anúncio ao ler o exemplo acima. A explicação de HTLC apresenta a coordenação de swaps atômicos em geral. Ela não descreve o protocolo interno do VEIL. O [guia do Faraday](/pt-br/blog/blocknet-faraday-upgrade/) aborda a transição de rede anunciada; instruções de swap específicas de uma implementação devem vir de uma versão publicada e de sua documentação.
+
+Para receber BNT agora, o [guia das primeiras moedas](/pt-br/blog/get-first-blocknet/) aborda transferências comuns e mineração. Esses são caminhos de uso estabelecidos, com suas próprias etapas de carteira e pagamento. Este artigo apresenta os conceitos para entender uma futura versão pública de swaps sem confundir um anúncio com instruções para depositar fundos.
+
+<CTA target="seine" title="Receba BNT pela mineração" text="Use o seine com bntpool.com e receba pagamentos de mineração na sua própria carteira Blocknet." />

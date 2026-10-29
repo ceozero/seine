@@ -14,10 +14,9 @@ const MAX_DRIFT: f64 = 0.05;
 
 const CACHE_SCHEMA: u32 = 3;
 
-// Plain AVX-512/AVX2 ran 25-67% slower than the cohort streaming kernel on every
-// validated host, and each A/B/A trial spent ~3% of a 15-minute run's hashes before
-// count tuning could start (Ryzen 7 7700X, EPYC 9355). Keep them as a safety-net
-// comparison, but out of the first half hour when mining started on that kernel.
+// Plain AVX-512/AVX2 are much slower than the cohort streaming kernel, and each
+// A/B/A trial delays count tuning. Keep them as a safety-net comparison, but out of
+// the first half hour when mining started on a streaming kernel.
 const GENERIC_TRIAL_DEFER_SECS: u64 = 1800;
 
 fn defer_generic_trial(
@@ -32,13 +31,14 @@ fn defer_generic_trial(
             base,
             CpuKernel::Avx512256Stream
                 | CpuKernel::Avx512256StreamL2
+                | CpuKernel::Avx512StreamL2
                 | CpuKernel::Avx512Stream
                 | CpuKernel::Avx2Stream
         )
         && matches!(candidate, CpuKernel::Avx512 | CpuKernel::Avx2)
 }
 
-// Validated policy, restricted to the native Turin measurement identity.
+// Shorter samples only for Turin (family 1Ah model 02h).
 // Slow samples and explicitly lengthened trials retain the existing window.
 fn short_trials_for(
     identity: &crate::runtime_identity::CpuIdentity,
@@ -89,15 +89,13 @@ fn candidates_for(
     .into_iter()
     .filter(|k| supported.contains(k))
     .collect();
-    // Streaming wins at high worker counts on every measured Zen 4/Zen 5 host:
-    // Genoa 9R14 +2.85% cold / +7.99% cached productive mining, Turin 9R45
-    // +19.9-29.8%, Ryzen 9950X3D +38-46%. Gate by microarchitecture rather than
-    // exact model so other Zen 4/5 parts (Raphael, Turin Dense, masked cloud
-    // CPUIDs) are eligible. The independent ISA/OS support check remains
-    // mandatory, and repeated-win trials can still replace it.
+    // Gate streaming by microarchitecture rather than exact model so every Zen 4/5
+    // part (Raphael, Turin Dense, masked cloud CPUIDs) is eligible. The independent
+    // ISA/OS support check remains mandatory, and repeated-win trials can still
+    // replace it.
     if let Some(stream) = cohort_stream_kernel(identity, supported) {
         if stream == CpuKernel::Avx512256Stream && identity.model == Some(0x02) {
-            // Turin: test the measured high-concurrency challenger before AVX2.
+            // Turin: test the high-concurrency challenger before AVX2.
             // Ordering changes discovery cost, never the repeated-win gate.
             let before_avx2 = paths
                 .iter()
@@ -118,9 +116,8 @@ fn candidates_for(
     })
     .flatten()
     {
-        // Unvalidated x86 hosts (Intel, masked-CPUID AMD VMs, Zen 1) keep their
-        // start, but may discover streaming through the repeated-win gate: it was
-        // 25-67% faster on every measured AMD cohort and +13.5% on Sapphire Rapids.
+        // Hosts without a cohort default (Intel, masked-CPUID AMD VMs, Zen 1) keep
+        // their start, but may discover streaming through the repeated-win gate.
         paths.push(stream);
     }
     paths
@@ -129,12 +126,9 @@ fn candidates_for(
 /// The streaming kernel for an AMD microarchitecture cohort, if validated.
 /// Zen 4 (family 19h with AVX-512) and Zen 5 (family 1Ah) use the AVX-512 path.
 /// Zen 3 (family 19h without AVX-512) and Zen 2 (family 17h, model 30h and up)
-/// use the AVX2 path: native EPYC 7443P +48% and EPYC 7R32 +67% over AVX2.
-/// Zen 1/Zen+ (17h below 30h) is unmeasured, and so is the AVX2 path outside
-/// Linux and Windows. Callers always intersect with runtime-detected kernels, so ISA
-/// support is never assumed.
-// Native Linux and Windows evidence: EPYC 7R13 on Windows Server 2025 measured
-// avx2-stream +39%/+50% over avx2 at 16/24 workers with full 2 GiB parity.
+/// use the AVX2 path. Zen 1/Zen+ (17h below 30h) has no default, and the AVX2
+/// path is enabled only on Linux and Windows. Callers always intersect with
+/// runtime-detected kernels, so ISA support is never assumed.
 const AVX2_STREAM_OS: bool = cfg!(any(target_os = "linux", target_os = "windows", test));
 
 fn cohort_stream_kernel(
@@ -142,9 +136,7 @@ fn cohort_stream_kernel(
     supported: &[CpuKernel],
 ) -> Option<CpuKernel> {
     // Intel Sapphire Rapids (06h/8Fh) and Emerald Rapids (06h/CFh, same Raptor
-    // Cove core): streaming beat plain AVX-512 by 14.5% / 19.3% at 16 / 32 workers
-    // on a Xeon Platinum 8488C (m7i.8xlarge) with full 2 GiB parity, and the
-    // register-resident full-width compress adds ~2% at 16 workers (6.5% at 8).
+    // Cove core) use full-width streaming with the register-resident compress.
     if identity.vendor.as_deref() == Some("GenuineIntel") {
         if identity.family != Some(6) || !matches!(identity.model, Some(0x8f | 0xcf)) {
             return None;
@@ -158,16 +150,18 @@ fn cohort_stream_kernel(
     }
     match identity.family {
         // Zen 5 server-class models (00h-1Fh: Turin, Turin Dense, masked cloud
-        // CPUIDs) use full-width compression: EPYC 9355P +4.9% at 64 workers.
-        // Client Zen 5 (20h+) stays 256-bit: Ryzen 7 9700X measured neutral.
+        // CPUIDs) use full-width compression. Client Zen 5 (20h+) stays 256-bit.
         Some(0x1a)
             if identity.model.is_some_and(|m| m < 0x20)
                 && supported.contains(&CpuKernel::Avx512Stream) =>
         {
             Some(CpuKernel::Avx512Stream)
         }
-        // Zen 4 adds a far L2 prefetch: EPYC 9124P +6% at 16 workers, Ryzen 7
-        // 7700X +5% / +1% at 8 / 16. Zen 5 measured 1-3% slower with it.
+        // Zen 4 adds a far L2 prefetch (Zen 5 does not benefit from it), with
+        // full-width compression on top.
+        Some(0x19) if supported.contains(&CpuKernel::Avx512StreamL2) => {
+            Some(CpuKernel::Avx512StreamL2)
+        }
         Some(0x19) if supported.contains(&CpuKernel::Avx512256StreamL2) => {
             Some(CpuKernel::Avx512256StreamL2)
         }
@@ -185,9 +179,7 @@ fn cohort_stream_kernel(
             Some(CpuKernel::Avx2Stream)
         }
         // No AMD CPU with AVX2 reports family 06h: these are hypervisor CPU models
-        // that hide the real Zen family and AVX-512 (231 telemetry installs of one
-        // 16-vCPU "AMD EPYC" VM type). EPYC 7R32 with 4 KiB pages at 14 workers,
-        // matching that fleet: avx2-stream 7.86 vs avx2 5.44 H/s (+44.5%).
+        // that hide the real Zen family and AVX-512. Use the AVX2 streaming path.
         Some(6) if AVX2_STREAM_OS && supported.contains(&CpuKernel::Avx2Stream) => {
             Some(CpuKernel::Avx2Stream)
         }
@@ -195,12 +187,9 @@ fn cohort_stream_kernel(
     }
 }
 
-// Native fixed-kernel runs measured streaming 38-46% faster than every uniform
-// kernel on Ryzen 9950X3D at 8 and 16 workers, and live A/B/A trials on a busy
-// desktop rarely clear the baseline-drift gate. Genoa and Turin show the same
-// direction at full counts. Start Zen 4/5 contexts on streaming; the other
-// candidates still get the usual two comparisons against it. Lower counts are
-// unmeasured.
+// A/B/A trials on a busy desktop rarely clear the baseline-drift gate, so start
+// Zen 4/5 contexts on streaming at this many workers or more; the other candidates
+// still get the usual two comparisons against it.
 const STARTUP_STREAM_MIN_WORKERS: usize = 8;
 
 fn startup_kernel_for(
@@ -215,6 +204,75 @@ fn startup_kernel_for(
 pub(super) fn cohort_kernel() -> Option<CpuKernel> {
     let identity = crate::runtime_identity::cpu_identity();
     cohort_stream_kernel(&identity, &candidates_for(&identity, &supported_kernels()))
+}
+
+/// Whether a fixed `--threads` count on this host should still run the kernel
+/// comparisons at that count. True only where no cohort default exists but a
+/// streaming kernel is supported, so hosts run with explicit counts can still
+/// find the streaming kernel. Hosts with a cohort default keep running no trials.
+pub(crate) fn fixed_count_trials_wanted() -> bool {
+    let identity = crate::runtime_identity::cpu_identity();
+    let supported = supported_kernels();
+    cohort_stream_kernel(&identity, &supported).is_none()
+        && candidates_for(&identity, &supported)
+            .iter()
+            .any(|kernel| matches!(kernel, CpuKernel::Avx512256Stream | CpuKernel::Avx2Stream))
+}
+
+/// Side-cache slots for this host (see `SideCacheSchedule` in the kernel crate),
+/// or 0. On for Zen 5 servers, Zen 5 desktops below the full thread count, and
+/// Intel Sapphire/Emerald Rapids at the full count; off elsewhere (Zen 4 shares
+/// one L2 between two workers with the far-L2 kernel).
+pub(crate) fn cohort_side_cache_blocks(
+    workers: usize,
+    physical_cores: Option<usize>,
+    logical_cpus: usize,
+) -> usize {
+    if !cfg!(target_os = "linux") || !CpuKernel::Avx512Stream.is_supported() {
+        return 0;
+    }
+    let identity = crate::runtime_identity::cpu_identity();
+    match identity.vendor.as_deref() {
+        // Zen 5 server-class: two workers per L2 are fine here, unlike Zen 4.
+        Some("AuthenticAMD")
+            if identity.family == Some(0x1a)
+                && identity.model.is_some_and(|model| model < 0x20) =>
+        {
+            let _ = physical_cores;
+            512
+        }
+        // Zen 5 desktop: only below the full thread count (memory-capped hosts,
+        // WSL2).
+        Some("AuthenticAMD") if identity.family == Some(0x1a) && workers < logical_cpus => 512,
+        Some("GenuineIntel")
+            if identity.family == Some(6)
+                && matches!(identity.model, Some(0x8f | 0xcf))
+                && workers >= logical_cpus.max(2) =>
+        {
+            1024
+        }
+        _ => 0,
+    }
+}
+
+/// Skipped-store permille for this host (see `set_skip_store_permille` in the
+/// kernel crate), or 0. Rebuilding late odd blocks trades DRAM traffic for extra
+/// compressions, which only pays where the streaming kernels are bandwidth-bound:
+/// Zen 4 desktops with every thread in use. Servers stay off.
+pub(crate) fn cohort_skip_store_permille(workers: usize) -> u16 {
+    if !cfg!(target_os = "linux") || !CpuKernel::Avx512Stream.is_supported() {
+        return 0;
+    }
+    let identity = crate::runtime_identity::cpu_identity();
+    match identity.vendor.as_deref() {
+        // Raphael and Dragon Range (Ryzen 7000 desktop and HX laptop).
+        Some("AuthenticAMD")
+            if identity.family == Some(0x19) && identity.model == Some(0x61) && workers >= 16 =>
+        {
+            600
+        }
+        _ => 0,
+    }
 }
 
 /// Kernel for fixed worker counts (explicit `--threads`), which run no trials.
@@ -239,7 +297,7 @@ fn static_kernel_for_identity(
 
 // Host eligibility must not depend on the initial worker count: a cached count
 // can differ on the next launch without changing the kernel policy. The actual
-// startup action remains restricted to the measured 32-worker/full-THP context
+// startup action remains restricted to the 32-worker/full-THP context
 // below. Normal repeated comparisons can still replace the starting kernel.
 fn genoa_stream_startup(
     cfg: &Config,
@@ -258,7 +316,7 @@ fn genoa_stream_startup(
         )
 }
 
-// Native comparison validates the existing streaming path on this exact host.
+// Streaming startup for this exact host context.
 // Actual full THP backing is checked separately before applying the startup hint.
 fn sapphire_stream_startup(
     cfg: &Config,
@@ -276,7 +334,7 @@ fn sapphire_stream_startup(
         )
 }
 
-// Native Turin cold-start comparison validates this exact startup context.
+// Turin cold-start context.
 // Actual full THP backing is checked separately before applying the startup hint.
 fn turin_stream_startup(
     cfg: &Config,
@@ -314,7 +372,7 @@ fn turin_prefetch_startup(
         && turin_demand_startup(cfg, host, identity, supported)
 }
 
-// Native exact-host confirmation: depth six adds 0.19% over depth four.
+// Depth six over depth four on the same Turin context.
 fn turin_depth6_startup(
     cfg: &Config,
     host: &CpuAutotuneHostFingerprint,
@@ -331,10 +389,8 @@ fn genoa_stream_context(context: &Context) -> bool {
         && context.backing == [[0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0, 0]]
 }
 
-// Validated startup policy from native Windows cold captures and a paired
-// startup screen. Discovering 32 workers took almost the entire 900-second
-// window. Start there while retaining exact backing, ISA, resource and
-// repeated-comparison gates. See CPU_OPTIMIZATION_LOG.md for measurement scope.
+// Discovering 32 workers on Windows takes many minutes, so start there while
+// retaining exact backing, ISA, resource and repeated-comparison gates.
 fn windows_genoa_stream_startup(
     cfg: &Config,
     host: &CpuAutotuneHostFingerprint,
@@ -358,7 +414,7 @@ fn windows_genoa_stream_context(context: &Context) -> bool {
         && context.backing == [[0, 0, 0, 32 * CPU_LANE_MEMORY_BYTES, 0]]
 }
 
-// Native paired runs support shorter samples only for these 9R14 contexts.
+// Shorter samples only for these Zen 4 contexts.
 // Require enough completed hashes for each ten-second sample, retaining the
 // A/B/A drift gate and two-cycle promotion rule.
 fn genoa_short_trials_for(
@@ -388,14 +444,14 @@ fn genoa_short_context(context: &Context) -> bool {
         && context.backing == [[0, 0, *workers as u64 * CPU_LANE_MEMORY_BYTES, 0, 0]]
 }
 
-// Native 9R14 cold pair gained 4.96% by prioritizing streaming on the first
-// sweep only. A saved winner makes subsequent periodic sweeps exhaustive again.
+// Prioritize streaming on the first sweep only.
+// A saved winner makes subsequent periodic sweeps exhaustive again.
 fn genoa_frontier_context(context: &Context) -> bool {
     genoa_short_context(context) && matches!(context.workers.as_slice(), [31 | 32])
 }
 
-// Native Windows 9R14 cold pair gained 5.38% by prioritizing streaming at
-// 31/32 workers with ordinary pages. Subsequent periodic sweeps remain
+// Prioritize streaming at 31/32 workers with ordinary pages on Windows.
+// Subsequent periodic sweeps remain
 // exhaustive once this context has a saved winner.
 fn windows_genoa_frontier_for(
     cfg: &Config,
@@ -474,8 +530,8 @@ struct Cache {
 }
 
 // A challenger at or below this share of the incumbent's rate in a stable A/B/A
-// is not retried at nearby counts. Native Zen 5 mining re-ran plain AVX-512/AVX2
-// trials (~75% of streaming) at every count probe, costing ~5% over 23 minutes.
+// is not retried at nearby counts, so known losers are not re-run at every count
+// probe.
 const DECISIVE_LOSS_RATIO: f64 = 0.85;
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -589,7 +645,7 @@ fn turin_small_gain_pair(base: CpuKernel, candidate: CpuKernel) -> bool {
 
 fn turin_pair_resolution(base: CpuKernel, candidate: CpuKernel) -> (u64, u64) {
     if [base, candidate].contains(&CpuKernel::Avx512256StreamR64D6) {
-        // Resolve the measured 0.19% gain above three-window hash quantization.
+        // Resolve a small gain above three-window hash quantization.
         (45, 2048)
     } else {
         (30, 1024)
@@ -604,7 +660,7 @@ fn comparison_for(
     after: Sample,
 ) -> Comparison {
     if turin_small_gain_pair(base, path) {
-        // Native fence/prefetch gains are below the generic 2% switching margin.
+        // Fence/prefetch gains are below the generic 2% switching margin.
         // Require longer, well-resolved samples and tighter baseline stability;
         // both fresh A/B/A cycles still have to win before promotion/caching.
         let (seconds, hashes) = turin_pair_resolution(base, path);
@@ -727,11 +783,14 @@ impl Tuner {
         // gates. Only synthetic fixtures opt into an identity-neutral tuner.
         let supported = supported_kernels();
         let mut candidates = candidates_for(identity, &supported);
-        // The exact 9R14 rental context keeps its separately validated startup,
-        // frontier and sample policies, which were measured on the 256-bit kernel.
+        // This exact Zen 4 context keeps its own startup, frontier and sample
+        // policies, which assume the 256-bit kernel.
         if super::adaptive_cpu::full_count_cold_start(cfg, &host, identity, 32, 32) {
             for kernel in &mut candidates {
-                if *kernel == CpuKernel::Avx512256StreamL2 {
+                if matches!(
+                    *kernel,
+                    CpuKernel::Avx512256StreamL2 | CpuKernel::Avx512StreamL2
+                ) {
                     *kernel = CpuKernel::Avx512256Stream;
                 }
             }
@@ -741,13 +800,13 @@ impl Tuner {
             candidates.push(CpuKernel::Avx512256Stream);
         }
         let turin_startup = turin_stream_startup(cfg, &host, identity, &supported);
-        // Native 32-core Linux 9R45: demand fences retain the proven R64/D3
+        // 32-core Linux Turin: demand fences keep the R64/D3
         // lookahead. Actual startup still requires full THP backing.
         let turin_demand = turin_demand_startup(cfg, &host, identity, &supported);
         if turin_demand {
             candidates.insert(0, CpuKernel::Avx512256StreamR64D3);
         }
-        // Native exact-host confirmation: depth four adds 0.35% over depth three.
+        // Depth four over depth three on the same context.
         // Keep the previous path available; actual startup still requires THP.
         let turin_prefetch = turin_prefetch_startup(cfg, &host, identity, &supported);
         if turin_prefetch {
@@ -759,8 +818,8 @@ impl Tuner {
         }
         let genoa_startup = genoa_stream_startup(cfg, &host, identity, &candidates);
         let windows_genoa_startup = windows_genoa_stream_startup(cfg, &host, identity, &candidates);
-        // Native ring/depth screen: retain the old streaming path as a challenger.
-        // Only this measured host gets the new automatic candidate; the startup
+        // Retain the old streaming path as a challenger.
+        // Only this exact host context gets the automatic candidate; the startup
         // action still checks exact worker count and platform-specific backing.
         let ring_startup = (genoa_startup || windows_genoa_startup)
             && supported.contains(&CpuKernel::Avx512256StreamR8D2);
@@ -1969,7 +2028,7 @@ mod tests {
             ..CpuIdentity::default()
         };
         // Zen 5 server-class models use full-width streaming, client Zen 5 the
-        // 256-bit path and Zen 4 the 256-bit path with a far L2 prefetch.
+        // 256-bit path and Zen 4 full width with a far L2 prefetch.
         for (identity, stream) in [
             (turin.clone(), Some(CpuKernel::Avx512Stream)),
             (
@@ -1985,7 +2044,7 @@ mod tests {
                     model: Some(0x11),
                     ..turin.clone()
                 },
-                Some(CpuKernel::Avx512256StreamL2),
+                Some(CpuKernel::Avx512StreamL2),
             ),
             (
                 CpuIdentity {
@@ -2575,6 +2634,21 @@ mod tests {
         assert_eq!(
             candidates_for(&CpuIdentity::default(), &supported),
             supported[..2]
+        );
+        // Zen 4 prefers full width with the far L2 prefetch, else the 256-bit one.
+        let zen4 = CpuIdentity {
+            family: Some(0x19),
+            model: Some(0x11),
+            ..turin.clone()
+        };
+        let both_l2 = [CpuKernel::Avx512256StreamL2, CpuKernel::Avx512StreamL2];
+        assert_eq!(
+            startup_kernel_for(&zen4, &both_l2),
+            Some(CpuKernel::Avx512StreamL2)
+        );
+        assert_eq!(
+            startup_kernel_for(&zen4, &both_l2[..1]),
+            Some(CpuKernel::Avx512256StreamL2)
         );
         // A masked-CPUID AMD VM (family 06h) starts AVX2-only hosts on streaming.
         let masked = CpuIdentity {
@@ -4289,6 +4363,7 @@ mod tests {
                         work_id: 1,
                         epoch: 1,
                         header_base: Arc::from(vec![0u8; blocknet_pow_spec::POW_HEADER_BASE_LEN]),
+                        pow: crate::backend::PowAlgorithm::Argon2id,
                         target: [0; 32],
                         dynamic_share_target: None,
                         pause_on_solution: false,

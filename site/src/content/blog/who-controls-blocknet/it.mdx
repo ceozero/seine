@@ -1,0 +1,66 @@
+---
+title: 'Chi controlla Blocknet?'
+description: 'Scopri chi applica le regole di Blocknet: ruoli di sviluppatori, miner, nodi e possessori, accettazione dei blocchi e distribuzione degli aggiornamenti di rete.'
+tags: ['Blocknet', 'Consenso', 'Valuta']
+faq:
+  - q: 'Un miner può creare più BNT della ricompensa consentita?'
+    a: 'Secondo le regole pubblicate, un nodo confronta la ricompensa del blocco con l’importo richiesto a quell’altezza. Trovare una prova di lavoro valida non evita questo controllo. Una ricompensa con un impegno diverso viene rifiutata: la potenza di calcolo del miner non stabilisce quindi il programma di emissione.'
+  - q: 'Possedere BNT mi dà un voto sul protocollo?'
+    a: 'Il saldo di un wallet permette di spendere fondi secondo le regole della rete. La validazione proof of work pubblicata non pesa l’accettazione dei blocchi in base alle monete possedute. Eseguire software, produrre blocchi e autorizzare i propri pagamenti sono ruoli distinti; un saldo elevato non rende valida una transazione non valida.'
+  - q: 'Pubblicare nuovo codice cambia subito Blocknet?'
+    a: 'Una modifica al codice diventa rilevante per il consenso quando il software che la implementa gira sulla rete e si applicano le condizioni di attivazione. Un annuncio o un commit non sostituisce da solo le regole dei nodi in esecuzione. Segui le indicazioni ufficiali e verifica la politica di aggiornamento del tuo software.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Comprendi chi fa cosa prima di decidere che cosa significhi controllare Blocknet. Scrivere software, trovare un blocco, verificarlo e spendere monete sono poteri diversi. Questa guida segue tali confini nel core v0.22.0 pubblicato, poi spiega come una proposta di aggiornamento raggiunge il software in uso. Descrive le responsabilità di validazione, senza misurare la distribuzione del mining o dello sviluppo.
+
+## Chi applica le regole di Blocknet?
+
+<Answer>
+I nodi applicano le regole implementate dal proprio software quando validano blocchi e transazioni ricevuti. I miner producono blocchi candidati, gli sviluppatori mantengono le implementazioni e i proprietari dei wallet autorizzano i pagamenti. Ogni ruolo contribuisce alla rete, ma pubblicare codice, possedere BNT o trovare una prova di lavoro non soddisfa da solo gli altri controlli.
+</Answer>
+
+Immagina un pagamento che attraversa queste responsabilità. Un wallet lo costruisce e autorizza; un miner lo include in un blocco proposto; un nodo verifica che la proposta rispetti le sue regole. L’accettazione dipende da questi controlli. Un nome di progetto noto, un saldo elevato o l’identità del peer mittente non li sostituiscono.
+
+[![Quattro ruoli numerati: gli sviluppatori pubblicano software, i miner propongono blocchi, i nodi li validano e i proprietari dei wallet autorizzano i propri pagamenti.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Il diagramma separa le responsabilità: 1 sviluppa software; 2 produce una proposta di blocco; 3 la verifica secondo le regole in esecuzione; 4 autorizza un pagamento del proprio wallet. I numeri non rappresentano voti né una misura dei partecipanti alla rete.
+
+## Che cosa possono cambiare gli sviluppatori?
+
+Gli sviluppatori possono proporre modifiche, scrivere implementazioni, revisionare codice e pubblicare versioni. Queste attività contano perché il software contiene le regole eseguite dai nodi. Il [codice pubblico del core](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) permette di esaminare i percorsi di validazione. La documentazione ne spiega lo scopo; il codice pubblicato identifica il comportamento di una versione specifica.
+
+Un commit in un repository non riscrive un eseguibile in funzione. Una modifica arriva a un nodo attraverso l’aggiornamento del software e, quando pertinente, la logica di attivazione. I partecipanti hanno quindi bisogno di software compatibile con le regole di rete che intendono seguire. È coordinamento del software distribuito, senza la garanzia che ogni proposta diventi una regola di rete.
+
+La politica di aggiornamento fa parte di questo rapporto. La CLI di gestione può programmare gli aggiornamenti di un core che segue l’ultima versione, mentre le versioni fissate seguono una politica diversa. La [guida ai nodi](/it/blog/run-blocknet-node/) spiega questa distinzione. Leggi la politica della tua installazione invece di presumere che ogni aggiornamento attenda una conferma manuale.
+
+## Che cosa possono decidere i miner?
+
+Il mining produce blocchi candidati e la prova di lavoro necessaria alla loro accettazione. Nel mining diretto, seine riceve lavoro da un nodo; nel mining in pool, il pool coordina il lavoro e invia i blocchi risolti al nodo a monte. Entrambi i percorsi costruiscono la catena. La [spiegazione del mining](/it/blog/how-crypto-mining-works/) descrive il processo e distingue una share del pool da un blocco completo.
+
+Risolvere una prova di lavoro è uno dei requisiti. Il [validatore di blocchi pubblicato](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) verifica anche contesto, difficoltà, validità delle transazioni e ricompensa richiesta. Se la ricompensa proposta differisce dall’importo consentito a quell’altezza, il suo impegno non supera il controllo. Una maggiore potenza di calcolo non cambia questo confronto.
+
+Per esempio, modificare il campo della ricompensa nel software di mining non cambia ciò che si aspetta un altro nodo. Il nodo ricevente calcola la ricompensa prevista dall’altezza e la confronta con l’output inviato. La [guida all’offerta](/it/blog/blocknet-supply/) spiega il programma di emissione; il miner deve produrre un blocco che lo rispetti.
+
+## Come decidono i nodi quale catena seguire?
+
+Il core pubblicato valida un candidato prima di applicare la logica di selezione della catena. Tiene traccia del lavoro accumulato e può passare a un ramo valido con più lavoro, secondo le proprie regole di riorganizzazione. Contare soltanto i blocchi perde questa distinzione. Il lavoro aiuta a scegliere fra cronologie accettabili, senza sostituire i controlli sui blocchi che le compongono.
+
+Anche le impostazioni di verifica contano quando si descrivono i controlli storici. La sincronizzazione facoltativa mediante checkpoint fidati può evitare di ripetere verifiche crittografiche e della prova di lavoro per i blocchi storici coperti. La validazione della punta attuale e questa sincronizzazione storica sono percorsi distinti. La presenza di un nodo locale non indica quale politica di sincronizzazione sia stata usata.
+
+La domanda utile è dunque precisa: quali software, regole e modalità di validazione sono in uso? La [guida ai ruoli del software](/it/blog/blocknet-wallet-node-miner/) aiuta a scegliere le applicazioni, mentre la guida ai nodi ne tratta la gestione. Un conteggio dei peer o una schermata dell’altezza di un blocco non stabilisce quante persone indipendenti controllino la rete.
+
+## Che cosa controllano i possessori di monete?
+
+Con le chiavi private necessarie, il proprietario di un wallet può autorizzare la spesa degli output che possiede. La rete verifica l’autorizzazione e le altre regole della transazione. Possedere più BNT non trasforma il sistema proof of work pubblicato in un voto ponderato per saldo sull’accettazione di una transazione non valida altrui.
+
+La proprietà si distingue anche dalla scelta di cosa rivelare. Le funzioni di visualizzazione e prova di pagamento del wallet consentono di condividere informazioni sui propri fondi o pagamenti. Ciò non concede il permesso di creare altre monete. La [guida alla verifica degli importi nascosti](/it/blog/bulletproofs-explained/) spiega come i controlli contabili restino possibili con importi privati.
+
+## Come leggere una proposta di aggiornamento?
+
+Distingui l’annuncio, la versione che lo implementa e le regole di attivazione. L’annuncio descrive una modifica prevista; il software compatibile implementa i controlli; l’attivazione stabilisce quando si applicano. Ottieni così elementi concreti da verificare, senza scambiare una dichiarazione della roadmap per un comportamento già attivo.
+
+Per Faraday, l’[annuncio ufficiale](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) descrive una proposta ancora in sviluppo e in fase di test. La nostra [guida all’aggiornamento](/it/blog/blocknet-faraday-upgrade/) segue la preparazione degli utenti, mentre la [guida alla politica monetaria](/it/blog/blocknet-faraday-monetary-policy/) separa le modifiche proposte all’emissione dalle regole attuali. Consulta queste fonti datate prima di decidere su una transizione futura.
+
+<CTA target="seine" title="Mina Blocknet con seine" text="Usa seine con bntpool.com per contribuire al mining e ricevere BNT nel tuo wallet." />

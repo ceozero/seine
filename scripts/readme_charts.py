@@ -217,7 +217,7 @@ def main():
     if data.get("best"):
         hbar_chart(data["best"], "Best by generation",
                    "Peak measured hashrate in the stated configurations",
-                   "Fixed configurations; bare-metal EPYC and AWS guests. Full settings: docs/PERFORMANCE.md",
+                   "Bare-metal EPYC and AWS guests. Full settings: docs/PERFORMANCE.md",
                    args.out / "best.svg", fonts, groups=False, big=True)
     hbar_chart(data["desktop"], "Desktops and laptops",
                "Whole-machine CPU hashrate, seine v0.2.22+",

@@ -2,17 +2,16 @@
 // Shared page shell. Owns every SEO tag: canonical, hreflang alternates, Open Graph/Twitter,
 // robots and JSON-LD. `path` is the unlocalized site path ("/", "/blog/<slug>/"); every page
 // exists in every locale, so the alternates are derived from it.
-// Weight entrypoints include unicode-range: each page fetches only the scripts it uses.
-import '@fontsource/instrument-sans/400.css';
-import '@fontsource/instrument-sans/500.css';
-import '@fontsource/instrument-sans/600.css';
-import '@fontsource/instrument-sans/700.css';
+// Unicode ranges keep unused writing systems out of the font downloads.
+import '@fontsource-variable/instrument-sans';
+import sansFont from '@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2?url';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import '../styles/site.css';
 import { LOCALES, localeDef, localizePath, type Locale } from '../i18n/locales';
 import { useTranslations } from '../i18n/ui';
 import LanguageAutoSwitch from '../components/LanguageAutoSwitch.astro';
+import BrandIcon from '../components/BrandIcon.astro';
 import { DEFAULT_IMAGE, REPO, SITE_URL, jsonLd } from '../lib/site';
 
 interface Props {
@@ -42,6 +41,7 @@ const home = localizePath('/', locale);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{locale !== 'ar' && <link rel="preload" href={sansFont} as="font" type="font/woff2" crossorigin>}
 <title>{title}</title>
 <meta name="description" content={description}>
 <meta name="robots" content={robots}>
@@ -64,7 +64,6 @@ const home = localizePath('/', locale);
 <meta name="twitter:image" content={image}>
 <meta name="twitter:image:alt" content={imageAlt}>
 <link rel="alternate" type="application/rss+xml" title={t('blogRssTitle')} href={localizePath('/blog/rss.xml', locale)}>
-<link rel="icon" href="/assets/brand/icon.svg" type="image/svg+xml">
 <link rel="icon" href="/assets/brand/icon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/assets/brand/icon-180.png">
 <slot name="head" />
@@ -75,7 +74,7 @@ const home = localizePath('/', locale);
 
 <header class="nav">
   <div class="wrap">
-    <a class="logo" href={home} aria-label={t('homeLink')}><img src="/assets/brand/icon.svg" alt="" width="26" height="26"><span>seine<i>.</i></span></a>
+    <a class="logo" href={home} aria-label={t('homeLink')}><BrandIcon size={26} /><span>seine<i>.</i></span></a>
     <nav aria-label={t('navMain')}>
       <a class="hide-sm" href={`${home}#download`}>{t('navDownload')}</a>
       <a class="hide-sm" href={`${home}#performance`}>{t('navPerformance')}</a>
@@ -100,7 +99,7 @@ const home = localizePath('/', locale);
 
 <footer>
   <div class="wrap">
-    <a class="logo" href={home} aria-label={t('homeLink')}><img src="/assets/brand/icon.svg" alt="" width="22" height="22"><span>seine<i>.</i></span></a>
+    <a class="logo" href={home} aria-label={t('homeLink')}><BrandIcon size={26} /><span>seine<i>.</i></span></a>
     <nav aria-label={t('navFooter')}>
       <a href={REPO}>GitHub</a>
       <a href={localizePath('/blog/', locale)}>{t('navBlog')}</a>

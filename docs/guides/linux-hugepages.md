@@ -88,9 +88,7 @@ reserving them at boot with the `hugepagesz=1G hugepages=18` kernel parameters.
 Verify the pool with
 `cat /sys/kernel/mm/hugepages/hugepages-1048576kB/free_hugepages` (the
 `HugePages_*` lines in `/proc/meminfo` cover only the default 2 MiB size).
-Benchmark telemetry reports 1 GiB backing separately (`large1g=`/`large1g_bytes=`),
-and `scripts/bench_cpu_ab.sh --page-mode large-1g` rejects any run that fell back or
-mixed page classes.
+Benchmark telemetry reports 1 GiB backing separately (`large1g=`/`large1g_bytes=`).
 
 ## WSL2
 

@@ -1,84 +1,68 @@
 ---
 title: 'Come minare Blocknet su Linux'
-description: 'Configura il mining Blocknet su Linux con seine: scegli x86_64 o ARM64, verifica l’archivio, glibc e le librerie NVIDIA e controlla le share accettate.'
+description: "Linux: Scarica seine, estrailo, inserisci il tuo indirizzo Blocknet e verifica le share accettate su bntpool.com. Inizia con le impostazioni automatiche; i consigli sulle prestazioni seguono la configurazione."
 tags: ['Guida al mining', 'Linux', 'NVIDIA']
 faq:
   - q: 'Quale archivio Linux devo scaricare?'
-    a: 'Esegui uname -m nel terminale. Scegli l’archivio x86_64 se compare x86_64, oppure aarch64 se compare aarch64. I binari Linux v0.2.26 verificati richiedono glibc 2.39 o successiva. Il pacchetto x86_64 supporta CPU e NVIDIA; quello ARM64 supporta solo CPU.'
+    a: "Apri la sezione download. Esegui uname -m: scegli seine-linux-x86_64.tar.gz per x86_64 o seine-linux-aarch64.tar.gz per aarch64. Le versioni Linux richiedono glibc 2.39 o successiva. La versione x86_64 supporta CPU e NVIDIA; ARM64 supporta il mining con CPU."
   - q: 'Devo avviare seine con sudo?'
     a: 'Esegui normalmente il miner con il tuo utente da una cartella scrivibile. Estrai l’archivio, concedi al proprietario il permesso di esecuzione se necessario e avvia ./seine. Riservare huge pages è un’attività amministrativa separata; l’avvio ordinario può usare pagine normali.'
   - q: 'Perché Linux segnala una libreria NVRTC mancante?'
     a: 'Il backend NVIDIA su Linux richiede un driver compatibile e le librerie runtime NVRTC, inclusa la libreria builtins corrispondente. Installale tramite la distribuzione o i pacchetti supportati da NVIDIA. L’archivio Linux non include le DLL Windows. Puoi scegliere la CPU mentre prepari il supporto GPU.'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-Questa guida avvia seine su un desktop o server Linux, dalla scelta dell’archivio al controllo delle share accettate dal pool. Usa la versione ufficiale v0.2.26 come esempio verificato. Tieni pronto il tuo indirizzo di ricezione Blocknet; la [guida al wallet](/it/blog/blocknet-wallet-for-mining/) spiega dove trovarlo. Inserisci un indirizzo pubblico o un `@name` registrato, mai una frase di recupero.
 
 ## Come si inizia a minare Blocknet su Linux?
 
 <Answer>
-Scegli l’archivio Linux adatto al processore, verificane il checksum SHA-256 ed estrailo in una cartella scrivibile. Esegui `./seine`, inserisci l’indirizzo di pagamento e accetta la connessione predefinita a bntpool.com. seine dimensiona automaticamente i thread CPU e può usare anche schede NVIDIA supportate su Linux x86_64, quando le relative librerie runtime sono installate.
+Scarica seine, estrailo, inserisci il tuo indirizzo Blocknet e verifica le share accettate su bntpool.com. Inizia con le impostazioni automatiche; i consigli sulle prestazioni seguono la configurazione.
 </Answer>
 
-## Passaggio 1: controlla architettura e glibc
+## Passaggio 1: scarica la versione giusta
 
-Apri un terminale ed esegui questi due controlli in sola lettura. Il primo identifica l’architettura; il secondo mostra la versione della libreria GNU C su un sistema basato su glibc. Non avviano il mining e non modificano la configurazione del computer.
+Apri la [sezione download](/it/#download). Esegui `uname -m`: scegli `seine-linux-x86_64.tar.gz` per `x86_64` o `seine-linux-aarch64.tar.gz` per `aarch64`. Le versioni Linux richiedono glibc 2.39 o successiva. La versione x86_64 supporta CPU e NVIDIA; ARM64 supporta il mining con CPU.
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="Tabella ufficiale dei download con archivi Linux e Linux ARM64" loading="lazy" />
 
-Abbina l’architettura all’archivio seguente. Entrambi i pacchetti Linux v0.2.26 richiedono glibc 2.39 o successiva. Ricontrolla i requisiti quando installi versioni più recenti. Se il sistema usa un’altra libreria C o una glibc precedente, usa un ambiente di distribuzione compatibile oppure segui le [istruzioni di compilazione dai sorgenti](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+## Passaggio 2: estrai e avvia
 
-| Output del comando | Archivio della versione | Backend |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU e NVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-Ogni thread di mining CPU richiede un blocco di memoria da 2 GiB. seine sceglie il numero iniziale di thread in base alla memoria e alle risorse CPU disponibili, poi lo ottimizza durante il mining. Al primo avvio non forzare thread e kernel: stabilisci una connessione funzionante prima di modificare le prestazioni.
-
-## Passaggio 2: scarica e verifica l’archivio
-
-Scegli Linux o Linux ARM64 nella [sezione download](/it/#download). Dalla stessa [versione ufficiale](https://github.com/zpalmtree/seine/releases/latest), scarica anche il file separato `SHA256SUMS.txt`. Conserva insieme archivio e checksum della stessa versione. Gli esempi usano x86_64; su ARM64 sostituisci `seine-linux-x86_64.tar.gz` con `seine-linux-aarch64.tar.gz` nei comandi.
-
-<img src="/assets/blog/linux-download.png" alt="Tabella ufficiale dei download con archivi Linux e Linux ARM64" width="1200" height="900" loading="lazy" />
-
-Nel terminale apri la cartella in cui il browser ha salvato i file e calcola il checksum dell’archivio. L’esempio presuppone una cartella Downloads nella directory personale; usa la cartella effettiva se ha un altro nome.
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-Confronta l’intero hash esadecimale con la riga di quell’esatto archivio in `SHA256SUMS.txt`. Ogni cifra deve coincidere prima di estrarre o eseguire. Usa il file dei checksum pubblicato con la versione: l’archivio contiene anche un manifesto dei file estratti. Un checksum coincidente verifica il file rispetto al valore pubblicato; scarica entrambi dalla fonte ufficiale.
-
-## Passaggio 3: estrai e controlla l’eseguibile
-
-Crea una cartella dedicata nella directory personale, estrai l’archivio al suo interno e chiedi al binario di mostrare la guida. L’archivio v0.2.26 contiene `./seine` nella radice, quindi questi comandi collocano l’eseguibile direttamente nella nuova cartella. Il comando di aiuto termina senza avviare il mining.
+Apri Terminale. Questi comandi presumono che l’archivio sia nella cartella Downloads; usa il percorso effettivo se diverso. Su ARM64, sostituisci `seine-linux-x86_64.tar.gz` con `seine-linux-aarch64.tar.gz`. Estraggono seine nella tua cartella personale e lo avviano:
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-Esegui i passaggi con il tuo account. `chmod u+x` concede l’esecuzione al proprietario del file; non serve un’installazione globale. Il prefisso `./` indica alla shell di eseguire il file nella cartella corrente. Conserva documentazione e licenze estratte insieme al binario.
-
-## Passaggio 4: inserisci l’indirizzo e connettiti
-
-Avvia dalla cartella di estrazione:
-
-```sh
 ./seine
 ```
 
-Inserisci l’indirizzo di ricezione o il tuo `@name` registrato, accetta `stratum+tcp://bntpool.com:3333` e scegli un nome riconoscibile per la macchina quando richiesto. Agli avvii successivi seine riutilizza `seine-data/seine.config.json`, relativo alla directory di lavoro. Avviare dalla stessa cartella rende facile ritrovare le impostazioni. Il [riferimento di configurazione](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) documenta le domande e la directory dati.
+## Passaggio 3: inserisci l’indirizzo del wallet
 
-Osserva hashrate e contatore delle share accettate. Apri quindi [My Stats](https://bntpool.com/stats) e cerca lo stesso indirizzo. Le share accettate confermano che il pool riceve lavoro; il pagamento segue il processo separato di ricompense e pagamenti. La [guida alla dashboard](/it/blog/seine-dashboard-explained/) spiega i pannelli del miner. Premi `q` o `Ctrl+C` per arrestarlo correttamente.
+Incolla il tuo indirizzo pubblico di ricezione Blocknet o il tuo `@name` registrato, poi premi Invio per accettare `stratum+tcp://bntpool.com:3333`. La [guida al wallet](/it/blog/blocknet-wallet-for-mining/) spiega dove trovare l’indirizzo. Seine non richiede la frase di recupero né le chiavi di spesa. Assegna automaticamente un nome al worker del pool.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Richieste di indirizzo e pool al primo avvio. Sostituisci l’esempio con il tuo indirizzo o nome registrato." loading="lazy" />
+  </picture>
+  <figcaption>Richieste di indirizzo e pool al primo avvio. Sostituisci l’esempio con il tuo indirizzo o nome registrato.</figcaption>
+</figure>
+
+Seine sceglie i thread e si regola automaticamente. Agli avvii successivi, eseguilo dalla stessa cartella per riutilizzare `seine-data/seine.config.json`.
+
+## Passaggio 4: controlla le share accettate
+
+Cerca un hashrate e un contatore **Accepted** in aumento nella [dashboard](/it/blog/seine-dashboard-explained/). Una share accettata conferma che il pool ha ricevuto il tuo lavoro; non significa che sia già avvenuto un pagamento. Premi `q` o `Ctrl+C` per fermare il miner.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="La vera dashboard di seine con dati di esempio. Cerca Accepted; questi valori non sono un benchmark." loading="lazy" />
+  </picture>
+  <figcaption>La vera dashboard di seine con dati di esempio. Cerca Accepted; questi valori non sono un benchmark.</figcaption>
+</figure>
+
+Apri [Le mie statistiche](https://bntpool.com/stats?lang=it) e inserisci lo stesso indirizzo o nome registrato per trovare worker, share e saldo.
 
 ## Cosa serve per minare con NVIDIA su Linux?
 
@@ -94,7 +78,7 @@ Questa scelta usa solo la CPU per quell’esecuzione. Per selezionare i disposit
 
 ## Come risolvere un errore di avvio su Linux?
 
-Usa il primo messaggio di errore per scegliere il controllo successivo. Un errore di architettura o runtime avviene prima delle share accettate: cambiare indirizzo del pool o numero di thread non risolve quella fase. Conserva l’archivio verificato mentre controlli eseguibile e ambiente.
+Usa il primo messaggio di errore per scegliere il controllo successivo:
 
 | Messaggio o sintomo | Cosa controllare |
 |---|---|
@@ -105,4 +89,6 @@ Usa il primo messaggio di errore per scegliere il controllo successivo. Un error
 
 Quando le share vengono accettate, la [guida alle huge pages](/it/blog/huge-pages-blocknet-mining/) descrive la configurazione facoltativa su Linux. La [guida ai server](/it/blog/mine-blocknet-on-servers/) tratta il funzionamento senza interfaccia grafica e il posizionamento NUMA. Nessuna delle due preparazioni serve per questo primo avvio; separa le modifiche per identificarne gli effetti sulla macchina.
 
-<CTA target="seine" title="Scarica seine per Linux" text="Scegli il tuo archivio Linux, verificalo e connettiti a bntpool.com con ottimizzazione automatica della CPU." />
+<CTA target="seine" title="Scarica seine per Linux" text="Estrai il download Linux, inserisci il tuo indirizzo e inizia a minare con la regolazione automatica della CPU." />
+
+Apri [Le mie statistiche](https://bntpool.com/stats?lang=it) e inserisci lo stesso indirizzo o nome registrato per trovare worker, share e saldo.

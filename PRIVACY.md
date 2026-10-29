@@ -131,12 +131,17 @@ Questions about Seine's telemetry can be directed to the
 
 ## Website analytics
 
-The blogs on **seineminer.com** and **bntpool.com** count article page loads and
-clicks toward Seine downloads or pool setup. These are aggregate activity counts,
+The public landing pages, pool setup page and blogs on **seineminer.com** and
+**bntpool.com** count page loads and clicks toward Seine downloads, platform
+setup guides, pool setup or worker statistics. These are aggregate activity counts,
 not unique visitors, completed downloads or confirmed miners.
 
-Each request contains only the article slug, its language, and one action:
-`view`, `download` or `pool_setup`. The collector identifies the source website
+Each request contains a fixed page name or article slug, its language, one action
+(`view`, `download`, `pool_setup`, `setup_guide` or `worker_stats`), and a broad
+referral category (`search`, `direct`, `internal` or `referral`). The browser derives
+this category locally; it never sends the referring URL or search query. A missing
+referrer is counted as direct. These categories do not establish an individual
+visitor journey or distinguish paid from organic search. The collector identifies the source website
 from the browser's Origin header. It does not store individual events, IP
 addresses, wallet addresses, names, cookies, browser identifiers, full page URLs,
 query strings or referrers in these counters. The script uses no browser storage
@@ -150,7 +155,9 @@ Counts are best effort: reloads and bots can increase them, blockers can prevent
 them, and an interrupted server can lose the latest unflushed batch.
 
 The script respects **Do Not Track** and **Global Privacy Control** when enabled
-in your browser. Blocking `/article-metrics.js`, `/blog/article-metrics.js` or
-`https://bntpool.com/api/site-events` also prevents these website counts without
-affecting reading or mining. These website counters are separate from the miner's
-hardware telemetry described above.
+in your browser. Blocking `https://bntpool.com/api/site-events` prevents these
+website counts without affecting reading or mining. On static pages, the
+`site-events.js` and `site-metrics.mjs` scripts (or the legacy `article-metrics.js`)
+can also be blocked; the pool dashboard includes its collector in the app bundle.
+These website counters are separate from the miner's hardware telemetry described
+above.

@@ -8,19 +8,19 @@ faq:
   - q: '¿Qué tamaño tiene una prueba de rango Bulletproofs?'
     a: 'Un solo Bulletproof de 64 bits contiene 2 × log2(64) + 9 = 21 elementos. Sobre el grupo Ristretto, cada elemento ocupa 32 bytes, así que cada prueba ocupa 672 bytes, y el explorador de Blocknet muestra exactamente eso para cada salida. El tamaño crece con el logaritmo del rango, así que duplicar el número de bits solo añade dos elementos.'
   - q: '¿Quién puede ver el importe de una transacción de Blocknet?'
-    a: 'Solo el emisor y el receptor. La cadena guarda un compromiso de Pedersen y una prueba de rango por cada salida, además del importe cifrado con el secreto que comparten las dos billeteras. La billetera del receptor lo descifra con la clave privada de visualización. La comisión de red es la única cifra pública, para que los nodos puedan sumarla en la comprobación del saldo.'
+    a: "En un pago ordinario, el remitente conoce el importe y la cartera receptora recupera el importe recibido. Las pruebas de pago o el acceso de visualización compartidos deliberadamente pueden revelárselo a otras personas. Los datos públicos de la transacción siguen incluyendo la comisión y la estructura. Las recompensas coinbase son distintas: su importe permitido y su codificación pueden deducirse públicamente de la altura del bloque y los datos de la transacción."
   - q: '¿Cómo saben los nodos que no se han creado monedas si los importes están ocultos?'
-    a: 'Cada nodo comprueba dos cosas en cada transacción. Los compromisos de Pedersen deben cuadrar, de modo que las entradas sean iguales a las salidas más la comisión, y cada salida debe llevar una prueba de rango válida que demuestre que su importe está entre 0 y 2^64. Juntas, estas comprobaciones descartan la inflación oculta sin revelar un solo importe.'
-sourceHash: e02793933862
-translation: reviewed
+    a: "En los pagos ordinarios, las pruebas de rango limitan cada salida a valores entre 0 y 2^64−1 y el balance de compromisos comprueba la conservación del valor, incluida la comisión. La validación completa también comprueba la autorización de gasto, la vinculación del anillo y la reutilización de imágenes de clave. La nueva emisión sigue una comprobación coinbase separada contra la recompensa permitida. Son comprobaciones distintas; una prueba de rango no verifica por sí sola todas las reglas de la transacción."
+sourceHash: 3be778e9122b
+translation: draft
 ---
 
-Los Bulletproofs son las pruebas de rango cortas de conocimiento cero que permiten a una criptomoneda ocultar todos los importes de las transacciones mientras cada nodo sigue comprobando que no se han creado monedas. Esta guía explica los compromisos de Pedersen, por qué los importes ocultos necesitan pruebas de rango, cómo los Bulletproofs mantienen pequeñas esas pruebas y cómo los usa Blocknet en cada salida.
+Bulletproofs son pruebas de rango breves y de conocimiento cero que ayudan a verificar importes de pago ocultos. Esta guía explica los compromisos de Pedersen, por qué hay que acotar los importes y cómo Bulletproofs mantiene pequeñas sus pruebas. En Blocknet, las pruebas de rango se combinan con controles de autorización, balance, gasto repetido y coinbase. Juntos explican cómo la privacidad de los pagos ordinarios encaja con la validación del movimiento de dinero y de la nueva emisión.
 
 ## ¿Qué son los Bulletproofs?
 
 <Answer>
-Los Bulletproofs son pruebas de conocimiento cero cortas, publicadas por Bünz, Bootle, Boneh, Poelstra, Wuille y Maxwell en 2018. En las criptomonedas demuestran que un importe oculto está en un rango válido, como de 0 a 2^64, sin revelarlo. No necesitan configuración de confianza, y su tamaño crece solo con el logaritmo del rango.
+Los Bulletproofs son pruebas de conocimiento cero cortas, publicadas por Bünz, Bootle, Boneh, Poelstra, Wuille y Maxwell en 2018. En las criptomonedas demuestran que un importe oculto está en un rango válido, como de 0 a 2^64−1, sin revelarlo. No necesitan configuración de confianza, y su tamaño crece solo con el logaritmo del rango.
 </Answer>
 
 El artículo, [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066), se presentó en el IEEE Symposium on Security and Privacy en 2018. Sus autores los diseñaron para las transacciones confidenciales, en las que los importes de una blockchain se sustituyen por compromisos. Para entender por qué hace falta una prueba así, hay que empezar por el compromiso.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Los compromisos de Pedersen se pueden sumar. La suma de dos compromisos es un compromiso con la suma de sus importes, con los factores de cegado también sumados. Un nodo suma los compromisos de entrada de una transacción y sus compromisos de salida más la comisión, y comprueba que los dos totales coinciden, así que confirma el saldo sin ver ningún importe.
 </Answer>
 
-Sumar dos compromisos da `(v1 + v2)·G + (r1 + r2)·H`, que es a su vez un compromiso con `v1 + v2`. El emisor ajusta los factores de cegado para que el cegado total de las entradas sea igual al de las salidas. Si los importes también cuadran, la diferencia entre la suma de entradas y la suma de salidas es exactamente cero, y cualquier nodo puede verificarlo.
+Al sumar dos compromisos se obtiene `(v1 + v2)·G + (r1 + r2)·H`, que es a su vez un compromiso de `v1 + v2`. El remitente ajusta los factores de ocultación para que su total en las entradas iguale al de las salidas. Si los importes cuadran, restar los compromisos de las salidas y el de la comisión a la suma de las entradas da cero.
 
-La comisión de red es la única cifra pública de una transacción. Los nodos la convierten en un compromiso con un factor de cegado de cero y la suman al lado de las salidas, así que la comprobación queda: entradas = salidas + comisión.
+La comisión de red es pública, al igual que otros datos de la transacción, como el hash y la estructura de entradas y salidas. Los nodos convierten la comisión en un compromiso con ocultación cero y lo añaden al lado de las salidas. Para un pago ordinario, la comprobación de conservación es entradas = salidas + comisión.
 
 ## ¿Por qué los importes ocultos necesitan pruebas de rango?
 
 La aritmética de los compromisos funciona módulo un número muy grande, el orden del grupo de la curva, que es aproximadamente 2^252. En esa aritmética, un importe «negativo» no es más que uno positivo enorme. Alguien podría gastar una entrada de 10 monedas y crear dos salidas, una de 11 y otra de «menos 1». Los compromisos cuadrarían perfectamente, y aparecería 1 moneda de la nada, oculta a todos los observadores.
 
-Una prueba de rango cierra esa puerta. Demuestra que el importe dentro de un compromiso está entre 0 y 2^64 sin decir cuál es. Con cada salida acotada así, un puñado de salidas nunca puede sumar un número lo bastante grande como para dar la vuelta al orden del grupo, así que unos compromisos que cuadran significan unos importes que cuadran.
+Una prueba de rango cierra esa puerta. Demuestra que el importe dentro de un compromiso está entre 0 y 2^64−1 sin decir cuál es. Con cada salida acotada así, un puñado de salidas nunca puede sumar un número lo bastante grande como para dar la vuelta al orden del grupo, así que unos compromisos que cuadran significan unos importes que cuadran.
 
 Los diseños anteriores de transacciones confidenciales usaban pruebas de rango que crecían linealmente con el número de bits. Los Bulletproofs crecen solo con el logaritmo, lo que reduce una prueba de 64 bits a unos pocos cientos de bytes.
 
@@ -74,24 +74,38 @@ La prueba no es interactiva. En lugar de un verificador en directo que envía de
 
 Monero activó los Bulletproofs en su actualización de red del 18 de octubre de 2018 (la versión v0.13.0) para reducir el tamaño de las transacciones. La [biblioteca bulletproofs de Rust](https://github.com/dalek-cryptography/bulletproofs) del proyecto dalek-cryptography los implementa sobre el grupo Ristretto de Curve25519, y la biblioteca criptográfica de Blocknet está construida sobre ella.
 
-## ¿Cómo oculta Blocknet cada importe?
+## ¿Cómo valida Blocknet los pagos privados?
 
-En Blocknet, cada salida de cada transacción contiene un compromiso de Pedersen en lugar de un importe, y cada salida lleva su propio Bulletproof de 64 bits. La privacidad forma parte del formato de transacción, sin modo transparente, así que no hay forma de enviar un pago con un importe visible.
+En la versión publicada core v0.22.0, las salidas de pagos ordinarios contienen compromisos de Pedersen, importes cifrados y pruebas Bulletproof individuales de 64 bits. Sus importes están ocultos en el registro público habitual. La transacción especial coinbase crea la recompensa del bloque y tiene una vía de emisión separada y verificable públicamente.
 
-Esto es lo que comprueba un nodo antes de aceptar una transacción:
+La validación criptográfica completa de un pago ordinario incluye estas comprobaciones separadas en el [validador de transacciones publicado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960):
 
-- **Cada prueba de rango.** El Bulletproof de cada salida debe verificarse frente a su compromiso, demostrando que el importe está entre 0 y 2^64. Las pruebas usan una transcripción con la etiqueta "Blocknet Range Proof", que vincula cada prueba a Blocknet.
-- **El saldo.** Cada entrada lleva un compromiso de pseudosalida, y la firma de anillo demuestra que se compromete con el mismo importe que la moneda real que se gasta, sin revelar qué miembro del anillo es. Después, el nodo comprueba que las pseudosalidas suman las salidas más la comisión.
-- **Las monedas nuevas.** La recompensa de un bloque sigue un calendario público, así que para la salida minada el nodo reconstruye el compromiso que espera para esa altura y comprueba que coincide.
+- **Autorización y vinculación.** Cada entrada debe utilizar 16 miembros canónicos del anillo registrados en la cadena. RingCT demuestra la propiedad y la igualdad de importes. El verificador también comprueba que la imagen de clave y el compromiso de pseudosalida coincidan con la prueba firmada.
+- **Rango y balance.** La Bulletproof de cada salida se verifica contra su compromiso y limita el importe entre 0 y 2^64−1. La transcripción utiliza la etiqueta "Blocknet Range Proof". Las pseudosalidas firmadas deben sumar lo mismo que las salidas más la comisión. Esto comprueba la conservación; no sustituye a la autorización.
+- **Gasto repetido.** Las imágenes de clave deben ser distintas dentro de la transacción y no constar ya como gastadas.
+
+[![Cuatro tareas de validación separadas: 1 autorización de gasto y vinculación del anillo; 2 rango del importe y balance de compromisos; 3 imagen de clave aún no gastada; 4 emisión coinbase permitida por una vía separada.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+Las comprobaciones **1–3** corresponden al gasto ordinario. La comprobación **4** corresponde a la transacción especial que crea la recompensa del bloque. El diagrama separa sus funciones; no muestra una transacción en curso ni sustituye al resto de la validación del bloque.
+
+## ¿Cómo detecta la red un gasto repetido?
+
+Una prueba de rango válida indica que el importe está dentro de los límites. No indica que el propietario aún no haya gastado la salida. La imagen de clave aporta esa comprobación separada de vinculación sin identificar al miembro real del anillo. La validación rechaza imágenes duplicadas dentro de una transacción e imágenes ya gastadas en la cadena aceptada. Vincular la imagen a la prueba RingCT firmada impide sustituirla de forma independiente. [Quién controla Blocknet](/es/blog/who-controls-blocknet/) explica la relación entre estas reglas y los nodos que las aplican.
+
+## ¿Cómo se comprueba la emisión sin leer saldos?
+
+La coinbase de un bloque no tiene entradas de gasto. El [validador de bloques publicado](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543) calcula la recompensa permitida para esa altura y reconstruye el compromiso y el importe codificado esperados mediante una ocultación derivada públicamente. Ambos deben coincidir. Por tanto, su importe puede deducirse públicamente, a diferencia de los importes ocultos de los pagos ordinarios.
+
+La emisión acumulada se calcula sumando las recompensas programadas desde la altura 1; el génesis no tiene coinbase. Este total no se obtiene sumando saldos privados de carteras ni indica cuánto puede gastarse actualmente o está en circulación. La [guía de oferta monetaria](/es/blog/blocknet-supply/) explica esa distinción, mientras que el [ejemplo de transacción](/es/blog/blocknet-transaction-explained/) aborda transferencias y cambio que no vuelven a emitir la recompensa.
 
 Puedes verlo en el [explorador de Blocknet](https://explorer.blocknetcrypto.com). La página de una transacción muestra sus importes como "hidden · Pedersen commitments", y cada salida muestra su compromiso, un memo cifrado y una prueba de rango de "672 bytes · Bulletproof", el tamaño que predicen las cuentas anteriores.
 
-El receptor sigue viendo la cifra real. Cada salida lleva el importe cifrado con el secreto que comparten las billeteras del emisor y del receptor, y la billetera del receptor lo descifra con la clave privada de visualización. El importe es visible para las dos personas del pago y para nadie más.
+En los pagos ordinarios, la cartera receptora reconoce sus salidas y recupera los importes cifrados con su información privada de visualización. El remitente conoce el importe introducido. Las pruebas de pago o el acceso de visualización compartidos deliberadamente pueden dar información adicional a otras personas. Estas decisiones de divulgación no cambian las comprobaciones de compromisos y pruebas de la red.
 
-Los importes ocultos funcionan junto con las demás capas de Blocknet: las [firmas de anillo](/es/blog/ring-signatures-explained/) sobre 16 salidas ocultan al emisor, las [direcciones sigilosas de un solo uso](/es/blog/stealth-addresses-explained/) ocultan al receptor y [Dandelion++](/es/blog/dandelion-plus-plus-explained/) oculta por dónde entró una transacción en la red. La [guía de las funciones de privacidad de Blocknet](/es/blog/blocknet-privacy-features/) las recorre una a una.
+Los importes ocultos de pagos ordinarios se combinan con las otras capas de Blocknet: las [firmas de anillo](/es/blog/ring-signatures-explained/) sobre 16 salidas protegen el origen gastado, las [direcciones sigilosas de un solo uso](/es/blog/stealth-addresses-explained/) protegen el destino receptor y [Dandelion++](/es/blog/dandelion-plus-plus-explained/) reduce la exposición del origen de red. La [guía de privacidad](/es/blog/blocknet-privacy-features/) explica cada capa. Estas comprobaciones describen la validación completa; la sincronización rápida puede apoyarse en puntos de control históricos de confianza para algunas comprobaciones costosas de firmas y pruebas de rango, según la implementación publicada.
 
 ## Consigue tus propios BNT privados
 
-Una forma sencilla de conseguir monedas con importes ocultos es minarlas. Blocknet usa una [prueba de trabajo Argon2id](/es/blog/argon2id-proof-of-work-explained/) intensiva en memoria que puedes minar con una computadora corriente, y seine la mina con tu CPU, junto con cualquier GPU NVIDIA, y se ajusta solo sin configuración. Cada pago que te envía bntpool.com llega como una salida privada con un compromiso y un Bulletproof. La [guía de minería](/es/blog/how-to-mine-blocknet/) te lleva de la descarga a los shares aceptados en pocos minutos.
+Para recibir pagos ordinarios de BNT en tu cartera puedes minar mediante un pool. Blocknet utiliza [prueba de trabajo Argon2id](/es/blog/argon2id-proof-of-work-explained/), que exige mucha memoria, y seine mina con tu CPU y las GPU NVIDIA compatibles mientras ajusta su funcionamiento. Los pagos enviados por bntpool.com son transferencias ordinarias con compromisos y pruebas de rango, distintas de la recompensa coinbase del bloque. La [guía de minería](/es/blog/how-to-mine-blocknet/) explica la configuración y las participaciones aceptadas.
 
-<CTA target="seine" title="Mina BNT privados con seine" text="Descarga seine, pega tu dirección o tu @name y empieza a ganar Blocknet con cada importe oculto en la cadena." />
+<CTA target="seine" title="Mina BNT con seine" text="Usa seine con bntpool.com y recibe pagos ordinarios del pool en tu propia cartera Blocknet." />

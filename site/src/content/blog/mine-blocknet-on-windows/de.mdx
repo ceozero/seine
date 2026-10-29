@@ -9,7 +9,7 @@ faq:
     a: 'Standardmäßig speichert seine die Auszahlungsadresse, den Pool und den Rig-Namen in seine-data/seine.config.json unterhalb des Ordners, aus dem du es startest. Starte es aus demselben entpackten Ordner, um diese Einstellungen wiederzuverwenden. Mit der Option data-dir kannst du bei Bedarf ein anderes Verzeichnis auswählen.'
   - q: 'Brauche ich Windows Large Pages, bevor ich mit dem Mining beginne?'
     a: 'Nein. seine versucht automatisch, Large Pages zu verwenden, und nutzt normale Speicherseiten, wenn sie nicht verfügbar sind. Du kannst mit den Standardeinstellungen minen. Für die optionale Einrichtung von Large Pages gewähre deinem Mining-Konto das Recht Sperren von Seiten im Speicher. Melde dich dann ab und wieder an, bevor du seine neu startest.'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ Halte deine öffentliche Auszahlungsadresse bereit, bevor du den Miner öffnest.
 
 Jeder CPU-Mining-Thread verwendet einen 2 GiB großen Speicherblock. seine prüft den verfügbaren RAM und die Anzahl der Kerne, hält Speicherreserven frei und wählt die anfängliche Thread-Anzahl für dich aus. Auf einem Desktop oder Laptop kannst du mit den Standardeinstellungen beginnen; du musst weder eine Thread-Anzahl berechnen noch zuerst einen CPU-Kernel auswählen.
 
-## Schritt 1: Windows-Archiv herunterladen
+## Schritt 1: die passende Version herunterladen
 
 Öffne den [Downloadbereich](/de/#download) und wähle Windows x86_64. Das Archiv heißt `seine-windows-x86_64.zip`.
 
-![Windows-ZIP in der offiziellen Downloadtabelle von seine](/assets/blog/windows-download.png)
+![Windows-ZIP in der offiziellen Downloadtabelle von seine](/assets/blog/setup-download.webp)
 
-## Schritt 2: Das vollständige ZIP entpacken
+## Schritt 2: entpacken und starten
 
 Klicke im Datei-Explorer mit der rechten Maustaste auf das heruntergeladene ZIP und wähle **Alle extrahieren**. Wähle einen Ordner mit Schreibzugriff und öffne anschließend den entpackten Ordner. Lasse `seine.exe` und die zugehörigen DLLs zusammen: Das Windows-Archiv enthält die vom Miner verwendeten NVIDIA-Laufzeitbibliotheken.
 
@@ -43,29 +43,37 @@ Doppelklicke im entpackten Ordner auf `seine.exe`. Wenn du ein Terminal bevorzug
 
 Das Präfix `./` oder `.\` weist die Shell an, die ausführbare Datei im aktuellen Verzeichnis zu starten. Der Start aus einem entpackten Ordner gibt seine außerdem einen festen Speicherort für seine Einstellungen. Verwende bei späteren Starts denselben Ordner, damit es die eingegebene Adresse und den Pool wiederfindet.
 
-## Schritt 3: Adresse und Pool eingeben
+## Schritt 3: deine Wallet-Adresse eingeben
 
-Füge bei der ersten Abfrage deine Blocknet-Empfangsadresse oder deinen registrierten `@name` ein und bestätige. Übernimm die Standard-Pool-URL `stratum+tcp://bntpool.com:3333`. Gib dem Rig auf Nachfrage einen erkennbaren Namen im Pool, damit du diesen Windows-PC von anderen Rechnern unterscheiden kannst, die auf dieselbe Adresse minen.
+Füge deine öffentliche Blocknet-Empfangsadresse oder deinen registrierten `@name` ein und drücke Enter, um `stratum+tcp://bntpool.com:3333` zu übernehmen. Der [Wallet-Leitfaden](/de/blog/blocknet-wallet-for-mining/) zeigt, wo du die Adresse findest. Seine benötigt weder deine Wiederherstellungsphrase noch deine Ausgabeschlüssel. Der Pool-Worker erhält automatisch einen Namen.
 
-Die [Konfigurationsanleitung](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) beschreibt diese Abfragen und die gespeicherten Einstellungen. Standardmäßig liegen sie in `seine-data/seine.config.json`, relativ zu dem Ordner, aus dem du das Programm startest. Bei späteren Starts verwendet seine sie erneut. Kurznamen werden bei jedem neuen Start wieder aufgelöst.
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen." loading="lazy" />
+  </picture>
+  <figcaption>Adress- und Pool-Abfrage beim ersten Start. Ersetze das Beispiel durch deine Adresse oder deinen registrierten Namen.</figcaption>
+</figure>
 
-Du kannst einen registrierten Kurznamen auch direkt in PowerShell übergeben:
+Seine wählt die Threads und optimiert automatisch. Starte es später aus demselben Ordner, um `seine-data/seine.config.json` wiederzuverwenden.
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-Ersetze `@name` durch deinen eigenen registrierten Kurznamen. Lasse die Flags für CPU-Threads und Kernel ungesetzt, damit seine sie automatisch auswählt. Die allgemeine Einrichtung für verschiedene Betriebssysteme findest du unter [Blocknet minen](/de/blog/how-to-mine-blocknet/).
-
-## Woran erkennst du, dass das Mining funktioniert?
+## Schritt 4: akzeptierte Shares prüfen
 
 <Answer>
 Prüfe, ob das Dashboard von seine eine Hashrate und akzeptierte Shares anzeigt, und suche anschließend dieselbe Auszahlungsadresse auf der Seite My Stats von bntpool.com. Das Dashboard beschreibt die aktuelle Arbeit des Miners; der Pool erfasst eingereichte Shares und Belohnungen. Lass die automatische Abstimmung zur Ruhe kommen, bevor du Hashraten vergleichst oder Einstellungen änderst.
 </Answer>
 
-Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die Hashrate, den Mining-Status und die Pool-Anzeigen. Eine laufende Hashrate zeigt die lokale Hashing-Aktivität; ein akzeptierter Share bestätigt, dass Arbeit beim Pool angekommen ist. Öffne [My Stats](https://bntpool.com/stats) und gib dieselbe Adresse oder denselben Kurznamen ein, um die Shares und das Guthaben dieses Rigs zu verfolgen.
+Die [Dashboard-Anleitung](/de/blog/seine-dashboard-explained/) erklärt die Hashrate, den Mining-Status und die Pool-Anzeigen. Eine laufende Hashrate zeigt die lokale Hashing-Aktivität; ein akzeptierter Share bestätigt, dass Arbeit beim Pool angekommen ist. Öffne [My Stats](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben Kurznamen ein, um die Shares und das Guthaben dieses Rigs zu verfolgen.
 
 Unterscheide beim Prüfen einer neuen Einrichtung zwischen akzeptierten Shares und Auszahlungen. Shares tragen zu den Pool-Belohnungen bei; eine Auszahlung richtet sich nach den Bestätigungs- und Guthabenregeln des Pools. Die [PPLNS-Anleitung](https://bntpool.com/blog/how-pplns-payouts-work/) erklärt diesen Ablauf. Du kannst die Verbindung sofort prüfen, ohne auf die erste Auszahlung zu warten.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Das echte Seine-Dashboard mit Beispieldaten. Achte auf Accepted; diese Zahlen sind kein Benchmark.</figcaption>
+</figure>
 
 ## CPU- und NVIDIA-Mining auf demselben PC
 
@@ -79,6 +87,6 @@ Beim normalen Start versucht das Programm bereits, Large Pages zu verwenden, und
 
 Die [Large-Pages-Anleitung](/de/blog/huge-pages-blocknet-mining/) beschreibt diese optionale Einrichtung ausführlich. Starte seine nach der erneuten Anmeldung normal und prüfe im Startprotokoll den ausgewählten Seitenmodus. Behalte den automatischen Standardmodus bei, während du deine erste funktionierende Einrichtung herstellst. Vergleiche anschließend Messungen auf demselben PC, wenn du Seiteneinstellungen änderst.
 
-[Windows blockiert deinen Miner? Download prüfen](/de/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="seine für Windows herunterladen" text="Entpacke das ZIP, gib deine Auszahlungsadresse ein und mine auf bntpool.com mit automatischer CPU- und NVIDIA-Abstimmung." />
+
+Öffne [Meine Statistik](https://bntpool.com/stats?lang=de) und gib dieselbe Adresse oder denselben registrierten Namen ein, um deinen Worker, Shares und Kontostand zu sehen.

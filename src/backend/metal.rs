@@ -106,6 +106,7 @@ impl MetalShared {
                 share_binding_id,
                 backend_id: instance_id,
                 backend: BACKEND_NAME,
+                found_at: std::time::Instant::now(),
             }),
         );
     }
@@ -255,7 +256,10 @@ impl MetalArgon2Engine {
             device.new_buffer(max_hashes_per_launch as u64 * 256 * 8, resource_opts);
         let last_blocks_buf =
             device.new_buffer(max_hashes_per_launch as u64 * 128 * 8, resource_opts);
-        let header_base_buf = device.new_buffer(POW_HEADER_BASE_LEN as u64, resource_opts);
+        let header_base_buf = device.new_buffer(
+            blocknet_pow_spec::MAX_POW_HEADER_BASE_LEN as u64,
+            resource_opts,
+        );
         let nonce_buf = device.new_buffer(max_hashes_per_launch as u64 * 8, resource_opts);
         let target_buf = device.new_buffer(POW_OUTPUT_LEN as u64, resource_opts);
         let cancel_flag_buf = device.new_buffer(4, resource_opts);
@@ -329,6 +333,8 @@ impl MetalArgon2Engine {
         target: Option<&[u8; 32]>,
         network_target: Option<&[u8; 32]>,
     ) -> Result<FillBatchResult> {
+        let header_len = blocknet_pow_spec::validate_header_length(header_base.len())
+            .map_err(|reason| anyhow!(reason))?;
         let requested_hashes = nonces.len() as u32;
         if requested_hashes == 0 {
             return Ok(FillBatchResult {
@@ -348,11 +354,7 @@ impl MetalArgon2Engine {
         // Write inputs to shared buffers (zero-copy)
         unsafe {
             let hdr_ptr = self.header_base_buf.contents() as *mut u8;
-            std::ptr::copy_nonoverlapping(
-                header_base.as_ptr(),
-                hdr_ptr,
-                header_base.len().min(POW_HEADER_BASE_LEN),
-            );
+            std::ptr::copy_nonoverlapping(header_base.as_ptr(), hdr_ptr, header_base.len());
 
             let nonce_ptr = self.nonce_buf.contents() as *mut u64;
             std::ptr::copy_nonoverlapping(nonces.as_ptr(), nonce_ptr, nonces.len());
@@ -372,7 +374,7 @@ impl MetalArgon2Engine {
         }
 
         // Write scalar uniforms
-        write_u32(&self.header_base_len_buf, header_base.len() as u32);
+        write_u32(&self.header_base_len_buf, header_len);
         write_u32(&self.active_hashes_buf, requested_hashes);
 
         let active_lanes = (self.lanes as u32).min(requested_hashes);
@@ -831,7 +833,7 @@ fn metal_worker_loop(
         let atomic = &*(max_lanes_atomic_ptr as *const AtomicU64);
         atomic.store(lanes, Ordering::Release);
     }
-    shared.active_lanes.store(lanes, Ordering::Release);
+    shared.active_lanes.store(0, Ordering::Release);
     shared
         .active_hashes_per_launch_per_lane
         .store(engine.hashes_per_launch_per_lane, Ordering::Release);
@@ -845,6 +847,7 @@ fn metal_worker_loop(
             match control_rx.try_recv() {
                 Ok(WorkerCommand::Cancel(ack)) => {
                     active = None;
+                    shared.active_lanes.store(0, Ordering::Release);
                     shared.pending_work.store(0, Ordering::Release);
                     shared
                         .inflight_assignment_hashes
@@ -892,6 +895,7 @@ fn metal_worker_loop(
         if let Some(ref mut assignment) = active {
             if shared.cancel_requested.swap(false, Ordering::AcqRel) {
                 active = None;
+                shared.active_lanes.store(0, Ordering::Release);
                 shared.pending_work.store(0, Ordering::Release);
                 shared
                     .inflight_assignment_hashes
@@ -919,6 +923,7 @@ fn metal_worker_loop(
                     .inflight_assignment_hashes
                     .store(0, Ordering::Release);
                 *shared.inflight_assignment_started_at.lock().unwrap() = None;
+                shared.active_lanes.store(0, Ordering::Release);
                 shared.pending_work.store(0, Ordering::Release);
                 active = None;
                 for waiter in fence_waiters.drain(..) {
@@ -941,6 +946,9 @@ fn metal_worker_loop(
                 Ordering::Release,
             );
 
+            shared
+                .active_lanes
+                .store((batch_size as u64).min(lanes), Ordering::Release);
             let target_snapshot = assignment.work.template.target_snapshot();
             let network_target = assignment.work.template.network_target();
             match engine.run_fill_batch_preserving_candidate(
@@ -968,6 +976,7 @@ fn metal_worker_loop(
                 Err(e) => {
                     shared.emit_error(instance_id, format!("Metal fill batch failed: {e:#}"));
                     drop(active);
+                    shared.active_lanes.store(0, Ordering::Release);
                     shared.pending_work.store(0, Ordering::Release);
                     shared
                         .inflight_assignment_hashes

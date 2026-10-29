@@ -699,13 +699,42 @@ struct Cli {
     #[arg(long, default_value_t = false)]
     bench: bool,
 
+    /// Replace this executable with the newest stable release for this platform
+    /// (checked against the release's SHA256SUMS.txt), then exit without mining.
+    #[arg(long, default_value_t = false)]
+    self_update: bool,
+
+    /// Install new stable releases while mining (the default): download, verify
+    /// the release signature and checksum, swap the executable and restart with
+    /// the same arguments. Needs the update check.
+    #[arg(long, default_value_t = true, action = ArgAction::SetTrue)]
+    auto_update: bool,
+
+    /// Keep mining the current version: only log that a newer release exists.
+    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "auto_update")]
+    no_auto_update: bool,
+
+    /// Experimental: side-buffer slots (1 KiB each) that serve scheduled
+    /// data-independent references in the AVX-512 streaming kernels; 0 disables,
+    /// unset uses the default for this CPU (512 on Linux Zen 5 EPYC
+    /// with one worker per core, otherwise off).
+    #[arg(long, hide = true)]
+    cpu_side_cache_blocks: Option<usize>,
+
+    /// Experimental: from this permille of the arena on (500-1000), odd blocks
+    /// skip their memory store and are rebuilt when referenced (AVX-512
+    /// streaming kernels); 0 disables, unset uses the default for this
+    /// CPU (600 on Linux Zen 4 desktops at 16 or more workers, otherwise off).
+    #[arg(long, hide = true)]
+    cpu_skip_store_permille: Option<u16>,
+
     /// Benchmark mode.
     /// `kernel-effective` measures kernel throughput with wall-time accounting and the backend's
     /// target/eval path enabled so results are directly comparable to backend-mode overhead.
     #[arg(long, value_enum, default_value_t = BenchKind::Backend)]
     bench_kind: BenchKind,
 
-    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, neon, neon-sha3).
+    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, avx512-stream-l2, neon, neon-sha3).
     /// Requires --bench, CPU-only backends, fixed --threads, and no CPU autotuning.
     #[arg(long, requires_all = ["bench", "threads"])]
     bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
@@ -759,6 +788,9 @@ pub struct Config {
     pub mining_address: Option<String>,
     pub backend_specs: Vec<BackendSpec>,
     pub threads: usize,
+    /// The explicit `--threads` value, reported in telemetry so fleet data can tell
+    /// operator choices from automatic sizing. `None` when sized automatically.
+    pub cpu_threads_explicit: Option<usize>,
     pub cpu_auto_threads_cap: usize,
     /// Recheck RAM after teardown for interactive/API thread overrides.
     pub cpu_manual_memory_check: bool,
@@ -816,6 +848,13 @@ pub struct Config {
     pub sub_round_rebalance_interval: Option<Duration>,
     pub sse_enabled: bool,
     pub update_check_enabled: bool,
+    /// Apply newer releases found by the update check (default; off with
+    /// `--no-auto-update` or `--disable-update-check`).
+    pub auto_update: bool,
+    /// Experimental side-cache slots for the AVX-512 streaming kernels (0 = off).
+    pub cpu_side_cache_blocks: usize,
+    /// Experimental skipped-store start for the AVX-512 streaming kernels (0 = off).
+    pub cpu_skip_store_permille: u16,
     pub refresh_on_same_height: bool,
     pub ui_mode: UiMode,
     pub data_dir: PathBuf,
@@ -1137,6 +1176,23 @@ impl Config {
         let profile_defaults = cpu_profile_defaults(cli.cpu_profile, auto_threads_cap);
         let resolved_threads = cli.threads.unwrap_or(profile_defaults.threads);
         let cpu_autotune_threads = cpu_autotune_enabled(&cli, cpu_backend_instances);
+        // An explicit count on a host without a validated streaming default keeps
+        // its count but runs the kernel comparisons there, which is the only way
+        // such a host ever tries the streaming kernels.
+        let pinned_kernel_trials = pinned_kernel_trials_wanted(
+            cli.threads.is_some(),
+            cpu_backend_instances,
+            !cli.cpu_threads_per_instance.is_empty(),
+            cpu_autotune_threads,
+            cli.disable_cpu_autotune_threads,
+            cli.bench,
+        ) && crate::miner::fixed_count_trials_wanted();
+        if pinned_kernel_trials {
+            startup_notices.push(format!(
+                "--threads {resolved_threads} is kept; the CPU kernel is still compared while mining because this CPU has no validated default"
+            ));
+        }
+        let cpu_autotune_threads = cpu_autotune_threads || pinned_kernel_trials;
         validate_benchmark_cpu_kernel(
             cli.bench_cpu_kernel,
             cli.bench,
@@ -1155,9 +1211,19 @@ impl Config {
         startup_notices.extend(underused_threads_notice(
             cli.threads,
             cpu_backend_instances,
-            cpu_autotune_threads,
+            cpu_autotune_threads && !pinned_kernel_trials,
             auto_threads_cap,
         ));
+        startup_notices.extend(wsl_sizing_notice_for(
+            cpu_backend_instances,
+            gpu_memory_reservation,
+            cli.cpu_affinity,
+            cli.cpu_page_mode,
+            cli.cpu_memory_reserve_percent,
+        ));
+        if cpu_backend_instances > 0 && !cli.bench {
+            startup_notices.extend(crate::memory_modules::host_memory_setup_notices());
+        }
         let cpu_autotune_config_path = cli
             .cpu_autotune_config
             .clone()
@@ -1288,6 +1354,7 @@ impl Config {
             mining_address: cli.mining_address.map(|address| address.trim().to_string()),
             backend_specs,
             threads: resolved_threads,
+            cpu_threads_explicit: cli.threads,
             cpu_auto_threads_cap: auto_threads_cap,
             cpu_manual_memory_check: false,
             cpu_autotune_worker_slots: None,
@@ -1307,8 +1374,16 @@ impl Config {
             cpu_hash_flush_interval: Duration::from_millis(effective_cpu_hash_flush_ms),
             cpu_event_dispatch_capacity: effective_cpu_event_dispatch_capacity,
             cpu_autotune_threads,
-            cpu_autotune_min_threads: cli.cpu_autotune_min_threads,
-            cpu_autotune_max_threads: cli.cpu_autotune_max_threads,
+            cpu_autotune_min_threads: if pinned_kernel_trials {
+                resolved_threads
+            } else {
+                cli.cpu_autotune_min_threads
+            },
+            cpu_autotune_max_threads: if pinned_kernel_trials {
+                Some(resolved_threads)
+            } else {
+                cli.cpu_autotune_max_threads
+            },
             cpu_autotune_secs: cli.cpu_autotune_secs.max(1),
             cpu_autotune_config_path,
             nvidia_autotune_secs: cli.nvidia_autotune_secs.max(1),
@@ -1349,6 +1424,17 @@ impl Config {
             sub_round_rebalance_interval: optional_duration_from_millis(cli.sub_round_rebalance_ms),
             sse_enabled: !cli.disable_sse,
             update_check_enabled: !cli.disable_update_check,
+            auto_update: cli.auto_update && !cli.no_auto_update && !cli.disable_update_check,
+            cpu_side_cache_blocks: cli.cpu_side_cache_blocks.unwrap_or_else(|| {
+                crate::miner::cohort_side_cache_blocks(
+                    cli.threads.unwrap_or(auto_threads_cap),
+                    sysinfo::System::new().physical_core_count(),
+                    cpu_parallelism_cap(cli.cpu_affinity),
+                )
+            }),
+            cpu_skip_store_permille: cli.cpu_skip_store_permille.unwrap_or_else(|| {
+                crate::miner::cohort_skip_store_permille(cli.threads.unwrap_or(auto_threads_cap))
+            }),
             refresh_on_same_height: cli.refresh_on_same_height,
             ui_mode: cli.ui,
             data_dir: cli.data_dir,
@@ -1492,7 +1578,7 @@ fn resolve_backend_selection(
     }
 
     // Metal is not auto-enabled: on Apple Silicon unified memory, Argon2id is
-    // memory-latency-bound and CPU lanes are ~12× faster per lane than Metal.
+    // memory-latency-bound and CPU lanes are much faster per lane than Metal.
     // Running both degrades total throughput.  Users can opt in via --backend cpu,metal.
     let mut selected = vec![BackendKind::Cpu];
     if nvidia_available || !nvidia_devices.is_empty() {
@@ -1548,7 +1634,7 @@ pub(crate) fn detect_nvidia_devices() -> Result<Vec<DetectedGpu>> {
 #[cfg(all(feature = "amd", unix))]
 pub(crate) fn detect_amd_devices(notices: &mut Vec<String>) -> Result<Vec<DetectedGpu>> {
     let devices = crate::backend::amd::query_amd_devices()?;
-    let (usable, skipped) = partition_wave32_amd_devices(devices);
+    let (usable, skipped) = partition_supported_amd_devices(devices);
     notices.extend(skipped);
     Ok(usable)
 }
@@ -1559,13 +1645,13 @@ pub(crate) fn detect_amd_devices(_notices: &mut Vec<String>) -> Result<Vec<Detec
 }
 
 #[cfg(all(feature = "amd", unix))]
-fn partition_wave32_amd_devices(
+fn partition_supported_amd_devices(
     devices: Vec<crate::backend::amd::AmdDeviceInfo>,
 ) -> (Vec<DetectedGpu>, Vec<String>) {
     let mut usable = Vec::new();
     let mut skipped = Vec::new();
     for device in devices {
-        if device.wavefront_size == crate::backend::amd::REQUIRED_WAVEFRONT_SIZE {
+        if crate::backend::amd::supports_wavefront_size(device.wavefront_size) {
             usable.push(DetectedGpu {
                 index: device.index,
                 name: device.name,
@@ -1573,7 +1659,7 @@ fn partition_wave32_amd_devices(
             });
         } else {
             skipped.push(format!(
-                "skipping AMD device {} ({}, {}): wavefront size {} is unsupported (wave32 required)",
+                "skipping AMD device {} ({}, {}): wavefront size {} is unsupported (wave32 or wave64 required)",
                 device.index, device.name, device.gcn_arch_name, device.wavefront_size
             ));
         }
@@ -2843,6 +2929,24 @@ fn cpu_parallelism_cap(affinity: CpuAffinityMode) -> usize {
     logical_parallelism
 }
 
+/// Explicit `--threads` without any tuning flag, on a host whose cohort has no
+/// validated kernel default, runs kernel comparisons at the fixed count.
+fn pinned_kernel_trials_wanted(
+    explicit_threads: bool,
+    instances: usize,
+    per_instance_overrides: bool,
+    autotune_threads: bool,
+    disable_autotune: bool,
+    bench: bool,
+) -> bool {
+    explicit_threads
+        && instances > 0
+        && !per_instance_overrides
+        && !autotune_threads
+        && !disable_autotune
+        && !bench
+}
+
 fn cpu_autotune_enabled(cli: &Cli, instances: usize) -> bool {
     !cli.disable_cpu_autotune_threads
         && (cli.cpu_autotune_threads
@@ -2905,6 +3009,52 @@ fn underused_threads_notice(
                 "--threads {threads} uses under half of the {auto_threads_cap} CPU workers this machine's cores and free RAM allow; omit --threads to size and tune workers automatically for more hashrate"
             )
         })
+}
+
+/// WSL2 gives its Linux VM half of the PC's RAM by default, so desktops with the
+/// cores for a dozen workers often fit three. Name the two fixes once at startup.
+fn wsl_sizing_notice_for(
+    cpu_backend_instances: usize,
+    gpu_memory_reservation: u64,
+    affinity: CpuAffinityMode,
+    page_mode: CpuPageMode,
+    reserve_percent: Option<u8>,
+) -> Option<String> {
+    if cpu_backend_instances == 0 {
+        return None;
+    }
+    let runtime_environment = crate::runtime_identity::runtime_environment();
+    if runtime_environment != "wsl2" {
+        return None;
+    }
+    let budget = detect_memory_budget_bytes(page_mode)?;
+    let memory_lanes = (auto_cpu_memory_bytes(budget, gpu_memory_reservation, reserve_percent)
+        / CPU_LANE_MEMORY_BYTES) as usize;
+    wsl_sizing_notice(
+        &runtime_environment,
+        cpu_backend_instances,
+        memory_lanes,
+        cpu_parallelism_cap(affinity),
+        budget.effective_total,
+    )
+}
+
+fn wsl_sizing_notice(
+    runtime_environment: &str,
+    cpu_backend_instances: usize,
+    memory_lanes: usize,
+    cpu_lanes: usize,
+    effective_total_bytes: u64,
+) -> Option<String> {
+    if runtime_environment != "wsl2" || cpu_backend_instances == 0 || memory_lanes >= cpu_lanes {
+        return None;
+    }
+    let gib = |bytes: u64| bytes.div_ceil(1024 * 1024 * 1024);
+    let needed_gib = gib(CPU_LANE_MEMORY_BYTES.saturating_mul(cpu_lanes as u64)) + 2;
+    Some(format!(
+        "WSL2 limits this Linux VM to {} GiB of RAM, which fits {memory_lanes} CPU worker(s) of the {cpu_lanes} this CPU allows; if the PC has more RAM, put \"[wsl2]\" and \"memory={needed_gib}GB\" in %UserProfile%\\.wslconfig and run `wsl --shutdown`, or run the native Windows build, which uses all of it",
+        gib(effective_total_bytes)
+    ))
 }
 
 fn distribute_auto_cpu_threads(total_lanes_cap: usize, cpu_backend_instances: usize) -> usize {
@@ -3520,6 +3670,11 @@ mod tests {
             api_token: None,
             api_cookie: None,
             bench: false,
+            self_update: false,
+            auto_update: false,
+            no_auto_update: false,
+            cpu_side_cache_blocks: None,
+            cpu_skip_store_permille: None,
             bench_kind: BenchKind::Backend,
             bench_cpu_kernel: None,
             bench_secs: 20,
@@ -4456,6 +4611,45 @@ HugePages_Rsvd:          0
             13
         );
         assert_eq!(memory_reserve_bytes(8 * gib, None), 8 * gib / 100 * 5);
+    }
+
+    #[test]
+    fn pinned_kernel_trials_only_for_plain_explicit_counts() {
+        assert!(pinned_kernel_trials_wanted(
+            true, 1, false, false, false, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            false, 1, false, false, false, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            true, 0, false, false, false, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            true, 1, true, false, false, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            true, 1, false, true, false, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            true, 1, false, false, true, false
+        ));
+        assert!(!pinned_kernel_trials_wanted(
+            true, 1, false, false, false, true
+        ));
+    }
+
+    #[test]
+    fn wsl_sizing_notice_only_when_memory_caps_workers_under_wsl2() {
+        let gib = 1024 * 1024 * 1024;
+        let notice = wsl_sizing_notice("wsl2", 1, 3, 16, 8 * gib).unwrap();
+        assert!(notice.contains("memory=34GB"), "{notice}");
+        assert!(
+            notice.contains("8 GiB of RAM, which fits 3 CPU worker(s) of the 16"),
+            "{notice}"
+        );
+        assert!(wsl_sizing_notice("wsl2", 1, 16, 16, 64 * gib).is_none());
+        assert!(wsl_sizing_notice("native", 1, 3, 16, 8 * gib).is_none());
+        assert!(wsl_sizing_notice("wsl2", 0, 3, 16, 8 * gib).is_none());
     }
 
     #[test]

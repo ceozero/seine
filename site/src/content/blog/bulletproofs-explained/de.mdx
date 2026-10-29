@@ -8,19 +8,19 @@ faq:
   - q: 'Wie groß ist ein Bulletproofs-Range-Proof?'
     a: 'Ein einzelner 64-Bit-Bulletproof besteht aus 2 × log2(64) + 9 = 21 Elementen. In der Ristretto-Gruppe belegt jedes Element 32 Byte, jeder Beweis ist also 672 Byte groß, und der Blocknet-Explorer zeigt genau das für jeden Output an. Die Größe wächst mit dem Logarithmus des Bereichs, eine doppelte Bitlänge fügt also nur zwei Elemente hinzu.'
   - q: 'Wer kann den Betrag einer Blocknet-Transaktion sehen?'
-    a: 'Nur Sender und Empfänger. Die Chain speichert für jeden Output ein Pedersen-Commitment und einen Range Proof sowie den Betrag, verschlüsselt mit dem Geheimnis, das die beiden Wallets teilen. Die Wallet des Empfängers entschlüsselt ihn mit dem privaten View Key. Die Netzwerkgebühr ist die einzige öffentliche Zahl, damit Nodes sie in die Bilanzprüfung einrechnen können.'
+    a: "Bei einer gewöhnlichen Zahlung kennt der Absender den Betrag, und die Empfänger-Wallet ermittelt ihren eingehenden Betrag. Bewusst weitergegebene Zahlungsnachweise oder Lesezugriffe können ihn anderen offenlegen. Öffentliche Transaktionsdaten umfassen weiterhin Gebühr und Struktur. Coinbase-Belohnungen sind anders: Ihr zulässiger Betrag und dessen Kodierung lassen sich öffentlich aus Blockhöhe und Transaktionsdaten ableiten."
   - q: 'Woher wissen Nodes, dass keine Coins erschaffen wurden, wenn die Beträge verborgen sind?'
-    a: 'Jeder Node prüft bei jeder Transaktion zwei Dinge. Die Pedersen-Commitments müssen aufgehen, die Inputs also den Outputs plus Gebühr entsprechen, und jeder Output muss einen gültigen Range Proof tragen, der zeigt, dass sein Betrag zwischen 0 und 2^64 liegt. Zusammen schließt das verdeckte Inflation aus, ohne einen einzigen Betrag offenzulegen.'
-sourceHash: e02793933862
-translation: reviewed
+    a: "Bei gewöhnlichen Zahlungen begrenzen Bereichsnachweise jeden Ausgang auf 0 bis 2^64−1, und die Commitment-Bilanz prüft die Werterhaltung einschließlich Gebühr. Die vollständige Validierung prüft außerdem Ausgabeberechtigung, Ringbindung und wiederverwendete Schlüsselbilder. Neue Ausgabe durchläuft eine gesonderte Coinbase-Prüfung gegen die erlaubte Blockbelohnung. Das sind unterschiedliche Prüfungen; ein Bereichsnachweis allein bestätigt nicht sämtliche Transaktionsregeln."
+sourceHash: 3be778e9122b
+translation: draft
 ---
 
-Bulletproofs sind die kurzen Zero-Knowledge-Range-Proofs, mit denen eine Kryptowährung jeden Transaktionsbetrag verbergen kann, während jeder Node trotzdem prüft, dass keine Coins erschaffen wurden. Diese Anleitung erklärt Pedersen-Commitments, warum verborgene Beträge Range Proofs brauchen, wie Bulletproofs diese Beweise klein halten und wie Blocknet sie an jedem Output einsetzt.
+Bulletproofs sind kurze Zero-Knowledge-Bereichsnachweise, die beim Prüfen verborgener Zahlungsbeträge helfen. Dieser Leitfaden erklärt Pedersen-Commitments, die nötigen Betragsgrenzen und warum Bulletproofs klein bleiben. In Blocknet arbeiten Bereichsnachweise mit Prüfungen für Berechtigung, Bilanz, wiederholtes Ausgeben und Coinbase zusammen. Gemeinsam erklären sie, wie die Privatsphäre gewöhnlicher Zahlungen mit der Validierung von Geldbewegungen und neuer Ausgabe zusammenpasst.
 
 ## Was sind Bulletproofs?
 
 <Answer>
-Bulletproofs sind kurze Zero-Knowledge-Beweise, 2018 von Bünz, Bootle, Boneh, Poelstra, Wuille und Maxwell veröffentlicht. In Kryptowährungen beweisen sie, dass ein verborgener Betrag in einem gültigen Bereich liegt, etwa von 0 bis 2^64, ohne ihn offenzulegen. Sie brauchen kein Trusted Setup, und ihre Größe wächst nur mit dem Logarithmus des Bereichs.
+Bulletproofs sind kurze Zero-Knowledge-Beweise, 2018 von Bünz, Bootle, Boneh, Poelstra, Wuille und Maxwell veröffentlicht. In Kryptowährungen beweisen sie, dass ein verborgener Betrag in einem gültigen Bereich liegt, etwa von 0 bis 2^64−1, ohne ihn offenzulegen. Sie brauchen kein Trusted Setup, und ihre Größe wächst nur mit dem Logarithmus des Bereichs.
 </Answer>
 
 Das Paper [Bulletproofs: Short Proofs for Confidential Transactions and More](https://eprint.iacr.org/2017/1066) erschien 2018 auf dem IEEE Symposium on Security and Privacy. Die Autoren haben Bulletproofs für vertrauliche Transaktionen entworfen, bei denen Beträge auf einer Blockchain durch Commitments ersetzt werden. Um zu verstehen, warum ein solcher Beweis überhaupt nötig ist, fang beim Commitment an.
@@ -46,15 +46,15 @@ C = v·G + r·H
 Pedersen-Commitments lassen sich addieren. Die Summe zweier Commitments ist ein Commitment auf die Summe ihrer Beträge, wobei auch die Blinding Factors addiert werden. Ein Node addiert die Input-Commitments einer Transaktion sowie ihre Output-Commitments plus Gebühr und prüft, ob beide Summen übereinstimmen. So bestätigt er die Bilanz, ohne einen Betrag zu sehen.
 </Answer>
 
-Die Addition zweier Commitments ergibt `(v1 + v2)·G + (r1 + r2)·H`, was selbst ein Commitment auf `v1 + v2` ist. Der Sender wählt die Blinding Factors so, dass ihre Summe auf der Input-Seite der Summe auf der Output-Seite entspricht. Wenn auch die Beträge aufgehen, ist die Differenz zwischen Input-Summe und Output-Summe genau null, und jeder Node kann das prüfen.
+Die Addition zweier Commitments ergibt `(v1 + v2)·G + (r1 + r2)·H`, selbst ein Commitment auf `v1 + v2`. Der Absender wählt die Verblindungsfaktoren so, dass ihre Summe bei den Eingängen der bei den Ausgängen entspricht. Stimmen die Beträge überein, ergibt das Abziehen der Ausgangs-Commitments und des Gebühren-Commitments von der Eingangssumme null.
 
-Die Netzwerkgebühr ist die einzige öffentliche Zahl in einer Transaktion. Nodes machen daraus ein Commitment mit dem Blinding Factor null und addieren es auf der Output-Seite, die Prüfung lautet also: Inputs = Outputs + Gebühr.
+Die Netzwerkgebühr ist öffentlich, ebenso andere Transaktionsdaten wie Hash und Ein-/Ausgangsstruktur. Knoten wandeln die Gebühr in ein Commitment mit Verblindung null um und addieren es auf der Ausgangsseite. Bei einer gewöhnlichen Zahlung lautet die Erhaltungsprüfung: Eingänge = Ausgänge + Gebühr.
 
 ## Warum brauchen verborgene Beträge Range Proofs?
 
 Die Commitment-Arithmetik rechnet modulo einer sehr großen Zahl, der Ordnung der Kurvengruppe, die etwa 2^252 beträgt. In dieser Arithmetik ist ein „negativer“ Betrag einfach ein riesiger positiver. Jemand könnte einen Input im Wert von 10 Coins ausgeben und zwei Outputs erzeugen, einen im Wert von 11 und einen im Wert von „minus 1“. Die Commitments würden perfekt aufgehen, und 1 Coin entstünde aus dem Nichts, verborgen vor jedem Beobachter.
 
-Ein Range Proof (Bereichsbeweis) schließt diese Lücke. Er beweist, dass der Betrag in einem Commitment zwischen 0 und 2^64 liegt, ohne zu sagen, wie hoch er ist. Wenn jeder Output so begrenzt ist, können ein paar Outputs nie zu einer Zahl aufaddiert werden, die groß genug ist, um über die Gruppenordnung hinauszulaufen. Ausgeglichene Commitments bedeuten also ausgeglichene Beträge.
+Ein Range Proof (Bereichsbeweis) schließt diese Lücke. Er beweist, dass der Betrag in einem Commitment zwischen 0 und 2^64−1 liegt, ohne zu sagen, wie hoch er ist. Wenn jeder Output so begrenzt ist, können ein paar Outputs nie zu einer Zahl aufaddiert werden, die groß genug ist, um über die Gruppenordnung hinauszulaufen. Ausgeglichene Commitments bedeuten also ausgeglichene Beträge.
 
 Frühere Designs für vertrauliche Transaktionen nutzten Range Proofs, die linear mit der Anzahl der Bits wuchsen. Bulletproofs wachsen nur mit dem Logarithmus, was einen 64-Bit-Beweis auf einige hundert Byte bringt.
 
@@ -74,24 +74,38 @@ Der Beweis ist nicht interaktiv. Statt eines Prüfers, der live Challenges sende
 
 Monero hat Bulletproofs mit seinem Netzwerk-Upgrade am 18. Oktober 2018 (Release v0.13.0) aktiviert, um die Transaktionsgrößen zu verringern. Die [Rust-Bibliothek bulletproofs](https://github.com/dalek-cryptography/bulletproofs) des Projekts dalek-cryptography implementiert sie über der Ristretto-Gruppe von Curve25519, und die Kryptografie-Bibliothek von Blocknet baut darauf auf.
 
-## Wie verbirgt Blocknet jeden Betrag?
+## Wie prüft Blocknet private Zahlungen?
 
-Bei Blocknet enthält jeder Output jeder Transaktion statt eines Betrags ein Pedersen-Commitment, und jeder Output trägt einen eigenen 64-Bit-Bulletproof. Privatsphäre ist Teil des Transaktionsformats, ohne transparenten Modus, es gibt also keinen Weg, eine Zahlung mit sichtbarem Betrag zu senden.
+Im veröffentlichten core v0.22.0 enthalten Ausgänge gewöhnlicher Zahlungen Pedersen-Commitments, verschlüsselte Beträge und jeweils einen 64-Bit-Bulletproof. Ihre Beträge sind im gewöhnlichen öffentlichen Datensatz verborgen. Die besondere Coinbase-Transaktion erzeugt die Blockbelohnung und hat einen getrennten, öffentlich prüfbaren Ausgabepfad.
 
-Das prüft ein Node, bevor er eine Transaktion akzeptiert:
+Die vollständige kryptografische Validierung einer gewöhnlichen Zahlung umfasst diese getrennten Prüfungen im [veröffentlichten Transaktionsvalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/transaction.go#L960):
 
-- **Jeden Range Proof.** Der Bulletproof jedes Outputs muss gegen dessen Commitment verifiziert werden und so beweisen, dass der Betrag zwischen 0 und 2^64 liegt. Die Beweise nutzen ein Transkript mit dem Label „Blocknet Range Proof“, das jeden Beweis an Blocknet bindet.
-- **Die Bilanz.** Jeder Input trägt ein Pseudo-Output-Commitment, und die Ringsignatur beweist, dass es auf denselben Betrag lautet wie der echte ausgegebene Coin, ohne zu verraten, welches Ringmitglied das ist. Der Node prüft dann, dass die Pseudo-Outputs zusammen den Outputs plus Gebühr entsprechen.
-- **Neue Coins.** Die Belohnung eines Blocks folgt einem öffentlichen Zeitplan, daher berechnet der Node für den geminten Output das Commitment nach, das er für diese Höhe erwartet, und prüft, ob es übereinstimmt.
+- **Berechtigung und Bindung.** Jeder Eingang muss 16 kanonische Ringmitglieder aus der Kette verwenden. RingCT beweist Eigentum und Betragsgleichheit. Der Prüfer kontrolliert außerdem, dass Schlüsselbild und Pseudoausgangs-Commitment zum signierten Nachweis passen.
+- **Bereich und Bilanz.** Der Bulletproof jedes Ausgangs wird gegen dessen Commitment geprüft und begrenzt den Betrag auf 0 bis 2^64−1. Das Transkript verwendet die Kennzeichnung "Blocknet Range Proof". Die Summe signierter Pseudoausgänge muss den Ausgängen plus Gebühr entsprechen. Dies prüft die Werterhaltung und ersetzt keine Berechtigungsprüfung.
+- **Wiederholtes Ausgeben.** Schlüsselbilder müssen innerhalb der Transaktion verschieden sein und dürfen nicht bereits als ausgegeben erfasst sein.
+
+[![Vier getrennte Prüfaufgaben: 1 Ausgabeberechtigung und Ringbindung; 2 Betragsbereich und Commitment-Bilanz; 3 Schlüsselbild noch nicht ausgegeben; 4 erlaubte Coinbase-Ausgabe auf einem getrennten Pfad.](/assets/blog/blocknet-private-validation.svg)](/assets/blog/blocknet-private-validation.svg)
+
+Die Prüfungen **1–3** betreffen gewöhnliche Ausgaben. Prüfung **4** betrifft die besondere Transaktion, die die Blockbelohnung erzeugt. Das Diagramm trennt ihre Aufgaben; es zeigt keine laufende Transaktion und ersetzt nicht die übrige Blockvalidierung.
+
+## Wie erkennt das Netzwerk wiederholtes Ausgeben?
+
+Ein gültiger Bereichsnachweis sagt aus, dass ein Betrag innerhalb der Grenzen liegt. Er sagt nicht aus, dass der Eigentümer den Ausgang noch nicht ausgegeben hat. Das Schlüsselbild ermöglicht diese getrennte Verknüpfbarkeitsprüfung, ohne das echte Ringmitglied zu benennen. Die Validierung weist doppelte Bilder innerhalb einer Transaktion und bereits auf der akzeptierten Kette ausgegebene Bilder zurück. Die Bindung des Bildes an den signierten RingCT-Nachweis verhindert seinen unabhängigen Austausch. [Wer kontrolliert Blocknet](/de/blog/who-controls-blocknet/) erklärt die Beziehung zwischen diesen Regeln und den Knoten, die sie anwenden.
+
+## Wie prüft man neue Ausgabe ohne Wallet-Salden?
+
+Die Coinbase eines Blocks hat keine auszugebenden Eingänge. Der [veröffentlichte Blockvalidator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L543) berechnet die erlaubte Belohnung für die Höhe und rekonstruiert das erwartete Commitment sowie den kodierten Betrag mit öffentlich ableitbarer Verblindung. Beide müssen übereinstimmen. Ihr Betrag ist daher öffentlich ableitbar, anders als die verborgenen Beträge gewöhnlicher Zahlungen.
+
+Die kumulierte Ausgabe wird durch Addition der vorgesehenen Belohnungen ab Höhe 1 berechnet; Genesis hat keine Coinbase. Diese Summe entsteht nicht durch Addieren privater Wallet-Salden und sagt nicht aus, wie viel derzeit ausgebbar oder im Umlauf ist. Der [Leitfaden zur Geldmenge](/de/blog/blocknet-supply/) erklärt den Unterschied; der [Transaktionsdurchgang](/de/blog/blocknet-transaction-explained/) behandelt Übertragungen und Wechselgeld, die die Belohnung nicht erneut erzeugen.
 
 Das kannst du im [Blocknet-Explorer](https://explorer.blocknetcrypto.com) sehen. Eine Transaktionsseite führt ihre Beträge als „hidden · Pedersen commitments“, und jeder Output zeigt sein Commitment, ein verschlüsseltes Memo und einen Range Proof von „672 bytes · Bulletproof“, genau die Größe, die die Rechnung oben vorhersagt.
 
-Der Empfänger sieht trotzdem die echte Zahl. Jeder Output trägt den Betrag, verschlüsselt mit dem Geheimnis, das die Wallets von Sender und Empfänger teilen, und die Wallet des Empfängers entschlüsselt ihn mit dem privaten View Key. Der Betrag ist für die beiden Beteiligten an der Zahlung sichtbar und für niemanden sonst.
+Bei gewöhnlichen Zahlungen erkennt die Empfänger-Wallet ihre Ausgänge und ermittelt deren verschlüsselte Beträge mit ihren privaten Leseinformationen. Der Absender kennt den eingegebenen Betrag. Bewusst weitergegebene Zahlungsnachweise oder Lesezugriffe können anderen zusätzliche Informationen geben. Diese Offenlegungsentscheidungen ändern die Commitment- und Nachweisprüfungen des Netzwerks nicht.
 
-Verborgene Beträge arbeiten mit den anderen Schichten von Blocknet zusammen: [Ringsignaturen](/de/blog/ring-signatures-explained/) über 16 Outputs verbergen den Sender, [Einmal-Stealth-Adressen](/de/blog/stealth-addresses-explained/) den Empfänger, und [Dandelion++](/de/blog/dandelion-plus-plus-explained/) verbirgt, wo eine Transaktion ins Netzwerk gelangt ist. Der [Leitfaden zu den Privatsphäre-Funktionen von Blocknet](/de/blog/blocknet-privacy-features/) geht jede davon durch.
+Verborgene Beträge gewöhnlicher Zahlungen arbeiten mit Blocknets weiteren Schichten zusammen: [Ringsignaturen](/de/blog/ring-signatures-explained/) über 16 Ausgänge schützen die ausgegebene Quelle, [einmalige Stealth-Adressen](/de/blog/stealth-addresses-explained/) schützen das Empfangsziel, und [Dandelion++](/de/blog/dandelion-plus-plus-explained/) verringert die Offenlegung des Netzwerkursprungs. Der [Privatsphäre-Leitfaden](/de/blog/blocknet-privacy-features/) erklärt jede Schicht. Diese Prüfungen beschreiben die vollständige Validierung; schnelle Synchronisierung kann sich bei einigen aufwendigen Signatur- und Bereichsnachweisprüfungen auf vertrauenswürdige historische Prüfpunkte stützen, wie in der veröffentlichten Implementierung vorgesehen.
 
 ## Hol dir eigene private BNT
 
-Ein einfacher Weg zu Coins mit verborgenen Beträgen ist, sie zu minen. Blocknet nutzt einen speicherintensiven [Argon2id-Proof-of-Work](/de/blog/argon2id-proof-of-work-explained/), den du auf einem normalen Computer minen kannst, und seine mint ihn auf deiner CPU, zusammen mit allen NVIDIA-GPUs, und optimiert sich ohne Einrichtung selbst. Jede Auszahlung, die dir bntpool.com schickt, kommt als privater Output mit Commitment und Bulletproof an. Mit der [Mining-Anleitung](/de/blog/how-to-mine-blocknet/) kommst du in wenigen Minuten vom Download zu akzeptierten Shares.
+Um gewöhnliche BNT-Zahlungen in Ihrer Wallet zu erhalten, können Sie über einen Pool minen. Blocknet nutzt speicherintensiven [Argon2id-Proof-of-Work](/de/blog/argon2id-proof-of-work-explained/), und seine mint mit Ihrer CPU und unterstützten NVIDIA-GPUs, während es seinen Betrieb abstimmt. Zahlungen von bntpool.com sind gewöhnliche Übertragungen mit Commitments und Bereichsnachweisen, getrennt von der Coinbase-Belohnung des Blocks. Der [Mining-Leitfaden](/de/blog/how-to-mine-blocknet/) behandelt Einrichtung und akzeptierte Shares.
 
-<CTA target="seine" title="Private BNT mit seine minen" text="Lade seine herunter, füge deine Adresse oder deinen @name ein und verdiene Blocknet, wobei jeder Betrag on-chain verborgen bleibt." />
+<CTA target="seine" title="BNT mit seine minen" text="Nutzen Sie seine mit bntpool.com und erhalten Sie gewöhnliche Pool-Zahlungen in Ihrer eigenen Blocknet-Wallet." />

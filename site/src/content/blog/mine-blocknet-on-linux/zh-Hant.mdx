@@ -1,84 +1,68 @@
 ---
 title: '如何在 Linux 上挖掘 Blocknet'
-description: '使用 seine 在 Linux 挖掘 Blocknet：選擇 x86_64 或 ARM64 壓縮檔、驗證校驗和、檢查 glibc 與 NVIDIA 程式庫，並確認礦池接受份額。'
+description: "Linux: 下載並解壓縮 seine，輸入 Blocknet 地址，然後在 bntpool.com 確認份額已被接受。先使用自動設定；效能調校建議放在設定步驟之後。"
 tags: ['挖礦指南', 'Linux', 'NVIDIA']
 faq:
   - q: '應該下載哪個 Linux 壓縮檔？'
-    a: '在終端機執行 uname -m。輸出為 x86_64 時選擇 x86_64 壓縮檔，輸出為 aarch64 時選擇 aarch64 壓縮檔。已檢查的 v0.2.26 Linux 二進位檔需要 glibc 2.39 或更新版本。x86_64 套件支援 CPU 與 NVIDIA 挖礦；ARM64 套件僅支援 CPU。'
+    a: "開啟下載區。執行 uname -m：結果為 x86_64 時選擇 seine-linux-x86_64.tar.gz，為 aarch64 時選擇 seine-linux-aarch64.tar.gz。Linux 版本需要 glibc 2.39 或更新版本。x86_64 版本支援 CPU 和 NVIDIA，ARM64 版本支援 CPU 挖礦。"
   - q: '需要透過 sudo 執行 seine 嗎？'
     a: '一般使用礦工程式時，以自己的使用者身分從可寫入的資料夾執行即可。解壓縮後，視需要為檔案擁有者新增執行權限，再以 ./seine 啟動。預留巨型記憶體分頁屬於另外的管理工作；一般啟動可使用標準記憶體分頁。'
   - q: '為什麼 Linux 提示缺少 NVRTC 程式庫？'
     a: 'Linux 的 NVIDIA 後端需要相容的驅動程式與 NVRTC 執行階段程式庫，包括相符的 builtins 程式庫。請透過發行版或 NVIDIA 支援的套件安裝。Linux 壓縮檔不包含 Windows DLL。準備 GPU 支援期間，可以選擇 CPU 後端。'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-本指南說明如何在 Linux 桌上型電腦或伺服器上執行 seine，從選擇壓縮檔到確認礦池接受份額。文中使用已驗證的官方 v0.2.26 版本作為範例。請準備好 Blocknet 收款地址；[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)說明如何找到它。輸入的是公開地址或已註冊的 `@name`，絕不能輸入錢包復原助記詞。
 
 ## 如何開始在 Linux 上挖掘 Blocknet？
 
 <Answer>
-選擇符合處理器架構的 Linux 壓縮檔，驗證 SHA-256 校驗和，然後解壓縮至可寫入的資料夾。執行 `./seine`，輸入收款地址，並接受預設的 bntpool.com 連線。seine 會自動設定 CPU 執行緒數；在 Linux x86_64 安裝對應的執行階段程式庫後，也能使用支援的 NVIDIA 顯示卡。
+下載並解壓縮 seine，輸入 Blocknet 地址，然後在 bntpool.com 確認份額已被接受。先使用自動設定；效能調校建議放在設定步驟之後。
 </Answer>
 
-## 步驟 1：檢查架構與 glibc
+## 第 1 步：下載適合的版本
 
-開啟終端機，執行下列兩項唯讀檢查。第一項辨識電腦架構；第二項會在以 glibc 為基礎的系統上輸出 GNU C 程式庫版本。它們不會啟動挖礦，也不會變更電腦設定。
+開啟[下載區](/zh-hant/#download)。執行 `uname -m`：結果為 `x86_64` 時選擇 `seine-linux-x86_64.tar.gz`，為 `aarch64` 時選擇 `seine-linux-aarch64.tar.gz`。Linux 版本需要 glibc 2.39 或更新版本。x86_64 版本支援 CPU 和 NVIDIA，ARM64 版本支援 CPU 挖礦。
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="列出 Linux 與 Linux ARM64 壓縮檔的官方下載表" loading="lazy" />
 
-依架構選擇下表中的壓縮檔。v0.2.26 的兩個 Linux 套件都需要 glibc 2.39 或更新版本。安裝後續版本時，請重新檢查該版本的需求。如果系統使用其他 C 程式庫或較舊的 glibc，請使用相容的發行版環境，或依照[從原始碼建置的說明](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md)操作。
+## 第 2 步：解壓縮並啟動
 
-| 指令輸出 | 版本壓縮檔 | 後端 |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU 與 NVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-每個 CPU 挖礦執行緒需要一個 2 GiB 的記憶體區塊。seine 根據可用記憶體與 CPU 資源選擇初始執行緒數，接著在挖礦過程中調整。首次執行時，請不要手動覆寫執行緒與運算核心程式設定；先建立正常連線，再變更效能參數。
-
-## 步驟 2：下載並驗證壓縮檔
-
-在[下載區](/zh-hant/#download)選擇 Linux 或 Linux ARM64。同時從相同的[官方版本](https://github.com/zpalmtree/seine/releases/latest)下載作為版本附件提供的 `SHA256SUMS.txt`。將同一版本的壓縮檔與校驗和檔案放在一起。下方範例使用 x86_64；在 ARM64 上，請將指令中的 `seine-linux-x86_64.tar.gz` 替換為 `seine-linux-aarch64.tar.gz`。
-
-<img src="/assets/blog/linux-download.png" alt="列出 Linux 與 Linux ARM64 壓縮檔的官方下載表" width="1200" height="900" loading="lazy" />
-
-在終端機進入瀏覽器儲存檔案的目錄，然後計算壓縮檔的校驗和。本範例假設檔案位於家目錄下的 Downloads 資料夾；若你的下載目錄使用其他名稱，請改用實際目錄。
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-將完整的十六進位雜湊值與下載的 `SHA256SUMS.txt` 中該壓縮檔對應的行比較。解壓縮或執行前，每一位都必須相符。此次比較應使用版本頁面另外提供的校驗和檔案：壓縮檔內也包含用於解壓縮後檔案的清單。校驗和相符表示檔案符合公開的數值；兩個檔案都應從官方來源下載。
-
-## 步驟 3：解壓縮並檢查執行檔
-
-在家目錄下建立專用資料夾，將壓縮檔解壓縮進去，然後讓二進位程式顯示說明。v0.2.26 壓縮檔的根目錄包含 `./seine`，因此下列指令會將執行檔直接放在新資料夾內。說明指令會直接結束，不會啟動挖礦工作階段。
+開啟終端機。以下指令假設壓縮檔位於 Downloads 資料夾；如果位置不同，請使用實際路徑。在 ARM64 上，將 `seine-linux-x86_64.tar.gz` 替換為 `seine-linux-aarch64.tar.gz`。指令會將 seine 解壓縮到個人專屬檔案夾中並啟動：
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-請使用自己的帳號執行這些步驟。`chmod u+x` 為檔案擁有者新增執行權限，不需要進行全系統安裝。`./` 前綴會指示 shell 執行目前目錄中的檔案。請將解壓縮取得的文件與授權檔案和二進位程式保存在一起。
-
-## 步驟 4：輸入地址並連線
-
-從解壓縮後的資料夾啟動：
-
-```sh
 ./seine
 ```
 
-輸入收款地址或已註冊的 `@name`，接受 `stratum+tcp://bntpool.com:3333`，並在提示時選擇容易辨識的礦機名稱。後續啟動時，seine 會重用相對於工作目錄的 `seine-data/seine.config.json`。固定從同一資料夾啟動，可以更方便地找到這些設定。[設定參考文件](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md)說明了互動提示與資料目錄。
+## 第 3 步：輸入錢包地址
 
-觀察礦工程式的雜湊率與已接受份額計數。接著開啟 [My Stats](https://bntpool.com/stats)，查詢相同的收款地址。份額獲接受表示礦池收到了運算工作；付款則遵循另外的獎勵與支付流程。[儀表板指南](/zh-hant/blog/seine-dashboard-explained/)解釋礦工程式的各個面板。按 `q` 或 `Ctrl+C` 即可正常停止。
+貼上你的公開 Blocknet 收款地址或已註冊的 `@name`，然後按 Enter 接受 `stratum+tcp://bntpool.com:3333`。[錢包指南](/zh-hant/blog/blocknet-wallet-for-mining/)說明了在哪裡找到地址。seine 不需要復原詞組或支出金鑰，並會自動分配礦池礦機名稱。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="首次啟動時的地址和礦池提示。請將範例替換為你自己的地址或已註冊名稱。" loading="lazy" />
+  </picture>
+  <figcaption>首次啟動時的地址和礦池提示。請將範例替換為你自己的地址或已註冊名稱。</figcaption>
+</figure>
+
+seine 會自動選擇執行緒並調校。之後從同一資料夾啟動，即可重用 `seine-data/seine.config.json`。
+
+## 第 4 步：查看已接受的份額
+
+在[儀表板](/zh-hant/blog/seine-dashboard-explained/)中查看雜湊率和持續增加的 **Accepted** 計數。份額被接受表示礦池收到了你的工作，並不表示已經付款。按 `q` 或 `Ctrl+C` 停止。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="使用範例資料繪製的 seine 實際儀表板。請留意 Accepted；這些數字不是效能測試結果。" loading="lazy" />
+  </picture>
+  <figcaption>使用範例資料繪製的 seine 實際儀表板。請留意 Accepted；這些數字不是效能測試結果。</figcaption>
+</figure>
+
+開啟[我的統計](https://bntpool.com/stats?lang=zh-hant)，輸入相同的地址或已註冊名稱，即可查看礦機、份額和餘額。
 
 ## 在 Linux 上使用 NVIDIA 挖礦需要什麼？
 
@@ -94,7 +78,7 @@ Linux x86_64 上的 GPU 挖礦需要 NVIDIA 驅動程式與相容的 NVRTC 執�
 
 ## 如何解決 Linux 啟動錯誤？
 
-根據第一則錯誤訊息選擇下一步檢查。架構或執行階段錯誤發生在份額被接受之前，因此變更礦池地址或執行緒數無法解決這個階段的問題。檢查執行檔與環境期間，請保留已驗證的壓縮檔。
+根據第一則錯誤訊息選擇下一項檢查：
 
 | 訊息或症狀 | 檢查項目 |
 |---|---|
@@ -105,4 +89,6 @@ Linux x86_64 上的 GPU 挖礦需要 NVIDIA 驅動程式與相容的 NVRTC 執�
 
 份額開始獲接受後，可參閱[巨型記憶體分頁指南](/zh-hant/blog/huge-pages-blocknet-mining/)進行選用的 Linux 分頁設定。[伺服器指南](/zh-hant/blog/mine-blocknet-on-servers/)介紹無頭執行與 NUMA 配置。這兩項準備都不是完成本首次執行教學的必要條件；請分別進行每項變更，以便判斷電腦上具體改變了什麼。
 
-<CTA target="seine" title="下載 Linux 版 seine" text="選擇並驗證 Linux 壓縮檔，透過 CPU 自動調校連線至 bntpool.com。" />
+<CTA target="seine" title="下載 Linux 版 seine" text="解壓縮 Linux 下載檔案，輸入地址，使用 CPU 自動調校開始挖礦。" />
+
+開啟[我的統計](https://bntpool.com/stats?lang=zh-hant)，輸入相同的地址或已註冊名稱，即可查看礦機、份額和餘額。

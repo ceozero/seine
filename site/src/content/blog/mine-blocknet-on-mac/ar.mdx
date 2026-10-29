@@ -1,6 +1,6 @@
 ---
 title: كيف تعدّن Blocknet على جهاز Mac
-description: عدّن Blocknet على جهاز Mac بمعالج Apple Silicon باستخدام seine. أعِدّه في Terminal، واطّلع على نتيجة M4 Max المُقاسة 30.9 H/s، واعرف كم خيطًا يستطيع جهازك تشغيله.
+description: "macOS: نزّل seine وفك ضغطه، ثم أدخل عنوان Blocknet وتأكد من قبول الحصص على bntpool.com. ابدأ بالإعدادات التلقائية؛ تأتي نصائح الأداء بعد خطوات الإعداد."
 tags: [دليل التعدين, macOS, Apple Silicon, seine]
 faq:
   - q: 'هل يمكن تعدين Blocknet على MacBook Air؟'
@@ -8,22 +8,70 @@ faq:
   - q: 'هل يستخدم seine البطاقة الرسومية عند تعدين Blocknet على Mac؟'
     a: 'يعدّن seine على المعالج (CPU) افتراضيًا في أجهزة Apple Silicon لأنه الخيار الأسرع. فالمعالج وأنوية الرسوميات يتشاركان الذاكرة الموحدة نفسها، وإثبات العمل Argon2id في Blocknet يعتمد على عرض نطاق الذاكرة. على M4 Max حقق التعدين بالمعالج وحده أعلى معدل تجزئة، لذا يستخدمه seine تلقائيًا.'
   - q: 'كم ذاكرة يحتاج جهاز Mac لتعدين Blocknet؟'
-    a: 'يعمل كل خيط تعدين على كتلة ذاكرة بحجم 2 GiB، لذا احسب نحو 2 GB لكل خيط. يستطيع Mac بذاكرة 16 GB تشغيل ما يصل إلى سبعة خيوط، وجهاز 32 GB ما يصل إلى 15، وجهاز 64 GB ما يصل إلى 30. ويحتسب seine الذاكرة الحرة ويوائم الخيوط أيضًا مع أنوية المعالج.'
+    a: 'يعمل كل خيط تعدين على كتلة ذاكرة بحجم 2 GiB، لذا احسب نحو 2 GB لكل خيط. يستطيع Mac بذاكرة 16 GB تشغيل ما يصل إلى سبعة خيوط، وجهاز 32 GB ما يصل إلى 15، وجهاز 64 GB ما يصل إلى 31. ويحتسب seine الذاكرة الحرة ويوائم الخيوط أيضًا مع أنوية المعالج.'
   - q: 'هل يمكن تعدين Blocknet على Mac بمعالج Intel؟'
     a: 'نعم. ينشر seine أرشيفًا منفصلًا لأجهزة Mac بمعالج Intel هو seine-macos-x86_64.tar.gz، والخطوات هي نفسها كما في Apple Silicon. نزّله وفك ضغطه في Terminal وشغّل ./seine والصق عنوان Blocknet الخاص بك أو @name. يحدد seine عدد خيوطه حسب ذاكرتك ويبدأ التعدين على bntpool.com افتراضيًا.'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: draft
 ---
-
-يوضح لك هذا الدليل كيف تعدّن Blocknet على جهاز Mac بمعالج Apple Silicon باستخدام **seine**: لماذا تناسب شرائح M-series إثبات العمل في Blocknet، وما الذي حققه M4 Max في القياس، وكم خيطًا تستوعبه ذاكرة جهازك، والخطوات الدقيقة في Terminal لبدء التعدين على bntpool.com.
 
 ## هل يمكن تعدين Blocknet على Mac؟
 
 <Answer>
-نعم. أجهزة Mac بمعالج Apple Silicon معدِّنات قوية لـ Blocknet، لأن ذاكرتها الموحدة تمنح إثبات العمل Argon2id الكثيف الذاكرة عرض نطاق وافرًا. نزّل `seine-macos-aarch64.tar.gz` وفك ضغطه في Terminal وشغّل `./seine` ثم الصق عنوانك. وقد سجّل M4 Max بذاكرة 48 GB معدل 30.9 H/s بالمعالج وحده.
+نزّل seine وفك ضغطه، ثم أدخل عنوان Blocknet وتأكد من قبول الحصص على bntpool.com. ابدأ بالإعدادات التلقائية؛ تأتي نصائح الأداء بعد خطوات الإعداد.
 </Answer>
 
-يتولى seine بنفسه الإعداد الخاص بأجهزة Mac. فهو يعدّن على المعالج، ويوزع خيوطه على أنوية الأداء أولًا، ويحدد عدد الخيوط حسب ذاكرتك، لذا يكفي معظم الناس أمر `./seine` البسيط.
+## الخطوة 1: نزّل الإصدار المناسب
+
+من قائمة Apple ← حول هذا الـ Mac، تحقق من الشريحة أو المعالج. في [قسم التنزيل](/ar/#download)، اختر `seine-macos-aarch64.tar.gz` لأجهزة Apple Silicon، أو `seine-macos-x86_64.tar.gz` لأجهزة Intel.
+
+## الخطوة 2: فك الضغط وشغّل البرنامج
+
+افتح Terminal. تفترض هذه الأوامر وجود الأرشيف في مجلد Downloads؛ استخدم مساره الفعلي إن كان مختلفًا. على أجهزة Mac بمعالج Intel، استبدل `seine-macos-aarch64.tar.gz` بـ `seine-macos-x86_64.tar.gz`. تفك الأوامر ضغط seine داخل مجلدك الرئيسي وتُشغّله:
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## الخطوة 3: أدخل عنوان محفظتك
+
+الصق عنوان استلام Blocknet العام أو اسمك المسجل `@name`، ثم اضغط Enter لقبول `stratum+tcp://bntpool.com:3333`. يوضح [دليل المحفظة](/ar/blog/blocknet-wallet-for-mining/) أين تجد عنوانك. لا يحتاج seine إلى عبارة الاسترداد أو مفاتيح الإنفاق. ويعيّن اسم جهاز التعدين في المجمع تلقائيًا.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="مطالبات العنوان والمجمع عند التشغيل الأول. استبدل المثال بعنوانك أو اسمك المسجل." loading="lazy" />
+  </picture>
+  <figcaption>مطالبات العنوان والمجمع عند التشغيل الأول. استبدل المثال بعنوانك أو اسمك المسجل.</figcaption>
+</figure>
+
+يختار seine الخيوط ويضبط الأداء تلقائيًا. في مرات التشغيل التالية، شغّله من المجلد نفسه لإعادة استخدام `seine-data/seine.config.json`.
+
+## الخطوة 4: تحقق من الحصص المقبولة
+
+ابحث عن معدل تجزئة وعدّاد **Accepted** يتزايد في [لوحة المتابعة](/ar/blog/seine-dashboard-explained/). تؤكد الحصة المقبولة أن المجمع استلم عملك؛ ولا تعني أن دفعة قد أُرسلت. اضغط `q` أو `Ctrl+C` للإيقاف.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="لوحة seine الفعلية ببيانات توضيحية. ابحث عن Accepted؛ هذه الأرقام ليست نتائج اختبار أداء." loading="lazy" />
+  </picture>
+  <figcaption>لوحة seine الفعلية ببيانات توضيحية. ابحث عن Accepted؛ هذه الأرقام ليست نتائج اختبار أداء.</figcaption>
+</figure>
+
+افتح [إحصاءاتي](https://bntpool.com/stats?lang=ar) وأدخل العنوان أو الاسم المسجل نفسه للعثور على جهازك وحصصك ورصيدك.
+
+## إذا منع macOS التشغيل الأول
+
+نسخة macOS موقّعة توقيعًا محليًا (ad-hoc). إذا أوقف macOS التشغيل الأول، افتح System Settings وانتقل إلى Privacy & Security واسمح بـ `seine`. ويمكنك أيضًا إزالة علامة التنزيل من Terminal ثم تشغيله مجددًا:
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## لماذا تعدّن أجهزة Apple Silicon عملة Blocknet بكفاءة؟
 
@@ -66,43 +114,6 @@ translation: draft
 
 لا تحتاج إلى حساب أي من ذلك. يختار seine عدد الخيوط عند تشغيله ويواصل اختبار الأعداد القريبة أثناء التعدين.
 
-## الإعداد خطوة بخطوة على macOS
-
-### الخطوة 1: احصل على عنوان Blocknet
-
-ثبّت محفظة Blocknet الرسمية، سواء [محفظة سطر الأوامر](https://github.com/blocknetprivacy/blocknet/releases/latest) أو [محفظة سطح المكتب](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)، وانسخ عنوانك. وإذا كان لديك اسم مختصر في Blocknet ID من [blocknet.id](https://blocknet.id)، يمكنك التعدين إلى `@name` بدلًا من ذلك.
-
-### الخطوة 2: نزّل seine لأجهزة Apple Silicon
-
-من [قسم التنزيل](/ar/#download)، احصل على `seine-macos-aarch64.tar.gz`. يحتوي على برنامج `seine` وملف readme والترخيص، وملف `SHA256SUMS.txt` للتحقق من التنزيل.
-
-### الخطوة 3: فك ضغطه في Terminal
-
-افتح Terminal (من Applications ثم Utilities) وشغّل هذه الأوامر. فهي تنشئ مجلد `seine` في مجلد المنزل وتفك الأرشيف داخله:
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### الخطوة 4: شغّل seine
-
-```sh
-./seine
-```
-
-نسخة macOS موقّعة توقيعًا محليًا (ad-hoc). إذا أوقف macOS التشغيل الأول، افتح System Settings وانتقل إلى Privacy & Security واسمح بـ `seine`. ويمكنك أيضًا إزالة علامة التنزيل من Terminal ثم تشغيله مجددًا:
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### الخطوة 5: أدخل عنوانك وابدأ التعدين
-
-يطلب seine عنوان الدفع أو `@shortname`، ثم مجمع التعدين. اضغط Return لقبول الافتراضي، `stratum+tcp://bntpool.com:3333`. بعد ذلك تعرض [لوحة التحكم](/ar/blog/seine-dashboard-explained/) معدل التجزئة وأولى حصصك المقبولة. يرسل مجمع bntpool.com رصيدك إلى عنوانك عندما يبلغ 0.1 BNT، ويمكنك متابعته على [bntpool.com](https://bntpool.com) بالبحث عن عنوانك.
-
 ## لماذا يعدّن seine على المعالج فقط في أجهزة Mac؟
 
 في Apple Silicon يتشارك المعالج وأنوية الرسوميات مجموعة واحدة من الذاكرة الموحدة. ويعتمد Argon2id على عرض نطاق الذاكرة، لذا سيتنافس المعالج وأنوية الرسوميات على عرض النطاق نفسه. وفي اختبارات seine على M4 Max، حقق التعدين بالمعالج وحده أعلى معدل تجزئة، لذا يختاره seine تلقائيًا على كل أجهزة Mac بمعالج Apple Silicon. فتحصل على أسرع إعداد دون أي خيارات تضبطها.
@@ -129,3 +140,5 @@ xattr -d com.apple.quarantine ./seine
 </Note>
 
 <CTA target="seine" title="نزّل seine لنظام macOS" text="تعدّن نسخة Apple Silicon على معالج جهاز Mac وتختار عدد خيوطها تلقائيًا." />
+
+افتح [إحصاءاتي](https://bntpool.com/stats?lang=ar) وأدخل العنوان أو الاسم المسجل نفسه للعثور على جهازك وحصصك ورصيدك.

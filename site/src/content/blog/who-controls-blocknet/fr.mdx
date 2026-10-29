@@ -1,0 +1,66 @@
+---
+title: 'Qui contrôle Blocknet ?'
+description: 'Comprenez qui applique les règles de Blocknet : rôles des développeurs, mineurs, nœuds et détenteurs, validation des blocs et déploiement des mises à jour.'
+tags: ['Blocknet', 'Consensus', 'Monnaie']
+faq:
+  - q: 'Un mineur peut-il créer plus de BNT que la récompense autorisée ?'
+    a: 'Selon les règles publiées, un nœud compare la récompense du bloc au montant requis à cette hauteur. Trouver une preuve de travail valide ne dispense pas de ce contrôle. Une récompense dont l’engagement diffère est rejetée : la puissance de calcul du mineur ne fixe donc pas le calendrier d’émission.'
+  - q: 'Détenir des BNT me donne-t-il un vote sur le protocole ?'
+    a: 'Le solde d’un portefeuille permet de dépenser des fonds selon les règles du réseau. La validation par preuve de travail publiée ne pondère pas l’acceptation des blocs selon les avoirs. Exécuter du logiciel, produire des blocs et autoriser ses paiements sont des rôles distincts ; un gros solde ne rend pas valide une transaction invalide.'
+  - q: 'Publier du nouveau code change-t-il immédiatement Blocknet ?'
+    a: 'Un changement de code concerne le consensus lorsque le logiciel qui l’implémente fonctionne sur le réseau et que ses conditions d’activation s’appliquent. Une annonce ou un commit ne remplace pas les règles des nœuds en cours d’exécution. Suivez les instructions officielles et vérifiez la politique de mise à jour de votre logiciel.'
+sourceHash: d17d54581a66
+translation: draft
+---
+
+Comprenez qui fait quoi avant de définir ce que signifie contrôler Blocknet. Écrire du logiciel, trouver un bloc, le vérifier et dépenser des monnaies correspondent à des pouvoirs différents. Ce guide suit ces frontières dans core v0.22.0 publié, puis explique comment une proposition de mise à jour atteint le logiciel utilisé. Il décrit les responsabilités de validation, sans mesurer la répartition du minage ou du développement.
+
+## Qui applique les règles de Blocknet ?
+
+<Answer>
+Les nœuds appliquent les règles de leur logiciel lorsqu’ils valident les blocs et transactions entrants. Les mineurs produisent des blocs candidats, les développeurs maintiennent les implémentations et les propriétaires de portefeuilles autorisent les paiements. Chaque rôle contribue au réseau, mais publier du code, détenir des BNT ou trouver une preuve de travail ne satisfait pas à lui seul les autres contrôles.
+</Answer>
+
+Imaginez un paiement traversant ces responsabilités. Un portefeuille le construit et l’autorise ; un mineur l’inclut dans un bloc proposé ; un nœud vérifie que la proposition respecte ses règles. L’acceptation dépend de ces contrôles. Un nom de projet connu, un solde important ou l’identité du pair émetteur ne les remplace pas.
+
+[![Quatre rôles numérotés : les développeurs publient le logiciel, les mineurs proposent des blocs, les nœuds les valident et les propriétaires autorisent leurs paiements.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+Le schéma sépare les responsabilités : 1 développe le logiciel ; 2 produit une proposition de bloc ; 3 la vérifie selon les règles exécutées ; 4 autorise le paiement de son portefeuille. Les numéros ne représentent ni un décompte de votes ni une mesure des participants au réseau.
+
+## Que peuvent changer les développeurs ?
+
+Les développeurs peuvent proposer des modifications, écrire des implémentations, relire du code et publier des versions. Ces activités comptent, car le logiciel contient les règles exécutées par les nœuds. Le [code public de core](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) permet d’examiner les chemins de validation. La documentation explique leur but ; le code publié identifie le comportement d’une version précise.
+
+Un commit dans un dépôt ne réécrit pas un exécutable en fonctionnement. Une modification atteint un nœud par son processus de mise à jour et, le cas échéant, sa logique d’activation. Les participants ont donc besoin d’un logiciel compatible avec les règles du réseau qu’ils souhaitent suivre. Cette coordination du logiciel déployé ne garantit pas que toute proposition deviendra une règle.
+
+La politique de mise à jour fait partie de cette relation. La CLI de gestion peut programmer les mises à jour d’un core suivant la dernière version, tandis que les versions épinglées suivent une autre politique. Le [guide des nœuds](/fr/blog/run-blocknet-node/) explique cette distinction. Lisez la politique de votre installation au lieu de supposer que chaque mise à jour attend une confirmation manuelle.
+
+## Que peuvent décider les mineurs ?
+
+Le minage produit des blocs candidats et la preuve de travail nécessaire à leur acceptation. En minage direct, seine reçoit du travail d’un nœud ; en pool, le pool coordonne le travail et soumet les blocs résolus au nœud en amont. Ces deux chemins construisent la chaîne. L’[explication du minage](/fr/blog/how-crypto-mining-works/) décrit le processus et distingue une part de pool d’un bloc complet.
+
+Résoudre une preuve de travail constitue une exigence parmi plusieurs. Le [validateur de blocs publié](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) vérifie aussi le contexte, la difficulté, la validité des transactions et la récompense requise. Si la récompense proposée diffère du montant autorisé à cette hauteur, son engagement échoue au contrôle. Davantage de puissance de calcul ne change pas cette comparaison.
+
+Par exemple, modifier le champ de récompense du logiciel de minage ne change pas ce qu’attend un autre nœud. Le nœud récepteur calcule la récompense attendue à partir de la hauteur et lui compare la sortie soumise. Le [guide de l’offre](/fr/blog/blocknet-supply/) explique le calendrier d’émission ; le mineur doit produire un bloc qui le respecte.
+
+## Comment les nœuds choisissent-ils la chaîne à suivre ?
+
+Le core publié valide un candidat avant d’appliquer sa logique de sélection de chaîne. Il suit le travail cumulé et peut passer à une branche valide qui en possède davantage, sous réserve de ses règles de réorganisation. Compter les blocs seuls manque cette distinction. Le travail départage des historiques acceptables sans remplacer la vérification de leurs blocs.
+
+Les paramètres de vérification comptent aussi pour décrire les contrôles historiques. La synchronisation facultative par points de contrôle de confiance peut éviter de répéter les vérifications cryptographiques et de preuve de travail des blocs historiques couverts. La validation de la pointe actuelle et cette synchronisation historique empruntent des chemins distincts. La présence d’un nœud local ne précise pas quelle politique de synchronisation a été utilisée.
+
+La question utile est donc précise : quels logiciel, règles et mode de validation sont utilisés ? Le [guide des rôles logiciels](/fr/blog/blocknet-wallet-node-miner/) aide à choisir les applications, et le guide des nœuds traite de leur exploitation. Un nombre de pairs ou une capture de hauteur de bloc ne détermine pas combien de personnes indépendantes contrôlent le réseau.
+
+## Que contrôlent les détenteurs de monnaies ?
+
+Avec les clés privées nécessaires, le propriétaire d’un portefeuille peut autoriser la dépense des sorties qu’il possède. Le réseau vérifie cette autorisation et les autres règles de la transaction. Posséder plus de BNT ne transforme pas le système de preuve de travail publié en vote pondéré par solde pour accepter une transaction invalide d’un tiers.
+
+La propriété se distingue aussi du choix de ce que l’on révèle. Les fonctions de consultation et de preuve de paiement du portefeuille permettent de partager des informations sur ses fonds ou son paiement. Cela ne donne pas le droit de créer des monnaies supplémentaires. Le [guide de vérification des montants masqués](/fr/blog/bulletproofs-explained/) explique comment les contrôles comptables restent possibles avec des montants privés.
+
+## Comment lire une proposition de mise à jour ?
+
+Distinguez l’annonce, la version qui l’implémente et les règles d’activation. L’annonce décrit une modification envisagée ; le logiciel compatible implémente les contrôles ; l’activation détermine quand ils s’appliquent. Vous disposez ainsi d’éléments concrets à vérifier sans assimiler une feuille de route à un comportement déjà actif.
+
+Pour Faraday, l’[annonce officielle](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) décrit une proposition encore en développement et en test. Notre [guide de mise à jour](/fr/blog/blocknet-faraday-upgrade/) suit la préparation des utilisateurs, et le [guide de politique monétaire](/fr/blog/blocknet-faraday-monetary-policy/) sépare les changements d’émission proposés des règles actuelles. Consultez ces sources datées avant de décider pour une transition future.
+
+<CTA target="seine" title="Miner Blocknet avec seine" text="Utilisez seine avec bntpool.com pour contribuer au minage et recevoir des BNT dans votre portefeuille." />

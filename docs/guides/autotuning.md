@@ -44,8 +44,7 @@ rejected using the same repeated comparisons. No worker-count cutoff forces
 this kernel. A 24-worker EPYC 9R45 test improved 27.78% over AVX2, while the
 one-worker screen regressed 3.53%, so selection remains specific to the measured
 worker count and memory backing. Other CPU families retain their existing
-automatic candidates. See the [integrated validation report](../../experiments/epyc-investigation/INTEGRATED_VALIDATION.md)
-for native comparisons and automatic-selection evidence.
+automatic candidates.
 
 ## Cached choices
 

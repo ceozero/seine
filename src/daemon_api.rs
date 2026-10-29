@@ -1,6 +1,6 @@
 use std::fmt;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::blocking::{Client, RequestBuilder, Response};
@@ -130,13 +130,16 @@ impl ApiClient {
 
     #[allow(dead_code)]
     pub fn get_block_template(&self, address: Option<&str>) -> Result<BlockTemplateResponse> {
+        let started_at = Instant::now();
         let url = blocktemplate_url(&self.base_url, address);
         let resp = self
             .with_auth(self.json_client.get(url))?
             .send()
             .context("request to blocktemplate endpoint failed")?;
 
-        decode_json_response(resp, "blocktemplate")
+        let template = decode_json_response(resp, "blocktemplate");
+        record_template_fetch(&template, started_at);
+        template
     }
 
     pub fn get_block_template_with_timeout(
@@ -144,6 +147,7 @@ impl ApiClient {
         timeout: Duration,
         address: Option<&str>,
     ) -> Result<BlockTemplateResponse> {
+        let started_at = Instant::now();
         let timeout = timeout.max(Duration::from_millis(1));
         let url = blocktemplate_url(&self.base_url, address);
         let resp = self
@@ -151,7 +155,9 @@ impl ApiClient {
             .send()
             .context("request to blocktemplate endpoint failed")?;
 
-        decode_json_response(resp, "blocktemplate")
+        let template = decode_json_response(resp, "blocktemplate");
+        record_template_fetch(&template, started_at);
+        template
     }
 
     pub fn submit_block<T: Serialize>(
@@ -170,11 +176,17 @@ impl ApiClient {
         } else {
             request.json(block)
         };
+        let started_at = Instant::now();
         let resp = request
             .send()
             .context("request to submitblock endpoint failed")?;
 
-        decode_json_response(resp, "submitblock")
+        let response = decode_json_response(resp, "submitblock");
+        crate::miner::block_latency::record(
+            crate::miner::block_latency::SOLO_SUBMIT_RTT,
+            started_at.elapsed(),
+        );
+        response
     }
 
     pub fn load_wallet(&self, password: &str) -> Result<()> {
@@ -397,6 +409,15 @@ fn is_wallet_wrong_password_message(message: &str) -> bool {
         || message.contains("failed to decrypt wallet")
         || message.contains("could not decrypt wallet")
         || message.contains("message authentication failed")
+}
+
+fn record_template_fetch(template: &Result<BlockTemplateResponse>, started_at: Instant) {
+    if template.is_ok() {
+        crate::miner::block_latency::record(
+            crate::miner::block_latency::SOLO_TEMPLATE_FETCH,
+            started_at.elapsed(),
+        );
+    }
 }
 
 #[cfg(test)]

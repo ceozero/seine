@@ -1,84 +1,68 @@
 ---
 title: 'Cara menambang Blocknet di Linux'
-description: 'Siapkan penambangan Blocknet di Linux dengan seine: pilih x86_64 atau ARM64, periksa arsip, glibc dan pustaka NVIDIA, lalu pastikan share diterima pool.'
+description: "Linux: Unduh seine, ekstrak, masukkan alamat Blocknet Anda, lalu pastikan share diterima di bntpool.com. Mulai dengan pengaturan otomatis; tips performa tersedia setelah langkah penyiapan."
 tags: ['Panduan penambangan', 'Linux', 'NVIDIA']
 faq:
   - q: 'Arsip Linux mana yang harus diunduh?'
-    a: 'Jalankan uname -m di terminal. Pilih arsip x86_64 jika keluarannya x86_64 atau arsip aarch64 jika keluarannya aarch64. Biner Linux v0.2.26 yang diperiksa memerlukan glibc 2.39 atau lebih baru. Paket x86_64 mendukung CPU dan NVIDIA; paket ARM64 hanya mendukung CPU.'
+    a: "Buka bagian unduhan. Jalankan uname -m: pilih seine-linux-x86_64.tar.gz untuk x86_64 atau seine-linux-aarch64.tar.gz untuk aarch64. Versi Linux memerlukan glibc 2.39 atau lebih baru. Versi x86_64 mendukung CPU dan NVIDIA; ARM64 mendukung penambangan CPU."
   - q: 'Apakah seine harus dijalankan dengan sudo?'
     a: 'Jalankan penambang biasa sebagai pengguna Anda sendiri dari folder yang dapat ditulis. Ekstrak arsip, berikan izin eksekusi kepada pemilik bila perlu, lalu mulai dengan ./seine. Menyiapkan huge pages yang dicadangkan merupakan tugas administrasi terpisah; startup biasa bisa memakai halaman memori normal.'
   - q: 'Mengapa Linux melaporkan pustaka NVRTC hilang?'
     a: 'Backend NVIDIA di Linux membutuhkan driver yang kompatibel dan pustaka runtime NVRTC, termasuk pustaka builtins yang cocok. Instal melalui distribusi atau paket resmi yang didukung NVIDIA. Arsip Linux tidak menyertakan DLL Windows. Anda dapat memilih backend CPU sambil menyiapkan dukungan GPU.'
-sourceHash: 'f5d2ea0db1d5'
+sourceHash: 'fee2c843812c'
 translation: draft
 ---
-
-Panduan ini menjalankan seine di desktop atau server Linux, mulai dari memilih arsip hingga memeriksa share yang diterima pool. Rilis resmi v0.2.26 menjadi contoh yang sudah diverifikasi. Siapkan alamat penerimaan Blocknet; [panduan dompet](/id/blog/blocknet-wallet-for-mining/) menjelaskan tempat menemukannya. Masukkan alamat publik atau `@name` terdaftar, jangan pernah frasa pemulihan dompet.
 
 ## Bagaimana memulai penambangan Blocknet di Linux?
 
 <Answer>
-Pilih arsip Linux sesuai prosesor, verifikasi checksum SHA-256, lalu ekstrak ke folder yang dapat ditulis. Jalankan `./seine`, masukkan alamat pembayaran, dan terima koneksi bawaan bntpool.com. seine menentukan thread CPU secara otomatis dan juga dapat memakai kartu NVIDIA yang didukung di Linux x86_64 jika pustaka runtime-nya sudah terpasang.
+Unduh seine, ekstrak, masukkan alamat Blocknet Anda, lalu pastikan share diterima di bntpool.com. Mulai dengan pengaturan otomatis; tips performa tersedia setelah langkah penyiapan.
 </Answer>
 
-## Langkah 1: periksa arsitektur dan glibc
+## Langkah 1: unduh versi yang tepat
 
-Buka terminal dan jalankan dua pemeriksaan baca-saja ini. Yang pertama mengenali arsitektur mesin; yang kedua menampilkan versi pustaka GNU C pada sistem berbasis glibc. Keduanya tidak memulai penambangan atau mengubah konfigurasi komputer.
+Buka [bagian unduhan](/id/#download). Jalankan `uname -m`: pilih `seine-linux-x86_64.tar.gz` untuk `x86_64` atau `seine-linux-aarch64.tar.gz` untuk `aarch64`. Versi Linux memerlukan glibc 2.39 atau lebih baru. Versi x86_64 mendukung CPU dan NVIDIA; ARM64 mendukung penambangan CPU.
 
-```sh
-uname -m
-getconf GNU_LIBC_VERSION
-```
+<img src="/assets/blog/setup-download.webp" alt="Tabel unduhan resmi dengan arsip Linux dan Linux ARM64" loading="lazy" />
 
-Cocokkan arsitektur dengan arsip di bawah. Kedua paket Linux v0.2.26 memerlukan glibc 2.39 atau lebih baru. Periksa lagi persyaratan rilis saat memasang versi berikutnya. Jika sistem menggunakan pustaka C lain atau glibc lebih lama, gunakan lingkungan distribusi yang kompatibel atau ikuti [petunjuk kompilasi dari sumber](https://github.com/zpalmtree/seine/blob/master/docs/BUILDING.md).
+## Langkah 2: ekstrak dan jalankan
 
-| Keluaran perintah | Arsip rilis | Backend |
-|---|---|---|
-| `x86_64` | `seine-linux-x86_64.tar.gz` | CPU dan NVIDIA |
-| `aarch64` | `seine-linux-aarch64.tar.gz` | CPU |
-
-Setiap thread penambangan CPU membutuhkan blok memori 2 GiB. seine memilih jumlah thread awal berdasarkan memori dan sumber daya CPU yang tersedia, kemudian menyesuaikannya selama menambang. Jangan tetapkan penggantian thread dan kernel saat pertama mulai; buat koneksi berfungsi dahulu sebelum mengubah pengaturan performa.
-
-## Langkah 2: unduh dan verifikasi arsip
-
-Pilih Linux atau Linux ARM64 di [bagian unduhan](/id/#download). Dari [rilis resmi](https://github.com/zpalmtree/seine/releases/latest) yang sama, unduh juga aset terpisah `SHA256SUMS.txt`. Simpan arsip dan checksum dari versi yang sama bersama-sama. Contoh menggunakan x86_64; di ARM64, ganti `seine-linux-x86_64.tar.gz` dengan `seine-linux-aarch64.tar.gz` dalam perintah.
-
-<img src="/assets/blog/linux-download.png" alt="Tabel unduhan resmi dengan arsip Linux dan Linux ARM64" width="1200" height="900" loading="lazy" />
-
-Di terminal, buka direktori tempat peramban menyimpan berkas dan hitung checksum arsip. Contoh ini mengasumsikan folder Downloads di direktori pengguna; gunakan direktori unduhan sebenarnya jika namanya berbeda.
-
-```sh
-cd "$HOME/Downloads"
-sha256sum seine-linux-x86_64.tar.gz
-```
-
-Bandingkan hash heksadesimal lengkap dengan baris untuk arsip tersebut dalam `SHA256SUMS.txt` yang diunduh. Semua digit harus cocok sebelum diekstrak atau dijalankan. Gunakan berkas checksum yang disediakan terpisah pada rilis: arsip juga memuat manifes untuk berkas hasil ekstraksi. Checksum yang cocok memverifikasi berkas terhadap nilai terbitan; dapatkan kedua unduhan dari sumber resmi.
-
-## Langkah 3: ekstrak dan periksa program
-
-Buat folder khusus di direktori pengguna, ekstrak arsip ke sana, lalu minta biner menampilkan bantuan. Arsip v0.2.26 berisi `./seine` di tingkat teratas, sehingga perintah ini menaruh program langsung di folder baru. Perintah bantuan keluar tanpa memulai sesi penambangan.
+Buka Terminal. Perintah ini menganggap arsip berada di folder Downloads; gunakan lokasi sebenarnya jika berbeda. Pada ARM64, ganti `seine-linux-x86_64.tar.gz` dengan `seine-linux-aarch64.tar.gz`. Perintah tersebut mengekstrak seine ke folder pribadi dan menjalankannya:
 
 ```sh
 mkdir -p "$HOME/seine"
-tar -xzf seine-linux-x86_64.tar.gz -C "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-linux-x86_64.tar.gz" -C "$HOME/seine"
 cd "$HOME/seine"
-chmod u+x ./seine
-./seine --help
-```
-
-Jalankan langkah ini dengan akun Anda sendiri. `chmod u+x` memberi izin eksekusi kepada pemilik berkas; instalasi seluruh sistem tidak diperlukan. Awalan `./` memberi tahu shell untuk menjalankan berkas di direktori saat ini. Simpan dokumentasi dan lisensi hasil ekstraksi bersama biner.
-
-## Langkah 4: masukkan alamat dan hubungkan
-
-Mulai dari folder hasil ekstraksi:
-
-```sh
 ./seine
 ```
 
-Masukkan alamat penerimaan atau `@name` terdaftar, terima `stratum+tcp://bntpool.com:3333`, dan pilih nama rig yang mudah dikenali saat diminta. Saat mulai berikutnya, seine memakai kembali `seine-data/seine.config.json` relatif terhadap direktori kerja. Memulai dari folder yang sama membuat pengaturan mudah ditemukan. [Referensi konfigurasi](https://github.com/zpalmtree/seine/blob/v0.2.26/docs/guides/configuration.md) menjelaskan pertanyaan dan direktori data.
+## Langkah 3: masukkan alamat dompet
 
-Amati hashrate dan penghitung share diterima pada penambang. Kemudian buka [My Stats](https://bntpool.com/stats) dan cari alamat penerimaan yang sama. Share diterima memastikan pool menerima pekerjaan; pembayaran mengikuti proses imbalan dan pembayaran tersendiri. [Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan panel penambang. Tekan `q` atau `Ctrl+C` untuk berhenti dengan benar.
+Tempel alamat penerimaan Blocknet publik atau `@name` terdaftar Anda, lalu tekan Enter untuk menerima `stratum+tcp://bntpool.com:3333`. [Panduan dompet](/id/blog/blocknet-wallet-for-mining/) menunjukkan tempat menemukan alamat. Seine tidak memerlukan frasa pemulihan atau kunci pembelanjaan Anda. Nama worker pool ditetapkan secara otomatis.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Permintaan alamat dan pool pada peluncuran pertama. Ganti contoh dengan alamat atau nama terdaftar Anda." loading="lazy" />
+  </picture>
+  <figcaption>Permintaan alamat dan pool pada peluncuran pertama. Ganti contoh dengan alamat atau nama terdaftar Anda.</figcaption>
+</figure>
+
+Seine memilih thread dan menyetel performa secara otomatis. Pada peluncuran berikutnya, jalankan dari folder yang sama untuk memakai kembali `seine-data/seine.config.json`.
+
+## Langkah 4: periksa share yang diterima
+
+Cari hashrate dan penghitung **Accepted** yang bertambah pada [dasbor](/id/blog/seine-dashboard-explained/). Share yang diterima menegaskan pool menerima pekerjaan Anda; bukan berarti pembayaran sudah terjadi. Tekan `q` atau `Ctrl+C` untuk berhenti.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Dasbor asli seine dengan data contoh. Cari Accepted; angka ini bukan hasil benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Dasbor asli seine dengan data contoh. Cari Accepted; angka ini bukan hasil benchmark.</figcaption>
+</figure>
+
+Buka [Statistik Saya](https://bntpool.com/stats?lang=id) dan masukkan alamat atau nama terdaftar yang sama untuk menemukan worker, share, dan saldo Anda.
 
 ## Apa yang dibutuhkan untuk menambang dengan NVIDIA di Linux?
 
@@ -94,7 +78,7 @@ Pilihan ini hanya memakai CPU untuk pemanggilan tersebut. Untuk memilih perangka
 
 ## Bagaimana mengatasi kesalahan startup Linux?
 
-Gunakan pesan kesalahan pertama untuk memilih pemeriksaan berikutnya. Kesalahan arsitektur atau runtime terjadi sebelum share diterima, sehingga mengganti alamat pool atau jumlah thread tidak menyelesaikan tahap itu. Simpan arsip terverifikasi selama memeriksa program dan lingkungannya.
+Gunakan pesan kesalahan pertama untuk menentukan pemeriksaan berikutnya:
 
 | Pesan atau gejala | Yang perlu diperiksa |
 |---|---|
@@ -105,4 +89,6 @@ Gunakan pesan kesalahan pertama untuk memilih pemeriksaan berikutnya. Kesalahan 
 
 Setelah share diterima, [panduan huge pages](/id/blog/huge-pages-blocknet-mining/) membahas pengaturan halaman opsional di Linux. [Panduan server](/id/blog/mine-blocknet-on-servers/) mencakup operasi tanpa antarmuka grafis dan penempatan NUMA. Keduanya tidak diperlukan untuk mengikuti langkah awal ini; lakukan setiap perubahan secara terpisah agar efeknya pada mesin dapat diketahui.
 
-<CTA target="seine" title="Unduh seine untuk Linux" text="Pilih arsip Linux, verifikasi, dan hubungkan ke bntpool.com dengan penyesuaian CPU otomatis." />
+<CTA target="seine" title="Unduh seine untuk Linux" text="Ekstrak unduhan Linux, masukkan alamat, dan mulai menambang dengan penyetelan CPU otomatis." />
+
+Buka [Statistik Saya](https://bntpool.com/stats?lang=id) dan masukkan alamat atau nama terdaftar yang sama untuk menemukan worker, share, dan saldo Anda.

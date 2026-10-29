@@ -1,5 +1,8 @@
 # Keyword ownership map
 
+Shared priorities and cross-site ownership: [publishing plan](cross-site-publishing-plan.md).
+Broader Blocknet coverage is open to both sites when the reader job is distinct.
+
 Which seineminer.com URL owns which search intent. It records editorial intent, not current
 rankings. The build fails if a published post has no row here.
 
@@ -36,14 +39,14 @@ in their selected language; do not create parallel download or tuning articles.
 
 | Primary keyword cluster | URL | Search job | Supporting phrases |
 |---|---|---|---|
-| mine blocknet on linux, linux blocknet miner | `/blog/mine-blocknet-on-linux/` | Install the native Linux release: choose x86_64/ARM64, verify the archive, check glibc and NVIDIA runtime, extract and confirm first accepted shares | seine linux setup, glibc 2.39, Linux ARM64 CPU mining, Linux 下挖 Blocknet / Linux 下挖礦 |
+| mine blocknet on linux, linux blocknet miner | `/blog/mine-blocknet-on-linux/` | Install the native Linux release: choose x86_64/ARM64, extract, launch, enter a receiving address and confirm accepted shares in My Stats | seine linux setup, glibc 2.39, Linux ARM64 CPU mining, Linux 下挖 Blocknet / Linux 下挖礦 |
 | how to mine blocknet | `/blog/how-to-mine-blocknet/` | Get a newcomer from zero to accepted shares on any OS, and set expectations for payouts and hashrate | blocknet mining guide, blocknet miner, mine Blocknet BNT, bntpool setup, Blocknet Argon2id miner, 如何挖 Blocknet |
 | what is blocknet | `/blog/what-is-blocknet/` | Explain what Blocknet is and does for someone new, then route to names, privacy and mining | Blocknet privacy coin, Blocknet cryptocurrency, Blocknet fair launch, Blocknet Faraday upgrade, Blocknet 是什么 |
 | blocknet privacy | `/blog/blocknet-privacy-features/` | Explain each layer of Blocknet's mandatory privacy and what it means when you pay | blocknet ring signatures, blocknet stealth address, blocknet ring size, Blocknet 隐私 |
 | blocknet id | `/blog/blocknet-id-pay-by-name/` | Claim a Blocknet ID shortname and get paid to `@name` (wallet, payment links, pool payouts) | blocknet.id, blocknet shortname, pay by name blocknet, mine to @name, Blocknet ID 短名称 |
 | argon2id proof of work | `/blog/argon2id-proof-of-work-explained/` | Explain how Blocknet's Argon2id PoW works and why RAM and bandwidth decide hashrate | argon2id mining, argon2id parameters, memory-hard proof of work, blocknet 2 GB per thread, Argon2id 工作量证明 |
 | best hardware for blocknet mining | `/blog/blocknet-mining-hardware-hashrate/` | Pick or size a mining machine: fastest hardware, threads per GB of RAM, expected H/s, CPU and GPU together | blocknet hashrate, blocknet mining RAM per thread, best CPU for Blocknet, Argon2id mining hardware, 挖 Blocknet 用什么硬件 |
-| mine blocknet on mac | `/blog/mine-blocknet-on-mac/` | Set up and size Blocknet mining on an Apple Silicon Mac | blocknet apple silicon, blocknet m4 max hashrate, mine blocknet macbook, seine macos, 在 Mac 上挖 Blocknet |
+| mine blocknet on mac | `/blog/mine-blocknet-on-mac/` | Download and launch on Apple Silicon or Intel, confirm accepted shares, then explore Mac performance | blocknet apple silicon, blocknet m4 max hashrate, mine blocknet macbook, seine macos, 在 Mac 上挖 Blocknet |
 | blocknet memo | `/blog/blocknet-encrypted-memos/` | Add an encrypted memo (invoice, order number, note) to a Blocknet payment, know who can read it, and find received memos | blocknet encrypted memo, blocknet payment memo, blocknet send memo, blocknet memo length, Blocknet 加密备注 / 加密備註 |
 | blocknet payment link | `/blog/blocknet-payment-links/` | Write a `blocknet://` or bntpay.com link that requests an amount (with memo and `$name`) and know what pasting it does | bntpay link, blocknet uri, blocknet://, request BNT payment, blocknet invoice link, Blocknet 付款链接 / 付款連結 |
 | huge pages blocknet mining | `/blog/huge-pages-blocknet-mining/` | Reserve huge pages (Linux/WSL 2 MiB and 1 GiB) or Windows large pages for seine: why they help Argon2id, pages per thread, exact commands, page modes | blocknet hugepages, seine hugepages, vm.nr_hugepages mining, 1GB huge pages argon2id, windows large pages mining, lock pages in memory seine, Blocknet 大页内存 / 大分頁 |
@@ -61,7 +64,7 @@ in their selected language; do not create parallel download or tuning articles.
 | mine crypto on old pc or laptop | `/blog/mine-crypto-on-old-pc-or-laptop/` | Decide whether a spare old desktop or laptop can mine, size threads to its RAM, keep it cool, and start safely with seine on bntpool.com | mining on an old laptop, mine crypto on laptop, old computer crypto mining, laptop mining 8GB RAM, seine efficiency profile, 用旧电脑挖矿 / 用舊電腦挖礦, 笔记本电脑挖矿 / 筆記型電腦挖礦 |
 | seed phrase explained | `/blog/seed-phrase-explained/` | Explain what a wallet seed (recovery) phrase is, how it becomes keys, how to store it and why never to share it, with Blocknet's 12-word seed as the example | what is a seed phrase, recovery phrase, mnemonic phrase, 12-word seed, how to store seed phrase, BIP39 explained, blocknet recovery seed, 助记词是什么 / 助記詞是什麼 |
 
-| mine blocknet on windows | `/blog/mine-blocknet-on-windows/` | Install and verify the Windows ZIP, run native PowerShell commands, complete first-run prompts and confirm accepted shares | Windows Blocknet miner, seine Windows setup, Blocknet NVIDIA Windows, 在 Windows 上挖 Blocknet |
+| mine blocknet on windows | `/blog/mine-blocknet-on-windows/` | Download and extract the Windows ZIP, open seine.exe, enter a receiving address and find accepted shares in My Stats | Windows Blocknet miner, seine Windows setup, Blocknet NVIDIA Windows, 在 Windows 上挖 Blocknet |
 | blocknet gpu mining; blocknet NVIDIA mining; mine blocknet RTX 5090 | `/blog/mine-blocknet-nvidia-gpu/` | Prepare the NVIDIA runtime, choose GPU-only or CPU-plus-GPU mining, verify accepted GPU shares, and compare the measured RTX 5090 modes | NVIDIA Blocknet setup, Blocknet GPU VRAM, CPU and GPU mining together |
 
 | windows defender crypto miner; antivirus blocks miner; verify seine download | `/blog/antivirus-flags-crypto-miner/` | Identify a blocked-download warning, verify the exact official Windows archive and gather evidence for an unresolved detection | SmartScreen miner warning, seine SHA-256, miner quarantine |
@@ -302,3 +305,29 @@ Privacy overview remains the mechanism hub for today's released format. Payment-
 | Blocknet transaction inputs and outputs; why two outputs; where transaction change goes | `/blog/blocknet-transaction-explained/` | Follow one payment's selected value into recipient outputs, change and fee; distinguish outputs from recipients and ring decoys from funding |
 
 The fee guide retains fee estimation and preview steps. Send/receive owns wallet procedure; transfer-time owns confirmation/maturity timing; payment-visibility owns observer/disclosure scope. This walkthrough owns the structure and change accounting of one payment. Closest existing fee coverage includes a short version of the same arithmetic; the new page expands output ownership and lifecycle without repeating rate calculations or CLI steps. Search demand is inferred from the user’s requested practical coverage, not measured analytics.
+
+## Currency, supply and privacy by default (October 28, 2026)
+
+| Primary search intent | Owner | Distinct reader job |
+|---|---|---|
+| Blocknet supply; maximum supply; issuance inflation and tail emission | `/blog/blocknet-supply/` | Understand the approximate target versus a cap, ongoing issuance, why rewards continue, and issuance versus transfers/spendability |
+| Blocknet fungibility; interchangeable privacy-coin units | `/blog/blocknet-fungibility/` | Understand fungibility as a currency property and the role of payment privacy, separate from acceptance, price and available balance |
+| Faraday currency continuity; block reward versus issuance rate | `/blog/blocknet-faraday-monetary-policy/` | Compare same-chain monetary continuity and proposed interval/reward pairing without treating proposal figures as live rules |
+
+The existing `/blog/blocknet-privacy-features/` remains the owner of privacy by default and its mechanisms. It receives a substantial update rather than a competing URL. The pool's `/blog/blocknet-block-reward-schedule/` retains the full monthly reward table and exact pre-tail arithmetic. The Faraday upgrade guide owns migration and preparation; the Faraday privacy guide owns proof mechanisms. Payment-visibility owns observer/disclosure scope, transaction anatomy owns inputs/change, and the generic privacy-coin article owns the category definition. The fungibility page develops the brief existing mention into a currency-focused explanation. No measured search-volume or ranking claim is made; these topics respond to the user's explicit currency/privacy direction.
+
+## Currency trust and validation (October 28, 2026)
+
+| Primary cluster | Owner | Reader job |
+|---|---|---|
+| Who controls Blocknet; who enforces Blocknet rules | `/blog/who-controls-blocknet/` | Distinguish developers, miners, validating nodes and wallet owners; understand software adoption versus block acceptance |
+
+The software-role guide owns choosing applications and what must stay running. This new guide owns authority and rule enforcement, without claiming a measured distribution of control or a formal governance vote. The existing `/blog/bulletproofs-explained/` remains the owner of hidden-amount verification and is expanded with the separate authorization, conservation, repeated-spend and issuance checks. Supply owns the emission schedule; Faraday upgrade owns preparation. Demand is inferred from newcomer questions; no measured search volume is claimed.
+
+## Atomic-swap concepts and the public VEIL announcement (October 28, 2026)
+
+| Primary cluster | Owner | Reader job |
+|---|---|---|
+| Blocknet atomic swaps; what is VEIL; atomic swap claims and refunds | `/blog/blocknet-atomic-swaps/` | Understand generic conditional exchange, claim/refund paths and disclosure, then identify the limited scope of Blocknet’s public VEIL announcement |
+
+The user approved a general explainer with a short public-announcement section after research could not verify a public VEIL implementation. The generic HTLC diagram is explicitly not a VEIL specification or supported trading pair. Faraday upgrade retains migration, ordinary sending retains payment steps, and payment visibility retains ordinary BNT disclosure. No private specification is quoted or used to describe the protocol. Demand is inferred from the approved currency/privacy direction, not measured search volume.

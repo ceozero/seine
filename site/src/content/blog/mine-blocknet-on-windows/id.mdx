@@ -9,7 +9,7 @@ faq:
     a: 'Secara default, seine menyimpan alamat pembayaran, pool, dan nama rig di seine-data/seine.config.json di dalam folder tempat Anda menjalankannya. Jalankan dari folder hasil ekstraksi yang sama untuk menggunakan kembali pengaturan tersebut. Opsi data-dir memungkinkan Anda memilih direktori lain bila diperlukan.'
   - q: 'Apakah saya memerlukan large pages Windows sebelum mulai menambang?'
     a: 'Tidak. seine mencoba large pages secara otomatis dan memakai halaman biasa jika tidak tersedia. Anda dapat mulai menambang dengan pengaturan default. Untuk pengaturan large pages opsional, berikan hak Lock pages in memory kepada akun penambangan, lalu keluar dan masuk kembali sebelum menjalankan ulang seine.'
-sourceHash: '1b3fa78c3bfe'
+sourceHash: '66babe3b41fb'
 translation: draft
 ---
 
@@ -25,13 +25,13 @@ Siapkan alamat pembayaran publik sebelum membuka penambang. [Panduan dompet](/id
 
 Setiap thread penambangan CPU memakai blok memori 2 GiB. seine memeriksa RAM yang tersedia dan jumlah inti, menyisakan ruang memori, dan memilih jumlah thread awal untuk Anda. Anda dapat memulai dengan pengaturan default di desktop atau laptop; tidak perlu menghitung jumlah thread atau memilih kernel CPU terlebih dahulu.
 
-## Langkah 1: unduh arsip Windows
+## Langkah 1: unduh versi yang tepat
 
 Buka [bagian unduhan](/id/#download) dan pilih Windows x86_64. Arsipnya bernama `seine-windows-x86_64.zip`.
 
-![ZIP Windows pada tabel unduhan resmi seine](/assets/blog/windows-download.png)
+![ZIP Windows pada tabel unduhan resmi seine](/assets/blog/setup-download.webp)
 
-## Langkah 2: ekstrak seluruh ZIP
+## Langkah 2: ekstrak dan jalankan
 
 Di File Explorer, klik kanan ZIP yang diunduh dan pilih **Extract All**. Pilih folder yang dapat Anda tulisi, lalu buka folder hasil ekstraksi. Simpan `seine.exe` dan DLL pendampingnya bersama: arsip Windows menyertakan pustaka runtime NVIDIA yang digunakan penambang.
 
@@ -43,29 +43,37 @@ Klik dua kali `seine.exe` dari folder hasil ekstraksi. Jika lebih suka terminal,
 
 Awalan `./` atau `.\` memberi tahu shell agar menjalankan file executable di direktori saat ini. Menjalankan dari folder hasil ekstraksi juga memberi seine tempat yang tetap untuk menyimpan pengaturannya. Gunakan folder yang sama saat menjalankan kembali agar seine dapat menemukan alamat dan pool yang Anda masukkan.
 
-## Langkah 3: masukkan alamat dan pool
+## Langkah 3: masukkan alamat dompet
 
-Pada permintaan pertama, tempel alamat penerima Blocknet atau `@name` terdaftar, lalu konfirmasikan. Terima URL pool default, `stratum+tcp://bntpool.com:3333`. Beri rig nama yang mudah dikenali di pool jika diminta, agar Anda dapat membedakan PC Windows ini dari komputer lain yang menambang ke alamat yang sama.
+Tempel alamat penerimaan Blocknet publik atau `@name` terdaftar Anda, lalu tekan Enter untuk menerima `stratum+tcp://bntpool.com:3333`. [Panduan dompet](/id/blog/blocknet-wallet-for-mining/) menunjukkan tempat menemukan alamat. Seine tidak memerlukan frasa pemulihan atau kunci pembelanjaan Anda. Nama worker pool ditetapkan secara otomatis.
 
-[Panduan konfigurasi](https://github.com/zpalmtree/seine/blob/master/docs/guides/configuration.md) menjelaskan permintaan ini dan pengaturan yang disimpan. Secara default, pengaturan berada di `seine-data/seine.config.json`, relatif terhadap folder tempat Anda menjalankan program. Pada proses berikutnya, seine menggunakannya kembali. Nama singkat diresolusikan lagi setiap kali proses baru dimulai.
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="Permintaan alamat dan pool pada peluncuran pertama. Ganti contoh dengan alamat atau nama terdaftar Anda." loading="lazy" />
+  </picture>
+  <figcaption>Permintaan alamat dan pool pada peluncuran pertama. Ganti contoh dengan alamat atau nama terdaftar Anda.</figcaption>
+</figure>
 
-Anda juga dapat memberikan nama singkat terdaftar langsung di PowerShell:
+Seine memilih thread dan menyetel performa secara otomatis. Pada peluncuran berikutnya, jalankan dari folder yang sama untuk memakai kembali `seine-data/seine.config.json`.
 
-```powershell
-.\seine.exe --address '@name' --pool-url stratum+tcp://bntpool.com:3333
-```
-
-Ganti `@name` dengan nama singkat terdaftar milik Anda. Biarkan flag thread CPU dan kernel tidak diatur agar seine memilihnya secara otomatis. Untuk pengaturan umum di berbagai sistem operasi, lihat [cara menambang Blocknet](/id/blog/how-to-mine-blocknet/).
-
-## Bagaimana Anda tahu penambangan berjalan?
+## Langkah 4: periksa share yang diterima
 
 <Answer>
 Periksa apakah dasbor seine menampilkan hashrate dan share yang diterima, lalu cari alamat pembayaran yang sama di halaman My Stats bntpool.com. Dasbor menjelaskan pekerjaan penambang saat ini; pool mencatat share yang dikirim dan imbalan. Biarkan penyetelan otomatis stabil sebelum membandingkan hashrate atau mengubah pengaturan.
 </Answer>
 
-[Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan hashrate, status penambangan, dan panel pool. Hashrate yang berjalan menunjukkan aktivitas hashing lokal; share yang diterima mengonfirmasi bahwa pekerjaan telah sampai ke pool. Buka [My Stats](https://bntpool.com/stats) dan masukkan alamat atau nama singkat yang sama untuk mengikuti share dan saldo rig ini.
+[Panduan dasbor](/id/blog/seine-dashboard-explained/) menjelaskan hashrate, status penambangan, dan panel pool. Hashrate yang berjalan menunjukkan aktivitas hashing lokal; share yang diterima mengonfirmasi bahwa pekerjaan telah sampai ke pool. Buka [My Stats](https://bntpool.com/stats?lang=id) dan masukkan alamat atau nama singkat yang sama untuk mengikuti share dan saldo rig ini.
 
 Bedakan share yang diterima dengan pembayaran saat memeriksa pengaturan baru. Share berkontribusi pada imbalan pool; pembayaran mengikuti aturan konfirmasi dan saldo pool. [Panduan PPLNS](https://bntpool.com/blog/how-pplns-payouts-work/) menjelaskan urutan tersebut. Anda dapat memeriksa koneksi segera tanpa menunggu pembayaran pertama.
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="Dasbor asli seine dengan data contoh. Cari Accepted; angka ini bukan hasil benchmark." loading="lazy" />
+  </picture>
+  <figcaption>Dasbor asli seine dengan data contoh. Cari Accepted; angka ini bukan hasil benchmark.</figcaption>
+</figure>
 
 ## Penambangan CPU dan NVIDIA pada PC yang sama
 
@@ -79,6 +87,6 @@ Saat dijalankan secara normal, program sudah mencoba large pages dan beralih ke 
 
 [Panduan large pages](/id/blog/huge-pages-blocknet-mining/) menjelaskan pengaturan opsional ini secara terperinci. Setelah masuk kembali, jalankan seine seperti biasa dan periksa log startup untuk mode halaman yang dipilih. Pertahankan mode otomatis default saat menyiapkan konfigurasi pertama yang berfungsi, lalu bandingkan pengukuran pada PC yang sama jika Anda mengubah pengaturan halaman.
 
-[Windows memblokir miner? Periksa unduhannya](/id/blog/antivirus-flags-crypto-miner/)
-
 <CTA target="seine" title="Unduh seine untuk Windows" text="Ekstrak ZIP, masukkan alamat pembayaran, dan mulai menambang di bntpool.com dengan penyetelan CPU dan NVIDIA otomatis." />
+
+Buka [Statistik Saya](https://bntpool.com/stats?lang=id) dan masukkan alamat atau nama terdaftar yang sama untuk menemukan worker, share, dan saldo Anda.

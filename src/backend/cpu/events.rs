@@ -46,7 +46,10 @@ pub(super) fn emit_event(shared: &Shared, event: BackendEvent) {
 }
 
 pub(super) fn send_dispatch_event(shared: &Shared, tx: &Sender<BackendEvent>, event: BackendEvent) {
-    send_event_with_backpressure(shared, tx, event);
+    shared.pending_events.fetch_add(1, Ordering::AcqRel);
+    if !send_event_with_backpressure(shared, tx, event) {
+        shared.pending_events.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 pub(super) fn forward_event(shared: &Shared, event: BackendEvent) {
@@ -88,27 +91,31 @@ fn send_critical_event(shared: &Shared, tx: &Sender<BackendEvent>, event: Backen
     send_event_with_backpressure(shared, tx, event);
 }
 
-fn send_event_with_backpressure(shared: &Shared, tx: &Sender<BackendEvent>, event: BackendEvent) {
+fn send_event_with_backpressure(
+    shared: &Shared,
+    tx: &Sender<BackendEvent>,
+    event: BackendEvent,
+) -> bool {
     let mut queued = event;
     let mut retry_wait = CRITICAL_EVENT_RETRY_WAIT;
     let mut retries = 0u32;
     loop {
         if !shared.started.load(Ordering::Acquire) {
             shared.dropped_events.fetch_add(1, Ordering::Relaxed);
-            return;
+            return false;
         }
 
         match tx.send_timeout(queued, retry_wait) {
-            Ok(()) => return,
+            Ok(()) => return true,
             Err(SendTimeoutError::Disconnected(_)) => {
                 shared.dropped_events.fetch_add(1, Ordering::Relaxed);
-                return;
+                return false;
             }
             Err(SendTimeoutError::Timeout(returned)) => {
                 retries += 1;
                 if retries >= MAX_EVENT_SEND_RETRIES {
                     shared.dropped_events.fetch_add(1, Ordering::Relaxed);
-                    return;
+                    return false;
                 }
                 queued = returned;
                 retry_wait = (retry_wait.saturating_mul(2)).min(CRITICAL_EVENT_RETRY_MAX_WAIT);

@@ -54,4 +54,3 @@ Autotune caches are invalidated when the allowed CPU set or detected NUMA/L3 lay
 changes, including changes that leave the CPU count unchanged.
 
 How thread counts, kernels and memory recovery are tuned: [automatic tuning](autotuning.md).
-Method and limitations of the measurements above: [CPU optimization log](../../CPU_OPTIMIZATION_LOG.md).

@@ -413,6 +413,7 @@ mod tests {
             height,
             nonce_start: 0,
             nonce_end: 1_000,
+            received_at: None,
         }
     }
 
@@ -423,6 +424,7 @@ mod tests {
             claimed_hash: hash,
             backend: Some("cpu#1".to_string()),
             retries: 0,
+            timing: None,
         }
     }
 

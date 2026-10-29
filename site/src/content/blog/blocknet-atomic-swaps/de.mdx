@@ -1,0 +1,73 @@
+---
+title: 'Blocknet Atomic Swaps erklärt: Was ist VEIL?'
+description: 'Verstehe Atomic Swaps, bedingte Ansprüche und Rückzahlungen, die Sichtbarkeit für Beteiligte und Blocknets öffentliche Ankündigung zu VEIL und Faraday.'
+tags: [Blocknet, Zahlungen, Privatsphäre]
+faq:
+  - q: 'Kann ich mit dieser Anleitung einen VEIL-Swap starten?'
+    a: 'Dies ist eine allgemeine Erklärung von Atomic Swaps mit einem Abschnitt zu Blocknets öffentlicher VEIL-Ankündigung. Sie belegt weder ein verfügbares Handelspaar noch einen Wallet-Befehl oder Dienst. Nutze die veröffentlichten Release-Anweisungen einer konkreten Implementierung, bevor du eine vorgeschlagene Swap-Funktion als verfügbaren Zahlungsablauf behandelst.'
+  - q: 'Bedeutet atomar, dass beide Zahlungen sofort erfolgen?'
+    a: 'Atomar beschreibt, wie der Tausch verknüpft ist. Im Beispiel hier legt die Einlösung eines Teilnehmers Informationen offen, mit denen der andere seine Seite einlösen kann. Transaktionen gelangen weiterhin getrennt auf ihre jeweiligen Chains. Bestätigungsprüfungen, Fristen und die erforderlichen Handlungen der Teilnehmer bleiben Teil des Protokollabschlusses.'
+  - q: 'Sind Atomic Swaps automatisch privat?'
+    a: 'Ein Atomic-Swap-Protokoll koordiniert die Abwicklung. Was es offenlegt, hängt von den beteiligten Chains, Verträgen und der Kommunikation ab. Ein gemeinsamer öffentlicher Hash kann die beiden Seiten eines einfachen Hashlock-Swaps verbinden. Blocknets Zahlungsschutz und die vollständigen Offenlegungseigenschaften eines Swaps müssen deshalb getrennt bewertet werden.'
+sourceHash: d62e4e93d4c6
+translation: draft
+---
+
+Verstehe zunächst, was ein Atomic Swap koordiniert, bevor du Blocknets VEIL-Ankündigung liest. Diese Anleitung verfolgt einen allgemeinen Tausch zwischen zwei Parteien durch die bedingte Einzahlung, erfolgreiche Einlösungen und den Rückzahlungspfad. Anschließend trennt sie dieses Lehrbeispiel von den knappen VEIL-Informationen auf Blocknets öffentlicher Website, geprüft am 28. Oktober 2026. Das Beispiel beschreibt ein Protokollmuster, keine verifizierte VEIL-Implementierung oder ein derzeit unterstütztes BNT-Handelspaar.
+
+## Was ist ein Atomic Swap?
+
+<Answer>
+Ein Atomic Swap verknüpft einen Tausch von Vermögenswerten so, dass Teilnehmer, die das Protokoll befolgen, unter dessen Annahmen ihre Seite abschließen oder den Wiederherstellungspfad nutzen können. Er ersetzt ein einfaches Versprechen, später zu senden, durch durchsetzbare Bedingungen. Beide Chains verarbeiten weiterhin ihre eigenen Transaktionen, und die Teilnehmer müssen die erforderliche Reihenfolge einhalten.
+</Answer>
+
+Die Frage des Lesers ist praktisch: Wenn du einen Vermögenswert gegen einen anderen sendest, was sorgt dafür, dass die zweite Zahlung folgt? Eine normale Überweisung autorisiert eine Zahlung. Ein Atomic-Swap-Protokoll verbindet die Bedingungen zweier Überweisungen. Maurice Herlihys [Arbeit zu atomaren Cross-Chain-Swaps](https://arxiv.org/abs/1801.09515) formalisiert dieses Koordinationsproblem und die Bedeutung der Protokolltreue der Teilnehmer.
+
+Stell dir zwei getrennte Transaktionsregister mit einem koordinierten Tausch zwischen ihnen vor. Vermögenswerte werden auf ihren jeweiligen Chains ausgegeben; das Protokoll verknüpft, wer sie einlösen kann. Das unterscheidet sich davon, einfach Coins an eine Empfangsadresse zu senden und darauf zu warten, dass jemand eine Vereinbarung erfüllt. Die [Blocknet-Sendeanleitung](/de/blog/send-receive-blocknet/) behandelt diesen gewöhnlichen Zahlungsablauf.
+
+## Wie funktioniert ein Swap mit Hashlock?
+
+Ein häufiges Lehrbeispiel verwendet einen **Hashlock**, der ein Geheimnis prüft, und einen **Timelock**, der steuert, wann eine Rückzahlung möglich wird. Zusammen werden sie oft als Hashed Timelock Contract oder HTLC bezeichnet. Dieser Abschnitt erklärt diese allgemeine Konstruktion; er behauptet nicht, dass VEIL sie verwendet.
+
+Alice und Bob vereinbaren zunächst den Tausch und die Empfangsziele. Alice erzeugt ein Geheimnis und teilt dessen Hash. Der Hash ermöglicht einem Vertrag, das Geheimnis später zu prüfen, ohne dass Alice es am Anfang veröffentlichen muss. Der Vertrag verlangt außerdem die Autorisierung des vorgesehenen Empfängers: Die Kenntnis des Geheimnisses allein erlaubt nicht jedem Beobachter, das Guthaben zu nehmen.
+
+Die [HTLC-Beschreibung in BIP 199](https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki) zeigt einen Einlösezweig, der das Geheimnis und eine Empfängersignatur verlangt, sowie einen Rückzahlungszweig, der nach einer Frist verfügbar ist. BIP 199 ist ein geschlossener Vorschlag, der diese Konstruktion beschreibt, keine Blocknet-Spezifikation.
+
+## Was passiert, wenn beide Seiten abschließen?
+
+Folge dem nummerierten Diagramm von der Einzahlungsphase zur Einlösephase. „Chain A“ und „Chain B“ sind allgemeine Bezeichnungen. Sie benennen kein verfügbares Paar und bedeuten nicht, dass Blocknet diese konkreten Verträge unterstützt.
+
+1. **Alice zahlt in den ersten Vertrag ein.** Er ermöglicht Bob die Einlösung mit dem Geheimnis und seiner Autorisierung. Alices Rückzahlung wird später verfügbar.
+2. **Bob prüft den zweiten Vertrag und zahlt ein.** Er verwendet den Hash desselben Geheimnisses und ermöglicht Alice die Einlösung. Bobs Rückzahlung wird früher verfügbar als Alices.
+3. **Alice prüft die zweite Seite und löst sie ein.** Ihre Einlösung legt in diesem einfachen Beispiel mit öffentlichem Hashlock das Geheimnis offen.
+4. **Bob nutzt das offengelegte Geheimnis, um die erste Seite einzulösen.** Der Abstand zwischen den Rückzahlungsfristen gibt ihm Zeit zum Handeln.
+
+[![Allgemeines Swap-Beispiel: Alice und Bob finanzieren getrennte bedingte Verträge, Alices Einlösung legt das Geheimnis offen und Bob nutzt es zur Einlösung; ein ungenutzter Vertrag hat einen zeitgebundenen Rückzahlungspfad.](/assets/blog/atomic-swap-flow.svg)](/assets/blog/atomic-swap-flow.svg)
+
+Die obere Reihe zeigt Einzahlungen auf zwei Chains. Die untere Reihe zeigt Einlösungen in umgekehrter Reihenfolge. Die gebogenen Pfeile markieren Wiederherstellungspfade für weiterhin gesperrtes Guthaben, sobald die Rückzahlungsbedingungen erfüllt sind. Dies ist ein erklärendes Diagramm, kein VEIL-Bildschirm oder eine laufende Transaktion.
+
+## Was passiert, wenn ein Teilnehmer aufhört?
+
+Die Wiederherstellung hängt davon ab, an welcher Stelle der Tausch abgebrochen wurde. Wenn Alice in den ersten Vertrag einzahlt und Bob den zweiten nie finanziert, kann Alice ihr weiterhin gesperrtes Guthaben über den Rückzahlungszweig zurückholen, sobald dieser gültig wird. Wenn beide Verträge finanziert wurden, Alice das Geheimnis aber nie offenlegt, können die Teilnehmer die jeweiligen Rückzahlungspfade für nicht ausgegebenes Guthaben nutzen.
+
+Ein Timelock macht eine Rückzahlungstransaktion zulässig; er sendet und bestätigt diese Transaktion nicht selbst. [BIP 65](https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki) erklärt zeitbasierte Ausgabebedingungen und nichtinteraktive Rückzahlungskonstruktionen. Eine konkrete Anwendung muss die Einlöse- oder Rückzahlungstransaktionen und die zu ihrer Autorisierung nötigen Informationen verwalten.
+
+Sobald Alice die zweite Seite einlöst und das Geheimnis offenlegt, muss Bob rechtzeitig dem Einlösepfad auf der ersten Seite folgen. Deshalb sind die Reihenfolge und die gestaffelten Fristen wichtig. Eine Anwendung zu schließen ist nicht dasselbe, wie einen bereits finanzierten Tausch zu stornieren. Die Wiederherstellungsanweisungen der Implementierung bestimmen, wie ihr Zustand wieder aufgenommen wird.
+
+## Was können Teilnehmer und Beobachter sehen?
+
+Abwicklung und Privatsphäre beantworten unterschiedliche Fragen. Die Teilnehmer kennen die vereinbarten Bedingungen und die ausgetauschten Empfangsinformationen. Im einfachen Beispiel erscheint derselbe öffentliche Hash auf beiden Chains, und die Einlösung legt sein Geheimnis offen. Diese gemeinsamen Werte können einem Beobachter eine Verbindung zwischen den beiden Seiten liefern.
+
+Die genaue Offenlegung hängt vom Protokoll und den beteiligten Chains ab. Ein privates Zahlungsformat legt für sich allein nicht fest, was eine andere Chain veröffentlicht oder eine Handelsoberfläche aufzeichnet. Ebenso löscht der Abschluss eines Tauschs nicht die Nachrichten, in denen die Teilnehmer ihn ausgehandelt haben.
+
+Für gewöhnliche Blocknet-Zahlungen trennt die [Anleitung zur Zahlungssichtbarkeit](/de/blog/blocknet-payment-visibility/) öffentliche Transaktionsfelder vom Zugriff des Senders, Empfängers und gewährten Einsichtsrechten. Das ist die Grundlage zum Verständnis der Privatsphäre von BNT-Zahlungen. Eine swapbezogene Datenschutzbehauptung braucht Belege zum vollständigen Swap, einschließlich des anderen Vermögenswerts und der Kommunikationsschritte.
+
+## Was hat Blocknet zu VEIL angekündigt?
+
+Die [offizielle Blocknet-Website](https://blocknetcrypto.com/#faraday) nennt VEIL in ihrem Atomic-Swap-Vergleich und beschreibt eine geplante Neugestaltung mit Post-Quanten-Primitiven als Teil von Faraday. Diese öffentliche Aussage legt die Richtung des Projekts fest. Sie spezifiziert keine Handelspaare, Swap-Befehle, Rückzahlungsfristen oder einen Endnutzerdienst, den diese Anleitung verifizieren könnte.
+
+Behalte den Umfang dieser Ankündigung beim Lesen des obigen Beispiels im Blick. Die HTLC-Erklärung behandelt die Koordination von Atomic Swaps allgemein. Sie beschreibt nicht das interne Protokoll von VEIL. Die [Faraday-Anleitung](/de/blog/blocknet-faraday-upgrade/) behandelt den angekündigten Netzwerkübergang; implementierungsspezifische Swap-Anweisungen sollten aus einem veröffentlichten Release und dessen Dokumentation stammen.
+
+Um jetzt BNT zu empfangen, behandelt die [Anleitung zu den ersten Coins](/de/blog/get-first-blocknet/) gewöhnliche Überweisungen und Mining. Das sind etablierte Nutzerabläufe mit eigenen Wallet- und Zahlungsschritten. Dieser Artikel vermittelt dir die Konzepte, um ein künftiges öffentliches Swap-Release zu verstehen, ohne eine Ankündigung mit einer Anleitung zur Einzahlung von Guthaben zu verwechseln.
+
+<CTA target="seine" title="BNT durch Mining empfangen" text="Nutze seine mit bntpool.com und empfange Mining-Auszahlungen in deiner eigenen Blocknet-Wallet." />

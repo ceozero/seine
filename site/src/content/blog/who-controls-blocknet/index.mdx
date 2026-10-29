@@ -1,0 +1,67 @@
+---
+title: 'Who controls Blocknet?'
+description: 'Understand who enforces Blocknet’s rules: what developers, miners, nodes and coin holders do, how valid blocks are accepted, and how network upgrades happen.'
+tags: ['Blocknet', 'Consensus', 'Currency']
+faq:
+  - q: 'Can a miner create more BNT than the reward allows?'
+    a: 'Under the released rules, a node checks the block reward against the amount required at that height. Finding a valid proof of work does not bypass that check. A reward with a different commitment is rejected, so the miner’s hashing power does not set the issuance schedule.'
+  - q: 'Does owning BNT give me a protocol vote?'
+    a: 'A wallet balance gives you funds to spend under the network’s rules. The released proof-of-work validation path does not weight block acceptance by coin holdings. Running software, producing blocks and authorizing your own payments are separate roles; a large balance does not make an invalid transaction valid.'
+  - q: 'Does publishing new code immediately change Blocknet?'
+    a: 'A code change becomes relevant to consensus when software implementing it runs on the network and its activation conditions apply. A website announcement or repository commit does not itself replace the rules in running nodes. Follow official upgrade guidance and check the update policy of the software you use.'
+date: 2026-10-28
+related: [blocknet-supply, bulletproofs-explained, blocknet-wallet-node-miner, blocknet-faraday-upgrade]
+image: /assets/blog/blocknet-control-roles.svg
+---
+
+Understand who does what before deciding what it means to control Blocknet. Writing software, finding a block, checking that block and spending coins are different powers. This guide follows those boundaries in released core v0.22.0, then explains how a proposed upgrade reaches the software people run. It describes validation responsibilities, rather than measuring how widely mining or development is distributed.
+
+## Who enforces Blocknet’s rules?
+
+<Answer>
+Nodes enforce the rules implemented by their software when they validate incoming blocks and transactions. Miners produce candidate blocks, developers maintain implementations, and wallet owners authorize payments. Each role contributes to the network, but publishing code, owning BNT or finding proof of work does not by itself satisfy the other validation checks.
+</Answer>
+
+Think of a payment moving through these responsibilities. A wallet constructs and authorizes it; a miner includes it in a proposed block; a node checks that the proposal follows its rules. Acceptance depends on those checks. A recognizable project name, a large wallet balance or the identity of the sending peer is not a substitute for them.
+
+[![Four numbered roles: developers publish software, miners propose blocks, nodes validate them, and wallet owners authorize their payments.](/assets/blog/blocknet-control-roles.svg)](/assets/blog/blocknet-control-roles.svg)
+
+The diagram separates responsibilities: 1 develops software; 2 produces a block proposal; 3 checks it against the running rules; 4 authorizes a wallet’s own payment. The numbered roles are not a voting tally or a measurement of network participants.
+
+## What can developers change?
+
+Developers can propose changes, write implementations, review code and publish releases. Those activities matter because software contains the rules that nodes execute. The [public core source](https://github.com/blocknetprivacy/core/tree/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3) lets readers inspect the actual validation paths. Documentation explains their purpose; released code identifies the behavior a particular version implements.
+
+A commit in a repository does not rewrite a running executable. A change reaches a node through its software update process and, where relevant, activation logic. Participants therefore need compatible software for the network rules they intend to follow. This is coordination around deployed software, not a guarantee that every proposal becomes a network rule.
+
+Update policy is part of that relationship. The managed CLI can schedule updates for a core following the latest release, while pinned versions have a different policy. The [node guide](/blog/run-blocknet-node/) explains this distinction. Read the policy of your installation instead of assuming that every update waits for a manual confirmation.
+
+## What can miners decide?
+
+Mining produces candidate blocks and the proof of work needed for acceptance. In direct mining, seine receives work from a node; in pool mining, the pool coordinates work and submits solved blocks upstream. These paths help build the chain. The [mining explanation](/blog/how-crypto-mining-works/) covers the process and the difference between a pool share and a full block.
+
+A solved proof of work is one requirement among several. The [released block validator](https://github.com/blocknetprivacy/core/blob/5a0a5b510c1dce46f4eeb12c33a291052e44e7b3/block.go#L1741-L1805) also checks block context, difficulty, transaction validity and the required reward. If a proposed reward differs from the amount allowed at that height, its commitment fails the reward check. Extra hashing power does not change that comparison.
+
+For example, changing the reward field in mining software does not change what another node expects. The receiving node calculates the expected reward from the height and checks the submitted output against it. The [supply guide](/blog/blocknet-supply/) explains the issuance schedule; the miner’s job is to produce a block that satisfies it.
+
+## How do nodes decide which chain to follow?
+
+The released core validates a candidate before applying its chain-selection logic. It tracks accumulated work and can switch to a valid branch with more work, subject to its reorganization rules. Counting blocks alone misses that distinction. Work helps select between acceptable histories; it does not replace checks on the blocks within them.
+
+A node’s verification settings also matter when describing its history checks. Optional trusted-checkpoint synchronization can skip repeated proof-of-work and cryptographic verification for covered historical blocks. Current-tip validation and checkpoint-assisted historical synchronization are distinct paths. The presence of a local node alone does not say which synchronization policy was used.
+
+This is why the useful question is specific: which software, rules and validation mode are in use? The [software roles guide](/blog/blocknet-wallet-node-miner/) helps choose the applications you need, while the node guide covers operation. A peer count or a screenshot of a block height does not establish how many independent people control the network.
+
+## What do coin holders control?
+
+With the required private keys, a wallet owner can authorize spending the outputs they own. The network checks that authorization and the rest of the transaction rules. Owning more BNT does not turn the released proof-of-work system into a balance-weighted vote on whether somebody else’s invalid transaction should be accepted.
+
+Ownership also differs from choosing what to disclose. You can use the wallet’s supported viewing and payment-proof features to share information about your own funds or payment. That does not grant permission to create extra coins. The [hidden-amount verification guide](/blog/bulletproofs-explained/) explains how accounting checks remain possible with private payment amounts.
+
+## How should you read a proposed upgrade?
+
+Separate the announcement, the implementing release and the activation rules. An announcement describes an intended change; compatible software implements the checks; activation determines when those checks apply. This gives you concrete things to verify instead of treating a roadmap statement as behavior that is already live.
+
+For Faraday, the [official announcement](https://blocknetcrypto.com/blog/2026-10-27-how-blocknet-privacy-survives-quantum-computers/) describes a proposed change that is still being built and tested. Our [upgrade guide](/blog/blocknet-faraday-upgrade/) tracks the user preparation, while the [monetary-policy guide](/blog/blocknet-faraday-monetary-policy/) separates the proposed issuance changes from today’s rules. Use those dated sources before making decisions about a future transition.
+
+<CTA target="seine" title="Mine Blocknet with seine" text="Use seine with bntpool.com to contribute mining work and receive BNT in your wallet." />

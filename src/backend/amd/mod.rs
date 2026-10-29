@@ -14,7 +14,6 @@
 //! the AMD tuning surface (waves-per-SIMD occupancy, launch depth, cadence of
 //! cancel checks, scheduling experiments) is intentionally deferred until the
 //! kernel passes the CPU-differential bring-up tests on real RDNA3 hardware.
-//! See docs/AMD_BRINGUP.md.
 
 mod engine;
 mod hip_ffi;
@@ -40,7 +39,7 @@ use crate::backend::{
 
 use engine::{HipArgon2Engine, HipInterruptController};
 
-pub(crate) use engine::{query_amd_devices, AmdDeviceInfo, REQUIRED_WAVEFRONT_SIZE};
+pub(crate) use engine::{query_amd_devices, supports_wavefront_size, AmdDeviceInfo};
 
 const BACKEND_NAME: &str = "amd";
 const ASSIGN_CHANNEL_CAPACITY: usize = 256;
@@ -1081,6 +1080,7 @@ fn worker_loop(
                     share_binding_id: target_snapshot.share_binding_id,
                     backend_id: instance_id.load(Ordering::Acquire),
                     backend: BACKEND_NAME,
+                    found_at: std::time::Instant::now(),
                 }),
             );
             if !current.work.template.pause_on_solution {
@@ -1363,6 +1363,7 @@ mod tests {
             work_id,
             epoch: 7,
             header_base: Arc::<[u8]>::from(vec![1u8; POW_HEADER_BASE_LEN]),
+            pow: crate::backend::PowAlgorithm::Argon2id,
             target: [0xff; 32],
             dynamic_share_target: None,
             pause_on_solution: true,

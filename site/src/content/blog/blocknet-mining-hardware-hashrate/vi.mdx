@@ -1,6 +1,6 @@
 ---
 title: Phần cứng tốt nhất để đào Blocknet
-description: "So sánh phần cứng đào Blocknet bằng kết quả đo: EPYC 9375F đạt 85,1 H/s. Xem chính xác RAM, số luồng, thiết lập trang nhớ và dữ liệu benchmark."
+description: "So sánh phần cứng đào Blocknet bằng kết quả đo: EPYC 9355P đạt 97,1 H/s với thiết lập mặc định. Xem chính xác RAM, số luồng và dữ liệu benchmark."
 tags: [Phần cứng, Hashrate, Hướng dẫn đào coin, Argon2id, NVIDIA]
 faq:
   - q: 'PC chơi game có đào được Blocknet không?'
@@ -11,7 +11,7 @@ faq:
     a: 'seine đào trên card đồ họa NVIDIA với bản tải cho Windows và Linux, dùng mọi card nó phát hiện được cùng với bộ xử lý. Trên Windows, CUDA runtime đã được kèm sẵn, nên bạn chỉ cần driver NVIDIA. Trên Linux, hãy cài driver và các thư viện NVRTC. Lần chạy đầu tiên tinh chỉnh từng card và ghi nhớ kết quả.'
   - q: 'Vì sao băng thông bộ nhớ quan trọng khi đào Blocknet?'
     a: 'Mỗi lần băm Blocknet ghi trọn một khối bộ nhớ 2 GiB và đọc lại dữ liệu từ khắp khối đó, lớn hơn rất nhiều so với dung lượng cache của bất kỳ bộ xử lý nào. Vì thế hashrate phụ thuộc vào tốc độ hệ thống bộ nhớ chuyển dữ liệu. Những máy có băng thông bộ nhớ cao hơn và đủ RAM cho nhiều luồng sẽ đào nhanh nhất.'
-sourceHash: 666371e468ff
+sourceHash: dae9fd024abc
 translation: draft
 ---
 
@@ -22,18 +22,18 @@ Hướng dẫn này cho bạn biết máy nào đào Blocknet nhanh nhất với
 ## Phần cứng tốt nhất để đào Blocknet là gì?
 
 <Answer>
-Cấu hình nhanh nhất trong các phép đo này là AMD EPYC 9375F đạt 85,1 H/s: 64 luồng đào, 384 GiB RAM và huge pages 1 GiB được chuẩn bị thủ công trên Linux. Đào Blocknet hưởng lợi từ băng thông bộ nhớ và đủ RAM cho 2 GiB mỗi luồng. Card NVIDIA có thể cộng thêm tốc độ băm cùng CPU.
+Cấu hình nhanh nhất trong các phép đo này là AMD EPYC 9355P đạt 97,1 H/s: 64 luồng đào và 192 GiB RAM trên Linux với thiết lập mặc định của seine. Đào Blocknet hưởng lợi từ băng thông bộ nhớ và đủ RAM cho 2 GiB mỗi luồng. Card NVIDIA có thể cộng thêm tốc độ băm cùng CPU.
 </Answer>
 
-[v0.2.39 · 2026-10-27 · 85.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9375f-headline-20261027/README.md)
+[c9c9638 · 2026-10-28 · 97.1 H/s](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md)
 
 Proof of Work của Blocknet là Argon2id với một khối bộ nhớ 2 GiB cho mỗi lần băm. Điều đó khiến nó [memory-hard](/vi/blog/argon2id-proof-of-work-explained/): hashrate phụ thuộc vào băng thông và độ trễ bộ nhớ nhiều như vào số nhân, và vào việc RAM chứa được bao nhiêu khối 2 GiB cùng lúc. Một hệ thống bộ nhớ mạnh là điểm chung của những máy đứng đầu bảng dưới đây.
 
 ## Phép đo mới trên máy chủ vật lý: EPYC 9355P
 
-Ngày 25 tháng 10 năm 2026, EPYC 9355P có 32 lõi/64 luồng phần cứng với 192 GiB trên mười hai kênh nhớ DDR5-4800 đạt **68,256 H/s**, làm tròn thành **68,3 H/s**. Cấu hình thủ công cố định này dùng 64 luồng đào, kernel streaming, huge pages 1 GiB và giới hạn công suất package 280 W. Tốc độ được tính bằng tổng số hash hoàn thành chia cho tổng thời gian của bốn lần chạy mới, mỗi lần 120 giây, bao gồm cả khởi động và tắt.
+Ngày 28 tháng 10 năm 2026, EPYC 9355P có 32 lõi/64 luồng với 192 GiB RAM đã đào trong 15 phút với thiết lập mặc định của seine: không dùng cờ nào, số luồng, kernel CPU và trang nhớ đều được chọn tự động. Máy đạt tốc độ đào **97,1 H/s**.
 
-[Thử nghiệm kích thước trang](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/RESULTS.md) ghi lại chính xác phiên bản mã nguồn, SHA-256 của tệp thực thi, các kiểm tra cấp phát trang và phương pháp đo. [Các bản ghi máy đọc được](https://github.com/zpalmtree/seine/blob/master/experiments/amd-page-size-20261025/benchmark-records.json) lưu cấu hình cùng tử số và mẫu số thô. Đây là toàn bộ một socket được cấu hình thủ công; các phép đo cloud và Mac bên dưới mô tả máy và thiết lập riêng của chúng.
+[Bản ghi phép đo](https://github.com/zpalmtree/seine/blob/master/experiments/9355p-live-20261028/README.md) liệt kê phiên bản mã nguồn và tốc độ băm của từng phút trong lần chạy. Các phép đo cloud và Mac bên dưới mô tả máy và thiết lập riêng của chúng.
 
 ## RTX 5090 nhanh đến mức nào trong thử nghiệm của chúng tôi?
 

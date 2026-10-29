@@ -1,6 +1,6 @@
 ---
 title: 如何在 Mac 上挖 Blocknet
-description: 用 seine 在 Apple 芯片 Mac 上挖 Blocknet：在终端中完成设置，了解 M4 Max 实测 30.9 H/s 的结果，并算出你的 Mac 能运行多少个线程。
+description: "macOS: 下载并解压 seine，输入 Blocknet 地址，然后在 bntpool.com 确认份额已被接受。先使用自动设置；性能调优建议放在设置步骤之后。"
 tags: [挖矿指南, macOS, Apple 芯片, seine]
 faq:
   - q: '可以用 MacBook Air 挖 Blocknet 吗？'
@@ -8,22 +8,70 @@ faq:
   - q: '在 Mac 上挖 Blocknet 时，seine 会使用 GPU 吗？'
     a: '在 Apple 芯片上，seine 默认用 CPU 挖矿，因为这是最快的选择。CPU 和图形核心共用同一块统一内存，而 Blocknet 的 Argon2id 工作量证明取决于内存带宽。在 M4 Max 上，只用 CPU 挖矿得到的算力最高，所以 seine 会自动采用这种方式。'
   - q: 'Mac 需要多少内存才能挖 Blocknet？'
-    a: '每个挖矿线程都要处理一块 2 GiB 的内存，所以每个线程大约按 2 GB 计算。16 GB 的 Mac 最多可容纳七个线程，32 GB 最多 15 个，64 GB 最多 30 个。seine 会计算空闲内存，并让线程数与你的核心数相匹配。'
+    a: '每个挖矿线程都要处理一块 2 GiB 的内存，所以每个线程大约按 2 GB 计算。16 GB 的 Mac 最多可容纳七个线程，32 GB 最多 15 个，64 GB 最多 31 个。seine 会计算空闲内存，并让线程数与你的核心数相匹配。'
   - q: '可以在 Intel Mac 上挖 Blocknet 吗？'
     a: '可以。seine 为 Intel Mac 单独发布了一个压缩包 seine-macos-x86_64.tar.gz，步骤与 Apple 芯片相同。下载后在终端中解压，运行 ./seine，并粘贴你的 Blocknet 地址或 @name。seine 会根据内存确定线程数，并默认在 bntpool.com 上开始挖矿。'
-sourceHash: 74b5026d4641
+sourceHash: '9338855a2863'
 translation: reviewed
 ---
-
-本指南介绍如何用 **seine** 在 Apple 芯片 Mac 上挖 Blocknet：为什么 M 系列芯片适合 Blocknet 的工作量证明，M4 Max 的实测结果，你的 Mac 内存能容纳多少个线程，以及在 bntpool.com 上开始挖矿的具体终端步骤。
 
 ## 可以在 Mac 上挖 Blocknet 吗？
 
 <Answer>
-可以。Apple 芯片 Mac 是很强的 Blocknet 矿机，因为它们的统一内存为内存密集型的 Argon2id 工作量证明提供了充足的带宽。下载 `seine-macos-aarch64.tar.gz`，在终端中解压，运行 `./seine` 并粘贴你的地址即可。一台 48 GB 的 M4 Max 仅用 CPU 就实测达到 30.9 H/s。
+下载并解压 seine，输入 Blocknet 地址，然后在 bntpool.com 确认份额已被接受。先使用自动设置；性能调优建议放在设置步骤之后。
 </Answer>
 
-seine 会自己处理 Mac 上的特定设置。它用 CPU 挖矿，优先把线程调度到性能核心上，并根据你的内存确定线程数，所以大多数人只需要运行 `./seine`。
+## 第 1 步：下载适合的版本
+
+在 Apple 菜单 → 关于本机中查看芯片或处理器。在[下载区](/zh-hans/#download)为 Apple Silicon 选择 `seine-macos-aarch64.tar.gz`，为 Intel 选择 `seine-macos-x86_64.tar.gz`。
+
+## 第 2 步：解压并启动
+
+打开终端。以下命令假设压缩包位于 Downloads 文件夹；如果位置不同，请使用实际路径。在 Intel Mac 上，将 `seine-macos-aarch64.tar.gz` 替换为 `seine-macos-x86_64.tar.gz`。命令会将 seine 解压到主文件夹中并启动：
+
+```sh
+mkdir -p "$HOME/seine"
+tar -xzf "$HOME/Downloads/seine-macos-aarch64.tar.gz" -C "$HOME/seine"
+cd "$HOME/seine"
+./seine
+```
+
+## 第 3 步：输入钱包地址
+
+粘贴你的公开 Blocknet 收款地址或已注册的 `@name`，然后按 Enter 接受 `stratum+tcp://bntpool.com:3333`。[钱包指南](/zh-hans/blog/blocknet-wallet-for-mining/)说明了在哪里找到地址。seine 不需要恢复短语或支出密钥，并会自动分配矿池矿机名称。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-prompts-mobile.webp" width="435" height="156" />
+    <img src="/assets/blog/setup-prompts.webp" width="893" height="91" alt="首次启动时的地址和矿池提示。请将示例替换为你自己的地址或已注册名称。" loading="lazy" />
+  </picture>
+  <figcaption>首次启动时的地址和矿池提示。请将示例替换为你自己的地址或已注册名称。</figcaption>
+</figure>
+
+seine 会自动选择线程并调优。之后从同一文件夹启动，即可复用 `seine-data/seine.config.json`。
+
+## 第 4 步：查看已接受的份额
+
+在[控制台](/zh-hans/blog/seine-dashboard-explained/)中查看算力和不断增加的 **Accepted** 计数。份额被接受表示矿池收到了你的工作，并不表示已经付款。按 `q` 或 `Ctrl+C` 停止。
+
+<figure>
+  <picture>
+    <source media="(max-width: 640px)" srcSet="/assets/blog/setup-accepted-shares-mobile.webp" width="384" height="221" />
+    <img src="/assets/blog/setup-accepted-shares.webp" width="912" height="241" alt="使用示例数据渲染的 seine 实际控制台。请关注 Accepted；这些数字不是性能测试结果。" loading="lazy" />
+  </picture>
+  <figcaption>使用示例数据渲染的 seine 实际控制台。请关注 Accepted；这些数字不是性能测试结果。</figcaption>
+</figure>
+
+打开[我的统计](https://bntpool.com/stats?lang=zh-hans)，输入相同的地址或已注册名称，即可查看矿机、份额和余额。
+
+## 如果 macOS 阻止首次启动
+
+macOS 版本采用临时（ad-hoc）签名。如果 macOS 阻止了首次启动，请打开“系统设置”，进入“隐私与安全性”，允许 `seine` 运行。你也可以在终端中清除下载标记，然后再次运行：
+
+```sh
+xattr -d com.apple.quarantine ./seine
+./seine
+```
 
 ## 为什么 Apple 芯片 Mac 挖 Blocknet 表现出色？
 
@@ -66,43 +114,6 @@ Apple 芯片围绕统一内存构建，[Apple 的描述](https://www.apple.com/n
 
 这些都无需你自己计算。seine 会在启动时选好线程数，并在挖矿过程中持续测试相近的线程数。
 
-## 在 macOS 上的分步设置
-
-### 第 1 步：准备一个 Blocknet 地址
-
-安装官方 Blocknet 钱包，即[命令行钱包](https://github.com/blocknetprivacy/blocknet/releases/latest)或[桌面钱包](https://github.com/blocknetprivacy/blocknet-gui/releases/latest)，然后复制你的地址。如果你在 [blocknet.id](https://blocknet.id) 注册了 Blocknet ID 短名称，也可以直接挖到 `@name`。
-
-### 第 2 步：下载适用于 Apple 芯片的 seine
-
-在[下载区](/zh-hans/#download)获取 `seine-macos-aarch64.tar.gz`。压缩包里有 `seine` 程序、说明文件和许可证，以及一个用于核对下载文件的 `SHA256SUMS.txt`。
-
-### 第 3 步：在终端中解压
-
-打开“终端”（在“应用程序”下的“实用工具”中）并运行以下命令。它们会在你的个人文件夹中创建一个 `seine` 文件夹，并把压缩包解压到里面：
-
-```sh
-mkdir -p ~/seine
-tar -xzf ~/Downloads/seine-macos-aarch64.tar.gz -C ~/seine
-cd ~/seine
-```
-
-### 第 4 步：运行 seine
-
-```sh
-./seine
-```
-
-macOS 版本采用临时（ad-hoc）签名。如果 macOS 阻止了首次启动，请打开“系统设置”，进入“隐私与安全性”，允许 `seine` 运行。你也可以在终端中清除下载标记，然后再次运行：
-
-```sh
-xattr -d com.apple.quarantine ./seine
-./seine
-```
-
-### 第 5 步：输入地址并开始挖矿
-
-seine 会先询问你的收款地址或 `@shortname`，然后询问矿池。按回车接受默认矿池 `stratum+tcp://bntpool.com:3333`。随后[仪表盘](/zh-hans/blog/seine-dashboard-explained/)会显示你的算力和第一批被接受的份额。bntpool.com 矿池会在你的余额达到 0.1 BNT 时把它发送到你的地址，你可以在 [bntpool.com](https://bntpool.com) 上查询自己的地址来跟踪余额。
-
 ## 为什么 seine 在 Mac 上只用 CPU 挖矿？
 
 在 Apple 芯片上，CPU 和图形核心共用同一个统一内存池。Argon2id 取决于内存带宽，所以 CPU 和图形核心会争用同一份带宽。在 seine 对 M4 Max 的测试中，只用 CPU 挖矿得到的算力最高，因此 seine 会在每台 Apple 芯片 Mac 上自动选择这种方式。你无需设置任何参数，就能得到最快的配置。
@@ -129,3 +140,5 @@ seine 会先询问你的收款地址或 `@shortname`，然后询问矿池。按�
 </Note>
 
 <CTA target="seine" title="下载 macOS 版 seine" text="Apple 芯片版本使用 Mac 的 CPU 挖矿，并自动选择线程数。" />
+
+打开[我的统计](https://bntpool.com/stats?lang=zh-hans)，输入相同的地址或已注册名称，即可查看矿机、份额和余额。

@@ -24,9 +24,7 @@ mode, and affinity for their CPU and GPUs.
   keep a safe fallback (`CpuKernel::preferred()`, the generic GPU candidate
   set).
 - **Evidence before defaults.** A new default needs a paired A/B on the
-  target hardware (interleaved, thermally stable, see Measuring), recorded in
-  the relevant optimization log. Kernel micro-opts are mostly exhausted:
-  read the REJECTED entries in the logs before proposing kernel work.
+  target hardware (interleaved, thermally stable).
 - **Correctness is non-negotiable.** Every kernel variant must match the
   reference Argon2id output. Consensus validation stays in the daemon, so a
   wrong hash costs users rejected shares, not chain safety.
@@ -54,40 +52,15 @@ set so stale caches from a different path get re-tuned, not reused.
 
 1. Measure on the exact target hardware (rented or remote is fine; the dev
    box is not a mining rig, so tear down hugepages and miners afterwards).
-2. Gate it in the matching location above, with a one-line comment naming
-   the identity and the measured win.
+2. Gate it in the matching location above, with a short comment naming the
+   identity and why the path suits it. Keep benchmark numbers out of comments.
 3. Add a unit test for the gate: the intended identity selects the path, a
    neighbouring identity doesn't, and an unsupported ISA never does (see the
    `candidates_for` tests).
 4. Check parity: kernel reference tests in `pow-kernel`, plus
    `pow-kernel/examples/verify_streaming_dispatch.rs` for streaming/ring
    kernels.
-5. Record the result (kept or reverted) in `CPU_OPTIMIZATION_LOG.md` or
-   `NVIDIA_OPTIMIZATION_LOG.md`, and add a user-facing line to `CHANGELOG.md`
-   if defaults change.
-
-## Measuring
-
-- Before choosing hardware optimization targets or answering a telemetry status
-  request, run `python3 telemetry/agent_report.py` when production SSH access is
-  available. It checks service/storage health and returns aggregate inventory and
-  comparable performance cohorts without installation IDs or raw reports.
-- Handle the analysis for the user: summarize collection health, adoption and the
-  next evidence-backed experiment. Do not direct them to a dashboard or require
-  manual SQL. If data is sparse or the query fails, say so; do not infer a regression
-  from missing reports or treat live hashrates as benchmark proof. See
-  `telemetry/README.md#agent-analysis` for interpretation and operating limits.
-- Use the interleaved A/B harnesses, not single runs:
-  `scripts/bench_cpu_ab.sh`, `scripts/bench_nvidia_ab.sh`,
-  `scripts/benchctl.py` (paired runs with CIs). Leave tuning flags unset so
-  both sides use their shipping defaults, unless the flag is the experiment.
-- `--bench-kind kernel` isolates the hash kernel. `backend` measures
-  steady-state workers. `end-to-end` includes start/fence/teardown and is
-  closest to what users see.
-- The zero-config path is what matters: also check a cold start with an
-  empty `--data-dir` and see what the tuner picks, not only a hand-pinned
-  config.
-- More harness detail: `docs/PERFORMANCE.md`, `docs/benchmarks.md`.
+5. Add a user-facing line to `CHANGELOG.md` if defaults change.
 
 ## Runtime invariants (don't break these)
 
@@ -104,37 +77,9 @@ set so stale caches from a different path get re-tuned, not reused.
 
 ## Release notes (`CHANGELOG.md`)
 
-- Batch several validated improvements into fewer releases. Keep landing finished
-  work promptly; do not publish a new release for each small performance gain.
-
-- Never mention competitors; describe Seine improvements and supported hardware.
-- Write for miners deciding whether to upgrade: what improves, who benefits,
-  and any action they need to take. Lead with the biggest user benefit; put
-  measured hashrate gains and the affected hardware first when available.
-- Use short, plain-language bullets, usually one sentence each. Aim for 3–5
-  bullets; small releases may need only one. Combine related fixes. A useful
-  example is "About 33% higher CPU hashrate on Ryzen 9 9950X3D at 8 threads."
-- Omit internal test data and implementation details: no run counts, sampling
-  windows, confidence intervals, cache schemas, kernel internals, code symbols,
-  or validation narratives. Keep those in engineering docs. Users need the
-  benefit, not an explanation of how we implemented or tested it.
-- Never show losses, regressions or no-gain results in release notes. Those
-  belong in `CPU_OPTIMIZATION_LOG.md` / `NVIDIA_OPTIMIZATION_LOG.md`.
-- Quote only measured gains on named hardware, and don't extrapolate to
-  untested models. Round sensibly, retain a short qualifier when needed for
-  accuracy, and distinguish faster startup from higher sustained hashrate.
-  Use a qualitative benefit when a number needs a lengthy explanation.
-- Keep required upgrade steps and compatibility changes, including API auth
-  and changed flags, in a brief note for affected users. Link to instructions
-  when needed. Never hide a required action to make the notes shorter.
-- Keep `CHANGELOG.md` and published GitHub release notes in sync. Publish the
-  edited notes plus a full-changelog link, without generated commit/PR lists.
-  When editing existing releases, preserve tags, binaries and release status.
+Write for miners deciding whether to upgrade: what improves, who benefits and any
+action they need to take, in short plain bullets with the biggest benefit first.
 
 ## References
 
 - Every flag: `docs/MINER_FLAGS.md` / `seine --help`.
-- Tuning history and rejected ideas: `CPU_OPTIMIZATION_LOG.md`,
-  `NVIDIA_OPTIMIZATION_LOG.md`, `docs/NVIDIA_5090_TUNING.md`.
-- Hardware-specific notes: `docs/AMD_BRINGUP.md`, `docs/CPU_ENERGY.md`,
-  `docs/validation/`.

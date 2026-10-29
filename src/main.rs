@@ -7,9 +7,11 @@ mod daemon_api;
 mod dev_fee;
 mod diagnostics;
 mod hardware_telemetry;
+mod memory_modules;
 mod miner;
 mod pool;
 mod runtime_identity;
+mod self_update;
 mod shortname;
 mod shutdown;
 mod types;
@@ -33,21 +35,28 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    // Handled before config parsing: updating needs no address, pool or data dir.
+    if std::env::args().skip(1).any(|arg| arg == "--self-update") {
+        return self_update::run_cli();
+    }
+    self_update::cleanup_leftovers();
     let cfg = Config::parse()?;
+    let shutdown = Arc::new(AtomicBool::new(false));
     if cfg.update_check_enabled && !cfg.bench {
-        update_check::spawn();
+        update_check::spawn(cfg.auto_update, Arc::clone(&shutdown));
     }
 
-    let shutdown = Arc::new(AtomicBool::new(false));
     let _shutdown_guard = shutdown::install(Arc::clone(&shutdown))?;
 
-    if cfg.api_server_enabled || cfg.service_mode {
-        return control_api::run(cfg, shutdown);
+    let result = if cfg.api_server_enabled || cfg.service_mode {
+        control_api::run(cfg, shutdown)
+    } else if !cfg.bench && miner::should_enable_tui(&cfg) {
+        control_api::run_interactive(cfg, shutdown)
+    } else {
+        miner::run(&cfg, shutdown)
+    };
+    if result.is_ok() && self_update::restart_pending() {
+        self_update::restart()?;
     }
-
-    if !cfg.bench && miner::should_enable_tui(&cfg) {
-        return control_api::run_interactive(cfg, shutdown);
-    }
-
-    miner::run(&cfg, shutdown)
+    result
 }

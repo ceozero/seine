@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // HIP Argon2id lane-fill kernel specialized for Seine's PoW profile.
 //
-// Port of src/backend/nvidia_kernel.cu (see NVIDIA_OPTIMIZATION_LOG.md for
-// the optimization lineage). Retained from the CUDA kernel:
-//   - A29 full-warp (32-thread) cooperative block compression mapping.
-//   - A77/A78 unrolled global loads/stores for memory-level parallelism.
-//   - A81 closed-form G-round index computation (no switch/branch divergence).
-//   - A82 warp-shuffle G-round fusion (row-columns->row-diagonals and
+// Port of src/backend/nvidia_kernel.cu. Retained from the CUDA kernel:
+//   - full-warp (32-thread) cooperative block compression mapping.
+//   - unrolled global loads/stores for memory-level parallelism.
+//   - closed-form G-round index computation (no switch/branch divergence).
+//   - warp-shuffle G-round fusion (row-columns->row-diagonals and
 //     col-columns->col-diagonals passed lane-to-lane via shuffles).
-// Deliberately OMITTED (NVIDIA/PTXAS-specific scheduling hacks, see A73/A77):
+// Deliberately OMITTED (NVIDIA/PTXAS-specific scheduling hacks):
 //   - The dead-code L2-prefetch address-computation block and its
 //     first-8-threads guard. That code exists purely to nudge NVRTC/PTXAS
 //     instruction scheduling on sm_120 and has no meaning for AMD's LLVM
 //     backend. Correctness over speed for bring-up; AMD-specific scheduling
 //     experiments come after the differential tests pass.
 //
-// Wavefront contract: this kernel REQUIRES wave32 execution (RDNA gfx10/gfx11
-// compiled with -mno-wavefrontsize64). The cooperative group is exactly one
-// 32-thread wavefront per hash lane (SEINE_WARPS_PER_BLOCK == 1 keeps the
-// thread block equal to that single wavefront). The host engine refuses to
-// run on devices reporting warpSize != 32 (CDNA/wave64 support comes later).
+// Wavefront contract: the cooperative group is exactly 32 threads per hash
+// lane and the thread block is exactly one wavefront. On wave32 (RDNA
+// gfx10-gfx12, compiled with -mno-wavefrontsize64) SEINE_WARPS_PER_BLOCK == 1;
+// on wave64 (CDNA gfx9, -mwavefrontsize64) the host sets
+// SEINE_WARPS_PER_BLOCK == 2 so two lanes share one wavefront, and every
+// __shfl below passes ARGON2_COOP_THREADS as its width so shuffles stay inside
+// each lane's 32-thread segment. The host engine refuses any other warpSize.
 //
 // hipRTC compiles HIP device code without explicit includes (__global__,
 // __shfl, atomics and friends are predeclared, mirroring NVRTC).
@@ -49,13 +50,19 @@ constexpr unsigned int CANCEL_CHECK_BLOCK_INTERVAL = SEINE_CANCEL_CHECK_BLOCK_IN
 #endif
 constexpr unsigned int WARPS_PER_BLOCK = SEINE_WARPS_PER_BLOCK;
 
-// Cooperative-group barrier. With WARPS_PER_BLOCK == 1 the thread block is
-// exactly one wave32 wavefront, so __syncthreads() is the conservative,
-// correctness-first barrier (also a shared-memory fence). CUDA's
-// __syncwarp(mask) has no direct HIP equivalent; revisit with
-// __builtin_amdgcn_wave_barrier()/fences only after differential tests pass.
+// Cooperative-group barrier. The thread block is exactly one wavefront (one
+// lane on wave32, two on wave64), so a wave-scoped fence (LDS/global ordering
+// for this wave only) plus a scheduling barrier is all the hardware needs per
+// the LLVM AMDGPU memory model; __syncthreads() additionally waited for every
+// outstanding global store before each round. The wave-scoped form is the
+// default; the host passes SEINE_WAVE_SYNC unless SEINE_AMD_BLOCK_SYNC is set.
 __device__ __forceinline__ void coop_sync() {
+#if defined(SEINE_WAVE_SYNC) && SEINE_WAVE_SYNC
+    __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "wavefront");
+    __builtin_amdgcn_wave_barrier();
+#else
     __syncthreads();
+#endif
 }
 
 // Lane-to-lane value exchange inside the 32-thread cooperative group.
@@ -471,7 +478,7 @@ __device__ __forceinline__ void compress_block_coop(
     unsigned int tid
 ) {
     // Issue all global loads into registers first to maximize
-    // memory-level parallelism (multiple loads in flight at once, A77).
+    // memory-level parallelism (multiple loads in flight at once).
     const unsigned long long r0 = rhs[tid]       ^ lhs[tid];
     const unsigned long long r1 = rhs[tid + 32U]  ^ lhs[tid + 32U];
     const unsigned long long r2 = rhs[tid + 64U]  ^ lhs[tid + 64U];
@@ -482,7 +489,7 @@ __device__ __forceinline__ void compress_block_coop(
     scratch_r[tid + 96U] = r3;  scratch_q[tid + 96U] = r3;
     coop_sync();
 
-    // G-rounds with wave-shuffle fusion (A82) and closed-form indexing (A81).
+    // G-rounds with wave-shuffle fusion and closed-form indexing.
     const unsigned int state = tid >> 2;
     const unsigned int lane = tid & 3U;
     const unsigned int shfl_base = state * 4U; // absolute lane base for shuffles
@@ -541,7 +548,7 @@ __device__ __forceinline__ void compress_block_coop(
     coop_sync();
 
     // Unrolled final store: read all shared-memory values into registers
-    // first, then issue all global stores to maximize MLP (A78).
+    // first, then issue all global stores to maximize MLP.
     {
         const unsigned long long m0 = scratch_q[tid]       ^ scratch_r[tid];
         const unsigned long long m1 = scratch_q[tid + 32U] ^ scratch_r[tid + 32U];
@@ -593,18 +600,33 @@ __device__ __forceinline__ void update_address_block_coop(
     );
 }
 
+// Lane memory is allocated in chunks of `lanes_per_chunk` lanes (one hipMalloc
+// each) because a single allocation hits per-allocation limits long before VRAM
+// runs out on large cards. `lane_chunks` is a
+// device-side table of chunk base pointers.
+__device__ __forceinline__ unsigned long long *lane_base(
+    unsigned long long *const *lane_chunks,
+    unsigned int lanes_per_chunk,
+    unsigned int lane,
+    unsigned long long lane_stride_words
+) {
+    return lane_chunks[lane / lanes_per_chunk]
+        + static_cast<unsigned long long>(lane % lanes_per_chunk) * lane_stride_words;
+}
+
 __global__ void touch_lane_memory_kernel(
-    unsigned long long *lane_memory,
+    unsigned long long *const *lane_chunks,
+    unsigned int lanes_per_chunk,
     unsigned int lanes_active,
     unsigned long long lane_stride_words
 ) {
     const unsigned int lane = blockIdx.x * blockDim.x + threadIdx.x;
-    if (lane >= lanes_active || lane_stride_words == 0ULL) {
+    if (lane >= lanes_active || lane_stride_words == 0ULL || lanes_per_chunk == 0U) {
         return;
     }
 
     volatile unsigned long long *lane_ptr =
-        lane_memory + static_cast<unsigned long long>(lane) * lane_stride_words;
+        lane_base(lane_chunks, lanes_per_chunk, lane, lane_stride_words);
 
     // Touch one 4 KiB page at a time (512 x u64) to force physical commit.
     for (unsigned long long word = 0ULL; word < lane_stride_words; word += 512ULL) {
@@ -624,7 +646,8 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
     unsigned int lane_launch_iters,
     unsigned int m_blocks,
     unsigned int t_cost,
-    unsigned long long *__restrict__ lane_memory,
+    unsigned long long *const *__restrict__ lane_chunks,
+    unsigned int lanes_per_chunk,
     unsigned long long *__restrict__ out_last_blocks,
     const volatile unsigned int *__restrict__ cancel_flag,
     unsigned int *__restrict__ completed_iters,
@@ -639,14 +662,14 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
         (SEINE_FIXED_M_BLOCKS > 0U) ? SEINE_FIXED_M_BLOCKS : m_blocks;
     const unsigned int effective_t_cost =
         (SEINE_FIXED_T_COST > 0U) ? SEINE_FIXED_T_COST : t_cost;
-    if (lane >= lanes_active || effective_m_blocks < 8U) {
+    if (lane >= lanes_active || effective_m_blocks < 8U || lanes_per_chunk == 0U) {
         return;
     }
 
     const unsigned long long lane_stride_words =
         static_cast<unsigned long long>(effective_m_blocks) * 128ULL;
     unsigned long long *memory =
-        lane_memory + static_cast<unsigned long long>(lane) * lane_stride_words;
+        lane_base(lane_chunks, lanes_per_chunk, lane, lane_stride_words);
     const unsigned int segment_length = effective_m_blocks / 4U;
     const unsigned int lane_length = effective_m_blocks;
 
@@ -801,7 +824,7 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
                         static_cast<unsigned long long>(ref_index) * 128ULL;
 
                     // NOTE: the CUDA kernel carries an NVRTC/PTXAS
-                    // scheduling hack here (A73): a dead-code L2-prefetch
+                    // scheduling hack here: a dead-code L2-prefetch
                     // address computation restricted to the first 8
                     // threads. Both parts are NVIDIA sm_120-specific and
                     // are intentionally omitted from the HIP port.
@@ -877,7 +900,8 @@ __global__ void argon2id_fill_kernel(
     unsigned int lane_launch_iters,
     unsigned int m_blocks,
     unsigned int t_cost,
-    unsigned long long *__restrict__ lane_memory,
+    unsigned long long *const *__restrict__ lane_chunks,
+    unsigned int lanes_per_chunk,
     unsigned long long *__restrict__ out_last_blocks,
     const volatile unsigned int *__restrict__ cancel_flag,
     unsigned int *__restrict__ completed_iters
@@ -889,7 +913,8 @@ __global__ void argon2id_fill_kernel(
         lane_launch_iters,
         m_blocks,
         t_cost,
-        lane_memory,
+        lane_chunks,
+        lanes_per_chunk,
         out_last_blocks,
         cancel_flag,
         completed_iters,
@@ -906,7 +931,8 @@ __global__ void argon2id_fill_kernel_fused_target(
     unsigned int lane_launch_iters,
     unsigned int m_blocks,
     unsigned int t_cost,
-    unsigned long long *__restrict__ lane_memory,
+    unsigned long long *const *__restrict__ lane_chunks,
+    unsigned int lanes_per_chunk,
     unsigned long long *__restrict__ out_last_blocks,
     const volatile unsigned int *__restrict__ cancel_flag,
     unsigned int *__restrict__ completed_iters,
@@ -920,7 +946,8 @@ __global__ void argon2id_fill_kernel_fused_target(
         lane_launch_iters,
         m_blocks,
         t_cost,
-        lane_memory,
+        lane_chunks,
+        lanes_per_chunk,
         out_last_blocks,
         cancel_flag,
         completed_iters,

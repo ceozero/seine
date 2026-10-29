@@ -22,7 +22,13 @@ npm run check      # editorial and translation checks only
 - `src/styles/site.css`: design tokens and landing styles; `blog.css`: blog pages.
 - Brand files (icon, social card) are copied from `docs/assets/brand` at build time, so the
   site and README stay in sync.
-- Fonts are self-hosted from `@fontsource` packages; Google Fonts is blocked in mainland China.
+- Fonts are self-hosted; the browser uses one variable Instrument Sans file for all weights.
+  Static Instrument Sans stays installed for build-time social-card rendering.
+- Small stylesheets are inlined to avoid blocking first paint on a CSS request. Logos are
+  generated at display sizes (including 2x), and raster blog cards use 440px WebP thumbnails;
+  full-size article images and social cards are preserved.
+- `npm run build` also checks the emitted CSS, font and thumbnail budgets with
+  `scripts/check-performance.mjs`.
 
 After a deploy, `npm run indexnow` tells Bing and the other IndexNow engines about every URL in
 the sitemap (CI does this automatically). The key file is `public/<key>.txt`.

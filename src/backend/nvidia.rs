@@ -210,6 +210,8 @@ mod library_tests {
     }
 }
 
+mod blake2b;
+
 const CUDA_KERNEL_SRC: &str = include_str!("nvidia_kernel.cu");
 const MAX_LANES_HARD_LIMIT: usize = 1024;
 const ASSIGN_CHANNEL_CAPACITY: usize = 256;
@@ -862,13 +864,8 @@ impl CudaArgon2Engine {
         target: Option<&[u8; POW_OUTPUT_LEN]>,
         network_target: Option<&[u8; POW_OUTPUT_LEN]>,
     ) -> Result<FillBatchResult> {
-        if header_base.len() != POW_HEADER_BASE_LEN {
-            bail!(
-                "invalid header base length: expected {} bytes, got {}",
-                POW_HEADER_BASE_LEN,
-                header_base.len()
-            );
-        }
+        let header_len = blocknet_pow_spec::validate_header_length(header_base.len())
+            .map_err(|reason| anyhow!(reason))?;
 
         if nonces.is_empty() {
             return Ok(FillBatchResult {
@@ -897,7 +894,7 @@ impl CudaArgon2Engine {
             {
                 let mut header_view = self
                     .header_base_input
-                    .try_slice_mut(0..POW_HEADER_BASE_LEN)
+                    .try_slice_mut(0..header_base.len())
                     .ok_or_else(|| anyhow!("failed to slice CUDA header buffer"))?;
                 self.stream
                     .memcpy_htod(header_base, &mut header_view)
@@ -988,7 +985,7 @@ impl CudaArgon2Engine {
                 let mut launch = self.stream.launch_builder(&self.seed_kernel);
                 launch
                     .arg(&self.header_base_input)
-                    .arg(&(POW_HEADER_BASE_LEN as u32))
+                    .arg(&header_len)
                     .arg(&self.nonce_input)
                     .arg(&requested_hashes_u32)
                     .arg(&self.m_cost_kib)
@@ -1634,6 +1631,8 @@ impl PowBackend for NvidiaBackend {
         let instance_id = Arc::clone(&self.instance_id);
         let adaptive_launch_depth = self.tuning_options.adaptive_launch_depth;
         let enforce_template_stop = self.tuning_options.enforce_template_stop;
+        let mut blake2b_state =
+            blake2b::Blake2bWorkerState::new(selected.index, self.cubin_cache_dir.clone());
         let handle = thread::Builder::new()
             .name(format!(
                 "seine-nvidia-worker-{}",
@@ -1642,6 +1641,7 @@ impl PowBackend for NvidiaBackend {
             .spawn(move || {
                 worker_loop(
                     &mut engine,
+                    &mut blake2b_state,
                     assignment_rx,
                     control_rx,
                     shared,
@@ -1879,6 +1879,10 @@ impl PowBackend for NvidiaBackend {
         PreemptionGranularity::Hashes((self.lanes() as u64).saturating_mul(per_launch).max(1))
     }
 
+    fn supports_pow(&self, _pow: crate::backend::PowAlgorithm) -> bool {
+        true
+    }
+
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             preferred_iters_per_lane: Some(
@@ -2038,6 +2042,7 @@ impl BenchBackend for NvidiaBackend {
 
 fn worker_loop(
     engine: &mut CudaArgon2Engine,
+    blake2b: &mut blake2b::Blake2bWorkerState,
     assignment_rx: Receiver<WorkerCommand>,
     control_rx: Receiver<WorkerCommand>,
     shared: Arc<NvidiaShared>,
@@ -2262,6 +2267,64 @@ fn worker_loop(
             continue;
         }
 
+        if current.work.template.pow == crate::backend::PowAlgorithm::Blake2b512 {
+            let target_snapshot = current.work.template.target_snapshot();
+            let stop_at = enforce_template_stop.then_some(current.work.template.stop_at);
+            shared
+                .active_lanes
+                .store(engine.max_lanes().max(1) as u64, Ordering::Release);
+            let batch = match blake2b.run_batch(
+                &current.work.template.header_base,
+                current.next_nonce,
+                current.remaining,
+                &target_snapshot.target,
+                stop_at,
+            ) {
+                Ok(batch) => batch,
+                Err(err) => {
+                    emit_worker_error(
+                        &shared,
+                        &instance_id,
+                        format!("CUDA BLAKE2b batch failed: {err:#}"),
+                    );
+                    break;
+                }
+            };
+            current.hashes_done = current.hashes_done.saturating_add(batch.hashes);
+            current.next_nonce = current.next_nonce.wrapping_add(batch.hashes);
+            current.remaining = current.remaining.saturating_sub(batch.hashes);
+            shared.hashes.fetch_add(batch.hashes, Ordering::Relaxed);
+            shared
+                .inflight_assignment_hashes
+                .store(current.hashes_done, Ordering::Release);
+            let mut paused = false;
+            for (nonce, hash) in batch.solutions {
+                send_backend_event(
+                    &shared,
+                    BackendEvent::Solution(MiningSolution {
+                        epoch: current.work.template.epoch,
+                        nonce,
+                        hash: Some(hash),
+                        share_binding_id: target_snapshot.share_binding_id,
+                        backend_id: instance_id.load(Ordering::Acquire),
+                        backend: BACKEND_NAME,
+                        found_at: std::time::Instant::now(),
+                    }),
+                );
+                if current.work.template.pause_on_solution {
+                    paused = true;
+                    break;
+                }
+            }
+            if paused {
+                queued.clear();
+                finalize_active_assignment(&shared, current, 0);
+                active = None;
+                drain_fence_waiters(&mut fence_waiters, Ok(()));
+            }
+            continue;
+        }
+
         let mut hashes_per_launch_per_lane = max_launch_depth;
         if adaptive_launch_depth {
             let pressure_levels = adaptive_pressure / ADAPTIVE_DEPTH_PRESSURE_CONTROL_BONUS.max(1);
@@ -2441,6 +2504,7 @@ fn worker_loop(
                     share_binding_id: target_snapshot.share_binding_id,
                     backend_id: instance_id.load(Ordering::Acquire),
                     backend: BACKEND_NAME,
+                    found_at: std::time::Instant::now(),
                 }),
             );
             if !current.work.template.pause_on_solution {
@@ -3152,7 +3216,8 @@ fn try_allocate_cuda_buffers(
     let seed_blocks = unsafe { stream.alloc::<u64>(launch_capacity.saturating_mul(256)) }?;
     let last_blocks = unsafe { stream.alloc::<u64>(launch_capacity.saturating_mul(128)) }?;
     let nonce_input = unsafe { stream.alloc::<u64>(launch_capacity) }?;
-    let header_base_input = unsafe { stream.alloc::<u8>(POW_HEADER_BASE_LEN) }?;
+    let header_base_input =
+        unsafe { stream.alloc::<u8>(blocknet_pow_spec::MAX_POW_HEADER_BASE_LEN) }?;
     let target_input = unsafe { stream.alloc::<u8>(POW_OUTPUT_LEN) }?;
     let cancel_flag = unsafe { stream.alloc::<u32>(1) }?;
     let completed_iters = unsafe { stream.alloc::<u32>(1) }?;
@@ -3942,6 +4007,7 @@ mod tests {
             work_id,
             epoch: 7,
             header_base: Arc::<[u8]>::from(vec![1u8; 92]),
+            pow: crate::backend::PowAlgorithm::Argon2id,
             target: [0xff; 32],
             dynamic_share_target: None,
             pause_on_solution: true,
