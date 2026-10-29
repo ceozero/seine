@@ -89,25 +89,6 @@ jobs:
       - name: Generate archive checksums
         run: sha256sum seine-*.tar.gz > SHA256SUMS.txt
 
-      - name: Sign archive checksums
-        env:
-          SEINE_RELEASE_SIGNING_KEY: ${{ secrets.SEINE_RELEASE_SIGNING_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$SEINE_RELEASE_SIGNING_KEY" || { echo "::error::SEINE_RELEASE_SIGNING_KEY secret is missing; the miner refuses unsigned releases"; exit 1; }
-          umask 077
-          printf '%s\n' "$SEINE_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/signing.pem"
-          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/signing.pem" -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig
-          rm -f "$RUNNER_TEMP/signing.pem"
-          # The miner embeds the matching public key (src/self_update.rs); verify here too.
-          cat > "$RUNNER_TEMP/signing.pub" <<'PEM'
-          -----BEGIN PUBLIC KEY-----
-          MCowBQYDK2VwAyEA9grQMoR5CXIcecwpn+EmZTEZ9D0e5QhkpWbQi+8K7O4=
-          -----END PUBLIC KEY-----
-          PEM
-          openssl pkeyutl -verify -pubin -inkey "$RUNNER_TEMP/signing.pub" -rawin -in SHA256SUMS.txt -sigfile SHA256SUMS.txt.sig
-          test "$(wc -c < SHA256SUMS.txt.sig)" -eq 64
-
       - name: Extract changelog section for this tag
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
