@@ -1173,7 +1173,7 @@ fn prefetch_pow_block<const ISA: u8>(block: &PowBlock) {
             _mm_prefetch(ptr.add(960), _MM_HINT_T0);
         }
     }
-    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+    #[cfg(target_arch = "aarch64")]
     {
         unsafe {
             let ptr = block as *const PowBlock as *const u8;

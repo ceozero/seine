@@ -583,13 +583,6 @@ const HUGEPAGE_BYTES: usize = 2 * 1024 * 1024;
 const HUGEPAGE_COVERAGE_WARN_PERCENT: u64 = 95;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const HUGEPAGE_1G_BYTES: usize = 1024 * 1024 * 1024;
-// Linux UAPI：HUGETLB_FLAG_ENCODE_1GB = 30 << HUGETLB_FLAG_ENCODE_SHIFT。
-// 不直接使用 libc 的同名常量，避免旧版 libc 在部分目标架构没有暴露它。
-#[cfg(all(
-    target_os = "linux",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
-const MAP_HUGE_1GB_FLAG: libc::c_int = 30 << 26;
 #[cfg(target_os = "linux")]
 const MADV_COLLAPSE: libc::c_int = 25;
 
@@ -1621,10 +1614,7 @@ mod tests {
     // Allocation needs a pre-reserved 1 GiB HugeTLB pool, e.g.:
     //   echo 2 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
     // so this test is ignored by default; run with `cargo test -- --ignored`.
-    #[cfg(all(
-        target_os = "linux",
-        any(target_arch = "x86_64", target_arch = "aarch64")
-    ))]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     #[test]
     #[ignore = "requires a pre-reserved 1 GiB HugeTLB pool"]
     fn large_1g_page_mode_reports_measured_1g_backing() {
@@ -2078,7 +2068,7 @@ impl VirtualArena {
 
         if page_mode == CpuPageMode::Large1G {
             return Err(
-                "--cpu-page-mode large-1g is only supported on Linux with a 1 GiB HugeTLB pool"
+                "--cpu-page-mode large-1g is only supported on x86_64 Linux (1 GiB HugeTLB pages)"
                     .into(),
             );
         }
@@ -2212,10 +2202,7 @@ unsafe impl Sync for VirtualArena {}
 
 #[cfg(any(
     target_os = "windows",
-    all(
-        target_os = "linux",
-        any(target_arch = "x86_64", target_arch = "aarch64")
-    )
+    all(target_os = "linux", target_arch = "x86_64")
 ))]
 fn round_up_to_multiple(value: usize, multiple: usize) -> Option<usize> {
     if multiple == 0 {
@@ -2292,10 +2279,7 @@ fn enable_lock_memory_privilege() -> Result<(), u32> {
 enum MmapBacking {
     #[cfg(target_os = "linux")]
     ExplicitHugeTLB,
-    #[cfg(all(
-        target_os = "linux",
-        any(target_arch = "x86_64", target_arch = "aarch64")
-    ))]
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     ExplicitHugeTLB1G,
     #[cfg(target_os = "linux")]
     TransparentHuge,
@@ -2506,16 +2490,13 @@ impl MmapArena {
     /// closed: `large-1g` never falls back to another page class.
     #[cfg(target_os = "linux")]
     fn new_hugetlb_1g(block_count: usize, byte_len: usize) -> Result<Self, String> {
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        #[cfg(not(target_arch = "x86_64"))]
         {
             let _ = (block_count, byte_len);
-            Err(
-                "--cpu-page-mode large-1g requires x86_64 or aarch64 Linux with a 1 GiB HugeTLB pool"
-                    .to_owned(),
-            )
+            Err("--cpu-page-mode large-1g requires x86_64 Linux (1 GiB HugeTLB pages)".to_owned())
         }
 
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        #[cfg(target_arch = "x86_64")]
         {
             // HugeTLB mapping lengths must be page-size multiples. Worker
             // arenas are exactly 2 GiB (two 1 GiB pages); round up defensively.
@@ -2529,7 +2510,7 @@ impl MmapArena {
                     libc::MAP_PRIVATE
                         | libc::MAP_ANON
                         | libc::MAP_HUGETLB
-                        | MAP_HUGE_1GB_FLAG
+                        | libc::MAP_HUGE_1GB
                         | libc::MAP_POPULATE,
                     -1,
                     0,
@@ -2583,7 +2564,7 @@ impl MmapArena {
                     allocation_failures: self.allocation_failures,
                     ..ArenaBackingObservation::default()
                 },
-                #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+                #[cfg(target_arch = "x86_64")]
                 MmapBacking::ExplicitHugeTLB1G => ArenaBackingObservation {
                     explicit_large_1g_workers: 1,
                     explicit_large_1g_bytes: requested_bytes,

@@ -80,8 +80,8 @@ pub enum CpuPageMode {
     Regular,
     /// Require explicit large pages and fail CPU backend startup when unavailable.
     Large,
-    /// Require explicit 1 GiB HugeTLB pages (supported Linux x86_64/aarch64
-    /// systems only) and fail CPU backend startup when unavailable.
+    /// Require explicit 1 GiB HugeTLB pages (x86_64 Linux only) and fail CPU
+    /// backend startup when unavailable.
     #[value(name = "large-1g")]
     Large1G,
 }
