@@ -5,12 +5,6 @@ spreads workers across usable NUMA nodes and across L3 cache groups within each
 node, using one thread per physical core before SMT siblings. This also spreads
 workers on single-node servers with multiple L3 groups.
 
-Measured gains from automatic placement:
-
-- Two-node EPYC 7R13 VM, 8 threads: **+73%** with ordinary pages and **+108%** with
-  2 MiB huge pages (the 16-thread all-core control was unchanged).
-- Rented EPYC 8434P, 24 threads: **+16.7%** from L3 spreading.
-
 ## How placement works
 
 - Respects the process CPU and memory masks.
@@ -34,7 +28,8 @@ local placement. See [Linux HugePages](linux-hugepages.md).
 
 ## Memory headroom
 
-Automatic thread sizing and autotuning reserve 5% of effective total RAM, in addition
+Automatic thread sizing and autotuning reserve 5% of effective total RAM (at most
+512 MiB on hosts with 16 GiB or more, else at most 1 GiB), in addition
 to any GPU/Metal reservation. Adjust this with `--cpu-memory-reserve-percent <0..99>`;
 `0` disables that reserve. Explicit thread counts keep their existing memory checks
 and disable tuning unless `--cpu-autotune-threads` is requested.
@@ -45,9 +40,8 @@ fits.
 
 ## Kernel selection on EPYC
 
-Automatic tuning compares CPU kernels (AVX2, AVX-512 and, on validated EPYC
-processors, a streaming-store kernel) while mining, and only switches after two
-confirmed gains at the current worker count and page backing. No configuration is
+Automatic tuning compares the CPU kernels available on your processor while
+mining, and only switches after two confirmed gains at the current worker count and page backing. No configuration is
 needed. Results for each EPYC generation are on the [performance page](../PERFORMANCE.md).
 
 Autotune caches are invalidated when the allowed CPU set or detected NUMA/L3 layout

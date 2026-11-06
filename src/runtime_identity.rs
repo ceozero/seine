@@ -68,6 +68,18 @@ pub(crate) fn build_fingerprint() -> String {
     )
 }
 
+/// Changes only when a build can hash at a different speed on the CPU.
+pub(crate) fn hash_path_fingerprint() -> String {
+    format!(
+        "source={};target={};opt={};rustc={};rustflags={}",
+        option_env!("SEINE_HASH_PATH_FINGERPRINT").unwrap_or("unknown"),
+        build_target(),
+        build_opt_level(),
+        rustc_version(),
+        build_rustflags(),
+    )
+}
+
 fn classify_runtime_environment(
     os: &str,
     kernel_release: &str,
@@ -143,6 +155,47 @@ pub(crate) struct CpuIdentity {
     pub family: Option<u32>,
     pub model: Option<u32>,
     pub stepping: Option<u32>,
+    /// Physical cores sharing CPU 0's L3 cache (Linux), when known.
+    pub l3_cores: Option<u32>,
+}
+
+/// Physical cores sharing CPU 0's last-level (L3) cache, from Linux sysfs.
+#[cfg(target_os = "linux")]
+fn l3_cores() -> Option<u32> {
+    static CORES: std::sync::OnceLock<Option<u32>> = std::sync::OnceLock::new();
+    *CORES.get_or_init(|| {
+        let cpu0 = std::path::Path::new("/sys/devices/system/cpu/cpu0");
+        let read = |path: std::path::PathBuf| std::fs::read_to_string(path).ok();
+        let smt = count_cpu_list(&read(cpu0.join("topology/thread_siblings_list"))?)?.max(1);
+        std::fs::read_dir(cpu0.join("cache"))
+            .ok()?
+            .flatten()
+            .find_map(|entry| {
+                let dir = entry.path();
+                (read(dir.join("level"))?.trim() == "3")
+                    .then(|| count_cpu_list(&read(dir.join("shared_cpu_list"))?))
+                    .flatten()
+                    .map(|shared| (shared / smt) as u32)
+            })
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+fn l3_cores() -> Option<u32> {
+    None
+}
+
+/// Number of CPUs in a Linux cpu list such as `0-15,128-143`.
+fn count_cpu_list(raw: &str) -> Option<usize> {
+    raw.trim()
+        .split(',')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let (first, last) = part.split_once('-').unwrap_or((part, part));
+            let (first, last) = (first.parse::<usize>().ok()?, last.parse::<usize>().ok()?);
+            (first <= last).then_some(last - first + 1)
+        })
+        .sum()
 }
 
 pub(crate) fn cpu_identity() -> CpuIdentity {
@@ -168,6 +221,7 @@ pub(crate) fn cpu_identity() -> CpuIdentity {
             identity.model = Some(model);
             identity.stepping = Some(stepping);
         }
+        identity.l3_cores = l3_cores();
         identity
     }
     #[cfg(not(target_arch = "x86_64"))]

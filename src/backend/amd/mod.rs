@@ -15,8 +15,27 @@
 //! cancel checks, scheduling experiments) is intentionally deferred until the
 //! kernel passes the CPU-differential bring-up tests on real RDNA3 hardware.
 
+mod code_objects;
+pub use code_objects::export_code_objects;
+pub(crate) mod crash_guard;
+pub mod dpm;
 mod engine;
 mod hip_ffi;
+
+/// Undoes process-wide AMD state on every way out of the program.
+pub fn on_process_exit() {
+    dpm::restore_performance_levels();
+    crash_guard::mark_clean_exit();
+}
+
+pub(crate) fn automatic_start_skipped() -> bool {
+    crash_guard::skips_automatic_start()
+}
+
+/// Whether the HIP runtime library can be loaded on this machine at all.
+pub(crate) fn hip_runtime_present() -> bool {
+    hip_ffi::HipApi::load().is_ok()
+}
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -80,6 +99,9 @@ struct AmdShared {
     completed_assignment_micros: AtomicU64,
     cancel_requested: AtomicBool,
     error_emitted: AtomicBool,
+    /// The worker's last batch was BLAKE2b (reported in telemetry).
+    blake2b_active: AtomicBool,
+    crash_card: crash_guard::Card,
 }
 
 impl AmdShared {
@@ -97,6 +119,8 @@ impl AmdShared {
             completed_assignment_micros: AtomicU64::new(0),
             cancel_requested: AtomicBool::new(false),
             error_emitted: AtomicBool::new(false),
+            blake2b_active: AtomicBool::new(false),
+            crash_card: crash_guard::Card::new(),
         }
     }
 }
@@ -158,6 +182,9 @@ struct PendingControlAck {
 #[derive(Default)]
 struct NonblockingControlState {
     pending: Option<PendingControlAck>,
+    /// An acknowledgement received while waiting, kept until the caller
+    /// polls for that control again; cleared when new work is assigned.
+    completed: Option<(PendingControlKind, Result<()>)>,
 }
 
 pub struct AmdBackend {
@@ -274,6 +301,7 @@ impl AmdBackend {
     fn clear_nonblocking_control_state(&self) {
         if let Ok(mut state) = self.nonblocking_control.lock() {
             state.pending = None;
+            state.completed = None;
         }
     }
 
@@ -292,6 +320,13 @@ impl AmdBackend {
         Ok(())
     }
 
+    /// A completed cancel or fence predates work assigned after it.
+    fn forget_completed_control(&self) {
+        if let Ok(mut state) = self.nonblocking_control.lock() {
+            state.completed = None;
+        }
+    }
+
     fn control_nonblocking(&self, kind: PendingControlKind) -> Result<BackendCallStatus> {
         let tx = self.worker_control_tx()?;
         let mut state = self
@@ -299,11 +334,21 @@ impl AmdBackend {
             .lock()
             .map_err(|_| anyhow!("amd nonblocking control lock poisoned"))?;
 
+        if let Some((completed_kind, result)) = state.completed.take() {
+            result?;
+            if completed_kind == kind {
+                return Ok(BackendCallStatus::Complete);
+            }
+        }
         if let Some(pending) = state.pending.as_mut() {
             match pending.ack_rx.try_recv() {
                 Ok(result) => {
+                    let pending_kind = pending.kind;
                     state.pending = None;
                     result?;
+                    if pending_kind == kind {
+                        return Ok(BackendCallStatus::Complete);
+                    }
                 }
                 Err(TryRecvError::Empty) => {
                     return Ok(BackendCallStatus::Pending);
@@ -363,9 +408,47 @@ impl Drop for AmdBackend {
     }
 }
 
+/// Kernel source per device index for telemetry; the engine built last wins.
+static KERNEL_SOURCES: std::sync::Mutex<Vec<(u32, seine_telemetry::GpuKernelSource)>> =
+    std::sync::Mutex::new(Vec::new());
+
+pub(crate) fn note_kernel_source(device_index: u32, source: seine_telemetry::GpuKernelSource) {
+    if let Ok(mut sources) = KERNEL_SOURCES.lock() {
+        match sources.iter_mut().find(|(index, _)| *index == device_index) {
+            Some(entry) => entry.1 = source,
+            None => sources.push((device_index, source)),
+        }
+    }
+}
+
+fn kernel_source(device_index: u32) -> Option<seine_telemetry::GpuKernelSource> {
+    KERNEL_SOURCES
+        .lock()
+        .ok()?
+        .iter()
+        .find(|(index, _)| *index == device_index)
+        .map(|(_, source)| *source)
+}
+
+/// `gfx1100` from a HIP architecture name such as `gfx1100:sramecc-:xnack-`.
+pub(crate) fn telemetry_arch(gcn_arch_name: &str) -> Option<String> {
+    let arch = gcn_arch_name.split(':').next()?.trim().to_ascii_lowercase();
+    seine_telemetry::valid_gpu_arch(&arch).then_some(arch)
+}
+
 impl PowBackend for AmdBackend {
     fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
         let device = self.resolved_device.try_read().ok().and_then(|d| d.clone());
+        let (gpu_arch, gpu_kernel_source, amd_perf_level) = device
+            .as_ref()
+            .map(|d| {
+                (
+                    telemetry_arch(&d.gcn_arch_name),
+                    kernel_source(d.index),
+                    dpm::telemetry_level(&d.pci_address),
+                )
+            })
+            .unwrap_or((None, None, None));
         seine_telemetry::BackendSettings {
             backend: "amd".into(),
             device_model: device.as_ref().map(|d| d.name.clone()),
@@ -379,6 +462,14 @@ impl PowBackend for AmdBackend {
             ),
             cpu_backing_mib: None,
             cpu_affinity: None,
+            pow: self
+                .shared
+                .blake2b_active
+                .load(Ordering::Acquire)
+                .then(|| "blake2b".to_string()),
+            gpu_arch,
+            gpu_kernel_source,
+            amd_perf_level,
         }
     }
 
@@ -395,6 +486,20 @@ impl PowBackend for AmdBackend {
             dev.as_ref()
                 .map(|d| d.memory_total_mib.saturating_mul(1024 * 1024))
         })
+    }
+
+    fn device_index(&self) -> Option<u32> {
+        self.resolved_device
+            .read()
+            .ok()
+            .and_then(|dev| dev.as_ref().map(|d| d.index))
+    }
+
+    fn pci_address(&self) -> Option<String> {
+        self.resolved_device
+            .read()
+            .ok()
+            .and_then(|dev| dev.as_ref().map(|d| d.pci_address.clone()))
     }
 
     fn set_instance_id(&self, id: BackendInstanceId) {
@@ -418,12 +523,29 @@ impl PowBackend for AmdBackend {
             }
         }
 
+        let native_call = crash_guard::enter_native_call();
         let selected = self.validate_or_select_device()?;
-        let mut engine = self.build_engine(&selected)?;
+        // Idempotent: config-time detection usually did this and printed the
+        // notice; explicit --amd-devices skips that probe, so do it here too.
+        let _ = dpm::raise_performance_level(&selected.pci_address, &selected.gcn_arch_name);
+        // A GPU joining a BLAKE2b network skips the Argon2 engine (kernel build
+        // and lanes); the worker builds it if Argon2 work arrives.
+        let mut engine = if network_pow_at_start() == Some(crate::backend::PowAlgorithm::Blake2b512)
+        {
+            None
+        } else {
+            Some(self.build_engine(&selected)?)
+        };
+        drop(native_call);
+        let mut blake2b_state = engine::blake2b::Blake2bWorkerState::new(selected.clone());
 
-        let discovered_lanes = engine.max_lanes().max(1);
-        let discovered_depth = engine.max_hashes_per_launch_per_lane().max(1) as u64;
-        let interrupt_controller = engine.interrupt_controller();
+        let discovered_lanes = engine
+            .as_ref()
+            .map_or(1, |engine| engine.max_lanes().max(1));
+        let discovered_depth = engine.as_ref().map_or(1, |engine| {
+            engine.max_hashes_per_launch_per_lane().max(1) as u64
+        });
+        let interrupt_controller = engine.as_ref().map(HipArgon2Engine::interrupt_controller);
         self.max_lanes.store(discovered_lanes, Ordering::Release);
         self.max_hashes_per_launch_per_lane
             .store(discovered_depth, Ordering::Release);
@@ -440,7 +562,7 @@ impl PowBackend for AmdBackend {
             *slot = None;
         }
         if let Ok(mut slot) = self.interrupt_controller.write() {
-            *slot = Some(interrupt_controller);
+            *slot = interrupt_controller;
         }
         self.clear_nonblocking_control_state();
 
@@ -448,12 +570,32 @@ impl PowBackend for AmdBackend {
         let (control_tx, control_rx) = bounded::<WorkerCommand>(CONTROL_CHANNEL_CAPACITY);
         let shared = Arc::clone(&self.shared);
         let instance_id = Arc::clone(&self.instance_id);
+        let argon2_device = selected.clone();
+        let max_lanes_override = self.tuning_options.max_lanes_override;
+        let hashes_per_launch_per_lane = self.tuning_options.hashes_per_launch_per_lane;
         let handle = thread::Builder::new()
             .name(format!(
                 "seine-amd-worker-{}",
                 self.instance_id.load(Ordering::Acquire)
             ))
-            .spawn(move || worker_loop(&mut engine, assignment_rx, control_rx, shared, instance_id))
+            .spawn(move || {
+                let build_argon2 = || {
+                    HipArgon2Engine::new(
+                        &argon2_device,
+                        max_lanes_override,
+                        hashes_per_launch_per_lane,
+                    )
+                };
+                worker_loop(
+                    &mut engine,
+                    &build_argon2,
+                    &mut blake2b_state,
+                    assignment_rx,
+                    control_rx,
+                    shared,
+                    instance_id,
+                )
+            })
             .map_err(|err| anyhow!("failed to spawn amd worker thread: {err}"))?;
 
         let mut guard = self
@@ -480,6 +622,9 @@ impl PowBackend for AmdBackend {
             }
             let _ = worker.handle.join();
         }
+        if let Some(device) = self.resolved_device.try_read().ok().and_then(|d| d.clone()) {
+            dpm::restore_performance_level(&device.pci_address);
+        }
         if let Ok(mut slot) = self.interrupt_controller.write() {
             *slot = None;
         }
@@ -497,12 +642,14 @@ impl PowBackend for AmdBackend {
     }
 
     fn assign_work(&self, work: WorkAssignment) -> Result<()> {
+        self.forget_completed_control();
         self.worker_assignment_tx()?
             .send(WorkerCommand::Assign(work))
             .map_err(|_| anyhow!("amd worker channel closed while assigning work"))
     }
 
     fn assign_work_batch(&self, work: &[WorkAssignment]) -> Result<()> {
+        self.forget_completed_control();
         let mut batch = normalize_assignment_batch(work)?;
         match batch.len() {
             0 => Ok(()),
@@ -519,6 +666,7 @@ impl PowBackend for AmdBackend {
         work: &[WorkAssignment],
         deadline: Instant,
     ) -> Result<()> {
+        self.forget_completed_control();
         self.assign_work_batch(work)?;
         if Instant::now() > deadline {
             return Err(anyhow!(
@@ -540,6 +688,7 @@ impl PowBackend for AmdBackend {
     }
 
     fn assign_work_batch_nonblocking(&self, work: &[WorkAssignment]) -> Result<BackendCallStatus> {
+        self.forget_completed_control();
         let mut batch = normalize_assignment_batch(work)?;
         if batch.is_empty() {
             return Ok(BackendCallStatus::Complete);
@@ -574,8 +723,9 @@ impl PowBackend for AmdBackend {
 
         match pending.ack_rx.recv_timeout(wait_for) {
             Ok(result) => {
+                let pending_kind = pending.kind;
                 state.pending = None;
-                result?;
+                state.completed = Some((pending_kind, result));
                 Ok(())
             }
             Err(RecvTimeoutError::Timeout) => Ok(()),
@@ -676,6 +826,10 @@ impl PowBackend for AmdBackend {
         PreemptionGranularity::Hashes((self.lanes() as u64).saturating_mul(per_launch).max(1))
     }
 
+    fn supports_pow(&self, _pow: crate::backend::PowAlgorithm) -> bool {
+        true
+    }
+
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             preferred_iters_per_lane: Some(DEFAULT_DISPATCH_ITERS_PER_LANE),
@@ -702,6 +856,9 @@ impl PowBackend for AmdBackend {
 impl BenchBackend for AmdBackend {
     fn kernel_bench(&self, seconds: u64, shutdown: &AtomicBool) -> Result<u64> {
         let selected = self.validate_or_select_device()?;
+        // Idempotent: config-time detection usually did this and printed the
+        // notice; explicit --amd-devices skips that probe, so do it here too.
+        let _ = dpm::raise_performance_level(&selected.pci_address, &selected.gcn_arch_name);
         let mut engine = self.build_engine(&selected)?;
         engine.bind_thread()?;
 
@@ -744,6 +901,9 @@ impl BenchBackend for AmdBackend {
         shutdown: &AtomicBool,
     ) -> Result<Vec<KernelBenchSample>> {
         let selected = self.validate_or_select_device()?;
+        // Idempotent: config-time detection usually did this and printed the
+        // notice; explicit --amd-devices skips that probe, so do it here too.
+        let _ = dpm::raise_performance_level(&selected.pci_address, &selected.gcn_arch_name);
         let mut engine = self.build_engine(&selected)?;
         engine.bind_thread()?;
 
@@ -793,14 +953,57 @@ impl BenchBackend for AmdBackend {
     }
 }
 
+/// Counts this card's first launches for the crash guard.
+struct LaunchesToWorking<'a>(u32, &'a crash_guard::Card);
+
+impl LaunchesToWorking<'_> {
+    fn is_pending(&self) -> bool {
+        self.0 > 0
+    }
+
+    fn launch_completed(&mut self) {
+        if self.0 > 0 {
+            self.0 -= 1;
+            if self.0 == 0 {
+                self.1.mark_working();
+            }
+        }
+    }
+}
+
+/// Longest wait at start for the first template, so the backend can skip the
+/// Argon2 engine on a BLAKE2b network.
+const NETWORK_POW_WAIT: Duration = Duration::from_secs(10);
+
+/// The network's PoW when this backend starts. While the network loop is
+/// already running, waits up to `NETWORK_POW_WAIT` for the first template.
+fn network_pow_at_start() -> Option<crate::backend::PowAlgorithm> {
+    if let Some(pow) = crate::backend::network_pow() {
+        return Some(pow);
+    }
+    if !crate::backend::network_pow_expected() {
+        return None;
+    }
+    let deadline = Instant::now() + NETWORK_POW_WAIT;
+    while Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(100));
+        if let Some(pow) = crate::backend::network_pow() {
+            return Some(pow);
+        }
+    }
+    None
+}
+
 fn worker_loop(
-    engine: &mut HipArgon2Engine,
+    engine: &mut Option<HipArgon2Engine>,
+    build_argon2: &dyn Fn() -> Result<HipArgon2Engine>,
+    blake2b: &mut engine::blake2b::Blake2bWorkerState,
     assignment_rx: Receiver<WorkerCommand>,
     control_rx: Receiver<WorkerCommand>,
     shared: Arc<AmdShared>,
     instance_id: Arc<AtomicU64>,
 ) {
-    if let Err(err) = engine.bind_thread() {
+    if let Err(err) = engine.as_ref().map_or(Ok(()), HipArgon2Engine::bind_thread) {
         emit_worker_error(
             &shared,
             &instance_id,
@@ -815,7 +1018,14 @@ fn worker_loop(
     let mut assignment_open = true;
     let mut control_open = true;
     let mut running = true;
-    let mut nonce_buf = vec![0u64; engine.max_hashes_per_launch()];
+    let mut nonce_buf = vec![
+        0u64;
+        engine
+            .as_ref()
+            .map_or(0, HipArgon2Engine::max_hashes_per_launch)
+    ];
+    let mut launches_to_working =
+        LaunchesToWorking(crash_guard::LAUNCHES_BEFORE_WORKING, &shared.crash_card);
 
     while running {
         while control_open {
@@ -1004,6 +1214,101 @@ fn worker_loop(
             continue;
         }
 
+        if current.work.template.pow == crate::backend::PowAlgorithm::Blake2b512 {
+            shared.blake2b_active.store(true, Ordering::Release);
+            shared.active_lanes.store(
+                engine
+                    .as_ref()
+                    .map_or(1, |engine| engine.max_lanes().max(1)) as u64,
+                Ordering::Release,
+            );
+            let target_snapshot = current.work.template.target_snapshot();
+            let native_call = launches_to_working
+                .is_pending()
+                .then(crash_guard::enter_native_call);
+            let batch = match blake2b.run_batch(
+                &current.work.template.header_base,
+                current.next_nonce,
+                current.remaining,
+                &target_snapshot.target,
+                Some(current.work.template.stop_at),
+            ) {
+                Ok(batch) => {
+                    drop(native_call);
+                    launches_to_working.launch_completed();
+                    batch
+                }
+                Err(err) => {
+                    emit_worker_error(
+                        &shared,
+                        &instance_id,
+                        format!("HIP BLAKE2b batch failed: {err:#}"),
+                    );
+                    break;
+                }
+            };
+            current.hashes_done = current.hashes_done.saturating_add(batch.hashes);
+            current.next_nonce = current.next_nonce.wrapping_add(batch.hashes);
+            current.remaining = current.remaining.saturating_sub(batch.hashes);
+            shared.hashes.fetch_add(batch.hashes, Ordering::Relaxed);
+            shared
+                .inflight_assignment_hashes
+                .store(current.hashes_done, Ordering::Release);
+            if blake2b.take_mismatch_warning() {
+                crate::miner::ui::warn(
+                    "BACKEND",
+                    crate::backend::gpu_mismatch_warning(&format!(
+                        "{BACKEND_NAME}#{}",
+                        instance_id.load(Ordering::Acquire)
+                    )),
+                );
+            }
+            let mut paused = false;
+            for (nonce, hash) in batch.solutions {
+                send_backend_event(
+                    &shared,
+                    BackendEvent::Solution(MiningSolution {
+                        epoch: current.work.template.epoch,
+                        nonce,
+                        hash: Some(hash),
+                        share_binding_id: target_snapshot.share_binding_id,
+                        backend_id: instance_id.load(Ordering::Acquire),
+                        backend: BACKEND_NAME,
+                        found_at: std::time::Instant::now(),
+                    }),
+                );
+                if current.work.template.pause_on_solution {
+                    paused = true;
+                    break;
+                }
+            }
+            if paused {
+                queued.clear();
+                finalize_active_assignment(&shared, current, 0);
+                active = None;
+                drain_fence_waiters(&mut fence_waiters, Ok(()));
+            }
+            continue;
+        }
+        shared.blake2b_active.store(false, Ordering::Release);
+
+        if engine.is_none() {
+            // Argon2 work on a backend that started on a BLAKE2b network.
+            match build_argon2().and_then(|built| built.bind_thread().map(|()| built)) {
+                Ok(built) => *engine = Some(built),
+                Err(err) => {
+                    emit_worker_error(
+                        &shared,
+                        &instance_id,
+                        format!("failed to initialize the HIP Argon2 engine: {err:#}"),
+                    );
+                    break;
+                }
+            }
+        }
+        let Some(engine) = engine.as_mut() else {
+            break;
+        };
         let max_hashes_for_launch = engine.max_hashes_per_launch().max(1);
         let hashes_per_batch = max_hashes_for_launch.min(current.remaining as usize).max(1);
         if nonce_buf.len() < hashes_per_batch {
@@ -1020,13 +1325,20 @@ fn worker_loop(
 
         let target_snapshot = current.work.template.target_snapshot();
         let network_target = current.work.template.network_target();
+        let native_call = launches_to_working
+            .is_pending()
+            .then(crash_guard::enter_native_call);
         let done = match engine.run_fill_batch_preserving_candidate(
             current.work.template.header_base.as_ref(),
             &nonce_buf[..hashes_per_batch],
             Some(&target_snapshot.target),
             network_target.as_ref(),
         ) {
-            Ok(done) => done,
+            Ok(done) => {
+                drop(native_call);
+                launches_to_working.launch_completed();
+                done
+            }
             Err(err) => {
                 emit_worker_error(
                     &shared,
@@ -1071,6 +1383,7 @@ fn worker_loop(
             .store(current.hashes_done, Ordering::Release);
 
         if let Some(nonce) = done.solved_nonce {
+            let found_at = std::time::Instant::now();
             send_backend_event(
                 &shared,
                 BackendEvent::Solution(MiningSolution {
@@ -1080,10 +1393,24 @@ fn worker_loop(
                     share_binding_id: target_snapshot.share_binding_id,
                     backend_id: instance_id.load(Ordering::Acquire),
                     backend: BACKEND_NAME,
-                    found_at: std::time::Instant::now(),
+                    found_at,
                 }),
             );
             if !current.work.template.pause_on_solution {
+                for (nonce, hash) in done.extra_solutions {
+                    send_backend_event(
+                        &shared,
+                        BackendEvent::Solution(MiningSolution {
+                            epoch: current.work.template.epoch,
+                            nonce,
+                            hash: Some(hash),
+                            share_binding_id: target_snapshot.share_binding_id,
+                            backend_id: instance_id.load(Ordering::Acquire),
+                            backend: BACKEND_NAME,
+                            found_at,
+                        }),
+                    );
+                }
                 continue;
             }
             queued.clear();
@@ -1356,6 +1683,62 @@ fn ensure_compatible_template(first: &Arc<WorkTemplate>, second: &Arc<WorkTempla
 mod tests {
     use super::*;
     use crate::backend::NonceChunk;
+
+    /// Installs a worker that acknowledges every cancel and fence at once and
+    /// counts the controls it receives.
+    fn install_acking_worker(backend: &AmdBackend) -> Arc<std::sync::atomic::AtomicUsize> {
+        let received = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (assignment_tx, _assignment_rx) = bounded::<WorkerCommand>(4);
+        let (control_tx, control_rx) = bounded::<WorkerCommand>(4);
+        let seen = Arc::clone(&received);
+        let handle = thread::spawn(move || {
+            while let Ok(cmd) = control_rx.recv() {
+                match cmd {
+                    WorkerCommand::Cancel(ack) | WorkerCommand::Fence(ack) => {
+                        seen.fetch_add(1, Ordering::SeqCst);
+                        let _ = ack.send(Ok(()));
+                    }
+                    WorkerCommand::Stop => break,
+                    _ => {}
+                }
+            }
+        });
+        *backend.worker.lock().unwrap() = Some(AmdWorker {
+            assignment_tx,
+            control_tx,
+            handle,
+        });
+        received
+    }
+
+    #[test]
+    fn nonblocking_cancel_completes_on_the_acknowledgement_it_waited_for() {
+        let backend = AmdBackend::new(None, AmdBackendTuningOptions::default());
+        let received = install_acking_worker(&backend);
+        let mut status = backend.cancel_work_nonblocking().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while status == BackendCallStatus::Pending && Instant::now() < deadline {
+            backend
+                .wait_for_nonblocking_progress(Duration::from_millis(20))
+                .unwrap();
+            status = backend.cancel_work_nonblocking().unwrap();
+        }
+        assert_eq!(status, BackendCallStatus::Complete);
+        assert_eq!(received.load(Ordering::SeqCst), 1, "one cancel per request");
+
+        // A new request after new work is a fresh cancel, not the old ack.
+        backend.forget_completed_control();
+        let mut status = backend.cancel_work_nonblocking().unwrap();
+        while status == BackendCallStatus::Pending && Instant::now() < deadline {
+            backend
+                .wait_for_nonblocking_progress(Duration::from_millis(20))
+                .unwrap();
+            status = backend.cancel_work_nonblocking().unwrap();
+        }
+        assert_eq!(status, BackendCallStatus::Complete);
+        assert_eq!(received.load(Ordering::SeqCst), 2);
+        backend.stop();
+    }
     use blocknet_pow_spec::pow_params;
 
     fn test_template(work_id: u64) -> Arc<WorkTemplate> {

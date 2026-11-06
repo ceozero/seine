@@ -5,7 +5,7 @@
 //! `r{2i+1}` (words 8-15). Row rounds process two rows per vector set; column
 //! rounds process two columns per set, gathered with two-source permutes. The
 //! pre-round value is written to `dst` once and XORed back at the end. Every
-//! step is unrolled over named locals so the block never spills to the stack.
+//! step is unrolled over named locals.
 //! Every entry point requires AVX-512F.
 
 use std::arch::x86_64::*;

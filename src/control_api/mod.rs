@@ -311,6 +311,7 @@ struct RuntimeStateSnapshot {
     last_error: Option<String>,
     pending_wallet_password: bool,
     pending_nvidia_count: u64,
+    pending_amd_count: u64,
     dev_fee_percent: f64,
     dev_fee_mode: String,
     dev_fee_address: &'static str,
@@ -350,6 +351,7 @@ struct SupervisorState {
     staged_config: Option<Config>,
     pending_wallet_password: Option<String>,
     pending_nvidia_count: u64,
+    pending_amd_count: u64,
     dev_fee_mode: String,
     backend_phases: BTreeMap<String, String>,
     metrics: RuntimeMetrics,
@@ -371,6 +373,7 @@ impl Default for SupervisorState {
             staged_config: None,
             pending_wallet_password: None,
             pending_nvidia_count: 0,
+            pending_amd_count: 0,
             dev_fee_mode: "user".to_string(),
             backend_phases: BTreeMap::new(),
             metrics: RuntimeMetrics::default(),
@@ -432,6 +435,7 @@ impl MinerSupervisor {
             last_error: state.last_error.clone(),
             pending_wallet_password: state.pending_wallet_password.is_some(),
             pending_nvidia_count: state.pending_nvidia_count,
+            pending_amd_count: state.pending_amd_count,
             dev_fee_percent: DEV_FEE_PERCENT,
             dev_fee_mode: state.dev_fee_mode.clone(),
             dev_fee_address: DEV_ADDRESS,
@@ -477,7 +481,10 @@ impl MinerSupervisor {
             }
 
             if log.tag == "BACKEND" {
-                if let Some(pending) = parse_pending_nvidia_count(&log.message) {
+                if let Some(pending) = parse_pending_gpu_count(&log.message, "amd") {
+                    state.pending_amd_count = pending;
+                }
+                if let Some(pending) = parse_pending_gpu_count(&log.message, "nvidia") {
                     state.pending_nvidia_count = pending;
                     extra_events.push((
                         "nvidia.init.progress",
@@ -486,6 +493,16 @@ impl MinerSupervisor {
                             "message": log.message,
                         }),
                     ));
+                }
+
+                match gpu_left_pending(&log.message) {
+                    Some("amd") => {
+                        state.pending_amd_count = state.pending_amd_count.saturating_sub(1);
+                    }
+                    Some(_) => {
+                        state.pending_nvidia_count = state.pending_nvidia_count.saturating_sub(1);
+                    }
+                    None => {}
                 }
 
                 if let Some((backend_label, phase)) = parse_backend_phase(&log.message) {
@@ -694,6 +711,7 @@ impl MinerSupervisor {
             state.effective_config = Some(cfg.clone());
             state.backend_phases.clear();
             state.pending_nvidia_count = 0;
+            state.pending_amd_count = 0;
             self.emit_state_changed(previous, state.lifecycle, "start requested");
             run_id
         };
@@ -705,6 +723,7 @@ impl MinerSupervisor {
             run_id,
             sender: self.thread_changes_tx.clone(),
             memory: None,
+            live: None,
             max_threads: cfg.cpu_auto_threads_cap,
             current_threads: cfg.threads,
             quit_requested: Arc::new(AtomicBool::new(false)),
@@ -747,6 +766,7 @@ impl MinerSupervisor {
                     if state.run_id != run_id {
                         return;
                     }
+                    crate::miner::live_stats::clear();
                     state.session_shutdown = None;
                     state.stopped_at_unix_ms = Some(now_unix_millis());
                     let previous = state.lifecycle;
@@ -958,19 +978,29 @@ impl MinerSupervisor {
                     apply_runtime_thread_count(&mut cfg, request.threads, request.max_threads)
                 });
             if let Err(err) = admission {
-                if let Some(reply) = &request.rejection {
+                if let Some(reply) = &request.reply {
                     let _ = reply.try_send(format!("{err:#}"));
                 }
                 return Err(err);
             }
             state.staged_config = Some(cfg);
         }
+        let mut reply = request.reply;
+        if let Some(live) = &request.live {
+            // Running workers take the new count; the session keeps mining.
+            let change = crate::miner::thread_control::LiveThreadChange {
+                threads: request.threads,
+                reply: reply.take(),
+            };
+            match live.try_send(change) {
+                Ok(()) => return Ok(()),
+                Err(failed) => reply = failed.into_inner().reply,
+            }
+        }
+        drop(reply);
         crate::miner::ui::info(
             "THREADS",
-            format!(
-                "restarting mining with {} threads per CPU backend; session statistics preserved",
-                request.threads
-            ),
+            format!("restarting with {} threads", request.threads),
         );
         self.restart_session(StartRequest::default(), true, Some(&request.quit_requested))?;
         Ok(())
@@ -1153,6 +1183,16 @@ struct HealthResponse {
     now_unix_ms: u64,
 }
 
+/// `GET /v1/miner/stats`: live hashrate and share counters for monitoring.
+#[derive(Debug, Clone, Serialize)]
+struct MinerStatsResponse {
+    version: &'static str,
+    lifecycle: MinerLifecycle,
+    running: bool,
+    /// `null` until the first sample of a mining session.
+    mining: Option<crate::miner::live_stats::LiveMiningStats>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ConfigEnvelope {
     config: ApiConfigView,
@@ -1161,6 +1201,7 @@ struct ConfigEnvelope {
 #[derive(Debug, Clone, Serialize)]
 struct BackendsResponse {
     pending_nvidia_count: u64,
+    pending_amd_count: u64,
     backend_phases: BTreeMap<String, String>,
     configured_backends: Vec<BackendSpecView>,
     available_devices: Vec<AvailableDeviceView>,
@@ -1186,7 +1227,7 @@ fn detect_available_devices() -> Vec<AvailableDeviceView> {
             memory_total_mib: device.memory_total_mib,
         }));
     }
-    if let Ok(detected) = crate::config::detect_amd_devices(&mut Vec::new()) {
+    if let Ok(detected) = crate::config::detect_amd_devices(&mut Vec::new(), true, false) {
         devices.extend(detected.into_iter().map(|device| AvailableDeviceView {
             vendor: "amd",
             index: device.index,
@@ -1328,6 +1369,7 @@ fn apply_thread_count(cfg: &mut Config, threads: usize) -> Result<()> {
 }
 
 async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
+    crate::miner::live_stats::enable();
     let supervisor = Arc::new(MinerSupervisor::new(cfg.clone(), Arc::clone(&shutdown)));
     let log_supervisor = Arc::clone(&supervisor);
     set_log_sink(Some(Arc::new(move |event| {
@@ -1339,9 +1381,12 @@ async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         None => {
             let token = generate_api_token()?;
             write_api_cookie(&cfg.api_cookie_path, &token)?;
-            eprintln!(
-                "control API token written to {}",
-                cfg.api_cookie_path.display()
+            crate::miner::ui::info(
+                "API",
+                format!(
+                    "control API token written to {}",
+                    cfg.api_cookie_path.display()
+                ),
             );
             token
         }
@@ -1369,6 +1414,7 @@ async fn run_async(cfg: Config, shutdown: Arc<AtomicBool>) -> Result<()> {
         .route("/v1/miner/stop", post(post_miner_stop))
         .route("/v1/miner/restart", post(post_miner_restart))
         .route("/v1/miner/live-config", patch(patch_live_config))
+        .route("/v1/miner/stats", get(get_miner_stats))
         .route("/v1/backends", get(get_backends))
         .route("/v1/wallet/unlock", post(post_wallet_unlock))
         .route("/v1/events/stream", get(get_events_stream))
@@ -1583,76 +1629,7 @@ fn parse_api_bind_addr(bind: &str) -> Result<SocketAddr> {
 }
 
 fn normalize_pool_url(value: &str) -> Result<String> {
-    let trimmed = value.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
-        bail!("pool_url cannot be empty");
-    }
-
-    let (scheme, rest) = if let Some(rest) = trimmed.strip_prefix("stratum+tcp://") {
-        ("stratum+tcp://", rest)
-    } else if trimmed.starts_with("stratum+ws://") || trimmed.starts_with("stratum+wss://") {
-        bail!("pool_url must be host:port or stratum+tcp://host:port");
-    } else {
-        ("stratum+tcp://", trimmed)
-    };
-    let authority = rest.split('/').next().unwrap_or(rest).trim();
-    if authority.is_empty() || authority.contains("://") || rest != authority {
-        bail!("pool_url must be host:port or stratum+tcp://host:port");
-    }
-
-    let (host, port) = parse_pool_host_port(authority)?;
-    let host_for_url = if host.contains(':') && !host.starts_with('[') {
-        format!("[{host}]")
-    } else {
-        host
-    };
-    Ok(format!("{scheme}{host_for_url}:{port}"))
-}
-
-fn parse_pool_host_port(authority: &str) -> Result<(String, u16)> {
-    let authority = authority.trim();
-    if authority.is_empty() {
-        bail!("pool_url authority is empty");
-    }
-    if authority.chars().all(|c| c.is_ascii_digit()) {
-        let port = authority
-            .parse::<u16>()
-            .with_context(|| format!("invalid pool port in '{authority}'"))?;
-        return Ok(("127.0.0.1".to_string(), port));
-    }
-
-    if let Some(rest) = authority.strip_prefix('[') {
-        let closing = rest
-            .find(']')
-            .ok_or_else(|| anyhow!("invalid IPv6 pool authority '{authority}'"))?;
-        let host = rest[..closing].to_string();
-        let port_part = rest
-            .get(closing + 1..)
-            .and_then(|v| v.strip_prefix(':'))
-            .ok_or_else(|| anyhow!("pool_url must include port in '{authority}'"))?;
-        let port = port_part
-            .parse::<u16>()
-            .with_context(|| format!("invalid pool port in '{authority}'"))?;
-        return Ok((host, port));
-    }
-
-    if authority.matches(':').count() == 1 {
-        let (host, port) = authority
-            .split_once(':')
-            .ok_or_else(|| anyhow!("pool_url must include port"))?;
-        let port = port
-            .parse::<u16>()
-            .with_context(|| format!("invalid pool port in '{authority}'"))?;
-        return Ok((host.to_string(), port));
-    }
-
-    let (host, port) = authority
-        .rsplit_once(':')
-        .ok_or_else(|| anyhow!("pool_url must include port"))?;
-    let port = port
-        .parse::<u16>()
-        .with_context(|| format!("invalid pool port in '{authority}'"))?;
-    Ok((host.to_string(), port))
+    crate::pool::normalize_pool_urls(value).context("invalid pool_url")
 }
 
 fn classify_start_or_restart_error(err: anyhow::Error, operation: &str) -> ApiError {
@@ -1677,6 +1654,21 @@ async fn get_health(State(state): State<AppState>) -> Json<HealthResponse> {
 
 async fn get_runtime_state(State(state): State<AppState>) -> Json<RuntimeStateSnapshot> {
     Json(state.supervisor.snapshot())
+}
+
+async fn get_miner_stats(State(state): State<AppState>) -> Json<MinerStatsResponse> {
+    let (lifecycle, running) = state
+        .supervisor
+        .state
+        .lock()
+        .map(|guard| (guard.lifecycle, guard.lifecycle == MinerLifecycle::Running))
+        .unwrap_or((MinerLifecycle::Error, false));
+    Json(MinerStatsResponse {
+        version: crate::version::release_version(),
+        lifecycle,
+        running,
+        mining: crate::miner::live_stats::snapshot(),
+    })
 }
 
 async fn get_runtime_defaults(State(state): State<AppState>) -> Json<ConfigEnvelope> {
@@ -1755,6 +1747,7 @@ async fn get_backends(State(state): State<AppState>) -> Json<BackendsResponse> {
 
     Json(BackendsResponse {
         pending_nvidia_count: snapshot.pending_nvidia_count,
+        pending_amd_count: snapshot.pending_amd_count,
         backend_phases: snapshot.backend_phases,
         configured_backends,
         available_devices,
@@ -1826,6 +1819,11 @@ async fn get_metrics(State(state): State<AppState>) -> String {
     output.push_str(&format!(
         "seine_miner_pending_nvidia {}\n",
         snapshot.pending_nvidia_count
+    ));
+    output.push_str("# TYPE seine_miner_pending_amd gauge\n");
+    output.push_str(&format!(
+        "seine_miner_pending_amd {}\n",
+        snapshot.pending_amd_count
     ));
     output.push_str("# TYPE seine_miner_start_requests_total counter\n");
     output.push_str(&format!(
@@ -1903,20 +1901,35 @@ fn emit_broadcast_event(
     });
 }
 
-fn parse_pending_nvidia_count(message: &str) -> Option<u64> {
-    if !message.starts_with("nvidia initialization in progress:") {
-        return None;
-    }
-    let tail = message.split(':').nth(1)?.trim();
+fn parse_pending_gpu_count(message: &str, kind: &str) -> Option<u64> {
+    let tail = message
+        .strip_prefix(kind)?
+        .strip_prefix(" initialization in progress:")?
+        .trim();
     let digits: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
     digits.parse::<u64>().ok()
+}
+
+/// The GPU kind whose startup this log line finished, online or unavailable.
+fn gpu_left_pending(message: &str) -> Option<&'static str> {
+    let kind = if message.starts_with("amd#") {
+        "amd"
+    } else if message.starts_with("nvidia#") {
+        "nvidia"
+    } else {
+        return None;
+    };
+    (message.contains(": online") || message.contains(" unavailable: ")).then_some(kind)
 }
 
 fn parse_backend_phase(message: &str) -> Option<(String, &'static str)> {
     if let Some((label, _)) = message.split_once(": online") {
         return Some((label.trim().to_string(), "ready"));
     }
-    if let Some((label, _)) = message.split_once(": initializing CUDA engine") {
+    if let Some((label, _)) = message
+        .split_once(": initializing CUDA engine")
+        .or_else(|| message.split_once(": initializing HIP engine"))
+    {
         return Some((label.trim().to_string(), "initializing"));
     }
     if message.contains("awaiting activation") {
@@ -1984,6 +1997,16 @@ fn apply_start_patch(cfg: &mut Config, patch: &StartRequest) -> Result<()> {
         }
         validate_destination(mining_address)
             .map_err(|err| anyhow!("invalid mining_address: {err}"))?;
+        // A memo belongs to the address it was set for.
+        if cfg.mining_address.as_deref().map(str::trim) != Some(mining_address) {
+            cfg.payout_memo = None;
+        }
+        crate::payout_destination::ensure_exchange_memo(
+            mining_address,
+            cfg.payout_memo.as_deref(),
+            cfg.mode == MiningMode::Pool,
+        )
+        .map_err(|err| anyhow!("invalid mining_address: {err:#}"))?;
         cfg.mining_address = Some(mining_address.to_string());
     }
     if let Some(pool_url) = patch.pool_url.as_ref() {
@@ -2276,7 +2299,7 @@ fn parse_backend_specs_patch(specs: &[BackendSpecPatch]) -> Result<Vec<BackendSp
 fn detected_gpu_indexes(kind: BackendKind) -> Vec<u32> {
     let detection = match kind {
         BackendKind::Nvidia => crate::config::detect_nvidia_devices(),
-        BackendKind::Amd => crate::config::detect_amd_devices(&mut Vec::new()),
+        BackendKind::Amd => crate::config::detect_amd_devices(&mut Vec::new(), true, true),
         BackendKind::Cpu | BackendKind::Metal => return Vec::new(),
     };
     detection
@@ -2481,6 +2504,85 @@ fn ui_mode_to_str(value: UiMode) -> &'static str {
 mod tests {
     use super::*;
     use anyhow::anyhow;
+
+    #[tokio::test]
+    async fn miner_stats_reports_lifecycle_and_version_while_idle() {
+        let supervisor = Arc::new(MinerSupervisor::new(
+            crate::miner::tests::test_config(),
+            Arc::new(AtomicBool::new(false)),
+        ));
+        let Json(stats) = get_miner_stats(State(AppState {
+            supervisor,
+            started_unix_ms: now_unix_millis(),
+        }))
+        .await;
+        let value = serde_json::to_value(&stats).unwrap();
+        assert_eq!(value["lifecycle"], "idle");
+        assert_eq!(value["running"], false);
+        assert_eq!(value["version"], crate::version::release_version());
+        assert!(value.get("mining").is_some(), "mining is always present");
+    }
+
+    /// The HiveOS and mmpOS package tests serve this fixture from a fake
+    /// control API, so it must stay in the exact shape seine serializes.
+    #[test]
+    fn miner_stats_fixture_matches_serialized_shape() {
+        use crate::miner::live_stats::{LiveDeviceStats, LiveMiningStats};
+
+        let device =
+            |label: &str, kind: &str, index, pci: Option<&str>, lanes, rate, avg| LiveDeviceStats {
+                label: label.to_string(),
+                kind: kind.to_string(),
+                device_index: index,
+                pci_address: pci.map(str::to_string),
+                lanes,
+                hashrate_hps: rate,
+                average_hashrate_hps: avg,
+            };
+        let response = MinerStatsResponse {
+            version: "0.2.46",
+            lifecycle: MinerLifecycle::Running,
+            running: true,
+            mining: Some(LiveMiningStats {
+                state: "working".to_string(),
+                uptime_secs: 3605.25,
+                updated_at_unix_ms: 1_767_225_600_000,
+                hashrate_hps: 1250.5,
+                average_hashrate_hps: 1240.0,
+                total_hashes: 4_470_000,
+                submitted: 52,
+                accepted: 50,
+                rejected: 2,
+                devices: vec![
+                    device(
+                        "nvidia#1",
+                        "nvidia",
+                        Some(0),
+                        Some("0000:01:00.0"),
+                        11,
+                        600.25,
+                        590.0,
+                    ),
+                    device("nvidia#2", "nvidia", Some(1), None, 3, 150.125, 150.0),
+                    device(
+                        "amd#1",
+                        "amd",
+                        Some(0),
+                        Some("0000:0a:00.0"),
+                        7,
+                        300.0,
+                        300.0,
+                    ),
+                    device("cpu#1", "cpu", None, None, 2, 200.125, 200.0),
+                ],
+            }),
+        };
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../packaging/hiveos/testdata/miner-stats.json"
+        ))
+        .unwrap();
+        assert_eq!(serde_json::to_value(&response).unwrap(), fixture);
+    }
 
     #[tokio::test]
     async fn process_shutdown_stops_mining_and_closes_an_open_event_stream() {
@@ -2796,6 +2898,28 @@ mod tests {
     }
 
     #[test]
+    fn api_address_change_drops_the_memo_and_refuses_exchange_addresses_without_one() {
+        const EXCHANGE: &str = "ZJZqGfDPCVg78CRH5Z33CtHafg911Dp5Bauf1Dnxg5jgXx7Whqsvqka96FCV8W6QZXNDKzJefkFU6bwDEGBewqPrTWjij";
+        let patch = |address: &str| StartRequest {
+            mining_address: Some(address.to_string()),
+            ..StartRequest::default()
+        };
+        let mut cfg = crate::miner::tests::test_config();
+        cfg.mode = MiningMode::Pool;
+        cfg.mining_address = Some(EXCHANGE.into());
+        cfg.payout_memo = Some("ID001".into());
+        apply_start_patch(&mut cfg, &patch(EXCHANGE)).unwrap();
+        assert_eq!(cfg.payout_memo.as_deref(), Some("ID001"));
+        let other = crate::shortname::tests::ADDRESS;
+        apply_start_patch(&mut cfg, &patch(other)).unwrap();
+        assert_eq!(cfg.payout_memo, None);
+        for address in [EXCHANGE.to_string(), format!("solo:{EXCHANGE}")] {
+            assert!(apply_start_patch(&mut cfg, &patch(&address)).is_err());
+        }
+        assert_eq!(cfg.mining_address.as_deref(), Some(other));
+    }
+
+    #[test]
     fn api_thread_override_disables_adaptation_unless_explicitly_requested() {
         for forced in [None, Some(true)] {
             let mut cfg = crate::miner::tests::test_config();
@@ -2902,7 +3026,8 @@ mod tests {
                 memory: Some(Arc::new(
                     crate::miner::thread_control::ThreadMemoryGuard::new(&cfg, vec![]),
                 )),
-                rejection: Some(reply),
+                reply: Some(reply),
+                live: None,
                 quit_requested: Arc::new(AtomicBool::new(false)),
             })
             .unwrap();
@@ -2933,9 +3058,10 @@ mod tests {
         supervisor
             .thread_changes_tx
             .send(ThreadChangeRequest {
+                live: None,
                 max_threads: 8,
                 memory: None,
-                rejection: None,
+                reply: None,
                 run_id: 1,
                 threads: 1,
                 quit_requested: Arc::new(AtomicBool::new(false)),
@@ -2955,9 +3081,10 @@ mod tests {
         supervisor
             .thread_changes_tx
             .send(ThreadChangeRequest {
+                live: None,
                 max_threads: 8,
                 memory: None,
-                rejection: None,
+                reply: None,
                 run_id: 0,
                 threads: 1,
                 quit_requested: Arc::new(AtomicBool::new(false)),
@@ -3002,6 +3129,25 @@ mod tests {
         let snapshot = supervisor.snapshot();
         assert_eq!(snapshot.run_id, 1);
         assert_eq!(snapshot.lifecycle, MinerLifecycle::Idle);
+    }
+
+    #[test]
+    fn pending_gpu_counts_follow_each_kind() {
+        let amd = "amd initialization in progress: 2 pending";
+        let nvidia = "nvidia initialization in progress: 3 pending";
+        assert_eq!(parse_pending_gpu_count(amd, "amd"), Some(2));
+        assert_eq!(parse_pending_gpu_count(amd, "nvidia"), None);
+        assert_eq!(parse_pending_gpu_count(nvidia, "nvidia"), Some(3));
+        assert_eq!(
+            gpu_left_pending("amd#1: online (initialized in background, 9 lanes)"),
+            Some("amd")
+        );
+        assert_eq!(
+            gpu_left_pending("nvidia#2 unavailable: driver error"),
+            Some("nvidia")
+        );
+        assert_eq!(gpu_left_pending("amd#1: initializing HIP engine..."), None);
+        assert_eq!(gpu_left_pending("cpu#1: online"), None);
     }
 
     #[test]

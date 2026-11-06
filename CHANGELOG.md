@@ -9,10 +9,43 @@ supported hardware only.
 
 ## Unreleased
 
-- **CPU threads start on a new block about 0.3 s sooner.** When the pool moves to a new block, Seine now drops hashes that can no longer win instead of finishing them first (job switch measured at 240 ms → 7 ms on a Zen 4 EPYC). Job refreshes within the same block still finish their hashes, so those shares still count.
-- **Ryzen 7000 desktops mine about 7% faster on Linux** (measured on a Zen 4 desktop (Ryzen 7 7700X) with every thread in use).
-- **Releases are signed and Seine keeps itself current.** Every release now ships a signature over its checksum list, Seine verifies it against the key built into the miner before installing anything, and a running miner installs new releases automatically and restarts with the same settings. Pass `--no-auto-update` to only be told about new releases.
-- Desktop PCs with one memory module, or RAM running below its rated or EXPO/XMP speed, now get a one-line hint at startup naming the fix (Windows, and Linux when run as root).
+## v0.3.1
+
+- **Up to 2.5x faster on NVIDIA GPUs** (GTX 1660 Ti, RTX 2070, RTX 2080 Ti, RTX 3060, RTX 4060, RTX 4090, RTX 5060 Ti)
+- **Up to 33% faster on CPUs** (12th Gen Intel Core, 3rd Gen Xeon, Ryzen 5000, 7000 and 9000)
+- **Much faster with fewer than 8 threads**: about 90% higher hashrate on Ryzen 5 5600, 40% on Skylake Xeon servers and 25% on Ice Lake Xeons and EPYC 9754 when `--threads` is set, and full speed from the first minutes without it
+- **Up to 13% higher CPU hashrate in containers with a CPU limit** (Ryzen 7 9800X3D; about 4% on Ryzen 5 7600X)
+- **Up to 3% higher CPU hashrate with default settings, often on less RAM** (Ryzen 9 5900X, Ryzen 9 9900X, Core i5-12400F, Core i7-14700K)
+- **AMD GPU support** (RX 6000, RX 7000, RX 9000, Radeon PRO): [setup](https://github.com/zpalmtree/seine/blob/v0.3.1/docs/guides/amd.md)
+- **Exchange mining support** (mine straight to your exchange deposit address; `--payout-memo` is required): [setup](https://github.com/zpalmtree/seine/blob/master/docs/EXCHANGE_PAYOUTS.md)
+- **Solo mining through pools that support it**: put `solo:` in front of your address (`-u solo:ADDRESS`) and the pool pays you the full reward of every block you find, less its fee
+- **Ready for the Faraday fork** (block 103,680): pool mining moves to the new proof of work by itself, and with automatic updates on, Seine pauses and installs a newer version whenever the pool asks for one
+- **Tunes faster, then stops**: finds your best thread count and kernel in minutes, keeps the lowest thread count that gets the same hashrate, and stops testing until something changes
+- **A cleaner first run**: the dashboard opens right away, setup happens on screen, and the log only shows what you need, with room to read it and scrollback (↑↓, PgUp, PgDn)
+- **Mining OS packages**
+  - HiveOS: [seine-hiveos-0.3.1.tar.gz](https://github.com/zpalmtree/seine/releases/download/v0.3.1/seine-hiveos-0.3.1.tar.gz) ([guide](https://github.com/zpalmtree/seine/blob/v0.3.1/docs/guides/hiveos.md))
+  - mmpOS: [seine-mmpos-0.3.1.tar.gz](https://github.com/zpalmtree/seine/releases/download/v0.3.1/seine-mmpos-0.3.1.tar.gz) ([guide](https://github.com/zpalmtree/seine/blob/v0.3.1/docs/guides/mmpos.md))
+- **[Farm proxy](https://github.com/zpalmtree/seine/blob/v0.3.1/docs/guides/farm-proxy.md)** (run a whole farm through one pool connection)
+- **Automatic updates that keep your tuning**: a new version starts on your saved settings and only tests what it changed (turn off with `--no-auto-update`)
+- **Shorter `--help`** (lists the flags most miners need; every other flag still works and is in the [flag reference](https://github.com/zpalmtree/seine/blob/master/docs/MINER_FLAGS.md))
+- **Pool Pending balance includes estimated rewards** from blocks that have not matured yet
+
+**Upgrading by automatic update:**
+- **Linux, from v0.2.45:** v0.2.45 installs this version but then exits instead of restarting. Start seine again once; setups that restart seine automatically, such as systemd, need nothing.
+- **Windows, from v0.2.45 or v0.3.0:** the old version starts this one and then exits. If a script or service restarts seine when it exits, stop it once after the update so only one seine keeps running.
+- **HiveOS and mmpOS, from the v0.3.0 package:** switch your flight sheet to the v0.3.1 package above. Automatic updates replace seine but not the package's launch scripts, which this version also fixes.
+
+## v0.3.0
+
+- **Up to 2.5x faster on NVIDIA GPUs** (GTX 1660 Ti, RTX 2070, RTX 2080 Ti, RTX 3060, RTX 4060, RTX 4090, RTX 5060 Ti)
+- **Up to 33% faster on CPUs** (12th Gen Intel Core, 3rd Gen Xeon, Ryzen 5000, 7000 and 9000)
+- **AMD GPU support** (RX 6000, RX 7000, RX 9000, Radeon PRO): [setup](https://github.com/zpalmtree/seine/blob/v0.3.0/docs/guides/amd.md)
+- **Exchange mining support** (mine straight to your exchange deposit address; `--payout-memo` is required): [setup](https://github.com/zpalmtree/seine/blob/master/docs/EXCHANGE_PAYOUTS.md)
+- **Mining OS packages**
+  - HiveOS: [seine-hiveos-0.3.0.tar.gz](https://github.com/zpalmtree/seine/releases/download/v0.3.0/seine-hiveos-0.3.0.tar.gz) ([guide](https://github.com/zpalmtree/seine/blob/v0.3.0/docs/guides/hiveos.md))
+  - mmpOS: [seine-mmpos-0.3.0.tar.gz](https://github.com/zpalmtree/seine/releases/download/v0.3.0/seine-mmpos-0.3.0.tar.gz) ([guide](https://github.com/zpalmtree/seine/blob/v0.3.0/docs/guides/mmpos.md))
+- **[Farm proxy](https://github.com/zpalmtree/seine/blob/v0.3.0/docs/guides/farm-proxy.md)** (run a whole farm through one pool connection)
+- **Automatic updates** (turn off with `--no-auto-update`)
 
 ## v0.2.45
 

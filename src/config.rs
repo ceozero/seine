@@ -20,7 +20,7 @@ pub enum BackendKind {
     Nvidia,
     Metal,
     /// AMD GPU backend (HIP/ROCm). Requires a build with `--features amd`;
-    /// never auto-selected, pass `--backend amd` explicitly.
+    /// discrete GPUs are auto-selected, integrated ones need `--backend amd`.
     Amd,
 }
 
@@ -30,6 +30,24 @@ pub enum BenchKind {
     KernelEffective,
     Backend,
     EndToEnd,
+}
+
+/// Proof of work a benchmark hashes.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum BenchPow {
+    #[default]
+    Argon2id,
+    /// Faraday BLAKE2b-512 on the 156-byte fork header; worker benchmarks only.
+    Blake2b,
+}
+
+impl BenchPow {
+    pub fn algorithm(self) -> crate::backend::PowAlgorithm {
+        match self {
+            Self::Argon2id => crate::backend::PowAlgorithm::Argon2id,
+            Self::Blake2b => crate::backend::PowAlgorithm::Blake2b512,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
@@ -303,121 +321,286 @@ enum TelemetryChoice {
     Off,
 }
 
+const HELP_POOL: &str = "Pool and payout";
+const HELP_HARDWARE: &str = "Hardware";
+const HELP_CPU: &str = "CPU";
+const HELP_SOLO: &str = "Solo mining";
+const HELP_OUTPUT: &str = "Display and data";
+const HELP_MONITORING: &str = "Monitoring";
+const HELP_UPDATES: &str = "Updates and privacy";
+const HELP_BENCH: &str = "Benchmark";
+const HELP_INFO: &str = "Help";
+
+/// `--help` lists what most miners need. Other flags use `hide = true`, keep
+/// working, and are documented in docs/MINER_FLAGS.md.
 #[derive(Debug, Parser)]
 #[command(
     name = "seine",
     version = crate::version::RELEASE_VERSION,
-    about = "Seine net miner for Blocknet"
+    about = "Seine net miner for Blocknet",
+    after_help = "Every flag: https://github.com/zpalmtree/seine/blob/master/docs/MINER_FLAGS.md"
 )]
 struct Cli {
-    /// Save hardware telemetry preference. Requires a collector URL on first opt-in.
-    #[arg(long, value_enum)]
-    telemetry: Option<TelemetryChoice>,
+    /// Pool to mine on: host:port, or stratum+ssl://host:port for TLS. Repeat or separate
+    /// with commas to add backup pools.
+    #[arg(
+        long = "pool-url",
+        short = 'o',
+        visible_alias = "url",
+        value_delimiter = ',',
+        value_name = "URL",
+        help_heading = HELP_POOL,
+    )]
+    pool_url_args: Vec<String>,
 
-    /// Hardware telemetry collector (HTTPS). An explicit opt-out is preserved across destinations.
-    #[arg(long)]
-    telemetry_url: Option<String>,
-    /// Mining mode. Default is pool mode.
-    #[arg(long, value_enum)]
-    mode: Option<MiningMode>,
-
-    /// Use Blocknet testnet defaults for daemon discovery in daemon mode.
-    #[arg(long, default_value_t = false)]
-    testnet: bool,
-
-    /// Stratum pool endpoint for pool mode.
-    /// Accepts host:port or stratum+tcp://host:port.
-    #[arg(long = "pool-url")]
+    /// Pool URL list joined from `pool_url_args`.
+    #[arg(skip)]
     pool_url: Option<String>,
 
-    /// Worker name used when logging into a pool.
-    #[arg(long = "pool-worker")]
-    pool_worker: Option<String>,
-
-    /// API base URL for the blocknet daemon.
-    /// When omitted, Seine prefers Blocknet wrapper config/pidfiles/processes and then falls back to 127.0.0.1:8332.
-    #[arg(long = "api-url")]
-    api_url: Option<String>,
-
-    /// Bearer token for authenticated API access.
-    #[arg(long)]
-    token: Option<String>,
-
-    /// Wallet password used for automatic wallet load when daemon starts without a wallet.
-    #[arg(long)]
-    wallet_password: Option<String>,
-
-    /// Path to a file containing the wallet password for automatic wallet load.
-    #[arg(long)]
-    wallet_password_file: Option<PathBuf>,
-
-    /// Optional payout address or Blocknet ID shortname (@name or $name).
-    /// When set, block templates are requested with this address instead of daemon wallet default.
-    #[arg(long = "address")]
+    /// Where your rewards go: an address or Blocknet ID (@name or $name). ADDRESS.WORKER
+    /// also sets the worker name. Prefix solo: to mine solo on the pool.
+    #[arg(
+        long = "address",
+        short = 'u',
+        visible_alias = "user",
+        value_name = "ADDRESS",
+        help_heading = HELP_POOL,
+    )]
     mining_address: Option<String>,
 
-    /// Path to api.cookie file.
-    /// When omitted, Seine auto-detects the managed cookie from Blocknet wrapper config or --daemon-dir.
-    #[arg(long)]
-    cookie: Option<PathBuf>,
+    /// Worker name shown on the pool.
+    #[arg(
+        long = "pool-worker",
+        visible_alias = "worker",
+        alias = "rig-id",
+        value_name = "NAME",
+        help_heading = HELP_POOL,
+    )]
+    pool_worker: Option<String>,
 
-    /// Daemon data directory (used to locate api.cookie when --cookie is unset).
-    /// Defaults to the Blocknet wrapper-managed data dir under ~/.config/bnt/data/{mainnet,testnet}.
-    #[arg(long)]
-    daemon_dir: Option<PathBuf>,
+    /// Exact exchange deposit memo (pool mining only).
+    #[arg(long, value_name = "MEMO", help_heading = HELP_POOL)]
+    payout_memo: Option<String>,
 
-    /// Seine's own data directory for persisted configs (e.g. autotune results).
-    #[arg(long, default_value = "./seine-data")]
-    data_dir: PathBuf,
+    /// Connect to pools through a SOCKS5 proxy: socks5://[user:pass@]host:port.
+    #[arg(
+        long = "pool-proxy",
+        visible_alias = "socks5",
+        value_name = "URL",
+        help_heading = HELP_POOL,
+    )]
+    pool_proxy: Option<String>,
 
-    /// One or more mining backends. Repeat the flag or pass comma-separated values.
-    /// When omitted, Seine auto-detects available backends (CPU + NVIDIA when available).
+    /// Run as a farm proxy instead of mining: rigs connect to this address and share one
+    /// pool session.
+    #[arg(long = "proxy-listen", value_name = "HOST:PORT", help_heading = HELP_POOL)]
+    proxy_listen: Option<String>,
+
+    /// Hardware to mine on. Repeat or separate with commas. Detected automatically by default.
     #[arg(
         long = "backend",
         value_enum,
         value_delimiter = ',',
-        num_args = 1..
+        num_args = 1..,
+        value_name = "BACKEND",
+        help_heading = HELP_HARDWARE,
     )]
     backends: Vec<BackendKind>,
 
-    /// Explicit NVIDIA device indices; creates one NVIDIA backend instance per index.
-    /// Requires selecting NVIDIA in --backend.
-    #[arg(long = "nvidia-devices", value_delimiter = ',', num_args = 1..)]
-    nvidia_devices: Vec<u32>,
-
-    /// Explicit AMD device indices; creates one AMD backend instance per index.
-    /// Requires selecting AMD in --backend (and a build with --features amd).
-    #[arg(long = "amd-devices", value_delimiter = ',', num_args = 1..)]
-    amd_devices: Vec<u32>,
-
-    /// Number of CPU mining threads per CPU backend instance (each uses ~2GB RAM for Argon2id).
-    /// When omitted, threads auto-size from available CPU parallelism and RAM budget.
-    #[arg(long, alias = "cpu-threads")]
+    /// CPU threads to use, about 2 GB of RAM each. Sized and tuned automatically by default.
+    #[arg(long, alias = "cpu-threads", value_name = "N", help_heading = HELP_HARDWARE)]
     threads: Option<usize>,
 
-    /// Percentage of effective total RAM left unused by automatic CPU sizing/autotuning.
-    /// Default: 5%, at most 1 GiB. Explicit thread counts override this reserve.
-    /// Set 0 to disable headroom.
-    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=99))]
-    cpu_memory_reserve_percent: Option<u8>,
+    /// NVIDIA GPUs to use, for example 0,1,3. All by default.
+    #[arg(
+        long = "nvidia-devices",
+        value_delimiter = ',',
+        num_args = 1..,
+        value_name = "INDEX",
+        help_heading = HELP_HARDWARE,
+    )]
+    nvidia_devices: Vec<u32>,
 
-    /// CPU affinity/scheduler-hint policy for CPU mining workers.
-    /// Default: `pcore-only` on macOS Apple Silicon, otherwise `auto`.
-    #[arg(long, value_enum, default_value_t = DEFAULT_CPU_AFFINITY)]
-    cpu_affinity: CpuAffinityMode,
+    /// AMD GPUs to use, for example 0,1,3. All by default.
+    #[arg(
+        long = "amd-devices",
+        value_delimiter = ',',
+        num_args = 1..,
+        value_name = "INDEX",
+        help_heading = HELP_HARDWARE,
+    )]
+    amd_devices: Vec<u32>,
 
-    /// CPU arena page policy: auto fallback, forced regular pages, required large pages,
-    /// or required 1 GiB HugeTLB pages (`large-1g`, supported Linux x86_64/aarch64 only).
-    #[arg(long = "cpu-page-mode", value_enum, default_value_t = CpuPageMode::Auto)]
+    /// Limit lanes on each NVIDIA GPU to use less VRAM (about 2 GB per lane).
+    #[arg(long, value_name = "N", help_heading = HELP_HARDWARE)]
+    nvidia_max_lanes: Option<usize>,
+
+    /// Limit lanes on each AMD GPU to use less VRAM (about 2 GB per lane).
+    #[arg(long, value_name = "N", help_heading = HELP_HARDWARE)]
+    amd_max_lanes: Option<usize>,
+
+    /// Limit Metal lanes to use less memory (about 2 GB per lane).
+    #[arg(long, value_name = "N", help_heading = HELP_HARDWARE)]
+    metal_max_lanes: Option<usize>,
+
+    /// Tuning goal: balanced and throughput aim for the highest hashrate; efficiency may
+    /// use fewer threads.
+    #[arg(
+        long = "cpu-profile",
+        value_enum,
+        default_value_t = CpuPerformanceProfile::Balanced,
+        value_name = "PROFILE",
+        help_heading = HELP_CPU,
+    )]
+    cpu_profile: CpuPerformanceProfile,
+
+    /// Most CPU threads automatic tuning may use, to leave room for other work.
+    #[arg(long, value_name = "N", help_heading = HELP_CPU)]
+    cpu_autotune_max_threads: Option<usize>,
+
+    /// Memory pages for CPU mining: auto uses large pages when it can, regular never does,
+    /// large and large-1g require them.
+    #[arg(
+        long = "cpu-page-mode",
+        value_enum,
+        default_value_t = CpuPageMode::Auto,
+        value_name = "MODE",
+        help_heading = HELP_CPU,
+    )]
     cpu_page_mode: CpuPageMode,
 
-    /// CPU mining profile preset; applies default threads/poll/flush knobs unless explicitly set.
-    #[arg(long = "cpu-profile", value_enum, default_value_t = CpuPerformanceProfile::Balanced)]
-    cpu_profile: CpuPerformanceProfile,
+    /// How CPU threads are placed on cores.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = DEFAULT_CPU_AFFINITY,
+        value_name = "POLICY",
+        help_heading = HELP_CPU,
+    )]
+    cpu_affinity: CpuAffinityMode,
+
+    /// Mine on a pool, or use daemon to mine solo on your own node. Pool by default.
+    #[arg(long, value_enum, value_name = "MODE", help_heading = HELP_SOLO)]
+    mode: Option<MiningMode>,
+
+    /// Daemon API address. Detected automatically by default.
+    #[arg(long = "api-url", value_name = "URL", help_heading = HELP_SOLO)]
+    api_url: Option<String>,
+
+    /// Path to the daemon's api.cookie. Detected automatically by default.
+    #[arg(long, value_name = "PATH", help_heading = HELP_SOLO)]
+    cookie: Option<PathBuf>,
+
+    /// File with the wallet password, to load the wallet automatically.
+    #[arg(long, value_name = "PATH", help_heading = HELP_SOLO)]
+    wallet_password_file: Option<PathBuf>,
+
+    /// Display: auto, tui for the full-screen dashboard, or plain for log lines.
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = UiMode::Auto,
+        value_name = "MODE",
+        help_heading = HELP_OUTPUT,
+    )]
+    ui: UiMode,
+
+    /// Show internal settings and routine activity on the dashboard and in logs.
+    #[arg(long, help_heading = HELP_OUTPUT)]
+    verbose: bool,
+
+    /// Seconds between stats lines in plain output.
+    #[arg(long, default_value_t = 10, value_name = "SECS", help_heading = HELP_OUTPUT)]
+    stats_secs: u64,
+
+    /// Where Seine keeps its settings and tuning results.
+    #[arg(long, default_value = "./seine-data", value_name = "DIR", help_heading = HELP_OUTPUT)]
+    data_dir: PathBuf,
+
+    /// Also run the local control API and Prometheus metrics.
+    #[arg(long, default_value_t = false, help_heading = HELP_MONITORING)]
+    api_server: bool,
+
+    /// Address for the control API.
+    #[arg(
+        long,
+        default_value = "127.0.0.1:9977",
+        value_name = "HOST:PORT",
+        help_heading = HELP_MONITORING,
+    )]
+    api_bind: String,
+
+    /// Install the newest release now, then exit.
+    #[arg(long, default_value_t = false, help_heading = HELP_UPDATES)]
+    self_update: bool,
+
+    /// Keep this version while mining; only log that a newer release exists.
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        conflicts_with = "auto_update",
+        help_heading = HELP_UPDATES,
+    )]
+    no_auto_update: bool,
+
+    /// Don't check GitHub for newer releases.
+    #[arg(long, action = ArgAction::SetTrue, help_heading = HELP_UPDATES)]
+    disable_update_check: bool,
+
+    /// Turn hardware and performance reports on or off (saved for later runs).
+    #[arg(long, value_enum, value_name = "STATE", help_heading = HELP_UPDATES)]
+    telemetry: Option<TelemetryChoice>,
+
+    /// Measure hashrate on this machine instead of mining.
+    #[arg(long, default_value_t = false, help_heading = HELP_BENCH)]
+    bench: bool,
+
+    // Everything below works but stays out of `--help`; docs/MINER_FLAGS.md lists it.
+    /// Hardware telemetry collector (HTTPS). An explicit opt-out is preserved across destinations.
+    #[arg(long, hide = true)]
+    telemetry_url: Option<String>,
+
+    /// Use Blocknet testnet defaults for daemon discovery in daemon mode.
+    #[arg(long, default_value_t = false, hide = true)]
+    testnet: bool,
+
+    /// Accepted for compatibility with other miners' launch templates.
+    /// Blocknet pools do not use passwords.
+    #[arg(long = "pass", short = 'p', alias = "password", hide = true)]
+    pool_password: Option<String>,
+
+    /// Bearer token for authenticated API access.
+    #[arg(long, hide = true)]
+    token: Option<String>,
+
+    /// Wallet password used for automatic wallet load when daemon starts without a wallet.
+    #[arg(long, hide = true)]
+    wallet_password: Option<String>,
+
+    /// Ignore the saved payout memo when switching to an ordinary wallet.
+    #[arg(long, conflicts_with = "payout_memo", hide = true)]
+    no_payout_memo: bool,
+
+    /// Select backends automatically, leaving out the CPU when a GPU is selected.
+    #[arg(long, conflicts_with = "backends", hide = true)]
+    gpu_only: bool,
+
+    /// Daemon data directory (used to locate api.cookie when --cookie is unset).
+    /// Defaults to the Blocknet wrapper-managed data dir under
+    /// ~/.config/bnt/data/{mainnet,testnet}.
+    #[arg(long, hide = true)]
+    daemon_dir: Option<PathBuf>,
+
+    /// Percentage of effective total RAM left unused by automatic CPU sizing/autotuning.
+    /// Default: 5%, at most 512 MiB on hosts with 16 GiB or more (else at most 1 GiB). Explicit
+    /// thread counts override this reserve.
+    /// Set 0 to disable headroom.
+    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=99), hide = true)]
+    cpu_memory_reserve_percent: Option<u8>,
 
     /// Optional per-CPU-instance thread counts (comma-separated).
     /// Length must match the number of configured CPU backend instances.
-    #[arg(long = "cpu-threads-per-instance", value_delimiter = ',', num_args = 1..)]
+    #[arg(long = "cpu-threads-per-instance", value_delimiter = ',', num_args = 1.., hide = true)]
     cpu_threads_per_instance: Vec<usize>,
 
     /// Optional per-CPU-instance affinity policies (comma-separated).
@@ -426,152 +609,123 @@ struct Cli {
         long = "cpu-affinity-per-instance",
         value_enum,
         value_delimiter = ',',
-        num_args = 1..
+        num_args = 1..,
+        hide = true,
     )]
     cpu_affinity_per_instance: Vec<CpuAffinityMode>,
 
     /// Allow starting when configured CPU lanes exceed detected system RAM.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide = true)]
     allow_oversubscribe: bool,
 
-    /// Maximum time to work on one block template before refreshing.
-    #[arg(long, default_value_t = 20)]
+    /// Maximum time to work on one block template before refreshing (daemon mode).
+    #[arg(long, default_value_t = 20, hide = true)]
     refresh_secs: u64,
 
     /// Timeout for JSON API requests (blocktemplate/submitblock/wallet/load), in seconds.
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 10, hide = true)]
     request_timeout_secs: u64,
 
     /// Timeout for each SSE stream connection attempt, in seconds.
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 10, hide = true)]
     events_stream_timeout_secs: u64,
 
     /// Maximum lifetime for one SSE stream request before reconnecting, in seconds.
-    #[arg(long, default_value_t = 90)]
+    #[arg(long, default_value_t = 90, hide = true)]
     events_idle_timeout_secs: u64,
 
-    /// Interval for periodic stats printing.
-    #[arg(long, default_value_t = 10)]
-    stats_secs: u64,
-
     /// Capacity of the bounded backend event queue.
-    #[arg(long, default_value_t = 1024)]
+    #[arg(long, default_value_t = 1024, hide = true)]
     backend_event_capacity: usize,
 
     /// Backend hash polling interval in milliseconds.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     hash_poll_ms: Option<u64>,
 
     /// CPU worker hash flush batch size.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     cpu_hash_batch_size: Option<u64>,
 
     /// CPU worker control polling cadence in hashes (deadline checks are also time-bounded).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     cpu_control_check_interval_hashes: Option<u64>,
 
     /// CPU worker hash flush interval in milliseconds.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     cpu_hash_flush_ms: Option<u64>,
 
     /// CPU backend internal event dispatch queue capacity.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     cpu_event_dispatch_capacity: Option<usize>,
 
     /// Enable adaptive CPU tuning while mining (offline kernel search in benchmark mode).
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     cpu_autotune_threads: bool,
 
     /// Disable adaptive CPU thread/kernel tuning; keep a fixed count and the default ISA.
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     disable_cpu_autotune_threads: bool,
 
     /// Minimum per-instance CPU thread count considered by autotuner.
-    #[arg(long, default_value_t = 1)]
+    #[arg(long, default_value_t = 1, hide = true)]
     cpu_autotune_min_threads: usize,
-
-    /// Maximum per-instance CPU thread count considered by autotuner.
-    #[arg(long)]
-    cpu_autotune_max_threads: Option<usize>,
 
     /// Base CPU autotune sample window; mining uses max(30, 5 * seconds).
     /// Samples may run longer to collect a stable minimum hash count.
-    #[arg(long, default_value_t = DEFAULT_CPU_AUTOTUNE_SECS)]
+    #[arg(long, default_value_t = DEFAULT_CPU_AUTOTUNE_SECS, hide = true)]
     cpu_autotune_secs: u64,
 
     /// Path for persisted CPU autotune result (default: <data-dir>/seine.cpu-autotune.json).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     cpu_autotune_config: Option<PathBuf>,
 
     /// Base benchmark window (seconds) per NVIDIA autotune sample.
-    #[arg(long, default_value_t = DEFAULT_NVIDIA_AUTOTUNE_SECS)]
+    #[arg(long, default_value_t = DEFAULT_NVIDIA_AUTOTUNE_SECS, hide = true)]
     nvidia_autotune_secs: u64,
 
     /// Number of benchmark samples per NVIDIA autotune candidate (median score wins).
-    #[arg(long, default_value_t = DEFAULT_NVIDIA_AUTOTUNE_SAMPLES)]
+    #[arg(long, default_value_t = DEFAULT_NVIDIA_AUTOTUNE_SAMPLES, hide = true)]
     nvidia_autotune_samples: u32,
 
     /// Path for persisted NVIDIA autotune result (default: <data-dir>/seine.nvidia-autotune.json).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     nvidia_autotune_config: Option<PathBuf>,
 
     /// Force NVIDIA kernel register cap and skip autotune/cache lookup.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     nvidia_max_rregcount: Option<u32>,
 
-    /// Cap NVIDIA active lanes per device instance.
-    #[arg(long)]
-    nvidia_max_lanes: Option<usize>,
-
     /// Override NVIDIA dispatch chunk hint (iterations per lane).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     nvidia_dispatch_iters_per_lane: Option<u64>,
 
     /// Override NVIDIA reservation/allocation hint (iterations per lane).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     nvidia_allocation_iters_per_lane: Option<u64>,
 
-    /// Maximum hashes each lane executes per CUDA launch (higher = fewer launches, coarser preemption).
-    /// When left unset, Blackwell GPUs treat depth-1 as the preferred frontier:
-    /// cached/default depth-2 records clamp to depth-1 at runtime, and fresh autotune
-    /// jointly re-probes regcap+depth with Blackwell-only tie-breaks toward shallower full-lane profiles.
-    /// Explicit overrides keep the requested depth.
-    #[arg(
-        long,
-        default_value_t = DEFAULT_NVIDIA_HASHES_PER_LAUNCH_PER_LANE
-    )]
+    /// Hashes each lane runs per CUDA launch; unset uses this GPU's default.
+    #[arg(long, default_value_t = DEFAULT_NVIDIA_HASHES_PER_LAUNCH_PER_LANE, hide = true)]
     nvidia_hashes_per_launch_per_lane: u32,
 
     /// Disable adaptive NVIDIA launch-depth pressure control and keep the configured launch depth.
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     nvidia_no_adaptive_launch_depth: bool,
 
-    /// Enable fused target-check in the fill kernel (can regress throughput on some GPUs).
-    #[arg(long, action = ArgAction::SetTrue)]
+    /// Run the target check inside the fill kernel.
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     nvidia_fused_target_check: bool,
 
     /// NVIDIA stop-at-template policy: `auto` follows round accounting mode, `on` always enforces,
     /// `off` never enforces in the backend worker loop.
-    #[arg(long, value_enum, default_value_t = NvidiaTemplateStopPolicy::Auto)]
+    #[arg(long, value_enum, default_value_t = NvidiaTemplateStopPolicy::Auto, hide = true)]
     nvidia_template_stop_policy: NvidiaTemplateStopPolicy,
 
-    /// Cap AMD active lanes per device instance (each lane uses ~2GB VRAM).
-    #[arg(long)]
-    amd_max_lanes: Option<usize>,
-
-    /// Cap Metal active lanes (each uses ~2GB unified memory).
-    #[arg(long)]
-    metal_max_lanes: Option<usize>,
-
-    /// Maximum hashes each lane executes per Metal dispatch (higher = fewer dispatches, coarser preemption).
-    #[arg(
-        long,
-        default_value_t = DEFAULT_METAL_HASHES_PER_LAUNCH_PER_LANE
-    )]
+    /// Hashes each lane runs per Metal dispatch.
+    #[arg(long, default_value_t = DEFAULT_METAL_HASHES_PER_LAUNCH_PER_LANE, hide = true)]
     metal_hashes_per_launch_per_lane: u32,
 
     /// Maximum time to wait for one backend assignment dispatch call, in milliseconds.
-    #[arg(long, default_value_t = 1000)]
+    #[arg(long, default_value_t = 1000, hide = true)]
     backend_assign_timeout_ms: u64,
 
     /// Optional per-backend-instance assignment dispatch timeouts in milliseconds.
@@ -579,12 +733,13 @@ struct Cli {
     #[arg(
         long = "backend-assign-timeout-ms-per-instance",
         value_delimiter = ',',
-        num_args = 1..
+        num_args = 1..,
+        hide = true,
     )]
     backend_assign_timeout_ms_per_instance: Vec<u64>,
 
     /// Consecutive assignment timeouts before backend quarantine.
-    #[arg(long, default_value_t = 3)]
+    #[arg(long, default_value_t = 3, hide = true)]
     backend_assign_timeout_strikes: u32,
 
     /// Optional per-backend-instance assignment-timeout strike thresholds.
@@ -592,12 +747,13 @@ struct Cli {
     #[arg(
         long = "backend-assign-timeout-strikes-per-instance",
         value_delimiter = ',',
-        num_args = 1..
+        num_args = 1..,
+        hide = true,
     )]
     backend_assign_timeout_strikes_per_instance: Vec<u32>,
 
     /// Maximum time to wait for backend cancel/fence control calls, in milliseconds.
-    #[arg(long, default_value_t = 60_000)]
+    #[arg(long, default_value_t = 60_000, hide = true)]
     backend_control_timeout_ms: u64,
 
     /// Optional per-backend-instance cancel/fence timeouts in milliseconds.
@@ -605,28 +761,29 @@ struct Cli {
     #[arg(
         long = "backend-control-timeout-ms-per-instance",
         value_delimiter = ',',
-        num_args = 1..
+        num_args = 1..,
+        hide = true,
     )]
     backend_control_timeout_ms_per_instance: Vec<u64>,
 
     /// Allow backends with best-effort deadline semantics.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide = true)]
     allow_best_effort_deadlines: bool,
 
     /// Maximum time to wait for a prefetched block template before falling back.
-    #[arg(long, default_value_t = 250)]
+    #[arg(long, default_value_t = 250, hide = true)]
     prefetch_wait_ms: u64,
 
     /// Maximum time to wait for tip-listener shutdown before detaching.
-    #[arg(long, default_value_t = 250)]
+    #[arg(long, default_value_t = 250, hide = true)]
     tip_listener_join_wait_ms: u64,
 
     /// Maximum time to wait for submit-worker shutdown before detaching.
-    #[arg(long, default_value_t = 2_000)]
+    #[arg(long, default_value_t = 2_000, hide = true)]
     submit_join_wait_ms: u64,
 
-    /// Enable strict per-round quiesce barriers for exact accounting (lower throughput).
-    #[arg(long, action = ArgAction::SetTrue)]
+    /// Stop all backends at each round end for exact round accounting.
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     strict_round_accounting: bool,
 
     /// Deprecated alias kept for compatibility; relaxed accounting is now the default.
@@ -634,139 +791,135 @@ struct Cli {
     relaxed_accounting: bool,
 
     /// Optional nonce seed.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     start_nonce: Option<u64>,
 
     /// Maximum iterations each lane will scan before switching to next reservation.
-    #[arg(long, default_value_t = 1u64 << 36)]
+    #[arg(long, default_value_t = 1u64 << 36, hide = true)]
     nonce_iters_per_lane: u64,
 
     /// Nonce chunk allocation strategy across active backends.
-    #[arg(long, value_enum, default_value_t = WorkAllocation::Adaptive)]
+    #[arg(long, value_enum, default_value_t = WorkAllocation::Adaptive, hide = true)]
     work_allocation: WorkAllocation,
 
     /// Optional periodic in-round redistribution interval in milliseconds (0 disables).
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0, hide = true)]
     sub_round_rebalance_ms: u64,
 
     /// Disable SSE tip notifications (/api/events) and rely only on refresh timer.
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     disable_sse: bool,
 
-    /// Disable the background check for newer seine releases on GitHub.
-    #[arg(long, action = ArgAction::SetTrue)]
-    disable_update_check: bool,
-
-    /// Refresh on same-height new_block hash changes (disabled by default to avoid replay churn).
-    #[arg(long, action = ArgAction::SetTrue)]
+    /// Refresh on same-height new_block hash changes.
+    #[arg(long, action = ArgAction::SetTrue, hide = true)]
     refresh_on_same_height: bool,
 
-    /// UI mode: auto (TTY-detected), tui (force full-screen TUI), plain (stdout logs only).
-    #[arg(long, value_enum, default_value_t = UiMode::Auto)]
-    ui: UiMode,
-
-    /// Start local control API server alongside miner operation.
-    #[arg(long, default_value_t = false)]
-    api_server: bool,
-
     /// API service mode: start local control API and wait for start commands.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide = true)]
     service: bool,
 
-    /// Bind address for local control API server.
-    #[arg(long, default_value = "127.0.0.1:9977")]
-    api_bind: String,
-
     /// Allow non-loopback API bind addresses.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, hide = true)]
     api_allow_unsafe_bind: bool,
 
     /// CORS allow-origin value for control API responses. Empty (default) sends no CORS
     /// headers, so web pages on other origins cannot call the API from a browser.
-    #[arg(long, default_value = "")]
+    #[arg(long, default_value = "", hide = true)]
     api_cors: String,
 
     /// Bearer token required by the control API. When omitted, Seine generates a random
     /// token at startup and writes it to --api-cookie.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     api_token: Option<String>,
 
     /// File the generated control API token is written to (default: <data-dir>/control-api.cookie).
-    #[arg(long)]
+    #[arg(long, hide = true)]
     api_cookie: Option<PathBuf>,
-
-    /// Run local performance benchmark instead of mining over API.
-    #[arg(long, default_value_t = false)]
-    bench: bool,
-
-    /// Replace this executable with the newest stable release for this platform
-    /// (checked against the release's SHA256SUMS.txt), then exit without mining.
-    #[arg(long, default_value_t = false)]
-    self_update: bool,
 
     /// Install new stable releases while mining (the default): download, verify
     /// the release signature and checksum, swap the executable and restart with
     /// the same arguments. Needs the update check.
-    #[arg(long, default_value_t = true, action = ArgAction::SetTrue)]
+    #[arg(long, default_value_t = true, action = ArgAction::SetTrue, hide = true)]
     auto_update: bool,
 
-    /// Keep mining the current version: only log that a newer release exists.
-    #[arg(long, action = ArgAction::SetTrue, conflicts_with = "auto_update")]
-    no_auto_update: bool,
-
-    /// Experimental: side-buffer slots (1 KiB each) that serve scheduled
-    /// data-independent references in the AVX-512 streaming kernels; 0 disables,
-    /// unset uses the default for this CPU (512 on Linux Zen 5 EPYC
-    /// with one worker per core, otherwise off).
+    /// Experimental: side-buffer slots (1 KiB each) for the AVX-512 streaming
+    /// kernels; 0 disables, unset uses this CPU's default.
     #[arg(long, hide = true)]
     cpu_side_cache_blocks: Option<usize>,
 
-    /// Experimental: from this permille of the arena on (500-1000), odd blocks
-    /// skip their memory store and are rebuilt when referenced (AVX-512
-    /// streaming kernels); 0 disables, unset uses the default for this
-    /// CPU (600 on Linux Zen 4 desktops at 16 or more workers, otherwise off).
+    /// Experimental: arena fraction (permille, 500-1000) from which odd blocks
+    /// are not stored (AVX2 and AVX-512 streaming kernels); 0 disables, unset uses this
+    /// CPU's default.
     #[arg(long, hide = true)]
     cpu_skip_store_permille: Option<u16>,
 
     /// Benchmark mode.
     /// `kernel-effective` measures kernel throughput with wall-time accounting and the backend's
     /// target/eval path enabled so results are directly comparable to backend-mode overhead.
-    #[arg(long, value_enum, default_value_t = BenchKind::Backend)]
+    #[arg(long, value_enum, default_value_t = BenchKind::Backend, hide = true)]
     bench_kind: BenchKind,
 
-    /// Force a supported CPU kernel for offline benchmarks (scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, avx512-stream-l2, neon, neon-sha3).
+    /// Proof of work to benchmark: argon2id (default) or blake2b (the Faraday fork
+    /// hash; `backend` and `end-to-end` kinds only).
+    #[arg(long, value_enum, default_value_t = BenchPow::Argon2id, hide = true)]
+    bench_pow: BenchPow,
+
+    /// Force a supported CPU kernel for offline benchmarks.
     /// Requires --bench, CPU-only backends, fixed --threads, and no CPU autotuning.
-    #[arg(long, requires_all = ["bench", "threads"])]
+    #[arg(long, requires_all = ["bench", "threads"], hide = true)]
     bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
 
     /// Per-round benchmark duration in seconds.
-    #[arg(long, default_value_t = 20)]
+    #[arg(long, default_value_t = 20, hide = true)]
     bench_secs: u64,
 
     /// Number of benchmark rounds.
-    #[arg(long, default_value_t = 3)]
+    #[arg(long, default_value_t = 3, hide = true)]
     bench_rounds: u32,
 
     /// Number of warmup rounds run before measured benchmark rounds.
-    #[arg(long, default_value_t = 0)]
+    #[arg(long, default_value_t = 0, hide = true)]
     bench_warmup_rounds: u32,
 
     /// Write benchmark report JSON to this file.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     bench_output: Option<PathBuf>,
 
     /// Compare benchmark average H/s against a previous JSON report.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     bench_baseline: Option<PathBuf>,
 
     /// Fail benchmark run if average H/s regresses below baseline by more than this percent.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     bench_fail_below_pct: Option<f64>,
 
     /// Baseline compatibility mode: strict validates environment/build identity;
     /// ignore-environment allows cross-build comparisons while keeping runtime/config/PoW checks.
-    #[arg(long, value_enum, default_value_t = BenchBaselinePolicy::Strict)]
+    #[arg(long, value_enum, default_value_t = BenchBaselinePolicy::Strict, hide = true)]
     bench_baseline_policy: BenchBaselinePolicy,
+}
+
+/// The command line, with `--help` printing the same list as `-h`.
+fn cli_command() -> clap::Command {
+    Cli::command()
+        .disable_help_flag(true)
+        .disable_version_flag(true)
+        .arg(
+            clap::Arg::new("help")
+                .short('h')
+                .long("help")
+                .action(ArgAction::HelpShort)
+                .help("Print help")
+                .help_heading(HELP_INFO),
+        )
+        .arg(
+            clap::Arg::new("version")
+                .short('V')
+                .long("version")
+                .action(ArgAction::Version)
+                .help("Print version")
+                .help_heading(HELP_INFO),
+        )
 }
 
 #[derive(Debug, Clone)]
@@ -775,6 +928,10 @@ pub struct Config {
     pub mode: MiningMode,
     pub pool_url: Option<String>,
     pub pool_worker: Option<String>,
+    /// SOCKS5 proxy for pool connections.
+    pub pool_proxy: Option<crate::pool::SocksProxy>,
+    /// Run as a farm proxy listening for rigs on this address.
+    pub proxy_listen: Option<String>,
     pub dev_fee_pool_worker: String,
     pub api_url: String,
     pub token: Option<String>,
@@ -786,6 +943,7 @@ pub struct Config {
     pub wallet_password: Option<String>,
     pub wallet_password_file: Option<PathBuf>,
     pub mining_address: Option<String>,
+    pub payout_memo: Option<String>,
     pub backend_specs: Vec<BackendSpec>,
     pub threads: usize,
     /// The explicit `--threads` value, reported in telemetry so fleet data can tell
@@ -797,7 +955,7 @@ pub struct Config {
     /// Frozen automatic worker slots for this run; distinct from the RAM-safe
     /// manual/offline ceiling and the CPU-only cache/search maximum.
     pub cpu_autotune_worker_slots: Option<usize>,
-    /// `None` reserves 5% of effective RAM, at most 1 GiB.
+    /// `None` reserves 5% of effective RAM, at most 512 MiB with 16 GiB or more (else 1 GiB).
     pub cpu_memory_reserve_percent: Option<u8>,
     pub cpu_affinity: CpuAffinityMode,
     pub cpu_page_mode: CpuPageMode,
@@ -834,6 +992,8 @@ pub struct Config {
     pub amd_max_lanes: Option<usize>,
     pub metal_max_lanes: Option<usize>,
     pub metal_hashes_per_launch_per_lane: u32,
+    /// The Metal backend was added automatically and mines BLAKE2b only.
+    pub metal_blake2b_only: bool,
     pub backend_assign_timeout: Duration,
     pub backend_assign_timeout_strikes: u32,
     pub backend_control_timeout: Duration,
@@ -870,6 +1030,7 @@ pub struct Config {
     pub allow_wallet_prompt: bool,
     pub bench: bool,
     pub bench_kind: BenchKind,
+    pub bench_pow: BenchPow,
     pub bench_cpu_kernel: Option<blocknet_pow_kernel::CpuKernel>,
     pub bench_secs: u64,
     pub bench_rounds: u32,
@@ -882,24 +1043,52 @@ pub struct Config {
     pub nvidia_hint: Option<&'static str>,
     /// GPU detection/auto-expansion notices, logged once at miner startup.
     pub startup_notices: Vec<String>,
+    /// Startup facts for plain logs; not worth a dashboard line.
+    pub startup_details: Vec<String>,
+}
+
+/// What `main` needs to know before the slower parts of configuration run.
+pub struct StartupUi {
+    pub verbose: bool,
+    pub opens_dashboard: bool,
+    pub mode_label: &'static str,
+    pub pool_url: Option<String>,
+    pub pool_worker: Option<String>,
 }
 
 impl Config {
-    pub fn parse() -> Result<Self> {
-        let matches = Cli::command().get_matches();
+    /// `on_startup` runs once, after any prompts and before hardware detection.
+    pub fn parse(on_startup: impl FnOnce(StartupUi) -> Result<()>) -> Result<Self> {
+        let matches = match cli_command().try_get_matches() {
+            Ok(matches) => matches,
+            // Arguments the previous version took and this one refuses go
+            // back to that version (see `self_update::roll_back_failed_start`).
+            Err(err)
+                if crate::self_update::rollback_pending()
+                    && !matches!(
+                        err.kind(),
+                        clap::error::ErrorKind::DisplayHelp
+                            | clap::error::ErrorKind::DisplayVersion
+                    ) =>
+            {
+                return Err(err.into());
+            }
+            Err(err) => err.exit(),
+        };
         let nvidia_hashes_per_launch_per_lane_was_set = matches!(
             matches.value_source("nvidia_hashes_per_launch_per_lane"),
             Some(clap::parser::ValueSource::CommandLine)
         );
         let mut cli =
             Cli::from_arg_matches(&matches).expect("clap matches should deserialize into Cli");
+        cli.apply_miner_style_args();
         if let Some(kernel) = cli.bench_cpu_kernel {
             if !kernel.is_supported() {
                 bail!("CPU kernel {kernel} is not supported by this host/build");
             }
         }
         let user_config_path = cli.data_dir.join(DEFAULT_USER_CONFIG_FILE);
-        let user_cfg = read_user_config(&user_config_path)?;
+        let mut user_cfg = read_user_config(&user_config_path)?;
         let user_config_exists = user_cfg.is_some();
         let mut dev_fee_pool_worker = user_cfg
             .as_ref()
@@ -907,7 +1096,9 @@ impl Config {
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
 
+        validate_saved_memo_override(&cli, user_cfg.as_ref())?;
         apply_user_config_defaults(&mut cli, user_cfg.as_ref());
+        validate_payout_memo_config(&cli)?;
         let mut user_config_created = false;
         let should_prompt_for_pool_bootstrap = !cli.bench && !cli.service;
         if !user_config_exists {
@@ -936,6 +1127,16 @@ impl Config {
                 cli.pool_worker = Some(generate_default_pool_worker());
             }
         }
+        let memo_prompted = prompt_payout_memo_on_screen(&mut cli)?;
+        if resolve_required_payout_memo(
+            &mut cli,
+            io::stdin().is_terminal() && io::stderr().is_terminal(),
+            &mut io::stdin().lock(),
+            &mut io::stderr(),
+        )? || memo_prompted
+        {
+            persist_prompted_payout_memo(&cli, user_cfg.as_mut(), &user_config_path)?;
+        }
         if dev_fee_pool_worker.is_none() {
             let generated = generate_default_dev_fee_pool_worker();
             persist_user_config_with_dev_fee_pool_worker(
@@ -962,14 +1163,17 @@ impl Config {
                 .map_err(|err| anyhow::anyhow!("invalid --address: {err}"))?;
         }
         if let Some(pool_url) = cli.pool_url.as_ref() {
-            if normalize_pool_url(pool_url).is_none() {
-                bail!("--pool-url must be host:port or stratum+tcp://host:port");
+            if let Err(err) = crate::pool::normalize_pool_urls(pool_url) {
+                bail!("invalid --pool-url: {err:#}");
             }
         }
         if let Some(pool_worker) = cli.pool_worker.as_ref() {
             if pool_worker.trim().is_empty() {
                 bail!("--pool-worker is empty");
             }
+        }
+        if cli.proxy_listen.is_some() && cli.mode == Some(MiningMode::Daemon) {
+            bail!("--proxy-listen relays to a pool; it cannot be used with --mode daemon");
         }
         if cli.nonce_iters_per_lane == 0 {
             bail!("nonce-iters-per-lane must be >= 1");
@@ -1097,22 +1301,61 @@ impl Config {
             }
         }
 
+        on_startup(StartupUi {
+            verbose: cli.verbose,
+            opens_dashboard: !cli.bench
+                && !cli.service
+                && cli.proxy_listen.is_none()
+                && crate::miner::ui_mode_enables_tui(cli.ui),
+            mode_label: match cli.mode.unwrap_or(MiningMode::Pool) {
+                MiningMode::Pool => "pool",
+                MiningMode::Daemon => "daemon",
+            },
+            pool_url: cli.pool_url.clone(),
+            pool_worker: cli.pool_worker.clone(),
+        })?;
+
         let nvidia_detection = detect_nvidia_devices();
         let nvidia_available = nvidia_detection
             .as_ref()
             .map(|devices| !devices.is_empty())
             .unwrap_or(false);
-        let (backends, nvidia_hint) =
-            resolve_backend_selection(&cli.backends, &cli.nvidia_devices, nvidia_available);
         let mut startup_notices = Vec::new();
-        // HIP is only dlopen'd when an AMD instance without explicit devices is
-        // actually requested; explicit --amd-devices keeps startup free of
+        let mut startup_details = Vec::new();
+        // HIP is dlopen'd when AMD is requested without explicit devices, or
+        // when no backend is requested so discrete AMD GPUs can be enabled
+        // automatically; explicit --amd-devices keeps startup free of
         // config-time ROCm probing.
-        let amd_detection = if backends.contains(&BackendKind::Amd) && cli.amd_devices.is_empty() {
-            Some(detect_amd_devices(&mut startup_notices))
-        } else {
-            None
-        };
+        let amd_requested = cli.backends.contains(&BackendKind::Amd);
+        if !cli.bench && cli.proxy_listen.is_none() {
+            init_amd_crash_guard(&cli.data_dir);
+        }
+        let amd_detection =
+            if (amd_requested || cli.backends.is_empty()) && cli.amd_devices.is_empty() {
+                Some(detect_amd_devices(
+                    &mut startup_notices,
+                    amd_requested,
+                    cli.proxy_listen.is_none(),
+                ))
+            } else {
+                None
+            };
+        let amd_available = amd_detection
+            .as_ref()
+            .and_then(|detection| detection.as_ref().ok())
+            .map(|devices| !devices.is_empty())
+            .unwrap_or(false);
+        let (mut backends, nvidia_hint) = resolve_backend_selection_in(
+            cli.mode.unwrap_or(MiningMode::Pool),
+            &cli.backends,
+            &cli.nvidia_devices,
+            nvidia_available,
+            &cli.amd_devices,
+            amd_available,
+        );
+        if cli.gpu_only {
+            drop_cpu_when_a_gpu_is_selected(&mut backends);
+        }
         let auto_nvidia_devices: Vec<u32> =
             if cli.nvidia_devices.is_empty() && backends.contains(&BackendKind::Nvidia) {
                 nvidia_detection
@@ -1130,7 +1373,6 @@ impl Config {
         startup_notices.extend(build_gpu_detection_notices(
             "NVIDIA",
             "nvidia",
-            "--nvidia-devices",
             &nvidia_detection,
             &cli.nvidia_devices,
             backends.contains(&BackendKind::Nvidia),
@@ -1139,17 +1381,20 @@ impl Config {
             startup_notices.extend(build_gpu_detection_notices(
                 "AMD",
                 "amd",
-                "--amd-devices",
                 detection,
                 &cli.amd_devices,
-                true,
+                backends.contains(&BackendKind::Amd),
             ));
         }
-        let gpu_memory_reservation = if backends.contains(&BackendKind::Metal) {
-            estimate_metal_memory_bytes(cli.metal_max_lanes)
-        } else {
-            0
-        };
+        // The Metal backend Seine adds by itself mines BLAKE2b only and keeps
+        // no Argon2 lanes, so the CPU keeps its full memory budget.
+        let metal_blake2b_only = cli.backends.is_empty() && backends.contains(&BackendKind::Metal);
+        let gpu_memory_reservation =
+            if backends.contains(&BackendKind::Metal) && !metal_blake2b_only {
+                estimate_metal_memory_bytes(cli.metal_max_lanes)
+            } else {
+                0
+            };
         let cpu_backend_instances = backends
             .iter()
             .filter(|kind| matches!(kind, BackendKind::Cpu))
@@ -1186,10 +1431,10 @@ impl Config {
             cpu_autotune_threads,
             cli.disable_cpu_autotune_threads,
             cli.bench,
-        ) && crate::miner::fixed_count_trials_wanted();
+        ) && crate::miner::fixed_count_trials_wanted(resolved_threads);
         if pinned_kernel_trials {
             startup_notices.push(format!(
-                "--threads {resolved_threads} is kept; the CPU kernel is still compared while mining because this CPU has no validated default"
+                "--threads {resolved_threads} is kept; the CPU kernel is still compared while mining on this CPU"
             ));
         }
         let cpu_autotune_threads = cpu_autotune_threads || pinned_kernel_trials;
@@ -1201,10 +1446,10 @@ impl Config {
             cpu_autotune_threads,
         )?;
         if cpu_backend_instances > 0 && (cli.threads.is_none() || cpu_autotune_threads) {
-            startup_notices.push(format!(
+            startup_details.push(format!(
                 "CPU automatic sizing reserves {} of effective RAM; cap={} thread(s) per instance (--cpu-memory-reserve-percent 0 disables the reserve)",
                 cli.cpu_memory_reserve_percent
-                    .map_or("5% (at most 1 GiB)".to_string(), |p| format!("{p}%")),
+                    .map_or("5% (at most 512 MiB with 16 GiB or more, else 1 GiB)".to_string(), |p| format!("{p}%")),
                 auto_threads_cap,
             ));
         }
@@ -1341,6 +1586,13 @@ impl Config {
                 .pool_worker
                 .as_ref()
                 .map(|value| value.trim().to_string()),
+            proxy_listen: cli.proxy_listen.clone(),
+            pool_proxy: cli
+                .pool_proxy
+                .as_deref()
+                .map(crate::pool::SocksProxy::parse)
+                .transpose()
+                .context("invalid --pool-proxy")?,
             dev_fee_pool_worker,
             api_url,
             token,
@@ -1351,6 +1603,7 @@ impl Config {
             daemon_expected_cookie_path,
             wallet_password: cli.wallet_password,
             wallet_password_file: cli.wallet_password_file,
+            payout_memo: cli.payout_memo.clone(),
             mining_address: cli.mining_address.map(|address| address.trim().to_string()),
             backend_specs,
             threads: resolved_threads,
@@ -1403,6 +1656,7 @@ impl Config {
             amd_devices: cli.amd_devices.clone(),
             amd_max_lanes: cli.amd_max_lanes.filter(|v| *v > 0),
             metal_max_lanes: cli.metal_max_lanes.filter(|v| *v > 0),
+            metal_blake2b_only,
             metal_hashes_per_launch_per_lane: cli.metal_hashes_per_launch_per_lane.max(1),
             backend_assign_timeout: Duration::from_millis(cli.backend_assign_timeout_ms),
             backend_assign_timeout_strikes: cli.backend_assign_timeout_strikes.max(1),
@@ -1450,6 +1704,7 @@ impl Config {
             allow_wallet_prompt: true,
             bench: cli.bench,
             bench_kind: cli.bench_kind,
+            bench_pow: cli.bench_pow,
             bench_cpu_kernel: cli.bench_cpu_kernel,
             bench_secs: cli.bench_secs.max(1),
             bench_rounds: cli.bench_rounds.max(1),
@@ -1460,6 +1715,7 @@ impl Config {
             bench_baseline_policy: cli.bench_baseline_policy,
             nvidia_hint,
             startup_notices,
+            startup_details,
         };
         if cfg.cpu_autotune_threads && !cfg.bench {
             cfg.cpu_auto_threads_cap = cpu_autotune_capacity(&cfg, 0).0;
@@ -1568,29 +1824,41 @@ impl Config {
     }
 }
 
-fn resolve_backend_selection(
+fn resolve_backend_selection_in(
+    mode: MiningMode,
     requested_backends: &[BackendKind],
     nvidia_devices: &[u32],
     nvidia_available: bool,
+    amd_devices: &[u32],
+    amd_available: bool,
 ) -> (Vec<BackendKind>, Option<&'static str>) {
     if !requested_backends.is_empty() {
         return (requested_backends.to_vec(), None);
     }
 
-    // Metal is not auto-enabled: on Apple Silicon unified memory, Argon2id is
-    // memory-latency-bound and CPU lanes are much faster per lane than Metal.
-    // Running both degrades total throughput.  Users can opt in via --backend cpu,metal.
+    // Integrated AMD GPUs are not auto-enabled; users can opt in via
+    // --backend cpu,amd. On Apple Silicon builds that mine BLAKE2b, Metal is
+    // added for BLAKE2b work only; --backend cpu,metal also mines Argon2 on it.
+    #[cfg(not(all(feature = "metal", target_os = "macos")))]
+    let _ = mode;
     let mut selected = vec![BackendKind::Cpu];
+    #[cfg(all(feature = "metal", target_os = "macos"))]
+    if crate::miner::mines_blake2b_in(mode) {
+        selected.push(BackendKind::Metal);
+    }
     if nvidia_available || !nvidia_devices.is_empty() {
         selected.push(BackendKind::Nvidia);
     }
+    if amd_available || !amd_devices.is_empty() {
+        selected.push(BackendKind::Amd);
+    }
 
     #[cfg(all(feature = "nvidia", not(target_os = "macos")))]
-    let hint = if !selected.contains(&BackendKind::Nvidia) {
+    let hint = if !selected.contains(&BackendKind::Nvidia) && !selected.contains(&BackendKind::Amd)
+    {
         Some(
             "this build supports NVIDIA GPU mining but no GPU was detected; \
-             install NVIDIA drivers + CUDA Toolkit to enable: \
-             https://developer.nvidia.com/cuda-downloads",
+             install the NVIDIA driver to enable it: https://www.nvidia.com/drivers",
         )
     } else {
         None
@@ -1599,6 +1867,16 @@ fn resolve_backend_selection(
     let hint = None;
 
     (selected, hint)
+}
+
+/// `--gpu-only`: a rig with no usable GPU still mines on the CPU.
+fn drop_cpu_when_a_gpu_is_selected(backends: &mut Vec<BackendKind>) {
+    if backends
+        .iter()
+        .any(|kind| matches!(kind, BackendKind::Nvidia | BackendKind::Amd))
+    {
+        backends.retain(|kind| *kind != BackendKind::Cpu);
+    }
 }
 
 /// A GPU reported by config-time device enumeration, used to fan out one
@@ -1631,20 +1909,155 @@ pub(crate) fn detect_nvidia_devices() -> Result<Vec<DetectedGpu>> {
 /// Enumerates HIP devices, keeping only wave32 GPUs the AMD backend can run on.
 /// Skipped devices are reported through `notices` instead of spawning instances
 /// that are guaranteed to fail wavefront validation at start.
-#[cfg(all(feature = "amd", unix))]
-pub(crate) fn detect_amd_devices(notices: &mut Vec<String>) -> Result<Vec<DetectedGpu>> {
-    let devices = crate::backend::amd::query_amd_devices()?;
+/// Integrated GPUs are kept only when `include_integrated` is set.
+/// `raise_perf_level` is false when nothing will mine (farm proxy).
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
+pub(crate) fn detect_amd_devices(
+    notices: &mut Vec<String>,
+    include_integrated: bool,
+    raise_perf_level: bool,
+) -> Result<Vec<DetectedGpu>> {
+    use crate::backend::amd::{crash_guard, hip_runtime_present, query_amd_devices};
+
+    // Startup detection (not device listing) feeds telemetry.
+    let record = raise_perf_level;
+    // `include_integrated` means the user listed `amd`, which always tries.
+    if !include_integrated && crash_guard::skips_automatic_start() {
+        notices.push(
+            "AMD GPUs skipped: the AMD GPU runtime ended the last Seine starts while using them. \
+             Seine tries them again after its next update; add amd to --backend to try now."
+                .to_string(),
+        );
+        if record {
+            crate::diagnostics::set_amd_detection(seine_telemetry::AmdDetection {
+                hip_unavailable: false,
+                pci_devices: amd_pci_display_devices(),
+                ..Default::default()
+            });
+        }
+        return Ok(Vec::new());
+    }
+    let queried = {
+        let _native_call = hip_runtime_present().then(crash_guard::enter_native_call);
+        query_amd_devices()
+    };
+    let mut devices = match queried {
+        Ok(devices) => devices,
+        Err(err) => {
+            if record {
+                crate::diagnostics::set_amd_detection(seine_telemetry::AmdDetection {
+                    hip_unavailable: true,
+                    pci_devices: amd_pci_display_devices(),
+                    ..Default::default()
+                });
+            }
+            return Err(err);
+        }
+    };
+    let found = devices.len() as u32;
+    devices.retain(|device| include_integrated || !device.integrated);
+    let integrated_skipped = found - devices.len() as u32;
+    for device in &devices {
+        if !raise_perf_level || !crate::backend::amd::supports_wavefront_size(device.wavefront_size)
+        {
+            continue;
+        }
+        let outcome = crate::backend::amd::dpm::raise_performance_level(
+            &device.pci_address,
+            &device.gcn_arch_name,
+        );
+        notices.extend(crate::backend::amd::dpm::startup_notice(
+            device.index,
+            &device.name,
+            &device.pci_address,
+            &outcome,
+        ));
+    }
+    let considered = devices.len() as u32;
     let (usable, skipped) = partition_supported_amd_devices(devices);
     notices.extend(skipped);
+    if record {
+        crate::diagnostics::set_amd_detection(seine_telemetry::AmdDetection {
+            hip_unavailable: false,
+            found: found.min(64),
+            selected: (usable.len() as u32).min(64),
+            integrated_skipped,
+            unsupported_skipped: considered - usable.len() as u32,
+            pci_devices: amd_pci_display_devices(),
+        });
+    }
     Ok(usable)
 }
 
-#[cfg(not(all(feature = "amd", unix)))]
-pub(crate) fn detect_amd_devices(_notices: &mut Vec<String>) -> Result<Vec<DetectedGpu>> {
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
+fn init_amd_crash_guard(data_dir: &Path) {
+    crate::backend::amd::crash_guard::init(data_dir);
+}
+
+#[cfg(not(all(feature = "amd", any(target_os = "linux", windows))))]
+fn init_amd_crash_guard(_data_dir: &Path) {}
+
+/// Discrete AMD display devices (vendor 0x1002, PCI class 0x03) as the OS lists
+/// them, whether or not HIP can use them. Linux only.
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
+fn amd_pci_display_devices() -> Option<u32> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    let entries = std::fs::read_dir("/sys/bus/pci/devices").ok()?;
+    let read = |path: std::path::PathBuf| {
+        std::fs::read_to_string(path)
+            .map(|value| value.trim().to_ascii_lowercase())
+            .unwrap_or_default()
+    };
+    let count = entries
+        .flatten()
+        .filter(|entry| {
+            read(entry.path().join("vendor")) == "0x1002"
+                && read(entry.path().join("class")).starts_with("0x03")
+                && !u16::from_str_radix(
+                    read(entry.path().join("device")).trim_start_matches("0x"),
+                    16,
+                )
+                .is_ok_and(amd_integrated_gpu_device)
+        })
+        .count();
+    Some(count.min(64) as u32)
+}
+
+/// AMD display devices built into a CPU (APU or Ryzen desktop graphics),
+/// which Seine never mines on.
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
+fn amd_integrated_gpu_device(device: u16) -> bool {
+    matches!(
+        device,
+        0x1304..=0x131d // Kaveri
+            | 0x9830..=0x983f // Kabini
+            | 0x9850..=0x985f // Mullins
+            | 0x9870..=0x9877 // Carrizo
+            | 0x98e4 // Stoney
+            | 0x15d8 | 0x15dd // Picasso, Raven
+            | 0x15e7 | 0x1636 | 0x1638 | 0x164c // Barcelo, Renoir, Cezanne, Lucienne
+            | 0x163f // Van Gogh
+            | 0x13fe | 0x143f // Cyan Skillfish
+            | 0x164d | 0x1681 // Rembrandt
+            | 0x164e | 0x13c0 // Raphael, Granite Ridge
+            | 0x1506 // Mendocino
+            | 0x15bf | 0x15c8 | 0x1900 | 0x1901 // Phoenix, Hawk Point
+            | 0x150e | 0x1114 | 0x1586 // Strix Point, Krackan Point, Strix Halo
+    )
+}
+
+#[cfg(not(all(feature = "amd", any(target_os = "linux", windows))))]
+pub(crate) fn detect_amd_devices(
+    _notices: &mut Vec<String>,
+    _include_integrated: bool,
+    _raise_perf_level: bool,
+) -> Result<Vec<DetectedGpu>> {
     bail!("AMD support is not compiled into this build")
 }
 
-#[cfg(all(feature = "amd", unix))]
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
 fn partition_supported_amd_devices(
     devices: Vec<crate::backend::amd::AmdDeviceInfo>,
 ) -> (Vec<DetectedGpu>, Vec<String>) {
@@ -1673,7 +2086,6 @@ fn partition_supported_amd_devices(
 fn build_gpu_detection_notices(
     vendor: &str,
     backend_flag: &str,
-    subset_flag: &str,
     detection: &Result<Vec<DetectedGpu>>,
     explicit_devices: &[u32],
     kind_selected: bool,
@@ -1705,17 +2117,11 @@ fn build_gpu_detection_notices(
         Ok(detected) => {
             let device_list = detected
                 .iter()
-                .map(|device| {
-                    format!(
-                        "[{}] {} ({} MiB)",
-                        device.index, device.name, device.memory_total_mib
-                    )
-                })
+                .map(|device| device.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
             notices.push(format!(
-                "detected {} {vendor} GPU(s): {device_list}; enabling one {backend_flag} backend \
-                 instance per device (use {subset_flag} to select a subset)",
+                "detected {} {vendor} GPU(s): {device_list}",
                 detected.len()
             ));
         }
@@ -2388,33 +2794,88 @@ fn normalize_api_url(input: &str) -> String {
 }
 
 fn normalize_pool_url(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
+    crate::pool::normalize_pool_urls(input).ok()
+}
 
-    let (scheme, rest) = if let Some(rest) = trimmed.strip_prefix("stratum+tcp://") {
-        ("stratum+tcp://", rest)
-    } else if trimmed.starts_with("stratum+ws://") || trimmed.starts_with("stratum+wss://") {
-        return None;
-    } else {
-        ("stratum+tcp://", trimmed)
-    };
-    let authority = rest.split('/').next().unwrap_or(rest).trim();
-    if authority.is_empty() || authority.contains("://") || rest != authority {
+impl Cli {
+    /// Folds the launch-template conventions shared with other miners into
+    /// seine's own options: repeated or comma-separated `-o` pool URLs and a
+    /// `-u ADDRESS.WORKER` login. An explicit `--pool-worker` wins.
+    fn apply_miner_style_args(&mut self) {
+        let urls = self
+            .pool_url_args
+            .iter()
+            .map(|url| url.trim())
+            .filter(|url| !url.is_empty())
+            .collect::<Vec<_>>();
+        if !urls.is_empty() {
+            self.pool_url = Some(urls.join(","));
+        }
+        if let Some((address, worker)) = self
+            .mining_address
+            .as_deref()
+            .and_then(split_address_worker)
+        {
+            if self.pool_worker.is_none() {
+                self.pool_worker = Some(worker.to_string());
+            }
+            self.mining_address = Some(address.to_string());
+        }
+    }
+}
+
+/// Splits `ADDRESS.WORKER`. Shortnames may contain dots, so only plain
+/// addresses are split.
+fn split_address_worker(value: &str) -> Option<(&str, &str)> {
+    let value = value.trim();
+    if crate::shortname::split_solo(value)
+        .1
+        .starts_with(['@', '$'])
+    {
         return None;
     }
-    let (host, port) = parse_host_port(authority)?;
-    let host_for_url = if host.contains(':') && !host.starts_with('[') {
-        format!("[{host}]")
-    } else {
-        host
-    };
-    Some(format!("{scheme}{host_for_url}:{port}"))
+    let (address, worker) = value.split_once('.')?;
+    let worker = worker.trim();
+    (!address.is_empty() && !worker.is_empty()).then_some((address.trim(), worker))
+}
+
+fn validate_saved_memo_override(cli: &Cli, saved: Option<&UserConfig>) -> Result<()> {
+    if let Some(saved) = saved {
+        if saved.payout_memo.is_some()
+            && cli.payout_memo.is_none()
+            && !cli.no_payout_memo
+            && cli.mining_address.as_deref().is_some_and(|address| {
+                Some(address.trim()) != saved.address.as_deref().map(str::trim)
+            })
+        {
+            bail!(
+                "changing an address with a saved memo requires --payout-memo or --no-payout-memo"
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_payout_memo_config(cli: &Cli) -> Result<()> {
+    if let Some(memo) = &cli.payout_memo {
+        crate::payout_destination::validate_memo(memo)?;
+        if cli.mode == Some(MiningMode::Daemon) || cli.proxy_listen.is_some() {
+            bail!("payout memos require a direct pool connection; solo mode and farm proxy hosting are not supported");
+        }
+        if let Some(address) = &cli.mining_address {
+            crate::address::validate_mining_address(crate::shortname::split_solo(address).1)
+                .map_err(anyhow::Error::msg)
+                .context("use the full exchange deposit address with --payout-memo")?;
+        }
+    }
+    Ok(())
 }
 
 fn apply_user_config_defaults(cli: &mut Cli, user_cfg: Option<&UserConfig>) {
     if let Some(user_cfg) = user_cfg {
+        if cli.payout_memo.is_none() && !cli.no_payout_memo {
+            cli.payout_memo = user_cfg.payout_memo.clone();
+        }
         if cli.mode.is_none() {
             cli.mode = user_cfg.mode;
         }
@@ -2438,6 +2899,105 @@ fn should_validate_pool_mode_inputs(cli: &Cli) -> bool {
     !cli.bench && cli.mode.unwrap_or(MiningMode::Pool) == MiningMode::Pool
 }
 
+fn resolve_required_payout_memo(
+    cli: &mut Cli,
+    interactive: bool,
+    input: &mut impl io::BufRead,
+    output: &mut impl Write,
+) -> Result<bool> {
+    if cli.bench || cli.payout_memo.is_some() {
+        return Ok(false);
+    }
+    let Some(exchange) = cli
+        .mining_address
+        .as_deref()
+        .and_then(crate::payout_destination::known_exchange)
+    else {
+        return Ok(false);
+    };
+    if cli.mode.unwrap_or(MiningMode::Pool) != MiningMode::Pool || cli.proxy_listen.is_some() {
+        bail!(
+            "this shared exchange address requires memo payouts through a direct pool connection"
+        );
+    }
+    if !interactive || cli.service || cli.no_payout_memo {
+        bail!("this shared exchange address requires a memo; use --payout-memo with the memo from your deposit page");
+    }
+    writeln!(output, "{exchange} requires a deposit memo.")?;
+    loop {
+        write!(output, "Enter your deposit memo: ")?;
+        output.flush()?;
+        let mut memo = String::new();
+        if input.read_line(&mut memo)? == 0 {
+            bail!("a deposit memo is required");
+        }
+        let memo = memo.trim_end_matches(['\r', '\n']).to_string();
+        match crate::payout_destination::validate_memo(&memo) {
+            Ok(()) => {
+                cli.payout_memo = Some(memo);
+                validate_payout_memo_config(cli)?;
+                return Ok(true);
+            }
+            Err(error) => writeln!(output, "{error}")?,
+        }
+    }
+}
+
+/// The full-screen form when one can be shown; otherwise the line prompt in
+/// `resolve_required_payout_memo` handles it. Returns true once a memo is entered.
+fn prompt_payout_memo_on_screen(cli: &mut Cli) -> Result<bool> {
+    if !screen_prompts_available(cli)
+        || cli.bench
+        || cli.service
+        || cli.no_payout_memo
+        || cli.payout_memo.is_some()
+        || cli.proxy_listen.is_some()
+        || cli.mode.unwrap_or(MiningMode::Pool) != MiningMode::Pool
+    {
+        return Ok(false);
+    }
+    let Some(exchange) = cli
+        .mining_address
+        .as_deref()
+        .and_then(crate::payout_destination::known_exchange)
+    else {
+        return Ok(false);
+    };
+    let help = format!("{exchange} requires the deposit memo shown on your deposit page.");
+    let memo = crate::miner::prompt_screen(crate::miner::PromptSpec {
+        help: &help,
+        label: "Deposit memo",
+        initial: "",
+        validate: &|value| {
+            crate::payout_destination::validate_memo(value).map_err(|err| err.to_string())
+        },
+    })?;
+    cli.payout_memo = Some(memo);
+    validate_payout_memo_config(cli)?;
+    Ok(true)
+}
+
+fn screen_prompts_available(cli: &Cli) -> bool {
+    io::stdin().is_terminal()
+        && io::stdout().is_terminal()
+        && crate::miner::ui_mode_enables_tui(cli.ui)
+}
+
+fn persist_prompted_payout_memo(
+    cli: &Cli,
+    saved: Option<&mut UserConfig>,
+    path: &Path,
+) -> Result<()> {
+    // A command-line destination override must not change the saved destination.
+    if let Some(saved) = saved {
+        if saved.address.as_deref().map(str::trim) == cli.mining_address.as_deref().map(str::trim) {
+            saved.payout_memo = cli.payout_memo.clone();
+            write_user_config(path, saved)?;
+        }
+    }
+    Ok(())
+}
+
 fn resolve_first_run_pool_inputs(cli: &mut Cli, user_config_path: &Path) -> Result<()> {
     let mode = cli.mode.unwrap_or(MiningMode::Pool);
     cli.mode = Some(mode);
@@ -2459,13 +3019,30 @@ fn resolve_first_run_pool_inputs(cli: &mut Cli, user_config_path: &Path) -> Resu
                 user_config_path.display()
             );
         }
-        let address = prompt_required_value(
-            "Enter your Blocknet address or shortname (@name / $name): ",
-            None,
-        )?;
+        let address = if screen_prompts_available(cli) {
+            crate::miner::prompt_screen(crate::miner::PromptSpec {
+                help: "Welcome to seine. Mining rewards are paid to your Blocknet wallet.",
+                label: "Your address or shortname (@name / $name)",
+                initial: "",
+                validate: &|value| {
+                    validate_destination(value).map_err(|_| {
+                        "That is not a Blocknet address. Paste the whole address, or use @name."
+                            .to_string()
+                    })
+                },
+            })?
+        } else {
+            prompt_required_value(
+                "Enter your Blocknet address or shortname (@name / $name): ",
+                None,
+            )?
+        };
         cli.mining_address = Some(address);
     }
 
+    if !prompt_payout_memo_on_screen(cli)? {
+        resolve_required_payout_memo(cli, interactive, &mut io::stdin().lock(), &mut io::stderr())?;
+    }
     if cli
         .pool_url
         .as_ref()
@@ -2479,10 +3056,23 @@ fn resolve_first_run_pool_inputs(cli: &mut Cli, user_config_path: &Path) -> Resu
                 user_config_path.display()
             );
         }
-        let pool_url = prompt_required_value(
-            "Enter pool URL [default: stratum+tcp://bntpool.com:3333]: ",
-            Some(DEFAULT_POOL_URL),
-        )?;
+        let pool_url = if screen_prompts_available(cli) {
+            crate::miner::prompt_screen(crate::miner::PromptSpec {
+                help: "Press Enter to mine on the default pool, or type another.",
+                label: "Pool",
+                initial: DEFAULT_POOL_URL,
+                validate: &|value| {
+                    normalize_pool_url(value).map(|_| ()).ok_or_else(|| {
+                        "Enter a pool as host:port or stratum+tcp://host:port".to_string()
+                    })
+                },
+            })?
+        } else {
+            prompt_required_value(
+                "Enter pool URL [default: stratum+tcp://bntpool.com:3333]: ",
+                Some(DEFAULT_POOL_URL),
+            )?
+        };
         cli.pool_url = Some(pool_url);
     }
 
@@ -2521,7 +3111,7 @@ fn ensure_pool_mode_inputs_available(cli: &Cli, user_config_path: &Path) -> Resu
     {
         bail!(
             "pool mode requires a valid pool URL.\n\
-             Pass --pool-url (host:port or stratum+tcp://host:port) or edit {}.",
+             Pass --pool-url (host:port, stratum+tcp://host:port or stratum+ssl://host:port) or edit {}.",
             user_config_path.display()
         );
     }
@@ -2543,10 +3133,12 @@ fn persist_bootstrap_user_config(
     user_config_path: &Path,
     dev_fee_pool_worker: &str,
 ) -> Result<()> {
+    validate_payout_memo_config(cli)?;
     let mode = cli.mode.unwrap_or(MiningMode::Pool);
     let cfg = UserConfig {
         schema_version: USER_CONFIG_SCHEMA_VERSION,
         mode: Some(mode),
+        payout_memo: cli.payout_memo.clone(),
         address: cli
             .mining_address
             .as_ref()
@@ -2580,7 +3172,7 @@ fn persist_user_config_with_dev_fee_pool_worker(
 
 fn prompt_required_value(prompt: &str, default: Option<&str>) -> Result<String> {
     loop {
-        eprint!("{prompt}");
+        write!(io::stderr(), "{prompt}")?;
         io::stderr().flush()?;
         let mut line = String::new();
         io::stdin()
@@ -2896,10 +3488,83 @@ fn pcore_count() -> Option<usize> {
 }
 
 fn logical_cpu_parallelism() -> usize {
-    std::thread::available_parallelism()
+    let available = std::thread::available_parallelism()
         .map(|p| p.get())
         .unwrap_or(1)
-        .max(1)
+        .max(1);
+    #[cfg(target_os = "linux")]
+    {
+        with_fractional_quota(available, linux_cgroup_cpu_quota(), linux_affinity_count())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        available
+    }
+}
+
+/// `available_parallelism` rounds a fractional CPU quota down, which leaves part of the
+/// quota unused. Count the partial CPU as a worker slot, within the CPUs this process
+/// may run on. Automatic tuning still decides whether that worker is worth running.
+#[cfg(any(target_os = "linux", test))]
+fn with_fractional_quota(available: usize, quota: Option<f64>, affinity: Option<usize>) -> usize {
+    let rounded_up = match quota {
+        Some(cpus) if cpus.fract() > 0.0 && cpus.floor() as usize == available => available + 1,
+        _ => return available,
+    };
+    affinity.map_or(available, |allowed| rounded_up.min(allowed).max(available))
+}
+
+/// CPUs allowed by `cpu.max` or `cpu.cfs_quota_us`, the tightest along the hierarchy.
+#[cfg(target_os = "linux")]
+fn linux_cgroup_cpu_quota() -> Option<f64> {
+    let mut tightest: Option<f64> = None;
+    if let Some(mut dir) = linux_cgroup_v2_path() {
+        loop {
+            if let Some(cpus) = fs::read_to_string(dir.join("cpu.max"))
+                .ok()
+                .and_then(|raw| parse_cgroup_v2_cpu_max(&raw))
+            {
+                tightest = Some(tightest.map_or(cpus, |t: f64| t.min(cpus)));
+            }
+            if dir == std::path::Path::new("/sys/fs/cgroup") || !dir.pop() {
+                break;
+            }
+        }
+    }
+    if tightest.is_some() {
+        return tightest;
+    }
+    ["/sys/fs/cgroup/cpu", "/sys/fs/cgroup/cpu,cpuacct"]
+        .iter()
+        .find_map(|root| {
+            let read = |name: &str| fs::read_to_string(format!("{root}/{name}")).ok();
+            parse_cgroup_v1_cpu_quota(&read("cpu.cfs_quota_us")?, &read("cpu.cfs_period_us")?)
+        })
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_cgroup_v2_cpu_max(raw: &str) -> Option<f64> {
+    let mut parts = raw.split_whitespace();
+    let quota: f64 = parts.next()?.parse().ok()?;
+    let period: f64 = parts.next().unwrap_or("100000").parse().ok()?;
+    (quota > 0.0 && period > 0.0).then_some(quota / period)
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_cgroup_v1_cpu_quota(quota: &str, period: &str) -> Option<f64> {
+    let quota: f64 = quota.trim().parse().ok()?;
+    let period: f64 = period.trim().parse().ok()?;
+    (quota > 0.0 && period > 0.0).then_some(quota / period)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_affinity_count() -> Option<usize> {
+    // SAFETY: the set is zero-initialized and sized for this call.
+    unsafe {
+        let mut set: libc::cpu_set_t = std::mem::zeroed();
+        (libc::sched_getaffinity(0, std::mem::size_of::<libc::cpu_set_t>(), &mut set) == 0)
+            .then(|| libc::CPU_COUNT(&set) as usize)
+    }
 }
 
 #[allow(dead_code)]
@@ -2973,12 +3638,20 @@ fn auto_cpu_threads(
 }
 
 // RAM kept free by automatic sizing, as a share of the effective (cgroup-aware)
-// total; free memory already excludes what the OS uses. The default caps 5% at
-// 1 GiB: on 32 GiB hosts the full 5% left 13 of 14 possible 2 GiB arenas.
+// total; free memory already excludes what the OS uses. The default is 5%, at most
+// 1 GiB, and at most 512 MiB on hosts with 16 GiB or more.
 fn memory_reserve_bytes(effective_total: u64, reserve_percent: Option<u8>) -> u64 {
     match reserve_percent {
         Some(percent) => effective_total / 100 * u64::from(percent),
-        None => (effective_total / 100 * 5).min(1024 * 1024 * 1024),
+        None => (effective_total / 100 * 5).min(default_reserve_cap(effective_total)),
+    }
+}
+
+fn default_reserve_cap(effective_total: u64) -> u64 {
+    if effective_total >= 16 * 1024 * 1024 * 1024 {
+        512 * 1024 * 1024
+    } else {
+        1024 * 1024 * 1024
     }
 }
 
@@ -3006,7 +3679,7 @@ fn underused_threads_notice(
     (cpu_backend_instances > 0 && !cpu_autotune_threads && threads.saturating_mul(2) <= auto_threads_cap)
         .then(|| {
             format!(
-                "--threads {threads} uses under half of the {auto_threads_cap} CPU workers this machine's cores and free RAM allow; omit --threads to size and tune workers automatically for more hashrate"
+                "--threads {threads} is under half of the {auto_threads_cap} this machine can run; omit --threads for more hashrate"
             )
         })
 }
@@ -3052,7 +3725,7 @@ fn wsl_sizing_notice(
     let gib = |bytes: u64| bytes.div_ceil(1024 * 1024 * 1024);
     let needed_gib = gib(CPU_LANE_MEMORY_BYTES.saturating_mul(cpu_lanes as u64)) + 2;
     Some(format!(
-        "WSL2 limits this Linux VM to {} GiB of RAM, which fits {memory_lanes} CPU worker(s) of the {cpu_lanes} this CPU allows; if the PC has more RAM, put \"[wsl2]\" and \"memory={needed_gib}GB\" in %UserProfile%\\.wslconfig and run `wsl --shutdown`, or run the native Windows build, which uses all of it",
+        "WSL2 gives this VM {} GiB of RAM, enough for {memory_lanes} of {cpu_lanes} CPU threads. For more, set memory={needed_gib}GB under [wsl2] in %UserProfile%\\.wslconfig and run `wsl --shutdown`, or use the Windows build.",
         gib(effective_total_bytes)
     ))
 }
@@ -3165,10 +3838,11 @@ pub(crate) fn cpu_autotune_capacity_snapshot(
         .max(1);
     let parallelism = cpu_parallelism_cap(cfg.cpu_affinity);
     let cpu_cap = parallelism / instances;
-    let gpu_reserve = if cfg
-        .backend_specs
-        .iter()
-        .any(|s| s.kind == BackendKind::Metal)
+    let gpu_reserve = if !cfg.metal_blake2b_only
+        && cfg
+            .backend_specs
+            .iter()
+            .any(|s| s.kind == BackendKind::Metal)
     {
         estimate_metal_memory_bytes(cfg.metal_max_lanes)
     } else {
@@ -3526,6 +4200,17 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
+    fn solo_logins_split_workers_only_from_addresses() {
+        assert_eq!(
+            split_address_worker("solo:ADDR.rig"),
+            Some(("solo:ADDR", "rig"))
+        );
+        assert_eq!(split_address_worker("solo:@a.b"), None);
+        assert_eq!(split_address_worker("SOLO:$a.b"), None);
+        assert_eq!(split_address_worker("@a.b"), None);
+    }
+
+    #[test]
     fn pid_headroom_uses_tightest_ancestor_and_fails_closed_on_bad_usage() {
         let root = unique_temp_dir();
         let group = root.join("service/worker");
@@ -3584,19 +4269,162 @@ mod tests {
         assert!(validate_cli_mining_address(&cli, "--address").is_err());
     }
 
+    #[test]
+    fn payout_memo_config_preserves_exact_bytes_and_requires_explicit_address_override() {
+        let mut cli = sample_cli();
+        cli.mode = Some(MiningMode::Pool);
+        cli.mining_address = Some(crate::dev_fee::DEV_ADDRESS.into());
+        cli.payout_memo = Some("ID000123".into());
+        let dir = unique_temp_dir();
+        let path = dir.join("config.json");
+        persist_bootstrap_user_config(&cli, &path, "dev").unwrap();
+        let saved = read_user_config(&path).unwrap().unwrap();
+        assert_eq!(saved.payout_memo.as_deref(), Some("ID000123"));
+        cli.payout_memo = None;
+        cli.mining_address = Some("another-address".into());
+        assert!(validate_saved_memo_override(&cli, Some(&saved)).is_err());
+        cli.no_payout_memo = true;
+        assert!(validate_saved_memo_override(&cli, Some(&saved)).is_ok());
+        apply_user_config_defaults(&mut cli, Some(&saved));
+        assert!(cli.payout_memo.is_none());
+        cli.payout_memo = Some("001".into());
+        cli.mode = Some(MiningMode::Daemon);
+        assert!(validate_payout_memo_config(&cli).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    const TEST_EXCHANGE_ADDRESS: &str = "ZJZqGfDPCVg78CRH5Z33CtHafg911Dp5Bauf1Dnxg5jgXx7Whqsvqka96FCV8W6QZXNDKzJefkFU6bwDEGBewqPrTWjij";
+
+    #[test]
+    fn existing_exchange_prompt_preserves_memo_and_saved_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut saved = UserConfig {
+            address: Some(TEST_EXCHANGE_ADDRESS.into()),
+            pool_worker: Some("keep-worker".into()),
+            dev_fee_pool_worker: Some("keep-dev-worker".into()),
+            ..Default::default()
+        };
+        let mut cli = sample_cli();
+        cli.mode = Some(MiningMode::Pool);
+        apply_user_config_defaults(&mut cli, Some(&saved));
+        let mut output = Vec::new();
+        assert!(resolve_required_payout_memo(
+            &mut cli,
+            true,
+            &mut &b"\n ID0001 \r\n"[..],
+            &mut output
+        )
+        .unwrap());
+        assert_eq!(cli.payout_memo.as_deref(), Some(" ID0001 "));
+        persist_prompted_payout_memo(&cli, Some(&mut saved), &path).unwrap();
+        let persisted = read_user_config(&path).unwrap().unwrap();
+        assert_eq!(persisted.payout_memo, cli.payout_memo);
+        assert_eq!(persisted.pool_worker.as_deref(), Some("keep-worker"));
+        assert_eq!(
+            persisted.dev_fee_pool_worker.as_deref(),
+            Some("keep-dev-worker")
+        );
+        assert!(
+            !resolve_required_payout_memo(&mut cli, true, &mut &b""[..], &mut Vec::new()).unwrap()
+        );
+        // An override cannot pair the new memo with the old saved address.
+        saved.address = Some(crate::dev_fee::DEV_ADDRESS.into());
+        saved.payout_memo = None;
+        persist_prompted_payout_memo(&cli, Some(&mut saved), &path).unwrap();
+        assert_eq!(saved.payout_memo, None);
+    }
+
+    #[test]
+    fn missing_memo_never_prompts_services_or_ordinary_wallets() {
+        for (interactive, service, no_memo, mode, should_error) in [
+            (false, false, false, MiningMode::Pool, true),
+            (true, true, false, MiningMode::Pool, true),
+            (true, false, true, MiningMode::Pool, true),
+            (true, false, false, MiningMode::Daemon, true),
+        ] {
+            let mut cli = sample_cli();
+            cli.mode = Some(mode);
+            cli.service = service;
+            cli.no_payout_memo = no_memo;
+            cli.mining_address = Some(TEST_EXCHANGE_ADDRESS.into());
+            let mut output = Vec::new();
+            assert_eq!(
+                resolve_required_payout_memo(
+                    &mut cli,
+                    interactive,
+                    &mut &b"DEMO001\n"[..],
+                    &mut output
+                )
+                .is_err(),
+                should_error
+            );
+            assert!(output.is_empty());
+        }
+        let mut cli = sample_cli();
+        cli.mode = Some(MiningMode::Pool);
+        cli.mining_address = Some(crate::dev_fee::DEV_ADDRESS.into());
+        let mut output = Vec::new();
+        assert!(!resolve_required_payout_memo(&mut cli, true, &mut &b""[..], &mut output).unwrap());
+        assert!(output.is_empty());
+        cli.mining_address = Some(TEST_EXCHANGE_ADDRESS.into());
+        assert!(resolve_required_payout_memo(&mut cli, true, &mut &b""[..], &mut output).is_err());
+        assert!(cli.payout_memo.is_none());
+    }
+
+    #[test]
+    #[ignore = "exports the actual missing-memo prompt with synthetic input"]
+    fn export_memo_prompt_showcase() {
+        let mut captures = Vec::new();
+        for (title, input, interactive) in [
+            ("Saved exchange address / missing memo", "", true),
+            ("Invalid memo / try again", "\n", true),
+            ("Unattended / memo required", "", false),
+        ] {
+            let mut cli = sample_cli();
+            cli.mode = Some(MiningMode::Pool);
+            cli.mining_address = Some(TEST_EXCHANGE_ADDRESS.into());
+            let mut output = Vec::new();
+            let result = resolve_required_payout_memo(
+                &mut cli,
+                interactive,
+                &mut input.as_bytes(),
+                &mut output,
+            );
+            if !interactive {
+                write!(&mut output, "{}", result.unwrap_err()).unwrap();
+            }
+            captures.push((title, String::from_utf8(output).unwrap()));
+        }
+        let path = Path::new("docs/showcases/exchange-payouts");
+        fs::create_dir_all(path).unwrap();
+        fs::write(
+            path.join("prompts.json"),
+            serde_json::to_string(&captures).unwrap(),
+        )
+        .unwrap();
+    }
+
     fn sample_cli() -> Cli {
         Cli {
             telemetry: None,
             telemetry_url: None,
             mode: Some(MiningMode::Daemon),
             testnet: false,
+            pool_url_args: Vec::new(),
             pool_url: None,
             pool_worker: None,
+            pool_proxy: None,
+            pool_password: None,
+            proxy_listen: None,
             api_url: None,
             token: None,
             wallet_password: None,
             wallet_password_file: None,
             mining_address: None,
+            payout_memo: None,
+            no_payout_memo: false,
+            gpu_only: false,
             cookie: None,
             daemon_dir: None,
             data_dir: PathBuf::from("./seine-data"),
@@ -3661,6 +4489,7 @@ mod tests {
             disable_sse: false,
             disable_update_check: false,
             refresh_on_same_height: false,
+            verbose: false,
             ui: UiMode::Auto,
             api_server: false,
             service: false,
@@ -3676,6 +4505,7 @@ mod tests {
             cpu_side_cache_blocks: None,
             cpu_skip_store_permille: None,
             bench_kind: BenchKind::Backend,
+            bench_pow: BenchPow::Argon2id,
             bench_cpu_kernel: None,
             bench_secs: 20,
             bench_rounds: 3,
@@ -3706,6 +4536,119 @@ mod tests {
             None
         );
         assert_eq!(normalize_pool_url("pool.example.com:3334/miner"), None);
+    }
+
+    #[test]
+    fn miner_style_flags_set_pool_list_address_and_worker() {
+        let address = "8yAUM9aprE1ffiEm5KugyGH1TUqXQTuF9j5Mt2ZabBJmM9HAb5bfPkpa5JjgGQHU8bAmsuuJrcJVSXNWt5KLVn7Tv1bVm";
+        let mut cli = Cli::try_parse_from([
+            "seine",
+            "-o",
+            "stratum+ssl://1.2.3.4:3443",
+            "-o",
+            "bntpool.com:3333,backup.example.com:3333",
+            "-u",
+            &format!("{address}.rig7"),
+            "-p",
+            "x",
+        ])
+        .expect("miner-style flags should parse");
+        cli.apply_miner_style_args();
+        assert_eq!(
+            cli.pool_url.as_deref().and_then(normalize_pool_url).as_deref(),
+            Some("stratum+ssl://1.2.3.4:3443,stratum+tcp://bntpool.com:3333,stratum+tcp://backup.example.com:3333")
+        );
+        assert_eq!(cli.mining_address.as_deref(), Some(address));
+        assert_eq!(cli.pool_worker.as_deref(), Some("rig7"));
+
+        let mut cli = Cli::try_parse_from([
+            "seine",
+            "--url",
+            "bntpool.com:3333",
+            "--user",
+            &format!("{address}.rig7"),
+            "--worker",
+            "explicit",
+        ])
+        .unwrap();
+        cli.apply_miner_style_args();
+        assert_eq!(cli.pool_worker.as_deref(), Some("explicit"));
+        assert_eq!(cli.mining_address.as_deref(), Some(address));
+    }
+
+    /// The HiveOS package (packaging/hiveos) writes these argument lists; its
+    /// shell tests check h-config.sh still produces them.
+    #[test]
+    fn hiveos_package_arguments_parse() {
+        let parse = |fixture: &str| {
+            let args = std::iter::once("seine").chain(fixture.lines());
+            let mut cli = Cli::try_parse_from(args).expect("HiveOS arguments should parse");
+            cli.apply_miner_style_args();
+            cli
+        };
+
+        let cli = parse(include_str!("../packaging/hiveos/testdata/nvidia-rig.args"));
+        assert_eq!(cli.pool_worker.as_deref(), Some("rig01"));
+        assert_eq!(
+            cli.pool_url
+                .as_deref()
+                .and_then(normalize_pool_url)
+                .as_deref(),
+            Some("stratum+tcp://bntpool.com:3333,stratum+ssl://backup.example.com:3443")
+        );
+        assert_eq!(cli.backends, vec![BackendKind::Nvidia]);
+        assert_eq!(cli.ui, UiMode::Plain);
+        assert!(cli.api_server && cli.no_auto_update);
+        assert_eq!(cli.api_bind, "127.0.0.1:9977");
+        assert_eq!(cli.data_dir, PathBuf::from("/var/lib/seine"));
+
+        let cli = parse(include_str!(
+            "../packaging/hiveos/testdata/extra-config.args"
+        ));
+        assert_eq!(cli.pool_worker.as_deref(), Some("rig02"));
+        assert_eq!(cli.backends, vec![BackendKind::Nvidia, BackendKind::Cpu]);
+        assert_eq!(cli.threads, Some(2));
+    }
+
+    /// The mmpOS package (packaging/mmpos) writes these argument lists; its
+    /// shell tests check mmp-launch.sh still produces them.
+    #[test]
+    fn mmpos_package_arguments_parse() {
+        let parse = |fixture: &str| {
+            let args = std::iter::once("seine").chain(fixture.lines());
+            let mut cli = Cli::try_parse_from(args).expect("mmpOS arguments should parse");
+            cli.apply_miner_style_args();
+            cli
+        };
+
+        let cli = parse(include_str!("../packaging/mmpos/testdata/gpu-rig.args"));
+        assert_eq!(cli.pool_worker.as_deref(), Some("rig01"));
+        assert_eq!(
+            cli.pool_url
+                .as_deref()
+                .and_then(normalize_pool_url)
+                .as_deref(),
+            Some("stratum+ssl://pool.example.com:3443")
+        );
+        assert!(cli.backends.is_empty() && cli.gpu_only);
+        assert_eq!(cli.ui, UiMode::Plain);
+        assert!(cli.api_server && cli.no_auto_update);
+        assert_eq!(cli.api_bind, "127.0.0.1:4044");
+        assert_eq!(cli.data_dir, PathBuf::from("/opt/mmp/miners/seine-data"));
+
+        let cli = parse(include_str!("../packaging/mmpos/testdata/extra-args.args"));
+        assert_eq!(cli.mining_address.as_deref(), Some("@miner.one"));
+        assert_eq!(cli.pool_worker.as_deref(), Some("rig02"));
+        assert_eq!(cli.backends, vec![BackendKind::Nvidia, BackendKind::Cpu]);
+        assert_eq!(cli.threads, Some(2));
+    }
+
+    #[test]
+    fn shortname_logins_are_not_split_on_dots() {
+        let mut cli = Cli::try_parse_from(["seine", "-u", "@miner.one"]).unwrap();
+        cli.apply_miner_style_args();
+        assert_eq!(cli.mining_address.as_deref(), Some("@miner.one"));
+        assert_eq!(cli.pool_worker, None);
     }
 
     #[cfg(target_os = "linux")]
@@ -4248,19 +5191,10 @@ HugePages_Rsvd:          0
             detected_gpu(0, "RTX 5090", 32607),
             detected_gpu(1, "RTX 4090", 24564),
         ]);
-        let notices = build_gpu_detection_notices(
-            "NVIDIA",
-            "nvidia",
-            "--nvidia-devices",
-            &detection,
-            &[],
-            true,
-        );
+        let notices = build_gpu_detection_notices("NVIDIA", "nvidia", &detection, &[], true);
         assert_eq!(notices.len(), 1);
         assert!(notices[0].contains("detected 2 NVIDIA GPU(s)"));
-        assert!(notices[0].contains("[0] RTX 5090 (32607 MiB)"));
-        assert!(notices[0].contains("[1] RTX 4090 (24564 MiB)"));
-        assert!(notices[0].contains("--nvidia-devices to select a subset"));
+        assert!(notices[0].contains("RTX 5090, RTX 4090"));
     }
 
     #[test]
@@ -4269,14 +5203,7 @@ HugePages_Rsvd:          0
             detected_gpu(0, "RTX 4090", 24564),
             detected_gpu(1, "RTX 4090", 24564),
         ]);
-        let notices = build_gpu_detection_notices(
-            "NVIDIA",
-            "nvidia",
-            "--nvidia-devices",
-            &detection,
-            &[0, 5],
-            true,
-        );
+        let notices = build_gpu_detection_notices("NVIDIA", "nvidia", &detection, &[0, 5], true);
         assert_eq!(notices.len(), 1);
         assert!(notices[0].contains("requested NVIDIA device index 5"));
         assert!(notices[0].contains("available: [0, 1]"));
@@ -4285,14 +5212,7 @@ HugePages_Rsvd:          0
     #[test]
     fn detection_notice_reports_forced_kind_enumeration_failure() {
         let detection = Err(anyhow::anyhow!("nvidia-smi not found"));
-        let notices = build_gpu_detection_notices(
-            "NVIDIA",
-            "nvidia",
-            "--nvidia-devices",
-            &detection,
-            &[],
-            true,
-        );
+        let notices = build_gpu_detection_notices("NVIDIA", "nvidia", &detection, &[], true);
         assert_eq!(notices.len(), 1);
         assert!(notices[0].contains("--backend nvidia selected"));
         assert!(notices[0].contains("nvidia-smi not found"));
@@ -4302,22 +5222,14 @@ HugePages_Rsvd:          0
     #[test]
     fn detection_notices_empty_when_kind_not_selected() {
         let detection = Ok(vec![detected_gpu(0, "RTX 4090", 24564)]);
-        let notices = build_gpu_detection_notices(
-            "NVIDIA",
-            "nvidia",
-            "--nvidia-devices",
-            &detection,
-            &[],
-            false,
-        );
+        let notices = build_gpu_detection_notices("NVIDIA", "nvidia", &detection, &[], false);
         assert!(notices.is_empty());
     }
 
     #[test]
     fn detection_notice_reports_no_usable_devices() {
         let detection = Ok(Vec::new());
-        let notices =
-            build_gpu_detection_notices("AMD", "amd", "--amd-devices", &detection, &[], true);
+        let notices = build_gpu_detection_notices("AMD", "amd", &detection, &[], true);
         assert_eq!(notices.len(), 1);
         assert!(notices[0].contains("no usable AMD devices"));
     }
@@ -4328,14 +5240,7 @@ HugePages_Rsvd:          0
             detected_gpu(0, "RTX 4090", 24564),
             detected_gpu(1, "RTX 4090", 24564),
         ]);
-        let notices = build_gpu_detection_notices(
-            "NVIDIA",
-            "nvidia",
-            "--nvidia-devices",
-            &detection,
-            &[1, 0],
-            true,
-        );
+        let notices = build_gpu_detection_notices("NVIDIA", "nvidia", &detection, &[1, 0], true);
         assert!(notices.is_empty());
     }
 
@@ -4455,6 +5360,18 @@ HugePages_Rsvd:          0
     fn human_bytes_formats_units() {
         assert_eq!(human_bytes(1024 * 1024), "1.00 MiB");
         assert_eq!(human_bytes(1024 * 1024 * 1024), "1.00 GiB");
+    }
+
+    #[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
+    #[test]
+    fn integrated_amd_graphics_are_not_counted_as_gpus() {
+        assert!(amd_integrated_gpu_device(0x164e), "Ryzen 7000 graphics");
+        assert!(amd_integrated_gpu_device(0x13c0), "Ryzen 9000 graphics");
+        assert!(amd_integrated_gpu_device(0x15bf), "Phoenix");
+        assert!(!amd_integrated_gpu_device(0x744c), "RX 7900 XTX");
+        assert!(!amd_integrated_gpu_device(0x73bf), "RX 6800 XT");
+        assert!(!amd_integrated_gpu_device(0x74a1), "MI300X");
+        assert!(!amd_integrated_gpu_device(0x7550), "RX 9070 XT");
     }
 
     #[test]
@@ -4611,6 +5528,9 @@ HugePages_Rsvd:          0
             13
         );
         assert_eq!(memory_reserve_bytes(8 * gib, None), 8 * gib / 100 * 5);
+        assert_eq!(memory_reserve_bytes(15 * gib, None), 15 * gib / 100 * 5);
+        assert_eq!(memory_reserve_bytes(16 * gib, None), gib / 2);
+        assert_eq!(memory_reserve_bytes(64 * gib, None), gib / 2);
     }
 
     #[test]
@@ -4644,7 +5564,7 @@ HugePages_Rsvd:          0
         let notice = wsl_sizing_notice("wsl2", 1, 3, 16, 8 * gib).unwrap();
         assert!(notice.contains("memory=34GB"), "{notice}");
         assert!(
-            notice.contains("8 GiB of RAM, which fits 3 CPU worker(s) of the 16"),
+            notice.contains("8 GiB of RAM, enough for 3 of 16 CPU threads"),
             "{notice}"
         );
         assert!(wsl_sizing_notice("wsl2", 1, 16, 16, 64 * gib).is_none());
@@ -4655,7 +5575,7 @@ HugePages_Rsvd:          0
     #[test]
     fn underused_explicit_threads_get_a_sizing_hint() {
         assert!(underused_threads_notice(Some(3), 1, false, 11)
-            .is_some_and(|n| n.contains("--threads 3") && n.contains("11 CPU workers")));
+            .is_some_and(|n| n.contains("--threads 3") && n.contains("under half of the 11")));
         assert!(underused_threads_notice(Some(6), 1, false, 11).is_none());
         assert!(underused_threads_notice(None, 1, false, 11).is_none());
         assert!(underused_threads_notice(Some(3), 1, true, 11).is_none());
@@ -4681,6 +5601,33 @@ HugePages_Rsvd:          0
         assert_eq!(cli.cpu_memory_reserve_percent, Some(0));
         assert_eq!(cli.cpu_affinity, CpuAffinityMode::Os);
         assert!(Cli::try_parse_from(["seine", "--cpu-memory-reserve-percent", "100"]).is_err());
+    }
+
+    #[test]
+    fn a_fractional_cpu_quota_counts_the_partial_cpu() {
+        // 15.36 CPUs on 16: the partial CPU is usable.
+        assert_eq!(with_fractional_quota(15, Some(15.36), Some(16)), 16);
+        // A whole quota, no quota, or a tighter affinity changes nothing.
+        assert_eq!(with_fractional_quota(8, Some(8.0), Some(16)), 8);
+        assert_eq!(with_fractional_quota(16, None, Some(16)), 16);
+        assert_eq!(with_fractional_quota(4, Some(7.68), Some(4)), 4);
+        // Pinned to as many CPUs as the quota rounds down to.
+        assert_eq!(with_fractional_quota(7, Some(7.68), Some(7)), 7);
+        // A quota below one CPU still gives one worker.
+        assert_eq!(with_fractional_quota(1, Some(0.5), Some(16)), 1);
+        // Affinity unknown: keep what the standard library reported.
+        assert_eq!(with_fractional_quota(7, Some(7.68), None), 7);
+    }
+
+    #[test]
+    fn cgroup_cpu_quotas_parse() {
+        assert_eq!(parse_cgroup_v2_cpu_max("1536000 100000\n"), Some(15.36));
+        assert_eq!(parse_cgroup_v2_cpu_max("max 100000\n"), None);
+        assert_eq!(
+            parse_cgroup_v1_cpu_quota("768000\n", "100000\n"),
+            Some(7.68)
+        );
+        assert_eq!(parse_cgroup_v1_cpu_quota("-1\n", "100000\n"), None);
     }
 
     #[test]
@@ -4779,25 +5726,115 @@ HugePages_Rsvd:          0
         assert!(!cpu_autotune_threads);
     }
 
+    /// Pool-mode backend selection.
+    fn resolve_backend_selection(
+        requested_backends: &[BackendKind],
+        nvidia_devices: &[u32],
+        nvidia_available: bool,
+        amd_devices: &[u32],
+        amd_available: bool,
+    ) -> (Vec<BackendKind>, Option<&'static str>) {
+        resolve_backend_selection_in(
+            MiningMode::Pool,
+            requested_backends,
+            nvidia_devices,
+            nvidia_available,
+            amd_devices,
+            amd_available,
+        )
+    }
+
+    /// The default selection: Apple Silicon builds that mine BLAKE2b add Metal
+    /// after the CPU.
+    fn auto_selected(mut kinds: Vec<BackendKind>) -> Vec<BackendKind> {
+        if cfg!(all(feature = "metal", target_os = "macos"))
+            && crate::miner::mines_blake2b_in(MiningMode::Pool)
+        {
+            kinds.insert(1, BackendKind::Metal);
+        }
+        kinds
+    }
+
     #[test]
     fn resolve_backend_selection_uses_requested_backends_verbatim() {
-        let (selected, hint) =
-            resolve_backend_selection(&[BackendKind::Nvidia, BackendKind::Cpu], &[], false);
+        let (selected, hint) = resolve_backend_selection(
+            &[BackendKind::Nvidia, BackendKind::Cpu],
+            &[],
+            false,
+            &[],
+            false,
+        );
         assert_eq!(selected, vec![BackendKind::Nvidia, BackendKind::Cpu]);
         assert!(hint.is_none());
     }
 
     #[test]
     fn resolve_backend_selection_defaults_to_cpu_only_when_nvidia_unavailable() {
-        let (selected, _hint) = resolve_backend_selection(&[], &[], false);
-        assert_eq!(selected, vec![BackendKind::Cpu]);
+        let (selected, _hint) = resolve_backend_selection(&[], &[], false, &[], false);
+        assert_eq!(selected, auto_selected(vec![BackendKind::Cpu]));
     }
 
     #[test]
     fn resolve_backend_selection_defaults_to_cpu_and_nvidia_when_available() {
-        let (selected, hint) = resolve_backend_selection(&[], &[], true);
-        assert_eq!(selected, vec![BackendKind::Cpu, BackendKind::Nvidia]);
+        let (selected, hint) = resolve_backend_selection(&[], &[], true, &[], false);
+        assert_eq!(
+            selected,
+            auto_selected(vec![BackendKind::Cpu, BackendKind::Nvidia])
+        );
         assert!(hint.is_none());
+    }
+
+    #[test]
+    fn resolve_backend_selection_adds_amd_when_available() {
+        let (selected, hint) = resolve_backend_selection(&[], &[], false, &[], true);
+        assert_eq!(
+            selected,
+            auto_selected(vec![BackendKind::Cpu, BackendKind::Amd])
+        );
+        assert!(hint.is_none());
+        let (selected, _) = resolve_backend_selection(&[], &[], true, &[], true);
+        assert_eq!(
+            selected,
+            auto_selected(vec![
+                BackendKind::Cpu,
+                BackendKind::Nvidia,
+                BackendKind::Amd
+            ])
+        );
+    }
+
+    #[test]
+    fn resolve_backend_selection_enables_amd_when_devices_are_explicit() {
+        let (selected, _) = resolve_backend_selection(&[], &[], false, &[0], false);
+        assert_eq!(
+            selected,
+            auto_selected(vec![BackendKind::Cpu, BackendKind::Amd])
+        );
+    }
+
+    #[test]
+    fn gpu_only_leaves_out_the_cpu_only_when_a_gpu_is_selected() {
+        for (mut selected, expected) in [
+            (
+                vec![BackendKind::Cpu, BackendKind::Nvidia, BackendKind::Amd],
+                vec![BackendKind::Nvidia, BackendKind::Amd],
+            ),
+            (
+                vec![BackendKind::Cpu, BackendKind::Amd],
+                vec![BackendKind::Amd],
+            ),
+            (vec![BackendKind::Cpu], vec![BackendKind::Cpu]),
+        ] {
+            drop_cpu_when_a_gpu_is_selected(&mut selected);
+            assert_eq!(selected, expected);
+        }
+        assert!(Cli::try_parse_from(["seine", "--gpu-only", "--backend", "amd"]).is_err());
+    }
+
+    #[test]
+    fn resolve_backend_selection_keeps_requested_backends_when_amd_available() {
+        let (selected, _) = resolve_backend_selection(&[BackendKind::Cpu], &[], false, &[], true);
+        assert_eq!(selected, vec![BackendKind::Cpu]);
     }
 
     #[test]
@@ -4817,22 +5854,25 @@ HugePages_Rsvd:          0
 
     #[test]
     fn resolve_backend_selection_enables_nvidia_when_devices_are_explicit() {
-        let (selected, hint) = resolve_backend_selection(&[], &[0, 1], false);
-        assert_eq!(selected, vec![BackendKind::Cpu, BackendKind::Nvidia]);
+        let (selected, hint) = resolve_backend_selection(&[], &[0, 1], false, &[], false);
+        assert_eq!(
+            selected,
+            auto_selected(vec![BackendKind::Cpu, BackendKind::Nvidia])
+        );
         assert!(hint.is_none());
     }
 
     #[cfg(all(feature = "nvidia", not(target_os = "macos")))]
     #[test]
     fn resolve_backend_selection_emits_cuda_hint_when_nvidia_unavailable() {
-        let (_, hint) = resolve_backend_selection(&[], &[], false);
+        let (_, hint) = resolve_backend_selection(&[], &[], false, &[], false);
         assert!(hint.is_some());
     }
 
     #[cfg(all(feature = "nvidia", target_os = "macos"))]
     #[test]
     fn resolve_backend_selection_skips_cuda_hint_on_macos() {
-        let (_, hint) = resolve_backend_selection(&[], &[], false);
+        let (_, hint) = resolve_backend_selection(&[], &[], false, &[], false);
         assert!(hint.is_none());
     }
 }
@@ -4923,5 +5963,229 @@ mod benchmark_kernel_tests {
         ])
         .unwrap();
         assert_eq!(cli.bench_cpu_kernel, Some(CpuKernel::Scalar));
+    }
+
+    /// A new flag stays hidden unless most miners need it.
+    #[test]
+    fn help_lists_only_the_flags_miners_need() {
+        let command = cli_command();
+        let visible: Vec<&str> = command
+            .get_arguments()
+            .filter(|arg| !arg.is_hide_set())
+            .filter_map(|arg| arg.get_long())
+            .collect();
+        assert_eq!(
+            visible,
+            [
+                "pool-url",
+                "address",
+                "pool-worker",
+                "payout-memo",
+                "pool-proxy",
+                "proxy-listen",
+                "backend",
+                "threads",
+                "nvidia-devices",
+                "amd-devices",
+                "nvidia-max-lanes",
+                "amd-max-lanes",
+                "metal-max-lanes",
+                "cpu-profile",
+                "cpu-autotune-max-threads",
+                "cpu-page-mode",
+                "cpu-affinity",
+                "mode",
+                "api-url",
+                "cookie",
+                "wallet-password-file",
+                "ui",
+                "verbose",
+                "stats-secs",
+                "data-dir",
+                "api-server",
+                "api-bind",
+                "self-update",
+                "no-auto-update",
+                "disable-update-check",
+                "telemetry",
+                "bench",
+                "help",
+                "version",
+            ]
+        );
+    }
+
+    #[test]
+    fn long_and_short_help_print_the_same_list() {
+        let render = |flag: &str| {
+            let err = cli_command()
+                .try_get_matches_from(["seine", flag])
+                .expect_err("help exits through an error");
+            assert_eq!(err.kind(), clap::error::ErrorKind::DisplayHelp);
+            err.to_string()
+        };
+        let long = render("--help");
+        assert_eq!(long, render("-h"));
+        assert!(long.contains("--pool-url"));
+        assert!(!long.contains("--backend-assign-timeout-ms"));
+        assert!(long.contains("MINER_FLAGS.md"));
+    }
+
+    #[test]
+    fn version_flags_still_report_the_version() {
+        for flag in ["--version", "-V"] {
+            let err = cli_command()
+                .try_get_matches_from(["seine", flag])
+                .expect_err("version exits through an error");
+            assert_eq!(err.kind(), clap::error::ErrorKind::DisplayVersion);
+            assert!(err.to_string().contains(crate::version::RELEASE_VERSION));
+        }
+    }
+
+    /// Auto-update restarts with the same arguments, so a flag removed from the
+    /// parser would stop any rig that passes it.
+    #[test]
+    fn hidden_flags_are_still_accepted() {
+        let cli = cli_command()
+            .try_get_matches_from([
+                "seine",
+                "-p",
+                "x",
+                "--auto-update",
+                "--telemetry-url",
+                "https://example.invalid/v1/reports",
+                "--testnet",
+                "--token",
+                "t",
+                "--daemon-dir",
+                "/tmp/d",
+                "--wallet-password",
+                "w",
+                "--refresh-secs",
+                "20",
+                "--request-timeout-secs",
+                "10",
+                "--events-stream-timeout-secs",
+                "10",
+                "--events-idle-timeout-secs",
+                "90",
+                "--backend-event-capacity",
+                "1024",
+                "--hash-poll-ms",
+                "200",
+                "--cpu-hash-batch-size",
+                "1",
+                "--cpu-control-check-interval-hashes",
+                "1",
+                "--cpu-hash-flush-ms",
+                "200",
+                "--cpu-event-dispatch-capacity",
+                "64",
+                "--cpu-memory-reserve-percent",
+                "5",
+                "--allow-oversubscribe",
+                "--cpu-threads-per-instance",
+                "1",
+                "--cpu-affinity-per-instance",
+                "auto",
+                "--disable-cpu-autotune-threads",
+                "--cpu-autotune-min-threads",
+                "1",
+                "--cpu-autotune-secs",
+                "6",
+                "--cpu-autotune-config",
+                "/tmp/c",
+                "--nvidia-autotune-secs",
+                "5",
+                "--nvidia-autotune-samples",
+                "2",
+                "--nvidia-autotune-config",
+                "/tmp/n",
+                "--nvidia-max-rregcount",
+                "128",
+                "--nvidia-dispatch-iters-per-lane",
+                "1",
+                "--nvidia-allocation-iters-per-lane",
+                "1",
+                "--nvidia-hashes-per-launch-per-lane",
+                "2",
+                "--nvidia-no-adaptive-launch-depth",
+                "--nvidia-fused-target-check",
+                "--nvidia-template-stop-policy",
+                "auto",
+                "--metal-hashes-per-launch-per-lane",
+                "2",
+                "--backend-assign-timeout-ms",
+                "1000",
+                "--backend-assign-timeout-ms-per-instance",
+                "1000",
+                "--backend-assign-timeout-strikes",
+                "3",
+                "--backend-assign-timeout-strikes-per-instance",
+                "3",
+                "--backend-control-timeout-ms",
+                "60000",
+                "--backend-control-timeout-ms-per-instance",
+                "60000",
+                "--allow-best-effort-deadlines",
+                "--prefetch-wait-ms",
+                "250",
+                "--tip-listener-join-wait-ms",
+                "250",
+                "--submit-join-wait-ms",
+                "2000",
+                "--strict-round-accounting",
+                "--start-nonce",
+                "0",
+                "--nonce-iters-per-lane",
+                "1",
+                "--work-allocation",
+                "adaptive",
+                "--sub-round-rebalance-ms",
+                "0",
+                "--disable-sse",
+                "--refresh-on-same-height",
+                "--service",
+                "--api-allow-unsafe-bind",
+                "--api-cors",
+                "*",
+                "--api-token",
+                "t",
+                "--api-cookie",
+                "/tmp/k",
+                "--bench",
+                "--bench-kind",
+                "backend",
+                "--bench-pow",
+                "argon2id",
+                "--bench-secs",
+                "1",
+                "--bench-rounds",
+                "1",
+                "--bench-warmup-rounds",
+                "0",
+                "--bench-output",
+                "/tmp/o",
+                "--bench-baseline",
+                "/tmp/b",
+                "--bench-fail-below-pct",
+                "1",
+                "--bench-baseline-policy",
+                "strict",
+            ])
+            .map(|matches| Cli::from_arg_matches(&matches).unwrap());
+        assert!(cli.is_ok(), "{:?}", cli.err());
+
+        assert!(Cli::try_parse_from(["seine", "--no-payout-memo"]).is_ok());
+        assert!(Cli::try_parse_from(["seine", "--cpu-autotune-threads"]).is_ok());
+        assert!(Cli::try_parse_from([
+            "seine",
+            "--bench",
+            "--threads",
+            "1",
+            "--bench-cpu-kernel",
+            "scalar",
+        ])
+        .is_ok());
     }
 }

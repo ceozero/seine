@@ -155,6 +155,21 @@ impl HashrateTracker {
         self.samples.push_back(snapshot);
     }
 
+    /// Moves every recorded sample `by` into the past, so tests can span a
+    /// rate window without sleeping.
+    #[cfg(test)]
+    pub(super) fn backdate_samples(&mut self, by: Duration) {
+        for sample in &mut self.samples {
+            sample.time -= by;
+        }
+        if let Some(start) = self.session_start.as_mut() {
+            start.time -= by;
+        }
+        for start in self.device_session_start.values_mut() {
+            start.time -= by;
+        }
+    }
+
     /// Compute hashrates: current uses a rolling window, average uses active (unpaused) time.
     #[cfg(test)]
     pub fn rates(&self) -> HashrateRates {

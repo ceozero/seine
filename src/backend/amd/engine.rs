@@ -9,7 +9,7 @@
 use std::ffi::{c_char, c_int, c_uint, c_void, CString};
 use std::sync::{Arc, Mutex};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use blocknet_pow_spec::{pow_params, CPU_LANE_MEMORY_BYTES, POW_OUTPUT_LEN};
 
 use super::hip_ffi::{
@@ -19,7 +19,9 @@ use super::hip_ffi::{
 use crate::backend::pow_hash_from_last_block_words;
 use crate::types::hash_meets_target;
 
-const HIP_KERNEL_SRC: &str = include_str!("amd_kernel.hip");
+pub(crate) mod blake2b;
+
+pub(crate) const HIP_KERNEL_SRC: &str = include_str!("amd_kernel.hip");
 const HIP_KERNEL_PROGRAM_NAME: &str = "seine_argon2id_fill.hip";
 
 pub(crate) const MAX_LANES_HARD_LIMIT: usize = 1024;
@@ -58,6 +60,10 @@ pub(crate) struct AmdDeviceInfo {
     pub wavefront_size: u32,
     pub memory_total_mib: u64,
     pub memory_free_mib: Option<u64>,
+    /// PCI address (`0000:c1:00.0`), the key for the device's amdgpu sysfs entries.
+    pub pci_address: String,
+    /// The GPU shares system memory (APU).
+    pub integrated: bool,
 }
 
 /// Query all visible HIP devices. Fails with the graceful "ROCm runtime not
@@ -85,9 +91,39 @@ pub(crate) fn query_amd_devices() -> Result<Vec<AmdDeviceInfo>> {
             wavefront_size: props.warp_size.max(0) as u32,
             memory_total_mib: (props.total_global_mem as u64) / (1024 * 1024),
             memory_free_mib,
+            pci_address: format!(
+                "{:04x}:{:02x}:{:02x}.0",
+                props.pci_domain_id.max(0),
+                props.pci_bus_id.max(0),
+                props.pci_device_id.max(0)
+            ),
+            integrated: props.integrated != 0
+                || is_integrated_gpu(&props.gcn_arch_name(), &props.device_name()),
         });
     }
     Ok(devices)
+}
+
+/// Integrated Radeon graphics by architecture, or by a device name without a
+/// model number ("AMD Radeon(TM) Graphics"). The Windows driver reports the
+/// `integrated` property as 0 for these GPUs.
+pub(crate) fn is_integrated_gpu(gcn_arch_name: &str, device_name: &str) -> bool {
+    let arch = gcn_arch_name.split(':').next().unwrap_or("").trim();
+    matches!(
+        arch,
+        "gfx902"
+            | "gfx909"
+            | "gfx90c"
+            | "gfx1033"
+            | "gfx1035"
+            | "gfx1036"
+            | "gfx1037"
+            | "gfx1103"
+            | "gfx1150"
+            | "gfx1151"
+            | "gfx1152"
+            | "gfx1153"
+    ) || !device_name.chars().any(|c| c.is_ascii_digit())
 }
 
 fn query_device_props(api: &'static HipApi, index: c_int) -> Result<HipDevicePropR0000> {
@@ -186,11 +222,153 @@ pub(crate) fn lane_capacity_from_budget(memory_budget_mib: u64, lane_bytes: u64)
 /// engine retries without it and relies on the reported `warpSize`.
 /// `SEINE_WARPS_PER_BLOCK` tells the kernel how many 32-thread lanes share one
 /// block, which is always exactly one wavefront.
+/// Default skip boundary (permille of the arena) per GPU architecture; 0 stores every
+/// block. RDNA2 (gfx103x), RDNA3 (gfx110x) and RDNA4 (gfx120x).
+fn default_skip_permille(gcn_arch_name: &str) -> u64 {
+    let arch = gcn_arch_name.trim();
+    if arch.starts_with("gfx103") || arch.starts_with("gfx110") || arch.starts_with("gfx120") {
+        500
+    } else {
+        0
+    }
+}
+
+/// First block whose odd successors are not stored (`SEINE_AMD_SKIP_FROM`), or 0 to
+/// store every block, at the architecture's default boundary. `SEINE_AMD_SKIP_PERMILLE`
+/// (500-999, or 0 for off) overrides it; single-pass only, never below the
+/// data-independent half.
+pub(crate) fn skip_from_block(gcn_arch_name: &str, m_blocks: u32, t_cost: u32) -> u32 {
+    let permille = skip_permille_override().unwrap_or_else(|| default_skip_permille(gcn_arch_name));
+    skip_from_permille(m_blocks, t_cost, permille)
+}
+
+fn skip_permille_override() -> Option<u64> {
+    std::env::var("SEINE_AMD_SKIP_PERMILLE")
+        .ok()
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+}
+
+fn skip_from_permille(m_blocks: u32, t_cost: u32, permille: u64) -> u32 {
+    if t_cost != 1 || !(500..1000).contains(&permille) {
+        return 0;
+    }
+    let from = (u64::from(m_blocks) * permille / 1000) as u32 & !1;
+    from.max(m_blocks / 2)
+}
+
+/// Expected rebuild compressions per block, rebuild chains included, for uniform skip
+/// boundaries (permille, fraction).
+const SKIP_REBUILD_RATE: [(u64, f64); 10] = [
+    (500, 0.1739),
+    (550, 0.1435),
+    (600, 0.1164),
+    (650, 0.0921),
+    (700, 0.0707),
+    (750, 0.0520),
+    (800, 0.0360),
+    (850, 0.0227),
+    (900, 0.0119),
+    (950, 0.0040),
+];
+
+/// Cost of one rebuild compression, in block times, used to weigh lanes against
+/// rebuilds when choosing the skip boundary.
+const SKIP_REBUILD_COST_BLOCKS: f64 = 1.5;
+
+fn skip_rebuild_rate(permille: u64) -> f64 {
+    let (first, last) = (
+        SKIP_REBUILD_RATE[0],
+        SKIP_REBUILD_RATE[SKIP_REBUILD_RATE.len() - 1],
+    );
+    if permille <= first.0 {
+        return first.1;
+    }
+    if permille >= last.0 {
+        return last.1 * (1000 - permille.min(1000)) as f64 / (1000 - last.0) as f64;
+    }
+    for pair in SKIP_REBUILD_RATE.windows(2) {
+        let ((p0, r0), (p1, r1)) = (pair[0], pair[1]);
+        if permille <= p1 {
+            return r0 + (r1 - r0) * (permille - p0) as f64 / (p1 - p0) as f64;
+        }
+    }
+    last.1
+}
+
+/// Bytes of device memory each lane occupies for a skip boundary.
+pub(crate) fn lane_bytes_for(m_blocks: u32, skip_from: u32) -> u64 {
+    let lane_blocks = lane_stride_blocks(m_blocks, skip_from);
+    if lane_blocks == u64::from(m_blocks) {
+        CPU_LANE_MEMORY_BYTES.max(lane_blocks * 1024)
+    } else {
+        lane_blocks * 1024
+    }
+}
+
+/// Skip boundary for one device: the boundary (store every block, or 500-990
+/// permille) that gives the most hashes for the lane count its VRAM budget and lane
+/// cap allow. With `builtin_only`, only boundaries the built-in code objects cover
+/// (store every block, or the architecture default). `SEINE_AMD_SKIP_PERMILLE`
+/// overrides the choice, and architectures without a default never skip.
+pub(crate) fn plan_skip_from(
+    gcn_arch_name: &str,
+    m_blocks: u32,
+    t_cost: u32,
+    memory_budget_mib: u64,
+    max_lanes_override: Option<usize>,
+    builtin_only: bool,
+) -> u32 {
+    if let Some(permille) = skip_permille_override() {
+        return skip_from_permille(m_blocks, t_cost, permille);
+    }
+    let default_permille = default_skip_permille(gcn_arch_name);
+    if t_cost != 1 || default_permille == 0 {
+        return 0;
+    }
+    let candidates: Vec<u64> = if builtin_only {
+        vec![0, default_permille]
+    } else {
+        std::iter::once(0).chain((500..1000).step_by(10)).collect()
+    };
+    let lane_cap = max_lanes_override
+        .map(|lanes| lanes.max(1))
+        .unwrap_or(MAX_LANES_HARD_LIMIT)
+        .min(MAX_LANES_HARD_LIMIT);
+    let mut best = (0u32, 0.0f64);
+    for permille in candidates {
+        let skip_from = skip_from_permille(m_blocks, t_cost, permille);
+        let lanes =
+            lane_capacity_from_budget(memory_budget_mib, lane_bytes_for(m_blocks, skip_from))
+                .min(lane_cap);
+        let rebuilds = if skip_from == 0 {
+            0.0
+        } else {
+            skip_rebuild_rate(permille)
+        };
+        let score = lanes as f64 / (1.0 + SKIP_REBUILD_COST_BLOCKS * rebuilds);
+        // Later candidates rebuild less, so they win ties.
+        if score >= best.1 {
+            best = (skip_from, score);
+        }
+    }
+    best.0
+}
+
+/// Blocks each lane occupies in device memory (see the layout in amd_kernel.hip).
+pub(crate) fn lane_stride_blocks(m_blocks: u32, skip_from: u32) -> u64 {
+    if skip_from == 0 {
+        u64::from(m_blocks)
+    } else {
+        u64::from(skip_from) + u64::from((m_blocks - skip_from) / 2) + 4
+    }
+}
+
 pub(crate) fn build_hiprtc_options(
     gcn_arch_name: &str,
     wavefront_size: u32,
     m_blocks: u32,
     t_cost: u32,
+    skip_from: u32,
 ) -> Vec<String> {
     let wavefront_flag = if wavefront_size == 64 {
         "-mwavefrontsize64"
@@ -202,6 +380,7 @@ pub(crate) fn build_hiprtc_options(
         wavefront_flag.to_string(),
         format!("-DSEINE_FIXED_M_BLOCKS={}U", m_blocks),
         format!("-DSEINE_FIXED_T_COST={}U", t_cost),
+        format!("-DSEINE_AMD_SKIP_FROM={}U", skip_from),
         format!(
             "-DSEINE_CANCEL_CHECK_BLOCK_INTERVAL={}U",
             CANCEL_CHECK_BLOCK_INTERVAL
@@ -213,11 +392,21 @@ pub(crate) fn build_hiprtc_options(
     ];
     // Wave-scoped cooperative barriers instead of __syncthreads(): the
     // cooperative group never spans more than one wavefront, so the LLVM AMDGPU
-    // memory model needs no waits at wavefront scope, and __syncthreads() was
-    // stalling every round on outstanding global stores. SEINE_AMD_BLOCK_SYNC=1
+    // memory model needs no waits at wavefront scope. SEINE_AMD_BLOCK_SYNC=1
     // restores the block barrier.
     if std::env::var_os("SEINE_AMD_BLOCK_SYNC").is_none() {
         options.push("-DSEINE_WAVE_SYNC=1".to_string());
+    }
+    // SEINE_AMD_DEFINES="NAME=1,OTHER=0" adds one -D per comma-separated entry.
+    if let Some(extra) = std::env::var_os("SEINE_AMD_DEFINES") {
+        for define in extra
+            .to_string_lossy()
+            .split(',')
+            .map(str::trim)
+            .filter(|define| !define.is_empty())
+        {
+            options.push(format!("-D{define}"));
+        }
     }
     options
 }
@@ -386,6 +575,8 @@ pub(crate) struct FillBatchResult {
     pub hashes_done: usize,
     pub solved_nonce: Option<u64>,
     pub solved_hash: Option<[u8; 32]>,
+    /// Further nonces in the batch that meet the share target.
+    pub extra_solutions: Vec<(u64, [u8; 32])>,
 }
 
 pub(crate) struct HipArgon2Engine {
@@ -463,15 +654,45 @@ impl HipArgon2Engine {
         let m_cost_kib = params.m_cost();
         let t_cost = params.t_cost();
 
-        let options = build_hiprtc_options(
-            &device.gcn_arch_name,
-            device.wavefront_size,
-            m_blocks,
-            t_cost,
-        );
-        let code = compile_hip_module_with_wavefront_fallback(api, &options)
-            .context("failed to compile HIP module with hipRTC")?;
+        let memory_budget_mib =
+            derive_memory_budget_mib(device.memory_total_mib, device.memory_free_mib);
+        let builtin_kernels = api.hiprtc.is_err()
+            || std::env::var_os("SEINE_AMD_BUILTIN_KERNELS").is_some_and(|v| v == "1");
+        let plan_skip = |builtin_only: bool| {
+            plan_skip_from(
+                &device.gcn_arch_name,
+                m_blocks,
+                t_cost,
+                memory_budget_mib,
+                max_lanes_override,
+                builtin_only,
+            )
+        };
+        let options_for = |skip_from: u32| {
+            build_hiprtc_options(
+                &device.gcn_arch_name,
+                device.wavefront_size,
+                m_blocks,
+                t_cost,
+                skip_from,
+            )
+        };
+        let mut skip_from = plan_skip(builtin_kernels);
+        let (code, kernel_source) =
+            match argon2_kernel_code(api, &device.gcn_arch_name, &options_for(skip_from)) {
+                Ok(code) => code,
+                Err(err) => {
+                    // hipRTC failed: fall back to a boundary the built-in kernels cover.
+                    let builtin_skip_from = plan_skip(true);
+                    if builtin_skip_from == skip_from {
+                        return Err(err);
+                    }
+                    skip_from = builtin_skip_from;
+                    argon2_kernel_code(api, &device.gcn_arch_name, &options_for(skip_from))?
+                }
+            };
         let module = Module::load(api, &code)?;
+        super::note_kernel_source(device.index, kernel_source);
         let kernel_nonfused = module.function("argon2id_fill_kernel")?;
         let kernel_fused_target = module.function("argon2id_fill_kernel_fused_target")?;
         let seed_kernel = module.function("build_seed_blocks_kernel")?;
@@ -481,16 +702,15 @@ impl HipArgon2Engine {
         let stream = Stream::new(api)?;
         let interrupt_stream = Arc::new(Stream::new(api)?);
 
-        let lane_bytes = CPU_LANE_MEMORY_BYTES.max(u64::from(m_blocks) * 1024);
-        let memory_budget_mib =
-            derive_memory_budget_mib(device.memory_total_mib, device.memory_free_mib);
+        let lane_blocks = lane_stride_blocks(m_blocks, skip_from);
+        let lane_bytes = lane_bytes_for(m_blocks, skip_from);
         let max_lanes_budget = lane_capacity_from_budget(memory_budget_mib, lane_bytes);
         let max_lanes = max_lanes_override
             .map(|lanes| lanes.max(1))
             .unwrap_or(max_lanes_budget)
             .min(MAX_LANES_HARD_LIMIT)
             .max(1);
-        let lane_stride_words = u64::from(m_blocks).saturating_mul(128);
+        let lane_stride_words = lane_blocks.saturating_mul(128);
         let hashes_per_launch_per_lane = hashes_per_launch_per_lane.max(1) as usize;
 
         // Lane probe with allocation backoff: descend from the budgeted lane
@@ -501,7 +721,7 @@ impl HipArgon2Engine {
             match try_allocate_hip_buffers(
                 api,
                 &stream,
-                m_blocks,
+                lane_stride_words,
                 lanes,
                 hashes_per_launch_per_lane,
             ) {
@@ -730,6 +950,7 @@ impl HipArgon2Engine {
                 hashes_done: 0,
                 solved_nonce: None,
                 solved_hash: None,
+                extra_solutions: Vec::new(),
             });
         }
 
@@ -876,12 +1097,14 @@ impl HipArgon2Engine {
                 hashes_done: 0,
                 solved_nonce: None,
                 solved_hash: None,
+                extra_solutions: Vec::new(),
             });
         }
 
         let mut solved_nonce = None;
         let mut solved_hash = None;
-        if target.is_some() {
+        let mut extra_solutions = Vec::new();
+        if let Some(share_target) = target {
             let evaluated_hashes_u32 =
                 u32::try_from(hashes_done).map_err(|_| anyhow!("active hash count overflow"))?;
             self.htod(&self.found_index, 0, &u32::MAX.to_le_bytes())?;
@@ -910,28 +1133,37 @@ impl HipArgon2Engine {
             let mut found_bytes = [0u8; 4];
             self.dtoh(&self.found_index, 0, &mut found_bytes)?;
             let found_index = u32::from_le_bytes(found_bytes);
-            if found_index != u32::MAX && found_index > 0 {
-                let idx = (found_index - 1) as usize;
-                if idx < hashes_done {
-                    solved_nonce = Some(nonces[idx]);
-                    solved_hash = Some(self.read_last_block_hash(idx)?);
-                }
-            }
-        }
-
-        // Pool mining: when a share was found, rescan the batch for a nonce
-        // meeting the (harder) network target so block candidates are never
-        // discarded in favor of an earlier share-only nonce.
-        if solved_nonce.is_some() {
-            if let Some(network_target) = network_target {
-                for (idx, nonce) in nonces.iter().take(hashes_done).enumerate() {
-                    let hash = self.read_last_block_hash(idx)?;
-                    if hash_meets_target(&hash, network_target) {
-                        solved_nonce = Some(*nonce);
-                        solved_hash = Some(hash);
-                        break;
+            if found_index != u32::MAX && found_index > 0 && (found_index as usize) <= hashes_done {
+                // The kernel reports the lowest hit; every later hash in the batch
+                // is checked here so no share is dropped. A nonce meeting the
+                // (harder) network target goes first so block candidates are
+                // never displaced by a share-only nonce.
+                let first = (found_index - 1) as usize;
+                let mut hits = Vec::new();
+                for (offset, hash) in self
+                    .read_last_block_hashes(first, hashes_done)?
+                    .into_iter()
+                    .enumerate()
+                {
+                    if offset == 0 || hash_meets_target(&hash, share_target) {
+                        hits.push((nonces[first + offset], hash));
                     }
                 }
+                if let Some(network_target) = network_target {
+                    if let Some(pos) = hits
+                        .iter()
+                        .position(|(_, hash)| hash_meets_target(hash, network_target))
+                    {
+                        let candidate = hits.remove(pos);
+                        hits.insert(0, candidate);
+                    }
+                }
+                let mut hits = hits.into_iter();
+                if let Some((nonce, hash)) = hits.next() {
+                    solved_nonce = Some(nonce);
+                    solved_hash = Some(hash);
+                }
+                extra_solutions.extend(hits);
             }
         }
 
@@ -939,23 +1171,30 @@ impl HipArgon2Engine {
             hashes_done,
             solved_nonce,
             solved_hash,
+            extra_solutions,
         })
     }
 
-    fn read_last_block_hash(&self, hash_idx: usize) -> Result<[u8; 32]> {
-        let offset = hash_idx
-            .checked_mul(128 * 8)
-            .ok_or_else(|| anyhow!("hash index overflow while reading HIP last block"))?;
-        let mut block_bytes = [0u8; 1024];
-        self.dtoh(&self.last_blocks, offset, &mut block_bytes)?;
-        let mut words = [0u64; 128];
-        for (idx, word) in words.iter_mut().enumerate() {
-            let start = idx * 8;
-            let mut le = [0u8; 8];
-            le.copy_from_slice(&block_bytes[start..start + 8]);
-            *word = u64::from_le_bytes(le);
+    /// Pow hashes of last blocks `start..end` of the current batch, read in one copy.
+    fn read_last_block_hashes(&self, start: usize, end: usize) -> Result<Vec<[u8; 32]>> {
+        let count = end.saturating_sub(start);
+        let mut bytes = vec![0u8; count * 128 * 8];
+        if count > 0 {
+            let offset = start
+                .checked_mul(128 * 8)
+                .ok_or_else(|| anyhow!("hash index overflow while reading HIP last blocks"))?;
+            self.dtoh(&self.last_blocks, offset, &mut bytes)?;
         }
-        Ok(pow_hash_from_last_block_words(&words))
+        Ok(bytes
+            .chunks_exact(128 * 8)
+            .map(|block| {
+                let mut words = [0u64; 128];
+                for (word, le) in words.iter_mut().zip(block.chunks_exact(8)) {
+                    *word = u64::from_le_bytes(le.try_into().expect("8-byte chunk"));
+                }
+                pow_hash_from_last_block_words(&words)
+            })
+            .collect())
     }
 }
 
@@ -972,11 +1211,10 @@ pub(crate) fn plan_lane_launch_iters(requested_hashes: u64, lanes_active: u64) -
 fn try_allocate_hip_buffers(
     api: &'static HipApi,
     stream: &Stream,
-    m_blocks: u32,
+    lane_words: u64,
     lanes: usize,
     hashes_per_launch_per_lane: usize,
 ) -> std::result::Result<EngineBuffers, HipError> {
-    let lane_words = u64::from(m_blocks).saturating_mul(128);
     let lanes_per_chunk = LANE_CHUNK_LANES.max(1);
     let mut lane_chunks = Vec::new();
     let mut remaining = lanes.max(1);
@@ -1102,15 +1340,60 @@ fn compile_hip_module_with_wavefront_fallback(
     }
 }
 
+/// The Argon2 code object: compiled with hipRTC, or the built-in one for this
+/// architecture when hipRTC is missing or fails (or `SEINE_AMD_BUILTIN_KERNELS=1`).
+/// The Argon2 code object and where it came from.
+fn argon2_kernel_code(
+    api: &'static HipApi,
+    gcn_arch_name: &str,
+    options: &[String],
+) -> Result<(Vec<u8>, seine_telemetry::GpuKernelSource)> {
+    use seine_telemetry::GpuKernelSource;
+    let key = super::code_objects::options_key(HIP_KERNEL_SRC, options);
+    let builtin = super::code_objects::find("argon2", gcn_arch_name, key);
+    let prefer_builtin = std::env::var_os("SEINE_AMD_BUILTIN_KERNELS").is_some_and(|v| v == "1");
+    if let (Some(code), true) = (builtin, prefer_builtin || api.hiprtc.is_err()) {
+        return Ok((code.to_vec(), GpuKernelSource::BuiltinCodeObject));
+    }
+    match compile_hip_module_with_wavefront_fallback(api, options) {
+        Ok(code) => Ok((code, GpuKernelSource::Hiprtc)),
+        Err(err) => match builtin {
+            Some(code) => Ok((code.to_vec(), GpuKernelSource::BuiltinCodeObject)),
+            None => Err(err.context(format!(
+                "failed to compile HIP module with hipRTC (no built-in kernel for {})",
+                gcn_arch_name.trim()
+            ))),
+        },
+    }
+}
+
+/// hipRTC compile without the wavefront-flag retry, for `--amd-export-code-objects`.
+pub(crate) fn compile_hip_source_for_export(
+    api: &'static HipApi,
+    options: &[String],
+) -> Result<Vec<u8>> {
+    compile_hip_module(api, options)
+}
+
 fn compile_hip_module(api: &'static HipApi, options: &[String]) -> Result<Vec<u8>> {
-    let source = CString::new(HIP_KERNEL_SRC)
+    compile_hip_source(api, HIP_KERNEL_SRC, HIP_KERNEL_PROGRAM_NAME, options)
+}
+
+fn compile_hip_source(
+    api: &'static HipApi,
+    source: &str,
+    program_name: &str,
+    options: &[String],
+) -> Result<Vec<u8>> {
+    let rtc = api.hiprtc.as_ref().map_err(|err| anyhow!("{err}"))?;
+    let source = CString::new(source)
         .map_err(|_| anyhow!("HIP kernel source contains interior NUL byte"))?;
-    let name = CString::new(HIP_KERNEL_PROGRAM_NAME)
+    let name = CString::new(program_name)
         .map_err(|_| anyhow!("HIP program name contains interior NUL byte"))?;
 
     let mut program: super::hip_ffi::HiprtcProgram = std::ptr::null_mut();
     let create_code = unsafe {
-        (api.hiprtc_create_program)(
+        (rtc.create_program)(
             &mut program,
             source.as_ptr(),
             name.as_ptr(),
@@ -1122,7 +1405,7 @@ fn compile_hip_module(api: &'static HipApi, options: &[String]) -> Result<Vec<u8
     if create_code != HIPRTC_SUCCESS {
         bail!(
             "hiprtcCreateProgram failed: {}",
-            api.hiprtc_error_string(create_code)
+            rtc.error_string(create_code)
         );
     }
 
@@ -1134,62 +1417,57 @@ fn compile_hip_module(api: &'static HipApi, options: &[String]) -> Result<Vec<u8
     let option_ptrs: Vec<*const c_char> =
         option_cstrings.iter().map(|cstr| cstr.as_ptr()).collect();
 
-    let compile_code = unsafe {
-        (api.hiprtc_compile_program)(program, option_ptrs.len() as c_int, option_ptrs.as_ptr())
-    };
+    let compile_code =
+        unsafe { (rtc.compile_program)(program, option_ptrs.len() as c_int, option_ptrs.as_ptr()) };
     if compile_code != HIPRTC_SUCCESS {
-        let log = read_hiprtc_log(api, program).unwrap_or_default();
-        let _ = unsafe { (api.hiprtc_destroy_program)(&mut program) };
+        let log = read_hiprtc_log(rtc, program).unwrap_or_default();
+        let _ = unsafe { (rtc.destroy_program)(&mut program) };
         if log.is_empty() {
             bail!(
                 "hiprtcCompileProgram failed (options: {options:?}): {}",
-                api.hiprtc_error_string(compile_code)
+                rtc.error_string(compile_code)
             );
         }
         bail!(
             "hiprtcCompileProgram failed (options: {options:?}): {}; log: {log}",
-            api.hiprtc_error_string(compile_code)
+            rtc.error_string(compile_code)
         );
     }
 
     let mut code_size: usize = 0;
-    let size_code = unsafe { (api.hiprtc_get_code_size)(program, &mut code_size) };
+    let size_code = unsafe { (rtc.get_code_size)(program, &mut code_size) };
     if size_code != HIPRTC_SUCCESS || code_size == 0 {
-        let _ = unsafe { (api.hiprtc_destroy_program)(&mut program) };
-        bail!(
-            "hiprtcGetCodeSize failed: {}",
-            api.hiprtc_error_string(size_code)
-        );
+        let _ = unsafe { (rtc.destroy_program)(&mut program) };
+        bail!("hiprtcGetCodeSize failed: {}", rtc.error_string(size_code));
     }
     let mut code = vec![0u8; code_size];
-    let get_code = unsafe { (api.hiprtc_get_code)(program, code.as_mut_ptr() as *mut c_char) };
+    let get_code = unsafe { (rtc.get_code)(program, code.as_mut_ptr() as *mut c_char) };
     if get_code != HIPRTC_SUCCESS {
-        let _ = unsafe { (api.hiprtc_destroy_program)(&mut program) };
-        bail!(
-            "hiprtcGetCode failed: {}",
-            api.hiprtc_error_string(get_code)
-        );
+        let _ = unsafe { (rtc.destroy_program)(&mut program) };
+        bail!("hiprtcGetCode failed: {}", rtc.error_string(get_code));
     }
-    let destroy_code = unsafe { (api.hiprtc_destroy_program)(&mut program) };
+    let destroy_code = unsafe { (rtc.destroy_program)(&mut program) };
     if destroy_code != HIPRTC_SUCCESS {
         bail!(
             "hiprtcDestroyProgram failed: {}",
-            api.hiprtc_error_string(destroy_code)
+            rtc.error_string(destroy_code)
         );
     }
     Ok(code)
 }
 
-fn read_hiprtc_log(api: &'static HipApi, program: super::hip_ffi::HiprtcProgram) -> Option<String> {
+fn read_hiprtc_log(
+    rtc: &super::hip_ffi::Hiprtc,
+    program: super::hip_ffi::HiprtcProgram,
+) -> Option<String> {
     let mut log_size: usize = 0;
-    if unsafe { (api.hiprtc_get_program_log_size)(program, &mut log_size) } != HIPRTC_SUCCESS
+    if unsafe { (rtc.get_program_log_size)(program, &mut log_size) } != HIPRTC_SUCCESS
         || log_size <= 1
     {
         return None;
     }
     let mut log = vec![0u8; log_size];
-    if unsafe { (api.hiprtc_get_program_log)(program, log.as_mut_ptr() as *mut c_char) }
-        != HIPRTC_SUCCESS
+    if unsafe { (rtc.get_program_log)(program, log.as_mut_ptr() as *mut c_char) } != HIPRTC_SUCCESS
     {
         return None;
     }
@@ -1246,8 +1524,94 @@ mod tests {
     }
 
     #[test]
+    fn skip_boundary_defaults_to_rdna2_to_rdna4() {
+        if std::env::var_os("SEINE_AMD_SKIP_PERMILLE").is_some() {
+            return;
+        }
+        let blocks = 2_097_152u32;
+        let from = skip_from_block("gfx1101", blocks, 1);
+        assert_eq!(from, 1_048_576);
+        assert_eq!(from % 2, 0);
+        assert_eq!(skip_from_block("gfx1201", blocks, 1), from);
+        assert_eq!(skip_from_block("gfx1151", blocks, 1), 0);
+        assert_eq!(skip_from_block("gfx1030", blocks, 1), from);
+        assert_eq!(
+            skip_from_block("gfx1100", blocks, 3),
+            0,
+            "multi-pass stores every block"
+        );
+        assert_eq!(lane_stride_blocks(blocks, 0), u64::from(blocks));
+        assert_eq!(
+            lane_stride_blocks(blocks, from),
+            u64::from(from) + u64::from((blocks - from) / 2) + 4
+        );
+        assert!(build_hiprtc_options("gfx1100", 32, blocks, 1, from)
+            .contains(&format!("-DSEINE_AMD_SKIP_FROM={from}U")));
+        assert!(build_hiprtc_options("gfx1151", 32, blocks, 1, 0)
+            .contains(&"-DSEINE_AMD_SKIP_FROM=0U".to_string()));
+    }
+
+    #[test]
+    fn skip_plan_trades_lanes_against_rebuilds() {
+        if std::env::var_os("SEINE_AMD_SKIP_PERMILLE").is_some() {
+            return;
+        }
+        let blocks = 2_097_152u32;
+        let lanes = |budget: u64, skip_from: u32| {
+            lane_capacity_from_budget(budget, lane_bytes_for(blocks, skip_from))
+        };
+        // A lane cap below what VRAM holds: skipping buys no lanes, so store every block.
+        assert_eq!(
+            plan_skip_from("gfx1101", blocks, 1, 24_000, Some(4), false),
+            0
+        );
+        assert_eq!(
+            plan_skip_from("gfx1101", blocks, 1, 24_000, Some(4), true),
+            0
+        );
+        // An 8 GiB card: the most lanes VRAM allows, at the highest boundary that keeps them.
+        let skip_from = plan_skip_from("gfx1030", blocks, 1, 7_764, None, false);
+        assert!(skip_from >= blocks / 2);
+        assert_eq!(lanes(7_764, skip_from), 5);
+        assert!(lanes(7_764, skip_from + 2 * (blocks / 100)) < 5);
+        // Built-in kernels only cover storing every block and the default boundary.
+        assert_eq!(
+            plan_skip_from("gfx1030", blocks, 1, 7_764, None, true),
+            skip_from_block("gfx1030", blocks, 1)
+        );
+        // No skipping where the architecture has no default, or for multi-pass fills.
+        assert_eq!(plan_skip_from("gfx1151", blocks, 1, 7_764, None, false), 0);
+        assert_eq!(plan_skip_from("gfx1100", blocks, 3, 7_764, None, false), 0);
+        assert!(skip_rebuild_rate(500) > skip_rebuild_rate(510));
+        assert!(skip_rebuild_rate(990) < skip_rebuild_rate(950));
+    }
+
+    #[test]
+    fn integrated_radeon_is_recognized_without_the_driver_flag() {
+        for (arch, name) in [
+            ("gfx1036", "AMD Radeon(TM) Graphics"),
+            ("gfx1103", "AMD Radeon 780M Graphics"),
+            ("gfx1151", "AMD Radeon 8060S Graphics"),
+            ("gfx1035:xnack-", "AMD Radeon 680M"),
+            ("gfx1234", "AMD Radeon(TM) Graphics"),
+        ] {
+            assert!(is_integrated_gpu(arch, name), "{arch} {name}");
+        }
+        for (arch, name) in [
+            ("gfx1030", "AMD Radeon RX 6800"),
+            ("gfx1032", "AMD Radeon RX 6600"),
+            ("gfx1100", "AMD Radeon RX 7900 XTX"),
+            ("gfx1101", "AMD Radeon Pro V710 MxGPU"),
+            ("gfx1201", "AMD Radeon AI PRO R9700"),
+            ("gfx942:sramecc+:xnack-", "AMD Instinct MI325X"),
+        ] {
+            assert!(!is_integrated_gpu(arch, name), "{arch} {name}");
+        }
+    }
+
+    #[test]
     fn hiprtc_options_pin_arch_wavefront_and_pow_parameters() {
-        let options = build_hiprtc_options("gfx1100:sramecc-:xnack-", 32, 2_097_152, 1);
+        let options = build_hiprtc_options("gfx1100:sramecc-:xnack-", 32, 2_097_152, 1, 0);
         assert!(options.contains(&"--offload-arch=gfx1100:sramecc-:xnack-".to_string()));
         assert!(options.contains(&"-mno-wavefrontsize64".to_string()));
         assert!(options.contains(&"-DSEINE_FIXED_M_BLOCKS=2097152U".to_string()));
@@ -1255,7 +1619,7 @@ mod tests {
         assert!(options.contains(&"-DSEINE_WARPS_PER_BLOCK=1U".to_string()));
         assert!(options.contains(&"-DSEINE_WAVE_SYNC=1".to_string()));
 
-        let options = build_hiprtc_options("gfx942:sramecc+:xnack-", 64, 2_097_152, 1);
+        let options = build_hiprtc_options("gfx942:sramecc+:xnack-", 64, 2_097_152, 1, 0);
         assert!(options.contains(&"--offload-arch=gfx942:sramecc+:xnack-".to_string()));
         assert!(options.contains(&"-mwavefrontsize64".to_string()));
         assert!(!options.contains(&"-mno-wavefrontsize64".to_string()));
@@ -1309,7 +1673,7 @@ mod tests {
         );
         assert!(
             !src.contains("prefetch.global"),
-            "A73 dead-code prefetch is an NVIDIA PTXAS scheduling hack"
+            "the CUDA kernel's dead-code prefetch block is not part of the HIP kernel"
         );
         assert!(
             !src.contains("tid < 8U"),
@@ -1353,6 +1717,10 @@ mod tests {
                 device.gcn_arch_name
             );
             assert!(device.memory_total_mib > 0);
+            eprintln!(
+                "device {} {} {} integrated={}",
+                device.index, device.name, device.gcn_arch_name, device.integrated
+            );
         }
     }
 
@@ -1368,6 +1736,11 @@ mod tests {
             device.wavefront_size,
             params.block_count() as u32,
             params.t_cost(),
+            skip_from_block(
+                &device.gcn_arch_name,
+                params.block_count() as u32,
+                params.t_cost(),
+            ),
         );
         let code = compile_hip_module_with_wavefront_fallback(api, &options)
             .expect("HIP kernel should compile with hipRTC");

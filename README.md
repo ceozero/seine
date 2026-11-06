@@ -40,11 +40,15 @@
 
 | Platform | Archive | GPU |
 |---|---|---|
-| Windows x86_64 | `seine-windows-x86_64.zip` | NVIDIA (drivers only, CUDA runtime bundled) |
-| Linux x86_64 | `seine-linux-x86_64.tar.gz` | NVIDIA (driver + NVRTC) |
-| Linux ARM64 | `seine-linux-aarch64.tar.gz` | CPU only (glibc 2.39+) |
-| macOS Apple Silicon | `seine-macos-aarch64.tar.gz` | CPU (Metal experimental) |
+| Windows x86_64 | `seine-windows-x86_64.zip` | NVIDIA (drivers only, CUDA runtime bundled), AMD Radeon RDNA (AMD driver) |
+| Linux x86_64 | `seine-linux-x86_64.tar.gz` | NVIDIA (driver only), AMD Radeon RDNA (ROCm HIP runtime) |
+| Linux ARM64 | `seine-linux-aarch64.tar.gz` | CPU only |
+| macOS Apple Silicon | `seine-macos-aarch64.tar.gz` | CPU; Metal GPU for BLAKE2b blocks |
 | macOS Intel | `seine-macos-x86_64.tar.gz` | CPU only |
+| HiveOS rigs | `seine-hiveos-<version>.tar.gz` | NVIDIA (NVRTC bundled), AMD; see the [HiveOS guide](docs/guides/hiveos.md) |
+| mmpOS rigs | `seine-mmpos-<version>.tar.gz` | NVIDIA (NVRTC bundled), AMD; see the [mmpOS guide](docs/guides/mmpos.md) |
+
+The Linux builds run on glibc 2.31 or newer: Ubuntu 20.04, Debian 11 and later.
 
 **2. Run it:**
 
@@ -53,7 +57,7 @@
 ```
 
 **3. Enter your Blocknet address** (or `@shortname`) when prompted, and accept the
-default pool. That's it: seine starts hashing straight away and keeps tuning
+default pool. That's it: seine starts hashing straight away and tunes
 itself as it goes.
 
 Each CPU thread needs about 2 GB of RAM. Seine sizes itself to your machine
@@ -62,14 +66,14 @@ automatically. More options: [setup and configuration](docs/guides/configuration
 ## Performance
 
 <p align="center">
-  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 97.1 H/s, EPYC 9554P Zen 4 75.0, Arm server (AWS Graviton4) 39.3, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
+  <img src="docs/assets/charts/best.svg" alt="Best measured hashrate by platform: AMD EPYC 9355P Zen 5 97.1 H/s, EPYC 9554P Zen 4 81.4, Arm server (AWS Graviton4) 39.3, Apple M4 Max 30.9, Intel Xeon 26.0" width="900">
 </p>
 
-**97.1 H/s on the AMD EPYC 9355P** with default settings, and **75.0 H/s on
-the EPYC 9554P** with 64 mining threads and 1 GiB huge pages.
+**97.1 H/s on the AMD EPYC 9355P** with default settings, and **81.4 H/s on
+the EPYC 9554P** with 128 mining threads selected automatically.
 [Measurements and settings](docs/PERFORMANCE.md).
 
-Every number is a measured result from repeated runs. Results for every CPU tested:
+These are measured results on the stated hardware and settings. Results for every CPU tested:
 **[performance results](docs/PERFORMANCE.md)**.
 
 ## Get the most from your hardware
@@ -87,8 +91,12 @@ Seine is fast out of the box. These guides cover the last few percent:
 ## Documentation
 
 - [Setup and configuration](docs/guides/configuration.md): first run, flags, dashboard controls, shortnames, dev fee
+- [Mining to an exchange](docs/EXCHANGE_PAYOUTS.md): pay straight to an exchange deposit address with `--payout-memo`
 - [How automatic tuning works](docs/guides/autotuning.md): thread counts, CPU kernels, memory recovery
 - [Solo mining](docs/guides/solo-mining.md): mine against your own Blocknet node
+- [HiveOS](docs/guides/hiveos.md): add seine to a flight sheet with one installation URL
+- [mmpOS](docs/guides/mmpos.md): add seine to a miner profile with one download URL
+- [Farm proxy](docs/guides/farm-proxy.md): many rigs, one pool connection
 - [Control API](docs/API.md): REST, live events and metrics for dashboards ([OpenAPI](docs/openapi/seine-api-v1.yaml))
 - [Flag reference](docs/MINER_FLAGS.md): every command-line option
 - [Building from source](docs/BUILDING.md)

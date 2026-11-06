@@ -234,6 +234,10 @@ impl SubmitRetryQueue {
         self.entries.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Records a job notification. Queued shares whose job a new block made
     /// stale are returned so the caller can report them as rejected.
     pub fn observe_job(&mut self, job: &PoolJob, now: Instant) -> Vec<AbandonedSubmit> {
@@ -425,6 +429,7 @@ mod tests {
             backend: Some("cpu#1".to_string()),
             retries: 0,
             timing: None,
+            worker: None,
         }
     }
 

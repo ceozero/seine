@@ -43,8 +43,8 @@ of them, the same policy as the Sol Incinerator blog.
 
 Readers arrive already knowing what Blocknet is. Don't explain which Blocknet this is, add
 "this is not the BLOCK project" notes, or define the coin in an intro; start with the task.
-Two naming rules still hold: never use the `$BNT` cashtag (Bancor's), and never link
-blocknet.org (an unrelated project).
+One naming rule still holds: never link blocknet.org (an unrelated project). The `$BNT`
+cashtag is welcome; we are reclaiming it from Bancor (owner decision, 2026-11-05).
 
 ## Claims you must not make
 
@@ -59,7 +59,7 @@ fails the build on most of them.
 - No profit promises, "passive income" or "risk-free". Profitability depends on coin price,
   network difficulty and electricity cost; give the reader the arithmetic and a way to measure.
 - No unannounced Faraday details. Only what blocknetcrypto.com states publicly.
-- No AMD GPU, Windows ARM64 or production Metal support claims.
+- No Windows ARM64 or production Metal support claims. AMD GPU support shipped in v0.3.0; say which cards (RX 6000, RX 7000, RX 9000, Radeon PRO).
 - seine's term is **threads** (the `--threads` flag), never "workers". On the pool, a "worker
   name" is fine because that's what the pool calls it.
 - Don't lead with fees. Mention seine's dev fee (flat 2% on every pool and in solo mode) only where

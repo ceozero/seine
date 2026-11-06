@@ -1,5 +1,6 @@
 mod adaptive_cpu;
 mod adaptive_kernel;
+mod adaptive_search;
 pub(crate) use adaptive_kernel::{
     cohort_side_cache_blocks, cohort_skip_store_permille, fixed_count_trials_wanted,
 };
@@ -11,6 +12,7 @@ mod bench;
 pub(crate) mod block_latency;
 mod hash_poll;
 mod hashrate_tracker;
+pub(crate) mod live_stats;
 mod mining;
 mod mining_pool;
 mod mining_tui;
@@ -26,6 +28,7 @@ mod template_prefetch;
 pub(crate) mod thread_control;
 mod tip;
 mod tui;
+mod tui_prompt;
 pub(crate) mod ui;
 mod wallet;
 mod work_allocator;
@@ -34,7 +37,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Result};
@@ -58,12 +61,16 @@ use crate::config::{
     BackendKind, BackendSpec, Config, CpuPerformanceProfile, MiningMode, UiMode, WorkAllocation,
 };
 use crate::daemon_api::ApiClient;
+pub(crate) use mining_tui::{close_dashboard, start_dashboard};
 use scheduler::NonceReservation;
 use stats::{format_hashrate, Stats};
 use tui::{new_tui_state, TuiState};
+pub(crate) use tui_prompt::{prompt_screen, PromptSpec};
 use ui::{info, warn};
 
 const TEMPLATE_RETRY_DELAY: Duration = Duration::from_secs(2);
+/// Re-fetch spacing while solo work needs a newer release.
+const UNSUPPORTED_WORK_RETRY_DELAY: Duration = Duration::from_secs(30);
 const MIN_EVENT_WAIT: Duration = Duration::from_millis(1);
 const BACKEND_EVENT_SOURCE_CAPACITY_MAX: usize = 256;
 const CPU_AUTOTUNE_RECORD_SCHEMA_VERSION: u32 = 11;
@@ -110,12 +117,100 @@ struct ActivatedBackend {
     event_rx: Receiver<BackendEvent>,
 }
 
-/// Mining BLAKE2b work needs this opt-in until its parameters are final
-/// (`blocknet_pow_spec::BLAKE2B_POW_PARAMS_FINAL`), e.g. on a Faraday testnet.
+/// Until the BLAKE2b parameters are final
+/// (`blocknet_pow_spec::BLAKE2B_POW_PARAMS_FINAL`), pool mining mines
+/// fork-height work with the provisional ones and tells pools so with the
+/// `pow_blake2b_v1` login capability; a pool on other parameters turns it away
+/// with an update notice. Direct daemon mining has no such check, so it mines
+/// provisional work only with `1` here. `0` refuses it in every mode.
 pub(super) const PROVISIONAL_FARADAY_POW_ENV: &str = "SEINE_FARADAY_PROVISIONAL_POW";
 
-pub(super) fn provisional_faraday_pow_allowed() -> bool {
-    std::env::var_os(PROVISIONAL_FARADAY_POW_ENV).is_some_and(|value| value == "1")
+/// Set for the duration of a direct daemon mining run.
+static DIRECT_DAEMON_MINING: AtomicBool = AtomicBool::new(false);
+
+fn note_mining_mode(mode: MiningMode) {
+    DIRECT_DAEMON_MINING.store(mode == MiningMode::Daemon, Ordering::Release);
+}
+
+fn current_mining_mode() -> MiningMode {
+    if DIRECT_DAEMON_MINING.load(Ordering::Acquire) {
+        MiningMode::Daemon
+    } else {
+        MiningMode::Pool
+    }
+}
+
+fn provisional_pow_allowed_in(mode: MiningMode, setting: Option<&std::ffi::OsStr>) -> bool {
+    match mode {
+        MiningMode::Pool => setting.is_none_or(|value| value != "0"),
+        MiningMode::Daemon => setting.is_some_and(|value| value == "1"),
+    }
+}
+
+/// Whether the current run mines fork-height work with the provisional
+/// BLAKE2b parameters.
+pub(crate) fn provisional_faraday_pow_allowed() -> bool {
+    provisional_pow_allowed_in(
+        current_mining_mode(),
+        std::env::var_os(PROVISIONAL_FARADAY_POW_ENV).as_deref(),
+    )
+}
+
+/// True when a run in `mode` mines fork-height (BLAKE2b) work: final
+/// parameters, or provisional ones allowed in that mode.
+pub(crate) fn mines_blake2b_in(mode: MiningMode) -> bool {
+    blocknet_pow_spec::ensure_supported_pow(
+        blocknet_pow_spec::FARADAY_ACTIVATION_HEIGHT,
+        provisional_pow_allowed_in(
+            mode,
+            std::env::var_os(PROVISIONAL_FARADAY_POW_ENV).as_deref(),
+        ),
+    )
+    .is_ok()
+}
+
+/// True when the current run mines fork-height (BLAKE2b) work.
+pub(crate) fn mines_blake2b() -> bool {
+    mines_blake2b_in(current_mining_mode())
+}
+
+/// The first fork-height work mined with provisional parameters asks for an
+/// update check, so a release with the final parameters installs promptly.
+pub(super) fn note_provisional_pow(pow: crate::backend::PowAlgorithm) {
+    static NOTED: AtomicBool = AtomicBool::new(false);
+    if pow == crate::backend::PowAlgorithm::Blake2b512
+        && !blocknet_pow_spec::BLAKE2B_POW_PARAMS_FINAL
+        && !NOTED.swap(true, Ordering::AcqRel)
+    {
+        crate::update_check::request_check_soon();
+    }
+}
+
+static UNSUPPORTED_WORK_NOTICE: AtomicBool = AtomicBool::new(false);
+
+/// Work this build cannot mine (a PoW or header format from a later release)
+/// pauses mining instead of ending the process, so the update checker can
+/// install a release that supports it. Warns once per pause.
+pub(crate) fn note_unsupported_work(reason: &str) {
+    crate::update_check::set_mining_blocked(true);
+    crate::update_check::request_check_soon();
+    crate::diagnostics::unsupported_work(true);
+    if !UNSUPPORTED_WORK_NOTICE.swap(true, Ordering::AcqRel) {
+        let action = if crate::update_check::auto_install_active() {
+            "checking for an update"
+        } else {
+            "install the newest release (seine --self-update)"
+        };
+        ui::warn("UPDATE", format!("mining paused: {reason}; {action}"));
+    }
+}
+
+pub(crate) fn clear_unsupported_work_notice() {
+    crate::update_check::set_mining_blocked(false);
+    crate::diagnostics::unsupported_work(false);
+    if UNSUPPORTED_WORK_NOTICE.swap(false, Ordering::AcqRel) {
+        ui::info("UPDATE", "mining resumed");
+    }
 }
 
 struct DistributeWorkOptions<'a> {
@@ -215,6 +310,9 @@ struct CpuAutotuneRecord {
     memory_limited: bool,
     #[serde(default)]
     mining_measurement: bool,
+    /// The live search's result. Older records stay useful as a starting count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    search: Option<adaptive_search::Saved>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -247,10 +345,25 @@ fn resolve_mining_config(
 ) -> Result<Config> {
     let mut resolved = cfg.clone();
     if let Some(destination) = cfg.mining_address.as_deref() {
-        let address = resolver.resolve(destination)?;
+        let mut address = resolver.resolve(destination)?;
         if address != destination.trim() {
             info("ADDRESS", format!("resolved {destination} to {address}"));
         }
+        // Daemon mining is already solo: the block template pays the address.
+        let (solo, bare) = crate::shortname::split_solo(&address);
+        if solo && cfg.mode == MiningMode::Daemon {
+            info(
+                "ADDRESS",
+                "daemon mining is always solo; ignoring the solo: prefix",
+            );
+            address = bare.to_string();
+        }
+        // A shortname or the API can reach an exchange address the startup checks never saw.
+        crate::payout_destination::ensure_exchange_memo(
+            &address,
+            cfg.payout_memo.as_deref(),
+            cfg.mode == MiningMode::Pool,
+        )?;
         resolved.mining_address = Some(address);
     }
     Ok(resolved)
@@ -276,6 +389,7 @@ pub(crate) fn run_with_thread_control(
     if cfg.bench {
         return bench::run_benchmark(cfg, shutdown.as_ref());
     }
+    note_mining_mode(cfg.mode);
     // Install before address resolution, backend initialization and autotuning so
     // failures before productive work are observable too. No network I/O here.
     let telemetry = cfg
@@ -369,6 +483,9 @@ fn start_backend_interruptibly(
     std::thread::Builder::new()
         .name(format!("{backend_name}-{backend_id}-start"))
         .spawn(move || {
+            // Held through the cancelled stop too: a new mining session on the
+            // same card must not start until this one has let go of it.
+            let _serial = amd_start_serial(backend_ref.name());
             if tx.send(backend_ref.start()).is_err() {
                 backend_ref.stop();
             }
@@ -395,6 +512,151 @@ fn backend_start_failure_detail(error: &anyhow::Error) -> seine_telemetry::Failu
         .and_then(std::io::Error::raw_os_error)
         .map(i64::from);
     detail
+}
+
+/// GPU backends start in background threads and join the run when ready.
+fn starts_in_background(kind: BackendKind) -> bool {
+    matches!(kind, BackendKind::Nvidia | BackendKind::Amd)
+}
+
+/// Removes one pending GPU of `name` (a backend name such as "nvidia").
+pub(super) fn remove_pending_gpu(pending: &mut Vec<&'static str>, name: &str) {
+    if let Some(index) = pending.iter().position(|kind| *kind == name) {
+        pending.remove(index);
+    }
+}
+
+/// AMD cards start one at a time, as they did when startup was synchronous.
+static AMD_START_LOCK: Mutex<()> = Mutex::new(());
+
+fn amd_start_serial(backend_name: &str) -> Option<MutexGuard<'static, ()>> {
+    (backend_name == "amd").then(|| AMD_START_LOCK.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Stops a backend that never joined the run, in turn with AMD starts.
+fn stop_unjoined_backend(backend: &dyn PowBackend) {
+    let _serial = amd_start_serial(backend.name());
+    backend.stop();
+}
+
+/// Starts one GPU backend off the main thread and hands it to the run through
+/// `deferred_tx`, or reports why it is unavailable.
+fn start_deferred_backend(
+    backend: Arc<dyn PowBackend>,
+    backend_id: BackendInstanceId,
+    display_id: u64,
+    spec: BackendSpec,
+    cfg: &Config,
+    shutdown: &AtomicBool,
+    deferred_tx: &Sender<BackendSlot>,
+) {
+    let backend_name = backend.name();
+    let detail = match spec.kind {
+        BackendKind::Nvidia => "initializing CUDA engine...",
+        BackendKind::Amd => "initializing HIP engine...",
+        BackendKind::Cpu | BackendKind::Metal => "initializing...",
+    };
+    ui::detail("BACKEND", format!("{backend_name}: {detail}"));
+    let start_t = Instant::now();
+    match start_backend_interruptibly(&backend, backend_id, shutdown) {
+        Ok(()) => {
+            ui::detail(
+                "BACKEND",
+                format!(
+                    "{backend_name}#{display_id}: initialized in {:.1}s (awaiting activation)",
+                    start_t.elapsed().as_secs_f64(),
+                ),
+            );
+            let capabilities =
+                match backend_capabilities_for_start(backend.as_ref(), backend_name, backend_id) {
+                    Ok(capabilities) => capabilities,
+                    Err(err) => {
+                        warn(
+                            "BACKEND",
+                            format!(
+                                "{backend_name}#{display_id} capability contract violation: {err:#}"
+                            ),
+                        );
+                        stop_unjoined_backend(backend.as_ref());
+                        return;
+                    }
+                };
+            if capabilities.max_inflight_assignments > 1 && !backend.supports_assignment_batching()
+            {
+                warn(
+                    "BACKEND",
+                    format!(
+                        "{backend_name}#{display_id} reports inflight={} but does not support batched assignment dispatch; clamping runtime inflight to 1",
+                        capabilities.max_inflight_assignments
+                    ),
+                );
+            }
+            let lanes = backend.lanes() as u64;
+            if lanes == 0 {
+                warn(
+                    "BACKEND",
+                    format!("skipping {backend_name}#{display_id}: reported zero lanes"),
+                );
+                stop_unjoined_backend(backend.as_ref());
+                return;
+            }
+            let runtime_policy = backend_runtime_policy(cfg, &spec, capabilities);
+            let slot = BackendSlot {
+                id: backend_id,
+                backend,
+                lanes,
+                runtime_policy,
+                capabilities,
+            };
+            // The run may have ended (or failed to start) meanwhile.
+            if let Err(unsent) = deferred_tx.send(slot) {
+                stop_unjoined_backend(unsent.into_inner().backend.as_ref());
+            }
+        }
+        Err(err) => {
+            if err.is::<StartupCancelled>() {
+                return;
+            }
+            record_backend_start_failure(&err, spec.kind);
+            warn(
+                "BACKEND",
+                format!("{backend_name}#{display_id} unavailable: {err:#}"),
+            );
+            warn("BACKEND", backend_requirements_hint(spec.kind));
+            stop_unjoined_backend(backend.as_ref());
+        }
+    }
+}
+
+/// CPU/Metal all failed to start, but a pending GPU can still carry the run.
+fn wait_for_gpu_after_failed_start(
+    deferred_rx: &Receiver<BackendSlot>,
+    shutdown: &AtomicBool,
+) -> Result<BackendSlot> {
+    check_startup_shutdown(shutdown)?;
+    warn(
+        "MINER",
+        "no CPU/Metal backend started; waiting for a GPU to finish initializing...",
+    );
+    wait_for_startup(deferred_rx, shutdown, "all GPU backends failed to start")
+}
+
+fn backend_requirements_hint(kind: BackendKind) -> &'static str {
+    match kind {
+        BackendKind::Amd => {
+            if cfg!(windows) {
+                "AMD mining requires a current AMD graphics driver (Adrenalin or Radeon PRO) \
+                 — https://www.amd.com/en/support"
+            } else {
+                "AMD mining requires the amdgpu driver and the ROCm HIP runtime \
+                 (libamdhip64) — https://rocm.docs.amd.com"
+            }
+        }
+        _ => {
+            "NVIDIA mining requires an up-to-date NVIDIA GPU driver \
+              — https://www.nvidia.com/drivers"
+        }
+    }
 }
 
 fn record_backend_start_failure(error: &anyhow::Error, kind: BackendKind) {
@@ -428,6 +690,7 @@ fn run_with_thread_control_inner(
     // Pin the destination for this run, including pool reconnects and daemon
     // template requests. Keep the user's saved shortname for the next run.
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::ResolvingAddress);
+    ui::set_startup_phase("preparing miners");
     let resolved_cfg = resolve_mining_config(cfg, &crate::shortname::ShortnameResolver::default())?;
     let cfg = &resolved_cfg;
 
@@ -444,47 +707,46 @@ fn run_with_thread_control_inner(
     }
 
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::InitializingBackends);
-    // Phase 1: Build NVIDIA backends and start compilation in background threads.
-    // NvidiaBackend::new() only depends on NVIDIA-specific config, not CPU autotune.
+    if crate::backend::amd::automatic_start_skipped()
+        && !cfg
+            .backend_specs
+            .iter()
+            .any(|spec| spec.kind == BackendKind::Amd)
+    {
+        record_backend_start_failure(
+            &anyhow!("AMD GPUs skipped after failed starts"),
+            BackendKind::Amd,
+        );
+    }
+    // Phase 1: Build GPU backends (NVIDIA, AMD) and start them in background
+    // threads so CPU/Metal mining does not wait for kernel builds, memory
+    // probes or a slow driver. Each GPU joins the run once it is ready.
     let per_backend_event_capacity = cfg
         .backend_event_capacity
         .clamp(8, BACKEND_EVENT_SOURCE_CAPACITY_MAX);
-    // ID assignment: non-NVIDIA backends get IDs 1..M (assigned in activate_backends),
-    // NVIDIA backends get IDs M+1..M+N so there are no collisions.
-    let non_nvidia_index = cfg
+    // ID assignment: CPU/Metal backends get IDs 1..M (assigned in
+    // activate_backends), GPU backends get IDs M+1..M+N so there are no
+    // collisions.
+    let immediate_count = cfg
         .backend_specs
         .iter()
-        .filter(|s| s.kind != BackendKind::Nvidia)
+        .filter(|s| !starts_in_background(s.kind))
         .count() as BackendInstanceId;
-    let mut nvidia_index: BackendInstanceId = 0;
+    let mut deferred_kinds: Vec<&'static str> = Vec::new();
     let (deferred_tx, deferred_rx) = bounded::<BackendSlot>(cfg.backend_specs.len());
-    let mut nvidia_event_sources: Vec<Receiver<BackendEvent>> = Vec::new();
+    // With another backend to start on, the network loop runs while GPU
+    // backends initialize, so they can learn the network's PoW first.
+    crate::backend::set_network_pow_expected(immediate_count > 0);
+    let mut deferred_event_sources: Vec<Receiver<BackendEvent>> = Vec::new();
     {
-        let has_nvidia = cfg
-            .backend_specs
-            .iter()
-            .any(|spec| spec.kind == BackendKind::Nvidia);
-
-        if has_nvidia {
-            let nvidia_total = cfg
-                .backend_specs
-                .iter()
-                .filter(|s| s.kind == BackendKind::Nvidia)
-                .count();
-            info(
-                "BACKEND",
-                format!(
-                    "nvidia: launching {nvidia_total} background initialization task(s) (CPU autotune will run in parallel)"
-                ),
-            );
-            for spec in cfg.backend_specs.iter().copied() {
-                if spec.kind != BackendKind::Nvidia {
-                    continue;
-                }
-                nvidia_index += 1;
-                let nvidia_display_id = nvidia_index;
-                let backend_id = non_nvidia_index + nvidia_index; // NVIDIA IDs start after non-NVIDIA
-                let backend = Arc::new(NvidiaBackend::new(
+        let mut display_ids: BTreeMap<&'static str, u64> = BTreeMap::new();
+        for spec in cfg.backend_specs.iter().copied() {
+            if !starts_in_background(spec.kind) {
+                continue;
+            }
+            let backend_id = immediate_count + deferred_kinds.len() as BackendInstanceId + 1;
+            let backend = match spec.kind {
+                BackendKind::Nvidia => Arc::new(NvidiaBackend::new(
                     spec.device_index,
                     cfg.nvidia_autotune_config_path.clone(),
                     cfg.nvidia_autotune_secs,
@@ -501,127 +763,62 @@ fn run_with_thread_control_inner(
                         adaptive_launch_depth: cfg.nvidia_adaptive_launch_depth,
                         enforce_template_stop: cfg.nvidia_enforce_template_stop,
                     },
-                )) as Arc<dyn PowBackend>;
+                )) as Arc<dyn PowBackend>,
+                BackendKind::Amd => Arc::new(AmdBackend::new(
+                    spec.device_index,
+                    AmdBackendTuningOptions {
+                        max_lanes_override: cfg.amd_max_lanes,
+                        ..AmdBackendTuningOptions::default()
+                    },
+                )) as Arc<dyn PowBackend>,
+                BackendKind::Cpu | BackendKind::Metal => unreachable!(),
+            };
+            let backend_name = backend.name();
+            deferred_kinds.push(backend_name);
+            let display_id = {
+                let next = display_ids.entry(backend_name).or_insert(0);
+                *next += 1;
+                *next
+            };
 
-                // Wire up the event channel now so it's included in the fan-in.
-                let (backend_event_tx, backend_event_rx) =
-                    bounded::<BackendEvent>(per_backend_event_capacity);
-                nvidia_event_sources.push(backend_event_rx);
+            // Wire up the event channel now so it's included in the fan-in.
+            let (backend_event_tx, backend_event_rx) =
+                bounded::<BackendEvent>(per_backend_event_capacity);
+            deferred_event_sources.push(backend_event_rx);
+            backend.set_instance_id(backend_id);
+            backend.set_event_sink(backend_event_tx);
 
-                let cfg_clone = cfg.clone();
-                let shutdown_clone = Arc::clone(&shutdown);
-                let deferred_tx = deferred_tx.clone();
-                std::thread::Builder::new()
-                    .name(format!("nvidia-{backend_id}-init"))
-                    .spawn(move || {
-                        // set_instance_id / set_event_sink / start / validate
-                        backend.set_instance_id(backend_id);
-                        backend.set_event_sink(backend_event_tx);
-                        let backend_name = backend.name();
-                        info(
-                            "BACKEND",
-                            format!(
-                                "{backend_name}: initializing CUDA engine (loads cached kernel if available; first run may take around 5 minutes)...",
-                            ),
-                        );
-                        let start_t = Instant::now();
-
-                        let start_result = start_backend_interruptibly(
-                            &backend,
-                            backend_id,
-                            shutdown_clone.as_ref(),
-                        );
-
-                        match start_result {
-                            Ok(()) => {
-                                info(
-                                    "BACKEND",
-                                    format!(
-                                        "{backend_name}#{nvidia_display_id}: initialized in {:.1}s (awaiting activation)",
-                                        start_t.elapsed().as_secs_f64(),
-                                    ),
-                                );
-                                let capabilities = match backend_capabilities_for_start(
-                                    backend.as_ref(),
-                                    backend_name,
-                                    backend_id,
-                                ) {
-                                    Ok(c) => c,
-                                    Err(err) => {
-                                        warn(
-                                            "BACKEND",
-                                            format!(
-                                                "{backend_name}#{nvidia_display_id} capability contract violation: {err:#}"
-                                            ),
-                                        );
-                                        backend.stop();
-                                        return;
-                                    }
-                                };
-                                if capabilities.max_inflight_assignments > 1
-                                    && !backend.supports_assignment_batching()
-                                {
-                                    warn(
-                                        "BACKEND",
-                                        format!(
-                                            "{}#{} reports inflight={} but does not support batched assignment dispatch; clamping runtime inflight to 1",
-                                            backend_name,
-                                            nvidia_display_id,
-                                            capabilities.max_inflight_assignments
-                                        ),
-                                    );
-                                }
-                                let lanes = backend.lanes() as u64;
-                                if lanes == 0 {
-                                    warn(
-                                        "BACKEND",
-                                        format!(
-                                            "skipping {}#{}: reported zero lanes",
-                                            backend_name, nvidia_display_id
-                                        ),
-                                    );
-                                    backend.stop();
-                                    return;
-                                }
-                                let runtime_policy =
-                                    backend_runtime_policy(&cfg_clone, &spec, capabilities);
-                                let slot = BackendSlot {
-                                    id: backend_id,
-                                    backend,
-                                    lanes,
-                                    runtime_policy,
-                                    capabilities,
-                                };
-                                let _ = deferred_tx.send(slot);
-                            }
-                            Err(err) => {
-                                if err.is::<StartupCancelled>() {
-                                    return;
-                                }
-                                record_backend_start_failure(&err, spec.kind);
-                                warn(
-                                    "BACKEND",
-                                    format!(
-                                        "{backend_name}#{nvidia_display_id} unavailable: {err:#}"
-                                    ),
-                                );
-                                warn(
-                                    "BACKEND",
-                                    "NVIDIA mining requires: (1) NVIDIA GPU drivers and \
-                                     (2) CUDA Toolkit — https://developer.nvidia.com/cuda-downloads",
-                                );
-                                backend.stop();
-                            }
-                        }
-                    })
-                    .expect("failed to spawn NVIDIA init thread");
-            }
+            let cfg_clone = cfg.clone();
+            let shutdown_clone = Arc::clone(&shutdown);
+            let deferred_tx = deferred_tx.clone();
+            std::thread::Builder::new()
+                .name(format!("{backend_name}-{backend_id}-init"))
+                .spawn(move || {
+                    start_deferred_backend(
+                        backend,
+                        backend_id,
+                        display_id,
+                        spec,
+                        &cfg_clone,
+                        shutdown_clone.as_ref(),
+                        &deferred_tx,
+                    );
+                })
+                .expect("failed to spawn GPU init thread");
+        }
+        for (kind, count) in &display_ids {
+            ui::detail(
+                "BACKEND",
+                format!(
+                    "{kind}: launching {count} background initialization task(s) (CPU mining starts meanwhile)"
+                ),
+            );
         }
     }
     // Drop sender so receiver knows when all threads are done.
     drop(deferred_tx);
 
-    // Phase 2: CPU autotune (runs in parallel with NVIDIA compilation).
+    // Phase 2: CPU autotune (runs in parallel with GPU initialization).
     crate::diagnostics::set_phase(seine_telemetry::RunPhase::Tuning);
     let runtime_cfg = prepare_runtime_config(cfg, shutdown.as_ref(), RuntimeMode::Mining)?;
     if shutdown.load(Ordering::SeqCst) {
@@ -649,15 +846,15 @@ fn run_with_thread_control_inner(
         bail!("missing API token in daemon mining mode");
     }
 
-    // Phase 3: Build and activate non-NVIDIA backends synchronously.
-    // CPU/Metal start is fast. Non-NVIDIA get IDs 1..M, NVIDIA get IDs M+1..M+N.
+    // Phase 3: Build and activate CPU/Metal backends synchronously.
+    // They start fast and get IDs 1..M; GPU backends have IDs M+1..M+N.
     let mut cpu_memory_backends = Vec::new();
     let mut adaptive_backends = Vec::new();
-    let non_nvidia_instances: Vec<(BackendSpec, Arc<dyn PowBackend>)> = cfg
+    let immediate_instances: Vec<(BackendSpec, Arc<dyn PowBackend>)> = cfg
         .backend_specs
         .iter()
         .copied()
-        .filter(|spec| spec.kind != BackendKind::Nvidia)
+        .filter(|spec| !starts_in_background(spec.kind))
         .map(|backend_spec| {
             let backend = match backend_spec.kind {
                 BackendKind::Cpu => {
@@ -674,6 +871,10 @@ fn run_with_thread_control_inner(
                     let threads = backend_spec.cpu_threads.unwrap_or(cfg.threads);
                     let affinity = backend_spec.cpu_affinity.unwrap_or(cfg.cpu_affinity);
                     let backend = Arc::new(if cfg.cpu_autotune_threads {
+                        let tuning = CpuBackendTuning {
+                            kernel: adaptive_cpu::initial_kernel(cfg, threads),
+                            ..tuning
+                        };
                         CpuBackend::adaptive(
                             threads,
                             cfg.cpu_autotune_worker_slots
@@ -702,39 +903,38 @@ fn run_with_thread_control_inner(
                     }
                     backend as Arc<dyn PowBackend>
                 }
-                BackendKind::Amd => Arc::new(AmdBackend::new(
-                    backend_spec.device_index,
-                    AmdBackendTuningOptions {
-                        max_lanes_override: cfg.amd_max_lanes,
-                        ..AmdBackendTuningOptions::default()
-                    },
-                )) as Arc<dyn PowBackend>,
-                BackendKind::Metal => Arc::new(MetalBackend::new(
-                    cfg.metal_max_lanes,
-                    cfg.metal_hashes_per_launch_per_lane,
-                )) as Arc<dyn PowBackend>,
-                BackendKind::Nvidia => unreachable!(),
+                BackendKind::Metal => {
+                    let backend = MetalBackend::new(
+                        cfg.metal_max_lanes,
+                        cfg.metal_hashes_per_launch_per_lane,
+                    );
+                    Arc::new(if cfg.metal_blake2b_only {
+                        backend.blake2b_only()
+                    } else {
+                        backend
+                    }) as Arc<dyn PowBackend>
+                }
+                BackendKind::Nvidia | BackendKind::Amd => unreachable!(),
             };
             (backend_spec, backend)
         })
         .collect();
 
-    // Phase 4: Collect any NVIDIA backends that finished during autotune+CPU init.
+    // Phase 4: Collect any GPU backends that finished during autotune+CPU init.
     // Also drain them into the initial backends vec if they're ready.
-    let mut early_nvidia_backends = Vec::new();
+    let mut early_gpu_backends = Vec::new();
     while let Ok(slot) = deferred_rx.try_recv() {
-        early_nvidia_backends.push(slot);
+        early_gpu_backends.push(slot);
     }
 
-    let has_non_nvidia = !non_nvidia_instances.is_empty();
-    let has_nvidia_ready = !early_nvidia_backends.is_empty();
-    let might_have_deferred = nvidia_index > early_nvidia_backends.len() as u64;
+    let has_immediate = !immediate_instances.is_empty();
+    let has_gpu_ready = !early_gpu_backends.is_empty();
 
-    // If we have no non-NVIDIA backends and no NVIDIA ready yet, we need to wait
-    // for at least one NVIDIA to finish (or we'd start with zero backends).
-    if !has_non_nvidia && !has_nvidia_ready {
+    // If we have no CPU/Metal backends and no GPU ready yet, we need to wait
+    // for at least one GPU to finish (or we'd start with zero backends).
+    if !has_immediate && !has_gpu_ready {
         check_startup_shutdown(shutdown.as_ref())?;
-        if nvidia_index == 0 {
+        if deferred_kinds.is_empty() {
             crate::diagnostics::record_failure(
                 seine_telemetry::DiagnosticCode::Error,
                 seine_telemetry::DiagnosticKind::General,
@@ -748,35 +948,43 @@ fn run_with_thread_control_inner(
         }
         info(
             "MINER",
-            "no CPU/Metal backends; waiting for NVIDIA compilation to complete...",
+            "no CPU/Metal backends; waiting for a GPU to finish initializing...",
         );
-        early_nvidia_backends.push(wait_for_startup(
+        early_gpu_backends.push(wait_for_startup(
             &deferred_rx,
             shutdown.as_ref(),
-            "all NVIDIA backends failed to start",
+            "all GPU backends failed to start",
         )?);
         // Also grab any others that finished
         while let Ok(slot) = deferred_rx.try_recv() {
-            early_nvidia_backends.push(slot);
+            early_gpu_backends.push(slot);
         }
     }
 
     let (mut backends, backend_events) = activate_backends_with_start_id(
-        non_nvidia_instances,
+        immediate_instances,
         cfg.backend_event_capacity,
         cfg,
         shutdown.as_ref(),
-        nvidia_event_sources,
-        1, // non-NVIDIA backends get IDs starting from 1
+        deferred_event_sources,
+        1, // CPU/Metal backends get IDs starting from 1
     )?;
 
-    // Merge early NVIDIA backends into the activated set.
-    let pending_nvidia_count = if might_have_deferred {
-        nvidia_index - early_nvidia_backends.len() as u64
-    } else {
-        0
-    };
-    for slot in early_nvidia_backends {
+    // Merge early GPU backends into the activated set; the rest are pending.
+    let mut pending_gpus = deferred_kinds;
+    if backends.is_empty() && early_gpu_backends.is_empty() && !pending_gpus.is_empty() {
+        early_gpu_backends.push(wait_for_gpu_after_failed_start(
+            &deferred_rx,
+            shutdown.as_ref(),
+        )?);
+    }
+    for slot in early_gpu_backends {
+        remove_pending_gpu(&mut pending_gpus, slot.backend.name());
+        let slot_name = pending_backend_slot_label(&backends, &slot);
+        info(
+            "BACKEND",
+            format!("{slot_name}: online ({} lanes)", slot.lanes),
+        );
         backends.push(slot);
     }
 
@@ -786,6 +994,7 @@ fn run_with_thread_control_inner(
         RuntimeMode::Mining,
         &backend_executor,
     )?;
+    let (live_thread_tx, live_thread_rx) = bounded(1);
     let total_lanes: usize = backends.iter().map(|s| s.backend.enabled_lanes()).sum();
     let cpu_lanes = cpu_lane_count(&backends);
     let cpu_ram_gib =
@@ -821,14 +1030,16 @@ fn run_with_thread_control_inner(
                         cfg,
                         cpu_memory_backends.clone(),
                     )));
+                    // Tuned runs have parked workers the controller can wake.
+                    control.live = cfg.cpu_autotune_threads.then(|| live_thread_tx.clone());
                     s.thread_control = Some(control);
                 }
             }
         }
-        if pending_nvidia_count > 0 {
+        if !pending_gpus.is_empty() {
             if let Ok(mut s) = state.lock() {
-                s.pending_nvidia = pending_nvidia_count;
-                s.pending_nvidia_since = Some(Instant::now());
+                s.pending_gpus = pending_gpus.clone();
+                s.pending_gpus_since = Some(Instant::now());
             }
         }
         Some(state)
@@ -836,28 +1047,35 @@ fn run_with_thread_control_inner(
         None
     };
 
-    if let Some(hint) = cfg.nvidia_hint {
-        info("HINT", hint);
+    // Once per process: a thread-change restart must not repeat setup advice.
+    static NOTICES_SHOWN: AtomicBool = AtomicBool::new(false);
+    if !NOTICES_SHOWN.swap(true, Ordering::Relaxed) {
+        if let Some(hint) = cfg.nvidia_hint {
+            info("HINT", hint);
+        }
+        for notice in &cfg.startup_notices {
+            info("BACKEND", notice);
+        }
+        for detail in &cfg.startup_details {
+            ui::detail("BACKEND", detail);
+        }
     }
-    for notice in &cfg.startup_notices {
-        info("BACKEND", notice);
-    }
-    info(
+    ui::detail(
         "CONFIG",
         format!("data directory: {}", cfg.data_dir.display()),
     );
-    info(
+    ui::detail(
         "CONFIG",
         format!("user settings file: {}", cfg.user_config_path.display()),
     );
     if cfg.user_config_created {
         info(
             "CONFIG",
-            "created first-run config file (edit this file to change defaults)",
+            format!("settings saved to {}", cfg.user_config_path.display()),
         );
     }
     if let Some(summary) = cfg.daemon_connection_summary() {
-        info("CONFIG", format!("daemon discovery: {summary}"));
+        ui::detail("CONFIG", format!("daemon discovery: {summary}"));
     }
 
     let endpoint_label = match cfg.mode {
@@ -879,7 +1097,7 @@ fn run_with_thread_control_inner(
         MiningMode::Daemon => "effective | daemon",
         MiningMode::Pool => "effective",
     };
-    info(
+    ui::detail(
         "MINER",
         format!(
             "{effective_prefix} | {} auth={} backends={} cpu_threads={} ui={}",
@@ -891,7 +1109,7 @@ fn run_with_thread_control_inner(
         ),
     );
 
-    info(
+    ui::detail(
         "MINER",
         format!(
             "starting | {} | {} lanes | ~{:.1} GiB RAM",
@@ -900,11 +1118,11 @@ fn run_with_thread_control_inner(
             cpu_ram_gib
         ),
     );
-    info(
+    ui::verbose(
         "MINER",
         format!("preemption | {}", backend_preemption_profiles(&backends)),
     );
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "allocation | {}",
@@ -920,7 +1138,7 @@ fn run_with_thread_control_inner(
             "--sub-round-rebalance-ms is set but --work-allocation=static; in-round rebalance is disabled",
         );
     }
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "chunking | {}",
@@ -947,7 +1165,7 @@ fn run_with_thread_control_inner(
             ),
         );
     }
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "hash-poll | configured={}ms effective={}ms",
@@ -955,7 +1173,7 @@ fn run_with_thread_control_inner(
             effective_hash_poll_interval(&backends, cfg.hash_poll_interval).as_millis(),
         ),
     );
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "cpu-profile | {} | page_mode={} | auto-cap={} | autotune={} range={}..{} secs={}",
@@ -973,7 +1191,7 @@ fn run_with_thread_control_inner(
             cfg.cpu_autotune_secs,
         ),
     );
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "cpu-tuning | hash_batch={} control_check={} hash_flush={}ms event_q={}",
@@ -987,7 +1205,7 @@ fn run_with_thread_control_inner(
         .sub_round_rebalance_interval
         .map(|interval| format!("{}ms", interval.as_millis()))
         .unwrap_or_else(|| "off".to_string());
-    info(
+    ui::verbose(
         "MINER",
         format!(
             "timeouts | assign={}ms assign_strikes={} control={}ms prefetch_wait={}ms tip_join_wait={}ms submit_join_wait={}ms sub_round_rebalance={}",
@@ -1000,7 +1218,7 @@ fn run_with_thread_control_inner(
             sub_round_rebalance,
         ),
     );
-    info(
+    ui::verbose(
         "MINER",
         format!("timeout-policy | {}", backend_timeout_profiles(&backends)),
     );
@@ -1052,10 +1270,10 @@ fn run_with_thread_control_inner(
         }
     }
 
-    let deferred_backends = if might_have_deferred {
-        Some((deferred_rx, pending_nvidia_count))
-    } else {
+    let deferred_backends = if pending_gpus.is_empty() {
         None
+    } else {
+        Some((deferred_rx, pending_gpus))
     };
 
     let tip_listener = if cfg.mode == MiningMode::Daemon && cfg.sse_enabled {
@@ -1077,6 +1295,8 @@ fn run_with_thread_control_inner(
         adaptive_backends,
         tui_state.clone(),
         telemetry,
+        live_thread_rx,
+        Arc::clone(&history),
     ) {
         Ok(controller) => controller,
         Err(err) => {
@@ -1129,7 +1349,7 @@ fn run_with_thread_control_inner(
     crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::StoppingAutotune);
     adaptive_controller.stop();
     let shutdown_requested = shutdown.load(Ordering::SeqCst);
-    info("MINER", "shutting down: stopping backends...");
+    ui::detail("MINER", "shutting down: stopping backends...");
     let stop_t = Instant::now();
     stop_backend_slots(
         &mut backends,
@@ -1137,7 +1357,7 @@ fn run_with_thread_control_inner(
         cfg.backend_control_timeout,
         "BACKEND",
     );
-    info(
+    ui::detail(
         "MINER",
         format!("backends stopped in {:.1}s", stop_t.elapsed().as_secs_f64()),
     );
@@ -1160,7 +1380,11 @@ fn run_with_thread_control_inner(
 }
 
 pub(crate) fn should_enable_tui(cfg: &Config) -> bool {
-    match cfg.ui_mode {
+    ui_mode_enables_tui(cfg.ui_mode)
+}
+
+pub(crate) fn ui_mode_enables_tui(mode: UiMode) -> bool {
+    match mode {
         UiMode::Plain => false,
         UiMode::Tui => true,
         UiMode::Auto => std::io::stdout().is_terminal() && std::io::stderr().is_terminal(),
@@ -1171,8 +1395,13 @@ fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
     // Read before locking the dashboard; the update checker takes these locks
     // in the opposite order.
     let update = crate::update_check::for_new_dashboard();
-    let tui_state = new_tui_state();
+    // An open dashboard keeps its state, and with it the log so far, across runs.
+    let (tui_state, reused) = match ui::current_tui_state() {
+        Some(state) => (state, true),
+        None => (new_tui_state(), false),
+    };
     if let Ok(mut s) = tui_state.lock() {
+        s.reset_for_new_run();
         s.mode = match cfg.mode {
             MiningMode::Pool => "pool".to_string(),
             MiningMode::Daemon => "daemon".to_string(),
@@ -1180,7 +1409,17 @@ fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
         s.wallet_visible = cfg.mode == MiningMode::Daemon;
         s.api_url = match cfg.mode {
             MiningMode::Daemon => cfg.api_url.clone(),
-            MiningMode::Pool => cfg.pool_url.clone().unwrap_or_else(|| "---".to_string()),
+            MiningMode::Pool => cfg.pool_url.as_deref().map_or_else(
+                || "---".to_string(),
+                |urls| match urls.split(',').count() - 1 {
+                    0 => urls.to_string(),
+                    1 => format!("{} (+1 backup)", crate::pool::primary_pool_url(urls)),
+                    backups => format!(
+                        "{} (+{backups} backups)",
+                        crate::pool::primary_pool_url(urls)
+                    ),
+                },
+            ),
         };
         s.pool_worker = cfg.pool_worker.clone().unwrap_or_else(|| "---".to_string());
         s.threads = cpu_lane_count(backends) as usize;
@@ -1196,29 +1435,28 @@ fn build_tui_state(cfg: &Config, backends: &[BackendSlot]) -> TuiState {
         if let Some(update) = update {
             s.update_available = Some(update.latest);
             if let Some(message) = update.log_message {
-                s.push_log(tui::LogEntry {
-                    elapsed_secs: 0.0,
-                    level: tui::LogLevel::Info,
-                    tag: "UPDATE".to_string(),
-                    message,
-                });
+                s.push_log(tui::LogEntry::new(
+                    0.0,
+                    tui::LogLevel::Info,
+                    "UPDATE",
+                    &message,
+                ));
             }
         }
-        if let Some(hint) = cfg.nvidia_hint {
-            s.push_log(tui::LogEntry {
-                elapsed_secs: 0.0,
-                level: tui::LogLevel::Info,
-                tag: "HINT".to_string(),
-                message: hint.to_string(),
-            });
-        }
-        for notice in &cfg.startup_notices {
-            s.push_log(tui::LogEntry {
-                elapsed_secs: 0.0,
-                level: tui::LogLevel::Info,
-                tag: "BACKEND".to_string(),
-                message: notice.clone(),
-            });
+        // Without an open dashboard these lines go to the plain log, which the
+        // dashboard is about to cover; carry them over.
+        if !reused {
+            if let Some(hint) = cfg.nvidia_hint {
+                s.push_log(tui::LogEntry::new(0.0, tui::LogLevel::Info, "HINT", hint));
+            }
+            for notice in &cfg.startup_notices {
+                s.push_log(tui::LogEntry::new(
+                    0.0,
+                    tui::LogLevel::Info,
+                    "BACKEND",
+                    notice,
+                ));
+            }
         }
     }
     tui_state
@@ -1246,7 +1484,7 @@ fn maybe_autotune_cpu_threads(
             .iter()
             .any(|spec| spec.kind == BackendKind::Cpu)
         {
-            info(
+            ui::detail(
                 runtime_mode_tag(mode),
                 "cpu-autotune | disabled; using configured thread count",
             );
@@ -1258,6 +1496,14 @@ fn maybe_autotune_cpu_threads(
     }
 
     let tag = runtime_mode_tag(mode);
+    // BLAKE2b work runs every CPU worker; the thread search measures Argon2.
+    if cfg.bench_pow == crate::config::BenchPow::Blake2b {
+        info(
+            tag,
+            "cpu-autotune | skipped for BLAKE2b; every CPU worker runs",
+        );
+        return Ok(());
+    }
     let cpu_instance_count = cfg
         .backend_specs
         .iter()
@@ -1368,9 +1614,7 @@ fn maybe_autotune_cpu_threads(
             }
         }
     } else {
-        // Coarse descending grid, then the local refinement below. Climbing one
-        // count at a time and stopping on dips gets stuck far below capacity, and
-        // streaming kernels peak near capacity.
+        // Coarse descending grid, then the local refinement below.
         let mut coarse: Vec<usize> = [
             max_threads,
             max_threads * 3 / 4,
@@ -2128,6 +2372,7 @@ fn persist_cpu_autotune_record(
             .unwrap_or(0),
         measurements: measurements.clone(),
         memory_limited: max_threads < adaptive_cpu::limits(cfg, 0).1,
+        search: None,
         mining_measurement: false,
     };
     let payload = serde_json::to_string_pretty(&record)?;
@@ -2208,8 +2453,7 @@ fn maybe_warn_linux_hugepages_setup(cfg: &Config, mode: RuntimeMode) {
         return;
     }
     // Auto mode backs arenas with transparent huge pages when the kernel allows
-    // them; explicit HugeTLB adds nothing over THP with the streaming kernels, so
-    // only nag when THP is off.
+    // them; only hint when THP is off.
     if cfg.cpu_page_mode == CpuPageMode::Auto && linux_thp_enabled() {
         return;
     }
@@ -2426,10 +2670,17 @@ fn build_backend_instances(cfg: &Config) -> Vec<(BackendSpec, Arc<dyn PowBackend
                         ..AmdBackendTuningOptions::default()
                     },
                 )) as Arc<dyn PowBackend>,
-                BackendKind::Metal => Arc::new(MetalBackend::new(
-                    cfg.metal_max_lanes,
-                    cfg.metal_hashes_per_launch_per_lane,
-                )) as Arc<dyn PowBackend>,
+                BackendKind::Metal => {
+                    let backend = MetalBackend::new(
+                        cfg.metal_max_lanes,
+                        cfg.metal_hashes_per_launch_per_lane,
+                    );
+                    Arc::new(if cfg.metal_blake2b_only {
+                        backend.blake2b_only()
+                    } else {
+                        backend
+                    }) as Arc<dyn PowBackend>
+                }
             };
             (backend_spec, backend)
         })
@@ -2454,17 +2705,13 @@ fn activate_single_backend(
             let lanes = backend.enabled_lanes();
             let ram_gib =
                 (lanes as f64 * CPU_LANE_MEMORY_BYTES as f64) / (1024.0 * 1024.0 * 1024.0);
-            format!(
-                "{backend_name}: initializing {lanes} workers (~{ram_gib:.1} GiB RAM, precomputing refs)...",
-            )
+            format!("{backend_name}: starting {lanes} threads (~{ram_gib:.1} GiB RAM)",)
         }
-        "nvidia" => format!(
-            "{backend_name}: initializing CUDA engine (loads cached kernel if available; first run may take ~2 min)...",
-        ),
-        "amd" => format!(
-            "{backend_name}: initializing HIP engine (hipRTC kernel compile; may take ~1 min)...",
-        ),
-        _ => format!("{backend_name}: initializing..."),
+        "nvidia" => format!("{backend_name}: starting CUDA engine",),
+        "amd" => {
+            format!("{backend_name}: starting HIP engine (first run can take about a minute)",)
+        }
+        _ => format!("{backend_name}: starting"),
     };
     info("BACKEND", &backend_start_detail);
     let start_t = Instant::now();
@@ -2472,7 +2719,7 @@ fn activate_single_backend(
     let start_result = start_backend_interruptibly(&backend, backend_id, shutdown);
     match start_result {
         Ok(()) => {
-            info(
+            ui::detail(
                 "BACKEND",
                 format!(
                     "{backend_name}#{backend_id}: ready in {:.1}s",
@@ -2536,16 +2783,12 @@ fn activate_single_backend(
             if backend_name == "nvidia" {
                 warn(
                     "BACKEND",
-                    "NVIDIA mining requires: (1) NVIDIA GPU drivers and \
-                     (2) CUDA Toolkit — https://developer.nvidia.com/cuda-downloads",
+                    "NVIDIA mining requires an up-to-date NVIDIA GPU driver \
+                     — https://www.nvidia.com/drivers",
                 );
             }
             if backend_name == "amd" {
-                warn(
-                    "BACKEND",
-                    "AMD mining requires: (1) amdgpu drivers and (2) the ROCm 6.x runtime \
-                     (libamdhip64/libhiprtc) — https://rocm.docs.amd.com",
-                );
+                warn("BACKEND", backend_requirements_hint(BackendKind::Amd));
             }
             backend.stop();
             Err(err.context(format!("{backend_name}#{backend_id} unavailable")))
@@ -3844,6 +4087,103 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn provisional_faraday_pow_needs_the_opt_in_only_for_direct_mining() {
+        use std::ffi::OsStr;
+        let on = Some(OsStr::new("1"));
+        let off = Some(OsStr::new("0"));
+        assert!(provisional_pow_allowed_in(MiningMode::Pool, None));
+        assert!(provisional_pow_allowed_in(MiningMode::Pool, on));
+        assert!(!provisional_pow_allowed_in(MiningMode::Pool, off));
+        assert!(!provisional_pow_allowed_in(MiningMode::Daemon, None));
+        assert!(provisional_pow_allowed_in(MiningMode::Daemon, on));
+        assert!(!provisional_pow_allowed_in(MiningMode::Daemon, off));
+        if std::env::var_os(PROVISIONAL_FARADAY_POW_ENV).is_none()
+            && !blocknet_pow_spec::BLAKE2B_POW_PARAMS_FINAL
+        {
+            assert!(!mines_blake2b_in(MiningMode::Daemon));
+            assert!(mines_blake2b_in(MiningMode::Pool));
+        }
+    }
+
+    #[test]
+    fn gpu_backends_start_in_background_and_pending_gpus_track_by_kind() {
+        assert!(starts_in_background(BackendKind::Nvidia));
+        assert!(starts_in_background(BackendKind::Amd));
+        assert!(!starts_in_background(BackendKind::Cpu));
+        assert!(!starts_in_background(BackendKind::Metal));
+        let mut pending = vec!["amd", "nvidia", "amd"];
+        assert_eq!(
+            mining::pending_gpu_counts(&pending),
+            vec![("amd", 2), ("nvidia", 1)]
+        );
+        remove_pending_gpu(&mut pending, "amd");
+        remove_pending_gpu(&mut pending, "metal");
+        assert_eq!(pending, vec!["nvidia", "amd"]);
+    }
+
+    #[test]
+    fn cancelled_amd_start_holds_the_next_start_until_it_has_stopped() {
+        let old_state = Arc::new(MockState::default());
+        let new_state = Arc::new(MockState::default());
+        let (entered_tx, entered_rx) = bounded(1);
+        let (release_tx, release_rx) = bounded(1);
+        let mut old = MockBackend::new("amd", 1, old_state.clone());
+        old.start_gate = Some((entered_tx, release_rx));
+        let old: Arc<dyn PowBackend> = Arc::new(old);
+        let new: Arc<dyn PowBackend> = Arc::new(MockBackend::new("amd", 1, new_state.clone()));
+
+        let old_shutdown = Arc::new(AtomicBool::new(false));
+        let cancelled = {
+            let shutdown = old_shutdown.clone();
+            std::thread::spawn(move || start_backend_interruptibly(&old, 1, &shutdown))
+        };
+        entered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("first start entered");
+        old_shutdown.store(true, Ordering::Relaxed);
+        assert!(cancelled
+            .join()
+            .unwrap()
+            .expect_err("start cancelled")
+            .is::<StartupCancelled>());
+
+        let next = std::thread::spawn(move || {
+            start_backend_interruptibly(&new, 2, &AtomicBool::new(false))
+        });
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(
+            new_state.start_calls.load(Ordering::Relaxed),
+            0,
+            "the next start must wait for the cancelled one"
+        );
+        release_tx.send(()).unwrap();
+        next.join().unwrap().expect("next start");
+        assert_eq!(new_state.start_calls.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            old_state.stop_calls.load(Ordering::Relaxed),
+            1,
+            "the cancelled start must have stopped before the next one ran"
+        );
+    }
+
+    #[test]
+    fn a_pending_gpu_carries_the_run_when_cpu_failed_to_start() {
+        let (tx, rx) = bounded(1);
+        let state = Arc::new(MockState::default());
+        tx.send(slot(1, 1, Arc::new(MockBackend::new("amd", 1, state))))
+            .unwrap();
+        let joined = wait_for_gpu_after_failed_start(&rx, &AtomicBool::new(false))
+            .expect("the pending GPU joins");
+        assert_eq!(joined.backend.name(), "amd");
+
+        drop(tx);
+        let error = wait_for_gpu_after_failed_start(&rx, &AtomicBool::new(false))
+            .err()
+            .expect("no GPU can start");
+        assert!(format!("{error:#}").contains("all GPU backends failed to start"));
+    }
+
+    #[test]
     fn pending_backend_slot_label_uses_per_type_numbering() {
         let existing_nvidia = slot(
             2,
@@ -3939,12 +4279,48 @@ pub(crate) mod tests {
         }
     }
 
+    #[test]
+    fn shortname_to_an_exchange_address_needs_a_memo() {
+        use crate::shortname::tests::mock_resolver;
+        const EXCHANGE: &str = "ZJZqGfDPCVg78CRH5Z33CtHafg911Dp5Bauf1Dnxg5jgXx7Whqsvqka96FCV8W6QZXNDKzJefkFU6bwDEGBewqPrTWjij";
+        for (memo, ok) in [(None, false), (Some("ID001"), true)] {
+            let mut cfg = test_config();
+            cfg.mode = MiningMode::Pool;
+            cfg.mining_address = Some("solo:$Alice".into());
+            cfg.payout_memo = memo.map(str::to_string);
+            let (resolver, task) = mock_resolver(EXCHANGE);
+            let resolved = resolve_mining_config(&cfg, &resolver);
+            task.join().unwrap();
+            assert_eq!(resolved.is_ok(), ok);
+        }
+    }
+
+    #[test]
+    fn solo_prefix_is_kept_for_pools_and_dropped_for_daemons() {
+        use crate::shortname::tests::{mock_resolver, ADDRESS};
+        for (mode, expected) in [
+            (MiningMode::Pool, format!("solo:{ADDRESS}")),
+            (MiningMode::Daemon, ADDRESS.to_string()),
+        ] {
+            let mut cfg = test_config();
+            cfg.mode = mode;
+            cfg.mining_address = Some("Solo:$Alice".into());
+            let (resolver, task) = mock_resolver(ADDRESS);
+            let resolved = resolve_mining_config(&cfg, &resolver).unwrap();
+            task.join().unwrap();
+            assert_eq!(resolved.mining_address.as_deref(), Some(expected.as_str()));
+            assert_eq!(cfg.mining_address.as_deref(), Some("Solo:$Alice"));
+        }
+    }
+
     pub(crate) fn test_config() -> Config {
         Config {
             hardware_telemetry: None,
             mode: MiningMode::Daemon,
             pool_url: None,
             pool_worker: None,
+            pool_proxy: None,
+            proxy_listen: None,
             dev_fee_pool_worker: "seine-devfee-test".to_string(),
             api_url: "http://127.0.0.1:8332".to_string(),
             token: Some("test-token".to_string()),
@@ -3956,6 +4332,7 @@ pub(crate) mod tests {
             wallet_password: None,
             wallet_password_file: None,
             mining_address: None,
+            payout_memo: None,
             backend_specs: vec![BackendSpec {
                 kind: BackendKind::Cpu,
                 device_index: None,
@@ -4011,6 +4388,7 @@ pub(crate) mod tests {
             amd_max_lanes: None,
             metal_max_lanes: None,
             metal_hashes_per_launch_per_lane: 2,
+            metal_blake2b_only: false,
             backend_assign_timeout: Duration::from_millis(1_000),
             backend_assign_timeout_strikes: 3,
             backend_control_timeout: Duration::from_millis(60_000),
@@ -4040,6 +4418,7 @@ pub(crate) mod tests {
             allow_wallet_prompt: true,
             bench: false,
             bench_kind: crate::config::BenchKind::Backend,
+            bench_pow: crate::config::BenchPow::Argon2id,
             bench_cpu_kernel: None,
             bench_secs: 20,
             bench_rounds: 3,
@@ -4050,6 +4429,7 @@ pub(crate) mod tests {
             bench_baseline_policy: crate::config::BenchBaselinePolicy::Strict,
             nvidia_hint: None,
             startup_notices: Vec::new(),
+            startup_details: Vec::new(),
         }
     }
 
@@ -4098,6 +4478,7 @@ pub(crate) mod tests {
             measurements: BTreeMap::new(),
             memory_limited: false,
             mining_measurement: false,
+            search: None,
         };
 
         assert!(cpu_autotune_record_matches_config(
@@ -4419,7 +4800,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn blake2b_work_quarantines_backends_without_support() {
+    fn blake2b_work_skips_backends_without_support() {
         let backend_executor = backend_executor::BackendExecutor::new();
         let supported = Arc::new(MockState::default());
         let unsupported = Arc::new(MockState::default());
@@ -4458,14 +4839,21 @@ pub(crate) mod tests {
             &backend_executor,
         )
         .expect("the BLAKE2b backend keeps mining");
-        assert_eq!(backends.len(), 1);
-        assert_eq!(backends[0].id, 1);
+        // The other backend waits for work it can hash instead of being quarantined.
+        assert_eq!(backends.len(), 2);
         assert_eq!(supported.assign_calls.load(Ordering::Relaxed), 1);
         assert_eq!(unsupported.assign_calls.load(Ordering::Relaxed), 0);
         assert!(
-            wait_for_stop_call(&unsupported, Duration::from_millis(250)),
-            "the backend without BLAKE2b must stop"
+            !wait_for_stop_call(&unsupported, Duration::from_millis(100)),
+            "the idle backend must keep running"
         );
+        distribute_work(
+            &mut backends,
+            options(crate::backend::PowAlgorithm::Argon2id),
+            &backend_executor,
+        )
+        .expect("both backends hash Argon2");
+        assert_eq!(unsupported.assign_calls.load(Ordering::Relaxed), 1);
 
         let only_unsupported = Arc::new(MockState::default());
         let mut backends = vec![slot(

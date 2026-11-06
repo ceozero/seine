@@ -143,6 +143,13 @@ struct Shared {
     started: AtomicBool,
     adaptive: bool,
     desired_workers: AtomicUsize,
+    /// Set while the current assignment is BLAKE2b: every provisioned worker
+    /// runs (the active count is otherwise sized by Argon2 arena RAM) and
+    /// workers release their arenas. `argon2_desired_workers` keeps the
+    /// count to restore when Argon2 work returns.
+    blake2b_workers: AtomicBool,
+    argon2_desired_workers: AtomicUsize,
+    blake2b_seen: AtomicBool,
     lifetime_hashes: AtomicU64,
     warmed_workers: AtomicUsize,
     worker_allocation_failures: AtomicU64,
@@ -233,6 +240,9 @@ impl CpuBackend {
                 started: AtomicBool::new(false),
                 adaptive: false,
                 desired_workers: AtomicUsize::new(lanes),
+                blake2b_workers: AtomicBool::new(false),
+                argon2_desired_workers: AtomicUsize::new(lanes),
+                blake2b_seen: AtomicBool::new(false),
                 lifetime_hashes: AtomicU64::new(0),
                 warmed_workers: AtomicUsize::new(0),
                 worker_allocation_failures: AtomicU64::new(0),
@@ -307,6 +317,8 @@ impl CpuBackend {
             self.initial_workers.min(self.worker_capacity()),
             Ordering::Release,
         );
+        self.shared.blake2b_workers.store(false, Ordering::Release);
+        self.shared.blake2b_seen.store(false, Ordering::Release);
         self.shared.lifetime_hashes.store(0, Ordering::Release);
         for ack in &self.shared.kernel_acknowledgements {
             ack.store(0, Ordering::Release);
@@ -537,6 +549,12 @@ impl CpuBackend {
             self.worker_capacity(),
             startup_ready_timeout(self.worker_capacity()),
         ) {
+            if let Some(timed_out) = err.downcast_ref::<StartupTimedOut>() {
+                if let Some(message) = self.continue_after_startup_timeout(timed_out) {
+                    emit_warning(&self.shared, message);
+                    return Ok(());
+                }
+            }
             request_shutdown(&self.shared);
             let handles = match self.worker_handles.lock() {
                 Ok(mut guard) => std::mem::take(&mut *guard),
@@ -577,6 +595,14 @@ impl PowBackend for CpuBackend {
                 }
                 .into(),
             ),
+            pow: self
+                .shared
+                .blake2b_workers
+                .load(Ordering::Acquire)
+                .then(|| "blake2b".to_string()),
+            gpu_arch: None,
+            gpu_kernel_source: None,
+            amd_perf_level: None,
         }
     }
 
@@ -651,6 +677,7 @@ impl PowBackend for CpuBackend {
                 .work_control
                 .lock()
                 .map_err(|_| anyhow!("CPU control lock poisoned"))?;
+            set_pow_workers(&self.shared, work.template.pow, self.worker_capacity());
             control.generation = control.generation.wrapping_add(1).max(1);
             control.work = Some(work);
             let generation = control.generation;
@@ -707,7 +734,17 @@ impl PowBackend for CpuBackend {
         if !self.shared.started.load(Ordering::SeqCst) {
             return Ok(());
         }
-        request_work_pause(&self.shared)?;
+        let generation = request_work_pause_generation(&self.shared)?;
+        // Let an ordinary in-flight hash finish and submit its solution. Reserve
+        // half the deadline for slice-boundary cancellation on stalled hosts.
+        let now = Instant::now();
+        let grace = now + deadline.saturating_duration_since(now) / 2;
+        if wait_for_idle_until(&self.shared, grace).is_ok() {
+            return Ok(());
+        }
+        self.shared
+            .abandon_through_generation
+            .fetch_max(generation, Ordering::AcqRel);
         wait_for_idle_until(&self.shared, deadline)
     }
 
@@ -884,13 +921,54 @@ impl CpuBackend {
         backend
     }
 
-    pub(crate) fn set_active_threads(&self, count: usize) {
-        if let Ok(_control) = self.shared.work_control.lock() {
+    /// Keeps the workers that finished starting when the rest are still
+    /// allocating at the startup deadline. Adaptive backends lower their worker
+    /// target to the ready count, so the late workers release their arenas once
+    /// allocation returns; fixed counts let them join when ready. Returns `None`
+    /// when no active worker is ready, which still fails startup.
+    fn continue_after_startup_timeout(&self, timed_out: &StartupTimedOut) -> Option<String> {
+        let _control = self.shared.work_control.lock().ok()?;
+        let desired = self.shared.desired_workers.load(Ordering::Acquire);
+        // Workers at or above the target park without an arena and report
+        // ready at once, so they are part of the ready count.
+        let parked = timed_out.expected.saturating_sub(desired);
+        let active_ready = timed_out.ready.saturating_sub(parked).min(desired);
+        if active_ready == 0 {
+            return None;
+        }
+        if self.shared.adaptive {
             self.shared
                 .desired_workers
-                .store(count.min(self.worker_capacity()), Ordering::Release);
+                .fetch_min(active_ready, Ordering::AcqRel);
+            self.shared.work_cv.notify_all();
+            Some(format!(
+                "CPU worker startup timed out with {active_ready} of {desired} workers ready; mining with {active_ready}"
+            ))
+        } else {
+            Some(format!(
+                "CPU worker startup timed out with {active_ready} of {desired} workers ready; the rest join when their memory is ready"
+            ))
+        }
+    }
+
+    pub(crate) fn set_active_threads(&self, count: usize) {
+        if let Ok(_control) = self.shared.work_control.lock() {
+            let count = count.min(self.worker_capacity());
+            if self.shared.blake2b_workers.load(Ordering::Acquire) {
+                // Applied when Argon2 work returns.
+                self.shared
+                    .argon2_desired_workers
+                    .store(count, Ordering::Release);
+                return;
+            }
+            self.shared.desired_workers.store(count, Ordering::Release);
             self.shared.work_cv.notify_all();
         }
+    }
+
+    /// True once this backend has been given BLAKE2b work in the current run.
+    pub(crate) fn blake2b_seen(&self) -> bool {
+        self.shared.blake2b_seen.load(Ordering::Acquire)
     }
 
     /// Request a switch at each worker's next hash boundary. Sampling must wait
@@ -1057,10 +1135,9 @@ fn resolve_affinity_core_ids(mode: CpuAffinityMode) -> Option<Vec<core_affinity:
     if mode == CpuAffinityMode::Os {
         return Some(core_ids);
     }
-    // Native Windows exposes reliable processor-core masks and benefits materially from
-    // spreading memory-hard workers across physical cores before SMT siblings.
-    // Linux spreads across NUMA nodes and L3 groups with complete, usable topology;
-    // a single node/cache or incomplete topology retains OS order.
+    // Native Windows places workers on physical cores before SMT siblings. Linux
+    // spreads across NUMA nodes and L3 groups when topology is complete and places
+    // physical cores before SMT siblings; incomplete topology retains OS order.
     #[cfg(target_os = "linux")]
     let core_ids = {
         let available = core_ids.iter().map(|cpu| cpu.id).collect();
@@ -1211,9 +1288,8 @@ fn order_core_ids_by_groups(
     ordered
 }
 
-/// Alternates physical cores across L3 domains (Zen CCDs), as Linux placement does:
-/// each CCD has its own link to memory, so packing low worker counts onto one CCD
-/// caps them at that link. Cores keep their order within a domain. Missing or
+/// Alternates physical cores across L3 domains (Zen CCDs), as Linux placement does.
+/// Cores keep their order within a domain. Missing or
 /// inconsistent cache data (a core outside exactly one domain) keeps core order.
 #[cfg(any(target_os = "windows", test))]
 fn interleave_cores_by_cache(
@@ -1457,23 +1533,29 @@ fn wait_for_worker_enabled(shared: &Shared, thread_idx: usize) -> bool {
 }
 
 fn request_work_pause(shared: &Shared) -> Result<()> {
-    let generation = {
+    request_work_pause_generation(shared).map(|_| ())
+}
+
+fn request_work_pause_generation(shared: &Shared) -> Result<u64> {
+    let cancelled_generation = {
         let mut control = shared
             .work_control
             .lock()
             .map_err(|_| anyhow!("CPU control lock poisoned"))?;
+        let cancelled_generation = control.generation;
         control.generation = control.generation.wrapping_add(1).max(1);
         control.work = None;
-        control.generation
+        shared
+            .work_generation
+            .store(control.generation, Ordering::Release);
+        cancelled_generation
     };
-
-    shared.work_generation.store(generation, Ordering::Release);
     shared.work_cv.notify_all();
     shared.ready_cv.notify_all();
     if shared.active_workers.load(Ordering::Acquire) == 0 {
         maybe_finalize_assignment(shared);
     }
-    Ok(())
+    Ok(cancelled_generation)
 }
 
 fn wait_for_idle(shared: &Shared) -> Result<()> {
@@ -1558,6 +1640,28 @@ fn startup_ready_timeout(workers: usize) -> Duration {
         .min(STARTUP_READY_TIMEOUT_MAX)
 }
 
+/// Startup reached its deadline before every worker was ready.
+#[derive(Debug)]
+struct StartupTimedOut {
+    ready: usize,
+    expected: usize,
+    late_by: Duration,
+}
+
+impl std::fmt::Display for StartupTimedOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CPU worker startup timed out by {}ms ({}/{} ready)",
+            self.late_by.as_millis(),
+            self.ready,
+            self.expected
+        )
+    }
+}
+
+impl std::error::Error for StartupTimedOut {}
+
 fn mark_worker_ready(shared: &Shared) {
     shared.ready_workers.fetch_add(1, Ordering::AcqRel);
     shared.ready_cv.notify_all();
@@ -1613,11 +1717,12 @@ fn wait_for_workers_ready(
                 Some("cpu"),
                 detail,
             );
-            let timed_out_by = now.saturating_duration_since(deadline);
-            return Err(anyhow!(
-                "CPU worker startup timed out by {}ms ({ready}/{expected_workers} ready)",
-                timed_out_by.as_millis()
-            ));
+            return Err(StartupTimedOut {
+                ready,
+                expected: expected_workers,
+                late_by: now.saturating_duration_since(deadline),
+            }
+            .into());
         }
 
         let wait_for = deadline
@@ -1629,6 +1734,34 @@ fn wait_for_workers_ready(
             .map_err(|_| anyhow!("CPU ready lock poisoned"))?;
         ready_guard = next_guard;
     }
+}
+
+/// Switches the active worker count for the assignment's PoW. Callers hold
+/// `work_control` so workers see the count with the new generation.
+fn set_pow_workers(shared: &Shared, pow: crate::backend::PowAlgorithm, capacity: usize) {
+    let blake2b = pow == crate::backend::PowAlgorithm::Blake2b512;
+    if blake2b == shared.blake2b_workers.load(Ordering::Acquire) {
+        return;
+    }
+    if blake2b {
+        shared.blake2b_seen.store(true, Ordering::Release);
+        shared.argon2_desired_workers.store(
+            shared.desired_workers.load(Ordering::Acquire),
+            Ordering::Release,
+        );
+        shared.blake2b_workers.store(true, Ordering::Release);
+        shared.desired_workers.store(capacity, Ordering::Release);
+    } else {
+        shared.blake2b_workers.store(false, Ordering::Release);
+        shared.desired_workers.store(
+            shared
+                .argon2_desired_workers
+                .load(Ordering::Acquire)
+                .min(capacity),
+            Ordering::Release,
+        );
+    }
+    shared.work_cv.notify_all();
 }
 
 fn has_pending_work(shared: &Shared) -> bool {
@@ -1851,7 +1984,7 @@ mod tests {
     use super::{
         emit_error, forward_event, lane_quota_for_chunk, maybe_finalize_assignment,
         order_core_ids_by_groups, should_flush_hashes, start_assignment, wait_for_workers_ready,
-        BackendEvent, CpuBackend, DEFAULT_HASH_BATCH_SIZE,
+        BackendEvent, CpuBackend, CpuBackendTuning, StartupTimedOut, DEFAULT_HASH_BATCH_SIZE,
     };
     use crate::backend::{MiningSolution, NonceChunk, PowBackend, WorkAssignment, WorkTemplate};
     use crate::config::CpuAffinityMode;
@@ -2223,6 +2356,39 @@ mod tests {
     }
 
     #[test]
+    fn startup_timeout_keeps_ready_workers() {
+        let backend = CpuBackend::adaptive(3, 4, CpuAffinityMode::Off, CpuBackendTuning::default());
+        // One parked worker plus two of the three active workers are ready.
+        let timed_out = StartupTimedOut {
+            ready: 3,
+            expected: 4,
+            late_by: Duration::ZERO,
+        };
+        assert!(backend.continue_after_startup_timeout(&timed_out).is_some());
+        assert_eq!(backend.shared.desired_workers.load(Ordering::Acquire), 2);
+
+        // Only the parked worker is ready: nothing could hash, so startup fails.
+        let backend = CpuBackend::adaptive(3, 4, CpuAffinityMode::Off, CpuBackendTuning::default());
+        let timed_out = StartupTimedOut {
+            ready: 1,
+            expected: 4,
+            late_by: Duration::ZERO,
+        };
+        assert!(backend.continue_after_startup_timeout(&timed_out).is_none());
+        assert_eq!(backend.shared.desired_workers.load(Ordering::Acquire), 3);
+
+        // A fixed worker count is kept; late workers join when ready.
+        let backend = CpuBackend::new(4, CpuAffinityMode::Off);
+        let timed_out = StartupTimedOut {
+            ready: 2,
+            expected: 4,
+            late_by: Duration::ZERO,
+        };
+        assert!(backend.continue_after_startup_timeout(&timed_out).is_some());
+        assert_eq!(backend.shared.desired_workers.load(Ordering::Acquire), 4);
+    }
+
+    #[test]
     fn error_event_retries_until_queue_capacity_is_available() {
         let backend = CpuBackend::new(1, CpuAffinityMode::Off);
         backend.shared.started.store(true, Ordering::Release);
@@ -2503,6 +2669,69 @@ mod tests {
 
         backend.shared.active_workers.store(0, Ordering::Release);
         backend.shared.idle_cv.notify_all();
+    }
+
+    #[test]
+    fn cancel_abandons_slow_hash_before_deadline_but_keeps_new_work_eligible() {
+        let backend = CpuBackend::new(1, CpuAffinityMode::Off);
+        backend.shared.started.store(true, Ordering::Release);
+        backend.shared.active_workers.store(1, Ordering::Release);
+        backend.shared.work_control.lock().unwrap().generation = 7;
+        backend.shared.work_generation.store(7, Ordering::Release);
+        let shared = Arc::clone(&backend.shared);
+        let worker = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while shared.abandon_through_generation.load(Ordering::Acquire) < 7
+                && Instant::now() < deadline
+            {
+                thread::sleep(Duration::from_millis(1));
+            }
+            let abandoned = shared.abandon_through_generation.load(Ordering::Acquire) == 7;
+            let mut active = true;
+            super::mark_worker_inactive(&shared, &mut active);
+            abandoned
+        });
+        let result = backend.cancel_work_with_deadline(Instant::now() + Duration::from_secs(1));
+        assert!(worker.join().unwrap(), "slow hash must see cancellation");
+        result.expect("cooperative worker should stop before the control deadline");
+        assert!(
+            backend.shared.work_generation.load(Ordering::Acquire)
+                > backend
+                    .shared
+                    .abandon_through_generation
+                    .load(Ordering::Acquire)
+        );
+    }
+
+    #[test]
+    fn cancel_preserves_hashes_that_finish_during_grace() {
+        let backend = CpuBackend::new(1, CpuAffinityMode::Off);
+        backend.shared.started.store(true, Ordering::Release);
+        backend.shared.active_workers.store(1, Ordering::Release);
+        backend.shared.work_control.lock().unwrap().generation = 7;
+        backend.shared.work_generation.store(7, Ordering::Release);
+        let shared = Arc::clone(&backend.shared);
+        let worker = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while shared.work_generation.load(Ordering::Acquire) == 7 && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(1));
+            }
+            let mut pending_hashes = 1;
+            super::flush_hashes(&shared, 0, &mut pending_hashes);
+            let mut active = true;
+            super::mark_worker_inactive(&shared, &mut active);
+        });
+        let result = backend.cancel_work_with_deadline(Instant::now() + Duration::from_secs(1));
+        worker.join().unwrap();
+        result.unwrap();
+        assert_eq!(backend.take_hashes(), 1);
+        assert_eq!(
+            backend
+                .shared
+                .abandon_through_generation
+                .load(Ordering::Acquire),
+            0
+        );
     }
 
     #[test]

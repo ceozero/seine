@@ -195,7 +195,12 @@ fn worker_loop_with_allocator<const MEMORY_KB: u32>(
             }
             continue;
         }
-        if arena.is_none() {
+        // BLAKE2b work needs no arena; one is allocated again when Argon2 work returns.
+        if arena.is_none() && shared.blake2b_workers.load(Ordering::Acquire) && !ready {
+            mark_worker_ready(&shared);
+            ready = true;
+        }
+        if arena.is_none() && !shared.blake2b_workers.load(Ordering::Acquire) {
             // Account for first-touch memory before allocation completes. A
             // concurrent budget refresh must not treat our own new arena as
             // competing RAM and immediately cancel the worker being added.
@@ -228,6 +233,9 @@ fn worker_loop_with_allocator<const MEMORY_KB: u32>(
                     );
                     arena = Some(allocated);
                     hasher = Some(initialized);
+                    // A rebuilt hasher starts on the default kernel; reapply the
+                    // requested one (already zero at startup).
+                    active_kernel_request = 0;
                     if !ready {
                         mark_worker_ready(&shared);
                         ready = true;
@@ -279,6 +287,20 @@ fn worker_loop_with_allocator<const MEMORY_KB: u32>(
             }
             match wait_for_work_update(&shared, local_generation, thread_idx) {
                 Ok(CpuWorkUpdate::Work(generation, work)) => {
+                    if work.template.pow == PowAlgorithm::Blake2b512 && arena.is_some() {
+                        drop(arena.take());
+                        drop(hasher.take());
+                        if warmed {
+                            shared.warmed_workers.fetch_sub(1, Ordering::AcqRel);
+                            warmed = false;
+                        }
+                        if let Some(observation) = backing.take() {
+                            release_arena_backing(&shared, observation);
+                            shared
+                                .arena_committed_bytes
+                                .fetch_sub(arena_bytes, Ordering::AcqRel);
+                        }
+                    }
                     nonce = work.nonce_chunk.start_nonce.wrapping_add(thread_idx as u64);
                     lane_iters = 0;
                     lane_quota = lane_quota_for_chunk(
@@ -367,11 +389,13 @@ fn worker_loop_with_allocator<const MEMORY_KB: u32>(
         let request = shared.kernel_request.load(Ordering::Acquire);
         if active_kernel_request != request {
             flush_hashes(&shared, thread_idx, &mut pending_hashes);
-            hasher
-                .as_mut()
-                .expect("enabled worker has a hasher")
-                .set_kernel(super::kernel_from_request(request))
-                .expect("requested kernel was checked before publication");
+            // A worker on BLAKE2b work has no Argon2 hasher; the allocation
+            // that rebuilds it resets this request so the kernel is reapplied.
+            if let Some(hasher) = hasher.as_mut() {
+                hasher
+                    .set_kernel(super::kernel_from_request(request))
+                    .expect("requested kernel was checked before publication");
+            }
             active_kernel_request = request;
         }
         let target_snapshot = template.target_snapshot();
@@ -553,10 +577,11 @@ fn worker_loop_with_allocator<const MEMORY_KB: u32>(
 
 #[cfg(target_os = "linux")]
 const HUGEPAGE_BYTES: usize = 2 * 1024 * 1024;
-#[cfg(all(
-    target_os = "linux",
-    any(target_arch = "x86_64", target_arch = "aarch64")
-))]
+/// Worker 0 warns when transparent huge pages back less than this share of
+/// its arena; a mapping that is not 2 MiB aligned always misses one page.
+#[cfg(target_os = "linux")]
+const HUGEPAGE_COVERAGE_WARN_PERCENT: u64 = 95;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const HUGEPAGE_1G_BYTES: usize = 1024 * 1024 * 1024;
 // Linux UAPI：HUGETLB_FLAG_ENCODE_1GB = 30 << HUGETLB_FLAG_ENCODE_SHIFT。
 // 不直接使用 libc 的同名常量，避免旧版 libc 在部分目标架构没有暴露它。
@@ -749,6 +774,27 @@ fn release_arena_backing(shared: &Shared, observation: ArenaBackingObservation) 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn large_page_advice_matches_the_windows_failure() {
+        let advice = super::windows_large_page_advice;
+
+        for missing_right in [1300, 1314] {
+            let message = advice(missing_right).expect("missing right has a fix");
+            assert!(message.contains("'Lock pages in memory'"), "{message}");
+            assert!(!message.contains("restart your PC"), "{message}");
+        }
+        for short_of_memory in [8, 14, 1450, 1455] {
+            let message = advice(short_of_memory).expect("low memory has a fix");
+            assert!(message.contains("restart your PC"), "{message}");
+            assert!(!message.contains("Lock pages"), "{message}");
+            assert!(!message.contains("error"), "{message}");
+        }
+        assert!(advice(87).expect("unknown code").contains("(error 87)"));
+        assert_eq!(advice(0), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    use super::arena_huge_kib_from_smaps;
     #[cfg(target_os = "linux")]
     use super::PowArena;
     use super::{handle_found_solution, SolutionDisposition};
@@ -1528,6 +1574,50 @@ mod tests {
         assert_eq!(observation.allocation_failures, 0);
     }
 
+    #[cfg(target_os = "linux")]
+    fn smaps_region(start: usize, end: usize, anonymous_kib: u64, huge_kib: u64) -> String {
+        format!(
+            "{start:x}-{end:x} rw-p 00000000 00:00 0\nSize:  {} kB\nRss:  {anonymous_kib} kB\n\
+             Anonymous:  {anonymous_kib} kB\nAnonHugePages:  {huge_kib} kB\nVmFlags: rd wr mr mw me ac hg\n",
+            (end - start) / 1024
+        )
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn arena_huge_pages_count_only_the_arena_when_neighbours_share_its_mapping() {
+        const ARENA: usize = 64 << 20;
+        const ARENA_KIB: u64 = (ARENA / 1024) as u64;
+        let base = 0x4000_0000usize;
+        let own = smaps_region(base, base + ARENA, ARENA_KIB, ARENA_KIB / 2);
+        let unrelated = smaps_region(base + ARENA, base + ARENA + 4096, 4, 0);
+        let alone = format!("{own}{unrelated}");
+        assert_eq!(
+            arena_huge_kib_from_smaps(&alone, base, ARENA),
+            Some(ARENA_KIB / 2)
+        );
+
+        // Three merged arenas, fully resident, three quarters on huge pages.
+        let merged = smaps_region(base, base + 3 * ARENA, 3 * ARENA_KIB, 9 * ARENA_KIB / 4);
+        for arena in 0..3 {
+            assert_eq!(
+                arena_huge_kib_from_smaps(&merged, base + arena * ARENA, ARENA),
+                Some(3 * ARENA_KIB / 4)
+            );
+        }
+
+        // A neighbour still faulting in counts by its resident share only.
+        let faulting = smaps_region(base, base + 2 * ARENA, 3 * ARENA_KIB / 2, 3 * ARENA_KIB / 2);
+        assert_eq!(
+            arena_huge_kib_from_smaps(&faulting, base, ARENA),
+            Some(ARENA_KIB)
+        );
+
+        let untouched = smaps_region(base, base + 2 * ARENA, 0, 0);
+        assert_eq!(arena_huge_kib_from_smaps(&untouched, base, ARENA), Some(0));
+        assert_eq!(arena_huge_kib_from_smaps(&unrelated, base, ARENA), None);
+    }
+
     // Allocation needs a pre-reserved 1 GiB HugeTLB pool, e.g.:
     //   echo 2 | sudo tee /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
     // so this test is ignored by default; run with `cargo test -- --ignored`.
@@ -1613,6 +1703,118 @@ mod tests {
     }
 
     #[test]
+    fn blake2b_work_runs_every_worker_and_releases_arenas() {
+        use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
+        use crate::backend::{NonceChunk, PowAlgorithm, PowBackend, WorkAssignment};
+
+        const ARENA_BYTES: u64 = 32 * 1024;
+        let backend = CpuBackend::adaptive(
+            2,
+            4,
+            CpuAffinityMode::Off,
+            CpuBackendTuning {
+                page_mode: crate::config::CpuPageMode::Regular,
+                ..CpuBackendTuning::default()
+            },
+        );
+        backend.shared.started.store(true, Ordering::Release);
+        let (tx, rx) = unbounded();
+        *backend.shared.event_dispatch_tx.write().unwrap() = Some(tx);
+        let handles: Vec<_> = (0..4)
+            .map(|index| {
+                let shared = Arc::clone(&backend.shared);
+                std::thread::spawn(move || super::worker_loop::<32>(shared, index, None))
+            })
+            .collect();
+        let wait = |what: &str, predicate: &dyn Fn() -> bool| {
+            let until = Instant::now() + Duration::from_secs(5);
+            while !predicate() {
+                assert!(Instant::now() < until, "timed out waiting for {what}");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        let work = |epoch: u64, pow, start, count| WorkAssignment {
+            template: Arc::new(WorkTemplate {
+                work_id: epoch,
+                epoch,
+                header_base: Arc::from(vec![3u8; 156]),
+                pow,
+                target: [0xff; 32],
+                dynamic_share_target: None,
+                pause_on_solution: false,
+                stop_at: Instant::now() + Duration::from_secs(60),
+            }),
+            nonce_chunk: NonceChunk {
+                start_nonce: start,
+                nonce_count: count,
+            },
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            wait("startup", &|| {
+                backend.shared.ready_workers.load(Ordering::Acquire) == 4
+            });
+            backend
+                .assign_work(work(1, PowAlgorithm::Argon2id, 0, 8))
+                .unwrap();
+            wait("Argon2 work", &|| {
+                !super::super::has_pending_work(&backend.shared)
+            });
+            assert_eq!(backend.enabled_lanes(), 2);
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, 2 * ARENA_BYTES);
+            assert!(!backend.blake2b_seen());
+
+            backend
+                .assign_work(work(2, PowAlgorithm::Blake2b512, 100, 4_000))
+                .unwrap();
+            assert_eq!(backend.enabled_lanes(), 4, "BLAKE2b runs every slot");
+            wait("BLAKE2b work", &|| {
+                !super::super::has_pending_work(&backend.shared)
+            });
+            wait("arena release", &|| {
+                backend.adaptive_snapshot().resident_bytes == 0
+            });
+            assert!(backend.blake2b_seen());
+            let blake2b_solutions: Vec<u64> = rx
+                .try_iter()
+                .filter_map(|event| match event {
+                    BackendEvent::Solution(solution) if solution.epoch == 2 => Some(solution.nonce),
+                    _ => None,
+                })
+                .collect();
+            let mut sorted = blake2b_solutions.clone();
+            sorted.sort_unstable();
+            assert_eq!(sorted, (100..4_100).collect::<Vec<_>>());
+
+            // A controller resize during BLAKE2b applies when Argon2 returns.
+            backend.set_active_threads(1);
+            assert_eq!(backend.enabled_lanes(), 4);
+            backend
+                .assign_work(work(3, PowAlgorithm::Argon2id, 10_000, 4))
+                .unwrap();
+            assert_eq!(backend.enabled_lanes(), 1);
+            wait("Argon2 after BLAKE2b", &|| {
+                !super::super::has_pending_work(&backend.shared)
+            });
+            assert_eq!(backend.adaptive_snapshot().resident_bytes, ARENA_BYTES);
+            // The nonce stride stays at the four slots, so the one active lane
+            // hashes its quarter of the chunk on its rebuilt arena.
+            let argon2_solutions: Vec<u64> = rx
+                .try_iter()
+                .filter_map(|event| match event {
+                    BackendEvent::Solution(solution) if solution.epoch == 3 => Some(solution.nonce),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(argon2_solutions, vec![10_000]);
+        }));
+        request_shutdown(&backend.shared);
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        result.unwrap();
+    }
+
+    #[test]
     fn blake2b_work_reports_exactly_the_reference_solutions() {
         use crate::backend::cpu::{request_shutdown, CpuBackendTuning};
         use crate::backend::{
@@ -1633,6 +1835,11 @@ mod tests {
             },
         );
         backend.shared.started.store(true, Ordering::Release);
+        // BLAKE2b-only workers skip the Argon2 arenas they would allocate at start.
+        backend
+            .shared
+            .blake2b_workers
+            .store(true, Ordering::Release);
         let (tx, rx) = unbounded();
         *backend.shared.event_dispatch_tx.write().unwrap() = Some(tx);
         let handles: Vec<_> = (0..LANES)
@@ -1687,8 +1894,14 @@ mod tests {
                 assert!(Instant::now() < until, "BLAKE2b assignment did not finish");
                 std::thread::sleep(Duration::from_millis(2));
             }
+            // A lane can still be sending its last solutions when the
+            // assignment's pending count reaches zero.
             let mut found = BTreeMap::new();
-            for event in rx.try_iter() {
+            while found.len() < expected.len() {
+                let Ok(event) = rx.recv_timeout(until.saturating_duration_since(Instant::now()))
+                else {
+                    break;
+                };
                 if let BackendEvent::Solution(solution) = event {
                     assert_eq!(solution.epoch, 1);
                     let hash = solution.hash.expect("CPU solutions carry their hash");
@@ -1697,6 +1910,12 @@ mod tests {
                         "duplicate nonce {}",
                         solution.nonce
                     );
+                }
+            }
+            std::thread::sleep(Duration::from_millis(20));
+            for event in rx.try_iter() {
+                if let BackendEvent::Solution(solution) = event {
+                    panic!("unexpected extra solution for nonce {}", solution.nonce);
                 }
             }
             assert!(!expected.is_empty());
@@ -1746,7 +1965,7 @@ fn emit_linux_hugepage_diagnostics(
     }
 
     let huge_kib = mmap_arena.anon_huge_kib().unwrap_or(0);
-    if huge_kib >= total_kib {
+    if huge_kib.saturating_mul(100) >= total_kib.saturating_mul(HUGEPAGE_COVERAGE_WARN_PERCENT) {
         return;
     }
 
@@ -1789,7 +2008,7 @@ fn emit_windows_large_page_diagnostics(
     let Some(arena) = arena.virtual_ref() else {
         emit_warning(
             shared,
-            "VirtualAlloc failed; CPU hashing fell back to heap memory and may suffer extra TLB pressure"
+            "Hashrate could be higher. Windows doesn't have enough free memory, so close other apps and restart Seine."
                 .to_owned(),
         );
         return;
@@ -1802,19 +2021,33 @@ fn emit_windows_large_page_diagnostics(
     // backend event path turns it into a generic display warning.
     crate::diagnostics::allocation_failure(true, block_bytes, Some(i64::from(error)));
 
-    emit_warning(
-        shared,
-        format!(
-            "Windows large-page allocation unavailable for {} MiB per worker (Win32 error {}); using regular VirtualAlloc pages",
-            block_bytes / (1024 * 1024),
-            error,
+    if let Some(advice) = windows_large_page_advice(error) {
+        emit_warning(shared, advice);
+    }
+}
+
+/// Dashboard advice for auto mode falling back from large pages. `error` is the
+/// Win32 code from enabling the privilege or from `VirtualAlloc`; 0 means Windows
+/// reports no large-page support, which the miner cannot change.
+#[cfg(any(target_os = "windows", test))]
+fn windows_large_page_advice(error: u32) -> Option<String> {
+    const GUIDE: &str = "https://seineminer.com/blog/huge-pages-blocknet-mining/";
+    match error {
+        0 => None,
+        // ERROR_NOT_ALL_ASSIGNED, ERROR_PRIVILEGE_NOT_HELD
+        1300 | 1314 => Some(format!(
+            "Hashrate could be higher. Give your Windows account the 'Lock pages in memory' right, then sign out and back in. Guide: {GUIDE}"
+        )),
+        // ERROR_NOT_ENOUGH_MEMORY, ERROR_OUTOFMEMORY, ERROR_NO_SYSTEM_RESOURCES,
+        // ERROR_COMMITMENT_LIMIT. The account already holds the right here.
+        8 | 14 | 1450 | 1455 => Some(
+            "Hashrate could be higher. Windows doesn't have enough free memory for large pages, so restart your PC and start Seine before other apps."
+                .to_owned(),
         ),
-    );
-    emit_warning(
-        shared,
-        "Large-page fix: grant this account 'Lock pages in memory' (SeLockMemoryPrivilege), sign out and back in, then restart Seine"
-            .to_owned(),
-    );
+        _ => Some(format!(
+            "Hashrate could be higher. Windows wouldn't provide large pages (error {error}). Guide: {GUIDE}"
+        )),
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -2088,10 +2321,8 @@ impl MmapArena {
         page_mode: CpuPageMode,
     ) -> Result<Self, String> {
         #[cfg(target_os = "linux")]
-        // Hint THP and let the first hash fault 2 MiB pages, like a writing prefault
-        // but overlapped with hashing, so many-worker hosts start hashing in
-        // under a second instead of waiting on a prefault. MAP_POPULATE and a synchronous
-        // collapse remain the fallback when the hint fails.
+        // Hint THP and let the first hash fault the pages. MAP_POPULATE and a
+        // synchronous collapse remain the fallback when the hint fails.
         let prefault_advice = (page_mode == CpuPageMode::Auto
             && byte_len == POW_MEMORY_KB as usize * 1024)
             .then_some(libc::MADV_HUGEPAGE);
@@ -2339,7 +2570,7 @@ impl MmapArena {
 
     #[cfg(target_os = "linux")]
     fn anon_huge_kib(&self) -> Option<u64> {
-        read_smaps_anon_huge_kib(self.ptr as usize)
+        read_smaps_arena_huge_kib(self.ptr as usize, self.byte_len)
     }
 
     fn backing_observation(&self, requested_bytes: u64) -> ArenaBackingObservation {
@@ -2407,24 +2638,74 @@ impl MmapArena {
 }
 
 #[cfg(target_os = "linux")]
-fn read_smaps_anon_huge_kib(addr: usize) -> Option<u64> {
+fn read_smaps_arena_huge_kib(addr: usize, len: usize) -> Option<u64> {
     let smaps = std::fs::read_to_string("/proc/self/smaps").ok()?;
-    let mut in_target_mapping = false;
+    arena_huge_kib_from_smaps(&smaps, addr, len)
+}
+
+/// Transparent-huge KiB backing `[addr, addr + len)`. The kernel merges
+/// adjacent arenas with matching flags into one mapping, so a mapping that
+/// extends past the arena is credited with its huge share of resident pages,
+/// scaled to the overlap, instead of its whole total.
+#[cfg(target_os = "linux")]
+fn arena_huge_kib_from_smaps(smaps: &str, addr: usize, len: usize) -> Option<u64> {
+    struct Region {
+        start: usize,
+        end: usize,
+        anonymous_kib: u64,
+        huge_kib: Option<u64>,
+    }
+    let arena_end = addr.checked_add(len)?;
+    let mut regions: Vec<Region> = Vec::new();
+    let mut in_arena = false;
     for line in smaps.lines() {
         if let Some((start, end)) = parse_smaps_region_header(line) {
-            in_target_mapping = addr >= start && addr < end;
+            in_arena = start < arena_end && addr < end;
+            if in_arena {
+                regions.push(Region {
+                    start,
+                    end,
+                    anonymous_kib: 0,
+                    huge_kib: None,
+                });
+            }
             continue;
         }
-        if in_target_mapping {
-            if let Some(rest) = line.strip_prefix("AnonHugePages:") {
-                return rest
-                    .split_whitespace()
-                    .next()
-                    .and_then(|value| value.parse::<u64>().ok());
-            }
+        let Some(region) = regions.last_mut().filter(|_| in_arena) else {
+            continue;
+        };
+        if let Some(kib) = smaps_field_kib(line, "Anonymous:") {
+            region.anonymous_kib = kib;
+        } else if let Some(kib) = smaps_field_kib(line, "AnonHugePages:") {
+            region.huge_kib = Some(kib);
         }
     }
-    None
+    let mut total = None;
+    for region in regions {
+        let Some(huge_kib) = region.huge_kib else {
+            continue;
+        };
+        let overlap_kib = ((region.end.min(arena_end) - region.start.max(addr)) / 1024) as u64;
+        let credited = if region.start >= addr && region.end <= arena_end {
+            huge_kib
+        } else if region.anonymous_kib == 0 {
+            0
+        } else {
+            (u128::from(huge_kib) * u128::from(overlap_kib) / u128::from(region.anonymous_kib))
+                .min(u128::from(overlap_kib)) as u64
+        };
+        total = Some(total.unwrap_or(0u64).saturating_add(credited));
+    }
+    total
+}
+
+#[cfg(target_os = "linux")]
+fn smaps_field_kib(line: &str, field: &str) -> Option<u64> {
+    line.strip_prefix(field)?
+        .split_whitespace()
+        .next()?
+        .parse()
+        .ok()
 }
 
 #[cfg(target_os = "linux")]

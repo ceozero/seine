@@ -18,7 +18,7 @@ REMOTE_SQL = (
 def remote(host, command, data=None):
     return subprocess.run(
         ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '--', host, command],
-        input=data, text=True, capture_output=True, timeout=60,
+        input=data, text=True, capture_output=True, timeout=90,
     )
 
 
@@ -46,13 +46,15 @@ def main():
         ('telemetry', REMOTE_SQL, Path(__file__).with_suffix('.sql').read_text()),
         ('diagnostics', REMOTE_SQL, Path(__file__).with_name('diagnostics.sql').read_text()),
         ('tuning', REMOTE_SQL, Path(__file__).with_name('tuning_report.sql').read_text()),
+        ('settled', REMOTE_SQL, Path(__file__).with_name('settled_report.sql').read_text()),
+        ('release_health', REMOTE_SQL, Path(__file__).with_name('release_health.sql').read_text()),
     ):
         try:
             result = remote(args.host, command, data)
             if result.returncode:
                 briefing[key] = {'status': 'error', 'detail': (result.stderr or result.stdout).strip()[:1000]}
                 failed = True
-            elif key in ('telemetry', 'data_quality', 'diagnostics', 'tuning'):
+            elif key in ('telemetry', 'data_quality', 'diagnostics', 'tuning', 'settled', 'release_health'):
                 briefing[key] = json.loads(result.stdout)
             else:
                 briefing[key] = {'status': 'ok', 'detail': result.stdout.strip()}
@@ -73,8 +75,10 @@ def main():
         failed = True
         briefing['assessment'] = (
             'Hardware inventory is arriving without performance samples from at least five '
-            'installations of one version, each reporting at least three times over two hours. '
-            'Investigate the miner sampling path; waiting for cohorts is not sufficient.'
+            'installations of one version on the newest release line, each reporting at least three '
+            'times over two hours. '
+            'Investigate the miner sampling path and pool connectivity using inventory_only_clusters; '
+            'missing samples alone do not prove a sampling bug.'
         )
     diagnostics = briefing.get('diagnostics', {})
     briefing['diagnostic_interpretation'] = (
@@ -101,8 +105,9 @@ def main():
     if diagnostics.get('status') == 'attention':
         failed = True
         briefing['diagnostic_assessment'] = (
-            'At least three installations of one version reported errors, quarantines or '
-            'unclean previous runs within 24 hours. Investigate issue clusters by build, '
+            'A version on the newest release line passed its share of installations with errors, '
+            'quarantines or unclean previous runs, or three installations of one version reported '
+            'failed installs or paused mining, within 24 hours. Investigate issue clusters by build, '
             'source location and hardware. An unclean run is not proof of a crash.'
         )
     elif diagnostics.get('status') == 'unavailable':
@@ -131,6 +136,40 @@ def main():
         briefing['tuning_assessment'] = (
             'No paired trials in this window; verify producer release adoption and collector compatibility. '
             'Missing trials do not establish no gain.'
+        )
+    release = briefing.get('release_health', {})
+    briefing['release_health_interpretation'] = (
+        'Schema-14 miners only; coverage shows how many installations per version can report these fields. '
+        'Update, pool, fork and AMD counts are summed over report windows; auto_install, pool settings, '
+        'AMD detection and GPU kernel sources use each installation\'s latest report. '
+        'install_failure_stages records only the last failed stage per report window. '
+        'amd_gpu_not_mining counts installations whose OS lists an AMD display device (pci_devices > 0, '
+        'Linux only, excluding graphics built into the CPU) while HIP is unavailable or no AMD GPU was '
+        'selected, usually missing ROCm; '
+        'hip_unavailable alone is normal on machines without AMD GPUs. nvrtc_failed_prebuilt_ptx means '
+        'NVRTC was installed but failed. Pool counts are booleans and counts, never hosts or memos. '
+        'startup.first_hash counts each run once, so cold starts stay visible; first_hash_ms includes any '
+        'wait for pool work, while lag_behind_cpu_ms removes it where a CPU backend ran. '
+        'backends_not_hashing covers runs up at least ten minutes that hashed on some backend; a GPU can '
+        'also be idle on purpose when its kernel cannot run this proof of work. '
+        'installations_idle_until_fork counts Metal that never hashed in a run that has not mined BLAKE2b: '
+        'the default Metal backend mines only BLAKE2b, and telemetry cannot tell it from an explicit '
+        '--backend metal, so these are left out of the missing counts until the fork.'
+    )
+    if release.get('status') == 'error':
+        briefing['release_health_assessment'] = 'Release-health query failed; missing schema-14 aggregates do not establish healthy updates.'
+    elif release.get('status') == 'attention':
+        failed = True
+        briefing['release_health_assessment'] = (
+            'At least three installations of one version reported failed self-update installs, or mining '
+            'paused on work this build cannot mine, within 24 hours. Check install_failure_stages and '
+            'fork_readiness by version; paused miners need an update.'
+        )
+    elif release.get('status') == 'unavailable':
+        briefing['release_health_assessment'] = 'No schema-14 reports yet; update, pool and AMD detection health are unknown, not healthy.'
+    elif release.get('status') == 'ok':
+        briefing['release_health_assessment'] = (
+            'Review install failures, fork readiness, amd_gpu_not_mining and NVRTC fallbacks below the fleet threshold.'
         )
     print(json.dumps(briefing, indent=2))
     return int(failed)

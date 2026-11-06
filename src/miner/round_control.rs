@@ -46,7 +46,9 @@ pub(super) fn redistribute_for_topology_change(
         return Ok(());
     }
 
-    let reservation = options.nonce_scheduler.reserve(total_lanes(backends));
+    let reservation = options
+        .nonce_scheduler
+        .reserve_for(total_lanes(backends), options.pow);
     warn(
         options.log_tag,
         format!(

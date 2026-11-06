@@ -1,8 +1,10 @@
 use std::io::IsTerminal;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
 use super::tui::{LogEntry, LogLevel, TuiState};
+use crate::console_output::{eprintln, println};
 
 const FRAME_INNER_WIDTH: usize = 92;
 const KEY_WIDTH: usize = 18;
@@ -21,6 +23,7 @@ static LOG_START: OnceLock<Instant> = OnceLock::new();
 static OUTPUT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static TUI_STATE: Mutex<Option<TuiState>> = Mutex::new(None);
 static LOG_SINK: OnceLock<Mutex<Option<LogSink>>> = OnceLock::new();
+static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 type LogSink = Arc<dyn Fn(UiLogEvent) + Send + Sync + 'static>;
 
@@ -30,6 +33,19 @@ pub(crate) struct UiLogEvent {
     pub level: &'static str,
     pub tag: String,
     pub message: String,
+}
+
+/// Who a log line is for. The control API sink receives everything except
+/// `DashboardOnly`, so nothing is lost to API clients.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Audience {
+    Everyone,
+    /// Plain logs; hidden on the dashboard unless `--verbose`.
+    PlainLog,
+    /// Only with `--verbose`.
+    VerboseOnly,
+    /// A short dashboard line standing in for the detail in plain logs.
+    DashboardOnly,
 }
 
 #[derive(Clone, Copy)]
@@ -104,12 +120,39 @@ pub(super) fn startup_banner(lines: &[(&str, String)]) {
     println!();
 }
 
-pub(crate) fn info(tag: &str, message: impl AsRef<str>) {
-    log(Level::Info, tag, message.as_ref());
+pub(crate) fn set_verbose(enabled: bool) {
+    VERBOSE.store(enabled, Ordering::Relaxed);
 }
 
-pub(super) fn success(tag: &str, message: impl AsRef<str>) {
-    log(Level::Success, tag, message.as_ref());
+pub(crate) fn info(tag: &str, message: impl AsRef<str>) {
+    log(Level::Info, Audience::Everyone, tag, message.as_ref());
+}
+
+pub(crate) fn success(tag: &str, message: impl AsRef<str>) {
+    log(Level::Success, Audience::Everyone, tag, message.as_ref());
+}
+
+/// Routine activity for plain logs; the dashboard already shows its effect.
+pub(crate) fn detail(tag: &str, message: impl AsRef<str>) {
+    log(Level::Info, Audience::PlainLog, tag, message.as_ref());
+}
+
+/// Internal settings, shown only with `--verbose`.
+pub(crate) fn verbose(tag: &str, message: impl AsRef<str>) {
+    log(Level::Info, Audience::VerboseOnly, tag, message.as_ref());
+}
+
+pub(crate) fn note(tag: &str, message: impl AsRef<str>) {
+    log(Level::Info, Audience::DashboardOnly, tag, message.as_ref());
+}
+
+pub(crate) fn note_success(tag: &str, message: impl AsRef<str>) {
+    log(
+        Level::Success,
+        Audience::DashboardOnly,
+        tag,
+        message.as_ref(),
+    );
 }
 
 #[track_caller]
@@ -119,7 +162,24 @@ pub(crate) fn warn(tag: &str, message: impl AsRef<str>) {
         crate::diagnostics::classify(message.as_ref()),
         None,
     );
-    log(Level::Warn, tag, message.as_ref());
+    log(Level::Warn, Audience::Everyone, tag, message.as_ref());
+}
+
+/// Like `warn`, but records a typed cause instead of classifying the text.
+#[track_caller]
+pub(crate) fn warn_with_detail(
+    tag: &str,
+    message: impl AsRef<str>,
+    kind: seine_telemetry::DiagnosticKind,
+    detail: seine_telemetry::FailureDetail,
+) {
+    crate::diagnostics::record_failure(
+        seine_telemetry::DiagnosticCode::Warning,
+        kind,
+        None,
+        detail,
+    );
+    log(Level::Warn, Audience::Everyone, tag, message.as_ref());
 }
 
 #[track_caller]
@@ -129,11 +189,11 @@ pub(super) fn error(tag: &str, message: impl AsRef<str>) {
         crate::diagnostics::classify(message.as_ref()),
         None,
     );
-    log(Level::Error, tag, message.as_ref());
+    log(Level::Error, Audience::Everyone, tag, message.as_ref());
 }
 
 pub(super) fn mined(tag: &str, message: impl AsRef<str>) {
-    log(Level::Mined, tag, message.as_ref());
+    log(Level::Mined, Audience::Everyone, tag, message.as_ref());
 }
 
 pub(super) fn notify_dev_fee_mode(is_dev: bool) {
@@ -163,8 +223,41 @@ pub(crate) fn announce_update(latest: &str, message: &str) -> bool {
     tui_state.is_some()
 }
 
+/// Shows (or clears) an automatic install in the live dashboard header.
+/// Returns false when no dashboard was live to show it.
+pub(crate) fn set_pending_install(pending: Option<crate::update_check::PendingInstall>) -> bool {
+    let Some(state) = lock(&TUI_STATE).clone() else {
+        return false;
+    };
+    if let Ok(mut state) = state.lock() {
+        state.pending_install = pending;
+    }
+    true
+}
+
 pub(super) fn set_tui_state(state: TuiState) {
     *lock(&TUI_STATE) = Some(state);
+}
+
+pub(super) fn current_tui_state() -> Option<TuiState> {
+    lock(&TUI_STATE).clone()
+}
+
+pub(super) fn set_share_difficulty(difficulty: Option<u64>) {
+    if let Some(state) = current_tui_state() {
+        if let Ok(mut state) = state.lock() {
+            state.share_difficulty = difficulty;
+        }
+    }
+}
+
+/// Names what the miner is doing while there is no mining loop to report it.
+pub(super) fn set_startup_phase(phase: &str) {
+    if let Some(state) = current_tui_state() {
+        if let Ok(mut state) = state.lock() {
+            state.state = phase.to_string();
+        }
+    }
 }
 
 pub(super) fn clear_tui_state(state: &TuiState) {
@@ -192,32 +285,40 @@ fn level_to_tui(level: Level) -> LogLevel {
     }
 }
 
-fn log(level: Level, tag: &str, message: &str) {
+fn log(level: Level, audience: Audience, tag: &str, message: &str) {
     let elapsed_secs = log_elapsed().as_secs_f64();
-    emit_log_sink(UiLogEvent {
-        elapsed_secs,
-        level: level.as_str(),
-        tag: tag.to_string(),
-        message: message.to_string(),
-    });
+    if audience != Audience::DashboardOnly {
+        emit_log_sink(UiLogEvent {
+            elapsed_secs,
+            level: level.as_str(),
+            tag: tag.to_string(),
+            message: message.to_string(),
+        });
+    }
+    let verbose = VERBOSE.load(Ordering::Relaxed);
 
     let tui_state = lock(&TUI_STATE).clone();
     if let Some(tui_state) = tui_state {
         if let Ok(mut state) = tui_state.lock() {
-            if suppress_in_tui(tag, message)
+            if !shows_on_dashboard(audience, verbose)
+                || suppress_in_tui(tag, message)
                 || suppress_dev_fee_related_in_tui(tag, message, state.dev_fee_active)
             {
                 return;
             }
-            let entry = LogEntry {
-                elapsed_secs: state.started_at.elapsed().as_secs_f64(),
-                level: level_to_tui(level),
-                tag: tag.to_string(),
-                message: message.to_string(),
-            };
+            let entry = LogEntry::new(
+                state.started_at.elapsed().as_secs_f64(),
+                level_to_tui(level),
+                tag,
+                message,
+            );
             state.push_log(entry);
             return;
         }
+    }
+
+    if !shows_in_plain_log(audience, verbose) {
+        return;
     }
 
     let colors = use_color();
@@ -261,6 +362,22 @@ fn emit_log_sink(event: UiLogEvent) {
 
 fn log_sink_lock() -> &'static Mutex<Option<LogSink>> {
     LOG_SINK.get_or_init(|| Mutex::new(None))
+}
+
+fn shows_on_dashboard(audience: Audience, verbose: bool) -> bool {
+    match audience {
+        Audience::Everyone | Audience::DashboardOnly => true,
+        // Verbose runs keep the summary line next to the detail it replaces.
+        Audience::PlainLog | Audience::VerboseOnly => verbose,
+    }
+}
+
+fn shows_in_plain_log(audience: Audience, verbose: bool) -> bool {
+    match audience {
+        Audience::Everyone | Audience::PlainLog => true,
+        Audience::VerboseOnly => verbose,
+        Audience::DashboardOnly => false,
+    }
 }
 
 fn suppress_in_tui(tag: &str, message: &str) -> bool {
@@ -572,7 +689,88 @@ fn lock<T>(mutex: &'static Mutex<T>) -> MutexGuard<'static, T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{suppress_dev_fee_related_in_tui, suppress_in_tui};
+    use super::{
+        shows_in_plain_log, shows_on_dashboard, suppress_dev_fee_related_in_tui, suppress_in_tui,
+        Audience,
+    };
+
+    #[test]
+    fn each_audience_reaches_only_its_outputs() {
+        for verbose in [false, true] {
+            assert!(shows_on_dashboard(Audience::Everyone, verbose));
+            assert!(shows_in_plain_log(Audience::Everyone, verbose));
+            assert!(shows_on_dashboard(Audience::DashboardOnly, verbose));
+            assert!(!shows_in_plain_log(Audience::DashboardOnly, verbose));
+            assert!(shows_in_plain_log(Audience::PlainLog, verbose));
+            assert_eq!(shows_on_dashboard(Audience::PlainLog, verbose), verbose);
+            assert_eq!(shows_on_dashboard(Audience::VerboseOnly, verbose), verbose);
+            assert_eq!(shows_in_plain_log(Audience::VerboseOnly, verbose), verbose);
+        }
+    }
+
+    #[test]
+    fn logging_survives_closed_output_pipes() {
+        use std::io::{BufRead, BufReader, Read, Write};
+        use std::process::{Command, Stdio};
+
+        const CHILD: &str = "SEINE_TEST_CLOSED_OUTPUT";
+        if std::env::var_os(CHILD).is_some() {
+            // The parent closes both readers before allowing logging to start.
+            std::io::stdout().write_all(b"output-ready\n").unwrap();
+            std::io::stdout().flush().unwrap();
+            let mut ready = [0];
+            std::io::stdin().read_exact(&mut ready).unwrap();
+            super::startup_banner(&[("test", "closed output".into())]);
+            super::info("TEST", "mining continues");
+            super::success("TEST", "share accepted");
+            super::warn("TEST", "warning survives");
+            super::error("TEST", "error survives");
+            super::mined("TEST", "block found");
+            // Bypass the test harness, which itself prints to stdout.
+            std::process::exit(0);
+        }
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "miner::ui::tests::logging_survives_closed_output_pipes",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut output = BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        loop {
+            assert_ne!(
+                output.read_line(&mut line).unwrap(),
+                0,
+                "child exited before logging"
+            );
+            if line.trim() == "output-ready" {
+                break;
+            }
+            line.clear();
+        }
+        drop(output);
+        drop(child.stderr.take());
+        child.stdin.take().unwrap().write_all(&[1]).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                assert!(status.success(), "logging terminated the process: {status}");
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("logging child did not exit");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
 
     #[test]
     fn suppresses_telemetry_lines_in_tui() {

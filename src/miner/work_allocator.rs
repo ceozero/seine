@@ -57,7 +57,7 @@ pub(super) fn distribute_work(
     let mut non_quarantined_retry_attempts = 0u32;
     // Hoist template allocation outside the retry loop -- the fields are
     // invariant across retries and the Arc can be cheaply cloned.
-    retire_backends_without_pow(backends, options.pow, backend_executor)?;
+    require_backend_for_pow(backends, options.pow)?;
     let template = Arc::new(WorkTemplate {
         work_id: options.work_id,
         epoch: options.epoch,
@@ -85,6 +85,11 @@ pub(super) fn distribute_work(
             options.backend_weights,
             options.pow,
         );
+        for (count, slot) in nonce_counts.iter_mut().zip(backends.iter()) {
+            if !slot.backend.supports_pow(options.pow) {
+                *count = 0;
+            }
+        }
         if options.strict_reservation {
             cap_nonce_counts_to_budget(&mut nonce_counts, remaining_reserved_span);
         }
@@ -256,34 +261,17 @@ pub(super) fn distribute_work(
 
 /// Quarantines backends that cannot hash `pow` (AMD and Metal have no
 /// BLAKE2b kernel yet), so they stop instead of mining a stale template.
-fn retire_backends_without_pow(
-    backends: &mut Vec<BackendSlot>,
+/// Backends that cannot hash `pow` stay registered but get no nonces, so a
+/// GPU that only runs BLAKE2b (for example without NVRTC) waits for the fork
+/// instead of being quarantined. Fails only when no backend can hash `pow`.
+fn require_backend_for_pow(
+    backends: &[BackendSlot],
     pow: crate::backend::PowAlgorithm,
-    backend_executor: &backend_executor::BackendExecutor,
 ) -> Result<()> {
-    if backends.iter().all(|slot| slot.backend.supports_pow(pow)) {
+    if backends.iter().any(|slot| slot.backend.supports_pow(pow)) {
         return Ok(());
     }
-    backends.retain(|slot| {
-        if slot.backend.supports_pow(pow) {
-            return true;
-        }
-        warn(
-            "BACKEND",
-            format!(
-                "quarantined {}#{}: it cannot mine {pow:?} work",
-                slot.backend.name(),
-                slot.id
-            ),
-        );
-        backend_executor.quarantine_backend(slot.id, Arc::clone(&slot.backend));
-        false
-    });
-    backend_executor.prune(backends);
-    if backends.is_empty() {
-        bail!("no active mining backend supports {pow:?} work");
-    }
-    Ok(())
+    bail!("no active mining backend supports {pow:?} work");
 }
 
 fn cap_nonce_counts_to_budget(nonce_counts: &mut [u64], budget: u64) {
@@ -320,6 +308,8 @@ fn dispatch_assignment_tasks(
     let mut span_end_offsets = vec![0u64; expected];
     let mut task_timeouts = vec![default_timeout; expected];
     let mut task_timeout_strikes = vec![1u32; expected];
+    // Slots given no nonces have no task; they survive the round untouched.
+    let mut dispatched = vec![false; expected];
     let backend_tasks = tasks
         .into_iter()
         .map(|task| {
@@ -336,6 +326,7 @@ fn dispatch_assignment_tasks(
             let timeout = assignment_timeout.max(default_timeout);
             let timeout_strikes = assignment_timeout_strikes.max(1);
             if idx < expected {
+                dispatched[idx] = true;
                 span_end_offsets[idx] = span_end_offset;
                 task_timeouts[idx] = timeout;
                 task_timeout_strikes[idx] = timeout_strikes;
@@ -366,6 +357,10 @@ fn dispatch_assignment_tasks(
         let Some(slot) = slots_by_idx.get_mut(idx).and_then(Option::take) else {
             continue;
         };
+        if !dispatched[idx] {
+            survivors.push((idx, slot));
+            continue;
+        }
         let span_end_offset = span_end_offsets.get(idx).copied().unwrap_or(0);
         let timeout = task_timeouts.get(idx).copied().unwrap_or(default_timeout);
         let timeout_strikes = task_timeout_strikes.get(idx).copied().unwrap_or(1);

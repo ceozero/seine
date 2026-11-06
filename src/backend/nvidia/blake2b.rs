@@ -19,11 +19,15 @@ use cudarc::nvrtc::Ptx;
 
 use super::{
     build_cubin_cache_key, compile_cuda_module_with_nvrtc_fallback, cubin_cache_file_path,
-    cuda_driver_err, load_cached_cubin, nvrtc_compiler_identity, persist_cached_cubin,
-    require_cuda_libraries, NvrtcModuleArtifact,
+    cuda_driver_err, load_cached_cubin, nvrtc_available, nvrtc_compiler_identity,
+    persist_cached_cubin, require_cuda_driver, NvrtcModuleArtifact,
 };
 
 const KERNEL_SRC: &str = include_str!("blake2b_kernel.cu");
+/// `KERNEL_SRC` built for `FARADAY_SHAPE` as PTX, loaded through the driver
+/// when NVRTC is not installed. Regenerate with `scripts/gen_blake2b_ptx.py`
+/// whenever the kernel changes.
+const FARADAY_PTX: &str = include_str!("blake2b_faraday.ptx");
 const KERNEL_NAME: &str = "blake2b_pow_scan_kernel";
 const PROGRAM_NAME: &str = "seine_blake2b_pow.cu";
 const THREADS_PER_BLOCK: u32 = 256;
@@ -39,10 +43,9 @@ const MAX_LAUNCH_WAVES: u64 = 4096;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct KernelParams {
-    h: [u64; 8],
+    v: [u64; 16],
     m: [u64; 16],
-    counter_lo: u64,
-    counter_hi: u64,
+    h0: u64,
     target_limb0: u64,
 }
 
@@ -54,7 +57,16 @@ struct KernelShape {
     nonce_word: usize,
     nonce_shift: u32,
     message_words: usize,
+    pre_columns: u8,
 }
+
+/// Layout of the Faraday header base (156 bytes) that `FARADAY_PTX` is built for.
+const FARADAY_SHAPE: KernelShape = KernelShape {
+    nonce_word: 3,
+    nonce_shift: 32,
+    message_words: 5,
+    pre_columns: 0b1001,
+};
 
 impl KernelShape {
     fn of(layout: &Blake2bPowSingleBlock) -> Self {
@@ -62,6 +74,12 @@ impl KernelShape {
             nonce_word: layout.nonce_word,
             nonce_shift: layout.nonce_shift,
             message_words: layout.message_words,
+            pre_columns: if cfg!(test) && std::env::var_os("SEINE_B2_NO_PRECOMPUTE").is_some() {
+                // Benchmark A/B only: compute every round-0 column per nonce.
+                0
+            } else {
+                layout.nonce_free_round0_columns()
+            },
         }
     }
 }
@@ -75,11 +93,20 @@ pub(super) struct CudaBlake2bEngine {
     candidates: CudaSlice<u64>,
     candidate_count: CudaSlice<u32>,
     grid_blocks: u32,
+    threads_per_block: u32,
+    /// Read by the benchmark launch-shape override.
+    #[cfg_attr(not(test), allow(dead_code))]
+    sm_count: u32,
+    /// Tests: load `FARADAY_PTX` even when NVRTC is available.
+    force_prebuilt: bool,
+    /// GPU candidates whose CPU-recomputed hash fails the kernel's own 32-bit
+    /// filter: the GPU computed a wrong hash (an unstable clock or voltage).
+    gpu_mismatches: u64,
 }
 
 impl CudaBlake2bEngine {
     pub(super) fn new(device_index: u32, cubin_cache_dir: &Path) -> Result<Self> {
-        require_cuda_libraries()?;
+        require_cuda_driver()?;
         let ctx = CudaContext::new(device_index as usize).map_err(|err| {
             anyhow!("failed to open CUDA context on device {device_index}: {err:?}")
         })?;
@@ -103,13 +130,24 @@ impl CudaBlake2bEngine {
             candidates,
             candidate_count,
             grid_blocks: u32::try_from(sm_count.max(1)).unwrap_or(1) * BLOCKS_PER_SM,
+            threads_per_block: THREADS_PER_BLOCK,
+            sm_count: u32::try_from(sm_count.max(1)).unwrap_or(1),
+            force_prebuilt: false,
+            gpu_mismatches: 0,
         })
     }
 
     /// Nonces per full launch wave; `scan` counts that are multiples of this
     /// keep every thread equally busy.
     pub(super) fn wave_nonces(&self) -> u64 {
-        u64::from(self.grid_blocks) * u64::from(THREADS_PER_BLOCK)
+        u64::from(self.grid_blocks) * u64::from(self.threads_per_block)
+    }
+
+    /// Benchmark-only launch shape override.
+    #[cfg(test)]
+    fn set_launch_shape(&mut self, threads_per_block: u32, blocks_per_sm: u32) {
+        self.threads_per_block = threads_per_block.max(32);
+        self.grid_blocks = self.sm_count * blocks_per_sm.max(1);
     }
 
     /// Hashes `count` nonces from `start_nonce` (wrapping) and returns every
@@ -127,12 +165,12 @@ impl CudaBlake2bEngine {
         if count == 0 {
             return Ok(Vec::new());
         }
-        let kernel = self.kernel(KernelShape::of(&layout))?;
+        let shape = KernelShape::of(&layout);
+        let kernel = self.kernel(shape)?;
         let params = KernelParams {
-            h: layout.h,
+            v: layout.round0_state(shape.pre_columns),
             m: layout.message,
-            counter_lo: layout.counter as u64,
-            counter_hi: (layout.counter >> 64) as u64,
+            h0: layout.h[0],
             target_limb0: u64::from_be_bytes(target[..8].try_into().expect("8 bytes")),
         };
 
@@ -143,11 +181,16 @@ impl CudaBlake2bEngine {
         let mut ranges = vec![(start_nonce, count)];
         while let Some((range_start, range_count)) = ranges.pop() {
             match self.launch_range(&kernel, &params, range_start, range_count)? {
-                Some(candidates) => hits.extend(
-                    candidates
-                        .into_iter()
-                        .filter(|&nonce| midstate.target_bytes(nonce) <= *target),
-                ),
+                Some(candidates) => {
+                    for nonce in candidates {
+                        let bytes = midstate.target_bytes(nonce);
+                        if bytes[..4] > target[..4] {
+                            self.gpu_mismatches += 1;
+                        } else if bytes <= *target {
+                            hits.push(nonce);
+                        }
+                    }
+                }
                 None => {
                     let first = range_count / 2;
                     ranges.push((range_start.wrapping_add(first), range_count - first));
@@ -171,11 +214,11 @@ impl CudaBlake2bEngine {
             .memset_zeros(&mut self.candidate_count)
             .map_err(cuda_driver_err)?;
         let blocks = u64::from(self.grid_blocks)
-            .min(count.div_ceil(u64::from(THREADS_PER_BLOCK)))
+            .min(count.div_ceil(u64::from(self.threads_per_block)))
             .max(1) as u32;
         let cfg = LaunchConfig {
             grid_dim: (blocks, 1, 1),
-            block_dim: (THREADS_PER_BLOCK, 1, 1),
+            block_dim: (self.threads_per_block, 1, 1),
             shared_mem_bytes: 0,
         };
         let capacity = CANDIDATE_CAPACITY as u32;
@@ -212,12 +255,50 @@ impl CudaBlake2bEngine {
         if let Some((_, kernel)) = self.kernels.iter().find(|(known, _)| *known == shape) {
             return Ok(kernel.clone());
         }
+        if !nvrtc_available() || self.force_prebuilt {
+            if shape != FARADAY_SHAPE {
+                return Err(anyhow!(
+                    "CUDA NVRTC library is unavailable; only Faraday block headers have a prebuilt BLAKE2b kernel"
+                ));
+            }
+            return self.prebuilt_kernel(shape);
+        }
+        match self.nvrtc_kernel(shape) {
+            Ok(kernel) => Ok(kernel),
+            // NVRTC is present but cannot build for this GPU (CUDA 13 NVRTC
+            // dropped compute capability 5.x-7.0): use the prebuilt PTX, which
+            // the driver compiles for any supported GPU.
+            Err(err) if shape == FARADAY_SHAPE => {
+                self.prebuilt_kernel(shape).map_err(|prebuilt_err| {
+                    anyhow!("{err:#}; the prebuilt BLAKE2b kernel also failed: {prebuilt_err:#}")
+                })
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Loads the prebuilt Faraday PTX through the driver.
+    fn prebuilt_kernel(&mut self, shape: KernelShape) -> Result<CudaFunction> {
+        let module = self
+            .ctx
+            .load_module(Ptx::from_src(FARADAY_PTX))
+            .map_err(|err| anyhow!("failed to load the prebuilt BLAKE2b kernel: {err:?}"))?;
+        let kernel = module
+            .load_function(KERNEL_NAME)
+            .map_err(|err| anyhow!("failed to load {KERNEL_NAME}: {err:?}"))?;
+        self.kernels.push((shape, kernel.clone()));
+        Ok(kernel)
+    }
+
+    /// Builds the kernel for `shape` with NVRTC (cached cubin, else cubin or PTX).
+    fn nvrtc_kernel(&mut self, shape: KernelShape) -> Result<CudaFunction> {
         let common = vec![
             "--std=c++14".to_string(),
             "--restrict".to_string(),
             format!("-DSEINE_B2_NONCE_WORD={}", shape.nonce_word),
             format!("-DSEINE_B2_NONCE_SHIFT={}", shape.nonce_shift),
             format!("-DSEINE_B2_MSG_WORDS={}", shape.message_words),
+            format!("-DSEINE_B2_PRE_COLUMNS={}", shape.pre_columns),
         ];
         let (major, minor) = self.arch;
         let mut cubin_options = common.clone();
@@ -269,6 +350,7 @@ pub(super) struct Blake2bWorkerState {
     engine: Option<CudaBlake2bEngine>,
     midstate: Option<(Arc<[u8]>, Blake2bPowMidstate)>,
     launch_nonces: u64,
+    mismatch_warned: bool,
 }
 
 pub(super) struct Blake2bBatch {
@@ -278,6 +360,18 @@ pub(super) struct Blake2bBatch {
 }
 
 impl Blake2bWorkerState {
+    /// True once, the first time this GPU returns a candidate that fails the
+    /// CPU check of the kernel's own filter.
+    pub(crate) fn take_mismatch_warning(&mut self) -> bool {
+        let mismatched = self
+            .engine
+            .as_ref()
+            .is_some_and(|engine| engine.gpu_mismatches > 0);
+        let warn = mismatched && !self.mismatch_warned;
+        self.mismatch_warned |= mismatched;
+        warn
+    }
+
     pub(super) fn new(device_index: u32, cubin_cache_dir: PathBuf) -> Self {
         Self {
             device_index,
@@ -285,6 +379,7 @@ impl Blake2bWorkerState {
             engine: None,
             midstate: None,
             launch_nonces: 0,
+            mismatch_warned: false,
         }
     }
 
@@ -357,6 +452,27 @@ mod tests {
         CudaBlake2bEngine::new(0, &dir).expect("CUDA BLAKE2b engine on device 0")
     }
 
+    #[test]
+    fn prebuilt_ptx_matches_the_kernel_source_and_faraday_layout() {
+        use sha2::{Digest, Sha256};
+        let digest = hex::encode(Sha256::digest(KERNEL_SRC.as_bytes()));
+        assert!(
+            FARADAY_PTX.contains(&format!("// kernel-sha256: {digest}\n")),
+            "blake2b_faraday.ptx is stale: run scripts/gen_blake2b_ptx.py"
+        );
+        let layout = midstate(FARADAY_HEADER_BASE_LEN)
+            .single_block_layout()
+            .expect("the Faraday header fits one final block");
+        assert_eq!(KernelShape::of(&layout), FARADAY_SHAPE);
+        assert!(FARADAY_PTX.contains(&format!(
+            "-DSEINE_B2_NONCE_WORD={} -DSEINE_B2_NONCE_SHIFT={} -DSEINE_B2_MSG_WORDS={} -DSEINE_B2_PRE_COLUMNS={}",
+            FARADAY_SHAPE.nonce_word,
+            FARADAY_SHAPE.nonce_shift,
+            FARADAY_SHAPE.message_words,
+            FARADAY_SHAPE.pre_columns
+        )));
+    }
+
     fn midstate(len: usize) -> Blake2bPowMidstate {
         let header: Vec<u8> = (0..len).map(|i| (i * 37 + 11) as u8).collect();
         Blake2bPowMidstate::new(&BLAKE2B_POW_PERSONAL_MAINNET, &header).unwrap()
@@ -397,28 +513,68 @@ mod tests {
                 }
             }
         }
+        // A healthy GPU never returns a candidate that fails its own filter.
+        assert_eq!(engine.gpu_mismatches, 0);
+    }
+
+    #[test]
+    #[ignore = "requires NVIDIA GPU + CUDA runtime; run manually under gpuq"]
+    fn gpu_blake2b_prebuilt_ptx_matches_cpu_kernel() {
+        let mut engine = engine("prebuilt");
+        engine.force_prebuilt = true;
+        let midstate = midstate(FARADAY_HEADER_BASE_LEN);
+        let count = 1u64 << 22;
+        for start in [0u64, u64::MAX - (count / 2)] {
+            for target in [target_with_limb0(u64::MAX >> 16), [0u8; 32]] {
+                let gpu = engine.scan(&midstate, start, count, &target).unwrap();
+                let mut cpu = Vec::new();
+                midstate.scan(start, count, &target, |nonce| cpu.push(nonce));
+                assert_eq!(gpu, cpu, "start={start}");
+            }
+        }
     }
 
     #[test]
     #[ignore = "requires NVIDIA GPU + CUDA runtime; run manually under gpuq"]
     fn gpu_blake2b_rate() {
+        // SEINE_B2_SHAPES="256x16,128x32" sweeps threads-per-block x blocks-per-SM;
+        // SEINE_B2_RUNS repeats each shape (default 1).
         let mut engine = engine("rate");
+        // SEINE_B2_PREBUILT=1 times the prebuilt PTX instead of NVRTC's build.
+        engine.force_prebuilt = std::env::var_os("SEINE_B2_PREBUILT").is_some();
         let midstate = midstate(FARADAY_HEADER_BASE_LEN);
         let target = target_with_limb0(0);
-        let launch = engine.wave_nonces() * 256;
-        engine.scan(&midstate, 0, launch, &target).unwrap();
-        let started = Instant::now();
-        let (mut nonce, mut hashes) = (0u64, 0u64);
-        while started.elapsed().as_secs_f64() < 5.0 {
-            engine.scan(&midstate, nonce, launch, &target).unwrap();
-            nonce = nonce.wrapping_add(launch);
-            hashes += launch;
+        let shapes: Vec<(u32, u32)> = std::env::var("SEINE_B2_SHAPES")
+            .unwrap_or_else(|_| format!("{THREADS_PER_BLOCK}x{BLOCKS_PER_SM}"))
+            .split(',')
+            .map(|shape| {
+                let (tpb, bpsm) = shape.split_once('x').expect("TPBxBPSM");
+                (tpb.parse().expect("tpb"), bpsm.parse().expect("bpsm"))
+            })
+            .collect();
+        let runs: usize = std::env::var("SEINE_B2_RUNS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1);
+        for _ in 0..runs {
+            for &(tpb, bpsm) in &shapes {
+                engine.set_launch_shape(tpb, bpsm);
+                let launch = (engine.wave_nonces() * 256).min(1 << 28);
+                engine.scan(&midstate, 0, launch, &target).unwrap();
+                let started = Instant::now();
+                let (mut nonce, mut hashes) = (0u64, 0u64);
+                while started.elapsed().as_secs_f64() < 5.0 {
+                    engine.scan(&midstate, nonce, launch, &target).unwrap();
+                    nonce = nonce.wrapping_add(launch);
+                    hashes += launch;
+                }
+                let secs = started.elapsed().as_secs_f64();
+                println!(
+                    "blake2b-rate | shape={tpb}x{bpsm} launch={launch} hashes={hashes} secs={secs:.3} ghs={:.3}",
+                    hashes as f64 / secs / 1e9
+                );
+            }
         }
-        let secs = started.elapsed().as_secs_f64();
-        println!(
-            "blake2b-rate | launch={launch} hashes={hashes} secs={secs:.3} ghs={:.3}",
-            hashes as f64 / secs / 1e9
-        );
     }
 
     #[test]
@@ -496,5 +652,93 @@ mod tests {
         backend.stop();
         assert_eq!(hashes, count);
         assert_eq!(found, expected);
+    }
+
+    #[test]
+    #[ignore = "requires NVIDIA GPU + CUDA runtime; run manually under gpuq"]
+    fn nvidia_backend_frees_argon2_memory_for_blake2b_and_rebuilds_it() {
+        use crate::backend::nvidia::{NvidiaBackend, NvidiaBackendTuningOptions};
+        use crate::backend::{
+            BackendEvent, NonceChunk, PowAlgorithm, PowBackend, WorkAssignment, WorkTemplate,
+        };
+        use std::collections::BTreeMap;
+        use std::time::Duration;
+
+        let dir = std::env::temp_dir().join(format!("seine-blake2b-memory-{}", std::process::id()));
+        let backend = NvidiaBackend::new(
+            Some(0),
+            dir.join("seine.nvidia-autotune.json"),
+            1,
+            NvidiaBackendTuningOptions {
+                max_rregcount_override: Some(super::super::DEFAULT_NVIDIA_MAX_RREGCOUNT),
+                max_lanes_override: Some(1),
+                ..NvidiaBackendTuningOptions::default()
+            },
+        );
+        let (tx, rx) = crossbeam_channel::unbounded();
+        backend.set_instance_id(1);
+        backend.set_event_sink(tx);
+        backend.start().expect("NVIDIA backend starts");
+        let ctx = CudaContext::new(0).expect("CUDA context");
+        let free_bytes = || ctx.mem_get_info().expect("memory info").0 as u64;
+
+        let work = |epoch: u64, pow, header_len, start, count| WorkAssignment {
+            template: Arc::new(WorkTemplate {
+                work_id: epoch,
+                epoch,
+                header_base: Arc::from(vec![7u8; header_len]),
+                pow,
+                target: [0xff; 32],
+                dynamic_share_target: None,
+                pause_on_solution: false,
+                stop_at: Instant::now() + Duration::from_secs(60),
+            }),
+            nonce_chunk: NonceChunk {
+                start_nonce: start,
+                nonce_count: count,
+            },
+        };
+        let collect = |epoch: u64, count: usize| {
+            let until = Instant::now() + Duration::from_secs(60);
+            let mut found = BTreeMap::new();
+            while found.len() < count && Instant::now() < until {
+                if let Ok(BackendEvent::Solution(solution)) =
+                    rx.recv_timeout(Duration::from_millis(50))
+                {
+                    if solution.epoch == epoch {
+                        found.insert(solution.nonce, solution.hash.expect("hash"));
+                    }
+                }
+            }
+            found
+        };
+
+        backend
+            // One nonce: the Argon2 path reports one solution per launch.
+            .assign_work(work(1, PowAlgorithm::Argon2id, 92, 5, 1))
+            .expect("Argon2 work");
+        let before = collect(1, 1);
+        assert_eq!(before.len(), 1);
+        let free_with_argon2 = free_bytes();
+
+        backend
+            .assign_work(work(2, PowAlgorithm::Blake2b512, 156, 0, 1 << 20))
+            .expect("BLAKE2b work");
+        assert_eq!(collect(2, 1 << 20).len(), 1 << 20);
+        let free_with_blake2b = free_bytes();
+        // The BLAKE2b engine is created after the first reading and holds a
+        // few MiB of its own, so most of the 2 GiB lane must come back.
+        let lane = blocknet_pow_spec::CPU_LANE_MEMORY_BYTES;
+        assert!(
+            free_with_blake2b >= free_with_argon2 + lane - lane / 8,
+            "BLAKE2b work frees the Argon2 lane: {free_with_argon2} -> {free_with_blake2b}"
+        );
+
+        backend
+            .assign_work(work(3, PowAlgorithm::Argon2id, 92, 5, 1))
+            .expect("Argon2 work after BLAKE2b");
+        let after = collect(3, 1);
+        backend.stop();
+        assert_eq!(after, before, "the rebuilt engine hashes the same");
     }
 }

@@ -51,7 +51,7 @@ in their selected language; do not create parallel download or tuning articles.
 | blocknet payment link | `/blog/blocknet-payment-links/` | Write a `blocknet://` or bntpay.com link that requests an amount (with memo and `$name`) and know what pasting it does | bntpay link, blocknet uri, blocknet://, request BNT payment, blocknet invoice link, Blocknet 付款链接 / 付款連結 |
 | huge pages blocknet mining | `/blog/huge-pages-blocknet-mining/` | Reserve huge pages (Linux/WSL 2 MiB and 1 GiB) or Windows large pages for seine: why they help Argon2id, pages per thread, exact commands, page modes | blocknet hugepages, seine hugepages, vm.nr_hugepages mining, 1GB huge pages argon2id, windows large pages mining, lock pages in memory seine, Blocknet 大页内存 / 大分頁 |
 | mine blocknet on servers | `/blog/mine-blocknet-on-servers/` | Run seine on many-core servers and rigs: NUMA/L3 placement and its measured gains, headless runs, `--service`, the control API, live events and Prometheus | blocknet mining server, blocknet NUMA, EPYC blocknet mining, seine headless, seine control API, seine Prometheus metrics, 在服务器上挖 Blocknet / 在伺服器上挖 Blocknet |
-| get a blocknet wallet for mining | `/blog/blocknet-wallet-for-mining/` | Create an official Blocknet wallet, back up the seed, get the address to mine to and watch pool payouts arrive | blocknet wallet, blocknet address, blocknet recovery seed, blocknet desktop wallet, blocknet cli wallet, 获取 Blocknet 钱包地址 / 取得 Blocknet 錢包地址 |
+| get a blocknet wallet for mining | `/blog/blocknet-wallet-for-mining/` | Create an official Blocknet wallet, back up the seed, get the address to mine to and watch pool payouts arrive | blocknet address, blocknet recovery seed, blocknet wallet for mining, 获取 Blocknet 钱包地址 / 取得 Blocknet 錢包地址 |
 | seine dashboard | `/blog/seine-dashboard-explained/` | Read seine's terminal dashboard: every panel and label, live auto-tuning in the log, keyboard thread controls | seine hashrate current vs average, seine accepted rejected shares, seine change threads while mining, seine tui, seine --ui plain, seine 仪表盘 / 儀表板 |
 | what is a privacy coin | `/blog/what-is-a-privacy-coin/` | Explain what a privacy coin is for any coin: what a transparent chain reveals, how privacy coins hide sender, receiver, amount and network origin, and why privacy by default matters, with Blocknet as the worked example | privacy coin meaning, privacy cryptocurrency, how privacy coins work, private by default crypto, privacy coin vs bitcoin, 什么是隐私币 / 什麼是隱私幣 |
 | ring signatures explained | `/blog/ring-signatures-explained/` | Explain how ring signatures work for any coin (signer hidden among public keys, key images, LSAG to CLSAG, ring size), with Blocknet's ring of 16 as the example | what is a ring signature, how do ring signatures work, linkable ring signature, key image, CLSAG ring signature, ring size, 环签名 / 環簽章 |
@@ -66,6 +66,9 @@ in their selected language; do not create parallel download or tuning articles.
 
 | mine blocknet on windows | `/blog/mine-blocknet-on-windows/` | Download and extract the Windows ZIP, open seine.exe, enter a receiving address and find accepted shares in My Stats | Windows Blocknet miner, seine Windows setup, Blocknet NVIDIA Windows, 在 Windows 上挖 Blocknet |
 | blocknet gpu mining; blocknet NVIDIA mining; mine blocknet RTX 5090 | `/blog/mine-blocknet-nvidia-gpu/` | Prepare the NVIDIA runtime, choose GPU-only or CPU-plus-GPU mining, verify accepted GPU shares, and compare the measured RTX 5090 modes | NVIDIA Blocknet setup, Blocknet GPU VRAM, CPU and GPU mining together |
+| blocknet AMD mining; mine blocknet Radeon; blocknet RX 7900 / RX 9070 mining | `/blog/mine-blocknet-amd-gpu/` | Install the AMD driver (Windows) or amdgpu + ROCm HIP runtime (Linux), choose AMD cards and lanes, confirm each `amd#` row is hashing, fix a missing card | AMD GPU Blocknet setup, ROCm Blocknet, Radeon PRO mining, HIP runtime |
+| blocknet HiveOS; blocknet mmpOS; seine HiveOS flight sheet | `/blog/mine-blocknet-hiveos-mmpos/` | Add seine to HiveOS (flight sheet, custom miner URL) or mmpOS (imported profile), what the package mines on, adding CPU mining and other arguments, upgrading by URL | HiveOS custom miner Blocknet, mmpOS BNT profile, mining OS Blocknet |
+| blocknet mining farm; mining proxy Blocknet; seine farm proxy | `/blog/blocknet-mining-farm-proxy/` | Run many rigs through one seine `--proxy-listen` proxy: start it, point rigs at it, payouts per rig address (16 max), per-rig pool stats, solo rigs, security | stratum proxy Blocknet, one pool connection for a farm, mining farm setup |
 
 | windows defender crypto miner; antivirus blocks miner; verify seine download | `/blog/antivirus-flags-crypto-miner/` | Identify a blocked-download warning, verify the exact official Windows archive and gather evidence for an unresolved detection | SmartScreen miner warning, seine SHA-256, miner quarantine |
 
@@ -164,9 +167,9 @@ Windows setup owns installation; server setup owns Linux systemd; updating owns 
 
 | Primary keyword cluster | URL | Search job |
 |---|---|---|
-| seine configuration file; saved mining settings; launch overrides | `/blog/configure-seine-miner/` | Choose the configuration file, edit persistent connection fields and distinguish them from runtime launch arguments |
+| seine settings; disable CPU or GPU mining; change seine threads; seine configuration file | `/blog/configure-seine-miner/` | Make the common changes to seine: turn CPU or GPU mining off, set threads, choose a card, keep settings for every start, change address or pool |
 
-Updating owns binary replacement, Windows startup owns Task Scheduler, tuning owns performance decisions. This article owns configuration precedence and persistence. The pool guide owns address-transition accounting. No URL is retargeted.
+Updating owns binary replacement, Windows startup owns Task Scheduler, tuning owns performance decisions. This article owns the common settings and how they persist. The pool guide owns address-transition accounting. Retargeted November 2, 2026 from configuration file mechanics to the wider settings job, same URL; the setup guides carry a short shared settings section and link here. `mine-while-using-pc` keeps the desktop-sharing decision.
 
 ## Miner stops and wallet receipt (October 26, 2026)
 
@@ -331,3 +334,15 @@ The software-role guide owns choosing applications and what must stay running. T
 | Blocknet atomic swaps; what is VEIL; atomic swap claims and refunds | `/blog/blocknet-atomic-swaps/` | Understand generic conditional exchange, claim/refund paths and disclosure, then identify the limited scope of Blocknet’s public VEIL announcement |
 
 The user approved a general explainer with a short public-announcement section after research could not verify a public VEIL implementation. The generic HTLC diagram is explicitly not a VEIL specification or supported trading pair. Faraday upgrade retains migration, ordinary sending retains payment steps, and payment visibility retains ordinary BNT disclosure. No private specification is quoted or used to describe the protocol. Demand is inferred from the approved currency/privacy direction, not measured search volume.
+
+## Choosing a wallet application (November 5, 2026)
+
+| Primary cluster | Owner | Reader job |
+|---|---|---|
+| blocknet wallet; bnt wallet; best blocknet wallet; blocknet gui wallet; blocknet cli wallet; gyroid wallet | `/blog/blocknet-wallets/` | Choose between the official desktop wallet, the official command-line wallet and Gyroid by platform and interface, verify the download, and move a wallet between them |
+
+Search Console (Oct 24–Nov 3) showed "blocknet wallet" landing on our wallet posts at an average position of 6.3, with the top Google results belonging to an unrelated project's documentation. The hub owns the choice of application and routes to the task owners: `blocknet-desktop-wallet` (desktop walkthrough), `blocknet-wallet-for-mining` (create a wallet and copy a mining address, keeping its short which-wallet list for miners), `blocknet-wallet-backup-restore` (the full migration procedure) and `antivirus-flags-crypto-miner` (checksum verification for seine). Research: `batches/2026-11-wallets-hub/research.md`.
+
+## Buying BNT (November 5, 2026)
+
+bntpool.com owns buying and selling: `https://bntpool.com/blog/buy-blocknet-bnt-safetrade/` ("where to buy Blocknet (BNT)", "buy BNT", "safetrade bnt", "$BNT") and `sell-blocknet-bnt-safetrade`. Seine does not publish a competing buying guide. `get-first-blocknet` carries a short "Can I buy BNT?" section that links to the pool guide in the reader's language. The `$BNT` cashtag is allowed in copy (owner decision, 2026-11-05).

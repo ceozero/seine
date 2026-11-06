@@ -19,6 +19,8 @@ use crate::backend::{
 use crate::types::hash_meets_target;
 
 const BACKEND_NAME: &str = "metal";
+mod blake2b;
+
 const METAL_KERNEL_SRC: &str = include_str!("metal_kernel.metal");
 const MAX_LANES_HARD_LIMIT: usize = 64;
 const ASSIGN_CHANNEL_CAPACITY: usize = 256;
@@ -58,6 +60,8 @@ struct MetalShared {
     cancel_requested: AtomicBool,
     error_emitted: AtomicBool,
     cancel_flag_ptr: AtomicU64, // raw pointer stored as u64 for Send
+    /// The worker's last batch was BLAKE2b (reported in telemetry).
+    blake2b_active: AtomicBool,
 }
 
 impl MetalShared {
@@ -76,6 +80,7 @@ impl MetalShared {
             active_hashes_per_launch_per_lane: AtomicU32::new(DEFAULT_HASHES_PER_LAUNCH_PER_LANE),
             cancel_requested: AtomicBool::new(false),
             error_emitted: AtomicBool::new(false),
+            blake2b_active: AtomicBool::new(false),
             cancel_flag_ptr: AtomicU64::new(0),
         }
     }
@@ -387,73 +392,79 @@ impl MetalArgon2Engine {
         write_u32(&self.evaluate_target_buf, evaluate_target);
         write_u32(&self.eval_active_hashes_buf, requested_hashes);
 
-        let cmd_buf = self.command_queue.new_command_buffer();
+        // The worker thread has no autorelease pool of its own; drain the
+        // command objects of each dispatch here.
+        metal::objc::rc::autoreleasepool(|| {
+            let cmd_buf = self.command_queue.new_command_buffer();
 
-        // ---- Kernel 1: build_seed_blocks ----
-        {
-            let encoder = cmd_buf.new_compute_command_encoder();
-            encoder.set_compute_pipeline_state(&self.seed_pipeline);
-            encoder.set_buffer(0, Some(&self.header_base_buf), 0);
-            encoder.set_buffer(1, Some(&self.nonce_buf), 0);
-            encoder.set_buffer(2, Some(&self.seed_blocks_buf), 0);
-            encoder.set_buffer(3, Some(&self.header_base_len_buf), 0);
-            encoder.set_buffer(4, Some(&self.active_hashes_buf), 0);
-            encoder.set_buffer(5, Some(&self.m_cost_kib_buf), 0);
-            encoder.set_buffer(6, Some(&self.t_cost_buf), 0);
+            // ---- Kernel 1: build_seed_blocks ----
+            {
+                let encoder = cmd_buf.new_compute_command_encoder();
+                encoder.set_compute_pipeline_state(&self.seed_pipeline);
+                encoder.set_buffer(0, Some(&self.header_base_buf), 0);
+                encoder.set_buffer(1, Some(&self.nonce_buf), 0);
+                encoder.set_buffer(2, Some(&self.seed_blocks_buf), 0);
+                encoder.set_buffer(3, Some(&self.header_base_len_buf), 0);
+                encoder.set_buffer(4, Some(&self.active_hashes_buf), 0);
+                encoder.set_buffer(5, Some(&self.m_cost_kib_buf), 0);
+                encoder.set_buffer(6, Some(&self.t_cost_buf), 0);
 
-            let threads_per_group = MTLSize::new(SEED_KERNEL_THREADS as u64, 1, 1);
-            let total_threads = MTLSize::new(
-                div_ceil(requested_hashes, SEED_KERNEL_THREADS) as u64 * SEED_KERNEL_THREADS as u64,
-                1,
-                1,
-            );
-            encoder.dispatch_threads(total_threads, threads_per_group);
-            encoder.end_encoding();
-        }
+                let threads_per_group = MTLSize::new(SEED_KERNEL_THREADS as u64, 1, 1);
+                let total_threads = MTLSize::new(
+                    div_ceil(requested_hashes, SEED_KERNEL_THREADS) as u64
+                        * SEED_KERNEL_THREADS as u64,
+                    1,
+                    1,
+                );
+                encoder.dispatch_threads(total_threads, threads_per_group);
+                encoder.end_encoding();
+            }
 
-        // ---- Kernel 2: argon2id_fill ----
-        {
-            let encoder = cmd_buf.new_compute_command_encoder();
-            encoder.set_compute_pipeline_state(&self.fill_pipeline);
-            encoder.set_buffer(0, Some(&self.seed_blocks_buf), 0);
-            encoder.set_buffer(1, Some(&self.lane_memory), 0);
-            encoder.set_buffer(2, Some(&self.last_blocks_buf), 0);
-            encoder.set_buffer(3, Some(&self.cancel_flag_buf), 0);
-            encoder.set_buffer(4, Some(&self.completed_iters_buf), 0);
-            encoder.set_buffer(5, Some(&self.target_buf), 0);
-            encoder.set_buffer(6, Some(&self.found_index_buf), 0);
-            encoder.set_buffer(7, Some(&self.lanes_active_buf), 0);
-            encoder.set_buffer(8, Some(&self.active_hashes_fill_buf), 0);
-            encoder.set_buffer(9, Some(&self.lane_launch_iters_buf), 0);
-            encoder.set_buffer(10, Some(&self.evaluate_target_buf), 0);
+            // ---- Kernel 2: argon2id_fill ----
+            {
+                let encoder = cmd_buf.new_compute_command_encoder();
+                encoder.set_compute_pipeline_state(&self.fill_pipeline);
+                encoder.set_buffer(0, Some(&self.seed_blocks_buf), 0);
+                encoder.set_buffer(1, Some(&self.lane_memory), 0);
+                encoder.set_buffer(2, Some(&self.last_blocks_buf), 0);
+                encoder.set_buffer(3, Some(&self.cancel_flag_buf), 0);
+                encoder.set_buffer(4, Some(&self.completed_iters_buf), 0);
+                encoder.set_buffer(5, Some(&self.target_buf), 0);
+                encoder.set_buffer(6, Some(&self.found_index_buf), 0);
+                encoder.set_buffer(7, Some(&self.lanes_active_buf), 0);
+                encoder.set_buffer(8, Some(&self.active_hashes_fill_buf), 0);
+                encoder.set_buffer(9, Some(&self.lane_launch_iters_buf), 0);
+                encoder.set_buffer(10, Some(&self.evaluate_target_buf), 0);
 
-            let threadgroups = MTLSize::new(active_lanes as u64, 1, 1);
-            let threads_per_group = MTLSize::new(KERNEL_THREADS as u64, 1, 1);
-            encoder.dispatch_thread_groups(threadgroups, threads_per_group);
-            encoder.end_encoding();
-        }
+                let threadgroups = MTLSize::new(active_lanes as u64, 1, 1);
+                let threads_per_group = MTLSize::new(KERNEL_THREADS as u64, 1, 1);
+                encoder.dispatch_thread_groups(threadgroups, threads_per_group);
+                encoder.end_encoding();
+            }
 
-        // ---- Kernel 3: evaluate_hashes (if no fused target check) ----
-        if target.is_some() && evaluate_target == 0 {
-            let encoder = cmd_buf.new_compute_command_encoder();
-            encoder.set_compute_pipeline_state(&self.eval_pipeline);
-            encoder.set_buffer(0, Some(&self.last_blocks_buf), 0);
-            encoder.set_buffer(1, Some(&self.target_buf), 0);
-            encoder.set_buffer(2, Some(&self.found_index_buf), 0);
-            encoder.set_buffer(3, Some(&self.eval_active_hashes_buf), 0);
+            // ---- Kernel 3: evaluate_hashes (if no fused target check) ----
+            if target.is_some() && evaluate_target == 0 {
+                let encoder = cmd_buf.new_compute_command_encoder();
+                encoder.set_compute_pipeline_state(&self.eval_pipeline);
+                encoder.set_buffer(0, Some(&self.last_blocks_buf), 0);
+                encoder.set_buffer(1, Some(&self.target_buf), 0);
+                encoder.set_buffer(2, Some(&self.found_index_buf), 0);
+                encoder.set_buffer(3, Some(&self.eval_active_hashes_buf), 0);
 
-            let threads_per_group = MTLSize::new(EVAL_KERNEL_THREADS as u64, 1, 1);
-            let total_threads = MTLSize::new(
-                div_ceil(requested_hashes, EVAL_KERNEL_THREADS) as u64 * EVAL_KERNEL_THREADS as u64,
-                1,
-                1,
-            );
-            encoder.dispatch_threads(total_threads, threads_per_group);
-            encoder.end_encoding();
-        }
+                let threads_per_group = MTLSize::new(EVAL_KERNEL_THREADS as u64, 1, 1);
+                let total_threads = MTLSize::new(
+                    div_ceil(requested_hashes, EVAL_KERNEL_THREADS) as u64
+                        * EVAL_KERNEL_THREADS as u64,
+                    1,
+                    1,
+                );
+                encoder.dispatch_threads(total_threads, threads_per_group);
+                encoder.end_encoding();
+            }
 
-        cmd_buf.commit();
-        cmd_buf.wait_until_completed();
+            cmd_buf.commit();
+            cmd_buf.wait_until_completed();
+        });
 
         // Read back results from shared memory
         let completed_iters = unsafe { *(self.completed_iters_buf.contents() as *const u32) };
@@ -541,6 +552,9 @@ pub struct MetalBackend {
     max_lanes: AtomicU64,
     max_lanes_override: Option<usize>,
     hashes_per_launch_per_lane: u32,
+    /// Mines only BLAKE2b and never builds the Argon2 engine; set for the
+    /// Metal backend Seine adds by itself on macOS.
+    blake2b_only: bool,
 }
 
 // Safety: MetalBackend is Send+Sync because:
@@ -561,7 +575,14 @@ impl MetalBackend {
             max_lanes: AtomicU64::new(0),
             max_lanes_override: max_lanes,
             hashes_per_launch_per_lane: hashes_per_launch_per_lane.max(1),
+            blake2b_only: false,
         }
+    }
+
+    /// A Metal backend that waits idle on Argon2 work and mines BLAKE2b.
+    pub fn blake2b_only(mut self) -> Self {
+        self.blake2b_only = true;
+        self
     }
 
     fn signal_cancel(&self) {
@@ -578,6 +599,33 @@ impl MetalBackend {
 impl PowBackend for MetalBackend {
     fn name(&self) -> &'static str {
         BACKEND_NAME
+    }
+
+    fn hardware_telemetry(&self) -> seine_telemetry::BackendSettings {
+        seine_telemetry::BackendSettings {
+            backend: BACKEND_NAME.into(),
+            device_model: None,
+            memory_mib: self.device_memory_bytes().map(|v| v / (1024 * 1024)),
+            lanes: self.enabled_lanes() as u32,
+            cpu_kernel: None,
+            cpu_page_mode: None,
+            gpu_register_cap: None,
+            gpu_launch_depth: None,
+            cpu_backing_mib: None,
+            cpu_affinity: None,
+            pow: self
+                .shared
+                .blake2b_active
+                .load(Ordering::Acquire)
+                .then(|| "blake2b".to_string()),
+            gpu_arch: None,
+            gpu_kernel_source: None,
+            amd_perf_level: None,
+        }
+    }
+
+    fn supports_pow(&self, pow: crate::backend::PowAlgorithm) -> bool {
+        !self.blake2b_only || pow == crate::backend::PowAlgorithm::Blake2b512
     }
 
     fn lanes(&self) -> usize {
@@ -610,6 +658,7 @@ impl PowBackend for MetalBackend {
         let instance_id = self.instance_id.load(Ordering::Acquire);
         let max_lanes_override = self.max_lanes_override;
         let hashes_per_launch_per_lane = self.hashes_per_launch_per_lane;
+        let blake2b_only = self.blake2b_only;
         let max_lanes_atomic = {
             // Clone a handle so the worker can write back discovered lanes
             let ptr = &self.max_lanes as *const AtomicU64;
@@ -623,6 +672,7 @@ impl PowBackend for MetalBackend {
                     instance_id,
                     max_lanes_override,
                     hashes_per_launch_per_lane,
+                    blake2b_only,
                     max_lanes_atomic,
                     shared,
                     assignment_rx,
@@ -764,7 +814,13 @@ impl PowBackend for MetalBackend {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             max_inflight_assignments: 1,
-            deadline_support: DeadlineSupport::BestEffort,
+            // BLAKE2b launches last milliseconds; Argon2 launches cannot be
+            // stopped early.
+            deadline_support: if self.blake2b_only {
+                DeadlineSupport::Cooperative
+            } else {
+                DeadlineSupport::BestEffort
+            },
             assignment_semantics: AssignmentSemantics::Replace,
             execution_model: BackendExecutionModel::Blocking,
             preferred_iters_per_lane: Some(1 << 20),
@@ -809,37 +865,49 @@ fn metal_worker_loop(
     instance_id: BackendInstanceId,
     max_lanes_override: Option<usize>,
     hashes_per_launch_per_lane: u32,
+    blake2b_only: bool,
     max_lanes_atomic_ptr: u64,
     shared: Arc<MetalShared>,
     assignment_rx: Receiver<WorkerCommand>,
     control_rx: Receiver<WorkerCommand>,
 ) {
-    // Initialize engine on worker thread (Metal objects are !Send)
-    let engine = match MetalArgon2Engine::new(max_lanes_override, hashes_per_launch_per_lane) {
-        Ok(engine) => engine,
-        Err(e) => {
-            shared.emit_error(instance_id, format!("Metal init failed: {e:#}"));
-            return;
+    // Initialize engine on worker thread (Metal objects are !Send). A
+    // BLAKE2b-only backend allocates no Argon2 lanes.
+    let engine = if blake2b_only {
+        None
+    } else {
+        match MetalArgon2Engine::new(max_lanes_override, hashes_per_launch_per_lane) {
+            Ok(engine) => Some(engine),
+            Err(e) => {
+                shared.emit_error(instance_id, format!("Metal init failed: {e:#}"));
+                return;
+            }
         }
     };
 
     // Store cancel flag pointer for cross-thread cancel signaling
-    let cancel_ptr = engine.cancel_flag_ptr() as u64;
-    shared.cancel_flag_ptr.store(cancel_ptr, Ordering::Release);
+    if let Some(engine) = engine.as_ref() {
+        let cancel_ptr = engine.cancel_flag_ptr() as u64;
+        shared.cancel_flag_ptr.store(cancel_ptr, Ordering::Release);
+    }
 
     // Publish discovered lanes
-    let lanes = engine.lanes as u64;
+    let lanes = engine.as_ref().map_or(1, |engine| engine.lanes as u64);
     unsafe {
         let atomic = &*(max_lanes_atomic_ptr as *const AtomicU64);
         atomic.store(lanes, Ordering::Release);
     }
     shared.active_lanes.store(0, Ordering::Release);
-    shared
-        .active_hashes_per_launch_per_lane
-        .store(engine.hashes_per_launch_per_lane, Ordering::Release);
+    shared.active_hashes_per_launch_per_lane.store(
+        engine
+            .as_ref()
+            .map_or(1, |engine| engine.hashes_per_launch_per_lane),
+        Ordering::Release,
+    );
 
     let mut active: Option<ActiveAssignment> = None;
     let mut fence_waiters: Vec<Sender<()>> = Vec::new();
+    let mut blake2b = blake2b::Blake2bWorkerState::default();
 
     loop {
         // Drain control commands first
@@ -932,10 +1000,69 @@ fn metal_worker_loop(
                 continue;
             }
 
+            if assignment.work.template.pow == crate::backend::PowAlgorithm::Blake2b512 {
+                shared.blake2b_active.store(true, Ordering::Release);
+                shared.active_lanes.store(lanes, Ordering::Release);
+                let target_snapshot = assignment.work.template.target_snapshot();
+                match blake2b.run_batch(
+                    &assignment.work.template.header_base,
+                    assignment.next_nonce,
+                    remaining,
+                    &target_snapshot.target,
+                    Some(assignment.work.template.stop_at),
+                ) {
+                    Ok(batch) => {
+                        assignment.advance(batch.hashes);
+                        shared.hashes.fetch_add(batch.hashes, Ordering::Relaxed);
+                        for (nonce, hash) in batch.solutions {
+                            shared.emit_solution(
+                                instance_id,
+                                assignment.work.template.epoch,
+                                nonce,
+                                Some(hash),
+                                target_snapshot.share_binding_id,
+                            );
+                            if assignment.work.template.pause_on_solution {
+                                assignment.solved = true;
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        shared
+                            .emit_error(instance_id, format!("Metal BLAKE2b batch failed: {e:#}"));
+                        drop(active);
+                        shared.active_lanes.store(0, Ordering::Release);
+                        shared.pending_work.store(0, Ordering::Release);
+                        shared
+                            .inflight_assignment_hashes
+                            .store(0, Ordering::Release);
+                        *shared.inflight_assignment_started_at.lock().unwrap() = None;
+                        for waiter in fence_waiters.drain(..) {
+                            let _ = waiter.send(());
+                        }
+                        return;
+                    }
+                }
+                continue;
+            }
+            shared.blake2b_active.store(false, Ordering::Release);
+            let Some(engine) = engine.as_ref() else {
+                // The scheduler gives a BLAKE2b-only backend no Argon2 work.
+                active = None;
+                shared.pending_work.store(0, Ordering::Release);
+                for waiter in fence_waiters.drain(..) {
+                    let _ = waiter.send(());
+                }
+                continue;
+            };
+
             // Dispatch a batch
             let batch_size = remaining.min(engine.max_hashes_per_launch as u64) as usize;
             let start_nonce = assignment.next_nonce;
-            let nonces: Vec<u64> = (0..batch_size as u64).map(|i| start_nonce + i).collect();
+            let nonces: Vec<u64> = (0..batch_size as u64)
+                .map(|i| start_nonce.wrapping_add(i))
+                .collect();
 
             shared
                 .inflight_assignment_hashes
@@ -959,8 +1086,7 @@ fn metal_worker_loop(
             ) {
                 Ok(result) => {
                     let done = result.hashes_done;
-                    assignment.next_nonce += done;
-                    assignment.hashes_done += done;
+                    assignment.advance(done);
                     shared.hashes.fetch_add(done, Ordering::Relaxed);
 
                     if let Some(solved_nonce) = result.solved_nonce {
@@ -971,6 +1097,9 @@ fn metal_worker_loop(
                             result.solved_hash,
                             target_snapshot.share_binding_id,
                         );
+                        if assignment.work.template.pause_on_solution {
+                            assignment.solved = true;
+                        }
                     }
                 }
                 Err(e) => {
@@ -1032,6 +1161,8 @@ struct ActiveAssignment {
     next_nonce: u64,
     hashes_done: u64,
     started_at: Instant,
+    /// A solution was found on work that stops at its first one.
+    solved: bool,
 }
 
 impl ActiveAssignment {
@@ -1042,15 +1173,23 @@ impl ActiveAssignment {
             next_nonce,
             hashes_done: 0,
             started_at: Instant::now(),
+            solved: false,
         }
     }
 
+    /// Nonces left in the chunk; the range may wrap past `u64::MAX`.
     fn remaining_nonces(&self) -> u64 {
-        let end = self
-            .work
+        if self.solved {
+            return 0;
+        }
+        self.work
             .nonce_chunk
-            .start_nonce
-            .saturating_add(self.work.nonce_chunk.nonce_count);
-        end.saturating_sub(self.next_nonce)
+            .nonce_count
+            .saturating_sub(self.hashes_done)
+    }
+
+    fn advance(&mut self, hashes: u64) {
+        self.next_nonce = self.next_nonce.wrapping_add(hashes);
+        self.hashes_done += hashes;
     }
 }

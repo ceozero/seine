@@ -1,9 +1,43 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 pub use blocknet_pow_spec::PowAlgorithm;
+
+/// PoW of the latest template the miner received (0 = none yet).
+static NETWORK_POW: AtomicU8 = AtomicU8::new(0);
+/// Set when the network loop starts without waiting for GPU backends, so a
+/// GPU backend that starts late can wait briefly for the first template.
+static NETWORK_POW_EXPECTED: AtomicBool = AtomicBool::new(false);
+
+/// Records the PoW of a template the miner received (or the benchmark's).
+pub(crate) fn note_network_pow(pow: PowAlgorithm) {
+    let code = match pow {
+        PowAlgorithm::Argon2id => 1,
+        PowAlgorithm::Blake2b512 => 2,
+    };
+    NETWORK_POW.store(code, Ordering::Release);
+}
+
+/// PoW of the latest template the miner received, if any.
+#[cfg_attr(not(feature = "nvidia"), allow(dead_code))]
+pub(crate) fn network_pow() -> Option<PowAlgorithm> {
+    match NETWORK_POW.load(Ordering::Acquire) {
+        1 => Some(PowAlgorithm::Argon2id),
+        2 => Some(PowAlgorithm::Blake2b512),
+        _ => None,
+    }
+}
+
+pub(crate) fn set_network_pow_expected(expected: bool) {
+    NETWORK_POW_EXPECTED.store(expected, Ordering::Release);
+}
+
+#[cfg_attr(not(feature = "nvidia"), allow(dead_code))]
+pub(crate) fn network_pow_expected() -> bool {
+    NETWORK_POW_EXPECTED.load(Ordering::Acquire)
+}
 
 /// Network whose BLAKE2b personalization the miner uses. No Faraday testnet
 /// exists yet; make this configurable alongside testnet activation rules.
@@ -51,6 +85,10 @@ pub mod metal {
             Self {
                 _instance_id: AtomicU64::new(0),
             }
+        }
+
+        pub fn blake2b_only(self) -> Self {
+            self
         }
     }
 
@@ -122,9 +160,9 @@ pub mod metal {
         }
     }
 }
-#[cfg(all(feature = "amd", unix))]
+#[cfg(all(feature = "amd", any(target_os = "linux", windows)))]
 pub mod amd;
-#[cfg(not(all(feature = "amd", unix)))]
+#[cfg(not(all(feature = "amd", any(target_os = "linux", windows))))]
 pub mod amd {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::time::Duration;
@@ -157,6 +195,17 @@ pub mod amd {
     pub struct AmdBackend {
         _instance_id: AtomicU64,
         _device_index: Option<u32>,
+    }
+
+    /// No AMD state exists in builds without the AMD backend.
+    pub fn on_process_exit() {}
+
+    pub(crate) fn automatic_start_skipped() -> bool {
+        false
+    }
+
+    pub fn export_code_objects(_dir: &std::path::Path) -> Result<()> {
+        bail!("AMD support is not compiled into this build")
     }
 
     impl AmdBackend {
@@ -789,6 +838,17 @@ pub fn normalize_backend_capabilities(
     capabilities
 }
 
+/// A GPU returned a BLAKE2b candidate whose hash the CPU check does not
+/// reproduce, so some of its hashes are wrong and shares are being lost.
+#[allow(dead_code)]
+pub(crate) fn gpu_mismatch_warning(backend: &str) -> String {
+    format!(
+        "{backend} computed BLAKE2b hashes that fail the CPU check, so some of its work is lost. \
+         This usually means an unstable overclock or undervolt: reduce the core clock offset or \
+         voltage offset until this warning no longer appears"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -979,6 +1039,10 @@ pub trait PowBackend: Send + Sync {
             gpu_launch_depth: None,
             cpu_backing_mib: None,
             cpu_affinity: None,
+            pow: None,
+            gpu_arch: None,
+            gpu_kernel_source: None,
+            amd_perf_level: None,
         }
     }
 
@@ -992,6 +1056,16 @@ pub trait PowBackend: Send + Sync {
 
     /// Total device memory in bytes (e.g. GPU VRAM), if known.
     fn device_memory_bytes(&self) -> Option<u64> {
+        None
+    }
+
+    /// Index of the GPU this instance mines on, once the device is resolved.
+    fn device_index(&self) -> Option<u32> {
+        None
+    }
+
+    /// PCI address (`dddd:bb:dd.f`) of the GPU this instance mines on, if known.
+    fn pci_address(&self) -> Option<String> {
         None
     }
 

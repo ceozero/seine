@@ -9,12 +9,13 @@ use crossbeam_channel::{unbounded, Receiver};
 use reqwest::blocking::{Client as HttpClient, Response as HttpResponse};
 use reqwest::header::RETRY_AFTER;
 use reqwest::StatusCode;
+use seine_telemetry::FailureReason;
 use serde_json::Value;
 
 use crate::backend::{DynamicShareTarget, MiningSolution, ShareBindingId};
 use crate::config::{Config, WorkAllocation};
 use crate::daemon_api::{is_unauthorized_error, ApiClient};
-use crate::dev_fee::{DevFeeTracker, DEV_ADDRESS};
+use crate::dev_fee::{DevFeeTracker, DEV_ADDRESS, POOL_ROUND};
 use crate::pool::{
     PoolClient, PoolEvent, PoolJob, PoolSubmitAck, PoolSubmitRetry, SubmitTiming,
     POOL_NOTIFICATION_MINER_BLOCK_FOUND, POOL_NOTIFICATION_POOL_BLOCK_SOLVED,
@@ -25,9 +26,9 @@ use super::auth::{refresh_api_token_from_cookie, TokenRefreshOutcome};
 use super::block_latency;
 use super::mining::MiningRuntimeBackends;
 use super::mining_tui::{
-    init_tui_display, render_tui_now, set_tui_dev_fee_active, set_tui_pending_nvidia,
-    set_tui_pool_balance_overview, set_tui_state_label, set_tui_wallet_overview, update_tui,
-    RoundUiView, TuiDisplay,
+    init_tui_display, render_tui_now, set_tui_dev_fee_active, set_tui_pending_gpus,
+    set_tui_pool_balance_overview, set_tui_pool_payout_minimum, set_tui_pool_solo,
+    set_tui_state_label, set_tui_wallet_overview, update_tui, RoundUiView, TuiDisplay,
 };
 use super::runtime::{maybe_print_stats, seed_backend_weights, work_distribution_weights};
 use super::scheduler::NonceReservation;
@@ -57,6 +58,9 @@ const POOL_DESYNC_STALE_ACK_THRESHOLD: usize = 3;
 const POOL_DESYNC_STALE_FOR_THRESHOLD: Duration = Duration::from_secs(15);
 const POOL_TELEMETRY_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 const POOL_HASHRATE_CACHE_TTL: Duration = Duration::from_secs(30);
+/// Consecutive failed refreshes before the pool statistics warning is shown.
+const POOL_TELEMETRY_WARN_AFTER_FAILURES: u32 = 3;
+const POOL_TELEMETRY_MAX_BACKOFF: Duration = Duration::from_secs(300);
 const POOL_TELEMETRY_TIMEOUT: Duration = Duration::from_secs(5);
 const POOL_TIMING_SLOW_QUEUE_THRESHOLD: Duration = Duration::from_secs(3);
 const POOL_TIMING_SLOW_ACK_THRESHOLD: Duration = Duration::from_secs(3);
@@ -93,14 +97,28 @@ fn should_apply_submit_ack_difficulty_immediately(_mode: PoolConnectionMode) -> 
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct PoolConnectionConfig {
+    payout_memo: Option<String>,
     mode: PoolConnectionMode,
     pool_url: String,
+    proxy: Option<crate::pool::SocksProxy>,
+    /// Payout address without any `solo:` prefix.
     address: String,
+    /// Log in as `solo:<address>`: the pool pays this connection only for
+    /// blocks it finds.
+    solo: bool,
     worker: String,
+}
+
+impl PoolConnectionConfig {
+    /// The address sent in the Stratum login.
+    fn login_address(&self) -> String {
+        crate::shortname::with_solo(self.solo, &self.address)
+    }
 }
 
 #[derive(Debug, Clone)]
 struct PoolUiTelemetryClient {
+    pool_url: String,
     endpoints: Vec<PoolTelemetryEndpoint>,
     http: HttpClient,
     rate_limit_backoff_until: Arc<Mutex<Option<Instant>>>,
@@ -110,10 +128,19 @@ struct PoolUiTelemetryClient {
 #[derive(Debug)]
 struct PoolTelemetryRefreshResult {
     request_id: u64,
+    pool_url: Option<String>,
     hashrate: Option<String>,
     balances: Option<(String, String)>,
     local_wallet: Option<LocalDaemonWalletSnapshot>,
     errors: Vec<String>,
+    /// Typed cause of the first error.
+    failure: Option<FailureReason>,
+    /// Pool statistics were asked for and the network hashrate fetch failed.
+    hashrate_failed: bool,
+    /// Pool statistics were asked for, but not the balance, which is backing off.
+    balances_skipped: bool,
+    /// The balance was asked for and its fetch failed.
+    balances_failed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -384,6 +411,9 @@ fn rebind_active_pool_job(
     active_job.register_share_binding(job.job_id.clone(), target);
     active_job.job = job.clone();
 
+    if mode.is_user() {
+        super::ui::set_share_difficulty(job.difficulty);
+    }
     if !mode.is_user() || !log_changes {
         return;
     }
@@ -393,15 +423,11 @@ fn rebind_active_pool_job(
         .unwrap_or_else(|| "unknown".to_string());
     match (previous_difficulty, job.difficulty) {
         (Some(old), Some(new)) if old != new => {
-            if new > old {
-                success("VARDIFF", format!("difficulty {old} -> {new}"));
-            } else {
-                info("VARDIFF", format!("difficulty {old} -> {new}"));
-            }
+            super::ui::detail("VARDIFF", format!("difficulty {old} -> {new}"));
         }
         _ => {}
     }
-    info(
+    super::ui::detail(
         "JOB",
         format!(
             "updated job height={} difficulty={difficulty_label}",
@@ -679,6 +705,18 @@ fn log_pool_issue_timing(
     warn("POOL", parts.join(" "));
 }
 
+/// Dev-fee rounds mine on the dev pool, then fall back to the user's own
+/// pools when it cannot be reached, so they never leave the miner idle.
+fn dev_pool_urls(user_pool_urls: &str) -> String {
+    let mut urls = vec![DEV_POOL_URL.to_string()];
+    for url in user_pool_urls.split(',').map(str::trim) {
+        if !url.is_empty() && !urls.iter().any(|existing| existing == url) {
+            urls.push(url.to_string());
+        }
+    }
+    urls.join(",")
+}
+
 fn build_pool_connection_configs(
     cfg: &Config,
 ) -> Result<(PoolConnectionConfig, PoolConnectionConfig)> {
@@ -686,25 +724,32 @@ fn build_pool_connection_configs(
         .pool_url
         .clone()
         .ok_or_else(|| anyhow!("pool mode requires a configured pool URL"))?;
-    let user_address = cfg
+    let user_destination = cfg
         .mining_address
         .clone()
         .ok_or_else(|| anyhow!("pool mode requires a configured address"))?;
+    let (solo, user_address) = crate::shortname::split_solo(&user_destination);
     let user_worker = cfg
         .pool_worker
         .clone()
         .ok_or_else(|| anyhow!("pool mode requires a configured pool worker"))?;
 
     let user = PoolConnectionConfig {
+        payout_memo: cfg.payout_memo.clone(),
         mode: PoolConnectionMode::User,
         pool_url: user_pool_url,
-        address: user_address,
+        proxy: cfg.pool_proxy.clone(),
+        address: user_address.to_string(),
+        solo,
         worker: user_worker,
     };
     let dev = PoolConnectionConfig {
+        payout_memo: None,
         mode: PoolConnectionMode::Dev,
-        pool_url: DEV_POOL_URL.to_string(),
+        pool_url: dev_pool_urls(&user.pool_url),
+        proxy: cfg.pool_proxy.clone(),
         address: DEV_ADDRESS.to_string(),
+        solo: false,
         worker: cfg.dev_fee_pool_worker.clone(),
     };
     Ok((user, dev))
@@ -721,27 +766,44 @@ fn connect_pool_session(
         render_tui_now(tui);
     }
 
-    let pool_client = PoolClient::connect(
+    let pool_client = PoolClient::connect_via_with_memo(
         &connection.pool_url,
-        connection.address.clone(),
+        connection.proxy.as_ref(),
+        connection.login_address(),
         connection.worker.clone(),
+        connection.payout_memo.clone(),
         shutdown,
     )?;
     if connection.mode.is_user() {
         let compact_address = compact_pool_address_for_log(&connection.address);
-        info(
+        super::ui::detail(
             "CONN",
             format!(
-                "connecting ({}) to {} as {}.{}",
+                "connecting ({}) to {} as {}.{}{}{}",
                 connection.mode.as_str(),
                 connection.pool_url,
                 compact_address,
-                connection.worker
+                connection.worker,
+                if connection.solo { " to mine solo" } else { "" },
+                connection
+                    .proxy
+                    .as_ref()
+                    .map(|proxy| format!(" via {}", proxy.display()))
+                    .unwrap_or_default()
             ),
         );
     }
-    let telemetry = PoolUiTelemetryClient::new(&connection.pool_url, &connection.address);
-    if telemetry.is_none() && connection.mode.is_user() {
+    let telemetry = if connection.payout_memo.is_none() {
+        PoolUiTelemetryClient::for_destination(
+            &connection.pool_url,
+            &connection.address,
+            None,
+            connection.proxy.as_ref(),
+        )
+    } else {
+        None
+    };
+    if telemetry.is_none() && connection.mode.is_user() && connection.payout_memo.is_none() {
         warn(
             "STATS",
             format!(
@@ -752,8 +814,39 @@ fn connect_pool_session(
     }
     if update_ui {
         set_tui_pool_balance_overview(tui, &connection.address, "---", "---");
+        set_tui_pool_solo(tui, connection.solo);
     }
     Ok((pool_client, telemetry))
+}
+
+fn update_user_pool_telemetry(
+    event: &PoolEvent,
+    session: &mut PoolSession,
+    tui: &mut Option<TuiDisplay>,
+) {
+    match event {
+        PoolEvent::LoginAccepted(ack) => {
+            if let Some(pool_url) = ack.pool_url.as_deref() {
+                if session
+                    .telemetry
+                    .as_ref()
+                    .is_none_or(|client| client.pool_url != pool_url)
+                {
+                    session.telemetry = PoolUiTelemetryClient::for_destination(
+                        pool_url,
+                        &session.connection.address,
+                        session.connection.payout_memo.as_deref(),
+                        session.connection.proxy.as_ref(),
+                    );
+                    set_tui_pool_balance_overview(tui, &session.connection.address, "---", "---");
+                }
+            }
+        }
+        PoolEvent::Disconnected(_) | PoolEvent::LoginRejected(_) => {
+            session.telemetry = None;
+        }
+        _ => {}
+    }
 }
 
 pub(super) fn run_pool_mining_loop(
@@ -763,7 +856,7 @@ pub(super) fn run_pool_mining_loop(
     local_daemon_client: Option<ApiClient>,
     tui_state: Option<TuiState>,
     history: Arc<super::session::SessionHistory>,
-    deferred_backends: Option<(Receiver<super::BackendSlot>, u64)>,
+    deferred_backends: Option<(Receiver<super::BackendSlot>, Vec<&'static str>)>,
 ) -> Result<()> {
     let MiningRuntimeBackends {
         backends,
@@ -771,8 +864,8 @@ pub(super) fn run_pool_mining_loop(
         backend_executor,
     } = runtime_backends;
     let (deferred_rx, mut deferred_remaining) = match deferred_backends {
-        Some((rx, count)) => (Some(rx), count),
-        None => (None, 0),
+        Some((rx, pending)) => (Some(rx), pending),
+        None => (None, Vec::new()),
     };
 
     let (user_connection, dev_connection) = build_pool_connection_configs(cfg)?;
@@ -784,6 +877,11 @@ pub(super) fn run_pool_mining_loop(
     let mut work_id_cursor = 1u64;
     let mut epoch = 0u64;
     let mut last_hash_poll = Instant::now();
+    if let Some(state) = tui_state.as_ref() {
+        if let Ok(mut state) = state.lock() {
+            state.pool_payout_minimum = cfg.payout_memo.as_ref().map(|_| "awaiting pool".into());
+        }
+    }
     let mut tui = init_tui_display(tui_state, Arc::clone(&shutdown), Arc::clone(&history));
     let mut dev_fee_tracker = DevFeeTracker::new();
     let mut dev_fee_round_started = Instant::now();
@@ -823,10 +921,12 @@ pub(super) fn run_pool_mining_loop(
     };
 
     let mut active_job: Option<ActivePoolJob> = None;
-    let mut pending_nvidia_logged = false;
+    let mut pending_gpus_logged = false;
     let mut pool_network_hashrate = "unknown".to_string();
     let mut next_pool_telemetry_refresh = Instant::now();
-    let mut pool_telemetry_warning_logged = false;
+    let mut next_pool_balance_refresh = Instant::now();
+    let mut pool_telemetry_failures = PoolTelemetryFailures::default();
+    let mut telemetry_spawn_warning_logged = false;
     let (telemetry_result_tx, telemetry_result_rx) = unbounded::<PoolTelemetryRefreshResult>();
     let mut telemetry_next_request_id = 0u64;
     let mut telemetry_inflight_request_id: Option<u64> = None;
@@ -838,7 +938,7 @@ pub(super) fn run_pool_mining_loop(
             bail!("all mining backends are unavailable");
         }
 
-        if dev_fee_round_started.elapsed() >= cfg.refresh_interval {
+        if dev_fee_round_started.elapsed() >= POOL_ROUND {
             dev_fee_tracker.end_round(dev_fee_round_started.elapsed());
             dev_fee_round_started = Instant::now();
 
@@ -865,10 +965,12 @@ pub(super) fn run_pool_mining_loop(
                                 &mut dev_session.resume_job,
                                 &mut dev_session.recent_submit_lookup,
                                 &stats,
+                                &mut tui,
                             );
                         }
                     } else {
                         for event in user_session.client.drain_events() {
+                            update_user_pool_telemetry(&event, &mut user_session, &mut tui);
                             handle_inactive_pool_event(
                                 event,
                                 PoolConnectionMode::User,
@@ -878,6 +980,7 @@ pub(super) fn run_pool_mining_loop(
                                 &mut user_session.resume_job,
                                 &mut user_session.recent_submit_lookup,
                                 &stats,
+                                &mut tui,
                             );
                         }
                     }
@@ -991,8 +1094,11 @@ pub(super) fn run_pool_mining_loop(
                     }
 
                     pool_network_hashrate = "unknown".to_string();
+                    // Dev-fee switches keep the statistics warning state: it
+                    // belongs to the user's pool, which has not changed. The
+                    // hashrate is fetched again at once; a request still in
+                    // flight is superseded and its result ignored.
                     next_pool_telemetry_refresh = Instant::now();
-                    pool_telemetry_warning_logged = false;
                     telemetry_inflight_request_id = None;
                 }
             }
@@ -1004,7 +1110,12 @@ pub(super) fn run_pool_mining_loop(
             if telemetry_inflight_request_id == Some(result.request_id) {
                 telemetry_inflight_request_id = None;
             }
-            if let Some(hashrate) = result.hashrate {
+            if result.request_id != telemetry_next_request_id {
+                continue;
+            }
+            let current_pool =
+                result.pool_url.as_deref() == user_telemetry.map(|client| client.pool_url.as_str());
+            if let Some(hashrate) = result.hashrate.filter(|_| current_pool) {
                 pool_network_hashrate = hashrate;
             }
             if let Some(snapshot) = result.local_wallet {
@@ -1015,7 +1126,7 @@ pub(super) fn run_pool_mining_loop(
                     &snapshot.unlocked,
                 );
                 if local_wallet_address_logged.as_deref() != Some(snapshot.address.as_str()) {
-                    info(
+                    super::ui::detail(
                         "WALLET",
                         format!("using local daemon wallet balance: {}", snapshot.address),
                     );
@@ -1023,29 +1134,47 @@ pub(super) fn run_pool_mining_loop(
                     local_wallet_mismatch_logged = false;
                 }
                 if snapshot.address != user_address && !local_wallet_mismatch_logged {
-                    warn(
+                    super::ui::detail(
                         "WALLET",
                         "local daemon wallet differs from pool payout address; wallet panel shows the local daemon wallet",
                     );
                     local_wallet_mismatch_logged = true;
                 }
-            } else if let Some((pending, paid)) = result.balances {
+            } else if let Some((pending, paid)) = result.balances.filter(|_| current_pool) {
                 set_tui_pool_balance_overview(&mut tui, user_address, &pending, &paid);
             }
 
+            if !current_pool {
+                continue;
+            }
+            let pool_url = result.pool_url.as_deref().unwrap_or_default();
+            if result.pool_url.is_some() {
+                pool_telemetry_failures.endpoints(
+                    pool_url,
+                    result.hashrate_failed,
+                    (!result.balances_skipped).then_some(result.balances_failed),
+                );
+            }
             if result.errors.is_empty() {
-                if pool_telemetry_warning_logged {
+                // A refresh that skipped the balance says nothing about it.
+                if !result.balances_skipped && pool_telemetry_failures.succeeded(pool_url) {
                     info("STATS", "pool telemetry recovered");
-                    pool_telemetry_warning_logged = false;
                 }
-            } else if !pool_telemetry_warning_logged {
+            } else if pool_telemetry_failures.failed(pool_url) {
                 let detail = result
                     .errors
                     .first()
                     .map(String::as_str)
                     .unwrap_or("unknown telemetry error");
-                warn("STATS", format!("failed to fetch pool stats: {detail}"));
-                pool_telemetry_warning_logged = true;
+                super::ui::warn_with_detail(
+                    "STATS",
+                    format!("failed to fetch pool stats: {detail}"),
+                    seine_telemetry::DiagnosticKind::Connection,
+                    seine_telemetry::FailureDetail::new(
+                        result.failure.unwrap_or(FailureReason::InvalidResponse),
+                        seine_telemetry::DiagnosticOperation::PoolStats,
+                    ),
+                );
             }
         }
         if user_telemetry.is_some() || local_daemon_client.is_some() {
@@ -1055,57 +1184,90 @@ pub(super) fn run_pool_mining_loop(
                 telemetry_next_request_id = telemetry_next_request_id.wrapping_add(1).max(1);
                 let request_id = telemetry_next_request_id;
                 let telemetry = user_telemetry.cloned();
+                // The balance backs off on its own failures; the network
+                // hashrate keeps its pace.
+                let fetch_balances = Instant::now() >= next_pool_balance_refresh;
+                if fetch_balances {
+                    next_pool_balance_refresh = Instant::now()
+                        + pool_telemetry_failure_backoff(pool_telemetry_failures.balances);
+                }
+                let shares_wallet_refresh = local_daemon_client.is_some();
                 let local_daemon_client = local_daemon_client.clone();
                 let local_daemon_cookie_path = cfg.token_cookie_path.clone();
                 let tx = telemetry_result_tx.clone();
                 let spawn_result = std::thread::Builder::new()
                     .name("pool-telemetry-user".to_string())
                     .spawn(move || {
-                        let mut errors = Vec::new();
-                        let hashrate = if let Some(telemetry) = telemetry.as_ref() {
-                            match telemetry.fetch_pool_hashrate() {
-                                Ok(value) => Some(value),
-                                Err(err) => {
-                                    errors.push(format!("global hashrate: {err:#}"));
-                                    None
-                                }
-                            }
-                        } else {
-                            None
-                        };
-                        let balances = if let Some(telemetry) = telemetry.as_ref() {
-                            match telemetry.fetch_pool_balances() {
-                                Ok(value) => Some(value),
-                                Err(err) => {
-                                    errors.push(format!("balance: {err:#}"));
-                                    None
-                                }
-                            }
-                        } else {
-                            None
-                        };
-                        let local_wallet = local_daemon_client.as_ref().and_then(|client| {
-                            fetch_local_daemon_wallet_snapshot(
-                                client,
-                                local_daemon_cookie_path.as_ref(),
+                        // The three sources are independent; fetch them together.
+                        let (hashrate, balances, local_wallet) = std::thread::scope(|scope| {
+                            let hashrate = telemetry
+                                .as_ref()
+                                .map(|telemetry| scope.spawn(|| telemetry.fetch_pool_hashrate()));
+                            let balances = telemetry
+                                .as_ref()
+                                .filter(|_| fetch_balances)
+                                .map(|telemetry| scope.spawn(|| telemetry.fetch_pool_balances()));
+                            let local_wallet = local_daemon_client.as_ref().and_then(|client| {
+                                fetch_local_daemon_wallet_snapshot(
+                                    client,
+                                    local_daemon_cookie_path.as_ref(),
+                                )
+                                .ok()
+                            });
+                            (
+                                hashrate.map(join_telemetry_fetch),
+                                balances.map(join_telemetry_fetch),
+                                local_wallet,
                             )
-                            .ok()
+                        });
+                        let mut errors = Vec::new();
+                        let mut failure = None;
+                        let hashrate_failed = matches!(hashrate, Some(Err(_)));
+                        let balances_skipped = telemetry.is_some() && !fetch_balances;
+                        let balances_failed = matches!(balances, Some(Err(_)));
+                        let hashrate = hashrate.and_then(|result| match result {
+                            Ok(value) => Some(value),
+                            Err(err) => {
+                                failure.get_or_insert_with(|| telemetry_failure_reason(&err));
+                                errors.push(format!("global hashrate: {err:#}"));
+                                None
+                            }
+                        });
+                        let balances = balances.and_then(|result| match result {
+                            Ok(value) => Some(value),
+                            Err(err) => {
+                                failure.get_or_insert_with(|| telemetry_failure_reason(&err));
+                                errors.push(format!("balance: {err:#}"));
+                                None
+                            }
                         });
                         let _ = tx.send(PoolTelemetryRefreshResult {
                             request_id,
+                            pool_url: telemetry.as_ref().map(|client| client.pool_url.clone()),
                             hashrate,
                             balances,
                             local_wallet,
                             errors,
+                            failure,
+                            hashrate_failed,
+                            balances_skipped,
+                            balances_failed,
                         });
                     });
                 if spawn_result.is_ok() {
                     telemetry_inflight_request_id = Some(request_id);
-                } else if !pool_telemetry_warning_logged {
+                } else if !telemetry_spawn_warning_logged {
                     warn("STATS", "failed to start pool telemetry refresh");
-                    pool_telemetry_warning_logged = true;
+                    telemetry_spawn_warning_logged = true;
                 }
-                next_pool_telemetry_refresh = Instant::now() + pool_telemetry_refresh_delay();
+                // The local daemon wallet shares this refresh, so keep its pace.
+                let backoff = if !shares_wallet_refresh {
+                    pool_telemetry_failure_backoff(pool_telemetry_failures.hashrate)
+                } else {
+                    Duration::ZERO
+                };
+                next_pool_telemetry_refresh =
+                    Instant::now() + pool_telemetry_refresh_delay().max(backoff);
             }
         }
 
@@ -1114,14 +1276,11 @@ pub(super) fn run_pool_mining_loop(
             loop {
                 match deferred.try_recv() {
                     Ok(slot) => {
-                        deferred_remaining = deferred_remaining.saturating_sub(1);
+                        super::remove_pending_gpu(&mut deferred_remaining, slot.backend.name());
                         let slot_name = pending_backend_slot_label(backends, &slot);
                         info(
                             "BACKEND",
-                            format!(
-                                "{slot_name}: online (initialized in background, {} lanes)",
-                                slot.lanes
-                            ),
+                            format!("{slot_name}: online ({} lanes)", slot.lanes),
                         );
                         backend_weights.insert(slot.id, slot.lanes.max(1) as f64);
                         stats.register_expected_backends(&[format!(
@@ -1134,22 +1293,24 @@ pub(super) fn run_pool_mining_loop(
                     }
                     Err(crossbeam_channel::TryRecvError::Empty) => break,
                     Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                        deferred_remaining = 0;
+                        deferred_remaining.clear();
                         break;
                     }
                 }
             }
-            if deferred_remaining > 0 && !pending_nvidia_logged {
-                info(
-                    "BACKEND",
-                    format!("nvidia initialization in progress: {deferred_remaining} pending"),
-                );
-                pending_nvidia_logged = true;
+            if !deferred_remaining.is_empty() && !pending_gpus_logged {
+                for (kind, count) in super::mining::pending_gpu_counts(&deferred_remaining) {
+                    super::ui::detail(
+                        "BACKEND",
+                        format!("{kind} initialization in progress: {count} pending"),
+                    );
+                }
+                pending_gpus_logged = true;
             }
-            if deferred_remaining == 0 {
-                pending_nvidia_logged = false;
+            if deferred_remaining.is_empty() {
+                pending_gpus_logged = false;
             }
-            set_tui_pending_nvidia(&mut tui, deferred_remaining);
+            set_tui_pending_gpus(&mut tui, &deferred_remaining);
             if deferred_backend_activated {
                 maybe_hot_rebalance_active_pool_job(
                     cfg,
@@ -1166,6 +1327,7 @@ pub(super) fn run_pool_mining_loop(
 
         let mut processed_pool_event = false;
         for event in user_session.client.drain_events() {
+            update_user_pool_telemetry(&event, &mut user_session, &mut tui);
             if active_mode == PoolConnectionMode::User {
                 processed_pool_event = true;
                 handle_active_pool_event(
@@ -1195,6 +1357,7 @@ pub(super) fn run_pool_mining_loop(
                     &mut user_session.resume_job,
                     &mut user_session.recent_submit_lookup,
                     &stats,
+                    &mut tui,
                 );
             }
         }
@@ -1228,6 +1391,7 @@ pub(super) fn run_pool_mining_loop(
                     &mut dev_session.resume_job,
                     &mut dev_session.recent_submit_lookup,
                     &stats,
+                    &mut tui,
                 );
             }
         }
@@ -1237,6 +1401,7 @@ pub(super) fn run_pool_mining_loop(
             render_tui_now(&mut tui);
             if active_mode == PoolConnectionMode::User {
                 if let Some(event) = user_session.client.recv_event_timeout(POOL_WAIT_POLL) {
+                    update_user_pool_telemetry(&event, &mut user_session, &mut tui);
                     handle_active_pool_event(
                         event,
                         PoolConnectionMode::User,
@@ -1418,7 +1583,7 @@ pub(super) fn run_pool_mining_loop(
                             .request_nonce_refill(&active_job.job.job_id),
                     }
                     if active_mode.is_user() {
-                        info("JOB", "nonce range finished; requesting fresh work");
+                        super::ui::detail("JOB", "nonce range finished; requesting fresh work");
                     }
                 }
                 update_tui(
@@ -1469,13 +1634,30 @@ pub(super) fn run_pool_mining_loop(
         );
 
         if !processed_pool_event {
-            std::thread::sleep(POOL_EVENT_IDLE_SLEEP);
+            let mut inputs = crossbeam_channel::Select::new();
+            inputs.recv(backend_events);
+            inputs.recv(user_session.client.event_receiver());
+            inputs.recv(dev_session.client.event_receiver());
+            inputs.recv(&telemetry_result_rx);
+            if let Some(deferred) = deferred_rx
+                .as_ref()
+                .filter(|_| !deferred_remaining.is_empty())
+            {
+                inputs.recv(deferred);
+            }
+            wait_for_pool_loop_input(inputs, POOL_EVENT_IDLE_SLEEP, || {
+                backend_events.is_empty()
+                    && user_session.client.event_receiver().is_empty()
+                    && dev_session.client.event_receiver().is_empty()
+                    && telemetry_result_rx.is_empty()
+                    && deferred_rx.as_ref().is_none_or(Receiver::is_empty)
+            });
         }
     }
 
     if !backends.is_empty() {
         crate::diagnostics::cleanup_stage(seine_telemetry::CleanupStage::QuiescingBackends);
-        info("MINER", "shutting down: cancelling pool work...");
+        super::ui::detail("MINER", "shutting down: cancelling pool work...");
         if let Err(err) =
             super::cancel_backend_slots(backends, RuntimeMode::Mining, backend_executor)
         {
@@ -1485,7 +1667,7 @@ pub(super) fn run_pool_mining_loop(
     }
 
     stats.print();
-    info("MINER", "stopped");
+    super::ui::detail("MINER", "stopped");
     Ok(())
 }
 
@@ -1550,11 +1732,12 @@ fn handle_active_pool_event(
     stats: &Stats,
     tui: &mut Option<TuiDisplay>,
 ) -> Result<()> {
+    note_pool_requires_update(mode, &event);
     match event {
         PoolEvent::Connected => {
             *connected = true;
             if mode.is_user() {
-                success("CONN", "connected");
+                success("CONN", "connected to pool");
             }
             set_tui_state_label(tui, "pool-connected");
         }
@@ -1592,12 +1775,22 @@ fn handle_active_pool_event(
         }
         PoolEvent::LoginAccepted(ack) => {
             if mode.is_user() {
+                set_tui_pool_payout_minimum(tui, ack.min_payout_atomic);
+                if let Some(minimum) = ack.min_payout_atomic {
+                    super::ui::detail(
+                        "PAYOUT",
+                        format!(
+                            "Minimum payout: {} BNT.",
+                            crate::payout_destination::format_amount(minimum)
+                        ),
+                    );
+                }
                 let required = if ack.required_capabilities.is_empty() {
                     "none".to_string()
                 } else {
                     ack.required_capabilities.join(",")
                 };
-                success(
+                super::ui::detail(
                     "AUTH",
                     format!(
                         "login accepted (protocol v{}, required={required})",
@@ -1611,6 +1804,8 @@ fn handle_active_pool_event(
             if mode.is_user() {
                 error("AUTH", format!("login rejected: {message}"));
             }
+            // Pools and farm proxies turn away outdated miners at login.
+            crate::update_check::request_check_soon();
             *latest_job = None;
             *connected = false;
             if active_job.is_some() {
@@ -1669,7 +1864,8 @@ fn handle_active_pool_event(
                     .map(|pending| format!(" (backend={})", pending.backend_label))
                     .unwrap_or_default();
                 if mode.is_user() {
-                    success("SHARE", format!("accepted{retry_suffix}{backend_suffix}"));
+                    super::ui::detail("SHARE", format!("accepted{retry_suffix}{backend_suffix}"));
+                    super::ui::note_success("SHARE", "share accepted");
                 }
                 if let Some(display) = tui.as_mut() {
                     display.mark_block_found();
@@ -1856,6 +2052,25 @@ fn force_pool_session_resync(
     Ok(())
 }
 
+/// A pool or farm proxy that turns this miner away until it is updated (for
+/// example a newer Faraday PoW) pauses mining like unsupported work, so the
+/// update installs even when it was skipped or the control API runs the miner.
+/// Only the user's pool counts: a dev-fee pool asking for an update does not
+/// stop mining on a user pool that still takes this version.
+fn note_pool_requires_update(mode: PoolConnectionMode, event: &PoolEvent) {
+    if !mode.is_user() {
+        return;
+    }
+    let message = match event {
+        PoolEvent::LoginRejected(message) | PoolEvent::Disconnected(message) => message,
+        PoolEvent::Notification(notification) => &notification.message,
+        _ => return,
+    };
+    if crate::pool::requires_newer_miner(message) {
+        super::note_unsupported_work("the pool requires a newer seine");
+    }
+}
+
 fn handle_inactive_pool_event(
     event: PoolEvent,
     mode: PoolConnectionMode,
@@ -1865,11 +2080,13 @@ fn handle_inactive_pool_event(
     inactive_job: &mut Option<ActivePoolJob>,
     recent_submit_lookup: &mut RecentPendingSubmitLookup,
     stats: &Stats,
+    tui: &mut Option<TuiDisplay>,
 ) {
+    note_pool_requires_update(mode, &event);
     match event {
         PoolEvent::Connected => {
             if !*connected && mode.is_user() {
-                info("CONN", format!("{} session connected", mode.as_str()));
+                super::ui::detail("CONN", format!("{} session connected", mode.as_str()));
             }
             *connected = true;
         }
@@ -1883,12 +2100,22 @@ fn handle_inactive_pool_event(
         }
         PoolEvent::LoginAccepted(ack) => {
             if mode.is_user() {
+                set_tui_pool_payout_minimum(tui, ack.min_payout_atomic);
+                if let Some(minimum) = ack.min_payout_atomic {
+                    super::ui::detail(
+                        "PAYOUT",
+                        format!(
+                            "Minimum payout: {} BNT.",
+                            crate::payout_destination::format_amount(minimum)
+                        ),
+                    );
+                }
                 let required = if ack.required_capabilities.is_empty() {
                     "none".to_string()
                 } else {
                     ack.required_capabilities.join(",")
                 };
-                success(
+                super::ui::detail(
                     "AUTH",
                     format!(
                         "{} session login accepted (protocol v{}, required={required})",
@@ -1945,7 +2172,7 @@ fn handle_inactive_pool_event(
                     .map(|pending| format!(" (backend={})", pending.backend_label))
                     .unwrap_or_default();
                 if mode.is_user() {
-                    success(
+                    super::ui::detail(
                         "SHARE",
                         format!("accepted ({}){retry_suffix}{backend_suffix}", mode.as_str()),
                     );
@@ -2024,19 +2251,20 @@ fn apply_submit_ack_difficulty(
     let new_target = difficulty_to_target(difficulty);
     let old_difficulty = job.share_difficulty;
     job.share_difficulty = Some(difficulty);
+    if mode.is_user() {
+        super::ui::set_share_difficulty(Some(difficulty));
+    }
     if new_target == job.target {
         return Ok(());
     }
     job.target = new_target;
     if mode.is_user() {
         if let Some(old) = old_difficulty {
-            if difficulty > old {
-                success("VARDIFF", format!("difficulty {old} -> {difficulty}"));
-            } else if difficulty < old {
-                info("VARDIFF", format!("difficulty {old} -> {difficulty}"));
+            if difficulty != old {
+                super::ui::detail("VARDIFF", format!("difficulty {old} -> {difficulty}"));
             }
         } else {
-            info("VARDIFF", format!("difficulty set to {difficulty}"));
+            super::ui::detail("VARDIFF", format!("difficulty set to {difficulty}"));
         }
     }
     let assign_started = Instant::now();
@@ -2051,6 +2279,29 @@ fn apply_submit_ack_difficulty(
     )?;
     record_pool_assignment_timing(job, "difficulty-update", None, assign_started.elapsed());
     Ok(())
+}
+
+fn pause_for_unsupported_job(
+    reason: &str,
+    backends: &mut Vec<BackendSlot>,
+    backend_executor: &super::backend_executor::BackendExecutor,
+    active_job: &mut Option<ActivePoolJob>,
+    tui: &mut Option<TuiDisplay>,
+) {
+    super::note_unsupported_work(reason);
+    if active_job.is_some() {
+        if let Err(err) =
+            super::cancel_backend_slots(backends, RuntimeMode::Mining, backend_executor)
+        {
+            warn(
+                "BACKEND",
+                format!("pool cancel failed for unsupported work: {err:#}"),
+            );
+        }
+        let _ = super::quiesce_backend_slots(backends, RuntimeMode::Mining, backend_executor);
+        *active_job = None;
+    }
+    set_tui_state_label(tui, "update-required");
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2070,10 +2321,21 @@ fn assign_pool_job(
     tui: &mut Option<TuiDisplay>,
 ) -> Result<()> {
     let handled_at = Instant::now();
-    // Returning an error exits the mining loop through normal backend teardown.
-    // Merely ignoring this job would leave workers hashing the previous template.
-    blocknet_pow_spec::ensure_supported_pow(job.height, super::provisional_faraday_pow_allowed())
-        .map_err(|reason| anyhow::anyhow!(reason))?;
+    // Work this build cannot mine stops the backends (so they do not keep
+    // hashing the previous template) but keeps the session and the update
+    // checker alive.
+    let pow = match blocknet_pow_spec::ensure_supported_pow(
+        job.height,
+        super::provisional_faraday_pow_allowed(),
+    ) {
+        Ok(pow) => pow,
+        Err(reason) => {
+            pause_for_unsupported_job(reason, backends, backend_executor, active_job, tui);
+            return Ok(());
+        }
+    };
+    crate::backend::note_network_pow(pow);
+    super::note_provisional_pow(pow);
     let nonce_count = job.nonce_count();
     if nonce_count == 0 {
         if mode.is_user() {
@@ -2091,8 +2353,11 @@ fn assign_pool_job(
             return Ok(());
         }
     };
-    blocknet_pow_spec::validate_header_length(header_base.len())
-        .map_err(|reason| anyhow::anyhow!(reason))?;
+    if let Err(reason) = blocknet_pow_spec::validate_header_length(header_base.len()) {
+        pause_for_unsupported_job(reason, backends, backend_executor, active_job, tui);
+        return Ok(());
+    }
+    super::clear_unsupported_work_notice();
 
     if let Some(current) = active_job.as_mut() {
         if same_pool_template_identity(current, &job, header_base.as_ref(), network_target.as_ref())
@@ -2130,6 +2395,9 @@ fn assign_pool_job(
 
     stats.bump_templates();
     let height = job.height;
+    if mode.is_user() {
+        super::ui::set_share_difficulty(job.difficulty);
+    }
     let difficulty_label = job
         .difficulty
         .map(|difficulty| difficulty.to_string())
@@ -2144,7 +2412,7 @@ fn assign_pool_job(
     *active_job = Some(next_job);
 
     if mode.is_user() {
-        info(
+        super::ui::detail(
             "JOB",
             format!("new job height={height} difficulty={difficulty_label}"),
         );
@@ -2336,7 +2604,7 @@ fn maybe_hot_rebalance_active_pool_job(
                 job,
             )?;
             record_pool_assignment_timing(job, "hot-rebalance", None, assign_started.elapsed());
-            info("JOB", format!("{reason}; hot-rebalanced current pool job"));
+            super::ui::detail("JOB", format!("{reason}; hot-rebalanced current pool job"));
         }
     }
 
@@ -2393,7 +2661,7 @@ fn service_pool_submit_backlog_with_submitter<F>(
     let (flushed, submit_failed) =
         flush_deferred_pool_submits(job, stats, &mut submitter, recent_submit_lookup);
     if flushed > 0 && mode.is_user() {
-        info("SHARE", format!("submitted {flushed} deferred share(s)"));
+        super::ui::detail("SHARE", format!("submitted {flushed} deferred share(s)"));
     }
     if submit_failed && mode.is_user() {
         warn("SHARE", "failed to queue deferred submit");
@@ -2615,7 +2883,7 @@ where
     {
         stats.bump_submitted();
         if mode.is_user() {
-            info("SHARE", format!("submitted (backend={backend_label})"));
+            super::ui::detail("SHARE", format!("submitted (backend={backend_label})"));
         }
         job.pending_submit_nonces.insert(
             (binding.job_id.clone(), solution.nonce),
@@ -2650,26 +2918,62 @@ where
 }
 
 impl PoolUiTelemetryClient {
+    /// Pool stats go through the same SOCKS proxy as the Stratum session.
+    fn for_destination(
+        pool_url: &str,
+        address: &str,
+        memo: Option<&str>,
+        proxy: Option<&crate::pool::SocksProxy>,
+    ) -> Option<Self> {
+        let account = crate::payout_destination::account_id(address, memo);
+        Self::with_proxy(pool_url, &account, proxy)
+    }
+
+    #[cfg(test)]
     fn new(pool_url: &str, address: &str) -> Option<Self> {
+        Self::with_proxy(pool_url, address, None)
+    }
+
+    fn with_proxy(
+        pool_url: &str,
+        address: &str,
+        proxy: Option<&crate::pool::SocksProxy>,
+    ) -> Option<Self> {
         let base_urls = pool_api_base_urls_from_pool_url(pool_url);
         if base_urls.is_empty() {
             return None;
         }
-        let http = HttpClient::builder()
-            .timeout(POOL_TELEMETRY_TIMEOUT)
-            .build()
-            .ok()?;
+        let mut builder = HttpClient::builder().timeout(POOL_TELEMETRY_TIMEOUT);
+        if let Some(proxy) = proxy {
+            // Never fall back to a direct request when the proxy is set.
+            builder = builder.proxy(proxy.reqwest_proxy().ok()?);
+        }
+        let http = builder.build().ok()?;
         let endpoints = base_urls
             .into_iter()
-            .map(|base_url| PoolTelemetryEndpoint {
-                stats_url: format!("{base_url}/api/stats"),
-                miner_balance_url: format!(
-                    "{base_url}/api/miner/{address}/balance?include_pending_estimate=false"
-                ),
-                miner_url: format!("{base_url}/api/miner/{address}?include_pending_estimate=false"),
+            .filter_map(|base_url| {
+                let mut miner_url = reqwest::Url::parse(&base_url).ok()?;
+                miner_url
+                    .path_segments_mut()
+                    .ok()?
+                    .extend(["api", "miner", address]);
+                let mut balance_url = miner_url.clone();
+                balance_url.path_segments_mut().ok()?.push("balance");
+                miner_url
+                    .query_pairs_mut()
+                    .append_pair("include_pending_estimate", "true");
+                balance_url
+                    .query_pairs_mut()
+                    .append_pair("include_pending_estimate", "true");
+                Some(PoolTelemetryEndpoint {
+                    stats_url: format!("{base_url}/api/stats"),
+                    miner_balance_url: balance_url.to_string(),
+                    miner_url: miner_url.to_string(),
+                })
             })
             .collect::<Vec<_>>();
         Some(Self {
+            pool_url: crate::pool::primary_pool_url(pool_url).to_string(),
             endpoints,
             http,
             rate_limit_backoff_until: Arc::new(Mutex::new(None)),
@@ -2691,10 +2995,12 @@ impl PoolUiTelemetryClient {
         }
         self.fail_if_rate_limited()?;
         let mut errors = Vec::new();
+        let mut first_reason = None;
         for endpoint in &self.endpoints {
             let response = match self.http.get(&endpoint.stats_url).send() {
                 Ok(response) => response,
                 Err(err) => {
+                    first_reason.get_or_insert_with(|| reqwest_failure_reason(&err));
                     errors.push(format!("GET {} failed: {err}", endpoint.stats_url));
                     continue;
                 }
@@ -2705,6 +3011,7 @@ impl PoolUiTelemetryClient {
                     if self.is_rate_limited() {
                         return Err(err);
                     }
+                    first_reason.get_or_insert_with(|| telemetry_failure_reason(&err));
                     errors.push(format!("GET {} failed: {err}", endpoint.stats_url));
                     continue;
                 }
@@ -2715,6 +3022,7 @@ impl PoolUiTelemetryClient {
                 .and_then(value_as_f64)
                 .or_else(|| body.pointer("/network_hashrate").and_then(value_as_f64));
             let Some(hashrate) = hashrate else {
+                first_reason.get_or_insert(FailureReason::InvalidResponse);
                 errors.push(format!(
                     "GET {} missing network hashrate field",
                     endpoint.stats_url
@@ -2722,6 +3030,7 @@ impl PoolUiTelemetryClient {
                 continue;
             };
             if !hashrate.is_finite() || hashrate < 0.0 {
+                first_reason.get_or_insert(FailureReason::InvalidResponse);
                 errors.push(format!(
                     "GET {} invalid network hashrate value",
                     endpoint.stats_url
@@ -2734,12 +3043,17 @@ impl PoolUiTelemetryClient {
             return Ok(value);
         }
 
-        bail!("pool hashrate telemetry unavailable: {}", errors.join("; "));
+        Err(PoolTelemetryError::new(
+            first_reason.unwrap_or(FailureReason::InvalidResponse),
+            format!("pool hashrate telemetry unavailable: {}", errors.join("; ")),
+        )
+        .into())
     }
 
     fn fetch_pool_balances(&self) -> Result<(String, String)> {
         self.fail_if_rate_limited()?;
         let mut errors = Vec::new();
+        let mut first_reason = None;
         for endpoint in &self.endpoints {
             match self.fetch_balance_from_url(&endpoint.miner_balance_url) {
                 Ok(value) => return Ok(value),
@@ -2756,9 +3070,10 @@ impl PoolUiTelemetryClient {
                                 StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
                             )
                         });
+                    first_reason.get_or_insert_with(|| telemetry_failure_reason(&err));
                     errors.push(format!(
                         "GET {} failed: {err:#}",
-                        endpoint.miner_balance_url
+                        pool_telemetry_url_for_log(&endpoint.miner_balance_url)
                     ));
                     if !legacy_route_missing {
                         continue;
@@ -2772,12 +3087,20 @@ impl PoolUiTelemetryClient {
                     if self.is_rate_limited() {
                         return Err(err);
                     }
-                    errors.push(format!("GET {} failed: {err:#}", endpoint.miner_url));
+                    first_reason.get_or_insert_with(|| telemetry_failure_reason(&err));
+                    errors.push(format!(
+                        "GET {} failed: {err:#}",
+                        pool_telemetry_url_for_log(&endpoint.miner_url)
+                    ));
                 }
             }
         }
 
-        bail!("pool balance telemetry unavailable: {}", errors.join("; "))
+        Err(PoolTelemetryError::new(
+            first_reason.unwrap_or(FailureReason::InvalidResponse),
+            format!("pool balance telemetry unavailable: {}", errors.join("; ")),
+        )
+        .into())
     }
 
     fn fail_if_rate_limited(&self) -> Result<()> {
@@ -2785,7 +3108,11 @@ impl PoolUiTelemetryClient {
             return Ok(());
         };
         let secs = remaining.as_secs().max(1);
-        bail!("pool telemetry temporarily rate limited; retry in {secs}s")
+        Err(PoolTelemetryError::new(
+            FailureReason::RateLimited,
+            format!("pool telemetry temporarily rate limited; retry in {secs}s"),
+        )
+        .into())
     }
 
     fn is_rate_limited(&self) -> bool {
@@ -2819,10 +3146,19 @@ impl PoolUiTelemetryClient {
                 .unwrap_or(POOL_TELEMETRY_REFRESH_INTERVAL)
                 .as_secs()
                 .max(1);
-            bail!("GET {url} rate limited; retry in {secs}s");
+            return Err(PoolTelemetryError::new(
+                FailureReason::RateLimited,
+                format!(
+                    "GET {} rate limited; retry in {secs}s",
+                    pool_telemetry_url_for_log(url)
+                ),
+            )
+            .into());
         }
-        let response = response.error_for_status()?;
-        Ok(response.json()?)
+        let response = response
+            .error_for_status()
+            .map_err(reqwest::Error::without_url)?;
+        Ok(response.json().map_err(reqwest::Error::without_url)?)
     }
 
     fn record_rate_limit_backoff(&self, retry_after: Option<Duration>) {
@@ -2837,7 +3173,11 @@ impl PoolUiTelemetryClient {
     }
 
     fn fetch_balance_from_url(&self, url: &str) -> Result<(String, String)> {
-        let response = self.http.get(url).send()?;
+        let response = self
+            .http
+            .get(url)
+            .send()
+            .map_err(reqwest::Error::without_url)?;
         let body = self.json_or_rate_limit(response, url)?;
         let pending = body
             .pointer("/balance/pending_confirmed")
@@ -2847,11 +3187,162 @@ impl PoolUiTelemetryClient {
         let (Some(pending), Some(paid)) = (pending, paid) else {
             bail!("missing balance fields");
         };
+        let estimated = body
+            .pointer("/pending_estimate/estimated_pending")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let pending = pending
+            .checked_add(estimated)
+            .ok_or_else(|| anyhow!("pool pending balance overflow"))?;
         Ok((
             format_atomic_units_bnt(pending),
             format_atomic_units_bnt(paid),
         ))
     }
+}
+
+fn pool_telemetry_url_for_log(url: &str) -> String {
+    if let Some((base, _)) = url.split_once("/api/miner/") {
+        format!("{base}/api/miner/[account]")
+    } else {
+        url.to_string()
+    }
+}
+
+/// Consecutive statistics failures for the user's pool. The warning is shown
+/// once per pool after a few failures in a row, so a single dropped request
+/// stays quiet, and again only after a successful fetch or a pool change.
+#[derive(Default)]
+struct PoolTelemetryFailures {
+    pool_url: String,
+    consecutive: u32,
+    warned: bool,
+    /// Consecutive network hashrate failures, which pace the refresh.
+    hashrate: u32,
+    /// Consecutive balance failures, which pace the balance fetch.
+    balances: u32,
+}
+
+impl PoolTelemetryFailures {
+    fn track(&mut self, pool_url: &str) {
+        if self.pool_url != pool_url {
+            *self = Self {
+                pool_url: pool_url.to_string(),
+                ..Self::default()
+            };
+        }
+    }
+
+    /// Returns true when a shown warning should be followed by a recovery note.
+    fn succeeded(&mut self, pool_url: &str) -> bool {
+        self.track(pool_url);
+        let recovered = self.warned;
+        self.consecutive = 0;
+        self.warned = false;
+        recovered
+    }
+
+    /// Counts each endpoint's failures in a row; `balances` is `None` when
+    /// the balance was not asked for.
+    fn endpoints(&mut self, pool_url: &str, hashrate_failed: bool, balances: Option<bool>) {
+        self.track(pool_url);
+        self.hashrate = if hashrate_failed {
+            self.hashrate.saturating_add(1)
+        } else {
+            0
+        };
+        if let Some(failed) = balances {
+            self.balances = if failed {
+                self.balances.saturating_add(1)
+            } else {
+                0
+            };
+        }
+    }
+
+    /// Returns true when the warning should be shown now.
+    fn failed(&mut self, pool_url: &str) -> bool {
+        self.track(pool_url);
+        self.consecutive = self.consecutive.saturating_add(1);
+        if self.warned || self.consecutive < POOL_TELEMETRY_WARN_AFTER_FAILURES {
+            return false;
+        }
+        self.warned = true;
+        true
+    }
+}
+
+/// A pool statistics fetch failure with its typed cause for diagnostics.
+#[derive(Debug)]
+struct PoolTelemetryError {
+    reason: FailureReason,
+    message: String,
+}
+
+impl PoolTelemetryError {
+    fn new(reason: FailureReason, message: String) -> Self {
+        Self { reason, message }
+    }
+}
+
+impl std::fmt::Display for PoolTelemetryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for PoolTelemetryError {}
+
+fn telemetry_failure_reason(err: &anyhow::Error) -> FailureReason {
+    if let Some(err) = err.downcast_ref::<PoolTelemetryError>() {
+        return err.reason;
+    }
+    if let Some(err) = err.downcast_ref::<reqwest::Error>() {
+        return reqwest_failure_reason(err);
+    }
+    FailureReason::InvalidResponse
+}
+
+fn reqwest_failure_reason(err: &reqwest::Error) -> FailureReason {
+    if err.is_timeout() {
+        return FailureReason::ConnectionTimedOut;
+    }
+    if err.status().is_some() {
+        return FailureReason::HttpStatus;
+    }
+    if err.is_decode() {
+        return FailureReason::InvalidResponse;
+    }
+    let mut source = std::error::Error::source(err);
+    while let Some(cause) = source {
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            let operation = if cause.to_string().contains("dns error") {
+                seine_telemetry::DiagnosticOperation::PoolResolve
+            } else {
+                seine_telemetry::DiagnosticOperation::PoolStats
+            };
+            return crate::diagnostics::io_detail(operation, io).reason;
+        }
+        if cause.to_string().contains("dns error") {
+            return FailureReason::DnsFailed;
+        }
+        source = cause.source();
+    }
+    if err.is_connect() {
+        FailureReason::ConnectionFailed
+    } else {
+        FailureReason::IoFailed
+    }
+}
+
+/// Polling slows down after repeated failures, up to five minutes apart,
+/// so an unreachable statistics API is not asked every few seconds.
+fn pool_telemetry_failure_backoff(consecutive_failures: u32) -> Duration {
+    if consecutive_failures < POOL_TELEMETRY_WARN_AFTER_FAILURES {
+        return Duration::ZERO;
+    }
+    let doublings = (consecutive_failures - POOL_TELEMETRY_WARN_AFTER_FAILURES + 1).min(6);
+    (POOL_TELEMETRY_REFRESH_INTERVAL * (1u32 << doublings)).min(POOL_TELEMETRY_MAX_BACKOFF)
 }
 
 fn pool_telemetry_refresh_delay() -> Duration {
@@ -2890,11 +3381,35 @@ fn fetch_local_daemon_wallet_snapshot(
     }
 }
 
+/// Waits up to `idle` for a message on any of `inputs`. A closed channel
+/// always reports ready, so a wake with nothing queued sleeps out the rest.
+fn wait_for_pool_loop_input(
+    mut inputs: crossbeam_channel::Select<'_>,
+    idle: Duration,
+    all_empty: impl FnOnce() -> bool,
+) {
+    let started = Instant::now();
+    if inputs.ready_timeout(idle).is_ok() && all_empty() {
+        std::thread::sleep(idle.saturating_sub(started.elapsed()));
+    }
+}
+
+fn join_telemetry_fetch<T>(handle: std::thread::ScopedJoinHandle<'_, Result<T>>) -> Result<T> {
+    handle
+        .join()
+        .unwrap_or_else(|_| Err(anyhow!("telemetry fetch panicked")))
+}
+
 fn fetch_local_daemon_wallet_snapshot_once(
     client: &ApiClient,
 ) -> Result<LocalDaemonWalletSnapshot> {
-    let address = client.get_wallet_address()?.address;
-    let balance = client.get_wallet_balance()?;
+    let (address, balance) = std::thread::scope(|scope| {
+        let address = scope.spawn(|| client.get_wallet_address());
+        let balance = client.get_wallet_balance();
+        (join_telemetry_fetch(address), balance)
+    });
+    let address = address?.address;
+    let balance = balance?;
     Ok(LocalDaemonWalletSnapshot {
         address,
         pending: format_atomic_units_bnt(balance.pending),
@@ -2908,7 +3423,7 @@ fn div_ceil_u64(value: u64, divisor: u64) -> u64 {
 }
 
 fn pool_api_base_urls_from_pool_url(pool_url: &str) -> Vec<String> {
-    let trimmed = pool_url.trim();
+    let trimmed = crate::pool::primary_pool_url(pool_url);
     if trimmed.is_empty() {
         return Vec::new();
     }
@@ -3035,17 +3550,75 @@ fn compact_pool_address_for_log(address: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn solo_logins_keep_the_bare_address_for_balances() {
+        use crate::shortname::tests::ADDRESS;
+        let mut cfg = crate::miner::tests::test_config();
+        cfg.pool_url = Some("stratum+tcp://bntpool.com:3333".into());
+        cfg.pool_worker = Some("rig".into());
+        cfg.mining_address = Some(format!("solo:{ADDRESS}"));
+        let (user, dev) = super::build_pool_connection_configs(&cfg).unwrap();
+        assert!(user.solo);
+        assert_eq!(user.address, ADDRESS);
+        assert_eq!(user.login_address(), format!("solo:{ADDRESS}"));
+        assert!(!dev.solo);
+        assert_eq!(dev.login_address(), dev.address);
+
+        cfg.mining_address = Some(ADDRESS.into());
+        let (user, _) = super::build_pool_connection_configs(&cfg).unwrap();
+        assert!(!user.solo);
+        assert_eq!(user.login_address(), ADDRESS);
+    }
+
+    #[test]
+    fn dev_fee_rounds_fall_back_to_the_users_pools() {
+        assert_eq!(
+            super::dev_pool_urls("stratum+ssl://1.2.3.4:3443,stratum+tcp://bntpool.com:3333"),
+            "stratum+tcp://bntpool.com:3333,stratum+ssl://1.2.3.4:3443"
+        );
+        assert_eq!(
+            super::dev_pool_urls("stratum+tcp://bntpool.com:3333"),
+            "stratum+tcp://bntpool.com:3333"
+        );
+    }
+
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
+    #[test]
+    fn idle_wait_wakes_on_a_message_and_not_on_a_closed_channel() {
+        let idle = Duration::from_secs(5);
+        let (tx, rx) = crossbeam_channel::unbounded::<u8>();
+        let sender = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(20));
+            tx.send(1).unwrap();
+        });
+        let started = Instant::now();
+        let mut inputs = crossbeam_channel::Select::new();
+        inputs.recv(&rx);
+        super::wait_for_pool_loop_input(inputs, idle, || rx.is_empty());
+        assert!(started.elapsed() < idle / 2);
+        assert_eq!(rx.try_recv(), Ok(1));
+        sender.join().unwrap();
+
+        let idle = Duration::from_millis(50);
+        let (tx, closed) = crossbeam_channel::unbounded::<u8>();
+        drop(tx);
+        let started = Instant::now();
+        let mut inputs = crossbeam_channel::Select::new();
+        inputs.recv(&closed);
+        super::wait_for_pool_loop_input(inputs, idle, || closed.is_empty());
+        assert!(started.elapsed() >= idle);
+    }
+
     use crate::backend::MiningSolution;
     use crate::daemon_api::ApiClient;
     use crate::miner::stats::Stats;
     use httpmock::prelude::*;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     use super::{
         advance_pool_nonce_cursor, compact_pool_address_for_log,
@@ -3058,6 +3631,10 @@ mod tests {
         PoolShareSubmitOutcome, PoolUiTelemetryClient, RecentPendingSubmitLookup,
         POOL_DESYNC_STALE_ACK_THRESHOLD, POOL_DESYNC_STALE_ACK_WINDOW, POOL_MAX_INFLIGHT_SUBMITS,
         POOL_SUBMIT_ACK_TIMEOUT,
+    };
+    use super::{
+        pool_telemetry_failure_backoff, telemetry_failure_reason, FailureReason,
+        PoolTelemetryFailures, POOL_TELEMETRY_MAX_BACKOFF,
     };
 
     #[test]
@@ -3126,6 +3703,90 @@ mod tests {
             "telemetry must not consume hashes twice"
         );
         assert_eq!(job.round_backend_hashes[&7], 339);
+    }
+
+    #[test]
+    fn unsupported_work_stops_backends_without_ending_the_session() {
+        use crate::backend::{BackendEvent, BackendInstanceId, PowBackend, WorkAssignment};
+        use crate::miner::{backend_executor::BackendExecutor, BackendSlot};
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        struct CancelCounting(AtomicU64);
+        impl PowBackend for CancelCounting {
+            fn name(&self) -> &'static str {
+                "cpu"
+            }
+            fn lanes(&self) -> usize {
+                1
+            }
+            fn set_instance_id(&self, _: BackendInstanceId) {}
+            fn set_event_sink(&self, _: crossbeam_channel::Sender<BackendEvent>) {}
+            fn start(&self) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn stop(&self) {}
+            fn assign_work(&self, _: WorkAssignment) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn cancel_work(&self) -> anyhow::Result<()> {
+                self.0.fetch_add(1, Ordering::AcqRel);
+                Ok(())
+            }
+            fn fence(&self) -> anyhow::Result<()> {
+                Ok(())
+            }
+            fn take_hashes(&self) -> u64 {
+                0
+            }
+        }
+        let backend = Arc::new(CancelCounting(AtomicU64::new(0)));
+        let mut slots = vec![BackendSlot {
+            id: 3,
+            backend: backend.clone(),
+            lanes: 1,
+            runtime_policy: Default::default(),
+            capabilities: backend.capabilities(),
+        }];
+        let executor = BackendExecutor::new();
+        let mut active = Some(test_active_job(1));
+        let mut tui = None;
+        super::pause_for_unsupported_job(
+            "Faraday PoW is not supported by this build",
+            &mut slots,
+            &executor,
+            &mut active,
+            &mut tui,
+        );
+        assert!(active.is_none(), "the old job must not keep being mined");
+        assert!(backend.0.load(Ordering::Acquire) >= 1);
+        // Repeated unsupported jobs while paused are a no-op for backends.
+        let cancels = backend.0.load(Ordering::Acquire);
+        super::pause_for_unsupported_job("x", &mut slots, &executor, &mut active, &mut tui);
+        assert_eq!(backend.0.load(Ordering::Acquire), cancels);
+        crate::miner::clear_unsupported_work_notice();
+    }
+
+    #[test]
+    fn a_pool_update_notice_pauses_mining_until_supported_work_arrives() {
+        let notice = "this miner cannot mine after the Faraday fork (block 103,680); update seine: https://github.com/zpalmtree/seine/releases/latest";
+        super::note_pool_requires_update(
+            super::PoolConnectionMode::User,
+            &crate::pool::PoolEvent::Connected,
+        );
+        assert!(!crate::update_check::mining_blocked());
+        // A dev-fee pool asking for an update leaves mining alone.
+        super::note_pool_requires_update(
+            super::PoolConnectionMode::Dev,
+            &crate::pool::PoolEvent::LoginRejected(notice.into()),
+        );
+        assert!(!crate::update_check::mining_blocked());
+        super::note_pool_requires_update(
+            super::PoolConnectionMode::User,
+            &crate::pool::PoolEvent::LoginRejected(notice.into()),
+        );
+        assert!(crate::update_check::mining_blocked());
+        crate::miner::clear_unsupported_work_notice();
+        assert!(!crate::update_check::mining_blocked());
     }
 
     fn test_daemon_client(server: &MockServer, token: &str) -> ApiClient {
@@ -3356,6 +4017,7 @@ mod tests {
             &mut parked,
             &mut lookup,
             &stats,
+            &mut None,
         );
         let kept = parked.as_ref().expect("rebind must keep the parked job");
         assert_eq!(kept.job.job_id, "job-2");
@@ -3376,6 +4038,7 @@ mod tests {
             &mut parked,
             &mut lookup,
             &stats,
+            &mut None,
         );
         assert!(parked.is_none(), "new block must discard the parked job");
         shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -3391,6 +4054,74 @@ mod tests {
             backend: "cpu",
             found_at: std::time::Instant::now(),
         }
+    }
+
+    #[test]
+    fn memo_telemetry_uses_the_opaque_account_id() {
+        let memo = "ID0001%2F?x=a&b=#";
+        let standard = PoolUiTelemetryClient::for_destination(
+            "stratum+tcp://bntpool.com:3333",
+            "address",
+            Some(memo),
+            None,
+        )
+        .unwrap();
+        assert!(standard.endpoints[0].miner_balance_url.contains(
+            &crate::payout_destination::account_id("address", Some(memo))
+        ));
+        assert!(!standard.endpoints[0].miner_balance_url.contains("ID0001"));
+    }
+
+    #[test]
+    fn memo_telemetry_tracks_accepted_pool_switches() {
+        let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let client = crate::pool::PoolClient::connect(
+            "127.0.0.1:1",
+            "address".into(),
+            "rig".into(),
+            shutdown.clone(),
+        )
+        .unwrap();
+        let mut session = super::PoolSession {
+            connection: super::PoolConnectionConfig {
+                payout_memo: Some("DEMO001".into()),
+                mode: PoolConnectionMode::User,
+                pool_url: "stratum+tcp://bntpool.com:3333,stratum+ssl://pool.example:3334".into(),
+                proxy: None,
+                address: "address".into(),
+                solo: false,
+                worker: "rig".into(),
+            },
+            client,
+            telemetry: None,
+            latest_job: None,
+            connected: false,
+            resume_job: None,
+            recent_submit_lookup: Default::default(),
+        };
+        for url in [
+            "stratum+ssl://pool.example:3334",
+            "stratum+tcp://bntpool.com:3333",
+        ] {
+            let event = crate::pool::PoolEvent::LoginAccepted(crate::pool::PoolLoginAck {
+                pool_url: Some(url.into()),
+                payout_account: None,
+                min_payout_atomic: None,
+                protocol_version: 2,
+                capabilities: vec![],
+                required_capabilities: vec![],
+            });
+            super::update_user_pool_telemetry(&event, &mut session, &mut None);
+            let telemetry = session.telemetry.as_ref().unwrap();
+            assert_eq!(telemetry.pool_url, url);
+            super::update_user_pool_telemetry(
+                &crate::pool::PoolEvent::Disconnected("test".into()),
+                &mut session,
+                &mut None,
+            );
+            assert!(session.telemetry.is_none());
+        }
+        shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
     }
 
     #[test]
@@ -3418,23 +4149,201 @@ mod tests {
     }
 
     #[test]
-    fn telemetry_balance_url_skips_pending_estimate_query() {
+    fn telemetry_balance_url_includes_pending_estimate() {
         let client = PoolUiTelemetryClient::new("stratum+tcp://bntpool.com:3333", "addr")
             .expect("telemetry client should be created");
         assert_eq!(
             client.endpoints[0].miner_balance_url,
-            "https://bntpool.com/api/miner/addr/balance?include_pending_estimate=false"
+            "https://bntpool.com/api/miner/addr/balance?include_pending_estimate=true"
         );
     }
 
     #[test]
-    fn telemetry_miner_fallback_url_skips_pending_estimate_query() {
+    fn telemetry_miner_fallback_url_includes_pending_estimate() {
         let client = PoolUiTelemetryClient::new("stratum+tcp://bntpool.com:3333", "addr")
             .expect("telemetry client should be created");
         assert_eq!(
             client.endpoints[0].miner_url,
-            "https://bntpool.com/api/miner/addr?include_pending_estimate=false"
+            "https://bntpool.com/api/miner/addr?include_pending_estimate=true"
         );
+    }
+
+    #[test]
+    fn telemetry_pending_includes_estimated_rewards() {
+        for (balance, estimate, expected) in [
+            (
+                json!({"pending_confirmed": 0, "paid": 200000000}),
+                json!({"estimated_pending": 10958365}),
+                "0.1096 BNT",
+            ),
+            (
+                json!({"pending_confirmed": 100000000, "pending_queued": 50000000, "paid": 200000000}),
+                json!({"estimated_pending": 10958365}),
+                "1.1096 BNT",
+            ),
+            (
+                json!({"pending_confirmed": 100000000, "paid": 200000000}),
+                Value::Null,
+                "1 BNT",
+            ),
+            (
+                json!({"pending": 100000000, "paid": 200000000}),
+                Value::Null,
+                "1 BNT",
+            ),
+            (
+                json!({"pending_confirmed": 0, "paid": 200000000}),
+                json!({"estimated_pending": 0}),
+                "0 BNT",
+            ),
+        ] {
+            let server = MockServer::start();
+            let response = server.mock(|when, then| {
+                when.method(GET)
+                    .path("/api/miner/addr/balance")
+                    .query_param("include_pending_estimate", "true");
+                then.status(200).json_body(json!({
+                    "balance": balance,
+                    "pending_estimate": estimate,
+                }));
+            });
+            let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+            assert_eq!(
+                client.fetch_pool_balances().unwrap(),
+                (expected.into(), "2 BNT".into())
+            );
+            response.assert_hits(1);
+        }
+    }
+
+    #[test]
+    fn pool_stats_warning_waits_for_repeated_failures_and_stays_per_pool() {
+        let mut failures = PoolTelemetryFailures::default();
+        let pool = "stratum+tcp://bntpool.com:3333";
+        assert!(!failures.failed(pool));
+        assert!(!failures.failed(pool));
+        assert!(
+            !failures.succeeded(pool),
+            "no warning shown, so no recovery note"
+        );
+        assert!(!failures.failed(pool));
+        assert!(!failures.failed(pool));
+        assert!(failures.failed(pool), "third failure in a row warns");
+        assert!(!failures.failed(pool), "warned once per outage");
+        assert!(failures.succeeded(pool));
+
+        for _ in 0..3 {
+            failures.failed(pool);
+        }
+        // A different pool starts its own count.
+        let backup = "stratum+tcp://backup.example:3333";
+        assert!(!failures.failed(backup));
+        assert_eq!(failures.consecutive, 1);
+    }
+
+    #[test]
+    fn pool_stats_polling_backs_off_after_repeated_failures() {
+        assert_eq!(pool_telemetry_failure_backoff(0), Duration::ZERO);
+        assert_eq!(pool_telemetry_failure_backoff(2), Duration::ZERO);
+        assert_eq!(pool_telemetry_failure_backoff(3), Duration::from_secs(10));
+        assert_eq!(pool_telemetry_failure_backoff(4), Duration::from_secs(20));
+        assert_eq!(
+            pool_telemetry_failure_backoff(100),
+            POOL_TELEMETRY_MAX_BACKOFF
+        );
+    }
+
+    #[test]
+    fn pool_stats_failures_carry_typed_reasons() {
+        let server = MockServer::start();
+        server.mock(|when, then| {
+            when.method(GET).path("/api/stats");
+            then.status(404);
+        });
+        server.mock(|when, then| {
+            when.method(GET).path("/api/miner/addr/balance");
+            then.status(200).body("not json");
+        });
+        let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+        let err = client.fetch_pool_hashrate().unwrap_err();
+        assert_eq!(telemetry_failure_reason(&err), FailureReason::HttpStatus);
+        let err = client.fetch_pool_balances().unwrap_err();
+        assert_eq!(
+            telemetry_failure_reason(&err),
+            FailureReason::InvalidResponse
+        );
+
+        let limited = MockServer::start();
+        limited.mock(|when, then| {
+            when.method(GET).path("/api/stats");
+            then.status(429).header("Retry-After", "30");
+        });
+        let client = PoolUiTelemetryClient::new(&limited.url(""), "addr").unwrap();
+        let err = client.fetch_pool_hashrate().unwrap_err();
+        assert_eq!(telemetry_failure_reason(&err), FailureReason::RateLimited);
+        let err = client.fetch_pool_balances().unwrap_err();
+        assert_eq!(telemetry_failure_reason(&err), FailureReason::RateLimited);
+
+        // A socket bound without listening holds its port. Linux refuses
+        // connections to it; macOS and Windows let them time out.
+        let socket = tokio::net::TcpSocket::new_v4().unwrap();
+        socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+        let port = socket.local_addr().unwrap().port();
+        let client =
+            PoolUiTelemetryClient::new(&format!("http://127.0.0.1:{port}"), "addr").unwrap();
+        let err = client.fetch_pool_hashrate().unwrap_err();
+        let reason = telemetry_failure_reason(&err);
+        if cfg!(target_os = "linux") {
+            assert_eq!(reason, FailureReason::ConnectionRefused);
+        } else {
+            assert!(
+                matches!(
+                    reason,
+                    FailureReason::ConnectionRefused | FailureReason::ConnectionTimedOut
+                ),
+                "{reason:?}"
+            );
+        }
+        drop(socket);
+    }
+
+    #[test]
+    fn balance_failures_do_not_slow_the_network_hashrate_refresh() {
+        let mut failures = PoolTelemetryFailures::default();
+        let pool = "stratum+tcp://bntpool.com:3333";
+        for _ in 0..5 {
+            failures.endpoints(pool, false, Some(true));
+        }
+        assert_eq!(failures.hashrate, 0);
+        assert_eq!(
+            pool_telemetry_failure_backoff(failures.hashrate),
+            Duration::ZERO
+        );
+        assert!(pool_telemetry_failure_backoff(failures.balances) > Duration::ZERO);
+        // A refresh that skipped the balance keeps its count.
+        failures.endpoints(pool, false, None);
+        assert_eq!(failures.balances, 5);
+        failures.endpoints(pool, true, Some(false));
+        assert_eq!((failures.hashrate, failures.balances), (1, 0));
+    }
+
+    #[test]
+    fn telemetry_pending_rejects_overflow() {
+        let server = MockServer::start();
+        let response = server.mock(|when, then| {
+            when.method(GET).path("/api/miner/addr/balance");
+            then.status(200).json_body(json!({
+                "balance": {"pending_confirmed": u64::MAX, "paid": 0},
+                "pending_estimate": {"estimated_pending": 1},
+            }));
+        });
+        let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
+        assert!(client
+            .fetch_pool_balances()
+            .unwrap_err()
+            .to_string()
+            .contains("overflow"));
+        response.assert_hits(1);
     }
 
     #[test]
@@ -3443,7 +4352,7 @@ mod tests {
         let balance_mock = server.mock(|when, then| {
             when.method(GET)
                 .path("/api/miner/addr/balance")
-                .query_param("include_pending_estimate", "false");
+                .query_param("include_pending_estimate", "true");
             then.status(429)
                 .header("retry-after", "5")
                 .json_body(json!({ "error": "rate limit exceeded" }));
@@ -3451,7 +4360,7 @@ mod tests {
         let fallback_mock = server.mock(|when, then| {
             when.method(GET)
                 .path("/api/miner/addr")
-                .query_param("include_pending_estimate", "false");
+                .query_param("include_pending_estimate", "true");
             then.status(200).json_body(json!({
                 "balance": {
                     "pending_confirmed": 1u64,
@@ -3470,6 +4379,27 @@ mod tests {
         assert!(client.rate_limit_backoff_remaining().is_some());
         balance_mock.assert_hits(1);
         fallback_mock.assert_hits(0);
+    }
+
+    #[test]
+    fn telemetry_through_a_pool_proxy_never_connects_directly() {
+        let server = MockServer::start();
+        let stats = server.mock(|when, then| {
+            when.method(GET).path("/api/stats");
+            then.status(200)
+                .json_body(json!({"chain": {"network_hashrate": 1234.0}}));
+        });
+        let dead = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = crate::pool::SocksProxy::parse(&format!(
+            "127.0.0.1:{}",
+            dead.local_addr().unwrap().port()
+        ))
+        .unwrap();
+        drop(dead);
+        let client = PoolUiTelemetryClient::with_proxy(&server.url(""), "addr", Some(&proxy))
+            .expect("telemetry client should be created");
+        assert!(client.fetch_pool_hashrate().is_err());
+        stats.assert_hits(0);
     }
 
     #[test]
@@ -3523,10 +4453,13 @@ mod tests {
         let fallback = server.mock(|when, then| {
             when.method(GET).path("/api/miner/addr");
             then.status(200)
-                .json_body(json!({"balance": {"pending": 1, "paid": 2}}));
+                .json_body(json!({"balance": {"pending": 100000000, "paid": 200000000}, "pending_estimate": {"estimated_pending": 10958365}}));
         });
         let client = PoolUiTelemetryClient::new(&server.url(""), "addr").unwrap();
-        assert!(client.fetch_pool_balances().is_ok());
+        assert_eq!(
+            client.fetch_pool_balances().unwrap(),
+            ("1.1096 BNT".into(), "2 BNT".into())
+        );
         balance.assert_hits(1);
         fallback.assert_hits(1);
     }

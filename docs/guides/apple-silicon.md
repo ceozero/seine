@@ -30,12 +30,16 @@ reversed-order samples, so a noisy first scan does not cache a slower setting.
 On macOS, affinity values are Mach scheduler tags plus a high-QoS preference; they
 are not hard CPU-ID pinning.
 
-## Metal (experimental)
+## Metal
 
-Metal support is experimental and is never auto-selected. On the M4 Max, CPU-only
-mining substantially outperformed Metal-only and CPU+Metal because both processors
-compete for the same unified memory bandwidth. Pre-built macOS ARM binaries include
-Metal for explicit experiments. To build from source:
+From block 103,680 (BLAKE2b blocks) Seine mines on the Metal GPU as well as the CPU.
+Pre-built macOS ARM binaries add the GPU by themselves; before that height it stays
+idle and holds no memory. Pass `--backend cpu` to leave the GPU out.
+
+Metal mining of Argon2 blocks is experimental and only runs with
+`--backend cpu,metal`: on the M4 Max, CPU-only Argon2 mining substantially
+outperformed Metal-only and CPU+Metal because both processors compete for the same
+unified memory bandwidth. To build from source:
 
 ```bash
 cargo build --release --no-default-features --features metal

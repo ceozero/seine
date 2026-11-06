@@ -31,7 +31,7 @@ fn main() {
         println!("{kernel}: PASS (full 2 GiB reference parity)");
         // Research: skipped arena stores, checked on an arena that still holds
         // the previous hash, so a stale read would show up as a mismatch.
-        if kernel.as_str().starts_with("avx512") && kernel.as_str().contains("stream") {
+        if kernel.as_str().contains("stream") {
             for permille in [500u16, 600] {
                 hasher.set_skip_store_permille(permille);
                 let salt2 = b"seine-cpu-validation-skip";

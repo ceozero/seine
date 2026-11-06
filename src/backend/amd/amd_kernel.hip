@@ -1,18 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // HIP Argon2id lane-fill kernel specialized for Seine's PoW profile.
 //
-// Port of src/backend/nvidia_kernel.cu. Retained from the CUDA kernel:
-//   - full-warp (32-thread) cooperative block compression mapping.
-//   - unrolled global loads/stores for memory-level parallelism.
-//   - closed-form G-round index computation (no switch/branch divergence).
-//   - warp-shuffle G-round fusion (row-columns->row-diagonals and
-//     col-columns->col-diagonals passed lane-to-lane via shuffles).
-// Deliberately OMITTED (NVIDIA/PTXAS-specific scheduling hacks):
-//   - The dead-code L2-prefetch address-computation block and its
-//     first-8-threads guard. That code exists purely to nudge NVRTC/PTXAS
-//     instruction scheduling on sm_120 and has no meaning for AMD's LLVM
-//     backend. Correctness over speed for bring-up; AMD-specific scheduling
-//     experiments come after the differential tests pass.
+// Port of src/backend/nvidia_kernel.cu: the same 32-thread cooperative block
+// compression, unrolled global loads/stores, closed-form G-round indexing and
+// shuffle-fused G-rounds. The CUDA kernel's NVRTC/PTXAS-specific dead-code
+// block is not part of this port.
 //
 // Wavefront contract: the cooperative group is exactly 32 threads per hash
 // lane and the thread block is exactly one wavefront. On wave32 (RDNA
@@ -52,10 +44,9 @@ constexpr unsigned int WARPS_PER_BLOCK = SEINE_WARPS_PER_BLOCK;
 
 // Cooperative-group barrier. The thread block is exactly one wavefront (one
 // lane on wave32, two on wave64), so a wave-scoped fence (LDS/global ordering
-// for this wave only) plus a scheduling barrier is all the hardware needs per
-// the LLVM AMDGPU memory model; __syncthreads() additionally waited for every
-// outstanding global store before each round. The wave-scoped form is the
-// default; the host passes SEINE_WAVE_SYNC unless SEINE_AMD_BLOCK_SYNC is set.
+// for this wave only) plus a scheduling barrier is what the LLVM AMDGPU memory
+// model requires. The wave-scoped form is the default; the host passes
+// SEINE_WAVE_SYNC unless SEINE_AMD_BLOCK_SYNC is set.
 __device__ __forceinline__ void coop_sync() {
 #if defined(SEINE_WAVE_SYNC) && SEINE_WAVE_SYNC
     __builtin_amdgcn_fence(__ATOMIC_SEQ_CST, "wavefront");
@@ -81,6 +72,128 @@ __device__ __forceinline__ unsigned int coop_shfl_u32(
     unsigned int src_lane
 ) {
     return __shfl(value, static_cast<int>(src_lane), ARGON2_COOP_THREADS);
+}
+
+// Compression-path switches; the host may override any of them through
+// SEINE_AMD_DEFINES.
+// SEINE_AMD_DIRECT_LAYOUT: load the compression input in the row-round layout and
+//   store the column-round result from registers (one LDS transposition per block).
+// SEINE_AMD_DPP_SHFL: the G-round quad rotations use DPP quad_perm moves instead
+//   of ds_bpermute shuffles.
+// SEINE_AMD_CARRY_WORD0: word 0 of the block just written is broadcast from the
+//   thread that holds it and used as the next data-dependent reference seed.
+#ifndef SEINE_AMD_DIRECT_LAYOUT
+#define SEINE_AMD_DIRECT_LAYOUT 1
+#endif
+#ifndef SEINE_AMD_DPP_SHFL
+#define SEINE_AMD_DPP_SHFL 1
+#endif
+#ifndef SEINE_AMD_CARRY_WORD0
+#define SEINE_AMD_CARRY_WORD0 1
+#endif
+// SEINE_AMD_DI_PREFETCH (off): in the data-independent half, load the next
+//   block's reference block into registers one block early.
+// Read the feed-forward words with the column loads (direct layout only).
+#ifndef SEINE_AMD_FF_EARLY
+#define SEINE_AMD_FF_EARLY 1
+#endif
+#ifndef SEINE_AMD_DI_PREFETCH
+#define SEINE_AMD_DI_PREFETCH 0
+#endif
+// SEINE_AMD_PIPELINE: single-pass fill (t_cost 1, one lane per wavefront, direct
+// layout) that keeps the previous block in registers and loads each reference
+// block one step ahead. On by default for RDNA2 (gfx103x), RDNA3 (gfx110x) and
+// RDNA4 (gfx120x).
+#ifndef SEINE_AMD_PIPELINE
+#if defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || defined(__gfx1033__) || \
+    defined(__gfx1034__) || defined(__gfx1035__) || defined(__gfx1036__) || \
+    defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || \
+    defined(__gfx1200__) || defined(__gfx1201__)
+#define SEINE_AMD_PIPELINE 1
+#else
+#define SEINE_AMD_PIPELINE 0
+#endif
+#endif
+// SEINE_AMD_SKIP_FROM (even, at least m_blocks / 2; 0 = off): odd blocks from this
+// index on, except the last, are not stored and are rebuilt when referenced. Lane
+// layout: blocks below the boundary at their own index, even blocks above it at half
+// density, then the last block, two rebuild slots and a sink for skipped stores.
+// Requires the pipelined single-pass fill.
+// SEINE_AMD_DI_EARLY: the data-independent half computes each reference index one
+// block before its load. On by default for RDNA2 (gfx103x) and RDNA3 (gfx110x).
+#ifndef SEINE_AMD_DI_EARLY
+#if defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || defined(__gfx1033__) || \
+    defined(__gfx1034__) || defined(__gfx1035__) || defined(__gfx1036__) || \
+    defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__)
+#define SEINE_AMD_DI_EARLY 1
+#else
+#define SEINE_AMD_DI_EARLY 0
+#endif
+#endif
+#ifndef SEINE_AMD_SKIP_FROM
+#define SEINE_AMD_SKIP_FROM 0U
+#endif
+#if SEINE_AMD_PIPELINE && SEINE_WARPS_PER_BLOCK == 1 && SEINE_AMD_DIRECT_LAYOUT
+#define SEINE_AMD_PIPELINE_ACTIVE 1
+#else
+#define SEINE_AMD_PIPELINE_ACTIVE 0
+#endif
+#if SEINE_AMD_SKIP_FROM && !SEINE_AMD_PIPELINE_ACTIVE
+#error "SEINE_AMD_SKIP_FROM requires the pipelined single-pass fill"
+#endif
+
+// Lane l of each aligned 4-lane group receives the value held by lane (l + K) & 3.
+// Three fixed rotations (the file has C linkage, so no C++ generics): the DPP
+// control word must be a compile-time constant.
+#if SEINE_AMD_DPP_SHFL
+#define SEINE_DEFINE_QUAD_ROT(K)                                                         \
+    __device__ __forceinline__ unsigned long long quad_rot_##K(                         \
+        unsigned long long value, unsigned int shfl_base, unsigned int lane             \
+    ) {                                                                                  \
+        /* quad_perm:[K, K+1, K+2, K+3] (mod 4); all rows/banks, no bound control */    \
+        const int lo = __builtin_amdgcn_update_dpp(                                      \
+            0, static_cast<int>(static_cast<unsigned int>(value)),                       \
+            (((K) & 3) | ((((K) + 1) & 3) << 2) | ((((K) + 2) & 3) << 4) |               \
+             ((((K) + 3) & 3) << 6)),                                                    \
+            0xF, 0xF, false                                                              \
+        );                                                                               \
+        const int hi = __builtin_amdgcn_update_dpp(                                      \
+            0, static_cast<int>(static_cast<unsigned int>(value >> 32)),                 \
+            (((K) & 3) | ((((K) + 1) & 3) << 2) | ((((K) + 2) & 3) << 4) |               \
+             ((((K) + 3) & 3) << 6)),                                                    \
+            0xF, 0xF, false                                                              \
+        );                                                                               \
+        (void)shfl_base;                                                                 \
+        (void)lane;                                                                      \
+        return (static_cast<unsigned long long>(static_cast<unsigned int>(hi)) << 32) |  \
+               static_cast<unsigned long long>(static_cast<unsigned int>(lo));           \
+    }
+#else
+#define SEINE_DEFINE_QUAD_ROT(K)                                                         \
+    __device__ __forceinline__ unsigned long long quad_rot_##K(                         \
+        unsigned long long value, unsigned int shfl_base, unsigned int lane             \
+    ) {                                                                                  \
+        return coop_shfl(value, shfl_base + ((lane + (K)) & 3U));                        \
+    }
+#endif
+SEINE_DEFINE_QUAD_ROT(1)
+SEINE_DEFINE_QUAD_ROT(2)
+SEINE_DEFINE_QUAD_ROT(3)
+
+// Broadcast the value held by thread 0 of this cooperative group to the group.
+__device__ __forceinline__ unsigned long long coop_broadcast0(unsigned long long value) {
+#if SEINE_WARPS_PER_BLOCK == 1
+    // One lane per wavefront: thread 0 is wave lane 0, which readfirstlane returns.
+    const unsigned int lo = static_cast<unsigned int>(
+        __builtin_amdgcn_readfirstlane(static_cast<int>(static_cast<unsigned int>(value)))
+    );
+    const unsigned int hi = static_cast<unsigned int>(
+        __builtin_amdgcn_readfirstlane(static_cast<int>(static_cast<unsigned int>(value >> 32)))
+    );
+    return (static_cast<unsigned long long>(hi) << 32) | static_cast<unsigned long long>(lo);
+#else
+    return coop_shfl(value, 0U);
+#endif
 }
 
 struct Blake2bState {
@@ -151,11 +264,26 @@ __device__ __forceinline__ unsigned long long load_u64_le(const unsigned char *s
     return value;
 }
 
+// Rotate right by a constant 0 < n < 64, one 32-bit funnel shift per half.
 __device__ __forceinline__ unsigned long long rotr64(
     unsigned long long x,
     unsigned int n
 ) {
-    return (x >> n) | (x << (64U - n));
+    const unsigned int lo = static_cast<unsigned int>(x);
+    const unsigned int hi = static_cast<unsigned int>(x >> 32);
+    unsigned int rlo;
+    unsigned int rhi;
+    if (n == 32U) {
+        rlo = hi;
+        rhi = lo;
+    } else if (n < 32U) {
+        rlo = __builtin_amdgcn_alignbit(hi, lo, n);
+        rhi = __builtin_amdgcn_alignbit(lo, hi, n);
+    } else {
+        rlo = __builtin_amdgcn_alignbit(lo, hi, n - 32U);
+        rhi = __builtin_amdgcn_alignbit(hi, lo, n - 32U);
+    }
+    return (static_cast<unsigned long long>(rhi) << 32) | static_cast<unsigned long long>(rlo);
 }
 
 __device__ __forceinline__ void blake2b_g(
@@ -443,12 +571,71 @@ __global__ void build_seed_blocks_kernel(
     }
 }
 
+// SEINE_AMD_BLAMKA_MAD: BlaMka as one 64-bit multiply-add plus a 32-bit fix-up.
+// On by default for RDNA2 (gfx103x) and RDNA3 (gfx110x).
+#ifndef SEINE_AMD_BLAMKA_MAD
+#if defined(__gfx1030__) || defined(__gfx1031__) || defined(__gfx1032__) || defined(__gfx1033__) || \
+    defined(__gfx1034__) || defined(__gfx1035__) || defined(__gfx1036__) || \
+    defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__)
+#define SEINE_AMD_BLAMKA_MAD 1
+#else
+#define SEINE_AMD_BLAMKA_MAD 0
+#endif
+#endif
+// SEINE_AMD_BLAMKA_NOCARRY: BlaMka from two multiply-adds and a 32-bit three-way add,
+// with no 64-bit add. On by default for RDNA4 (gfx120x).
+#ifndef SEINE_AMD_BLAMKA_NOCARRY
+#if defined(__gfx1200__) || defined(__gfx1201__)
+#define SEINE_AMD_BLAMKA_NOCARRY 1
+#else
+#define SEINE_AMD_BLAMKA_NOCARRY 0
+#endif
+#endif
+#if SEINE_AMD_BLAMKA_MAD || SEINE_AMD_BLAMKA_NOCARRY
+// a * b + c with a and b 32-bit; kept as a single instruction.
+__device__ __forceinline__ unsigned long long mad_u64_u32(
+    unsigned int a, unsigned int b, unsigned long long c
+) {
+    unsigned long long r;
+    asm("v_mad_u64_u32 %0, null, %1, %2, %3" : "=v"(r) : "v"(a), "v"(b), "v"(c));
+    return r;
+}
+#endif
+
+// x is the operand produced two steps earlier, y the one produced by the previous step.
 __device__ __forceinline__ unsigned long long blamka(
     unsigned long long x,
     unsigned long long y
 ) {
+#if SEINE_AMD_BLAMKA_NOCARRY
+    // x + y + 2*x_lo*y_lo = (x + (2*x_lo mod 2^32) * y_lo + y_lo)
+    //                       + 2^32 * (y_hi + ((x_lo >> 31) ? y_lo : 0))   (mod 2^64)
+    const unsigned int xl = static_cast<unsigned int>(x);
+    const unsigned int yl = static_cast<unsigned int>(y);
+    const unsigned int yh = static_cast<unsigned int>(y >> 32);
+    const unsigned int xmask = static_cast<unsigned int>(static_cast<int>(xl) >> 31);
+    const unsigned long long p = mad_u64_u32(xl << 1, yl, x);
+    const unsigned long long t = mad_u64_u32(yl, 1U, p);
+    // The high word as one 32-bit three-way add, kept out of a 64-bit add.
+    unsigned int hi;
+    asm("v_add3_u32 %0, %1, %2, %3" : "=v"(hi) : "v"(static_cast<unsigned int>(t >> 32)), "v"(yh), "v"(yl & xmask));
+    return (static_cast<unsigned long long>(hi) << 32) | static_cast<unsigned int>(t);
+#elif SEINE_AMD_BLAMKA_MAD
+    // 2*x_lo = (2*x_lo mod 2^32) + (x_lo >> 31) * 2^32, so x + y + 2*x_lo*y_lo equals
+    // (x + (2*x_lo mod 2^32) * y_lo) + (y_lo | ((((x_lo >> 31) ? y_lo : 0) + y_hi) << 32)).
+    const unsigned int xl = static_cast<unsigned int>(x);
+    const unsigned int yl = static_cast<unsigned int>(y);
+    const unsigned int yh = static_cast<unsigned int>(y >> 32);
+    const unsigned int xmask = static_cast<unsigned int>(static_cast<int>(xl) >> 31);
+    const unsigned long long p = mad_u64_u32(xl << 1, yl, x);
+    unsigned long long q = static_cast<unsigned long long>(yl) |
+                           (static_cast<unsigned long long>((yl & xmask) + yh) << 32);
+    asm("" : "+v"(q));
+    return p + q;
+#else
     const unsigned long long low = 0xFFFFFFFFULL;
     return x + y + 2ULL * (x & low) * (y & low);
+#endif
 }
 
 __device__ __forceinline__ void permute_step(
@@ -458,57 +645,111 @@ __device__ __forceinline__ void permute_step(
     unsigned long long &d
 ) {
     a = blamka(a, b);
-    d = ((d ^ a) >> 32) | ((d ^ a) << (64 - 32));
+    d = rotr64(d ^ a, 32U);
     c = blamka(c, d);
-    b = ((b ^ c) >> 24) | ((b ^ c) << (64 - 24));
+    b = rotr64(b ^ c, 24U);
 
     a = blamka(a, b);
-    d = ((d ^ a) >> 16) | ((d ^ a) << (64 - 16));
+    d = rotr64(d ^ a, 16U);
     c = blamka(c, d);
-    b = ((b ^ c) >> 63) | ((b ^ c) << 1);
+    b = rotr64(b ^ c, 63U);
 }
 
-__device__ __forceinline__ void compress_block_coop(
+// Returns word 0 of the block just written (valid when SEINE_AMD_CARRY_WORD0).
+// PRELOADED: the four reference-block words this thread needs arrive in l0..l3
+// instead of being loaded from lhs. prefetch: when non-null, the next block's
+// reference block, whose four words are loaded into pf0..pf3 after this block's
+// own loads.
+__device__ __forceinline__ unsigned long long compress_block_coop_impl(
+    bool PRELOADED,
     const unsigned long long *__restrict__ rhs,
     const unsigned long long *__restrict__ lhs,
     unsigned long long *__restrict__ out,
     bool xor_out,
     unsigned long long *__restrict__ scratch_r,
     unsigned long long *__restrict__ scratch_q,
-    unsigned int tid
+    unsigned int tid,
+    unsigned long long l0,
+    unsigned long long l1,
+    unsigned long long l2,
+    unsigned long long l3,
+    const unsigned long long *__restrict__ prefetch,
+    unsigned long long &pf0,
+    unsigned long long &pf1,
+    unsigned long long &pf2,
+    unsigned long long &pf3
 ) {
-    // Issue all global loads into registers first to maximize
-    // memory-level parallelism (multiple loads in flight at once).
-    const unsigned long long r0 = rhs[tid]       ^ lhs[tid];
-    const unsigned long long r1 = rhs[tid + 32U]  ^ lhs[tid + 32U];
-    const unsigned long long r2 = rhs[tid + 64U]  ^ lhs[tid + 64U];
-    const unsigned long long r3 = rhs[tid + 96U]  ^ lhs[tid + 96U];
-    scratch_r[tid]       = r0;  scratch_q[tid]       = r0;
-    scratch_r[tid + 32U] = r1;  scratch_q[tid + 32U] = r1;
-    scratch_r[tid + 64U] = r2;  scratch_q[tid + 64U] = r2;
-    scratch_r[tid + 96U] = r3;  scratch_q[tid + 96U] = r3;
-    coop_sync();
-
-    // G-rounds with wave-shuffle fusion and closed-form indexing.
     const unsigned int state = tid >> 2;
     const unsigned int lane = tid & 3U;
     const unsigned int shfl_base = state * 4U; // absolute lane base for shuffles
+    const unsigned int base = state * 16U;
+    unsigned long long a;
+    unsigned long long b;
+    unsigned long long c;
+    unsigned long long d;
+#if SEINE_AMD_DIRECT_LAYOUT
+    // Row layout straight from global memory: thread (state, lane) owns column
+    // `lane` of row `state`. The XORed input stays in scratch_r for the final
+    // feed-forward, where the thread holding each word after the column round
+    // reads it back.
+    {
+        const unsigned int w0 = base + lane;
+        const unsigned long long r0 = rhs[w0]       ^ (PRELOADED ? l0 : lhs[w0]);
+        const unsigned long long r1 = rhs[w0 + 4U]  ^ (PRELOADED ? l1 : lhs[w0 + 4U]);
+        const unsigned long long r2 = rhs[w0 + 8U]  ^ (PRELOADED ? l2 : lhs[w0 + 8U]);
+        const unsigned long long r3 = rhs[w0 + 12U] ^ (PRELOADED ? l3 : lhs[w0 + 12U]);
+        if (prefetch != nullptr) {
+            pf0 = prefetch[w0];
+            pf1 = prefetch[w0 + 4U];
+            pf2 = prefetch[w0 + 8U];
+            pf3 = prefetch[w0 + 12U];
+        }
+        scratch_r[w0]       = r0;
+        scratch_r[w0 + 4U]  = r1;
+        scratch_r[w0 + 8U]  = r2;
+        scratch_r[w0 + 12U] = r3;
+        a = r0;
+        b = r1;
+        c = r2;
+        d = r3;
+    }
+#else
+    // Issue all global loads into registers first.
+    {
+        const unsigned long long r0 = rhs[tid]       ^ (PRELOADED ? l0 : lhs[tid]);
+        const unsigned long long r1 = rhs[tid + 32U]  ^ (PRELOADED ? l1 : lhs[tid + 32U]);
+        const unsigned long long r2 = rhs[tid + 64U]  ^ (PRELOADED ? l2 : lhs[tid + 64U]);
+        const unsigned long long r3 = rhs[tid + 96U]  ^ (PRELOADED ? l3 : lhs[tid + 96U]);
+        if (prefetch != nullptr) {
+            pf0 = prefetch[tid];
+            pf1 = prefetch[tid + 32U];
+            pf2 = prefetch[tid + 64U];
+            pf3 = prefetch[tid + 96U];
+        }
+        scratch_r[tid]       = r0;  scratch_q[tid]       = r0;
+        scratch_r[tid + 32U] = r1;  scratch_q[tid + 32U] = r1;
+        scratch_r[tid + 64U] = r2;  scratch_q[tid + 64U] = r2;
+        scratch_r[tid + 96U] = r3;  scratch_q[tid + 96U] = r3;
+    }
+    coop_sync();
+    // Row columns: load from shared in row layout.
+    a = scratch_q[base + lane];
+    b = scratch_q[base + 4U + lane];
+    c = scratch_q[base + 8U + lane];
+    d = scratch_q[base + 12U + lane];
+#endif
 
+    // G-rounds with wave-shuffle fusion and closed-form indexing.
     // --- Fused row rounds (columns + diagonals) ---
     {
-        const unsigned int base = state * 16U;
-        // Row columns: load from shared, permute
-        unsigned long long a = scratch_q[base + lane];
-        unsigned long long b = scratch_q[base + 4U + lane];
-        unsigned long long c = scratch_q[base + 8U + lane];
-        unsigned long long d = scratch_q[base + 12U + lane];
         permute_step(a, b, c, d);
-        // Row diagonals: shuffle outputs instead of shared-memory round-trip.
-        // Thread lane l needs: a from self, b from (l+1)&3, c from (l+2)&3, d from (l+3)&3
+        // Row diagonals: rotate outputs within the quad instead of a shared-memory
+        // round-trip. Thread lane l needs: a from self, b from (l+1)&3, c from
+        // (l+2)&3, d from (l+3)&3.
         unsigned long long a2 = a; // same thread, same position
-        unsigned long long b2 = coop_shfl(b, shfl_base + ((lane + 1U) & 3U));
-        unsigned long long c2 = coop_shfl(c, shfl_base + ((lane + 2U) & 3U));
-        unsigned long long d2 = coop_shfl(d, shfl_base + ((lane + 3U) & 3U));
+        unsigned long long b2 = quad_rot_1(b, shfl_base, lane);
+        unsigned long long c2 = quad_rot_2(c, shfl_base, lane);
+        unsigned long long d2 = quad_rot_3(d, shfl_base, lane);
         permute_step(a2, b2, c2, d2);
         // Store diagonal results to shared memory for column rounds.
         // Diagonal indices: base + lane, base + 4 + (lane+1)&3, base + 8 + (lane+2)&3, base + 12 + (lane+3)&3
@@ -520,52 +761,127 @@ __device__ __forceinline__ void compress_block_coop(
     coop_sync();
 
     // --- Fused column rounds (columns + diagonals) ---
+    unsigned long long word0 = 0ULL;
     {
-        const unsigned int b = state * 2U;
+        const unsigned int cb = state * 2U;
         const unsigned int col_sub = (lane >> 1) * 16U + (lane & 1U);
         // Column columns: load from shared, permute
-        unsigned long long a = scratch_q[b + col_sub];
-        unsigned long long c = scratch_q[b + 32U + col_sub];
-        unsigned long long d = scratch_q[b + 64U + col_sub];
-        unsigned long long e = scratch_q[b + 96U + col_sub];
-        permute_step(a, c, d, e);
-        // Column diagonals: shuffle instead of shared-memory round-trip.
-        unsigned long long a2 = a;
-        unsigned long long c2 = coop_shfl(c, shfl_base + ((lane + 1U) & 3U));
-        unsigned long long d2 = coop_shfl(d, shfl_base + ((lane + 2U) & 3U));
-        unsigned long long e2 = coop_shfl(e, shfl_base + ((lane + 3U) & 3U));
-        permute_step(a2, c2, d2, e2);
-        // Store diagonal results back.
+        unsigned long long ca = scratch_q[cb + col_sub];
+        unsigned long long cc = scratch_q[cb + 32U + col_sub];
+        unsigned long long cd = scratch_q[cb + 64U + col_sub];
+        unsigned long long ce = scratch_q[cb + 96U + col_sub];
         const unsigned int p0 = lane;
         const unsigned int p1 = (lane + 1U) & 3U;
         const unsigned int p2 = (lane + 2U) & 3U;
         const unsigned int p3 = (lane + 3U) & 3U;
-        scratch_q[b + (p0 >> 1) * 16U + (p0 & 1U)] = a2;
-        scratch_q[b + 32U + (p1 >> 1) * 16U + (p1 & 1U)] = c2;
-        scratch_q[b + 64U + (p2 >> 1) * 16U + (p2 & 1U)] = d2;
-        scratch_q[b + 96U + (p3 >> 1) * 16U + (p3 & 1U)] = e2;
+        const unsigned int q0 = cb + (p0 >> 1) * 16U + (p0 & 1U);
+        const unsigned int q1 = cb + 32U + (p1 >> 1) * 16U + (p1 & 1U);
+        const unsigned int q2 = cb + 64U + (p2 >> 1) * 16U + (p2 & 1U);
+        const unsigned int q3 = cb + 96U + (p3 >> 1) * 16U + (p3 & 1U);
+#if SEINE_AMD_DIRECT_LAYOUT && SEINE_AMD_FF_EARLY
+        const unsigned long long ff0 = scratch_r[q0];
+        const unsigned long long ff1 = scratch_r[q1];
+        const unsigned long long ff2 = scratch_r[q2];
+        const unsigned long long ff3 = scratch_r[q3];
+        __builtin_amdgcn_sched_barrier(0);
+#endif
+        permute_step(ca, cc, cd, ce);
+        // Column diagonals: quad rotation instead of shared-memory round-trip.
+        unsigned long long ca2 = ca;
+        unsigned long long cc2 = quad_rot_1(cc, shfl_base, lane);
+        unsigned long long cd2 = quad_rot_2(cd, shfl_base, lane);
+        unsigned long long ce2 = quad_rot_3(ce, shfl_base, lane);
+        permute_step(ca2, cc2, cd2, ce2);
+#if SEINE_AMD_DIRECT_LAYOUT
+        // Feed-forward and store from registers; thread 0 holds word 0 (q0 == 0)
+        // for the broadcast below.
+#if SEINE_AMD_FF_EARLY
+        const unsigned long long m0 = ca2 ^ ff0;
+        const unsigned long long m1 = cc2 ^ ff1;
+        const unsigned long long m2 = cd2 ^ ff2;
+        const unsigned long long m3 = ce2 ^ ff3;
+#else
+        const unsigned long long m0 = ca2 ^ scratch_r[q0];
+        const unsigned long long m1 = cc2 ^ scratch_r[q1];
+        const unsigned long long m2 = cd2 ^ scratch_r[q2];
+        const unsigned long long m3 = ce2 ^ scratch_r[q3];
+#endif
+        if (xor_out) {
+            const unsigned long long o0 = out[q0] ^ m0;
+            const unsigned long long o1 = out[q1] ^ m1;
+            const unsigned long long o2 = out[q2] ^ m2;
+            const unsigned long long o3 = out[q3] ^ m3;
+            out[q0] = o0;
+            out[q1] = o1;
+            out[q2] = o2;
+            out[q3] = o3;
+            word0 = o0;
+        } else {
+            out[q0] = m0;
+            out[q1] = m1;
+            out[q2] = m2;
+            out[q3] = m3;
+            word0 = m0;
+        }
+#else
+        // Store diagonal results back.
+        scratch_q[q0] = ca2;
+        scratch_q[q1] = cc2;
+        scratch_q[q2] = cd2;
+        scratch_q[q3] = ce2;
+#endif
     }
+#if !SEINE_AMD_DIRECT_LAYOUT
     coop_sync();
 
     // Unrolled final store: read all shared-memory values into registers
-    // first, then issue all global stores to maximize MLP.
+    // first, then issue all global stores.
     {
         const unsigned long long m0 = scratch_q[tid]       ^ scratch_r[tid];
         const unsigned long long m1 = scratch_q[tid + 32U] ^ scratch_r[tid + 32U];
         const unsigned long long m2 = scratch_q[tid + 64U] ^ scratch_r[tid + 64U];
         const unsigned long long m3 = scratch_q[tid + 96U] ^ scratch_r[tid + 96U];
         if (xor_out) {
-            out[tid]       ^= m0;
+            const unsigned long long o0 = out[tid] ^ m0;
+            out[tid]       = o0;
             out[tid + 32U] ^= m1;
             out[tid + 64U] ^= m2;
             out[tid + 96U] ^= m3;
+            word0 = o0;
         } else {
             out[tid]       = m0;
             out[tid + 32U] = m1;
             out[tid + 64U] = m2;
             out[tid + 96U] = m3;
+            word0 = m0;
         }
     }
+#endif
+#if SEINE_AMD_CARRY_WORD0
+    return coop_broadcast0(word0);
+#else
+    (void)word0;
+    return 0ULL;
+#endif
+}
+
+__device__ __forceinline__ unsigned long long compress_block_coop(
+    const unsigned long long *__restrict__ rhs,
+    const unsigned long long *__restrict__ lhs,
+    unsigned long long *__restrict__ out,
+    bool xor_out,
+    unsigned long long *__restrict__ scratch_r,
+    unsigned long long *__restrict__ scratch_q,
+    unsigned int tid
+) {
+    unsigned long long unused0 = 0ULL;
+    unsigned long long unused1 = 0ULL;
+    unsigned long long unused2 = 0ULL;
+    unsigned long long unused3 = 0ULL;
+    return compress_block_coop_impl(
+        false, rhs, lhs, out, xor_out, scratch_r, scratch_q, tid,
+        0ULL, 0ULL, 0ULL, 0ULL, nullptr, unused0, unused1, unused2, unused3
+    );
 }
 
 __device__ __forceinline__ void update_address_block_coop(
@@ -639,6 +955,419 @@ __global__ void touch_lane_memory_kernel(
     lane_ptr[tail] = tail_v;
 }
 
+__device__ __forceinline__ unsigned long long skip_last_slot(unsigned int m_blocks) {
+    return static_cast<unsigned long long>(SEINE_AMD_SKIP_FROM) +
+        static_cast<unsigned long long>((m_blocks - SEINE_AMD_SKIP_FROM) / 2U);
+}
+
+// Blocks per lane in device memory.
+__device__ __forceinline__ unsigned long long lane_stride_blocks(unsigned int m_blocks) {
+    return (SEINE_AMD_SKIP_FROM != 0U) ? skip_last_slot(m_blocks) + 4ULL
+                                       : static_cast<unsigned long long>(m_blocks);
+}
+
+__device__ __forceinline__ bool block_skipped(unsigned int index, unsigned int m_blocks) {
+    return SEINE_AMD_SKIP_FROM != 0U && index >= SEINE_AMD_SKIP_FROM && (index & 1U) != 0U &&
+        index != m_blocks - 1U;
+}
+
+// Device slot of a stored block.
+__device__ __forceinline__ unsigned long long block_slot(unsigned int index, unsigned int m_blocks) {
+    if (SEINE_AMD_SKIP_FROM == 0U || index < SEINE_AMD_SKIP_FROM) {
+        return index;
+    }
+    if (index == m_blocks - 1U) {
+        return skip_last_slot(m_blocks);
+    }
+    return static_cast<unsigned long long>(SEINE_AMD_SKIP_FROM) +
+        static_cast<unsigned long long>((index - SEINE_AMD_SKIP_FROM) >> 1);
+}
+
+// Slot of a reference block for the hot load: (i + min(i, S)) / 2 is i below the
+// boundary and S + (i - S) / 2 above it, and a skipped (odd) index lands on its stored
+// predecessor, so the address never waits on the skip test. References are never the
+// last block. Returned as a word offset.
+__device__ __forceinline__ unsigned long long ref_word_offset(unsigned int index) {
+    const unsigned int doubled = index + (index < SEINE_AMD_SKIP_FROM ? index : SEINE_AMD_SKIP_FROM);
+    return static_cast<unsigned long long>(doubled & ~1U) * 64ULL;
+}
+
+// Slot a block's store goes to: its own, or the sink when the store is skipped.
+__device__ __forceinline__ unsigned long long store_slot(unsigned int index, unsigned int m_blocks) {
+    return block_skipped(index, m_blocks) ? skip_last_slot(m_blocks) + 3ULL
+                                          : block_slot(index, m_blocks);
+}
+
+#if SEINE_AMD_PIPELINE_ACTIVE
+// Pass-0 reference index for block `cur`: the reference area is every block
+// before `cur` except its predecessor.
+__device__ __forceinline__ unsigned int pass0_ref_index(
+    unsigned long long rand64,
+    unsigned int cur
+) {
+    const unsigned long long area = static_cast<unsigned long long>(cur) - 1ULL;
+    unsigned long long map = rand64 & 0xFFFFFFFFULL;
+    map = (map * map) >> 32;
+    return static_cast<unsigned int>(area - 1ULL - ((area * map) >> 32));
+}
+
+
+// Thread (state, lane) owns words w0, w0 + 4, w0 + 8, w0 + 12 of a block in the
+// row layout (w0 = state * 16 + lane).
+__device__ __forceinline__ void load_row_words(
+    const unsigned long long *block,
+    unsigned int w0,
+    unsigned long long &v0,
+    unsigned long long &v1,
+    unsigned long long &v2,
+    unsigned long long &v3
+) {
+    v0 = block[w0];
+    v1 = block[w0 + 4U];
+    v2 = block[w0 + 8U];
+    v3 = block[w0 + 12U];
+}
+
+// One block of the pipelined fill: x (previous block, row layout) XOR y (reference
+// block, row layout) through the row and column rounds. Stores the block to `out` in
+// column layout, leaves it in x in row layout and sets word0. NEXT_LOADS runs
+// after word 0 is known and before the stores, so the caller can issue the next
+// reference load there.
+#define SEINE_PIPELINED_BLOCK(OUT_PTR, NEXT_LOADS)                                    \
+    {                                                                                \
+        unsigned long long a = x0 ^ y0;                                              \
+        unsigned long long b = x1 ^ y1;                                              \
+        unsigned long long c = x2 ^ y2;                                              \
+        unsigned long long d = x3 ^ y3;                                              \
+        scratch_r[w0] = a;                                                           \
+        scratch_r[w0 + 4U] = b;                                                      \
+        scratch_r[w0 + 8U] = c;                                                      \
+        scratch_r[w0 + 12U] = d;                                                     \
+        permute_step(a, b, c, d);                                                    \
+        unsigned long long b2 = quad_rot_1(b, shfl_base, lane);                      \
+        unsigned long long c2 = quad_rot_2(c, shfl_base, lane);                      \
+        unsigned long long d2 = quad_rot_3(d, shfl_base, lane);                      \
+        permute_step(a, b2, c2, d2);                                                 \
+        scratch_q[w0] = a;                                                           \
+        scratch_q[state * 16U + 4U + p1] = b2;                                       \
+        scratch_q[state * 16U + 8U + p2] = c2;                                       \
+        scratch_q[state * 16U + 12U + p3] = d2;                                      \
+        coop_sync();                                                                 \
+        unsigned long long ca = scratch_q[cb + col_sub];                             \
+        unsigned long long cc = scratch_q[cb + 32U + col_sub];                       \
+        unsigned long long cd = scratch_q[cb + 64U + col_sub];                       \
+        unsigned long long ce = scratch_q[cb + 96U + col_sub];                       \
+        const unsigned long long ff0 = scratch_r[q0];                                \
+        const unsigned long long ff1 = scratch_r[q1];                                \
+        const unsigned long long ff2 = scratch_r[q2];                                \
+        const unsigned long long ff3 = scratch_r[q3];                                \
+        __builtin_amdgcn_sched_barrier(0);                                           \
+        permute_step(ca, cc, cd, ce);                                                \
+        unsigned long long cc2 = quad_rot_1(cc, shfl_base, lane);                    \
+        unsigned long long cd2 = quad_rot_2(cd, shfl_base, lane);                    \
+        unsigned long long ce2 = quad_rot_3(ce, shfl_base, lane);                    \
+        permute_step(ca, cc2, cd2, ce2);                                             \
+        const unsigned long long m0 = ca ^ ff0;                                      \
+        const unsigned long long m1 = cc2 ^ ff1;                                     \
+        const unsigned long long m2 = cd2 ^ ff2;                                     \
+        const unsigned long long m3 = ce2 ^ ff3;                                     \
+        word0 = coop_broadcast0(m0);                                                 \
+        NEXT_LOADS                                                                   \
+        unsigned long long *out_block = (OUT_PTR);                                   \
+        out_block[q0] = m0;                                                          \
+        out_block[q1] = m1;                                                          \
+        out_block[q2] = m2;                                                          \
+        out_block[q3] = m3;                                                          \
+        coop_sync();                                                                 \
+        scratch_q[q0] = m0;                                                          \
+        scratch_q[q1] = m1;                                                          \
+        scratch_q[q2] = m2;                                                          \
+        scratch_q[q3] = m3;                                                          \
+        coop_sync();                                                                 \
+        x0 = scratch_q[w0];                                                          \
+        x1 = scratch_q[w0 + 4U];                                                     \
+        x2 = scratch_q[w0 + 8U];                                                     \
+        x3 = scratch_q[w0 + 12U];                                                    \
+        coop_sync();                                                                 \
+    }
+
+// Rebuilds skipped block `index` of a single-pass fill: B[i] = G(B[i - 1], B[ref(i)]),
+// where B[i - 1] is stored and B[ref(i)] may itself be skipped. The chain of skipped
+// blocks is walked down to a stored one (indices kept in `stack`, 256 entries), then
+// compressed back up through the two rebuild slots. Returns the rebuilt block.
+__device__ __forceinline__ const unsigned long long *rebuild_skipped_block(
+    unsigned long long *memory,
+    unsigned int m_blocks,
+    unsigned int index,
+    unsigned int *__restrict__ stack,
+    unsigned long long *__restrict__ scratch_r,
+    unsigned long long *__restrict__ scratch_q,
+    unsigned int tid
+) {
+    unsigned int depth = 0U;
+    while (block_skipped(index, m_blocks) && depth < 256U) {
+        if (tid == 0U) stack[depth] = index;
+        ++depth;
+        const unsigned long long prev_word0 = memory[block_slot(index - 1U, m_blocks) * 128ULL];
+        index = pass0_ref_index(prev_word0, index);
+    }
+    coop_sync();
+    const unsigned long long rebuild_slot = skip_last_slot(m_blocks) + 1ULL;
+    const unsigned long long *src = memory + block_slot(index, m_blocks) * 128ULL;
+    while (depth > 0U) {
+        --depth;
+        const unsigned int block = stack[depth];
+        unsigned long long *dst = memory + (rebuild_slot + (depth & 1U)) * 128ULL;
+        compress_block_coop(
+            memory + block_slot(block - 1U, m_blocks) * 128ULL, src, dst, false,
+            scratch_r, scratch_q, tid
+        );
+        __threadfence_block();
+        coop_sync();
+        src = dst;
+    }
+    return src;
+}
+
+// Fills blocks 2..m_blocks-1 of one lane for t_cost 1. Returns false when the
+// cancel flag stopped it. Each loop body issues exactly one set of reference loads
+// (the next block's, with the current block's index standing in when there is no
+// next), so the previous set is always the one being waited for.
+__device__ __forceinline__ bool fill_single_pass_pipelined(
+    unsigned long long *memory,
+    unsigned int m_blocks,
+    unsigned long long *__restrict__ my_address,
+    unsigned long long *__restrict__ my_input,
+    unsigned long long *__restrict__ my_zero,
+    unsigned long long *__restrict__ scratch_r,
+    unsigned long long *__restrict__ scratch_q,
+    unsigned int tid,
+    const volatile unsigned int *__restrict__ cancel_flag
+) {
+    const unsigned int segment_length = m_blocks / 4U;
+    const unsigned int di_end = 2U * segment_length;
+    const unsigned int state = tid >> 2;
+    const unsigned int lane = tid & 3U;
+    const unsigned int shfl_base = state * 4U;
+    const unsigned int w0 = state * 16U + lane;
+    const unsigned int cb = state * 2U;
+    const unsigned int p1 = (lane + 1U) & 3U;
+    const unsigned int p2 = (lane + 2U) & 3U;
+    const unsigned int p3 = (lane + 3U) & 3U;
+    const unsigned int q0 = cb + (lane >> 1) * 16U + (lane & 1U);
+    const unsigned int q1 = cb + 32U + (p1 >> 1) * 16U + (p1 & 1U);
+    const unsigned int q2 = cb + 64U + (p2 >> 1) * 16U + (p2 & 1U);
+    const unsigned int q3 = cb + 96U + (p3 >> 1) * 16U + (p3 & 1U);
+    const unsigned int col_sub = (lane >> 1) * 16U + (lane & 1U);
+
+    unsigned long long x0, x1, x2, x3;
+    unsigned long long y0, y1, y2, y3;
+    unsigned long long word0 = 0ULL;
+    load_row_words(memory + 128ULL, w0, x0, x1, x2, x3);
+
+    // Data-independent half: slices 0 and 1.
+    for (unsigned int slice = 0U; slice < 2U; ++slice) {
+        for (unsigned int i = tid; i < 128U; i += ARGON2_COOP_THREADS) {
+            my_address[i] = 0ULL;
+            my_input[i] = 0ULL;
+        }
+        if (tid == 0U) {
+            my_input[0] = 0ULL; // pass
+            my_input[1] = 0ULL; // lane index (p=1)
+            my_input[2] = static_cast<unsigned long long>(slice);
+            my_input[3] = static_cast<unsigned long long>(m_blocks);
+            my_input[4] = 1ULL; // t_cost
+            my_input[5] = 2ULL; // Argon2id
+        }
+        coop_sync();
+        update_address_block_coop(my_address, my_input, my_zero, scratch_r, scratch_q, tid);
+        coop_sync();
+        const unsigned int first_block = (slice == 0U) ? 2U : 0U;
+        unsigned int cur_ref = pass0_ref_index(
+            my_address[first_block], slice * segment_length + first_block
+        );
+        load_row_words(memory + static_cast<unsigned long long>(cur_ref) * 128ULL, w0, y0, y1, y2, y3);
+#if SEINE_AMD_DI_EARLY
+        // Reference indices run one block ahead of the loads: ref(cur + 1) is ready
+        // when block cur starts, and ref(cur + 2) is computed during block cur.
+        unsigned int next_ref = pass0_ref_index(
+            my_address[first_block + 1U], slice * segment_length + first_block + 1U
+        );
+        for (unsigned int block = first_block; block < segment_length; ++block) {
+            const unsigned int cur = slice * segment_length + block;
+            if (((block - first_block) % CANCEL_CHECK_BLOCK_INTERVAL) == 0U) {
+                unsigned int cancel_val = 0U;
+                if (tid == 0U) cancel_val = cancel_flag[0];
+                cancel_val = coop_shfl_u32(cancel_val, 0U);
+                if (cancel_val != 0U) {
+                    return false;
+                }
+            }
+            // The last block reloads a valid reference instead of a next one.
+            const unsigned int load_ref = (block + 1U) < segment_length ? next_ref : cur_ref;
+            unsigned long long n0, n1, n2, n3;
+            load_row_words(memory + static_cast<unsigned long long>(load_ref) * 128ULL, w0, n0, n1, n2, n3);
+            // Block + 2 opens a fresh address block: generate it after this block, then
+            // read its first word.
+            const bool has_after = (block + 2U) < segment_length;
+            const bool regen = has_after && ((block + 2U) & 127U) == 0U;
+            // The address word is read before the rounds and its index computed after
+            // word 0, so neither sits on the path between blocks.
+            const unsigned long long after_word = my_address[(block + 2U) & 127U];
+            unsigned int after_ref = load_ref;
+            SEINE_PIPELINED_BLOCK(
+                memory + static_cast<unsigned long long>(cur) * 128ULL,
+                {
+                    if (has_after && !regen) {
+                        after_ref = pass0_ref_index(after_word, cur + 2U);
+                    }
+                    asm("" : "+v"(after_ref));
+                }
+            )
+            if (regen) {
+                update_address_block_coop(my_address, my_input, my_zero, scratch_r, scratch_q, tid);
+                coop_sync();
+                after_ref = pass0_ref_index(my_address[0], cur + 2U);
+            }
+            y0 = n0;
+            y1 = n1;
+            y2 = n2;
+            y3 = n3;
+            cur_ref = load_ref;
+            next_ref = after_ref;
+        }
+#else
+        for (unsigned int block = first_block; block < segment_length; ++block) {
+            const unsigned int cur = slice * segment_length + block;
+            if (((block - first_block) % CANCEL_CHECK_BLOCK_INTERVAL) == 0U) {
+                unsigned int cancel_val = 0U;
+                if (tid == 0U) cancel_val = cancel_flag[0];
+                cancel_val = coop_shfl_u32(cancel_val, 0U);
+                if (cancel_val != 0U) {
+                    return false;
+                }
+            }
+            // The next block's address word; a fresh address block is generated one
+            // block early (this block's word was already used).
+            const bool has_next = (block + 1U) < segment_length;
+            if (has_next && ((block + 1U) & 127U) == 0U) {
+                update_address_block_coop(my_address, my_input, my_zero, scratch_r, scratch_q, tid);
+                coop_sync();
+            }
+            const unsigned int next_ref = has_next
+                ? pass0_ref_index(my_address[(block + 1U) & 127U], cur + 1U)
+                : cur_ref;
+            unsigned long long n0, n1, n2, n3;
+            load_row_words(memory + static_cast<unsigned long long>(next_ref) * 128ULL, w0, n0, n1, n2, n3);
+            SEINE_PIPELINED_BLOCK(memory + static_cast<unsigned long long>(cur) * 128ULL, )
+            y0 = n0;
+            y1 = n1;
+            y2 = n2;
+            y3 = n3;
+            cur_ref = next_ref;
+        }
+#endif
+    }
+
+    // Data-dependent half: the next reference index is word 0 of the block just
+    // computed, so its load goes out before this block is stored.
+    load_row_words(
+        memory + static_cast<unsigned long long>(pass0_ref_index(word0, di_end)) * 128ULL,
+        w0, y0, y1, y2, y3
+    );
+#if SEINE_AMD_SKIP_FROM
+    // A reference that was not stored gets a placeholder load here and is rebuilt at
+    // the top of the next iteration (address-block LDS is free in this half), so the
+    // block keeps a single load site.
+    bool rebuild_pending = false;
+    unsigned int rebuild_index = 0U;
+    for (unsigned int cur = di_end; cur < m_blocks; ++cur) {
+        if (((cur - di_end) % CANCEL_CHECK_BLOCK_INTERVAL) == 0U) {
+            unsigned int cancel_val = 0U;
+            if (tid == 0U) cancel_val = cancel_flag[0];
+            cancel_val = coop_shfl_u32(cancel_val, 0U);
+            if (cancel_val != 0U) {
+                return false;
+            }
+        }
+        if (rebuild_pending) {
+            // B[r] = G(B[r - 1], B[ref(r)]) in registers with the block macro (its store
+            // goes to the sink); a reference that is itself skipped is rebuilt in the slots.
+            // The placeholder load already brought B[r - 1] (ref_word_offset of an odd
+            // index is its stored predecessor), so it becomes the rebuild's previous block.
+            const unsigned long long sx0 = x0, sx1 = x1, sx2 = x2, sx3 = x3;
+            x0 = y0;
+            x1 = y1;
+            x2 = y2;
+            x3 = y3;
+            const unsigned int inner_ref = pass0_ref_index(coop_broadcast0(x0), rebuild_index);
+            if (block_skipped(inner_ref, m_blocks)) {
+                const unsigned long long *rebuilt = rebuild_skipped_block(
+                    memory, m_blocks, inner_ref, reinterpret_cast<unsigned int *>(my_address),
+                    my_input, my_zero, tid
+                );
+                load_row_words(rebuilt, w0, y0, y1, y2, y3);
+            } else {
+                load_row_words(memory + block_slot(inner_ref, m_blocks) * 128ULL, w0, y0, y1, y2, y3);
+            }
+            SEINE_PIPELINED_BLOCK(memory + store_slot(rebuild_index, m_blocks) * 128ULL, )
+            y0 = x0;
+            y1 = x1;
+            y2 = x2;
+            y3 = x3;
+            x0 = sx0;
+            x1 = sx1;
+            x2 = sx2;
+            x3 = sx3;
+        }
+        unsigned long long n0, n1, n2, n3;
+        SEINE_PIPELINED_BLOCK(
+            memory + store_slot(cur, m_blocks) * 128ULL,
+            {
+                const unsigned int next_ref = (cur + 1U < m_blocks)
+                    ? pass0_ref_index(word0, cur + 1U)
+                    : 0U;
+                load_row_words(memory + ref_word_offset(next_ref), w0, n0, n1, n2, n3);
+                rebuild_pending = block_skipped(next_ref, m_blocks);
+                rebuild_index = next_ref;
+            }
+        )
+        y0 = n0;
+        y1 = n1;
+        y2 = n2;
+        y3 = n3;
+    }
+#else
+    for (unsigned int cur = di_end; cur < m_blocks; ++cur) {
+        if (((cur - di_end) % CANCEL_CHECK_BLOCK_INTERVAL) == 0U) {
+            unsigned int cancel_val = 0U;
+            if (tid == 0U) cancel_val = cancel_flag[0];
+            cancel_val = coop_shfl_u32(cancel_val, 0U);
+            if (cancel_val != 0U) {
+                return false;
+            }
+        }
+        unsigned long long n0, n1, n2, n3;
+        SEINE_PIPELINED_BLOCK(
+            memory + static_cast<unsigned long long>(cur) * 128ULL,
+            {
+                const unsigned int next_ref = (cur + 1U < m_blocks)
+                    ? pass0_ref_index(word0, cur + 1U)
+                    : 0U;
+                load_row_words(memory + static_cast<unsigned long long>(next_ref) * 128ULL, w0, n0, n1, n2, n3);
+            }
+        )
+        y0 = n0;
+        y1 = n1;
+        y2 = n2;
+        y3 = n3;
+    }
+#endif
+    return true;
+}
+#undef SEINE_PIPELINED_BLOCK
+#endif
+
 __device__ __forceinline__ void argon2id_fill_kernel_impl(
     const unsigned long long *__restrict__ seed_blocks,
     unsigned int lanes_active,
@@ -666,8 +1395,7 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
         return;
     }
 
-    const unsigned long long lane_stride_words =
-        static_cast<unsigned long long>(effective_m_blocks) * 128ULL;
+    const unsigned long long lane_stride_words = lane_stride_blocks(effective_m_blocks) * 128ULL;
     unsigned long long *memory =
         lane_base(lane_chunks, lanes_per_chunk, lane, lane_stride_words);
     const unsigned int segment_length = effective_m_blocks / 4U;
@@ -713,6 +1441,14 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
         }
         coop_sync();
 
+#if SEINE_AMD_PIPELINE_ACTIVE
+        if (effective_t_cost == 1U) {
+            abort_requested = !fill_single_pass_pipelined(
+                memory, effective_m_blocks, my_address, my_input, my_zero,
+                my_scratch_r, my_scratch_q, tid, cancel_flag
+            );
+        } else
+#endif
         for (unsigned int pass = 0; pass < effective_t_cost && !abort_requested; ++pass) {
             for (unsigned int slice = 0; slice < 4U && !abort_requested; ++slice) {
                 const bool data_independent = (pass == 0U && slice < 2U);
@@ -756,6 +1492,22 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
                         ? (cur_index + lane_length - 1U)
                         : (cur_index - 1U);
 
+                // Word 0 of the previous block seeds the data-dependent reference
+                // index: loaded once per segment and then carried in a register
+                // when SEINE_AMD_CARRY_WORD0, else re-read every block.
+                unsigned long long prev_word0 = 0ULL;
+#if SEINE_AMD_CARRY_WORD0
+                if (!data_independent) {
+                    prev_word0 = memory[static_cast<unsigned long long>(prev_index) * 128ULL];
+                }
+#endif
+                // Data-independent prefetch state: pf_valid means pf0..pf3 hold this
+                // thread's words of the current block's reference block.
+                bool pf_valid = false;
+                unsigned long long pf0 = 0ULL;
+                unsigned long long pf1 = 0ULL;
+                unsigned long long pf2 = 0ULL;
+                unsigned long long pf3 = 0ULL;
                 for (unsigned int block = first_block; block < segment_length; ++block) {
                     if (((block - first_block) % CANCEL_CHECK_BLOCK_INTERVAL) == 0U) {
                         unsigned int cancel_val = 0U;
@@ -783,7 +1535,11 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
                         coop_sync();
                         rand64 = my_address[address_index];
                     } else {
+#if SEINE_AMD_CARRY_WORD0
+                        rand64 = prev_word0;
+#else
                         rand64 = memory[static_cast<unsigned long long>(prev_index) * 128ULL];
+#endif
                     }
 
                     unsigned long long reference_area_size;
@@ -823,34 +1579,67 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
                     const unsigned long long lhs_offset =
                         static_cast<unsigned long long>(ref_index) * 128ULL;
 
-                    // NOTE: the CUDA kernel carries an NVRTC/PTXAS
-                    // scheduling hack here: a dead-code L2-prefetch
-                    // address computation restricted to the first 8
-                    // threads. Both parts are NVIDIA sm_120-specific and
-                    // are intentionally omitted from the HIP port.
-
-                    if (pass == 0U) {
-                        compress_block_coop(
+                    // Next block's reference block, when it is data independent and its
+                    // address word is already in the address block (not the first of
+                    // the next 128, which needs a fresh address block).
+                    const unsigned long long *next_ref = nullptr;
+#if SEINE_AMD_DI_PREFETCH
+                    if (data_independent && (block + 1U) < segment_length &&
+                        ((block + 1U) & 127U) != 0U) {
+                        const unsigned long long rand_next = my_address[(block + 1U) & 127U];
+                        const unsigned long long area_next =
+                            (slice == 0U)
+                                ? static_cast<unsigned long long>(block)
+                                : (static_cast<unsigned long long>(slice) * segment_length +
+                                   static_cast<unsigned long long>(block));
+                        unsigned long long map_next = rand_next & 0xFFFFFFFFULL;
+                        map_next = (map_next * map_next) >> 32;
+                        const unsigned long long rel_next =
+                            area_next - 1ULL - ((area_next * map_next) >> 32);
+                        const unsigned int ref_next = static_cast<unsigned int>(
+                            rel_next % static_cast<unsigned long long>(lane_length)
+                        );
+                        next_ref = memory + static_cast<unsigned long long>(ref_next) * 128ULL;
+                    }
+#endif
+                    unsigned long long new_word0;
+                    const bool xor_out = (pass != 0U);
+                    if (pf_valid) {
+                        new_word0 = compress_block_coop_impl(
+                            true,
                             memory + rhs_offset,
                             memory + lhs_offset,
                             memory + dst_offset,
-                            false,
+                            xor_out,
                             my_scratch_r,
                             my_scratch_q,
-                            tid
+                            tid,
+                            pf0, pf1, pf2, pf3,
+                            next_ref,
+                            pf0, pf1, pf2, pf3
                         );
                     } else {
-                        compress_block_coop(
+                        new_word0 = compress_block_coop_impl(
+                            false,
                             memory + rhs_offset,
                             memory + lhs_offset,
                             memory + dst_offset,
-                            true,
+                            xor_out,
                             my_scratch_r,
                             my_scratch_q,
-                            tid
+                            tid,
+                            0ULL, 0ULL, 0ULL, 0ULL,
+                            next_ref,
+                            pf0, pf1, pf2, pf3
                         );
                     }
+                    pf_valid = (next_ref != nullptr);
                     coop_sync();
+#if SEINE_AMD_CARRY_WORD0
+                    prev_word0 = new_word0;
+#else
+                    (void)new_word0;
+#endif
 
                     prev_index = cur_index;
                     cur_index += 1U;
@@ -862,7 +1651,7 @@ __device__ __forceinline__ void argon2id_fill_kernel_impl(
         }
 
         const unsigned long long *last =
-            memory + (static_cast<unsigned long long>(lane_length) - 1ULL) * 128ULL;
+            memory + block_slot(lane_length - 1U, lane_length) * 128ULL;
         unsigned long long *out = out_last_blocks + global_hash_idx * 128ULL;
         {
             const unsigned long long v0 = last[tid];

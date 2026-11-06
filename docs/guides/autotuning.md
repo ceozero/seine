@@ -1,61 +1,76 @@
 # How automatic tuning works
 
-Seine starts mining immediately and keeps tuning while it works: it compares thread
-counts and CPU kernels using real mining work, and backs off when RAM gets tight.
-Nothing here needs configuring; this page explains what it does.
+Seine starts mining immediately and tunes while it works, on real mining work. It
+finds the thread count and CPU kernel that hash fastest, uses no more threads than
+that takes, then stops testing. Nothing here needs configuring; this page explains
+what it does.
 
-`--disable-cpu-autotune-threads` turns off both thread and kernel tuning, and an
-explicit `--threads` count keeps the default kernel unless tuning is requested.
+`--disable-cpu-autotune-threads` turns off both thread and kernel tuning. An explicit
+`--threads` count stays fixed, and Seine still picks the kernel for it.
 
-## Thread count
+## What you see
 
-CPU autotuning during mining starts from a compatible cached count, limited by
-current RAM, or an initial estimate of half the automatic capacity. Mining begins
-without an offline thread-count sweep. The miner then compares settings using
-real mining work: baseline, candidate, and baseline again. Every arena completes
-one hash before its measurement window starts. Windows last at least 30 seconds
-(or five times `--cpu-autotune-secs`) and collect at least 20 completed hashes.
-Brief gaps between jobs remain part of measured wall time. Sustained work loss,
-changing RAM limits, or substantial baseline drift discard the comparison.
-Balanced/efficiency profiles retain their 99%/75% peak floors;
-upward changes additionally require a gain above a conservative noise margin.
-After exploring the peak, a lower count that meets the profile's floor stays
-selected between probes. New peak measurements can extend exploration without
-repeatedly committing higher counts that are already known to be unnecessary.
+The dashboard's `Tuning:` row says where things stand:
 
-## CPU kernels
+| Row | Meaning |
+|---|---|
+| `trying kernels, about 4 min left` | Comparing CPU kernels while mining |
+| `12 vs 16 threads, about 3 min left` | Comparing thread counts: the thread count moves between the two while it measures |
+| `update: 12 vs 14 threads, ~2 min` | A new version changed something for your CPU |
+| `done` | Tuned. The thread count stays put unless something changes |
+| `done, one more look at 12 vs 16` | Tuned; one more look at a result that was too close to call, so the thread count moves between the two for a while |
+| `low on RAM, best is 12 threads` | Running fewer threads until RAM is free |
+| `waiting for RAM` | Not enough free RAM for one thread yet |
 
-On CPUs supporting both AVX2 and AVX-512, automatic mining tuning also compares
-those paths at the current worker count. On AArch64 with runtime SHA3 support,
-it compares baseline NEON with `neon-sha3`, which combines XOR/rotate instructions
-and 64-byte prefetch coverage. Startup keeps the existing portable NEON path.
-Two baseline/candidate/baseline cycles
-must confirm a gain above 2% plus the hash-count uncertainty before changing the
-path. Kernel and thread-count trials run in turn; memory-pressure handling remains
-active throughout. Kernel windows last 30–60 seconds and require 32 hashes, with
-a ten-minute limit for each trial. Interrupted or noisy trials retain the previous
-path. Workers switch between complete hashes without reallocating their arenas.
+The log has one line when tuning starts and says why, and one when it finishes, for
+example `tuned to 12 threads`. On a restart Seine goes straight back to the saved result
+and the row says `done`; if the hashrate differs from last time, it tunes again and the
+log says why. Plain logs (`--ui plain`) and the control API also list
+each comparison.
 
-On validated Zen 5 EPYC processors (AMD family 26, model 2), tuning also compares
-`avx512-256-stream`: a 256-bit AVX-512 kernel that keeps recent blocks cached and
-streams outputs into the normal 2 GiB arena. It requires AVX2 and AVX-512F/VL.
-Every eligible path is considered before caching the result; slower paths are
-rejected using the same repeated comparisons. No worker-count cutoff forces
-this kernel. A 24-worker EPYC 9R45 test improved 27.78% over AVX2, while the
-one-worker screen regressed 3.53%, so selection remains specific to the measured
-worker count and memory backing. Other CPU families retain their existing
-automatic candidates.
+The `+` and `-` keys wait while tuning picks the thread count and say how long it has
+left. They work again once the row says `done`. To fix a count
+from the start, use `--threads N`.
 
-## Cached choices
+## Finding the best settings
 
-Confirmed kernel choices are cached alongside the thread cache in
-`seine.cpu-autotune.json.kernels.json`, keyed by worker counts, observed page
-backing, CPU/build identity, eligible kernels, placement and tuning settings. Known contexts reuse
-that choice; stable contexts are reconsidered after 30 minutes. Experimental
-`avx512-256` remains benchmark-only. AVX2-only CPUs and ARM hosts without SHA3
-keep their existing paths. No extra configuration is needed: `--disable-cpu-autotune-threads` disables
-both automatic count and kernel tuning, and explicit fixed thread counts retain
-the default ISA unless autotuning is explicitly enabled.
+Each comparison runs the current setting, then the candidate, then the current setting
+again, so a change in load does not count for or against the candidate. All of it is
+real mining, and a candidate that is clearly slower is cut short.
+
+Seine starts from the best it knows: this machine's saved result, then a starting
+point for your CPU, then an estimate from your cores and free RAM. It compares any
+kernels worth trying on your CPU, then searches thread counts in growing steps until
+adding threads stops helping, then narrows down. A count that matches the fastest
+one within 0.25% is as good as it, so Seine keeps the lowest such count and the RAM
+stays free for your other programs. It only moves to fewer threads once the
+measurements show little is lost. A result too close to call is checked again straight
+away, then a few more times half an hour apart. When more threads look only slightly
+faster, Seine stops stepping up and gives that count one longer look straight away;
+after that, differences that small only move the count after a longer look.
+
+Kernels your CPU cannot run are never tried, and kernels known not to win on your CPU
+are skipped. Most machines finish within minutes; a slow or busy machine can take
+longer because each measurement needs enough completed hashes to mean something.
+
+`--cpu-profile efficiency` keeps the lowest count within 25% of the fastest instead.
+
+## When tuning runs again
+
+Once tuned, Seine runs no scheduled tests. It looks again only when:
+
+- **A new version changes something that affects speed.** It starts on your saved
+  result, tests what changed (a new kernel, an improved kernel even if it lost before,
+  or another change that could move the best thread count) and skips everything else.
+  The log line says which of these it is. A version that changes nothing about hashing
+  runs no tests at all.
+- **Hashrate moves by more than 7% for 10 minutes**, for example when another program
+  starts or stops using the CPU. If fewer threads then win, Seine checks now and then
+  whether it can go back.
+- **More RAM becomes free** and RAM was what held the thread count back.
+- **Your CPU, operating system or CPU limits change**, or a CPU backend stops.
+
+Results are saved in `seine.cpu-autotune.json` in the data directory.
 
 ## Memory pressure and recovery
 
@@ -65,7 +80,9 @@ cgroup limits, including `memory.high`, and credit clean inactive file cache tha
 can be reclaimed. Linux pressure checks prefer the miner's own cgroup so unrelated
 host stalls do not cause false reductions. Sustained memory stalls or Windows
 low-memory notifications reduce the operating count when arena headroom is also
-tight; brief reclaim spikes do not force a reduction.
+tight; brief reclaim spikes do not force a reduction. On macOS, memory-pressure
+warnings alone decide when running workers go, because free memory moves as the
+system compresses it.
 The CPU backend can pause at zero workers when no complete arena fits, then retry
 after 30 seconds of sustained headroom. Released Linux HugeTLB arenas return to the
 reserved hugepage pool; the miner does not resize that OS pool. Parked worker slots
@@ -76,9 +93,14 @@ retries with fewer slots; explicit fixed counts report failure instead. The nonc
 stride remains fixed. Raising a RAM limit can activate more provisioned workers;
 raising a task limit requires restarting to provision additional slots. A task
 budget too small for the CPU and supporting threads reports a startup error.
-Only active arenas count against the refreshed memory allowance. Returning capacity
-and sustained throughput changes prompt new probes. Stable settings are revisited
-periodically; failed allocation attempts back off for five minutes.
+Only active arenas count against the refreshed memory allowance. Failed allocation
+attempts back off, starting at five minutes. A thread that is shed again within
+five minutes of coming back marks the edge of the machine's RAM: Seine stays one
+below it and retries after five minutes, then ten, twenty and forty, without a
+dashboard line for each try. A higher count that runs out of RAM as soon as it starts
+marks the edge too. Either way, Seine moves back up at once when a full thread's worth
+of RAM comes free.
+
 
 ## What tuning never interrupts
 

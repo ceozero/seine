@@ -16,8 +16,8 @@ use crate::backend::{
     BackendEvent, BackendInstanceId, DeadlineSupport, KernelBenchSample, PowBackend,
 };
 use crate::config::{
-    BackendKind, BenchBaselinePolicy, BenchKind, Config, CpuAffinityMode, CpuPerformanceProfile,
-    WorkAllocation,
+    BackendKind, BenchBaselinePolicy, BenchKind, BenchPow, Config, CpuAffinityMode,
+    CpuPerformanceProfile, WorkAllocation,
 };
 
 use super::hash_poll::build_backend_poll_state;
@@ -247,6 +247,9 @@ struct BenchPowFingerprint {
     parallelism: u32,
     output_len: usize,
     header_base_len: usize,
+    /// `blake2b` for BLAKE2b runs; absent for Argon2id so older baselines match.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    algorithm: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -396,7 +399,18 @@ pub(super) fn run_benchmark(cfg: &Config, shutdown: &AtomicBool) -> Result<()> {
     let cfg = &runtime_cfg;
     let instances = super::build_backend_instances(cfg);
     let backend_executor = super::backend_executor::BackendExecutor::new();
+    crate::backend::note_network_pow(cfg.bench_pow.algorithm());
 
+    if cfg.bench_pow == BenchPow::Blake2b
+        && matches!(
+            cfg.bench_kind,
+            BenchKind::Kernel | BenchKind::KernelEffective
+        )
+    {
+        bail!(
+            "--bench-pow blake2b runs through the backends: use --bench-kind backend or end-to-end"
+        );
+    }
     match cfg.bench_kind {
         BenchKind::Kernel => run_kernel_benchmark(
             cfg,
@@ -583,7 +597,7 @@ fn run_kernel_benchmark(
             schema_version: BENCH_REPORT_SCHEMA_VERSION,
             environment,
             config_fingerprint: benchmark_config_fingerprint(cfg, None),
-            pow_fingerprint: benchmark_pow_fingerprint(),
+            pow_fingerprint: benchmark_pow_fingerprint(cfg.bench_pow),
             bench_kind: mode.report_kind_label().to_string(),
             backends: vec![backend.name().to_string()],
             preemption: vec![format!(
@@ -692,6 +706,9 @@ fn run_worker_benchmark(
     }
     for notice in &cfg.startup_notices {
         info("BACKEND", notice);
+    }
+    for detail in &cfg.startup_details {
+        info("BACKEND", detail);
     }
     let initial_startup_started = Instant::now();
     let requested_backend_kinds: Vec<String> = instances
@@ -869,8 +886,8 @@ fn run_worker_benchmark_inner(
         let work_id = next_work_id(&mut work_id_cursor);
         let round_start = Instant::now();
         let stop_at = round_start + Duration::from_secs(cfg.bench_secs);
-        let header_base = benchmark_header_base(round);
-        let reservation = scheduler.reserve(total_lanes(backends));
+        let header_base = benchmark_header_base(round, cfg.bench_pow);
+        let reservation = scheduler.reserve_for(total_lanes(backends), cfg.bench_pow.algorithm());
 
         let distribution = distribute_work(
             backends,
@@ -878,7 +895,7 @@ fn run_worker_benchmark_inner(
                 epoch,
                 work_id,
                 header_base: std::sync::Arc::clone(&header_base),
-                pow: crate::backend::PowAlgorithm::Argon2id,
+                pow: cfg.bench_pow.algorithm(),
                 target: impossible_target,
                 dynamic_share_target: None,
                 pause_on_solution: true,
@@ -1121,7 +1138,7 @@ fn run_worker_benchmark_inner(
             schema_version: BENCH_REPORT_SCHEMA_VERSION,
             environment,
             config_fingerprint: benchmark_config_fingerprint(cfg, Some(backends)),
-            pow_fingerprint: benchmark_pow_fingerprint(),
+            pow_fingerprint: benchmark_pow_fingerprint(cfg.bench_pow),
             bench_kind: if restart_each_round {
                 "end_to_end".to_string()
             } else {
@@ -1941,15 +1958,15 @@ fn late_hash_share_pct(late_hashes: u64, total_hashes: u64) -> f64 {
     }
 }
 
-fn benchmark_header_base(round: u32) -> std::sync::Arc<[u8]> {
-    let mut data = [0u8; POW_HEADER_BASE_LEN];
+fn benchmark_header_base(round: u32, pow: BenchPow) -> std::sync::Arc<[u8]> {
+    let mut data = vec![0u8; benchmark_header_base_len(pow)];
     for (i, byte) in data.iter_mut().enumerate() {
         *byte = (i as u8)
             .wrapping_mul(37)
             .wrapping_add(11)
             .wrapping_add((round % 251) as u8);
     }
-    std::sync::Arc::from(data.to_vec())
+    std::sync::Arc::from(data)
 }
 
 fn benchmark_environment() -> BenchEnvironment {
@@ -2075,13 +2092,21 @@ fn benchmark_config_fingerprint(
     }
 }
 
-fn benchmark_pow_fingerprint() -> BenchPowFingerprint {
+fn benchmark_pow_fingerprint(pow: BenchPow) -> BenchPowFingerprint {
     BenchPowFingerprint {
         memory_kb: POW_MEMORY_KB,
         iterations: POW_ITERATIONS,
         parallelism: POW_PARALLELISM,
         output_len: POW_OUTPUT_LEN,
-        header_base_len: POW_HEADER_BASE_LEN,
+        header_base_len: benchmark_header_base_len(pow),
+        algorithm: (pow == BenchPow::Blake2b).then(|| "blake2b".to_string()),
+    }
+}
+
+fn benchmark_header_base_len(pow: BenchPow) -> usize {
+    match pow {
+        BenchPow::Argon2id => POW_HEADER_BASE_LEN,
+        BenchPow::Blake2b => blocknet_pow_spec::FARADAY_HEADER_BASE_LEN,
     }
 }
 
@@ -2485,6 +2510,23 @@ mod tests {
     }
 
     #[test]
+    fn blake2b_benchmarks_are_fingerprinted_apart_from_argon2() {
+        let argon2 = benchmark_pow_fingerprint(BenchPow::Argon2id);
+        let blake2b = benchmark_pow_fingerprint(BenchPow::Blake2b);
+        assert_ne!(argon2, blake2b);
+        assert_eq!(
+            blake2b.header_base_len,
+            blocknet_pow_spec::FARADAY_HEADER_BASE_LEN
+        );
+        assert_eq!(benchmark_header_base(3, BenchPow::Blake2b).len(), 156);
+        // Argon2 fingerprints serialize as before, so existing baselines still match.
+        let json = serde_json::to_value(&argon2).unwrap();
+        assert!(json.get("algorithm").is_none());
+        let old: BenchPowFingerprint = serde_json::from_value(json).unwrap();
+        assert_eq!(old, argon2);
+    }
+
+    #[test]
     fn kernel_identity_is_checked_even_when_environment_is_ignored() {
         let baseline = sample_report();
         let mut current = baseline.clone();
@@ -2623,6 +2665,7 @@ mod tests {
                 parallelism: POW_PARALLELISM,
                 output_len: POW_OUTPUT_LEN,
                 header_base_len: POW_HEADER_BASE_LEN,
+                algorithm: None,
             },
             bench_kind: "backend".to_string(),
             backends: vec!["cpu#1".to_string()],

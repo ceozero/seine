@@ -30,10 +30,16 @@ pub enum CpuKernel {
     Avx512256StreamL2,
     /// `Avx512Stream` plus the far L2 prefetch (Zen 4).
     Avx512StreamL2,
+    /// `Avx512Stream` with stores skipped from 60% of the arena, independent of
+    /// `FixedArgon2id::set_skip_store_permille`.
+    Avx512StreamSkip,
+    /// `Avx2Stream` with stores skipped from 60% of the arena, independent of
+    /// `FixedArgon2id::set_skip_store_permille`.
+    Avx2StreamSkip,
 }
 
 impl CpuKernel {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 17] = [
         Self::Scalar,
         Self::Avx2,
         Self::Avx512,
@@ -49,6 +55,8 @@ impl CpuKernel {
         Self::Avx512Stream,
         Self::Avx512256StreamL2,
         Self::Avx512StreamL2,
+        Self::Avx512StreamSkip,
+        Self::Avx2StreamSkip,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -68,6 +76,8 @@ impl CpuKernel {
             Self::Avx512Stream => "avx512-stream",
             Self::Avx512256StreamL2 => "avx512-256-stream-l2",
             Self::Avx512StreamL2 => "avx512-stream-l2",
+            Self::Avx512StreamSkip => "avx512-stream-skip",
+            Self::Avx2StreamSkip => "avx2-stream-skip",
         }
     }
 
@@ -75,7 +85,9 @@ impl CpuKernel {
         match self {
             Self::Scalar => true,
             #[cfg(target_arch = "x86_64")]
-            Self::Avx2 | Self::Avx2Stream => std::arch::is_x86_feature_detected!("avx2"),
+            Self::Avx2 | Self::Avx2Stream | Self::Avx2StreamSkip => {
+                std::arch::is_x86_feature_detected!("avx2")
+            }
             #[cfg(target_arch = "x86_64")]
             Self::Avx512 => {
                 std::arch::is_x86_feature_detected!("avx512f")
@@ -90,7 +102,8 @@ impl CpuKernel {
             | Self::Avx512256StreamR64D6
             | Self::Avx512Stream
             | Self::Avx512256StreamL2
-            | Self::Avx512StreamL2 => {
+            | Self::Avx512StreamL2
+            | Self::Avx512StreamSkip => {
                 std::arch::is_x86_feature_detected!("avx2")
                     && std::arch::is_x86_feature_detected!("avx512f")
                     && std::arch::is_x86_feature_detected!("avx512vl")
@@ -103,12 +116,43 @@ impl CpuKernel {
         }
     }
 
+    /// Kernels that skip arena stores on their own.
+    pub const fn skips_stores(self) -> bool {
+        matches!(self, Self::Avx512StreamSkip | Self::Avx2StreamSkip)
+    }
+
     /// The existing automatic dispatch policy, also used by normal mining.
     pub fn preferred() -> Self {
         [Self::Avx512, Self::Avx2, Self::Neon, Self::Scalar]
             .into_iter()
             .find(|kernel| kernel.is_supported())
             .expect("scalar is always supported")
+    }
+}
+
+impl CpuKernel {
+    /// Raise a kernel's number when a change can make it faster or slower: every
+    /// miner then measures it again, even if it lost before.
+    pub const fn revision(self) -> u32 {
+        match self {
+            Self::Scalar
+            | Self::Avx2
+            | Self::Avx512
+            | Self::Avx512256
+            | Self::Neon
+            | Self::Avx512256Stream
+            | Self::NeonSha3
+            | Self::Avx512256StreamR8D2
+            | Self::Avx512256StreamR64D3
+            | Self::Avx512256StreamR64D4
+            | Self::Avx512256StreamR64D6
+            | Self::Avx2Stream
+            | Self::Avx512Stream
+            | Self::Avx512256StreamL2
+            | Self::Avx512StreamL2
+            | Self::Avx512StreamSkip
+            | Self::Avx2StreamSkip => 1,
+        }
     }
 }
 
@@ -126,7 +170,7 @@ impl std::str::FromStr for CpuKernel {
             .into_iter()
             .find(|kernel| kernel.as_str() == value)
             .ok_or_else(|| {
-                "expected scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, avx512-stream-l2, neon, or neon-sha3"
+                "expected scalar, avx2, avx512, avx512-256, avx512-256-stream, avx512-256-stream-r8d2, avx512-256-stream-r64d3, avx512-256-stream-r64d4, avx512-256-stream-r64d6, avx2-stream, avx512-stream, avx512-256-stream-l2, avx512-stream-l2, avx512-stream-skip, avx2-stream-skip, neon, or neon-sha3"
                     .to_string()
             })
     }

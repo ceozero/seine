@@ -31,7 +31,7 @@ if [[ "${1:-}" == --infrastructure-only ]]; then
     exit 0
 fi
 quality="$("${compose[@]}" exec -T db psql -X -U telemetry -d telemetry -qAt -v ON_ERROR_STOP=1 < "$deploy_dir/../data_quality.sql")"
-diagnostics="$("${compose[@]}" exec -T db psql -X -U telemetry -d telemetry -qAt -v ON_ERROR_STOP=1 < "$deploy_dir/../diagnostics.sql")"
+diagnostics="$("${compose[@]}" exec -T db psql -X -U telemetry -d telemetry -qAt -v ON_ERROR_STOP=1 < "$deploy_dir/../diagnostic_alerts.sql")"
 python3 - "$quality" "$diagnostics" <<'PYTHON'
 import json, sys
 quality, diagnostics = map(json.loads, sys.argv[1:])
@@ -39,7 +39,7 @@ failures = []
 if quality['status'] != 'ok':
     failures.append('Telemetry data quality failed: sustained hardware-only reports without backend samples.')
 if diagnostics['status'] == 'attention':
-    failures.append('Miner reliability needs attention: errors or unclean runs on at least three installations of one version in 24 hours. Run telemetry/agent_report.py.')
+    failures.append('Miner reliability needs attention: errors or unclean runs above the per-version share on the newest release line, or failed installs or paused mining on at least three installations of one version, in 24 hours. Run telemetry/agent_report.py.')
 if failures:
     sys.exit('\n'.join(failures))
 PYTHON

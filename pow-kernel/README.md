@@ -8,37 +8,11 @@ This crate exports:
 - `PowBlock`
 - `ReusablePowContext`
 
-## CPU memory-recomputation research
+## Verification tools
 
-The opt-in `cpu-research` feature adds exact dependency tracing and bounded
-checkpoint-recomputation simulations. It is not enabled by the miner and does
-not change PoW parameters or automatic kernel dispatch.
-
-```bash
-# Reduced-memory screening; not a production hash-rate benchmark.
-cargo +1.93.0 run --release --locked -p blocknet-pow-kernel \
-  --features cpu-research --example cpu_tmto -- 65536 0 8
-
-# Production parameters, nonce 0, stop each replay at 8x normal compressions.
-cargo +1.93.0 run --release --locked -p blocknet-pow-kernel \
-  --features cpu-research --example cpu_tmto -- 2097152 0 8
-```
-
-Arguments are memory KiB, nonce, and maximum work factor. JSON goes to stdout;
-diagnostics go to stderr. Every trace is checked against RustCrypto first,
-using sequential arenas to keep peak arena allocation near 2 GiB at production
-parameters. Normal host and cgroup headroom is still required.
-
-The simulator compares fixed-spacing checkpoints with an online reconstruction
-cost heuristic. Both retain the previous output, count live input/output block
-slots, and use an explicit dependency stack. Cost decisions use only already
-known parents; future data-dependent references never inform retention. An
-incomplete replay has a null work ratio, not an estimated completed result.
-
-Reported residency is block storage plus a separately reported reference-table
-size. It excludes implementation-specific allocation, index and policy metadata.
-This is not a reduced-memory hashing implementation, an optimal tradeoff search,
-or a prediction of CPU throughput.
+The opt-in `cpu-research` feature adds verification and analysis tools used in
+development. It is not enabled by the miner and does not change PoW parameters or
+kernel dispatch.
 
 ## Faraday BLAKE2b-512 PoW
 
@@ -50,8 +24,8 @@ the 156-byte v2 header costs one compression per nonce. The reference lives in
 `hashlib.blake2b` until upstream publishes official ones; the kernel is
 checked against the reference for every header length from 0 to 300 bytes.
 
-The miner does not use it yet. Portable scalar rate on one 9950X3D core:
-about 8 MH/s (14 MH/s with `-C target-cpu=native`).
+CPU workers use it for BLAKE2b templates. To print the single-thread scan
+rate on a host:
 
 ```bash
 cargo +1.93.0 run --release --locked -p blocknet-pow-kernel --example blake2b_pow_rate -- 3

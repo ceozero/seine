@@ -181,6 +181,7 @@ struct TrialRecorder {
     run_id: String,
     started: Instant,
     queue: Mutex<(u64, Vec<RecordedTrial>)>,
+    settled: Mutex<Option<seine_telemetry::tuning::SettledTuning>>,
     dropped: AtomicU64,
 }
 
@@ -191,6 +192,7 @@ impl TrialRecorder {
             run_id,
             started: Instant::now(),
             queue: Mutex::new((0, Vec::new())),
+            settled: Mutex::new(None),
             dropped: AtomicU64::new(0),
         }
     }
@@ -214,6 +216,7 @@ impl Drop for TrialWorkerLifetime {
 struct Accumulated {
     settings: BackendSettings,
     hashes: u64,
+    first_hash_noted: bool,
     first: Instant,
     last: Instant,
     changed: bool,
@@ -233,6 +236,13 @@ impl Recorder {
     #[allow(dead_code)]
     pub(crate) fn trial_elapsed_ms(&self) -> u64 {
         self.2.started.elapsed().as_millis().min(u64::MAX as u128) as u64
+    }
+
+    /// Keep the latest result the search settled on for the next report.
+    pub(crate) fn record_settled(&self, settled: seine_telemetry::tuning::SettledTuning) {
+        if self.trials_enabled() && settled.validate() {
+            *self.2.settled.lock().unwrap_or_else(|e| e.into_inner()) = Some(settled);
+        }
     }
 
     /// Emit once per completed/aborted trial. Never blocks or serializes on the
@@ -268,6 +278,12 @@ impl Recorder {
             run_id: self.2.run_id.clone(),
             trials: std::mem::take(&mut queue.1),
             dropped_trials: self.2.dropped.swap(0, Ordering::Relaxed),
+            settled: self
+                .2
+                .settled
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take(),
         };
         drop(queue);
         // Only the reporting thread performs serialization/budget work. Keep
@@ -278,7 +294,8 @@ impl Recorder {
             report.trials.pop();
             report.dropped_trials += 1;
         }
-        (!report.trials.is_empty() || report.dropped_trials > 0).then_some(report)
+        (!report.trials.is_empty() || report.dropped_trials > 0 || report.settled.is_some())
+            .then_some(report)
     }
 
     #[cfg(test)]
@@ -287,20 +304,31 @@ impl Recorder {
     }
 
     pub(crate) fn record(&self, instance: u64, settings: BackendSettings, hashes: u64) {
+        let backend = (hashes > 0).then(|| settings.backend.clone());
+        // Noted outside the sample lock; a retry after contention finds it unset.
+        let first_hash = self.record_sample(instance, settings, hashes);
+        if let (true, Some(backend)) = (first_hash, backend) {
+            crate::diagnostics::backend_first_hash(&backend, instance);
+        }
+    }
+
+    /// Returns true when this is the instance's first sample with hashes.
+    fn record_sample(&self, instance: u64, settings: BackendSettings, hashes: u64) -> bool {
         // The miner never waits for a report to finish; contention loses telemetry only.
         let Ok(mut samples) = self.0.try_lock() else {
             self.1.store(true, Ordering::Relaxed);
-            return;
+            return false;
         };
         if samples.len() >= 128 && !samples.contains_key(&instance) {
             self.1.store(true, Ordering::Relaxed);
-            return;
+            return false;
         }
         let now = Instant::now();
         let first_sample = !samples.contains_key(&instance);
         let sample = samples.entry(instance).or_insert_with(|| Accumulated {
             settings: settings.clone(),
             hashes: 0,
+            first_hash_noted: false,
             first: now,
             last: now,
             changed: false,
@@ -312,6 +340,9 @@ impl Recorder {
         if !first_sample {
             sample.hashes = sample.hashes.saturating_add(hashes);
         }
+        let first_hash = hashes > 0 && !sample.first_hash_noted;
+        sample.first_hash_noted |= hashes > 0;
+        first_hash
     }
 
     #[cfg(test)]
@@ -529,20 +560,21 @@ fn start_with_context(
             if !still_enabled(&options) {
                 return;
             }
-            let store =
-                crate::diagnostics::Store::open(&options.state_path, &options.installation_id).map(
-                    |(store, unclean)| {
-                        let store = Arc::new(store);
-                        worker_completion
-                            .lock()
-                            .unwrap_or_else(|e| e.into_inner())
-                            .attach(&store);
-                        diagnostics.set_previous_unclean(unclean);
-                        diagnostics.set_previous_run(store.previous_run.clone());
-                        diagnostics.attach_checkpoint_store(&store, &options.installation_id);
-                        store
-                    },
-                );
+            let store = crate::diagnostics::Store::open(
+                &options.state_path,
+                &options.installation_id,
+            )
+            .map(|(store, unclean)| {
+                let store = Arc::new(store);
+                worker_completion
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .attach(&store);
+                diagnostics.set_previous_unclean(unclean);
+                diagnostics.set_previous_run(store.previous_run.clone(), store.previous_rebooted);
+                diagnostics.attach_checkpoint_store(&store, &options.installation_id);
+                store
+            });
             // One bounded replay on the next launch, using the same report ID for deduplication.
             if let Some(store) = &store {
                 if let Some(pending) = store.pending(&options.installation_id) {

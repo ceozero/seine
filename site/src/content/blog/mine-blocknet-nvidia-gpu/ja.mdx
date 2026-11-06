@@ -2,7 +2,7 @@
 title: 'NVIDIA GPUでBlocknetをマイニングする方法'
 description: 'seineでNVIDIA GPUを使ってBlocknetをマイニング。Windows・Linuxの設定、CPUとの併用、ハッシュレートの確認、起動時の問題への対処を解説します。'
 tags: ['マイニングガイド', 'NVIDIA', 'GPU']
-sourceHash: 6a693c616f37
+sourceHash: bcf2b64687ba
 translation: draft
 faq:
   - q: 'seineはCPUとNVIDIA GPUを同時に使えますか？'
@@ -15,7 +15,7 @@ faq:
     a: 'マイニングのダッシュボードに、送信済み・拒否・受理済みのシェアが表示されます。ログには、シェアのイベントを発生させたバックエンドも表示されます。NVIDIAデバイスの行でローカルのハッシュレートを確認し、そのバックエンドのシェア受理メッセージを探してください。プールに計上された作業は、プールの追跡ガイドに沿って確認できます。'
 ---
 
-seineはCPUとともにNVIDIA GPUでもBlocknetをマイニングします。このガイドでは、WindowsとLinuxの設定、カードの選択、受理されたシェアの確認、RTX 5090での実測比較を解説します。コマンドはseine v0.2.26と、2026年10月時点のArgon2idネットワークに基づいています。
+seineはCPUとともにNVIDIA GPUでもBlocknetをマイニングします。このガイドでは、WindowsとLinuxの設定、カードの選択、受理されたシェアの確認、RTX 5090での実測比較を解説します。コマンドはseine v0.3.0と、2026年10月時点のArgon2idネットワークに基づいています。
 
 ## NVIDIA GPUでBlocknetのマイニングを始めるには？
 
@@ -32,7 +32,7 @@ Windows x86_64またはLinux x86_64向けのseineアーカイブをダウンロ�
 | プラットフォーム | 準備するもの | 起動コマンド |
 |---|---|---|
 | Windows x86_64 | NVIDIAディスプレイドライバー、実行ファイルと同じフォルダーに置く同梱ランタイムDLL | `.\seine.exe` |
-| Linux x86_64 | NVIDIAドライバーと対応するNVRTCランタイムライブラリ | `./seine` |
+| Linux x86_64 | NVIDIAドライバー | `./seine` |
 
 Windowsでは、書き込み可能なフォルダーにZIP全体を展開します。`nvrtc64_120_0.dll`と`nvrtc-builtins64_128.dll`は、`seine.exe`と同じフォルダーに置いてください。配布済みのリリースはこれらの同梱ライブラリを使用するため、CUDA Toolkitを別途インストールする必要はありません。
 
@@ -40,7 +40,7 @@ Windowsでは、書き込み可能なフォルダーにZIP全体を展開しま�
 
 [NVIDIAのドライバーページ](https://www.nvidia.com/en-us/drivers/)から、カードとOSに合ったドライバーをインストールしてください。[Windows設定ガイド](/ja/blog/mine-blocknet-on-windows/)では、ダウンロード、チェックサムの確認、展開の手順を説明しています。
 
-Linuxでは、ディストリビューションに合ったNVIDIAドライバーと対応するNVRTCパッケージをインストールします。NVRTCは、実行時にseineのCUDAカーネルをコンパイルします。NVIDIAの[NVRTCドキュメント](https://docs.nvidia.com/cuda/nvrtc/)にはコンパイラーと対応するbuiltinsライブラリの説明があり、[seineのNVIDIA要件](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)にはマイナーに必要なランタイム環境が記載されています。
+LinuxではNVIDIAドライバーがあれば十分です。seineはNVRTCがインストールされていればそれを使い、なければseineに組み込まれたカーネルを読み込みます。これはGeForce GTX 10 series以降のカードに対応しています。詳細は[seineのNVIDIA要件](https://github.com/zpalmtree/seine/blob/master/docs/guides/nvidia.md)をご覧ください。
 
 実行ファイルがあるフォルダーから起動してください。同じ作業ディレクトリを使い続けると、`seine-data`に保存した設定を維持できます。初回起動時には受取アドレスを入力し、プールに`stratum+tcp://bntpool.com:3333`を選びます。
 
@@ -86,18 +86,15 @@ NVIDIAバックエンドは`nvidia#1`、`nvidia#2`などと表示され、CPUに
 
 ## テストでのRTX 5090の速度は？
 
-2026年10月25日に、Windows 11、NVIDIA GeForce RTX 5090、AMD Ryzen 9 9950X3D、利用可能なRAM 125.4 GiB、seine v0.2.26、NVIDIAドライバー`610.88`を使用してテストしました。`--bench-kind backend`を使い、両モードを交互に実行する比較を3組行いました。各実行には20秒のウォームアップ1回と20秒の測定ラウンド3回を含め、実行の間に20秒の間隔を置きました。カーネル、レジスタ上限、レーン数、スレッド数は自動設定でした。
+2026年10月31日測定。RTX 5090単体、ネイティブのWindows 11、ドライバー610.88、公開開発ビルドを使用。安定時のマイニング速度はマイナー手数料控除後の値で、CPUの処理は含みません。
 
 | モード | 平均 H/s |
 |---|---|
-| RTX 5090のみ | 7.3 |
-| RTX 5090 + Ryzen 9 9950X3D | 12.9 |
-
-表は、このデスクトップPCで既存のアプリを開いたまま各モードを3回実行した平均値です。両モードでGPU `0`と同じNVIDIA自動調整キャッシュを使用しました。これらはローカルベンチマークの速度であり、プールへの計上は受理されたシェアで確認します。[測定メモ](https://github.com/zpalmtree/seine/blob/master/site/editorial/batches/2026-10-nvidia-guide/research.md)には設定と個別の結果を記録しています。
+| RTX 5090のみ | 13.8 |
 
 ## NVIDIAの行が表示されないときは何を確認しますか？
 
-まず、展開した実行ファイルとランタイムライブラリを確認します。Windowsでは同梱のNVRTC DLLを`seine.exe`と同じフォルダーに置きます。Linuxでは、マイナーを起動する環境にドライバーとNVRTCライブラリをインストールしてください。
+まずドライバーを確認してください。Windowsでは、付属のNVRTC DLLも `seine.exe` と同じフォルダーに置いておきます。Linuxでは、マイナーを起動する環境にNVIDIAドライバーをインストールします。
 
 次にコマンドを確認します。`--backend cpu`はCPUのみを選択します。両方を使うには、既定のコマンドか`--backend cpu,nvidia`を使用します。`--nvidia-devices`を指定した場合は、そのインデックスが使用中のマシンに存在することを確認してください。
 

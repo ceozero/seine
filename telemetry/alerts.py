@@ -20,6 +20,9 @@ REPEAT_SECONDS = 4 * 3600
 REMINDER_CATEGORIES = {'infrastructure', 'ingestion', 'monitor'}
 CONFIRM_SECONDS = 240
 MAX_SENDS = 10
+# Installations with pool connection warnings in one hour, versus the prior day.
+POOL_SPIKE_MIN_INSTALLATIONS = 20
+POOL_SPIKE_FACTOR = 3
 
 
 def identity(value):
@@ -52,9 +55,14 @@ def evaluate(results):
             count = row['sustained_inventory_only_installations']
             if count >= 5:
                 # These shipped versions predate the pool sampling fix in v0.2.26.
-                legacy = row['version'] in ('0.2.24', 'v0.2.24', '0.2.25', 'v0.2.25')
-                action = ('Known pool-reporting bug in this release. Upgrade to v0.2.26 or later.'
-                          if legacy else 'Inspect miner activity and the performance sampling path.')
+                pool_bug = row['version'] in ('0.2.24', 'v0.2.24', '0.2.25', 'v0.2.25')
+                legacy = pool_bug or bool(row.get('legacy'))
+                if pool_bug:
+                    action = 'Known pool-reporting bug in this release. Upgrade to v0.2.26 or later.'
+                elif legacy:
+                    action = 'Older release line; only an upgrade changes it.'
+                else:
+                    action = 'Inspect miner activity and the performance sampling path.'
                 active.append(issue(
                     'quality', row['version'],
                     'Installations repeatedly send hardware inventory without hashrate samples. '
@@ -63,17 +71,33 @@ def evaluate(results):
                     severity='info' if legacy else 'warning'))
     diagnostics = results.get('diagnostics')
     if diagnostics is not None:
-        for field, title in [('recent_error_versions', 'miner errors/quarantines'), ('recent_unclean_versions', 'unclean previous runs (not proof of crashes)')]:
-            for row in diagnostics[field]:
+        for field, title in [('recent_error_versions', 'miner errors/quarantines'), ('recent_unclean_versions', 'unclean previous runs (not proof of crashes)'),
+                             ('recent_install_failure_versions', 'failed self-update installs'),
+                             ('recent_unsupported_work_versions', 'mining paused on work this build cannot mine (these miners need an update)')]:
+            for row in diagnostics.get(field, []):
                 count = row['affected_installations']
-                if count >= 3:
+                # Errors and unclean runs carry a fleet-scaled verdict; install
+                # failures and paused mining alert at three on any version.
+                if row.get('needs_attention', count >= 3):
                     version = label(row['version'])
                     attribution = ''
                     if field == 'recent_unclean_versions':
                         version = ('Unknown previous version' if row['version'] == 'unknown'
                                    else f'Previous run {version}')
                         attribution = ' The restarting version is not assumed to be the interrupted version.'
+                        # Reboots and single restarts of new installations are not counted.
+                        count = row.get('counted_installations', count)
+                        uncounted = row['affected_installations'] - count
+                        if uncounted:
+                            attribution += f' {uncounted} more after a reboot or one restart of a new installation are not counted.'
                     active.append(issue('diagnostics', [field, row['version']], f'{version}: {count} installations with {title} in 24 hours.{attribution} Run telemetry/agent_report.py for issue clusters.'))
+        pool = diagnostics.get('pool_connection_warnings')
+        if pool is not None:
+            known.add('pool')
+            recent = pool['last_hour_installations']
+            baseline = float(pool['baseline_hourly_installations'] or 0)
+            if recent >= max(POOL_SPIKE_MIN_INSTALLATIONS, POOL_SPIKE_FACTOR * baseline):
+                active.append(issue('pool', 'connection_spike', f'{recent} installations reported pool connection failures in the last hour (prior-day average {baseline:.0f}/hour); {pool["last_hour_limit_installations"]} were refused at the pool connection limit. Check bntpool Stratum, the gateway and DNS.'))
     performance = results.get('performance')
     if performance is not None:
         known.add('ingestion')
@@ -91,22 +115,46 @@ def run(command, data=None):
     return subprocess.run(command, input=data, text=True, capture_output=True, timeout=45)
 
 
+def check_failure(category, result=None, error=None):
+    # Do not log SQL, connection strings, payloads or arbitrary stderr. Keep the
+    # bounded failure class that operators need to distinguish query failures.
+    detail = 'process failed'
+    if isinstance(error, subprocess.TimeoutExpired):
+        detail = 'process timeout'
+    elif isinstance(error, ValueError):
+        detail = 'invalid JSON response'
+    elif isinstance(error, OSError):
+        detail = 'process unavailable'
+    elif result is not None:
+        if 'canceling statement due to statement timeout' in result.stderr:
+            detail = 'database statement timeout'
+        elif 'canceling statement due to lock timeout' in result.stderr:
+            detail = 'database lock timeout'
+        else:
+            detail = f'process exited {result.returncode}'
+    print(f'Telemetry {category} check failed: {detail}.', file=sys.stderr)
+
+
 def collect():
     results = {}
     try:
         health = run(['bash', str(ROOT / 'deploy/check.sh'), '--infrastructure-only'])
         results['infrastructure'] = health.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as error:
+        check_failure('infrastructure', error=error)
         results['infrastructure'] = None
     compose = ['docker', 'compose', '--project-directory', str(ROOT / 'deploy'),
                '--env-file', str(ROOT / 'deploy/.env'), '-f', str(ROOT / 'deploy/compose.yaml'),
                'exec', '-T', 'db', 'psql', '-X', '-U', 'telemetry', '-d', 'telemetry',
                '-qAt', '-v', 'ON_ERROR_STOP=1']
-    for category, name in [('quality', 'data_quality.sql'), ('diagnostics', 'diagnostics.sql'), ('performance', 'alerts.sql')]:
+    for category, name in [('quality', 'data_quality.sql'), ('diagnostics', 'diagnostic_alerts.sql'), ('performance', 'alerts.sql')]:
         try:
             result = run(compose, (ROOT / name).read_text())
             results[category] = json.loads(result.stdout) if result.returncode == 0 else None
-        except (OSError, subprocess.TimeoutExpired, ValueError):
+            if result.returncode:
+                check_failure(category, result=result)
+        except (OSError, subprocess.TimeoutExpired, ValueError) as error:
+            check_failure(category, error=error)
             results[category] = None
     return results
 

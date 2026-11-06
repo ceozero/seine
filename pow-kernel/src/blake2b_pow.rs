@@ -67,6 +67,40 @@ pub struct Blake2bPowSingleBlock {
     pub message_words: usize,
 }
 
+impl Blake2bPowSingleBlock {
+    /// Round-0 column steps (bit `c` for column `c`) whose two message words
+    /// never hold nonce bytes. They depend only on the template, so a kernel
+    /// can take them from `round0_state` instead of computing them per nonce.
+    pub fn nonce_free_round0_columns(&self) -> u8 {
+        let touches_nonce = |word: usize| {
+            word == self.nonce_word || (self.nonce_shift != 0 && word == self.nonce_word + 1)
+        };
+        (0..4)
+            .filter(|&column| !touches_nonce(2 * column) && !touches_nonce(2 * column + 1))
+            .fold(0, |mask, column| mask | 1 << column)
+    }
+
+    /// Working state of the final compression before round 0, with the
+    /// round-0 column steps in `columns` already applied.
+    pub fn round0_state(&self, columns: u8) -> [u64; 16] {
+        let mut v = initial_state(&self.h, self.counter, true);
+        for column in 0..4 {
+            if columns & (1 << column) != 0 {
+                g(
+                    &mut v,
+                    column,
+                    column + 4,
+                    column + 8,
+                    column + 12,
+                    self.message[2 * column],
+                    self.message[2 * column + 1],
+                );
+            }
+        }
+        v
+    }
+}
+
 /// Per-template BLAKE2b state; cheap to clone into each worker.
 #[derive(Debug, Clone)]
 pub struct Blake2bPowMidstate {
@@ -304,7 +338,7 @@ macro_rules! round {
 }
 
 #[inline(always)]
-fn rounds(h: &[u64; 8], m: &[u64; BLOCK_WORDS], counter: u128, last: bool) -> [u64; 16] {
+fn initial_state(h: &[u64; 8], counter: u128, last: bool) -> [u64; 16] {
     let mut v = [0u64; 16];
     v[..8].copy_from_slice(h);
     v[8..].copy_from_slice(&IV);
@@ -313,6 +347,12 @@ fn rounds(h: &[u64; 8], m: &[u64; BLOCK_WORDS], counter: u128, last: bool) -> [u
     if last {
         v[14] = !v[14];
     }
+    v
+}
+
+#[inline(always)]
+fn rounds(h: &[u64; 8], m: &[u64; BLOCK_WORDS], counter: u128, last: bool) -> [u64; 16] {
+    let mut v = initial_state(h, counter, last);
     round!(v, m, 0);
     round!(v, m, 1);
     round!(v, m, 2);
@@ -332,5 +372,80 @@ fn compress(h: &mut [u64; 8], m: &[u64; BLOCK_WORDS], counter: u128, last: bool)
     let v = rounds(h, m, counter, last);
     for i in 0..8 {
         h[i] ^= v[i] ^ v[i + 8];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Finishes the final compression from `round0_state`, as a kernel does.
+    fn finish(layout: &Blake2bPowSingleBlock, columns: u8, nonce: u64) -> u64 {
+        let mut m = layout.message;
+        m[layout.nonce_word] |= nonce << layout.nonce_shift;
+        if layout.nonce_shift != 0 {
+            m[layout.nonce_word + 1] |= nonce >> (64 - layout.nonce_shift);
+        }
+        let mut v = layout.round0_state(columns);
+        for column in 0..4 {
+            if columns & (1 << column) == 0 {
+                g(
+                    &mut v,
+                    column,
+                    column + 4,
+                    column + 8,
+                    column + 12,
+                    m[2 * column],
+                    m[2 * column + 1],
+                );
+            }
+        }
+        g(&mut v, 0, 5, 10, 15, m[8], m[9]);
+        g(&mut v, 1, 6, 11, 12, m[10], m[11]);
+        g(&mut v, 2, 7, 8, 13, m[12], m[13]);
+        g(&mut v, 3, 4, 9, 14, m[14], m[15]);
+        round!(v, m, 1);
+        round!(v, m, 2);
+        round!(v, m, 3);
+        round!(v, m, 4);
+        round!(v, m, 5);
+        round!(v, m, 6);
+        round!(v, m, 7);
+        round!(v, m, 8);
+        round!(v, m, 9);
+        round!(v, m, 10);
+        round!(v, m, 11);
+        layout.h[0] ^ v[0] ^ v[8]
+    }
+
+    #[test]
+    fn round0_precompute_matches_the_full_compression() {
+        let personal = *b"blocknet/pow/v1\0";
+        let mut seen_masks = std::collections::BTreeSet::new();
+        for len in 0..=300usize {
+            let header: Vec<u8> = (0..len).map(|i| (i * 131 + len) as u8).collect();
+            let midstate = Blake2bPowMidstate::new(&personal, &header).unwrap();
+            let Some(layout) = midstate.single_block_layout() else {
+                continue;
+            };
+            let free = layout.nonce_free_round0_columns();
+            seen_masks.insert(free);
+            for nonce in [0u64, 1, 0x0123_4567_89ab_cdef, u64::MAX] {
+                let expected = u64::from_le_bytes(midstate.hash(nonce)[..8].try_into().unwrap());
+                // Every subset of the nonce-free columns is a valid precompute.
+                for columns in 0..16u8 {
+                    if columns & !free == 0 {
+                        assert_eq!(
+                            finish(&layout, columns, nonce),
+                            expected,
+                            "len={len} columns={columns:#06b}"
+                        );
+                    }
+                }
+            }
+        }
+        // The Faraday header leaves columns 0 and 3 free; other layouts free more or fewer.
+        assert!(seen_masks.contains(&0b1001));
+        assert!(seen_masks.len() > 2);
     }
 }

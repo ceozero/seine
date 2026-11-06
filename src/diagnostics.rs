@@ -10,7 +10,7 @@ use std::{
     panic::Location,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         Arc, Mutex, Once, Weak,
     },
     time::{Duration, Instant, SystemTime},
@@ -44,6 +44,9 @@ pub(crate) struct Recorder {
     nvidia_software: Mutex<Option<seine_telemetry::NvidiaSoftware>>,
     checkpoint_store: Mutex<Option<(Weak<Store>, String)>>,
     previous_run: Mutex<Option<PreviousRun>>,
+    previous_oom: Mutex<Option<bool>>,
+    previous_rebooted: Mutex<Option<bool>>,
+    first_hashes: Mutex<BTreeMap<u64, (String, u64)>>,
 }
 
 /// Session-owned origin survives a stop arriving before the recorder is installed.
@@ -96,6 +99,8 @@ pub(crate) fn context(cfg: &Config) -> Diagnostics {
         nvidia_software: None,
         phase: None,
         previous_run: None,
+        previous_run_oom: None,
+        previous_run_rebooted: None,
         build_commit: fingerprint(option_env!("SEINE_GIT_COMMIT").unwrap_or("unknown")),
         source_fingerprint: fingerprint(crate::runtime_identity::source_fingerprint()),
         mode: match cfg.mode {
@@ -120,7 +125,253 @@ pub(crate) fn context(cfg: &Config) -> Diagnostics {
         dropped_events: 0,
         dropped_backend_samples: 0,
         events: Vec::new(),
+        update: None,
+        pool: (cfg.mode == MiningMode::Pool).then(|| pool_setup(cfg)),
+        amd_detection: None,
+        unsupported_work_paused_secs: None,
+        backend_startup: Some(expected_backends(cfg)),
     }
+}
+
+fn expected_backends(cfg: &Config) -> seine_telemetry::BackendStartup {
+    let count = |kind: BackendKind| {
+        cfg.backend_specs
+            .iter()
+            .filter(|spec| spec.kind == kind)
+            .count()
+            .min(1024) as u32
+    };
+    seine_telemetry::BackendStartup {
+        expected_cpu: count(BackendKind::Cpu),
+        expected_nvidia: count(BackendKind::Nvidia),
+        expected_amd: count(BackendKind::Amd),
+        expected_metal: count(BackendKind::Metal),
+        first_hashes: Vec::new(),
+    }
+}
+
+/// A backend instance reported its first hash of this run.
+pub(crate) fn backend_first_hash(backend: &str, instance: u64) {
+    if let Some(recorder) = active_recorder() {
+        let elapsed = recorder.started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+        recorder
+            .first_hashes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .entry(instance)
+            .or_insert_with(|| (backend.to_owned(), elapsed));
+    }
+}
+
+/// Pool settings as booleans and a count; never hosts, addresses or memos.
+fn pool_setup(cfg: &Config) -> seine_telemetry::PoolStatus {
+    let urls: Vec<&str> = cfg
+        .pool_url
+        .as_deref()
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .collect();
+    let primary = urls.first().map(|url| url.to_ascii_lowercase());
+    seine_telemetry::PoolStatus {
+        tls: primary.as_deref().is_some_and(|url| {
+            url.starts_with("stratum+ssl://") || url.starts_with("stratum+tls://")
+        }),
+        socks: cfg.pool_proxy.is_some(),
+        payout_memo: cfg.payout_memo.is_some(),
+        backup_pools: urls.len().saturating_sub(1).min(16) as u32,
+        ..Default::default()
+    }
+}
+
+// Process-wide schema-14 counters. The update checker and pool sessions run
+// outside any one recorder, so each report takes the counts for its window.
+
+static UPDATE_ACTIVE: AtomicBool = AtomicBool::new(false);
+static UPDATE_AUTO_INSTALL: AtomicBool = AtomicBool::new(false);
+static UPDATE_CHECKS_API: AtomicU32 = AtomicU32::new(0);
+static UPDATE_CHECKS_WEB: AtomicU32 = AtomicU32::new(0);
+static UPDATE_CHECKS_FAILED: AtomicU32 = AtomicU32::new(0);
+static UPDATE_INSTALLS: AtomicU32 = AtomicU32::new(0);
+static UPDATE_INSTALL_FAILURES: AtomicU32 = AtomicU32::new(0);
+static UPDATE_LAST_FAILURE: Mutex<Option<seine_telemetry::UpdateFailure>> = Mutex::new(None);
+
+/// How a release lookup was answered.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UpdateCheck {
+    Api,
+    Web,
+    Failed,
+}
+
+/// The background release checker started; `auto_install` when it installs.
+pub(crate) fn update_checker_started(auto_install: bool) {
+    UPDATE_AUTO_INSTALL.store(auto_install, Ordering::Relaxed);
+    UPDATE_ACTIVE.store(true, Ordering::Relaxed);
+}
+
+pub(crate) fn update_checked(check: UpdateCheck) {
+    match check {
+        UpdateCheck::Api => &UPDATE_CHECKS_API,
+        UpdateCheck::Web => &UPDATE_CHECKS_WEB,
+        UpdateCheck::Failed => &UPDATE_CHECKS_FAILED,
+    }
+    .fetch_add(1, Ordering::Relaxed);
+}
+
+pub(crate) fn update_installed() {
+    UPDATE_INSTALLS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub(crate) fn update_install_failed(stage: seine_telemetry::UpdateFailure) {
+    UPDATE_INSTALL_FAILURES.fetch_add(1, Ordering::Relaxed);
+    *UPDATE_LAST_FAILURE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(stage);
+}
+
+fn take_update_status() -> Option<seine_telemetry::UpdateStatus> {
+    if !UPDATE_ACTIVE.load(Ordering::Relaxed) {
+        return None;
+    }
+    let take = |counter: &AtomicU32| counter.swap(0, Ordering::Relaxed).min(100_000);
+    let install_failures = take(&UPDATE_INSTALL_FAILURES);
+    let last = UPDATE_LAST_FAILURE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take();
+    Some(seine_telemetry::UpdateStatus {
+        auto_install: UPDATE_AUTO_INSTALL.load(Ordering::Relaxed),
+        checks_api: take(&UPDATE_CHECKS_API),
+        checks_web: take(&UPDATE_CHECKS_WEB),
+        checks_failed: take(&UPDATE_CHECKS_FAILED),
+        installs: take(&UPDATE_INSTALLS),
+        install_failures,
+        last_install_failure: last.filter(|_| install_failures > 0),
+    })
+}
+
+static POOL_FAILOVERS: AtomicU32 = AtomicU32::new(0);
+static POOL_RECONNECTS: AtomicU32 = AtomicU32::new(0);
+static POOL_REFILLS: AtomicU32 = AtomicU32::new(0);
+
+/// Sessions currently on a backup pool, when that started, and backup time
+/// accumulated in this window.
+struct BackupClock {
+    sessions: u32,
+    since: Option<Instant>,
+    accumulated: Duration,
+}
+
+static POOL_BACKUP: Mutex<BackupClock> = Mutex::new(BackupClock {
+    sessions: 0,
+    since: None,
+    accumulated: Duration::ZERO,
+});
+
+pub(crate) fn pool_failover() {
+    POOL_FAILOVERS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub(crate) fn pool_reconnect() {
+    POOL_RECONNECTS.fetch_add(1, Ordering::Relaxed);
+}
+
+pub(crate) fn pool_refill() {
+    POOL_REFILLS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// A pool session moved onto (`true`) or off (`false`) a backup pool.
+pub(crate) fn pool_on_backup(on_backup: bool) {
+    let mut clock = POOL_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+    if on_backup {
+        if clock.sessions == 0 {
+            clock.since = Some(Instant::now());
+        }
+        clock.sessions += 1;
+    } else if clock.sessions > 0 {
+        clock.sessions -= 1;
+        if clock.sessions == 0 {
+            if let Some(since) = clock.since.take() {
+                clock.accumulated += since.elapsed();
+            }
+        }
+    }
+}
+
+fn take_pool_counts(status: &mut seine_telemetry::PoolStatus, uptime_secs: u64) {
+    status.failovers = POOL_FAILOVERS.swap(0, Ordering::Relaxed).min(1_000_000);
+    status.reconnects = POOL_RECONNECTS.swap(0, Ordering::Relaxed).min(1_000_000);
+    status.refills = POOL_REFILLS.swap(0, Ordering::Relaxed).min(100_000_000);
+    let mut clock = POOL_BACKUP.lock().unwrap_or_else(|e| e.into_inner());
+    let mut on_backup = std::mem::take(&mut clock.accumulated);
+    if let Some(since) = clock.since.as_mut() {
+        on_backup += since.elapsed();
+        *since = Instant::now();
+    }
+    status.secs_on_backup = on_backup.as_secs().min(uptime_secs.max(1)) as u32;
+}
+
+/// When mining paused on unsupported work, and pause time in this window.
+static UNSUPPORTED_PAUSE: Mutex<(Option<Instant>, Duration, bool)> =
+    Mutex::new((None, Duration::ZERO, false));
+
+/// Mining paused on (`true`) or resumed after (`false`) work this build
+/// cannot mine. The first pause also records a typed diagnostic.
+#[track_caller]
+pub(crate) fn unsupported_work(paused: bool) {
+    let first_pause = {
+        let mut pause = UNSUPPORTED_PAUSE.lock().unwrap_or_else(|e| e.into_inner());
+        match (paused, pause.0) {
+            (true, None) => {
+                pause.0 = Some(Instant::now());
+                pause.2 = true;
+                true
+            }
+            (false, Some(since)) => {
+                pause.1 += since.elapsed();
+                pause.0 = None;
+                false
+            }
+            _ => false,
+        }
+    };
+    if first_pause {
+        record_failure(
+            DiagnosticCode::Warning,
+            DiagnosticKind::General,
+            None,
+            FailureDetail::new(
+                FailureReason::UnsupportedWork,
+                DiagnosticOperation::ReceiveWork,
+            ),
+        );
+    }
+}
+
+fn take_unsupported_pause(uptime_secs: u64) -> Option<u32> {
+    let mut pause = UNSUPPORTED_PAUSE.lock().unwrap_or_else(|e| e.into_inner());
+    if !pause.2 {
+        return None;
+    }
+    let mut paused = std::mem::take(&mut pause.1);
+    match pause.0.as_mut() {
+        Some(since) => {
+            paused += since.elapsed();
+            *since = Instant::now();
+        }
+        // Report once more after the pause ended, then stop sending the field.
+        None => pause.2 = false,
+    }
+    Some(paused.as_secs().min(uptime_secs.max(1)) as u32)
+}
+
+static AMD_DETECTION: Mutex<Option<seine_telemetry::AmdDetection>> = Mutex::new(None);
+
+/// AMD devices found at startup, reported with every window of the run.
+pub(crate) fn set_amd_detection(detection: seine_telemetry::AmdDetection) {
+    *AMD_DETECTION.lock().unwrap_or_else(|e| e.into_inner()) = Some(detection);
 }
 
 pub(crate) fn install(context: Diagnostics) -> Guard {
@@ -138,6 +389,9 @@ pub(crate) fn install(context: Diagnostics) -> Guard {
         nvidia_software: Mutex::new(None),
         checkpoint_store: Mutex::new(None),
         previous_run: Mutex::new(None),
+        previous_oom: Mutex::new(None),
+        previous_rebooted: Mutex::new(None),
+        first_hashes: Mutex::new(BTreeMap::new()),
     });
     if let Ok(mut active) = ACTIVE.lock() {
         *active = Some(Arc::downgrade(&recorder));
@@ -564,6 +818,7 @@ impl Recorder {
     pub(crate) fn checkpoint(&self) -> PreviousRun {
         let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
         PreviousRun {
+            oom_kills: oom_kill_count(),
             shutdown_request: self
                 .shutdown_request
                 .lock()
@@ -584,7 +839,26 @@ impl Recorder {
         }
     }
 
-    pub(crate) fn set_previous_run(&self, previous: Option<PreviousRun>) {
+    /// `rebooted` compares the boot the previous run checkpointed on with this one.
+    pub(crate) fn set_previous_run(&self, previous: Option<PreviousRun>, rebooted: Option<bool>) {
+        let rebooted = previous.as_ref().and(rebooted);
+        *self.previous_oom.lock().unwrap_or_else(|e| e.into_inner()) =
+            previous.as_ref().and_then(|run| {
+                // The kernel's count restarts at boot, so a reboot leaves it unknown.
+                (rebooted != Some(true))
+                    .then(|| {
+                        oom_likely(
+                            self.previous_unclean.load(Ordering::Relaxed),
+                            run.oom_kills,
+                            oom_kill_count(),
+                        )
+                    })
+                    .flatten()
+            });
+        *self
+            .previous_rebooted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = rebooted;
         *self.previous_run.lock().unwrap_or_else(|e| e.into_inner()) = previous;
     }
 
@@ -608,6 +882,16 @@ impl Recorder {
         result.cleanup_stage = checkpoint.cleanup_stage;
         result.nvidia_software = checkpoint.nvidia_software;
         result.previous_run_unclean = self.previous_unclean.swap(false, Ordering::Relaxed);
+        result.previous_run_oom = self
+            .previous_oom
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        result.previous_run_rebooted = self
+            .previous_rebooted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         result.previous_run = self
             .previous_run
             .lock()
@@ -618,6 +902,35 @@ impl Recorder {
             result.events = std::mem::take(&mut *events).into_values().collect();
         }
         result.uptime_secs = self.started.elapsed().as_secs();
+        result.update = take_update_status();
+        if let Some(pool) = result.pool.as_mut() {
+            take_pool_counts(pool, result.uptime_secs);
+        }
+        result.amd_detection = AMD_DETECTION
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .filter(seine_telemetry::AmdDetection::is_valid);
+        result.unsupported_work_paused_secs = take_unsupported_pause(result.uptime_secs);
+        if let Some(startup) = result.backend_startup.as_mut() {
+            // Whole-run context: every report repeats it, so a lost report loses nothing.
+            let latest = result.uptime_secs.saturating_mul(1000).saturating_add(999);
+            startup.first_hashes = self
+                .first_hashes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .iter()
+                .filter(|(instance, _)| **instance <= 65536)
+                .take(128)
+                .map(
+                    |(instance, (backend, ms))| seine_telemetry::BackendFirstHash {
+                        backend: backend.clone(),
+                        instance: *instance,
+                        first_hash_ms: (*ms).min(latest),
+                    },
+                )
+                .collect();
+        }
         result
     }
 }
@@ -631,7 +944,11 @@ pub(crate) struct Store {
     pending: PathBuf,
     attempt: PathBuf,
     checkpoint_path: PathBuf,
+    boot_id: Option<String>,
     pub(crate) previous_run: Option<PreviousRun>,
+    /// Whether the machine booted again since the previous run's checkpoint;
+    /// absent when either boot is unknown. The boot ID never leaves the data directory.
+    pub(crate) previous_rebooted: Option<bool>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -639,7 +956,32 @@ pub(crate) struct Store {
 struct Checkpoint {
     installation_id: String,
     marker_modified_ns: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    boot_id: Option<String>,
     run: PreviousRun,
+}
+
+/// The kernel's random identifier for the current boot, where it provides one.
+fn boot_id() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        parse_boot_id(&std::fs::read_to_string("/proc/sys/kernel/random/boot_id").ok()?)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_boot_id(value: &str) -> Option<String> {
+    let value = value.trim();
+    (value.len() == 36 && value.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-'))
+        .then(|| value.to_ascii_lowercase())
+}
+
+fn rebooted(saved: Option<&str>, current: Option<&str>) -> Option<bool> {
+    Some(saved? != current?)
 }
 
 fn marker_stamp(path: &Path) -> Option<u64> {
@@ -669,7 +1011,8 @@ impl Store {
         let previous_unclean =
             fresh(&marker) && fs::read_to_string(&marker).ok().as_deref() == Some(installation_id);
         let checkpoint_path = dir.join("seine.diagnostics.phase.json");
-        let previous_run = if previous_unclean && fresh(&checkpoint_path) {
+        let boot_id = boot_id();
+        let previous = if previous_unclean && fresh(&checkpoint_path) {
             fs::metadata(&checkpoint_path)
                 .ok()
                 .filter(|m| m.len() <= 8192)
@@ -680,10 +1023,13 @@ impl Store {
                         && Some(c.marker_modified_ns) == marker_stamp(&marker)
                         && c.run.validate()
                 })
-                .map(|c| c.run)
         } else {
             None
         };
+        let previous_rebooted = previous
+            .as_ref()
+            .and_then(|c| rebooted(c.boot_id.as_deref(), boot_id.as_deref()));
+        let previous_run = previous.map(|c| c.run);
         let _ = fs::remove_file(&checkpoint_path);
         fs::write(&marker, installation_id).ok()?;
         let _ = fs::remove_file(dir.join("seine.diagnostics.pending.tmp"));
@@ -693,7 +1039,9 @@ impl Store {
                 finished: Mutex::new(false),
                 marker,
                 checkpoint_path,
+                boot_id,
                 previous_run,
+                previous_rebooted,
                 pending: dir.join("seine.diagnostics.pending.json"),
                 attempt: dir.join("seine.diagnostics.attempt"),
             },
@@ -768,6 +1116,7 @@ impl Store {
         let checkpoint = Checkpoint {
             installation_id: installation_id.into(),
             marker_modified_ns,
+            boot_id: self.boot_id.clone(),
             run,
         };
         let temp = self.checkpoint_path.with_extension("tmp");
@@ -826,6 +1175,8 @@ pub(crate) fn test_context() -> Diagnostics {
         nvidia_software: None,
         phase: None,
         previous_run: None,
+        previous_run_oom: None,
+        previous_run_rebooted: None,
         build_commit: "abcdef123456".into(),
         source_fingerprint: "1234abcd".into(),
         mode: "pool".into(),
@@ -840,12 +1191,197 @@ pub(crate) fn test_context() -> Diagnostics {
         dropped_events: 0,
         dropped_backend_samples: 0,
         events: vec![],
+        update: None,
+        pool: None,
+        amd_detection: None,
+        unsupported_work_paused_secs: None,
+        backend_startup: None,
     }
+}
+
+/// OOM kills the kernel has made since boot, where it reports them.
+pub(crate) fn oom_kill_count() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        parse_oom_kills(&std::fs::read_to_string("/proc/vmstat").ok()?)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_oom_kills(vmstat: &str) -> Option<u64> {
+    vmstat
+        .lines()
+        .find_map(|line| line.strip_prefix("oom_kill "))
+        .and_then(|count| count.trim().parse().ok())
+}
+
+/// An unclean end while the count rose suggests the OOM killer. A lower count means
+/// the machine rebooted, which says nothing either way.
+fn oom_likely(unclean: bool, saved: Option<u64>, now: Option<u64>) -> Option<bool> {
+    let (saved, now) = (saved?, now?);
+    (now >= saved).then_some(unclean && now > saved)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{oom_likely, parse_boot_id, parse_oom_kills, rebooted};
+
+    #[test]
+    fn boot_ids_are_read_and_compared_only_when_both_are_known() {
+        let id = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
+        assert_eq!(
+            parse_boot_id(&format!("{}\n", id.to_uppercase())).as_deref(),
+            Some(id)
+        );
+        assert_eq!(parse_boot_id("not a boot id"), None);
+        assert_eq!(rebooted(Some(id), Some(id)), Some(false));
+        assert_eq!(rebooted(Some(id), Some("other")), Some(true));
+        assert_eq!(rebooted(None, Some(id)), None);
+        assert_eq!(rebooted(Some(id), None), None);
+    }
+
+    #[test]
+    fn oom_kills_are_read_from_vmstat() {
+        assert_eq!(parse_oom_kills("pgfault 12\noom_kill 3\nx 1\n"), Some(3));
+        assert_eq!(parse_oom_kills("pgfault 12\n"), None);
+    }
+
+    #[test]
+    fn oom_is_only_suspected_after_an_unclean_end_with_a_higher_count() {
+        assert_eq!(oom_likely(true, Some(1), Some(2)), Some(true));
+        assert_eq!(oom_likely(true, Some(1), Some(1)), Some(false));
+        assert_eq!(oom_likely(false, Some(1), Some(2)), Some(false));
+        // The machine rebooted, or the count is unavailable: unknown.
+        assert_eq!(oom_likely(true, Some(5), Some(0)), None);
+        assert_eq!(oom_likely(true, None, Some(1)), None);
+        assert_eq!(oom_likely(true, Some(1), None), None);
+    }
+
     use super::*;
+
+    #[test]
+    fn first_hash_keeps_the_earliest_time_per_instance_and_leaves_gaps_visible() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut context = test_context();
+        context.backend_startup = Some(seine_telemetry::BackendStartup {
+            expected_cpu: 1,
+            expected_amd: 2,
+            ..Default::default()
+        });
+        let guard = install(context);
+        guard
+            .0
+            .first_hashes
+            .lock()
+            .unwrap()
+            .insert(1, ("cpu".into(), 250));
+        backend_first_hash("cpu", 1);
+        backend_first_hash("amd", 2);
+        backend_first_hash("amd", 2);
+        let startup = guard.0.snapshot(false).backend_startup.unwrap();
+        // The second AMD card never hashed, so only the expected count shows it.
+        assert_eq!(startup.expected_amd, 2);
+        assert_eq!(startup.first_hashes.len(), 2);
+        assert_eq!(startup.first_hashes[0].backend, "cpu");
+        assert_eq!(startup.first_hashes[0].first_hash_ms, 250);
+        assert_eq!(startup.first_hashes[1].backend, "amd");
+        // Reports repeat the record for the whole run.
+        assert_eq!(guard.0.snapshot(false).backend_startup.unwrap(), startup);
+    }
+
+    #[test]
+    fn schema14_counters_cover_one_window_and_never_invalidate_a_report() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut context = test_context();
+        context.pool = Some(seine_telemetry::PoolStatus {
+            tls: true,
+            backup_pools: 1,
+            ..Default::default()
+        });
+        let recorder = Recorder {
+            context,
+            ..recorder()
+        };
+        // Clear what other tests left in the process-wide counters.
+        let _ = recorder.snapshot(false);
+
+        update_checker_started(true);
+        update_checked(UpdateCheck::Api);
+        update_checked(UpdateCheck::Web);
+        update_checked(UpdateCheck::Failed);
+        update_install_failed(seine_telemetry::UpdateFailure::Signature);
+        update_installed();
+        pool_failover();
+        pool_reconnect();
+        pool_reconnect();
+        pool_refill();
+        pool_on_backup(true);
+        unsupported_work(true);
+
+        let first = recorder.snapshot(false);
+        let update = first.update.as_ref().unwrap();
+        assert!(update.auto_install);
+        assert_eq!(
+            (update.checks_api, update.checks_web, update.checks_failed),
+            (1, 1, 1)
+        );
+        assert_eq!((update.installs, update.install_failures), (1, 1));
+        assert_eq!(
+            update.last_install_failure,
+            Some(seine_telemetry::UpdateFailure::Signature)
+        );
+        let pool = first.pool.as_ref().unwrap();
+        assert!(pool.tls);
+        assert_eq!(pool.backup_pools, 1);
+        assert_eq!((pool.failovers, pool.reconnects, pool.refills), (1, 2, 1));
+        assert!(first.unsupported_work_paused_secs.is_some());
+
+        // Counters reset each window, while a pause in progress keeps reporting.
+        let second = recorder.snapshot(false);
+        let update = second.update.as_ref().unwrap();
+        assert_eq!((update.checks_api, update.install_failures), (0, 0));
+        assert_eq!(update.last_install_failure, None);
+        assert_eq!(second.pool.as_ref().unwrap().reconnects, 0);
+        assert!(second.unsupported_work_paused_secs.is_some());
+
+        // An ended pause reports once more, then the field goes away.
+        pool_on_backup(false);
+        unsupported_work(false);
+        assert!(recorder
+            .snapshot(false)
+            .unsupported_work_paused_secs
+            .is_some());
+        assert!(recorder
+            .snapshot(false)
+            .unsupported_work_paused_secs
+            .is_none());
+        UPDATE_ACTIVE.store(false, Ordering::Relaxed);
+    }
+
+    #[test]
+    fn invalid_amd_detection_is_dropped_instead_of_failing_the_report() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let recorder = recorder();
+        set_amd_detection(seine_telemetry::AmdDetection {
+            found: 1,
+            selected: 2,
+            ..Default::default()
+        });
+        assert!(recorder.snapshot(false).amd_detection.is_none());
+        let valid = seine_telemetry::AmdDetection {
+            hip_unavailable: true,
+            pci_devices: Some(1),
+            ..Default::default()
+        };
+        set_amd_detection(valid.clone());
+        assert_eq!(recorder.snapshot(false).amd_detection, Some(valid));
+        *AMD_DETECTION.lock().unwrap() = None;
+    }
+
     fn recorder() -> Recorder {
         Recorder {
             started: Instant::now(),
@@ -861,6 +1397,9 @@ mod tests {
             nvidia_software: Mutex::new(None),
             checkpoint_store: Mutex::new(None),
             previous_run: Mutex::new(None),
+            previous_oom: Mutex::new(None),
+            previous_rebooted: Mutex::new(None),
+            first_hashes: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -882,6 +1421,27 @@ mod tests {
         assert_eq!(second.checkpoint().shutdown_request, Some(TuiThreadChange));
         origin.request(ApiStop);
         assert_eq!(second.checkpoint().shutdown_request, Some(TuiThreadChange));
+    }
+
+    #[test]
+    fn notify_panic_source_keeps_only_the_allowlisted_dependency_suffix() {
+        assert_eq!(
+            normalize_source(
+                "/private/home/.cargo/registry/src/index/tokio-1.49.0/src/sync/notify.rs"
+            ),
+            "deps/tokio-1.49.0/src/sync/notify.rs"
+        );
+        assert_eq!(
+            normalize_source(r"C:\private\cargo\tokio-1.49.0\src\sync\notify.rs"),
+            "deps/tokio-1.49.0/src/sync/notify.rs"
+        );
+        for source in [
+            "/private/tokio-1.49.0/src/sync/private.rs",
+            "/private/tokio-1.49.1/src/sync/notify.rs",
+            "/private/my-tokio-1.49.0/src/sync/notify.rs",
+        ] {
+            assert_eq!(normalize_source(source), "unknown");
+        }
     }
 
     #[test]
@@ -1009,6 +1569,41 @@ mod tests {
         let (store, unclean) = Store::open(&settings, id).unwrap();
         assert!(!unclean);
         assert!(store.previous_run.is_none());
+        store.finish();
+        drop(store);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn interrupted_run_reports_whether_the_machine_booted_again() {
+        let dir =
+            std::env::temp_dir().join(format!("seine-boot-diagnostics-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let settings = dir.join("settings.json");
+        let id = "22222222222222222222222222222222";
+        let recorder = recorder();
+        let (store, _) = Store::open(&settings, id).unwrap();
+        store.checkpoint(id, recorder.checkpoint());
+        drop(store);
+        let (mut store, unclean) = Store::open(&settings, id).unwrap();
+        assert!(unclean);
+        assert!(store.previous_run.is_some());
+        // Same boot where the kernel names one; unknown elsewhere.
+        assert_eq!(store.previous_rebooted, boot_id().map(|_| false));
+        assert!(!serde_json::to_string(&store.previous_run)
+            .unwrap()
+            .contains("boot"));
+        store.boot_id = Some("00000000-0000-0000-0000-000000000000".into());
+        store.checkpoint(id, recorder.checkpoint());
+        drop(store);
+        let (store, unclean) = Store::open(&settings, id).unwrap();
+        assert!(unclean);
+        assert_eq!(store.previous_rebooted, boot_id().map(|_| true));
+        recorder.set_previous_unclean(true);
+        recorder.set_previous_run(store.previous_run.clone(), Some(true));
+        let snapshot = recorder.snapshot(false);
+        assert_eq!(snapshot.previous_run_rebooted, Some(true));
+        assert_eq!(snapshot.previous_run_oom, None);
         store.finish();
         drop(store);
         fs::remove_dir_all(dir).unwrap();
@@ -1249,6 +1844,7 @@ mod tests {
         store.checkpoint(
             &report.installation_id,
             PreviousRun {
+                oom_kills: None,
                 shutdown_request: None,
                 cleanup_stage: None,
                 nvidia_software: None,
@@ -1303,6 +1899,7 @@ mod tests {
         store.checkpoint(
             id,
             PreviousRun {
+                oom_kills: None,
                 shutdown_request: None,
                 cleanup_stage: None,
                 nvidia_software: None,
@@ -1328,6 +1925,7 @@ mod tests {
         store.checkpoint(
             id,
             PreviousRun {
+                oom_kills: None,
                 shutdown_request: None,
                 cleanup_stage: None,
                 nvidia_software: None,

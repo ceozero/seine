@@ -4,6 +4,89 @@ Seine hardware and performance reporting, with a separate Rust/Axum
 collector and PostgreSQL database. Pool Stratum, wallet and daemon contracts are
 unchanged. A collector outage drops reports without stopping mining.
 
+Schema 14 adds operational summaries for the v0.3.0 release, all fixed booleans,
+counts and enums:
+
+- `diagnostics.update`: whether this process installs releases by itself
+  (`auto_install`), release lookups answered by the GitHub API, by the release
+  page, or failed both ways, plus installs and failed installs in the window and
+  the stage of the most recent failure (`no_build`, `missing_asset`, `download`,
+  `signature`, `checksum`, `extract`, `startup_probe` or `replace`).
+- `diagnostics.pool` (pool mode only): whether the primary pool uses TLS, pools
+  are reached through SOCKS5, and a payout memo is configured; the number of
+  backup pools; and failovers, seconds on a backup pool, reconnects and
+  nonce-range refills in the window, for the miner's own pool session (dev-fee
+  sessions are not counted).
+- `diagnostics.amd_detection`: whether the HIP runtime was unavailable, AMD GPUs
+  found and selected, integrated GPUs and unsupported-wavefront GPUs skipped,
+  and `pci_devices`, the AMD display devices the OS lists (Linux sysfs, vendor
+  0x1002) whether or not HIP can use them; absent where unknown, such as Windows.
+  From schema 15 the count leaves out graphics built into the CPU; for older
+  reports `release_health.sql` discounts them.
+- `diagnostics.unsupported_work_paused_secs`: seconds in the window that mining
+  was paused on work this build cannot mine, with the diagnostic reason
+  `unsupported_work` and operation `receive_work`. This measures readiness for
+  the Faraday fork: paused miners need an update.
+- `diagnostics.backend_startup`: backend instances the run expected per kind, and
+  milliseconds from the start of the run to each instance's first hash, including
+  any wait for pool work. An expected backend with no entry has not hashed. Every
+  report of a run repeats this record.
+- `backends[].settings.gpu_arch` (`gfx1100` or `sm_86`) and
+  `gpu_kernel_source` for NVIDIA and AMD backends (`prebuilt_cubin`,
+  `prebuilt_ptx`, `nvrtc`, `nvrtc_cached`, `nvrtc_failed_prebuilt_ptx`,
+  `builtin_code_object` or `hiprtc`), plus `amd_perf_level` for AMD backends
+  (`already_high`, `raised`, `needs_root`, `kept_by_operator`, `unavailable` or
+  `not_raised_for_arch`).
+
+Privacy: these fields never contain payout memos, wallet addresses, pool hosts or
+URLs, proxy addresses, IP addresses, release URLs or error text, and AMD
+detection reports counts, not device identifiers. The
+[schema-14 fixture](schema14-fixture.json) populates every new field.
+`release_health.sql` aggregates them for the agent briefing, and the fleet alert
+runner raises an alert when three installations of one version report failed
+installs or paused mining within 24 hours. The GPU fields stay out of performance
+cohorts, because the kernel source differs between otherwise identical runs. Deploy the
+schema-14 collector before schema-14 miners. Schemas 1–13 remain accepted; no
+SQL storage migration is required.
+
+Schema 13 records backend control failures with the backend type, cancel/fence
+operation, and enqueue/execution timeout stage. A backend-returned error remains
+`backend_control_failed`; its category is a hint, not a proven timeout stage.
+The fixed dependency-source allowlist also includes Tokio 1.49.0's
+`src/sync/notify.rs`, without recording panic contents or local paths.
+Deploy the schema-13 collector before schema-13 miners. Schemas 1–12 remain
+accepted; no SQL storage migration is required.
+
+Schema 12 adds the diagnostic reason `pool_connection_limit`: the pool sent a
+`connection_limit` notification before closing the session, so the miner waits
+the pool's suggested delay before reconnecting. Deploy the schema-12 collector
+before releasing schema-12 miners; schemas 1-11 remain accepted, with no SQL
+storage migration.
+
+Schema 11 adds `backends[].settings.pow`: `blake2b` while a backend mines
+Faraday BLAKE2b work, absent for Argon2id (so Argon2 samples are unchanged).
+BLAKE2b samples may report up to 10^18 hashes per window; Argon2 keeps the
+10^15 bound. Performance views group by the whole `settings` object, so the two
+algorithms never share a cohort. Deploy the schema-11 collector before
+releasing schema-11 miners; schemas 1-10 remain accepted, with no SQL storage
+migration.
+
+Schema 16 adds `diagnostics.previous_run_rebooted`: whether the machine booted
+again between the previous run's last checkpoint and the restart. Linux miners
+compare the kernel's boot ID, which stays in the data directory and is never
+uploaded; other platforms leave the field out. After a reboot
+`previous_run_oom` is absent, because the kernel's OOM-kill count restarts at
+boot. Deploy the schema-16 collector before releasing schema-16 miners; schemas
+1-15 remain accepted, with no SQL storage migration.
+
+Schema 15 adds the search's settled result under `tuning.settled` and
+`diagnostics.previous_run_oom`; see [TUNING.md](TUNING.md). It also adds the
+operation `pool_stats` for pool statistics and balance fetches, with the reasons
+`http_status`, `rate_limited` and `invalid_response` alongside the existing
+connection reasons. Deploy the schema-15
+collector before releasing schema-15 miners; schemas 1-14 remain accepted, with no
+SQL storage migration.
+
 Schema 10 adds `hardware.memory_setup`: the populated memory module count, DDR
 type, whether the modules are registered, and the lowest rated and configured
 speed in MT/s, read from SMBIOS (Windows always, Linux only as root; absent
@@ -117,12 +200,18 @@ The strict upload schema is in [src/lib.rs](src/lib.rs), with an example in
 - Schema 3 reliability summaries: fixed warning/error codes and category hints,
   repository source locations, counts and elapsed times, build revision and source
   fingerprint, requested mining settings and an unclean-previous-run marker.
+- Schema 14 operational summaries: self-update checks, installs and the failed
+  install stage; pool TLS/SOCKS/payout-memo booleans, backup-pool count and
+  failover/reconnect/refill counts (never hosts or memos); AMD GPUs found,
+  selected, skipped and listed by the OS; seconds paused on unsupported work;
+  expected backends and time to first hash; and GPU architecture, kernel source and
+  AMD performance level.
 
 ### Reliability reporting
 
 The [reliability fixture](reliability-fixture.json) demonstrates schema 5; the
 [diagnostic fixture](diagnostics-fixture.json) retains schema-4 compatibility coverage.
-The current schema-7 collector accepts schemas 1–6. Deploy it before schema-7 miners.
+The collector accepts schemas 1–16. Deploy schema-16 support before schema-16 miners.
 The recorder starts after configuration parsing, before address resolution,
 backend initialization and tuning. UI warnings/errors identify their original
 call site through `track_caller`; backend error and quarantine paths also report
@@ -175,7 +264,14 @@ or triggering fresh current-run error alerts.
 
 Run `python3 telemetry/agent_report.py` for installation-weighted issue clusters
 by build, source, CPU, OS, runtime environment and backend. It includes diagnostic
-coverage separately from legacy clients; no reports does not mean no failures.
+coverage separately from legacy clients. The scheduled health and Discord checks
+use `diagnostic_alerts.sql`, which evaluates the same reliability and connection
+thresholds without constructing the full seven-day diagnostic clusters. Failed
+alert queries log a bounded failure category (including statement or lock timeout)
+without logging SQL, reports or connection credentials. No reports does not mean
+no failures.
+The full on-demand diagnostic report has a 30-second statement deadline;
+scheduled diagnostic checks retain a 15-second deadline.
 The briefing groups typed details and phases separately and prioritizes recorded errors
 and structured causes before common warnings. Its `unclean_run_clusters` includes hardware,
 previous-build/phase/uptime and installation counts with hashes in the restart report.
@@ -187,10 +283,22 @@ Hardware labels describe the reporting machine after restart. Previous-run event
 clusters are checkpoint context and may overlap earlier current-run issue clusters.
 Null fields mean unavailable evidence, including reports from older miners. Infrastructure
 health is evaluated separately from sample-quality and miner-reliability assessments.
-`diagnostics.sql` flags a version after at least three installations report errors,
-quarantines or unclean runs within 24 hours. Single-installation failures and
-warnings remain visible below that threshold. Unattributed interrupted runs have a
-separate explicitly unknown-version bucket. The five-minute server check records
+`diagnostics.sql` also counts installations with pool connection warnings; the alert
+service flags a fleet-wide spike when at least 20 installations, and three times the
+prior day's hourly average, report them within an hour.
+`diagnostics.sql` flags a version on the newest release line when at least three
+installations, and at least 5% of that version's installations reporting in 24 hours,
+report errors or quarantines, or 10% report unclean previous runs. Unclean runs
+count only when they are not explained by setup: a run that ended in a reboot
+(`rebooted_installations`), or the only interrupted run of an installation first
+seen in the last 24 hours (`new_installation_single_restarts`), is listed but not
+counted; a new installation that restarts uncleanly twice counts. The threshold
+uses `counted_installations`. Each row carries `installations_24h`, `legacy` and
+`needs_attention`, and `unclean_run_clusters` carries `installations_rebooted`. Older release lines and the
+explicitly unknown-version bucket of unattributed interrupted runs stay listed but
+never raise attention. Failed self-update installs and mining paused on unsupported
+work still flag any version at three installations. Single-installation failures and
+warnings remain visible below these thresholds. The five-minute server check records
 these incidents in systemd/journald; the separate alert timer sends aggregate incidents to the configured Discord destination
 (see the production runbook). It never sends raw report payloads.
 
@@ -357,9 +465,29 @@ not "hardware is slow."
 A separate six-hour data-quality query counts inventory-only, sampled and stable
 reports. Five installations of the same version, each with at least three reports
 spanning two hours and no backend samples, fail both the agent briefing and the
-five-minute service check. This detects a broken sampling path even when HTTPS
-and the database are healthy. Low report counts alone are not an outage; unstable
+five-minute service check. Only the newest release line (`newest_release_line`,
+the highest major.minor among v-prefixed release builds) can fail it; older lines
+are still listed with `legacy: true` and alert at info severity, because only an
+upgrade changes them. Source builds and commit versions are never legacy. This flags sustained missing samples even when HTTPS
+and the database are healthy. `inventory_only_clusters` separately shows observed
+pool connection warnings and mining phase; neither a mining checkpoint nor the
+absence of a connection warning proves that usable work was available. Low report counts alone are not an outage; unstable
 tuning windows remain visible in the stable-sample count.
+The `release_health` section (`release_health.sql`, seven days) covers schema-14
+reporters only; `coverage` shows how many installations per version send these
+fields. It reports, by version, self-update checks, installs, failed installs and
+their last failed stage, and installations with automatic installs on; fork
+readiness as installations and seconds paused on unsupported work (by version
+and pool/daemon mode) plus `unsupported_work` events; AMD detection cohorts,
+including `amd_gpu_not_mining` (the OS lists an AMD display device while HIP is
+unavailable or no AMD GPU was selected, usually missing ROCm; `hip_unavailable`
+alone is normal without an AMD GPU); AMD performance level by architecture and
+OS; GPU kernel source by backend and architecture; and pool TLS/SOCKS/memo/backup
+shares with failover, reconnect, refill and backup-time totals, per-installation
+quantiles, by-version and daily series. Settings use each installation's latest
+report; counts are summed over report windows. Like `diagnostics.sql`, it flags
+`attention` after three installations of one version report failed installs, or
+mining paused on unsupported work, within 24 hours.
 Send the user a concise interpretation and next action rather than raw SQL output.
 
 The command is invoked during agent work; it does not schedule unattended agent
@@ -398,7 +526,8 @@ describe reporting installations and may not represent all miners.
 ```sh
 python3 -m unittest discover -s telemetry -p 'test_a*.py'
 python3 -m unittest discover -s telemetry -p 'test_performance_sql.py'
-# Includes disposable PostgreSQL cohort/alert tests when PostgreSQL 16 is installed.
+python3 -m unittest discover -s telemetry -p 'test_*_sql.py'
+# Includes disposable PostgreSQL cohort/alert/diagnostic/release-health tests when PostgreSQL 16 is installed.
 cargo +1.93.0 test -p seine-telemetry --features server
 cargo +1.93.0 test --bin seine --no-default-features hardware_telemetry
 cargo +1.93.0 check --workspace --all-targets --features seine-telemetry/server,amd

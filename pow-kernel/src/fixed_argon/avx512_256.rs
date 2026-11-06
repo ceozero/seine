@@ -1,8 +1,7 @@
-//! 256-bit AVX-512 compression candidate for EPYC.
+//! 256-bit AVX-512 compression.
 //!
 //! Uses paired 256-bit rows/columns and native rotate instructions. Data-dependent
-//! reference prefetch starts after column zero, leaving seven columns to overlap
-//! the load. All q elements are initialized before the column phase reads them.
+//! reference prefetch starts after column zero. All q elements are initialized before the column phase reads them.
 //! Runtime selection belongs to the parent; every entry point requires AVX2,
 //! AVX-512F and AVX-512VL with operating-system vector state enabled.
 
@@ -379,9 +378,8 @@ pub(super) unsafe fn compress_into_mid_prefetch(
     }
 
     // --- Mid-compress prefetch ---
-    // dst[0] now has its final value.  Compute the NEXT iteration's ref_index
-    // and prefetch it.  The remaining 7 column rounds (~35-40 ns of compute)
-    // overlap with the DRAM fetch.
+    // dst[0] now has its final value: compute the next iteration's ref_index
+    // and prefetch it.
     {
         let rand = *dst_ptr;
         let next_ref = reference_index(next_ref_area_size, rand);
@@ -617,9 +615,8 @@ pub(super) unsafe fn compress_into_mid_prefetch_ring<const RING: usize>(
     }
 
     // --- Mid-compress prefetch ---
-    // dst[0] now has its final value.  Compute the NEXT iteration's ref_index
-    // and prefetch it.  The remaining 7 column rounds (~35-40 ns of compute)
-    // overlap with the DRAM fetch.
+    // dst[0] now has its final value: compute the next iteration's ref_index
+    // and prefetch it.
     {
         let rand = *dst_ptr;
         let mut next_ref = reference_index(next_ref_area_size, rand);

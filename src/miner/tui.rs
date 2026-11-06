@@ -1,9 +1,11 @@
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::io::{self, Stdout};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, Instant};
 
+use crossterm::cursor::Show;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -18,9 +20,13 @@ use ratatui::Terminal;
 
 use super::thread_control::{ThreadChangeRequest, ThreadControl};
 
-const LOG_CAPACITY: usize = 200;
+const LOG_CAPACITY: usize = 2_000;
 const BLOCK_MARKER_CAPACITY: usize = 4096;
-const CONFIG_TWO_COLUMN_MIN_WIDTH: u16 = 148;
+const CONFIG_TWO_COLUMN_MIN_WIDTH: u16 = 80;
+/// Below this many rows the header gives up its second wave row to the log.
+const TALL_DASHBOARD_MIN_HEIGHT: u16 = 40;
+const LOG_PAGE_ENTRIES: usize = 10;
+const THREAD_NOTICE_LIFETIME: Duration = Duration::from_secs(8);
 
 #[derive(Clone)]
 pub struct LogEntry {
@@ -28,9 +34,23 @@ pub struct LogEntry {
     pub level: LogLevel,
     pub tag: String,
     pub message: String,
+    /// Consecutive identical lines folded into this one.
+    pub count: u32,
 }
 
-#[derive(Clone, Copy)]
+impl LogEntry {
+    pub fn new(elapsed_secs: f64, level: LogLevel, tag: &str, message: &str) -> Self {
+        Self {
+            elapsed_secs,
+            level,
+            tag: tag.to_string(),
+            message: message.to_string(),
+            count: 1,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
     Info,
     Success,
@@ -40,16 +60,6 @@ pub enum LogLevel {
 }
 
 impl LogLevel {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Info => "INFO",
-            Self::Success => " OK ",
-            Self::Warn => "WARN",
-            Self::Error => " ERR",
-            Self::Mined => " ** ",
-        }
-    }
-
     fn color(self) -> Color {
         match self {
             Self::Info => Color::Rgb(140, 160, 180),
@@ -102,20 +112,26 @@ pub struct TuiStateInner {
     pub total_hashes: u64,
     pub templates: u64,
     pub submitted: u64,
+    /// The pool's current share difficulty for this miner.
+    pub share_difficulty: Option<u64>,
     pub stale_shares: u64,
     pub accepted: u64,
     /// Resubmits after retryable ("server busy, retry") pool rejects.
     pub share_retries: u64,
     pub pool_address: String,
+    /// The pool account mines solo (`solo:` login).
+    pub pool_solo: bool,
     pub pool_pending: String,
     pub pool_paid: String,
+    pub pool_payout_minimum: Option<String>,
     pub wallet_visible: bool,
     pub wallet_address: String,
     pub wallet_pending: String,
     pub wallet_unlocked: String,
     pub device_hashrates: Vec<DeviceHashrate>,
-    pub pending_nvidia: u64,
-    pub pending_nvidia_since: Option<Instant>,
+    /// Backend names ("nvidia", "amd") of GPUs still initializing.
+    pub pending_gpus: Vec<&'static str>,
+    pub pending_gpus_since: Option<Instant>,
     pub dev_fee_active: bool,
 
     // Config (set once at startup)
@@ -126,19 +142,39 @@ pub struct TuiStateInner {
     pub thread_control: Option<ThreadControl>,
     pub thread_change_pending: bool,
     pub thread_notice: Option<String>,
-    thread_rejection: Option<crossbeam_channel::Receiver<String>>,
+    /// Short status of automatic tuning, shown beside the thread count.
+    pub tuning_status: Option<String>,
+    /// Set while tuning picks the thread count: the thread keys show this
+    /// notice and leave the count unchanged.
+    pub threads_locked: Option<String>,
+    /// The notice on screen and when it appeared, so it can make way for the log.
+    thread_notice_shown: Option<(String, Instant)>,
+    thread_reply: Option<crossbeam_channel::Receiver<String>>,
     pub refresh_secs: u64,
     pub sse_enabled: bool,
     pub backends_desc: String,
     pub accounting: String,
     pub version: String,
     pub update_available: Option<String>,
+    /// An automatic install counting down or downloading.
+    pub pending_install: Option<crate::update_check::PendingInstall>,
 
     // Timing
     pub started_at: Instant,
 
     // Log
     pub log_entries: VecDeque<LogEntry>,
+    /// Entries scrolled back from the newest; 0 follows new lines.
+    pub log_scroll: usize,
+    /// Inner height and width of the log panel at its last draw.
+    log_panel: Cell<(usize, usize)>,
+    /// Bumped on every log change so the renderer can redraw promptly.
+    pub log_seq: u64,
+
+    /// Set once the process is shutting down.
+    pub stopping: bool,
+    /// True while the dashboard is open but no mining run has been set up yet.
+    pub before_first_run: bool,
 
     // Wave markers for mined blocks (elapsed seconds when each block was accepted)
     pub block_found_ticks: VecDeque<u64>,
@@ -158,19 +194,22 @@ impl TuiStateInner {
             total_hashes: 0,
             templates: 0,
             submitted: 0,
+            share_difficulty: None,
             stale_shares: 0,
             accepted: 0,
             share_retries: 0,
             pool_address: "---".to_string(),
+            pool_solo: false,
             pool_pending: "---".to_string(),
             pool_paid: "---".to_string(),
+            pool_payout_minimum: None,
             wallet_visible: false,
             wallet_address: "---".to_string(),
             wallet_pending: "---".to_string(),
             wallet_unlocked: "---".to_string(),
             device_hashrates: Vec::new(),
-            pending_nvidia: 0,
-            pending_nvidia_since: None,
+            pending_gpus: Vec::new(),
+            pending_gpus_since: None,
             dev_fee_active: false,
 
             mode: String::new(),
@@ -180,41 +219,161 @@ impl TuiStateInner {
             thread_control: None,
             thread_change_pending: false,
             thread_notice: None,
-            thread_rejection: None,
+            tuning_status: None,
+            threads_locked: None,
+            thread_notice_shown: None,
+            thread_reply: None,
             refresh_secs: 0,
             sse_enabled: false,
             backends_desc: String::new(),
             accounting: String::new(),
             version: String::new(),
             update_available: None,
+            pending_install: None,
 
             started_at: Instant::now(),
 
-            log_entries: VecDeque::with_capacity(LOG_CAPACITY),
+            log_entries: VecDeque::new(),
+            log_scroll: 0,
+            log_panel: Cell::new((0, 0)),
+            log_seq: 0,
+            stopping: false,
+            before_first_run: false,
 
             block_found_ticks: VecDeque::with_capacity(BLOCK_MARKER_CAPACITY),
         }
     }
 
     pub fn push_log(&mut self, entry: LogEntry) {
+        self.log_seq = self.log_seq.wrapping_add(1);
+        if let Some(last) = self.log_entries.back_mut() {
+            if last.level == entry.level && last.tag == entry.tag && last.message == entry.message {
+                last.count = last.count.saturating_add(entry.count);
+                last.elapsed_secs = entry.elapsed_secs;
+                return;
+            }
+        }
         if self.log_entries.len() >= LOG_CAPACITY {
             self.log_entries.pop_front();
         }
         self.log_entries.push_back(entry);
+        // Keep what the reader is looking at in place while new lines arrive.
+        if self.log_scroll > 0 {
+            self.log_scroll = (self.log_scroll + 1).min(self.log_entries.len() - 1);
+        }
     }
 
-    pub(super) fn poll_thread_rejection(&mut self) -> bool {
-        if let Some(message) = self
-            .thread_rejection
+    /// Clears what belongs to one mining run; a thread change or restart keeps
+    /// the log, balances and session totals on screen.
+    pub(super) fn reset_for_new_run(&mut self) {
+        self.before_first_run = false;
+        self.state = "starting".to_string();
+        self.blocktemplate_retry_since = None;
+        self.round_hashrate = "0.000 H/s".to_string();
+        self.share_difficulty = None;
+        self.device_hashrates.clear();
+        self.pending_gpus.clear();
+        self.pending_gpus_since = None;
+        self.dev_fee_active = false;
+        self.thread_control = None;
+        self.thread_change_pending = false;
+        self.thread_notice = None;
+        self.thread_reply = None;
+    }
+
+    /// Clears a finished thread notice after a while. Returns true when it did.
+    pub(super) fn expire_thread_notice(&mut self, now: Instant) -> bool {
+        let Some(notice) = self
+            .thread_notice
             .as_ref()
-            .and_then(|rx| rx.try_recv().ok())
-        {
-            self.thread_change_pending = false;
-            self.thread_notice = Some(message);
-            self.thread_rejection = None;
-            return true;
+            .filter(|_| !self.thread_change_pending)
+        else {
+            self.thread_notice_shown = None;
+            return false;
+        };
+        match &self.thread_notice_shown {
+            Some((shown, since)) if shown == notice => {
+                if now.saturating_duration_since(*since) < THREAD_NOTICE_LIFETIME {
+                    return false;
+                }
+                self.thread_notice = None;
+                self.thread_notice_shown = None;
+                true
+            }
+            _ => {
+                self.thread_notice_shown = Some((notice.clone(), now));
+                false
+            }
         }
-        false
+    }
+
+    /// The offset of the oldest page: the oldest line on the top row and as many
+    /// newer entries below it as fit whole. 0 when the whole log fits.
+    fn max_log_scroll(&self, inner_height: usize, inner_width: usize) -> usize {
+        let mut rows = 0;
+        for (index, entry) in self.log_entries.iter().enumerate() {
+            rows += log_entry_rows(entry, 0.0, inner_width).len();
+            if rows > inner_height {
+                return self.log_entries.len() - index.max(1);
+            }
+        }
+        0
+    }
+
+    /// `u` installs a counting-down update now; `s` skips that version.
+    fn answer_update_countdown(&mut self, key: KeyCode) -> bool {
+        let counting = self
+            .pending_install
+            .as_ref()
+            .is_some_and(|pending| pending.deadline.is_some());
+        if !counting {
+            return false;
+        }
+        let choice = match key {
+            KeyCode::Char('u') | KeyCode::Char('U') => crate::update_check::Choice::InstallNow,
+            KeyCode::Char('s') | KeyCode::Char('S') => crate::update_check::Choice::Skip,
+            _ => return false,
+        };
+        crate::update_check::choose(choice);
+        if let Some(pending) = &mut self.pending_install {
+            match choice {
+                crate::update_check::Choice::InstallNow => pending.deadline = None,
+                crate::update_check::Choice::Skip => self.pending_install = None,
+            }
+        }
+        true
+    }
+
+    fn scroll_log(&mut self, key: KeyCode) -> bool {
+        let (inner_height, inner_width) = self.log_panel.get();
+        let oldest = self.max_log_scroll(inner_height, inner_width);
+        // A resize or dropped lines can leave the stored offset past the oldest page.
+        let current = self.log_scroll.min(oldest);
+        self.log_scroll = match key {
+            KeyCode::Up => current + 1,
+            KeyCode::Down => current.saturating_sub(1),
+            KeyCode::PageUp => current + LOG_PAGE_ENTRIES,
+            KeyCode::PageDown => current.saturating_sub(LOG_PAGE_ENTRIES),
+            KeyCode::Home => oldest,
+            KeyCode::End => 0,
+            _ => return false,
+        }
+        .min(oldest);
+        true
+    }
+
+    pub(super) fn poll_thread_reply(&mut self) -> bool {
+        let message = match self.thread_reply.as_ref().map(|rx| rx.try_recv()) {
+            Some(Ok(message)) => message,
+            Some(Err(crossbeam_channel::TryRecvError::Disconnected)) => {
+                "Thread change unavailable; try again.".to_string()
+            }
+            Some(Err(crossbeam_channel::TryRecvError::Empty)) | None => return false,
+        };
+        self.thread_change_pending = false;
+        self.thread_notice = Some(message);
+        self.thread_reply = None;
+        true
     }
 
     /// Returns true only for an explicit quit. No backend work runs on the UI thread.
@@ -231,7 +390,13 @@ impl TuiStateInner {
             }
             return true;
         }
-        self.poll_thread_rejection();
+        if self.scroll_log(key.code) {
+            return false;
+        }
+        if self.answer_update_countdown(key.code) {
+            return false;
+        }
+        self.poll_thread_reply();
         if !matches!(
             key.code,
             KeyCode::Char('+') | KeyCode::Char('=') | KeyCode::Char('-')
@@ -239,10 +404,17 @@ impl TuiStateInner {
             return false;
         }
         let Some(control) = self.thread_control.as_ref() else {
-            self.thread_notice =
-                Some("Thread controls unavailable: no active CPU backend.".to_string());
+            self.thread_notice = Some(if self.before_first_run {
+                "Thread controls are available once mining starts.".to_string()
+            } else {
+                "Thread controls unavailable: no active CPU backend.".to_string()
+            });
             return false;
         };
+        if let Some(notice) = &self.threads_locked {
+            self.thread_notice = Some(notice.clone());
+            return false;
+        }
         if self.thread_change_pending {
             self.thread_notice = Some("Thread change in progress; please wait.".to_string());
             return false;
@@ -271,10 +443,11 @@ impl TuiStateInner {
         if threads == control.current_threads {
             return false;
         }
-        let (rejection, receiver) = crossbeam_channel::bounded(1);
+        let (reply, receiver) = crossbeam_channel::bounded(1);
         let request = ThreadChangeRequest {
             memory: control.memory.clone(),
-            rejection: Some(rejection),
+            reply: Some(reply),
+            live: control.live.clone(),
             max_threads: control.max_threads.max(control.current_threads),
             run_id: control.run_id,
             threads,
@@ -283,7 +456,7 @@ impl TuiStateInner {
         self.thread_notice = Some(match control.sender.try_send(request) {
             Ok(()) => {
                 self.thread_change_pending = true;
-                self.thread_rejection = Some(receiver);
+                self.thread_reply = Some(receiver);
                 format!(
                     "Checking RAM: {} -> {threads} threads...",
                     control.current_threads
@@ -301,7 +474,7 @@ impl TuiStateInner {
         self.block_found_ticks.push_back(tick);
     }
 
-    fn uptime(&self) -> String {
+    pub(super) fn uptime(&self) -> String {
         let secs = self.started_at.elapsed().as_secs();
         if secs < 60 {
             format!("{}s", secs)
@@ -319,6 +492,12 @@ impl TuiStateInner {
 }
 
 pub type TuiState = Arc<Mutex<TuiStateInner>>;
+
+/// Puts the terminal back when the process must exit without running destructors.
+pub(super) fn restore_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen, Show);
+}
 
 pub fn new_tui_state() -> TuiState {
     Arc::new(Mutex::new(TuiStateInner::new()))
@@ -383,6 +562,43 @@ const UPDATE_STYLE: Style = Style::new()
     .fg(Color::Rgb(230, 200, 120))
     .bg(Color::Rgb(100, 80, 20))
     .add_modifier(Modifier::BOLD);
+/// The header's update notice: a countdown with its keys, the install in
+/// progress, or a release that is only announced.
+fn update_spans(state: &TuiStateInner, now: Instant) -> Vec<Span<'static>> {
+    match &state.pending_install {
+        Some(pending) => match pending.deadline {
+            Some(deadline) => vec![
+                Span::styled(
+                    format!(
+                        " updating to {} in {}s ",
+                        pending.latest,
+                        countdown_secs(deadline, now)
+                    ),
+                    UPDATE_STYLE,
+                ),
+                Span::styled(" u now  s skip ", TITLE_STYLE),
+            ],
+            None => vec![Span::styled(
+                format!(" installing {}… ", pending.latest),
+                UPDATE_STYLE,
+            )],
+        },
+        None => match &state.update_available {
+            Some(latest) => vec![Span::styled(
+                format!(" update {latest} available "),
+                UPDATE_STYLE,
+            )],
+            None => Vec::new(),
+        },
+    }
+}
+
+/// Whole seconds left, rounded up so the count never shows 0 while waiting.
+fn countdown_secs(deadline: Instant, now: Instant) -> u64 {
+    let left = deadline.saturating_duration_since(now);
+    left.as_secs() + u64::from(left.subsec_nanos() > 0)
+}
+
 // Keep block marker glyph single-cell across terminals.
 const BLOCK_MARKER_GLYPH: &str = "♦";
 
@@ -411,7 +627,7 @@ fn draw_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner)
 
     let stats_height: u16 = if wide { 5 } else { 14 };
     let active_device_count = state.device_hashrates.len() as u16;
-    let pending_count = state.pending_nvidia as u16;
+    let pending_count = state.pending_gpus.len() as u16;
     let active_rows = if wide {
         (active_device_count + 1) / 2 // 2 per row in wide mode
     } else {
@@ -420,14 +636,18 @@ fn draw_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner)
     // Pending devices are always 1-per-line (not paired in wide mode)
     let device_rows = active_rows + pending_count;
     let devices_height: u16 = if device_rows > 0 { 2 + device_rows } else { 0 };
-    let runtime_panel_height: u16 = 4;
-    let wallet_panel_height = wallet_panel_height(state);
+    let runtime_panel_height = runtime_panel_height(state);
+    let wallet_panel_height = wallet_panel_height(state, area.width);
     let config_height: u16 = if config_two_columns {
         runtime_panel_height.max(wallet_panel_height)
     } else {
         runtime_panel_height + wallet_panel_height
     };
-    let header_height: u16 = 4;
+    let header_height: u16 = if area.height >= TALL_DASHBOARD_MIN_HEIGHT {
+        4
+    } else {
+        3
+    };
 
     if area.height < header_height + stats_height + devices_height + config_height + 4 {
         draw_compact_dashboard(frame, area, state);
@@ -454,15 +674,27 @@ fn draw_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner)
     draw_log(frame, chunks[4], state);
 }
 
+fn tuning_line(status: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled("Tuning: ", LABEL_STYLE),
+        Span::styled(status.to_string(), VALUE_STYLE),
+    ])
+}
+
 fn thread_line(state: &TuiStateInner) -> Line<'static> {
-    let hint = if state.thread_control.is_some() {
+    let hint = if state.thread_control.is_some() && state.threads_locked.is_none() {
         "  [+] [-]"
     } else {
         ""
     };
+    let threads = if state.before_first_run {
+        "---".to_string()
+    } else {
+        state.threads.to_string()
+    };
     Line::from(vec![
         Span::styled("Threads: ", LABEL_STYLE),
-        Span::styled(state.threads.to_string(), VALUE_STYLE),
+        Span::styled(threads, VALUE_STYLE),
         Span::styled(hint, TITLE_STYLE),
     ])
 }
@@ -478,10 +710,18 @@ fn draw_compact_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &TuiSta
         ]),
         Line::from(format!("Current: {}", state.round_hashrate)),
         Line::from(format!("Average: {}", state.avg_hashrate)),
-        Line::from(format!(
-            "Accepted: {}  Submitted: {}",
-            state.accepted, state.submitted
-        )),
+        Line::from(if state.mode == "pool" {
+            format!(
+                "Accepted: {}  Difficulty: {}",
+                state.accepted,
+                share_difficulty_display(state)
+            )
+        } else {
+            format!(
+                "Accepted: {}  Submitted: {}",
+                state.accepted, state.submitted
+            )
+        }),
         Line::from(format!(
             "{}: {}  Height: {}",
             if state.mode == "pool" {
@@ -493,11 +733,17 @@ fn draw_compact_dashboard(frame: &mut ratatui::Frame, area: Rect, state: &TuiSta
             state.height
         )),
     ];
-    if let Some(latest) = &state.update_available {
-        lines.push(Line::from(Span::styled(
-            format!("Update {latest} available"),
-            UPDATE_STYLE,
-        )));
+    if state.mode == "pool" {
+        if let Some(minimum) = &state.pool_payout_minimum {
+            lines.insert(4, Line::from(format!("Min payout: {minimum}")));
+        }
+    }
+    let update = update_spans(state, Instant::now());
+    if !update.is_empty() {
+        lines.push(Line::from(update));
+    }
+    if let Some(status) = &state.tuning_status {
+        lines.insert(1, tuning_line(status));
     }
     let summary_height = (lines.len() as u16).min(area.height);
     frame.render_widget(
@@ -529,17 +775,13 @@ fn draw_header(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
         format!(" seine {} ", state.version),
         TITLE_STYLE,
     )];
-    if let Some(latest) = &state.update_available {
-        title.push(Span::styled(
-            format!(" update {latest} available "),
-            UPDATE_STYLE,
-        ));
-    }
+    title.extend(update_spans(state, Instant::now()));
     let uptime_text = format!(" uptime {uptime} ");
 
     let inner_width = area.width.saturating_sub(2) as usize;
 
     let mut lines = wave_lines(inner_width, tick, &state.block_found_ticks);
+    lines.truncate(area.height.saturating_sub(2).max(1) as usize);
 
     // Overlay uptime on the last wave row
     if let Some(last) = lines.last_mut() {
@@ -672,14 +914,19 @@ fn draw_stats(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner, wid
 }
 
 fn format_state_display(state: &TuiStateInner) -> (String, Color) {
+    if state.stopping {
+        return ("stopping".to_string(), Color::Rgb(200, 170, 80));
+    }
     let mut state_display = if state.dev_fee_active && state.state == "working" {
         "working (dev fee)".to_string()
     } else {
-        state.state.clone()
+        friendly_state_label(&state.state).to_string()
     };
 
     let mut state_color = match state.state.as_str() {
         "working" => Color::Rgb(100, 170, 100),
+        "pool-disconnected" | "pool-resync" => Color::Rgb(215, 165, 95),
+        "pool-login-rejected" => Color::Rgb(220, 105, 95),
         "stale-tip" | "stale-refresh" => Color::Rgb(200, 170, 80),
         "solved" => Color::Rgb(120, 190, 120),
         "wallet-required" | "wallet-password-required" => Color::Rgb(220, 170, 90),
@@ -704,6 +951,20 @@ fn format_state_display(state: &TuiStateInner) -> (String, Color) {
     }
 
     (state_display, state_color)
+}
+
+fn friendly_state_label(state: &str) -> &str {
+    match state {
+        "initializing" => "starting",
+        "pool-connecting" => "connecting",
+        "pool-connected" => "connected",
+        "pool-authenticated" => "logged in",
+        "waiting-pool-job" => "waiting for work",
+        "pool-disconnected" => "reconnecting",
+        "pool-resync" => "resyncing with pool",
+        "pool-login-rejected" => "login rejected",
+        other => other,
+    }
 }
 
 fn draw_stats_wide(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
@@ -754,19 +1015,7 @@ fn draw_stats_wide(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner
     frame.render_widget(network, cols[1]);
 
     // Mining panel
-    let submitted_str = format_u64(state.submitted);
-    let stale_shares_str = rejected_shares_display(state, format_u64);
-    let accepted_str = format_u64(state.accepted);
-    let rejected_or_stale_label = if state.mode == "pool" {
-        "Rejected"
-    } else {
-        "Stale"
-    };
-    let mining_lines = vec![
-        kv_line("Submitted", &submitted_str),
-        kv_line(rejected_or_stale_label, &stale_shares_str),
-        kv_line("Accepted", &accepted_str),
-    ];
+    let mining_lines = mining_panel_lines(state);
     let mining_block = Block::default()
         .title(Span::styled(" MINING ", TITLE_STYLE))
         .borders(Borders::ALL)
@@ -814,24 +1063,39 @@ fn draw_stats_narrow(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInn
     frame.render_widget(Paragraph::new(network_lines).block(network_block), rows[1]);
 
     // Mining
-    let submitted_str = format_u64(state.submitted);
-    let stale_shares_str = rejected_shares_display(state, format_u64);
-    let accepted_str = format_u64(state.accepted);
-    let rejected_or_stale_label = if state.mode == "pool" {
-        "Rejected"
-    } else {
-        "Stale"
-    };
-    let mining_lines = vec![
-        kv_line("Submitted", &submitted_str),
-        kv_line(rejected_or_stale_label, &stale_shares_str),
-        kv_line("Accepted", &accepted_str),
-    ];
+    let mining_lines = mining_panel_lines(state);
     let mining_block = Block::default()
         .title(Span::styled(" MINING ", TITLE_STYLE))
         .borders(Borders::ALL)
         .border_style(BORDER_STYLE);
     frame.render_widget(Paragraph::new(mining_lines).block(mining_block), rows[2]);
+}
+
+fn mining_panel_lines(state: &TuiStateInner) -> Vec<Line<'static>> {
+    let first = if state.mode == "pool" {
+        kv_line("Difficulty", &share_difficulty_display(state))
+    } else {
+        kv_line("Submitted", &format_u64(state.submitted))
+    };
+    let rejected_or_stale_label = if state.mode == "pool" {
+        "Rejected"
+    } else {
+        "Stale"
+    };
+    vec![
+        first,
+        kv_line(
+            rejected_or_stale_label,
+            &rejected_shares_display(state, format_u64),
+        ),
+        kv_line("Accepted", &format_u64(state.accepted)),
+    ]
+}
+
+fn share_difficulty_display(state: &TuiStateInner) -> String {
+    state
+        .share_difficulty
+        .map_or_else(|| "---".to_string(), format_u64)
 }
 
 /// Rejected/stale count, with busy-reject resubmits alongside in pool mode so
@@ -883,22 +1147,33 @@ fn draw_devices(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner, w
             .collect()
     };
 
-    // Show pending NVIDIA backends that are still initializing.
-    if state.pending_nvidia > 0 {
-        let online_nvidia = state
-            .device_hashrates
-            .iter()
-            .filter(|d| d.name.starts_with("nvidia#"))
-            .count() as u64;
+    // Show GPU backends that are still initializing.
+    if !state.pending_gpus.is_empty() {
         let pending_elapsed = state
-            .pending_nvidia_since
+            .pending_gpus_since
             .map(|started| started.elapsed())
             .unwrap_or_default();
-        let pending_status = pending_nvidia_status_label(pending_elapsed);
         let pending_elapsed_label = format_duration_compact(pending_elapsed);
-        let pending_message = format!("{pending_status} ({pending_elapsed_label})");
-        for i in 0..state.pending_nvidia {
-            let name = format!("nvidia#{}", online_nvidia + i + 1);
+        let mut shown_per_kind: Vec<(&str, u64)> = Vec::new();
+        for kind in &state.pending_gpus {
+            let shown = match shown_per_kind.iter_mut().find(|(seen, _)| seen == kind) {
+                Some((_, shown)) => {
+                    *shown += 1;
+                    *shown
+                }
+                None => {
+                    shown_per_kind.push((kind, 1));
+                    1
+                }
+            };
+            let online = state
+                .device_hashrates
+                .iter()
+                .filter(|d| d.name.starts_with(&format!("{kind}#")))
+                .count() as u64;
+            let pending_status = pending_gpu_status_label(kind, pending_elapsed);
+            let pending_message = format!("{pending_status} ({pending_elapsed_label})");
+            let name = format!("{kind}#{}", online + shown);
             lines.push(Line::from(vec![
                 Span::styled("  ", Style::default()),
                 Span::styled("▸ ", Style::default().fg(Color::Rgb(70, 100, 130))),
@@ -916,7 +1191,7 @@ fn draw_devices(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner, w
 }
 
 fn draw_config(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
-    let wallet_height = wallet_panel_height(state);
+    let wallet_height = wallet_panel_height(state, area.width);
     if config_uses_two_columns(area.width) {
         let cols = Layout::default()
             .direction(Direction::Horizontal)
@@ -929,62 +1204,142 @@ fn draw_config(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(4), Constraint::Length(wallet_height)])
+        .constraints([
+            Constraint::Length(runtime_panel_height(state)),
+            Constraint::Length(wallet_height),
+        ])
         .split(area);
     draw_config_runtime_panel(frame, rows[0], state);
     draw_config_wallet_panel(frame, rows[1], state);
+}
+
+fn runtime_panel_height(state: &TuiStateInner) -> u16 {
+    if state.tuning_status.is_some() {
+        5
+    } else {
+        4
+    }
 }
 
 fn config_uses_two_columns(width: u16) -> bool {
     width >= CONFIG_TWO_COLUMN_MIN_WIDTH
 }
 
-fn wallet_panel_height(state: &TuiStateInner) -> u16 {
-    if state.mode == "pool" && state.wallet_visible {
+fn wallet_panel_height(state: &TuiStateInner, config_width: u16) -> u16 {
+    let base = if state.mode == "pool" && state.wallet_visible {
         6
     } else {
         4
+    };
+    let panel_width = if config_uses_two_columns(config_width) {
+        config_width / 2
+    } else {
+        config_width
+    };
+    base + if state.mode == "pool" {
+        pool_paid_lines(state, panel_width.saturating_sub(2) as usize).len() as u16 - 1
+    } else {
+        0
     }
 }
 
+fn pool_paid_lines(state: &TuiStateInner, inner_width: usize) -> Vec<Line<'static>> {
+    let label = if state.wallet_visible {
+        "P.Paid"
+    } else {
+        "Paid"
+    };
+    if let Some(minimum) = &state.pool_payout_minimum {
+        let line =
+            wallet_line_with_right(label, &state.pool_paid, "Min payout", minimum, inner_width);
+        if line.width() <= inner_width {
+            return vec![line];
+        }
+        return vec![
+            kv_line(label, &state.pool_paid),
+            kv_line("Min payout", minimum),
+        ];
+    }
+    vec![kv_line(label, &state.pool_paid)]
+}
+
 fn draw_config_runtime_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
+    let (endpoint_label, endpoint) = if state.mode == "pool" {
+        ("  Pool: ", endpoint_for_display(&state.api_url))
+    } else {
+        ("  Daemon: ", state.api_url.as_str())
+    };
     let line1 = Line::from(vec![
-        Span::styled("  Endpoint: ", LABEL_STYLE),
-        Span::styled(&state.api_url, VALUE_STYLE),
-        Span::styled("  Worker: ", LABEL_STYLE),
-        Span::styled(&state.pool_worker, VALUE_STYLE),
+        Span::styled(endpoint_label, LABEL_STYLE),
+        Span::styled(endpoint, VALUE_STYLE),
     ]);
+    // Thread keys first: a long worker name may clip, the controls must not.
     let mut line2 = thread_line(state);
     line2.spans.insert(0, Span::raw("  "));
-    line2.spans.push(Span::styled("  Backends: ", LABEL_STYLE));
-    line2
-        .spans
-        .push(Span::styled(state.backends_desc.clone(), VALUE_STYLE));
+    if state.mode == "pool" {
+        line2.spans.push(Span::styled("  Worker: ", LABEL_STYLE));
+        line2
+            .spans
+            .push(Span::styled(state.pool_worker.clone(), VALUE_STYLE));
+    }
     let config_block = Block::default()
         .title(Span::styled(" CONFIG ", TITLE_STYLE))
         .borders(Borders::ALL)
         .border_style(BORDER_STYLE);
-    let config = Paragraph::new(vec![line1, line2]).block(config_block);
+    let mut lines = vec![line1, line2];
+    if let Some(status) = &state.tuning_status {
+        let mut line = tuning_line(status);
+        line.spans.insert(0, Span::raw("  "));
+        lines.push(line);
+    }
+    let config = Paragraph::new(lines).block(config_block);
     frame.render_widget(config, area);
+}
+
+fn endpoint_for_display(endpoint: &str) -> &str {
+    endpoint.strip_prefix("stratum+tcp://").unwrap_or(endpoint)
+}
+
+/// Drops the right-hand value when both will not fit, rather than clipping it.
+fn wallet_line_fitted(
+    left_label: &str,
+    left_value: &str,
+    right_label: &str,
+    right_value: &str,
+    inner_width: usize,
+) -> Line<'static> {
+    let line = wallet_line_with_right(
+        left_label,
+        left_value,
+        right_label,
+        right_value,
+        inner_width,
+    );
+    if line.width() <= inner_width {
+        line
+    } else {
+        kv_line(left_label, left_value)
+    }
 }
 
 fn draw_config_wallet_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
     let inner_width = area.width.saturating_sub(2) as usize;
     let pool_address = compact_wallet_address(&state.pool_address);
+    let pool_account_label = if state.pool_solo { "Solo" } else { "Miner" };
     let wallet_address = compact_wallet_address(&state.wallet_address);
-    let (title, wallet_lines) = if state.mode == "pool" && state.wallet_visible {
+    let (title, mut wallet_lines) = if state.mode == "pool" && state.wallet_visible {
         (
             " BALANCES ",
             vec![
-                wallet_line_with_right(
+                wallet_line_fitted(
                     "P.Pending",
                     &state.pool_pending,
-                    "Miner",
+                    pool_account_label,
                     &pool_address,
                     inner_width,
                 ),
                 kv_line("P.Paid", &state.pool_paid),
-                wallet_line_with_right(
+                wallet_line_fitted(
                     "W.Pending",
                     &state.wallet_pending,
                     "Address",
@@ -998,10 +1353,10 @@ fn draw_config_wallet_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiS
         (
             " POOL BALANCE ",
             vec![
-                wallet_line_with_right(
+                wallet_line_fitted(
                     "Pending",
                     &state.pool_pending,
-                    "Miner",
+                    pool_account_label,
                     &pool_address,
                     inner_width,
                 ),
@@ -1012,7 +1367,7 @@ fn draw_config_wallet_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiS
         (
             " WALLET ",
             vec![
-                wallet_line_with_right(
+                wallet_line_fitted(
                     "Pending",
                     &state.wallet_pending,
                     "Address",
@@ -1023,6 +1378,9 @@ fn draw_config_wallet_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiS
             ],
         )
     };
+    if state.mode == "pool" {
+        wallet_lines.splice(1..2, pool_paid_lines(state, inner_width));
+    }
     let wallet_block = Block::default()
         .title(Span::styled(title, TITLE_STYLE))
         .borders(Borders::ALL)
@@ -1032,147 +1390,127 @@ fn draw_config_wallet_panel(frame: &mut ratatui::Frame, area: Rect, state: &TuiS
 }
 
 fn draw_log(frame: &mut ratatui::Frame, area: Rect, state: &TuiStateInner) {
+    let inner_height = area.height.saturating_sub(2) as usize;
+    let inner_width = area.width.saturating_sub(2) as usize;
+    state.log_panel.set((inner_height, inner_width));
+    let scroll = state
+        .log_scroll
+        .min(state.max_log_scroll(inner_height, inner_width));
+    let title = if scroll > 0 {
+        " LOG  paused, End to follow "
+    } else {
+        " LOG "
+    };
+    let hint = if state.stopping {
+        " q again to force quit "
+    } else {
+        " ↑↓ scroll  q quit "
+    };
     let log_block = Block::default()
-        .title(Span::styled(" LOG ", TITLE_STYLE))
+        .title(Span::styled(title, TITLE_STYLE))
+        .title(Line::from(Span::styled(hint, DIM_STYLE)).right_aligned())
         .borders(Borders::ALL)
         .border_style(BORDER_STYLE);
 
-    let inner_height = area.height.saturating_sub(2) as usize;
-    let inner_width = area.width.saturating_sub(2) as usize;
     let now_elapsed_secs = state.started_at.elapsed().as_secs_f64();
-    // Build wrapped lines from the end so recent entries are always visible.
-    let mut all_lines: Vec<Line> = Vec::new();
-    let elapsed_labels: Vec<String> = state
-        .log_entries
-        .iter()
-        .map(|entry| {
-            format_elapsed_log_ago(log_entry_age_secs(now_elapsed_secs, entry.elapsed_secs))
-        })
-        .collect();
-    let row_indent = "  ";
-    let time_col_width = elapsed_labels
-        .iter()
-        .map(|label| label.chars().count())
-        .max()
-        .unwrap_or(8)
-        .max(8);
-    for (entry, elapsed) in state.log_entries.iter().zip(elapsed_labels.iter()) {
-        let time_text = format!(" {elapsed:>time_col_width$} ");
-        let time = Span::styled(time_text.clone(), DIM_STYLE);
-        let level_text = format!(" {} ", entry.level.label());
-        let level = Span::styled(
-            level_text.clone(),
-            Style::default()
-                .fg(entry.level.label_fg())
-                .bg(entry.level.label_bg())
-                .add_modifier(Modifier::BOLD),
+    // Walk back from the newest entry shown and stop as soon as the panel is full.
+    let mut rows: Vec<Line> = Vec::with_capacity(inner_height);
+    for entry in state.log_entries.iter().rev().skip(scroll) {
+        rows.extend(
+            log_entry_rows(entry, now_elapsed_secs, inner_width)
+                .into_iter()
+                .rev(),
         );
-        let tag_text = format!(" {:^8} ", entry.tag);
-        let tag_width = tag_text.chars().count();
-        let tag = Span::styled(
-            tag_text,
-            Style::default()
-                .fg(Color::Rgb(200, 200, 200))
-                .bg(Color::Rgb(40, 40, 40))
-                .add_modifier(Modifier::BOLD),
-        );
-        let message_separator = " ";
-        let prefix_width = row_indent.chars().count()
-            + level_text.chars().count()
-            + tag_width
-            + message_separator.chars().count();
-        let suffix_width = time_text.chars().count();
-        let msg_width = inner_width
-            .saturating_sub(prefix_width + suffix_width)
-            .max(1);
-        let msg_style = if matches!(entry.level, LogLevel::Mined) {
-            Style::default()
-                .fg(entry.level.color())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(entry.level.color())
-        };
-        let chunks = wrap_str(&entry.message, msg_width);
-        for (i, chunk) in chunks.iter().enumerate() {
-            if i == 0 {
-                let msg = Span::styled(chunk.clone(), msg_style);
-                let gap =
-                    inner_width.saturating_sub(prefix_width + chunk.chars().count() + suffix_width);
-                all_lines.push(Line::from(vec![
-                    Span::raw(row_indent),
-                    level.clone(),
-                    tag.clone(),
-                    Span::raw(message_separator),
-                    msg,
-                    Span::raw(" ".repeat(gap)),
-                    time.clone(),
-                ]));
-            } else {
-                let pad = " ".repeat(prefix_width);
-                let msg = Span::styled(format!("{pad}{chunk}"), msg_style);
-                all_lines.push(Line::from(vec![msg]));
-            }
+        if rows.len() >= inner_height {
+            break;
         }
     }
-    let start = all_lines.len().saturating_sub(inner_height);
-    let visible: Vec<Line> = all_lines.into_iter().skip(start).collect();
+    rows.truncate(inner_height);
+    rows.reverse();
+    // The oldest page can end on an entry that only partly fits.
+    if rows.len() < inner_height {
+        if let Some(entry) = state.log_entries.get(state.log_entries.len() - scroll) {
+            rows.extend(log_entry_rows(entry, now_elapsed_secs, inner_width));
+            rows.truncate(inner_height);
+        }
+    }
 
-    let log = Paragraph::new(visible).block(log_block);
-    frame.render_widget(log, area);
+    frame.render_widget(Paragraph::new(rows).block(log_block), area);
+}
+
+fn log_entry_rows(
+    entry: &LogEntry,
+    now_elapsed_secs: f64,
+    inner_width: usize,
+) -> Vec<Line<'static>> {
+    const TAG_WIDTH: usize = 9;
+    const AGE_WIDTH: usize = 9;
+    // The age column gives way to the message on very narrow terminals.
+    const AGE_MIN_INNER_WIDTH: usize = 60;
+    let tag = Span::styled(
+        format!(" {:<width$}", entry.tag, width = TAG_WIDTH - 1),
+        Style::default()
+            .fg(entry.level.label_fg())
+            .bg(entry.level.label_bg())
+            .add_modifier(Modifier::BOLD),
+    );
+    let prefix_width = TAG_WIDTH + 1;
+    let age_width = if inner_width >= AGE_MIN_INNER_WIDTH {
+        AGE_WIDTH
+    } else {
+        0
+    };
+    let message_width = inner_width.saturating_sub(prefix_width + age_width).max(1);
+    let message_style = if matches!(entry.level, LogLevel::Mined) {
+        Style::default()
+            .fg(entry.level.color())
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(entry.level.color())
+    };
+    let message = if entry.count > 1 {
+        format!("{} ×{}", entry.message, entry.count)
+    } else {
+        entry.message.clone()
+    };
+    let mut rows = Vec::new();
+    for (index, chunk) in wrap_str(&message, message_width).into_iter().enumerate() {
+        if index > 0 {
+            rows.push(Line::from(vec![
+                Span::raw(" ".repeat(prefix_width)),
+                Span::styled(chunk, message_style),
+            ]));
+            continue;
+        }
+        let mut spans = vec![tag.clone(), Span::raw(" ")];
+        let used = chunk.chars().count();
+        spans.push(Span::styled(chunk, message_style));
+        if age_width > 0 {
+            let age =
+                format_elapsed_log_ago(log_entry_age_secs(now_elapsed_secs, entry.elapsed_secs));
+            spans.push(Span::raw(" ".repeat(message_width.saturating_sub(used))));
+            spans.push(Span::styled(
+                format!("{age:>width$} ", width = AGE_WIDTH - 1),
+                DIM_STYLE,
+            ));
+        }
+        rows.push(Line::from(spans));
+    }
+    rows
 }
 
 fn log_entry_age_secs(now_elapsed_secs: f64, entry_elapsed_secs: f64) -> f64 {
-    let now = now_elapsed_secs.max(0.0);
-    let entry = entry_elapsed_secs.max(0.0);
-    if now >= entry {
-        now - entry
-    } else {
-        0.0
-    }
+    (now_elapsed_secs - entry_elapsed_secs).max(0.0)
 }
 
 fn format_elapsed_log_ago(elapsed_secs: f64) -> String {
     let total = elapsed_secs.max(0.0).floor() as u64;
-    if total < 60 {
-        return if total == 1 {
-            "1 sec ago".to_string()
-        } else {
-            format!("{total} sec ago")
-        };
-    }
-
-    let minutes = total / 60;
-    if minutes < 60 {
-        return if minutes == 1 {
-            "1 min ago".to_string()
-        } else {
-            format!("{minutes} mins ago")
-        };
-    }
-
-    let hours = minutes / 60;
-    if hours < 24 {
-        return if hours == 1 {
-            "1 hour ago".to_string()
-        } else {
-            format!("{hours} hours ago")
-        };
-    }
-
-    let days = hours / 24;
-    if days < 7 {
-        return if days == 1 {
-            "1 day ago".to_string()
-        } else {
-            format!("{days} days ago")
-        };
-    }
-
-    let weeks = days / 7;
-    if weeks == 1 {
-        "1 week ago".to_string()
-    } else {
-        format!("{weeks} weeks ago")
+    match total {
+        0..=4 => "now".to_string(),
+        5..=59 => format!("{total}s ago"),
+        60..=3_599 => format!("{}m ago", total / 60),
+        3_600..=86_399 => format!("{}h ago", total / 3_600),
+        _ => format!("{}d ago", total / 86_400),
     }
 }
 
@@ -1229,29 +1567,51 @@ fn device_line(name: &str, current: &str, average: &str) -> Line<'static> {
     ])
 }
 
+/// Wraps at spaces, splitting only words longer than a whole row (URLs, paths).
 fn wrap_str(s: &str, max: usize) -> Vec<String> {
-    if max == 0 {
-        return vec![s.to_string()];
-    }
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max {
-        return vec![s.to_string()];
-    }
+    let max = max.max(1);
     let mut lines = Vec::new();
-    let mut pos = 0;
-    while pos < chars.len() {
-        let end = (pos + max).min(chars.len());
-        lines.push(chars[pos..end].iter().collect());
-        pos = end;
+    let mut line = String::new();
+    let mut width = 0;
+    for word in s.split(' ') {
+        let word_width = word.chars().count();
+        if width > 0 && width + 1 + word_width > max {
+            lines.push(std::mem::take(&mut line));
+            width = 0;
+        }
+        if width > 0 {
+            line.push(' ');
+            width += 1;
+        }
+        let mut chars = word.chars();
+        let mut remaining = word_width;
+        while width + remaining > max {
+            let take = max - width;
+            line.extend(chars.by_ref().take(take));
+            lines.push(std::mem::take(&mut line));
+            remaining -= take;
+            width = 0;
+        }
+        line.extend(chars);
+        width += remaining;
     }
+    lines.push(line);
     lines
 }
 
-fn pending_nvidia_status_label(elapsed: Duration) -> &'static str {
+fn pending_gpu_status_label(kind: &str, elapsed: Duration) -> &'static str {
     if elapsed < Duration::from_secs(20) {
-        "starting CUDA runtime"
+        if kind == "amd" {
+            "starting HIP runtime"
+        } else {
+            "starting CUDA runtime"
+        }
     } else if elapsed < Duration::from_secs(90) {
-        "preparing NVIDIA backend"
+        if kind == "amd" {
+            "preparing AMD backend"
+        } else {
+            "preparing NVIDIA backend"
+        }
     } else {
         "still initializing (first run may take a few minutes)"
     }
@@ -1317,6 +1677,34 @@ mod tests {
     }
 
     #[test]
+    fn payout_minimum_survives_full_and_compact_layouts() {
+        let mut state = TuiStateInner::new();
+        state.mode = "pool".into();
+        state.pool_payout_minimum = Some("10 BNT".into());
+        for wallet_visible in [false, true] {
+            state.wallet_visible = wallet_visible;
+            for (width, height) in [(160, 32), (120, 30), (80, 24), (40, 18), (40, 8)] {
+                let text = render_text(&state, width, height);
+                assert!(text.contains("Min payout"), "{width}x{height}: {text}");
+                assert!(text.contains("10 BNT"), "{width}x{height}: {text}");
+                if width >= 120 {
+                    assert!(
+                        text.lines().any(|line| line.contains("Paid")
+                            && line.contains("Min payout")
+                            && line.contains("10 BNT")),
+                        "{width}x{height}: {text}"
+                    );
+                }
+            }
+        }
+        state.pool_payout_minimum = None;
+        assert!(!render_text(&state, 120, 30).contains("Min payout"));
+        state.mode = "daemon".into();
+        state.pool_payout_minimum = Some("10 BNT".into());
+        assert!(!render_text(&state, 120, 30).contains("Min payout"));
+    }
+
+    #[test]
     fn essential_stats_survive_short_narrow_and_device_heavy_layouts() {
         let mut state = TuiStateInner::new();
         state.threads = 7;
@@ -1324,7 +1712,8 @@ mod tests {
         state.round_hashrate = "1.234 H/s".into();
         state.wallet_visible = true;
         state.mode = "pool".into();
-        state.pending_nvidia = 16;
+        state.pending_gpus = vec!["nvidia"; 12];
+        state.pending_gpus.extend(["amd"; 4]);
         for (width, height) in [
             (40, 8),
             (60, 12),
@@ -1359,8 +1748,71 @@ mod tests {
             "{full}"
         );
         let compact = render_text(&state, 60, 12);
-        assert!(compact.contains("Update v0.2.23 available"), "{compact}");
+        assert!(compact.contains("update v0.2.23 available"), "{compact}");
         assert!(render_text(&state, 24, 1).contains("Threads: 7"));
+    }
+
+    #[test]
+    fn update_countdown_shows_keys_then_the_install() {
+        let mut state = TuiStateInner::new();
+        state.version = "v0.2.22".into();
+        state.threads = 7;
+        state.update_available = Some("v0.2.23".into());
+        state.pending_install = Some(crate::update_check::PendingInstall {
+            latest: "v0.2.23".into(),
+            deadline: Some(Instant::now() + Duration::from_millis(41_500)),
+        });
+        for (width, height) in [(160, 50), (60, 12)] {
+            let text = render_text(&state, width, height);
+            assert!(
+                text.contains(" updating to v0.2.23 in 42s  u now  s skip "),
+                "{width}x{height}: {text}"
+            );
+            assert!(!text.contains("available"), "{text}");
+        }
+        state.pending_install.as_mut().unwrap().deadline = None;
+        assert!(render_text(&state, 160, 50).contains(" installing v0.2.23… "));
+    }
+
+    #[test]
+    fn countdown_rounds_up_and_stops_at_zero() {
+        let now = Instant::now();
+        assert_eq!(countdown_secs(now + Duration::from_millis(59_001), now), 60);
+        assert_eq!(countdown_secs(now + Duration::from_secs(5), now), 5);
+        assert_eq!(countdown_secs(now, now + Duration::from_secs(1)), 0);
+    }
+
+    #[test]
+    fn update_keys_only_act_during_a_countdown() {
+        let _serial = crate::update_check::CHOICE_TEST
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut state = TuiStateInner::new();
+        // No countdown: `s` and `u` do nothing.
+        assert!(!state.answer_update_countdown(KeyCode::Char('s')));
+        state.pending_install = Some(crate::update_check::PendingInstall {
+            latest: "v0.2.23".into(),
+            deadline: None,
+        });
+        assert!(!state.answer_update_countdown(KeyCode::Char('u')));
+        assert_eq!(crate::update_check::take_choice(), None);
+
+        state.pending_install.as_mut().unwrap().deadline = Some(Instant::now());
+        assert!(!state.answer_update_countdown(KeyCode::Char('x')));
+        assert!(state.answer_update_countdown(KeyCode::Char('u')));
+        assert_eq!(
+            crate::update_check::take_choice(),
+            Some(crate::update_check::Choice::InstallNow)
+        );
+        assert_eq!(state.pending_install.as_ref().unwrap().deadline, None);
+
+        state.pending_install.as_mut().unwrap().deadline = Some(Instant::now());
+        assert!(state.answer_update_countdown(KeyCode::Char('S')));
+        assert_eq!(
+            crate::update_check::take_choice(),
+            Some(crate::update_check::Choice::Skip)
+        );
+        assert!(state.pending_install.is_none());
     }
 
     fn controlled_state() -> (
@@ -1371,6 +1823,7 @@ mod tests {
         let mut state = TuiStateInner::new();
         state.threads = 2;
         state.thread_control = Some(ThreadControl {
+            live: None,
             run_id: 42,
             sender,
             memory: None,
@@ -1409,6 +1862,31 @@ mod tests {
             assert!(press(&mut state, KeyCode::Char('q')));
             assert!(request.quit_requested.load(Ordering::SeqCst));
         }
+    }
+
+    #[test]
+    fn thread_keys_explain_and_wait_while_tuning_picks_the_count() {
+        let notice = "Tuning is picking the thread count, about 4 min left. \
+                      To set it yourself, start with --threads N.";
+        let (mut state, receiver) = controlled_state();
+        state.threads_locked = Some(notice.to_string());
+        assert!(render_text(&state, 120, 34).contains("Threads: 2"));
+        assert!(!render_text(&state, 120, 34).contains("[+] [-]"));
+        for key in ['+', '=', '-'] {
+            press(&mut state, KeyCode::Char(key));
+            assert!(receiver.is_empty(), "{key} must not change the count");
+            assert!(!state.thread_change_pending);
+            assert_eq!(state.thread_notice.as_deref(), Some(notice));
+        }
+        for (width, height) in [(46, 36), (120, 34)] {
+            let text = render_text(&state, width, height);
+            assert!(text.contains("--threads N"), "{width}x{height}:\n{text}");
+        }
+        // Once tuning is done the keys work again.
+        state.threads_locked = None;
+        assert!(render_text(&state, 120, 34).contains("Threads: 2  [+] [-]"));
+        press(&mut state, KeyCode::Char('+'));
+        assert_eq!(receiver.try_recv().unwrap().threads, 3);
     }
 
     #[test]
@@ -1454,6 +1932,31 @@ mod tests {
     }
 
     #[test]
+    fn a_live_change_clears_pending_and_a_lost_controller_does_not_stick() {
+        let (mut state, receiver) = controlled_state();
+        press(&mut state, KeyCode::Char('+'));
+        assert!(state.thread_change_pending);
+        let request = receiver.try_recv().unwrap();
+        request
+            .reply
+            .unwrap()
+            .send("CPU threads: 3".to_string())
+            .unwrap();
+        assert!(state.poll_thread_reply());
+        assert!(!state.thread_change_pending);
+        assert_eq!(state.thread_notice.as_deref(), Some("CPU threads: 3"));
+
+        press(&mut state, KeyCode::Char('+'));
+        assert!(state.thread_change_pending);
+        drop(receiver.try_recv().unwrap());
+        assert!(state.poll_thread_reply());
+        assert!(
+            !state.thread_change_pending,
+            "a dropped reply must not block changes"
+        );
+    }
+
+    #[test]
     fn ram_rejection_is_visible_and_unblocks_retry() {
         let (mut state, receiver) = controlled_state();
         press(&mut state, KeyCode::Char('+'));
@@ -1461,8 +1964,8 @@ mod tests {
         let reason = super::super::thread_control::validate_headroom(3, 2)
             .unwrap_err()
             .to_string();
-        request.rejection.unwrap().send(reason.clone()).unwrap();
-        state.poll_thread_rejection();
+        request.reply.unwrap().send(reason.clone()).unwrap();
+        state.poll_thread_reply();
         assert!(!state.thread_change_pending);
         assert_eq!(state.threads, 2);
         for (width, height) in [(40, 18), (80, 12), (160, 34)] {
@@ -1523,13 +2026,13 @@ mod tests {
     #[test]
     fn log_ring_buffer_capacity() {
         let mut state = TuiStateInner::new();
-        for i in 0..250 {
-            state.push_log(LogEntry {
-                elapsed_secs: i as f64,
-                level: LogLevel::Info,
-                tag: "TEST".to_string(),
-                message: format!("msg {}", i),
-            });
+        for i in 0..LOG_CAPACITY + 50 {
+            state.push_log(LogEntry::new(
+                i as f64,
+                LogLevel::Info,
+                "TEST",
+                &format!("msg {i}"),
+            ));
         }
         assert_eq!(state.log_entries.len(), LOG_CAPACITY);
         assert_eq!(state.log_entries.front().unwrap().message, "msg 50");
@@ -1551,6 +2054,303 @@ mod tests {
         assert!(config_uses_two_columns(CONFIG_TWO_COLUMN_MIN_WIDTH));
     }
 
+    fn test_entry(message: &str) -> LogEntry {
+        LogEntry::new(1.0, LogLevel::Info, "TEST", message)
+    }
+
+    #[test]
+    fn finished_thread_notice_makes_way_for_the_log() {
+        let mut state = TuiStateInner::new();
+        let start = Instant::now();
+        state.thread_notice = Some("CPU threads: 4".into());
+        assert!(!state.expire_thread_notice(start));
+        assert!(!state.expire_thread_notice(start + THREAD_NOTICE_LIFETIME / 2));
+        assert!(state.expire_thread_notice(start + THREAD_NOTICE_LIFETIME));
+        assert_eq!(state.thread_notice, None);
+
+        // A change still in progress keeps its notice, and restarts the clock after.
+        state.thread_notice = Some("Checking RAM".into());
+        state.thread_change_pending = true;
+        assert!(!state.expire_thread_notice(start));
+        assert!(!state.expire_thread_notice(start + THREAD_NOTICE_LIFETIME * 2));
+        assert!(state.thread_notice.is_some());
+        state.thread_change_pending = false;
+        assert!(!state.expire_thread_notice(start + THREAD_NOTICE_LIFETIME * 2));
+        assert!(state.thread_notice.is_some());
+    }
+
+    #[test]
+    fn pool_mode_shows_share_difficulty_in_every_layout() {
+        let mut state = TuiStateInner::new();
+        state.mode = "pool".into();
+        state.submitted = 7;
+        state.accepted = 3;
+        assert!(render_text(&state, 120, 30).contains("Difficulty ---"));
+
+        state.share_difficulty = Some(12_345);
+        for (width, height) in [(120, 30), (80, 24), (60, 30), (60, 12)] {
+            let text = render_text(&state, width, height);
+            assert!(text.contains("12,345"), "{width}x{height}: {text}");
+            assert!(!text.contains("Submitted"), "{width}x{height}: {text}");
+        }
+    }
+
+    #[test]
+    fn daemon_mode_keeps_submitted_because_it_has_no_share_difficulty() {
+        let mut state = TuiStateInner::new();
+        state.mode = "daemon".into();
+        for (width, height) in [(120, 30), (60, 12)] {
+            let text = render_text(&state, width, height);
+            assert!(text.contains("Submitted"), "{width}x{height}: {text}");
+            assert!(!text.contains("Difficulty"), "{width}x{height}: {text}");
+        }
+    }
+
+    #[test]
+    fn identical_lines_fold_into_one_counted_row() {
+        let mut state = TuiStateInner::new();
+        state.push_log(test_entry("share accepted"));
+        assert!(!render_text(&state, 120, 30).contains('×'));
+        state.push_log(test_entry("share accepted"));
+        let mut newest = test_entry("share accepted");
+        newest.elapsed_secs = 9.0;
+        state.push_log(newest);
+        assert_eq!(state.log_entries.len(), 1);
+        assert_eq!(state.log_entries[0].elapsed_secs, 9.0);
+        assert!(render_text(&state, 120, 30).contains("share accepted ×3"));
+
+        state.push_log(test_entry("connected"));
+        state.push_log(test_entry("share accepted"));
+        assert_eq!(state.log_entries.len(), 3);
+        assert_eq!(state.log_entries.back().unwrap().count, 1);
+    }
+
+    #[test]
+    fn scrolling_back_pins_the_view_until_end_is_pressed() {
+        let mut state = TuiStateInner::new();
+        for i in 0..100 {
+            state.push_log(test_entry(&format!("line-{i:03}")));
+        }
+        assert!(render_text(&state, 120, 30).contains("line-099"));
+
+        assert!(!press(&mut state, KeyCode::PageUp));
+        assert_eq!(state.log_scroll, LOG_PAGE_ENTRIES);
+        let paused = render_text(&state, 120, 30);
+        assert!(paused.contains("line-089"));
+        assert!(!paused.contains("line-099"));
+        assert!(paused.contains("End to follow"));
+
+        // A new line must not move what the reader is looking at.
+        state.push_log(test_entry("line-new"));
+        let still = render_text(&state, 120, 30);
+        assert!(still.contains("line-089"));
+        assert!(!still.contains("line-new"));
+
+        press(&mut state, KeyCode::Home);
+        assert!(render_text(&state, 120, 30).contains("line-000"));
+        let oldest_page = state.log_scroll;
+        press(&mut state, KeyCode::Up);
+        assert_eq!(state.log_scroll, oldest_page);
+
+        press(&mut state, KeyCode::End);
+        assert_eq!(state.log_scroll, 0);
+        assert!(render_text(&state, 120, 30).contains("line-new"));
+    }
+
+    /// The rows between the log panel's borders.
+    fn log_panel_rows(state: &TuiStateInner, width: u16, height: u16) -> Vec<String> {
+        let text = render_text(state, width, height);
+        let lines: Vec<&str> = text.lines().collect();
+        let top = lines
+            .iter()
+            .position(|line| line.contains(" LOG "))
+            .unwrap();
+        lines[top + 1..lines.len() - 1]
+            .iter()
+            .map(|line| line.to_string())
+            .collect()
+    }
+
+    fn numbered_log(lines: usize) -> TuiStateInner {
+        let mut state = TuiStateInner::new();
+        for i in 0..lines {
+            state.push_log(test_entry(&format!("line-{i:04}")));
+        }
+        state
+    }
+
+    #[test]
+    fn scrolling_past_the_oldest_line_keeps_the_log_panel_full() {
+        let mut state = numbered_log(100);
+        let height = log_panel_rows(&state, 120, 30).len();
+
+        for _ in 0..30 {
+            press(&mut state, KeyCode::PageUp);
+        }
+        let oldest_page = state.log_scroll;
+        let rows = log_panel_rows(&state, 120, 30);
+        assert!(rows[0].contains("line-0000"), "{rows:#?}");
+        assert!(
+            rows[height - 1].contains(&format!("line-{:04}", height - 1)),
+            "{rows:#?}"
+        );
+
+        press(&mut state, KeyCode::Up);
+        assert_eq!(state.log_scroll, oldest_page);
+        press(&mut state, KeyCode::Home);
+        assert_eq!(state.log_scroll, oldest_page);
+
+        // The first key back down moves the view.
+        press(&mut state, KeyCode::Down);
+        let rows = log_panel_rows(&state, 120, 30);
+        assert!(rows[0].contains("line-0001"), "{rows:#?}");
+        assert!(
+            rows[height - 1].contains(&format!("line-{height:04}")),
+            "{rows:#?}"
+        );
+    }
+
+    #[test]
+    fn oldest_page_starts_on_the_first_row_of_a_wrapped_line() {
+        let wrapped = format!("oldest-start {}oldest-end", "word ".repeat(40));
+        let height = log_panel_rows(&TuiStateInner::new(), 120, 30).len();
+        // Walk the log through fitting exactly, overflowing by one row and beyond.
+        for newer in 0..height + 3 {
+            let mut state = TuiStateInner::new();
+            state.push_log(test_entry(&wrapped));
+            for i in 0..newer {
+                state.push_log(test_entry(&format!("line-{i:04}")));
+            }
+            let total_rows = log_entry_rows(&state.log_entries[0], 0.0, 118).len() + newer;
+            log_panel_rows(&state, 120, 30);
+
+            press(&mut state, KeyCode::Home);
+            let rows = log_panel_rows(&state, 120, 30);
+            assert!(rows[0].contains("oldest-start"), "{newer}: {rows:#?}");
+            assert!(
+                rows[height - 1].trim_matches(['│', ' ']).is_empty() == (total_rows < height),
+                "{newer}: {rows:#?}"
+            );
+
+            press(&mut state, KeyCode::End);
+            if newer > 0 {
+                let rows = log_panel_rows(&state, 120, 30);
+                let newest = format!("line-{:04}", newer - 1);
+                assert!(rows.iter().any(|row| row.contains(&newest)), "{rows:#?}");
+            }
+        }
+    }
+
+    #[test]
+    fn log_that_fits_has_nothing_to_scroll() {
+        let mut state = numbered_log(3);
+        log_panel_rows(&state, 120, 30);
+        for key in [KeyCode::Up, KeyCode::PageUp, KeyCode::Home] {
+            press(&mut state, key);
+            assert_eq!(state.log_scroll, 0);
+        }
+        assert!(!render_text(&state, 120, 30).contains("End to follow"));
+    }
+
+    #[test]
+    fn oldest_page_stays_full_when_the_window_grows_or_old_lines_drop() {
+        let mut state = numbered_log(100);
+        log_panel_rows(&state, 80, 24);
+        press(&mut state, KeyCode::Home);
+
+        let height = log_panel_rows(&state, 140, 45).len();
+        let rows = log_panel_rows(&state, 140, 45);
+        assert!(rows[0].contains("line-0000"), "{rows:#?}");
+        assert!(
+            rows[height - 1].contains(&format!("line-{:04}", height - 1)),
+            "{rows:#?}"
+        );
+        press(&mut state, KeyCode::Down);
+        assert!(log_panel_rows(&state, 140, 45)[0].contains("line-0001"));
+
+        let mut state = numbered_log(LOG_CAPACITY);
+        log_panel_rows(&state, 120, 30);
+        press(&mut state, KeyCode::Home);
+        for i in 0..5 {
+            state.push_log(test_entry(&format!("new-{i}")));
+        }
+        let rows = log_panel_rows(&state, 120, 30);
+        let height = rows.len();
+        assert!(rows[0].contains("line-0005"), "{rows:#?}");
+        assert!(
+            rows[height - 1].contains(&format!("line-{:04}", height + 4)),
+            "{rows:#?}"
+        );
+    }
+
+    fn log_inner_rows(state: &TuiStateInner, width: u16, height: u16) -> usize {
+        // One bordered panel holds the log: count rows between its borders.
+        let text = render_text(state, width, height);
+        let lines: Vec<&str> = text.lines().collect();
+        let top = lines
+            .iter()
+            .position(|line| line.contains(" LOG "))
+            .unwrap();
+        lines.len() - top - 2
+    }
+
+    #[test]
+    fn common_window_sizes_leave_the_log_room_to_read() {
+        let mut state = TuiStateInner::new();
+        state.mode = "pool".into();
+        state.device_hashrates.push(DeviceHashrate {
+            name: "cpu#1".into(),
+            current: "1.000 kH/s".into(),
+            average: "1.000 kH/s".into(),
+        });
+        assert_eq!(log_inner_rows(&state, 120, 30), 13);
+        assert_eq!(log_inner_rows(&state, 80, 24), 7);
+        assert_eq!(log_inner_rows(&state, 120, 40), 22);
+        assert_eq!(log_inner_rows(&state, 140, 45), 27);
+    }
+
+    #[test]
+    fn thread_keys_survive_a_long_worker_name_at_80_columns() {
+        let (mut state, _rx) = controlled_state();
+        state.mode = "pool".into();
+        state.backends_desc = "cpu#1".into();
+        state.api_url = "stratum+tcp://bntpool.com:3333".into();
+        state.pool_worker = "a-very-long-worker-name-from-the-config".into();
+        let text = render_text(&state, 80, 24);
+        assert!(text.contains("[+] [-]"), "{text}");
+        assert!(text.contains("Pool: bntpool.com:3333"), "{text}");
+    }
+
+    #[test]
+    fn narrow_wallet_panel_keeps_balances_instead_of_clipping_the_address() {
+        let mut state = TuiStateInner::new();
+        state.mode = "pool".into();
+        state.pool_address = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIj".into();
+        state.pool_pending = "123.45678901 BNT".into();
+        let text = render_text(&state, 80, 24);
+        assert!(text.contains("123.45678901 BNT"));
+    }
+
+    #[test]
+    fn wrap_prefers_spaces_and_splits_only_oversized_words() {
+        assert_eq!(wrap_str("one two three", 7), ["one two", "three"]);
+        assert_eq!(wrap_str("abcdefghij kl", 4), ["abcd", "efgh", "ij", "kl"]);
+        assert_eq!(wrap_str("short", 80), ["short"]);
+        assert_eq!(wrap_str("", 10), [""]);
+    }
+
+    #[test]
+    fn startup_states_read_as_plain_words() {
+        let mut state = TuiStateInner::new();
+        state.state = "pool-connecting".into();
+        assert_eq!(format_state_display(&state).0, "connecting");
+        state.state = "preparing miners".into();
+        assert_eq!(format_state_display(&state).0, "preparing miners");
+        state.stopping = true;
+        assert_eq!(format_state_display(&state).0, "stopping");
+        assert!(render_text(&state, 120, 30).contains("q again to force quit"));
+    }
+
     #[test]
     fn uptime_formatting() {
         let state = TuiStateInner::new();
@@ -1560,11 +2360,12 @@ mod tests {
 
     #[test]
     fn log_elapsed_formatter_uses_relative_ago_style() {
-        assert_eq!(format_elapsed_log_ago(0.0), "0 sec ago");
-        assert_eq!(format_elapsed_log_ago(65.0), "1 min ago");
-        assert_eq!(format_elapsed_log_ago(3_600.0), "1 hour ago");
-        assert_eq!(format_elapsed_log_ago(32_857.9), "9 hours ago");
-        assert_eq!(format_elapsed_log_ago(360_000.0), "4 days ago");
+        assert_eq!(format_elapsed_log_ago(0.0), "now");
+        assert_eq!(format_elapsed_log_ago(12.0), "12s ago");
+        assert_eq!(format_elapsed_log_ago(65.0), "1m ago");
+        assert_eq!(format_elapsed_log_ago(3_600.0), "1h ago");
+        assert_eq!(format_elapsed_log_ago(32_857.9), "9h ago");
+        assert_eq!(format_elapsed_log_ago(360_000.0), "4d ago");
     }
 
     #[test]

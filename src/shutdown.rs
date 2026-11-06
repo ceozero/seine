@@ -30,6 +30,21 @@ pub(crate) fn request_auto_update(shutdown: &Arc<AtomicBool>) {
 
 pub(crate) struct Guard;
 
+/// This process now only waits for a restarted Seine sharing its console, which
+/// handles console interrupts itself.
+#[cfg(not(unix))]
+pub(crate) fn supervise_child() {
+    #[cfg(target_os = "windows")]
+    windows::SUPERVISING.store(true, Ordering::Release);
+}
+
+/// The running child's process handle, which a console close waits on before
+/// this process (and the job holding the child) ends. Null while none runs.
+#[cfg(target_os = "windows")]
+pub(crate) fn set_supervised_child(handle: *mut std::ffi::c_void) {
+    windows::CHILD.store(handle, Ordering::Release);
+}
+
 #[cfg(not(target_os = "windows"))]
 pub(crate) fn install(shutdown: Arc<AtomicBool>) -> anyhow::Result<Guard> {
     ctrlc::set_handler(move || {
@@ -37,6 +52,9 @@ pub(crate) fn install(shutdown: Arc<AtomicBool>) -> anyhow::Result<Guard> {
             .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
             .ok();
         if shutdown.swap(true, Ordering::SeqCst) {
+            // A second interrupt skips normal cleanup; still undo the AMD
+            // performance level change.
+            crate::backend::amd::on_process_exit();
             std::process::exit(130);
         }
     })?;
@@ -49,10 +67,13 @@ mod windows {
     use std::sync::OnceLock;
     use windows_sys::Win32::System::Console::*;
     use windows_sys::Win32::System::SystemInformation::GetTickCount64;
-    use windows_sys::Win32::System::Threading::Sleep;
+    use windows_sys::Win32::System::Threading::{Sleep, WaitForSingleObject};
 
     static SHUTDOWN: OnceLock<Arc<AtomicBool>> = OnceLock::new();
     pub(super) static COMPLETE: AtomicBool = AtomicBool::new(false);
+    pub(super) static SUPERVISING: AtomicBool = AtomicBool::new(false);
+    pub(super) static CHILD: std::sync::atomic::AtomicPtr<std::ffi::c_void> =
+        std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
 
     // No allocation, locks, logging, disk or network IO in the OS callback.
     unsafe extern "system" fn handler(event: u32) -> i32 {
@@ -63,6 +84,18 @@ mod windows {
             CTRL_SHUTDOWN_EVENT => (4, true),
             _ => return 0,
         };
+        if SUPERVISING.load(Ordering::Acquire) {
+            // Ctrl+C: the child stops and the wait returns its code. Close
+            // events end this process the default way once the child has had
+            // its own cleanup time, since ending this process ends the child.
+            if closing {
+                let child = CHILD.load(Ordering::Acquire);
+                if !child.is_null() {
+                    WaitForSingleObject(child, 4_500);
+                }
+            }
+            return i32::from(!closing);
+        }
         let Some(shutdown) = SHUTDOWN.get() else {
             return 0;
         };

@@ -40,9 +40,9 @@ cargo build --release --no-default-features --features metal
 
 The binary lands in `target/release/seine`.
 
-The Linux ARM64 release archive is built on Ubuntu 24.04 and needs glibc 2.39 or
-newer. On older distributions, build the CPU-only miner from source with
-`cargo build --release --locked --no-default-features`.
+The Linux release archives are built on Ubuntu 20.04 and need glibc 2.31 or newer.
+On older distributions, build from source; `--no-default-features` gives the
+CPU-only miner.
 
 On x86_64, every build includes the scalar, AVX2 and AVX-512 kernels and selects
 one at runtime, so a portable build is already fast. On dedicated miners,

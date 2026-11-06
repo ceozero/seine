@@ -2,24 +2,27 @@
 
 This page documents every `seine` CLI flag and what it controls.
 
-For the raw CLI output, run:
-
-```bash
-./seine --help
-```
+`./seine --help` lists the flags most miners need. All of the flags below work
+whether or not `--help` shows them.
 
 ## Connectivity, Auth, and Paths
 
 | Flag | Values / Default | What it does |
 |---|---|---|
 | `--mode` | `pool` or `daemon`, default `pool` | Selects mining mode. |
-| `--pool-url` | `host:port` or `stratum+tcp://host:port` | Stratum pool endpoint used in pool mode. |
-| `--pool-worker` | string | Worker name sent during pool login. |
+| `--pool-url` (`-o`, `--url`) | `host:port`, `stratum+tcp://host:port` or `stratum+ssl://host:port` | Stratum pool endpoint used in pool mode. `stratum+ssl://` (also `stratum+tls://`) connects over TLS. Repeat the flag or separate URLs with commas to add backup pools in failover order. See [pool connections](guides/configuration.md#pool-connections). |
+| `--payout-memo` | UTF-8 text, unset by default | Exchange deposit memo, preserved exactly. Requires a full deposit address and a compatible pool. Not supported in daemon mode or farm-proxy hosting. |
+| `--no-payout-memo` | flag | Ignores a saved payout memo for this run when switching back to a personal address. |
+| `--testnet` | bool flag (default `false`) | Uses Blocknet testnet defaults for daemon discovery in daemon mode. |
+| `--pool-worker` (`--worker`) | string | Worker name sent during pool login. |
+| `--pool-proxy` (`--socks5`) | `socks5://[user:pass@]host:port` | Sends pool connections, including backup pools and dev-fee rounds, through a SOCKS5 proxy. The proxy resolves pool hostnames. Pool stats requests use it too; update checks and optional telemetry connect directly. |
+| `--proxy-listen` | `host:port` | Runs Seine as a farm proxy instead of mining. Rigs connect to this address and share one session with `--pool-url`; every share pays `--address`. See [farm proxy](guides/farm-proxy.md). |
+| `--pass` (`-p`) | string | Accepted so launch templates that always pass a pool password keep working. Blocknet pools do not use passwords; the value is ignored. |
 | `--api-url` | URL, default auto-detected then `http://127.0.0.1:8332` | Blocknet daemon API base URL. Seine prefers Blocknet wrapper config/pidfiles/processes before falling back to loopback. Optional in daemon mode for standard wrapper-managed installs; optional in pool mode for local daemon wallet balance. |
 | `--token` | string | Explicit daemon API bearer token. Optional override in daemon mode; optional in pool mode for local daemon wallet balance. |
 | `--wallet-password` | string | Wallet password for automatic wallet load when needed. |
 | `--wallet-password-file` | path | File containing the wallet password. |
-| `--address` | string | Full payout address or Blocknet ID shortname (`@name` or `$name`) for pool login or daemon templates. Shortnames are verified and resolved once per mining run; quote them in shell commands, e.g. `--address '$name'`. In daemon mode, if the resolved address matches the daemon wallet, TUI wallet stats remain available; otherwise pending/unlocked display as `---`. |
+| `--address` (`-u`, `--user`) | string | `ADDRESS.WORKER` also sets the worker name when `--pool-worker` is not given. Full payout address or Blocknet ID shortname (`@name` or `$name`) for pool login or daemon templates. Shortnames are verified and resolved once per mining run; quote them in shell commands, e.g. `--address '$name'`. Prefix `solo:` (e.g. `-u solo:ADDRESS`) to mine solo on a pool that supports it; daemon mode ignores the prefix. In daemon mode, if the resolved address matches the daemon wallet, TUI wallet stats remain available; otherwise pending/unlocked display as `---`. |
 | `--cookie` | path | Explicit `api.cookie` path used to read daemon API token. Optional override in daemon mode; optional in pool mode for local daemon wallet balance. |
 | `--daemon-dir` | path, default wrapper-managed `~/.config/bnt/data/mainnet` | Daemon data dir used to find `api.cookie` when `--cookie` is not set. Also used by pool mode when probing for a local daemon wallet. |
 | `--data-dir` | path, default `./seine-data` | Seine data dir for persisted state (`seine.config.json`, autotune caches, etc). |
@@ -37,7 +40,7 @@ See [collection fields and self-hosting](../telemetry/README.md).
 
 | Flag | Values / Default | What it does |
 |---|---|---|
-| `--backend` | `cpu`, `nvidia`, `metal`, `amd`; repeatable / comma-separated; default auto | Selects mining backends. Auto mode selects CPU plus all detected NVIDIA GPUs (one instance per device). `amd` requires a `--features amd` build and is never auto-selected. |
+| `--backend` | `cpu`, `nvidia`, `metal`, `amd`; repeatable / comma-separated; default auto | Selects mining backends. Auto mode selects CPU plus all detected NVIDIA GPUs and discrete AMD GPUs (one instance per device). `amd` needs a Linux release build or a `--features amd` source build; integrated AMD GPUs are used only when `amd` is listed. See [AMD GPUs](guides/amd.md). |
 | `--nvidia-devices` | comma-separated GPU indices; default all detected devices | Creates one NVIDIA backend instance per listed device index; listing indices subsets/pins devices and disables auto-expansion. Requires NVIDIA backend selected. |
 | `--amd-devices` | comma-separated GPU indices; default all detected wave32 devices | Creates one AMD backend instance per listed device index; listing indices subsets/pins devices and disables auto-expansion. Requires AMD backend selected. |
 | `--threads` | integer `>=1`; alias: `--cpu-threads` | CPU threads per CPU backend instance. If omitted, auto-sized by CPU/RAM/profile. |
@@ -46,14 +49,14 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--cpu-profile` | `balanced`, `throughput`, `efficiency`; default `balanced` | Profile presets for CPU polling, flushing and batching. Both `balanced` and `throughput` target the highest measured hashrate; only opt-in `efficiency` may choose fewer workers below that peak. All profiles retain memory safeguards. |
 | `--cpu-threads-per-instance` | comma-separated integers `>=1` | Per-CPU-backend thread counts; length must match CPU instances. |
 | `--cpu-affinity-per-instance` | comma-separated `off|auto|os|pcore-only` | Per-CPU-backend affinity; length must match CPU instances. |
-| `--cpu-memory-reserve-percent` | integer `0..99`; default `5` | Subtract this percentage of effective total RAM from the automatic CPU sizing/autotune budget. `0` opts out. Explicit thread counts bypass the reserve unless autotuning is forced; fixed counts retain RAM checks; adaptive mining may pause at zero workers when RAM is insufficient. |
+| `--cpu-memory-reserve-percent` | integer `0..99`; default `5` (at most 512 MiB on hosts with 16 GiB or more, else at most 1 GiB) | Subtract this percentage of effective total RAM from the automatic CPU sizing/autotune budget. `0` opts out. Explicit thread counts bypass the reserve unless autotuning is forced; fixed counts retain RAM checks; adaptive mining may pause at zero workers when RAM is insufficient. |
 | `--allow-oversubscribe` | bool flag (default `false`) | Allows start even when configured CPU lanes exceed detected RAM budget. |
 
 ## Runtime Loop, Scheduling, and Nonce Space
 
 | Flag | Values / Default | What it does |
 |---|---|---|
-| `--refresh-secs` | integer `>=1`, default `20` | Max time spent on one template before refresh. |
+| `--refresh-secs` | integer `>=1`, default `20` | Daemon mode: max time spent on one template before refresh. |
 | `--request-timeout-secs` | integer `>=1`, default `10` | Timeout for template/submit/wallet JSON API calls. |
 | `--events-stream-timeout-secs` | integer `>=1`, default `10` | Timeout for each SSE connection attempt to daemon `/api/events`. |
 | `--events-idle-timeout-secs` | integer `>=1`, default `90` | Max lifetime of one daemon SSE request before reconnect. |
@@ -67,10 +70,11 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--disable-sse` | bool flag (default `false`) | Disables daemon tip SSE; miner falls back to refresh timer only. |
 | `--disable-update-check` | bool flag (default `false`) | Disables the startup and 12-hourly GitHub check for newer seine releases. |
 | `--self-update` | bool flag (default `false`) | Replaces this executable with the newest stable release for the platform (archive SHA-256 checked against the release's `SHA256SUMS.txt`), then exits without mining. Needs no other flags. |
-| `--auto-update` | bool flag (default `true`) | When the update check finds a newer stable release, installs it the same way (release signature and checksum verified), stops mining cleanly and restarts with the same arguments. Ignored with `--disable-update-check`. |
+| `--auto-update` | bool flag (default `true`) | When the update check finds a newer stable release, installs it after a 60-second countdown while mining continues; on the dashboard `u` updates now and `s` skips that version. The release signature and checksum are verified and the new executable must report the release version before it replaces this one; Seine then stops mining cleanly and restarts with the same arguments. Applies to official release downloads only; self-compiled builds just log the release, and `--service`/`--api-server` runs install only when mining is paused on work that needs a newer release. Ignored with `--disable-update-check`. |
 | `--no-auto-update` | bool flag (default `false`) | Keeps mining the current version; a newer release is only logged. |
 | `--refresh-on-same-height` | bool flag (default `false`) | Refresh on same-height `new_block` hash change events. |
 | `--ui` | `auto`, `tui`, `plain`; default `auto` | Output mode selection. |
+| `--verbose` | bool flag | Shows internal settings and routine activity on the dashboard and in logs. |
 
 ## CPU Backend Tuning
 
@@ -84,8 +88,8 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--disable-cpu-autotune-threads` | bool flag | Disables CPU thread autotune and runtime worker adjustment. |
 | `--cpu-autotune-min-threads` | integer `>=1`, default `1` | Lower performance-search bound; memory pressure can temporarily reduce the count below it, including to zero. |
 | `--cpu-autotune-max-threads` | integer `>=1` | Upper bound for CPU autotune thread search. |
-| `--cpu-autotune-secs` | integer `>=1`, default `6` | Offline sample window. Mining uses `max(30, 5 × value)` seconds per productive A/B/A window, with at least 20 hashes; warming and interrupted windows are excluded. |
-| `--cpu-autotune-config` | path | CPU autotune cache file (default under `--data-dir`); mining reuses compatible seeds across changes in available RAM and records subsequent progress. |
+| `--cpu-autotune-secs` | integer `>=1`, default `6` | Sample window of the offline benchmark search. Mining sizes its comparison windows from your hashrate. |
+| `--cpu-autotune-config` | path | CPU tuning result file (default under `--data-dir`); it carries over between versions and changes in available RAM. |
 
 ## NVIDIA Backend Tuning
 
@@ -98,7 +102,7 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--nvidia-max-lanes` | integer `>=1` | Caps active NVIDIA lanes per device instance. |
 | `--nvidia-dispatch-iters-per-lane` | integer `>=1` | Overrides NVIDIA scheduler dispatch hint (iters/lane). |
 | `--nvidia-allocation-iters-per-lane` | integer `>=1` | Overrides NVIDIA reservation/allocation hint (iters/lane). |
-| `--nvidia-hashes-per-launch-per-lane` | integer `>=1`, default `2` | Work depth per CUDA launch per lane. On Blackwell, when this flag is left unset, Seine now treats depth `1` as the preferred runtime/fresh-autotune frontier: cached/default depth-`2` records are clamped to `1`, and fresh autotune jointly re-probes regcap+depth with Blackwell-only tie-breaks that favor shallower full-lane profiles. Explicit overrides keep the requested depth. |
+| `--nvidia-hashes-per-launch-per-lane` | integer `>=1`; unset uses this GPU's default | Hashes each lane runs per CUDA launch. |
 | `--nvidia-no-adaptive-launch-depth` | bool flag | Disables adaptive launch depth shaping. |
 | `--nvidia-fused-target-check` | bool flag | Enables fused in-kernel target checks. |
 | `--nvidia-template-stop-policy` | `auto`, `on`, `off`; default `auto` | Controls backend enforcement of template `stop_at`. |
@@ -152,6 +156,7 @@ See [collection fields and self-hosting](../telemetry/README.md).
 | `--bench-kind` | `kernel`, `kernel-effective`, `backend`, `end-to-end`; default `backend` | Selects benchmark scope. |
 | `--bench-cpu-kernel` | `scalar`, `avx2`, `avx512`, `avx512-256`, `avx512-256-stream`, `neon`, `neon-sha3`; unset = automatic | Benchmark-only CPU kernel selection. Requires `--bench`, explicit `--threads`, CPU-only backends, and disabled CPU autotuning; unsupported host/build paths fail. |
 | `--bench-secs` | integer `>=1`, default `20` | Per-round measured benchmark duration. |
+| `--bench-pow` | `argon2id` or `blake2b`, default `argon2id` | Proof of work to benchmark. |
 | `--bench-rounds` | integer `>=1`, default `3` | Number of measured rounds. |
 | `--bench-warmup-rounds` | integer `>=0`, default `0` | Warmup rounds before measured rounds. |
 | `--bench-output` | path | Writes benchmark JSON report. |
@@ -163,7 +168,7 @@ See [collection fields and self-hosting](../telemetry/README.md).
 
 | Flag | What it does |
 |---|---|
-| `-h`, `--help` | Prints help output. |
+| `-h`, `--help` | Lists the flags most miners need. |
 | `-V`, `--version` | Prints version. |
 
 ## Hidden/Compatibility Flag

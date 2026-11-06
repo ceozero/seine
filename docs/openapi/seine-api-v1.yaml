@@ -154,6 +154,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorBody'
+  /v1/miner/stats:
+    get:
+      tags: [Runtime]
+      summary: Get live hashrate, share counters and per-device rates
+      responses:
+        '200':
+          description: Live mining statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MinerStatsResponse'
   /v1/backends:
     get:
       tags: [Runtime]
@@ -261,9 +272,12 @@ components:
           minLength: 1
     BackendsResponse:
       type: object
-      required: [pending_nvidia_count, backend_phases, configured_backends, available_devices]
+      required: [pending_nvidia_count, pending_amd_count, backend_phases, configured_backends, available_devices]
       properties:
         pending_nvidia_count:
+          type: integer
+          minimum: 0
+        pending_amd_count:
           type: integer
           minimum: 0
         backend_phases:
@@ -291,3 +305,45 @@ components:
         index: { type: integer, minimum: 0 }
         name: { type: string }
         memory_total_mib: { type: integer, minimum: 0 }
+    MinerStatsResponse:
+      type: object
+      required: [version, lifecycle, running, mining]
+      properties:
+        version: { type: string }
+        lifecycle: { type: string, enum: [idle, starting, running, stopping, error] }
+        running: { type: boolean }
+        mining:
+          description: Null until the first sample of a mining session.
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/LiveMiningStats'
+    LiveMiningStats:
+      type: object
+      required: [state, uptime_secs, updated_at_unix_ms, hashrate_hps, average_hashrate_hps, total_hashes, submitted, accepted, rejected, devices]
+      properties:
+        state:
+          type: string
+          description: Mining state, for example `working`, `pool-disconnected` or `wallet-required`. Current rates read as zero in states where the miner is not hashing.
+        uptime_secs: { type: number, minimum: 0, description: Seconds since this mining session started. }
+        updated_at_unix_ms: { type: integer, minimum: 0 }
+        hashrate_hps: { type: number, minimum: 0, description: Current hashrate in H/s (zero once samples are 30 s old). }
+        average_hashrate_hps: { type: number, minimum: 0 }
+        total_hashes: { type: integer, minimum: 0 }
+        submitted: { type: integer, minimum: 0, description: Shares (pool mode) or blocks (daemon mode) submitted. }
+        accepted: { type: integer, minimum: 0 }
+        rejected: { type: integer, minimum: 0, description: Rejected or stale shares/blocks. }
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveDeviceStats'
+    LiveDeviceStats:
+      type: object
+      required: [label, kind, device_index, pci_address, lanes, hashrate_hps, average_hashrate_hps]
+      properties:
+        label: { type: string, description: 'Backend instance label, for example `nvidia#1`.' }
+        kind: { type: string, enum: [cpu, nvidia, amd, metal] }
+        device_index: { type: [integer, 'null'], minimum: 0, description: GPU index for GPU backends. }
+        pci_address: { type: [string, 'null'], description: 'PCI address (`dddd:bb:dd.f`) of the GPU, when known.' }
+        lanes: { type: integer, minimum: 0 }
+        hashrate_hps: { type: number, minimum: 0 }
+        average_hashrate_hps: { type: number, minimum: 0 }

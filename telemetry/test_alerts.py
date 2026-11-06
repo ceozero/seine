@@ -1,14 +1,47 @@
 """Alert lifecycle, privacy, delivery and threshold tests; no external messages."""
 import copy
+import io
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import alerts
 
 
 class AlertsTests(unittest.TestCase):
+    def test_query_failure_logs_class_without_database_details(self):
+        result = SimpleNamespace(returncode=1, stdout='', stderr=(
+            'ERROR: canceling statement due to statement timeout\n'
+            'SECRET connection=private report=private'))
+        with patch('sys.stderr', new_callable=io.StringIO) as output:
+            alerts.check_failure('diagnostics', result=result)
+        self.assertEqual(output.getvalue(),
+                         'Telemetry diagnostics check failed: database statement timeout.\n')
+
+    def test_failed_query_stays_unknown_and_uses_lightweight_diagnostics(self):
+        ok = SimpleNamespace(returncode=0, stdout='{}', stderr='')
+        failed = SimpleNamespace(returncode=1, stdout='', stderr='private SQL error')
+        with patch.object(alerts, 'run', side_effect=[ok, ok, failed, ok]) as run, \
+                patch('sys.stderr', new_callable=io.StringIO) as output:
+            results = alerts.collect()
+        self.assertIsNone(results['diagnostics'])
+        self.assertEqual(run.call_args_list[2].args[1],
+                         (Path(__file__).parent / 'diagnostic_alerts.sql').read_text())
+        self.assertNotIn('private SQL error', output.getvalue())
+
+    def test_query_timeout_and_invalid_response_are_bounded(self):
+        for error, expected in [
+                (subprocess.TimeoutExpired('secret command', 45), 'process timeout'),
+                (ValueError('private payload'), 'invalid JSON response'),
+                (OSError('secret path'), 'process unavailable')]:
+            with patch('sys.stderr', new_callable=io.StringIO) as output:
+                alerts.check_failure('diagnostics', error=error)
+            self.assertEqual(output.getvalue(),
+                             f'Telemetry diagnostics check failed: {expected}.\n')
+
     def setUp(self):
         self.state = {'incidents': {}}
         self.sent = []
@@ -136,13 +169,20 @@ class AlertsTests(unittest.TestCase):
     def test_aggregate_thresholds_and_unknown_categories(self):
         results = {'infrastructure': False, 'quality': {'versions': [
             {'version': 'v1', 'sustained_inventory_only_installations': 4},
-            {'version': 'v2', 'sustained_inventory_only_installations': 5}]},
+            {'version': 'v2', 'sustained_inventory_only_installations': 5},
+            {'version': 'v0.2.45', 'sustained_inventory_only_installations': 9, 'legacy': True}]},
             'diagnostics': {'recent_error_versions': [
                 {'version': 'v1', 'affected_installations': 2},
-                {'version': 'v2', 'affected_installations': 3}], 'recent_unclean_versions': []},
+                {'version': 'v2', 'affected_installations': 3},
+                {'version': 'v0.2.45', 'affected_installations': 67, 'needs_attention': False}],
+                'recent_unclean_versions': []},
             'performance': None}
         active, known = alerts.evaluate(results)
         self.assertEqual({i['category'] for i in active}, {'monitor', 'infrastructure', 'quality', 'diagnostics'})
+        self.assertEqual([i['key'] for i in active if i['category'] == 'diagnostics'],
+                         [alerts.issue('diagnostics', ['recent_error_versions', 'v2'], '')['key']])
+        quality = {i['version']: i for i in active if i['category'] == 'quality'}
+        self.assertEqual((quality['v2']['severity'], quality['v0.2.45']['severity']), ('warning', 'info'))
         self.assertNotIn('performance', known)
         self.assertNotIn('ingestion', known)
         results['performance'] = {'minutes_since_last_report': 120, 'performance_cohorts': []}
@@ -160,6 +200,45 @@ class AlertsTests(unittest.TestCase):
         self.assertIn('Previous run v0.2.35', active[0]['summary'])
         self.assertNotIn('v0.2.36:', active[0]['summary'])
         self.assertIn('Unknown previous version', active[1]['summary'])
+
+    def test_unclean_alert_counts_only_runs_not_explained_by_reboots_or_new_machines(self):
+        active, _ = alerts.evaluate({'diagnostics': {
+            'recent_error_versions': [], 'recent_unclean_versions': [
+                {'version': 'v0.3.1', 'affected_installations': 12, 'counted_installations': 4,
+                 'needs_attention': True, 'reporting_versions': ['v0.3.1']},
+            ]}})
+        self.assertIn('Previous run v0.3.1: 4 installations', active[0]['summary'])
+        self.assertIn('8 more after a reboot or one restart of a new installation are not counted', active[0]['summary'])
+
+    def test_update_failures_and_unsupported_work_alert_at_three_installations(self):
+        active, _ = alerts.evaluate({'diagnostics': {
+            'recent_error_versions': [], 'recent_unclean_versions': [],
+            'recent_install_failure_versions': [
+                {'version': 'v0.3.0', 'affected_installations': 2},
+                {'version': 'v0.3.1', 'affected_installations': 3}],
+            'recent_unsupported_work_versions': [
+                {'version': 'v0.3.0', 'affected_installations': 4}]}})
+        summaries = [item['summary'] for item in active]
+        self.assertEqual(len(summaries), 2)
+        self.assertIn('v0.3.1: 3 installations with failed self-update installs', summaries[0])
+        self.assertIn('v0.3.0: 4 installations with mining paused', summaries[1])
+
+    def test_pool_connection_spike_needs_breadth_above_the_prior_day(self):
+        def evaluate(recent, baseline):
+            return alerts.evaluate({'diagnostics': {
+                'recent_error_versions': [], 'recent_unclean_versions': [],
+                'pool_connection_warnings': {
+                    'last_hour_installations': recent, 'last_hour_limit_installations': 4,
+                    'baseline_hourly_installations': baseline}}})
+        # 2026-10-29: the connection cap took warnings from ~45 to 216 per hour.
+        active, known = evaluate(216, 45.0)
+        self.assertEqual([i['category'] for i in active], ['pool'])
+        self.assertIn('pool', known)
+        self.assertIn('216 installations', active[0]['summary'])
+        self.assertIn('4 were refused', active[0]['summary'])
+        self.assertEqual(evaluate(130, 45.0)[0], [])
+        self.assertEqual(evaluate(19, 0.0)[0], [], 'a handful of miners is not a fleet spike')
+        self.assertEqual(len(evaluate(20, 0.0)[0]), 1)
 
     def test_regression_requires_breadth_not_one_bad_rig(self):
         cohort = dict(version='v2', baseline_version='v1', hardware={'cpu_model': 'CPU'},

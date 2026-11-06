@@ -1,5 +1,25 @@
 # seineminer.com blog fact sheet
 
+
+## Current published performance — November 1, 2026
+
+Use `site/src/data/benchmarks.json`, `docs/assets/charts/benchmarks.json` and
+`docs/PERFORMANCE.md` for current figures. Dated measurements below are historical.
+
+- EPYC 9355P: **97.1 H/s**, steady mining, default settings, 64 threads, 192 GiB RAM.
+- EPYC 9554P: **81.4 H/s**, automatic settings, 128 threads, 384 GiB RAM;
+  local completed hashes over elapsed time, including startup.
+- Cloud EPYC 9R45 / 9R14: **50.5 / 45.3 H/s**, 32 threads, transparent huge pages;
+  hashing time, excluding startup. These are VM allocations.
+- RTX 5090: **13.8 H/s**, GPU only, native Windows 11, driver 610.88,
+  steady mining after the miner fee; public development build measured October 31.
+  Do not add a separately measured CPU rate to invent a combined result.
+- Graviton4 **39.3 H/s**, M4 Max **30.9 H/s**, Xeon 8488C **26.0 H/s** remain current.
+
+Public articles link to the performance guide, not private measurement records.
+The older 68.3/75.0 CPU and 7.3/12.9 GPU figures below describe earlier settings
+and builds; they are not the current headline results.
+
 Initial research checked 2026-10-25; release, platform and pool facts rechecked 2026-10-26. Writers may state only what is listed here. Every bullet ends with its source.
 
 **Released behavior:** `release-facts.json` pins the reviewed public release. Source on `master` may be newer and must not be described as released. Historical benchmark versions and screenshots retain their original labels.
@@ -194,8 +214,8 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
   - Source: `blocknet-core@pool:api_handlers.go:25`, `blocknet@master:docs/reference-core.md:212`, `blocknet-pool@master:frontend/src/lib/format.ts:114` (checked 2026-10-25)
 - The official site does not state a ticker.
   - Source: https://blocknetcrypto.com (checked 2026-10-25)
-- **Never use the `$BNT` cashtag.** It belongs to Bancor.
-  - Source: `marketing/README.md:81`, `marketing/brand/taglines.md:56` (checked 2026-10-25)
+- **Use the `$BNT` cashtag for Blocknet.** We are reclaiming it from Bancor.
+  - Source: owner decision, 2026-11-05; `marketing/README.md`
 - **Name collision:** an unrelated older project, "Blocknet" at blocknet.org (an interoperability protocol, token **BLOCK**, XBridge/XRouter), ranks for the same name.
   - Our project brands as "Blocknet Privacy" (@blocknetprivacy, blocknetcrypto.com).
   - Never link blocknet.org, and never conflate it with this project.
@@ -240,11 +260,11 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
 ## 3. bntpool.com
 - Live pool parameters:
   - **pool fee 0%**
-  - minimum payout **0.1 BNT**
+  - minimum payout **1 BNT** (0.1 BNT until the 2026-11-02 payout memo rollout; exchange addresses with a memo: **10 BNT**, `memo_min_payout_amount`)
   - **60 blocks** before payout
   - **PPLNS** with a **6h** window
   - Stratum port **3333**
-  - Source: https://bntpool.com/api/info (live 2026-10-25 ~00:26 EDT)
+  - Source: https://bntpool.com/api/info (live 2026-10-25 ~00:26 EDT; minimum payouts rechecked 2026-11-04 20:55 EST)
   - Production and the example config use `pool_fee_pct: 0` (verified live 2026-10-25, 11:59 PM EDT). Always check the live value.
   - Source: `blocknet-pool@master:config.example.json:40` (checked 2026-10-25)
 - The pool fee is taken as `reward × pool_fee_pct / 100` per block.
@@ -271,8 +291,8 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
 
 ## 4. seine (the miner)
 - Seine is the external miner for Blocknet. License BSD-3-Clause. Repo: github.com/zpalmtree/seine.
-  - Latest reviewed release **v0.2.45**, published October 28, 2026 at 3:45:27 PM EDT.
-  - Source: GitHub latest-release API and `seine@v0.2.45:Cargo.toml`; rechecked October 28, 2026. `release-facts.json` records the immutable source and release assets.
+  - Latest reviewed release **v0.3.1**, published November 4, 2026 at 5:25:42 PM EST.
+  - Source: GitHub latest-release API and `seine@v0.3.1:Cargo.toml`; rechecked November 4, 2026. `release-facts.json` records the immutable source and release assets.
 - Name styling: the wordmark is always lowercase, `seine.` with a lime full stop. README prose capitalizes "Seine" at sentence start.
   - Source: `seine@master:docs/BRAND.md:43-44`, `README.md:24` (checked 2026-10-25)
 - **Historical released miner fee (v0.2.26):** 1% of mining time on bntpool.com and its subdomains; 2.5% on other pools and in solo mode. The current calculator now uses v0.2.36's 2% fee and names that version.
@@ -307,11 +327,10 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
   - kernels compile at startup with NVRTC
   - the first launch autotunes and caches the result per GPU
   - Source: `seine@master:docs/guides/nvidia.md:3-4`, `:23-24`, `:37-38` (checked 2026-10-25)
-- **AMD GPU:** experimental HIP backend for RDNA3 (wave32) only:
+- **AMD GPU (historical; superseded by v0.3.0, see §11):** experimental HIP backend for RDNA3 (wave32) only:
   - requires a source build with `--features amd`
   - "never auto-selected"
   - not in any release archive
-  - **Do not claim AMD GPU support.**
   - Source: `seine@master:docs/guides/nvidia.md:50-53`, `Cargo.toml:42-49`, `docs/AMD_BRINGUP.md:8-12`, `release.yml:13-31` (checked 2026-10-25)
 - **Apple Metal:** "experimental and is never auto-selected". On the M4 Max, CPU-only mining beat Metal and CPU+Metal.
   - Source: `seine@master:docs/guides/apple-silicon.md:35-37` (checked 2026-10-25)
@@ -351,6 +370,8 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
   - `--service` idles until `POST /v1/miner/start`
   - Source: `seine@master:docs/API.md:18-42`, `:65-76`; `docs/guides/configuration.md:97-106` (checked 2026-10-25)
 - **Solo mining:** `./seine --mode daemon` against your own synced Blocknet node, using its API cookie. Pool mining is the default.
+- **Solo mining on a pool (seine v0.3.1+):** put `solo:` in front of the address or shortname (`-u solo:ADDRESS`, `solo:@name`, any letter case). bntpool.com pays only for blocks that connection finds: the whole block reward less `pool_fee_pct`, through normal payouts after 60 confirmations; nothing from other miners' blocks. Each connection picks its mode, so one address can run solo and PPLNS rigs. Seine's balance panel labels the account `Solo`; daemon mode ignores the prefix. Stats: Type column (Pool/Solo) on Workers, estimated rewards, Blocks and Luck.
+  - Source: `seine@v0.3.1:docs/guides/configuration.md:146-156`, `src/miner/tui.rs:1328`; `blocknet-pool@a46bbd1:README.md` "Solo Mining", `frontend/src/lib/solo.ts` (checked 2026-11-04)
   - Source: `seine@master:docs/guides/solo-mining.md:1-36` (checked 2026-10-25)
 - Seine checks GitHub for updates at startup and every 12 h. This can be turned off with `--disable-update-check`.
   - Source: `seine@master:docs/guides/configuration.md:69-72` (checked 2026-10-25)
@@ -365,7 +386,7 @@ Initial research checked 2026-10-25; release, platform and pool facts rechecked 
 
 **Historical "best per generation" snapshot** (superseded for current headline claims; retain for dated comparisons), from `seine@master:docs/assets/charts/benchmarks.json:112-143` (checked 2026-10-25).
 
-**Earlier update 2026-10-25 (superseded by the 9355P result below):** the owner approved **49.4 H/s for AMD EPYC · Zen 5 (EPYC 9R45, 32 threads)** for the site, from a new 32-thread run. It replaced the 44.7 H/s / 24-thread headline below. The current site and introductory guides use 68.3 H/s on EPYC 9355P, with 64 mining threads, 192 GiB RAM and manually prepared 1 GiB pages; see the detailed measurement at the end of this sheet and `site/src/data/benchmarks.json`.
+**Earlier update 2026-10-25 (superseded by the 9355P result below):** the owner approved **49.4 H/s for AMD EPYC · Zen 5 (EPYC 9R45, 32 threads)** for the site, from a new 32-thread run. It replaced the 44.7 H/s / 24-thread headline below. The site and introductory guides at that time used 68.3 H/s on EPYC 9355P, with 64 mining threads, 192 GiB RAM and manually prepared 1 GiB pages; see the detailed measurement at the end of this sheet and `site/src/data/benchmarks.json`.
   - Source: AWS m8a.8xlarge, seine v0.2.22, avx512-256-stream kernel, 32 threads, 49.39 H/s mean of 4 runs, 2026-10-25 (in-progress AWS hardware campaign).
   - Evidence: `seine:experiments/readme-hardware-20261025/summary.json`, host "zen5-turin" (AMD EPYC 9R45, 32 cores, no SMT), in seine PR #59 (`codex/zen5-turin-result`), which also updates `benchmarks.json`, `PERFORMANCE.md` and the README. TODO: switch this to the master path once #59 merges.
 
@@ -433,8 +454,8 @@ From the Blocknet marketing kit, close to verbatim:
   - Source: `marketing/README.md:79`; `marketing/brand/taglines.md:54` (checked 2026-10-25)
 - "Don't say 'more private than Monero' (same ring size today, and Monero's FCMP++ will exceed it)." Also avoid "Most private coin".
   - Source: `marketing/README.md:80`; `marketing/brand/taglines.md:53` (checked 2026-10-25)
-- "Avoid the `$BNT` cashtag; it collides with Bancor."
-  - Source: `marketing/README.md:81`; `marketing/brand/taglines.md:56` (checked 2026-10-25)
+- The `$BNT` cashtag is welcome (owner decision, 2026-11-05; replaces the earlier "avoid" rule).
+  - Source: `marketing/README.md`
 - Positioning: "Lead with usability and fair launch, not 'most private'."
   - Source: `marketing/brand/taglines.md:3-4` (checked 2026-10-25)
 
@@ -451,7 +472,7 @@ Added by this sheet from the evidence:
   - The tagline "No premine. No dev tax." (`taglines.md:30`) is true of the **protocol** only. Released v0.2.26 charges 1% or 2.5%, depending on the pool; v0.2.36 uses 2%. See §4.
 - Don't write "ASIC-proof" or "botnet-proof". The code claims design intent only ("resist ASICs", "impractical", `pow.rs:1-4`). "Designed to resist ASICs" is the safe wording.
   - Faraday's planned lighter PoW (§0) undercuts memory-hardness messaging after ~Feb 2027.
-- Don't claim AMD GPU support, Windows ARM64 builds, or production Metal support (§4).
+- Don't claim Windows ARM64 builds or production Metal support (§4). AMD GPU support shipped in v0.3.0; see §11.
 - Don't present M4 Max 30.9 H/s as a balanced or default setting. It used 16 threads and swap. The balanced figure is 29.3 H/s.
 - Don't claim multi-socket NUMA results (`PERFORMANCE.md:145`).
 - Don't write "fastest Blocknet miner" as a proven comparison. The README asserts it (`README.md:6`), but the repo has no head-to-head comparison against another miner or the daemon's built-in miner. Treat it as a brand tagline only.
@@ -593,7 +614,7 @@ actual command output, capture provenance and failure-case checks.
   preserve JSON reports, environment, cache policy and all repeated pairs.
 - The pool's confirmation depth is current chain height minus found-block height,
   starting at zero, with a separate node hash identity check. The public setting
-  checked October 26 is 60 blocks and the minimum payment is 0.1 BNT. The wallet
+  checked October 26 is 60 blocks and the minimum payment was 0.1 BNT (1 BNT since 2026-11-02). The wallet
   coinbase maturity rule also uses a depth of 60; a later payout transaction has
   its own receipt and spendability state. Five hours is target arithmetic only.
 - Full source pins and verification: `research/benchmarks-and-confirmations-2026-10-26.md`.
@@ -745,3 +766,27 @@ Released core v0.22.0 (`5a0a5b510c1dce46f4eeb12c33a291052e44e7b3`) validates can
 
 - Generic HTLC examples connect conditional transfers through a shared hash/preimage and different refund deadlines; the claim branch also requires the intended recipient's signature. Refund conditions make a spend eligible, rather than broadcasting a refund automatically. BIP 199 is a closed explanatory proposal, not a Blocknet specification. Sources: https://github.com/bitcoin/bips/blob/master/bip-0199.mediawiki, https://github.com/bitcoin/bips/blob/master/bip-0065.mediawiki and https://arxiv.org/abs/1801.09515. See batch research for claim/sequence boundaries.
 - The official Blocknet overview names VEIL atomic swaps and presents their post-quantum redesign as part of proposed Faraday. This public statement does not establish a currently usable pair, command, service or specific swap protocol. Only the announcement is described; the new general HTLC diagram must not be represented as VEIL's design. Source: https://blocknetcrypto.com/#faraday (checked October 28).
+
+
+## 11. Setup requirements and settings in v0.3.0 (checked November 2, 2026)
+
+Checked against the published v0.3.0 Linux and Windows archives and `seine@v0.3.0`.
+
+- **AMD GPUs:** RX 6000, RX 7000, RX 9000 and Radeon PRO, on Windows x86_64 and Linux x86_64. Discrete cards are selected automatically; integrated Radeon needs `--backend amd`. Windows needs the AMD driver. Linux needs the amdgpu driver and the ROCm HIP runtime. Source: `docs/guides/amd.md`, `CHANGELOG.md`, `seine.exe` from the v0.3.0 ZIP.
+- **Linux NVIDIA:** the driver is enough. NVRTC is used when installed; otherwise seine loads built-in kernels for GeForce GTX 10 series and newer. Source: `docs/guides/nvidia.md`.
+- **Linux glibc:** the v0.3.0 binary needs symbols up to GLIBC_2.30; the README states 2.31 or newer (Ubuntu 20.04, Debian 11). Source: `objdump -T` on the release binary; `README.md`. This supersedes the 2.39 requirement in earlier notes.
+- **Backends:** `--backend` takes `cpu`, `nvidia`, `amd` and `metal`, comma-separated. `--nvidia-devices` needs `nvidia` in `--backend`, or seine stops with an error naming the flag. A `--threads` count larger than memory allows stops with `configured CPU lanes need ~N GiB RAM`. `--backend amd` with no runtime stops with `all GPU backends failed to start`. Source: runs of the v0.3.0 Linux binary against an unreachable pool, November 2, 2026.
+- **Thread keys (v0.3.1):** `-` and `+` remove or add one thread per CPU backend for the current run only; the count is not saved. The change applies to the running CPU threads while GPUs and the pool connection keep running. While tuning is still choosing a count, the keys leave it alone and the dashboard shows how long tuning has left. With a fixed `--threads`, the change restarts mining and keeps session statistics. In v0.3.0 and earlier every change restarted the mining backends and reconnected the pool. `--threads` turns thread tuning off. Source: `seine@v0.3.1:docs/guides/configuration.md` (Dashboard controls); v0.3.0 log line `cpu-autotune | disabled; using configured thread count`.
+- **Saved settings:** `seine.config.json` holds the mode, address, pool, worker name and dev fee worker name. Backend and thread flags are not saved. Automatic updates restart with the same arguments. Source: first-run file from the v0.3.0 binary; `docs/guides/configuration.md`.
+
+## 12. v0.3.1 features used in the November 4, 2026 posts
+
+Checked against `seine@v0.3.1` (33d94e2) and live bntpool.com `/api/info` on November 4, 2026.
+
+- **Automatic updates:** check at startup and every 12 h; header `update vX.Y.Z available`, then a 60 s countdown `updating to vX.Y.Z in 42s` while mining continues; `u` installs now, `s` skips that version (remembered in the data directory). Signed archive verified, the new executable must start before it replaces the old one, then seine restarts with the same arguments and logs `updated to seine vX.Y.Z`. Work that needs a newer release pauses mining (`installing seine vX.Y.Z now: mining is paused until Seine is updated`) and installs at once, even a skipped version. `--no-auto-update` keeps only the notice; self-built binaries only notify. Upgrade notes for v0.2.45 (Linux exits once after installing; Windows double-run with restarting scripts) and the HiveOS/mmpOS package switch: `CHANGELOG.md` v0.3.1. Source: `docs/guides/configuration.md:110-127`, `src/miner/tui.rs` `update_spans`, `src/update_check.rs:215`.
+- **CPU tuning:** dashboard `Tuning:` rows and their meanings, keep the lowest thread count that matches the fastest, no scheduled tests once `done`, re-tune triggers (new version change, sustained hashrate move, freed RAM, hardware/OS/limit change), `seine.cpu-autotune.json`, `--cpu-profile efficiency`, `--disable-cpu-autotune-threads`. Source: `docs/guides/autotuning.md`.
+- **Dashboard layout (v0.3.1 renderer):** MINING panel shows `Difficulty`, `Rejected`, `Accepted` in pool mode (`Submitted`, `Stale`, `Accepted` in daemon mode); CONFIG shows `Pool`, `Threads` (`[+] [-]` hint), `Worker`, `Tuning`; POOL BALANCE shows `Pending`, `Paid`, `Miner`/`Solo`, `Min payout`; log scroll keys arrows/PgUp/PgDn/Home/End, title `LOG  paused, End to follow`; gold diamonds mark accepted shares and found blocks; current hashrate windows 5 s (NVIDIA 30 s). Source: `src/miner/tui.rs`, `src/miner/hashrate_tracker.rs:6`, `src/miner/mining_tui.rs:20`. Blog capture: `export_blog_dashboard_capture` in `src/miner/thread_showcase.rs`, demo values (Ryzen 9 9950X 16.63 H/s, 21 threads, from the desktop chart).
+- **AMD GPUs:** see §11; plus per-card lanes (~9 on a 16 GB RDNA2-4 card), `amd#N` device rows with `online (initialized in background, N lanes)`, RDNA3 `high` performance level when root, crash guard after two runtime crashes (retry after next update or with `amd` listed). Source: `docs/guides/amd.md`, `src/control_api/mod.rs:3142`.
+- **HiveOS/mmpOS packages:** `seine-hiveos-X.Y.Z.tar.gz`, `seine-mmpos-X.Y.Z.tar.gz`; flight sheet fields, imported mmpOS profile, GPU rigs mine GPUs only, CPU-only rigs mine CPU, CUDA 12 driver (RTX 50: 570+), mmpOS image Ubuntu 20.04+, upgrade by changing the URL version, HiveOS log path. Source: `docs/guides/hiveos.md`, `docs/guides/mmpos.md`.
+- **Farm proxy:** `--proxy-listen`, rigs pay their own valid full address (up to 16, 10 min slot release), invalid/missing pays `--address`, per-rig pool stats on bntpool.com, one-minute summary log, up to 64 pool connections per payout address, `solo:` rigs supported, memos not carried. Source: `docs/guides/farm-proxy.md`, `src/proxy.rs:627-641`, `src/config.rs:2859-2864`.
+- **Exchange payouts:** `--payout-memo`, `--no-payout-memo`, prompt for known shared addresses, unattended runs must pass the flag; bntpool memo minimum 10 BNT (`memo_min_payout_amount`), personal 1 BNT. Source: `docs/EXCHANGE_PAYOUTS.md`; bntpool.com `/api/info` 2026-11-04 20:55 EST.

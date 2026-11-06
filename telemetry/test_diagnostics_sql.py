@@ -15,12 +15,191 @@ class DiagnosticSQLTests(unittest.TestCase):
     query = classmethod(test_alerts_sql.AlertSQLTests.query.__func__)
     setUp = test_alerts_sql.AlertSQLTests.setUp
     def insert_diagnostic(self, payload, identity=None):
+        if identity is None and payload['diagnostics'].get('previous_run_unclean'):
+            # An interrupted run on an installation already reporting two days ago, so
+            # the restart counts toward attention like an established machine's.
+            identity = uuid.uuid4().hex
+            earlier = copy.deepcopy(payload)
+            earlier['diagnostics'].update(previous_run_unclean=False, events=[])
+            earlier['diagnostics'].pop('previous_run', None)
+            earlier['diagnostics'].pop('previous_run_rebooted', None)
+            text = json.dumps(earlier).replace("'", "''")
+            self.query("INSERT INTO telemetry_reports VALUES "
+                       f"('{uuid.uuid4().hex}','{identity}',now()-interval '2 days','{text}'::jsonb)")
         text = json.dumps(payload).replace("'", "''")
         self.query("INSERT INTO telemetry_reports VALUES "
                    f"('{uuid.uuid4().hex}','{identity or uuid.uuid4().hex}',now(),'{text}'::jsonb)")
 
     def diagnostics(self):
-        return json.loads(self.query((Path(__file__).parent / 'diagnostics.sql').read_text()))
+        result = json.loads(self.query((Path(__file__).parent / 'diagnostics.sql').read_text()))
+        alerts = json.loads(self.query((Path(__file__).parent / 'diagnostic_alerts.sql').read_text()))
+        for key, value in alerts.items():
+            self.assertEqual(value, result[key], key)
+        return result
+
+    def test_missing_sample_context_keeps_connection_evidence_separate(self):
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        for index in range(5):
+            identity = uuid.uuid4().hex
+            value = copy.deepcopy(fixture)
+            value['backends'] = []
+            value['diagnostics']['reason'] = 'periodic'
+            value['diagnostics']['phase'] = 'mining'
+            value['diagnostics']['events'] = []
+            if index < 2:
+                value['diagnostics']['events'] = [{
+                    'detail': {'operation': 'pool_connect', 'reason': 'connection_timed_out'},
+                }]
+            for hour in (5, 3, 1):
+                payload = json.dumps(value).replace("'", "''")
+                self.query("INSERT INTO telemetry_reports VALUES "
+                           f"('{uuid.uuid4().hex}','{identity}',now()-interval '{hour} hours','{payload}'::jsonb)")
+        result = json.loads(self.query((Path(__file__).parent / 'data_quality.sql').read_text()))
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(result['versions'][0]['sustained_inventory_only_installations'], 5)
+        clusters = result['inventory_only_clusters']
+        self.assertEqual({c['connection_warning']: c['installations'] for c in clusters}, {True: 2, False: 3})
+        self.assertTrue(all(c['observed_mining_phase'] for c in clusters))
+        self.assertNotIn('installation_id', json.dumps(result))
+
+    def test_errors_and_unclean_runs_scale_with_the_version_fleet(self):
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        fixture['diagnostics']['previous_run_unclean'] = False
+        def add(version, count, events=(), previous=None):
+            value = copy.deepcopy(fixture)
+            value['miner_version'] = version
+            value['diagnostics']['events'] = [{'code': code, 'kind': 'general', 'count': 1} for code in events]
+            if previous:
+                value['diagnostics']['previous_run_unclean'] = True
+                value['diagnostics']['previous_run'] = {
+                    'miner_version': previous, 'build_commit': 'unknown', 'phase': 'mining', 'uptime_secs': 60}
+            for _ in range(count):
+                self.insert_diagnostic(value)
+        # 4 of 100 newest-line installations with errors stays under 5%.
+        add('v0.3.1', 96)
+        add('v0.3.1', 4, events=['run_failed'])
+        # Every one of ten installations on an older line errors and was interrupted.
+        add('v0.2.45', 10, events=['error'], previous='v0.2.45')
+        # Unattributed interrupted runs never raise attention.
+        add('v0.3.1', 5, previous='unknown')
+        result = self.diagnostics()
+        errors = {r['version']: r for r in result['recent_error_versions']}
+        self.assertEqual((errors['v0.3.1']['affected_installations'], errors['v0.3.1']['installations_24h']), (4, 105))
+        self.assertFalse(errors['v0.3.1']['needs_attention'] or errors['v0.3.1']['legacy'])
+        self.assertTrue(errors['v0.2.45']['legacy'])
+        self.assertFalse(errors['v0.2.45']['needs_attention'])
+        unclean = {r['version']: r for r in result['recent_unclean_versions']}
+        self.assertFalse(unclean['v0.2.45']['needs_attention'] or unclean['unknown']['needs_attention'])
+        self.assertEqual(result['status'], 'ok')
+        # Two more failing installations pass 5% of the newest line.
+        add('v0.3.1', 2, events=['backend_quarantined'])
+        result = self.diagnostics()
+        errors = {r['version']: r for r in result['recent_error_versions']}
+        self.assertTrue(errors['v0.3.1']['needs_attention'])
+        self.assertEqual(result['status'], 'attention')
+        # 10% of the newest line interrupted is attention too.
+        self.query('TRUNCATE telemetry_reports')
+        add('v0.3.1', 27)
+        add('v0.3.1', 3, previous='v0.3.1')
+        result = self.diagnostics()
+        self.assertTrue(result['recent_unclean_versions'][0]['needs_attention'])
+        self.assertEqual(result['status'], 'attention')
+
+    def test_reboots_and_single_restarts_of_new_installations_are_not_counted(self):
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        fixture['miner_version'] = 'v0.3.1'
+        fixture['diagnostics']['previous_run_unclean'] = False
+        fixture['diagnostics'].pop('previous_run', None)
+        def add(count, restarts=0, established=True, rebooted=None):
+            for _ in range(count):
+                identity = uuid.uuid4().hex
+                if established:
+                    text = json.dumps(fixture).replace("'", "''")
+                    self.query("INSERT INTO telemetry_reports VALUES "
+                               f"('{uuid.uuid4().hex}','{identity}',now()-interval '2 days','{text}'::jsonb)")
+                self.insert_diagnostic(fixture, identity)
+                for _ in range(restarts):
+                    value = copy.deepcopy(fixture)
+                    value['diagnostics']['previous_run_unclean'] = True
+                    value['diagnostics']['previous_run'] = {
+                        'miner_version': 'v0.3.1', 'build_commit': 'unknown', 'phase': 'mining', 'uptime_secs': 60}
+                    if rebooted is not None:
+                        value['diagnostics']['previous_run_rebooted'] = rebooted
+                    self.insert_diagnostic(value, identity)
+        add(20)
+        # A farm bringing up new machines: one interrupted run each.
+        add(4, restarts=1, established=False)
+        # Established machines that rebooted.
+        add(3, restarts=1, rebooted=True)
+        result = self.diagnostics()
+        row = result['recent_unclean_versions'][0]
+        self.assertEqual((row['affected_installations'], row['counted_installations']), (7, 0))
+        self.assertEqual((row['rebooted_installations'], row['new_installation_single_restarts']), (3, 4))
+        self.assertFalse(row['needs_attention'])
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(sum(c['installations_rebooted'] for c in result['unclean_run_clusters']), 3)
+        # A new installation that keeps restarting counts, as do established ones on the same boot.
+        add(1, restarts=2, established=False)
+        add(2, restarts=1, rebooted=False)
+        row = self.diagnostics()['recent_unclean_versions'][0]
+        self.assertEqual((row['affected_installations'], row['counted_installations'], row['installations_24h']), (10, 3, 30))
+        self.assertTrue(row['needs_attention'])
+
+    def test_older_release_lines_are_reported_without_failing_data_quality(self):
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        def add(version, backends):
+            value = copy.deepcopy(fixture)
+            value['miner_version'] = version
+            value['diagnostics']['reason'] = 'periodic'
+            value['diagnostics']['events'] = []
+            if not backends:
+                value['backends'] = []
+            identity = uuid.uuid4().hex
+            for hour in (5, 3, 1):
+                payload = json.dumps(value).replace("'", "''")
+                self.query("INSERT INTO telemetry_reports VALUES "
+                           f"('{uuid.uuid4().hex}','{identity}',now()-interval '{hour} hours','{payload}'::jsonb)")
+        # The newest release line comes from release builds; a source build of
+        # a later line does not move it.
+        add('v0.3.1', True)
+        add('0.4.0', True)
+        for _ in range(5):
+            add('v0.2.45', False)
+        result = json.loads(self.query((Path(__file__).parent / 'data_quality.sql').read_text()))
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual(result['newest_release_line'], 'v0.3')
+        versions = {v['version']: v for v in result['versions']}
+        self.assertEqual(versions['v0.2.45']['sustained_inventory_only_installations'], 5)
+        self.assertTrue(versions['v0.2.45']['legacy'])
+        self.assertFalse(versions['v0.3.1']['legacy'] or versions['0.4.0']['legacy'])
+        self.assertTrue(all(c['legacy'] for c in result['inventory_only_clusters']))
+        # The same gap on the newest line still fails.
+        for _ in range(5):
+            add('v0.3.1', False)
+        self.assertEqual(json.loads(self.query(
+            (Path(__file__).parent / 'data_quality.sql').read_text()))['status'], 'error')
+
+    def test_alert_counts_keep_distinct_installations_and_time_windows(self):
+        self.assertEqual(self.diagnostics()['status'], 'unavailable')
+        fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())
+        fixture['diagnostics']['previous_run_unclean'] = False
+        fixture['diagnostics']['events'] = [
+            {'code': 'run_failed', 'kind': 'general', 'count': 1},
+            {'code': 'warning', 'kind': 'general', 'count': 1,
+             'detail': {'operation': 'pool_login', 'reason': 'pool_connection_limit'}}]
+        identity = uuid.uuid4().hex
+        for hour, install in ((0.2, identity), (0.4, identity),
+                              (2, uuid.uuid4().hex), (24.5, uuid.uuid4().hex),
+                              (26, uuid.uuid4().hex)):
+            text = json.dumps(fixture).replace("'", "''")
+            self.query('INSERT INTO telemetry_reports VALUES '
+                       f"('{uuid.uuid4().hex}','{install}',now()-interval '{hour} hours','{text}'::jsonb)")
+        result = self.diagnostics()
+        self.assertEqual(result['recent_error_versions'][0]['affected_installations'], 2)
+        pool = result['pool_connection_warnings']
+        self.assertEqual(pool['last_hour_installations'], 1)
+        self.assertEqual(pool['last_hour_limit_installations'], 1)
+        self.assertAlmostEqual(pool['baseline_hourly_installations'], 2 / 24)
 
     def test_schema8_context_groups_loaded_software_and_interrupted_cleanup(self):
         fixture = json.loads((Path(__file__).parent / 'reliability-fixture.json').read_text())
@@ -146,6 +325,30 @@ class DiagnosticSQLTests(unittest.TestCase):
         self.assertNotIn('occurrences', cluster)
         self.assertEqual(result['unclean_run_clusters'][0]['installations_with_truncated_previous_events'], 1)
         self.assertNotIn(identity, json.dumps(result))
+
+    def test_schema14_unsupported_work_is_a_typed_warning_cluster(self):
+        fixture = json.loads((Path(__file__).parent / 'schema14-fixture.json').read_text())
+        for _ in range(3):
+            self.insert_diagnostic(fixture)
+        report = self.diagnostics()
+        cluster, = report['issue_clusters']
+        self.assertEqual(cluster['detail'], {'reason': 'unsupported_work', 'operation': 'receive_work'})
+        self.assertEqual(cluster['affected_installations'], 3)
+        self.assertEqual(report['recent_error_versions'], [])
+        # The fixture also pauses and fails an install on all three installations.
+        self.assertEqual(report['status'], 'attention')
+
+    def test_schema14_install_failures_and_pauses_reach_alert_counts(self):
+        fixture = json.loads((Path(__file__).parent / 'schema14-fixture.json').read_text())
+        for _ in range(3):
+            self.insert_diagnostic(fixture)
+        alerts = json.loads(self.query((Path(__file__).parent / 'diagnostic_alerts.sql').read_text()))
+        version = fixture['miner_version']
+        self.assertEqual(alerts['recent_install_failure_versions'],
+                         [{'version': version, 'affected_installations': 3}])
+        self.assertEqual(alerts['recent_unsupported_work_versions'],
+                         [{'version': version, 'affected_installations': 3}])
+        self.assertEqual(alerts['status'], 'attention')
 
     def test_unique_failure_is_not_hidden_by_common_warning_limit(self):
         fixture = json.loads((Path(__file__).parent / 'diagnostics-fixture.json').read_text())

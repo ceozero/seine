@@ -1,15 +1,13 @@
-//! Productive CPU tuning: startup uses a seed, and A/B/A trials run on real work.
+//! Productive CPU tuning: startup uses a seed and the search runs on real work.
 //! RAM limits constrain the operating count without replacing a remembered peak.
+use super::adaptive_search::{
+    BuildFacts, Comparing, Params, Saved, Search, SeedQuality, Setting, SettledSummary, Status,
+    TrialEvent, Verdict,
+};
 use super::*;
 use crate::config::{cpu_autotune_capacity, cpu_autotune_worker_ceiling};
 use blocknet_pow_kernel::CpuKernel;
 use std::thread::{self, JoinHandle};
-
-const RECOVERY_SECS: u64 = 30;
-const RETRY_SECS: u64 = 300;
-const MAX_DRIFT: f64 = 0.08;
-const JOINT_TIMEOUT_SECS: u64 = 15 * 60;
-const SWITCH_TIMEOUT_SECS: u64 = 10 * 60;
 
 pub(super) fn limits(cfg: &Config, owned_bytes: u64) -> (usize, usize, usize) {
     let (_, available) = cpu_autotune_capacity(cfg, owned_bytes);
@@ -41,16 +39,26 @@ fn instances(cfg: &Config) -> usize {
         .count()
 }
 
+/// Why a saved result does not apply to this machine. A new build, kernel version or
+/// RAM size does not invalidate it: the search re-checks what actually changed.
 fn seed_miss_reason(
     record: &CpuAutotuneRecord,
     cfg: &Config,
     host: &CpuAutotuneHostFingerprint,
 ) -> Option<&'static str> {
-    // Schema 10 already has warmed scores. Old records remain useful as seeds.
+    let saved = &record.host_fingerprint;
     if !(10..=CPU_AUTOTUNE_RECORD_SCHEMA_VERSION).contains(&record.schema_version) {
         Some("cache format changed")
-    } else if let Some(reason) = cpu_autotune_host_change(&record.host_fingerprint, host) {
-        Some(reason)
+    } else if saved.cpu_brand != host.cpu_brand
+        || saved.cpu_arch != host.cpu_arch
+        || saved.logical_cores != host.logical_cores
+        || saved.physical_cores != host.physical_cores
+    {
+        Some("CPU changed")
+    } else if saved.os != host.os || saved.runtime_environment != host.runtime_environment {
+        Some("operating system or runtime changed")
+    } else if saved.affinity_topology != host.affinity_topology {
+        Some("CPU affinity or topology changed")
     } else if record.affinity != cpu_affinity_label(cfg.cpu_affinity)
         || record.page_mode != cfg.cpu_page_mode.as_str()
         || record.profile != cpu_profile_label(cfg.cpu_profile)
@@ -65,6 +73,37 @@ fn seed_miss_reason(
     } else {
         None
     }
+}
+
+/// The kernel the backend starts on: this machine's earlier result, else the one
+/// validated for this CPU at this count.
+pub(super) fn initial_kernel(cfg: &Config, threads: usize) -> Option<CpuKernel> {
+    if let Ok(record) = read_seed(cfg) {
+        if let Some(kernel) = record
+            .search
+            .as_ref()
+            .and_then(|saved| saved.kernel.parse::<CpuKernel>().ok())
+            .or_else(|| super::adaptive_kernel::legacy_winner(cfg, record.selected_threads))
+            .filter(|kernel| kernel.is_supported())
+        {
+            return Some(kernel);
+        }
+    }
+    super::adaptive_kernel::static_kernel_for(threads)
+}
+
+/// A start rule covers this CPU, so the first search can look nearby.
+fn family_start(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    max: usize,
+    capacity: usize,
+) -> bool {
+    let identity = crate::runtime_identity::cpu_identity();
+    full_count_cold_start(cfg, host, &identity, max, capacity)
+        || sapphire_full_count_cold_start(cfg, host, &identity, max, capacity)
+        || turin_full_count_cold_start(cfg, host, &identity, max, capacity)
+        || cohort_cold_start(cfg, host, max, capacity).is_some()
 }
 
 #[cfg(test)]
@@ -86,6 +125,7 @@ fn seed_threads(
     max: usize,
     available: usize,
     memory_capacity: usize,
+    physical: Option<usize>,
 ) -> usize {
     if available == 0 {
         return 0;
@@ -93,7 +133,15 @@ fn seed_threads(
     let floor = min.min(available);
     record
         .map(|r| r.selected_threads)
-        .unwrap_or((max.min(memory_capacity) / 2).max(1))
+        .unwrap_or_else(|| {
+            // Small machines run every thread; larger ones start on their cores.
+            let room = max.min(memory_capacity);
+            if room <= 4 {
+                room.max(1)
+            } else {
+                physical.unwrap_or(room / 2).clamp(1, room)
+            }
+        })
         .clamp(floor, max.min(available))
 }
 
@@ -198,31 +246,112 @@ fn initial_threads(
     memory_capacity: usize,
     full_count: bool,
     cohort_start: Option<usize>,
+    physical: Option<usize>,
 ) -> usize {
     match (record, full_count, cohort_start) {
         (None, true, _) => max.min(memory_capacity).min(available),
         (None, false, Some(start)) if available > 0 => {
             start.clamp(min.min(available), max.min(memory_capacity).min(available))
         }
-        _ => seed_threads(record, min, max, available, memory_capacity),
+        _ => seed_threads(record, min, max, available, memory_capacity, physical),
     }
 }
 
-// Cold start for CPUs whose cohort mines on a streaming kernel. Zen 4/5
-// (AVX-512 streaming) start at every allowed logical CPU that fits in RAM: SMT
-// hides memory latency on many-channel servers. Zen 2/3 (AVX2 streaming) plateau
-// by the physical core count, so they start there. Count trials still decide
-// afterwards.
-fn cohort_cold_start(cfg: &Config, host: &CpuAutotuneHostFingerprint, max: usize) -> Option<usize> {
+// Cold start for CPUs whose cohort mines on a streaming kernel. Zen 4/5, Intel
+// Xeons with an AVX-512 streaming default and Intel AVX2 desktops start at every
+// allowed logical CPU that fits in RAM, as do Broadwell-EP Xeons; Haswell-E/EP and Kaby
+// Lake to Comet Lake have no cohort start and keep the estimate from their core count;
+// Zen 2/3 (AVX2 streaming, with or without skipped stores) start at the physical core
+// count, and Ryzen 5000 desktops with 12 or more cores and EPYC 7002 with 64 or more at
+// three quarters of it.
+// Count trials still decide afterwards.
+fn cohort_cold_start(
+    cfg: &Config,
+    host: &CpuAutotuneHostFingerprint,
+    max: usize,
+    memory_capacity: usize,
+) -> Option<usize> {
     if cfg!(test) || cfg.cpu_profile == CpuPerformanceProfile::Efficiency {
         // Unit tests stay host-independent; `initial_threads` covers the policy.
         return None;
     }
+    if let Some(start) = super::adaptive_kernel::field_start(max.min(memory_capacity)) {
+        return Some(start);
+    }
+    if super::adaptive_kernel::intel_server_full_count_start() {
+        return Some(max).filter(|&workers| workers > 0);
+    }
     match super::adaptive_kernel::cohort_kernel()? {
-        CpuKernel::Avx2Stream => host.physical_cores,
+        CpuKernel::Avx2Stream
+            if crate::runtime_identity::cpu_identity().vendor.as_deref()
+                == Some("GenuineIntel") =>
+        {
+            intel_stream_start_for(&crate::runtime_identity::cpu_identity(), max)
+        }
+        CpuKernel::Avx2Stream | CpuKernel::Avx2StreamSkip => vermeer_start(host)
+            .or_else(|| {
+                rome_start_for(
+                    &crate::runtime_identity::cpu_identity(),
+                    host.physical_cores,
+                )
+            })
+            .or(host.physical_cores),
         _ => Some(max),
     }
     .filter(|&workers| workers > 0)
+}
+
+/// The cold start for Intel CPUs whose cohort kernel is AVX2 streaming: every allowed
+/// logical CPU that fits in RAM, or none for Haswell-E/EP (06h/3Fh) and Kaby Lake to
+/// Comet Lake (06h/9Eh, A5h).
+fn intel_stream_start_for(
+    identity: &crate::runtime_identity::CpuIdentity,
+    max: usize,
+) -> Option<usize> {
+    let core_count_start = identity.vendor.as_deref() == Some("GenuineIntel")
+        && identity.family == Some(6)
+        && matches!(identity.model, Some(0x3f | 0x9e | 0xa5));
+    (!core_count_start).then_some(max)
+}
+
+/// The cold start for Ryzen 5000 desktops (19h model 21h): the physical core count,
+/// or three quarters of it from 12 cores.
+fn vermeer_start(host: &CpuAutotuneHostFingerprint) -> Option<usize> {
+    vermeer_start_for(
+        &crate::runtime_identity::cpu_identity(),
+        host.physical_cores,
+    )
+}
+
+fn vermeer_start_for(
+    identity: &crate::runtime_identity::CpuIdentity,
+    physical_cores: Option<usize>,
+) -> Option<usize> {
+    let vermeer = identity.vendor.as_deref() == Some("AuthenticAMD")
+        && identity.family == Some(0x19)
+        && identity.model == Some(0x21);
+    let cores = physical_cores.filter(|_| vermeer)?;
+    Some(if cores >= 12 { cores * 3 / 4 } else { cores })
+}
+
+/// The cold start for EPYC 7002 (17h model 31h) with 64 or more physical cores: three
+/// quarters of them.
+fn rome_start_for(
+    identity: &crate::runtime_identity::CpuIdentity,
+    physical_cores: Option<usize>,
+) -> Option<usize> {
+    let rome = identity.vendor.as_deref() == Some("AuthenticAMD")
+        && identity.family == Some(0x17)
+        && identity.model == Some(0x31);
+    physical_cores
+        .filter(|&cores| rome && cores >= 64)
+        .map(|cores| cores * 3 / 4)
+}
+
+/// True where Ryzen 5000 desktops start from their own rule; the search steps out from
+/// there rather than looking at every thread first.
+fn start_is_core_count(cfg: &Config, host: &CpuAutotuneHostFingerprint, start: usize) -> bool {
+    cfg.cpu_profile != CpuPerformanceProfile::Efficiency && vermeer_start(host) == Some(start)
 }
 
 // Threads already running (including the API's Tokio worker pool) are charged
@@ -302,7 +431,7 @@ fn prepare_with_resources(
     let seed = match read_seed(cfg) {
         Ok(record) => Some(record),
         Err(reason) => {
-            info(
+            super::ui::detail(
                 "MINER",
                 format!("cpu-autotune | {reason}; tuning while mining"),
             );
@@ -331,7 +460,7 @@ fn prepare_with_resources(
         ));
     let cohort_start = seed
         .is_none()
-        .then(|| cohort_cold_start(cfg, &cpu_autotune_host_fingerprint(), max))
+        .then(|| cohort_cold_start(cfg, &cpu_autotune_host_fingerprint(), max, memory_capacity))
         .flatten();
     let threads = initial_threads(
         seed.as_ref(),
@@ -341,6 +470,10 @@ fn prepare_with_resources(
         memory_capacity,
         full_count,
         cohort_start,
+        // Unit tests stay host-independent, like `cohort_cold_start`.
+        cpu_autotune_host_fingerprint()
+            .physical_cores
+            .filter(|_| !cfg!(test)),
     );
     // Zero is intentional here. A parked CPU backend stays connected and can
     // recover when a whole arena plus the configured reserve fits again.
@@ -365,769 +498,11 @@ fn prepare_with_resources(
     } else {
         "initial estimate"
     };
-    info("MINER", format!("cpu-autotune | starting with {threads} threads ({reason}); tuning while mining, capacity={max}, worker slots={slots}, currently available={available}"));
+    super::ui::detail("MINER", format!("cpu-autotune | starting with {threads} threads ({reason}); tuning while mining, capacity={max}, worker slots={slots}, currently available={available}"));
+    if available == 0 {
+        super::ui::note("CPU", "paused until enough RAM is free for one thread");
+    }
     Ok(())
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Phase {
-    Baseline,
-    Probe {
-        base: usize,
-        before: CpuAutotuneMeasurement,
-    },
-    Confirm {
-        base: usize,
-        before: CpuAutotuneMeasurement,
-        candidate: usize,
-        candidate_sample: CpuAutotuneMeasurement,
-    },
-}
-
-#[derive(Debug, Clone)]
-struct JointComparison {
-    base: usize,
-    candidate: usize,
-    base_kernel: CpuKernel,
-    candidate_kernel: Option<CpuKernel>,
-    base_backing: Vec<[u64; 5]>,
-    candidate_backing: Option<Vec<[u64; 5]>>,
-    started: u64,
-    confirmed_peak: f64,
-    // A changed kernel must also win a second fresh count/configuration A/B/A.
-    repeat: bool,
-}
-
-#[derive(Debug)]
-struct Policy {
-    current: usize,
-    min: usize,
-    max: usize,
-    profile: CpuPerformanceProfile,
-    phase: Phase,
-    up: bool,
-    attempts: u64,
-    ramp: bool,
-    next_up_probe: Option<usize>,
-    unsuccessful: usize,
-    next_trial: u64,
-    allocation_retry_at: u64,
-    headroom_since: u64,
-    previous_cap: usize,
-    cap_observed: bool,
-    recovery_pending: bool,
-    window_start: u64,
-    window_hashes: u64,
-    window_secs: u64,
-    sampling: bool,
-    idle_since: Option<u64>,
-    reference_hps: Option<f64>,
-    peak_hps: f64,
-    joint: Option<JointComparison>,
-    waiting_for_kernel_retry: bool,
-    restoring: Option<(CpuKernel, u64)>,
-    members: Option<Vec<usize>>,
-}
-
-#[derive(Debug)]
-struct Decision {
-    threads: usize,
-    reason: &'static str,
-    learned: Option<Vec<(usize, CpuAutotuneMeasurement)>>,
-}
-
-impl Policy {
-    fn new(cfg: &Config, current: usize, min: usize, max: usize) -> Self {
-        Self {
-            current,
-            min,
-            max,
-            profile: cfg.cpu_profile,
-            phase: Phase::Baseline,
-            up: true,
-            attempts: 0,
-            ramp: true,
-            next_up_probe: None,
-            unsuccessful: 0,
-            next_trial: 0,
-            allocation_retry_at: 0,
-            headroom_since: 0,
-            previous_cap: current,
-            cap_observed: false,
-            recovery_pending: false,
-            window_start: 0,
-            window_hashes: 0,
-            window_secs: cfg.cpu_autotune_secs.saturating_mul(5).max(30),
-            sampling: false,
-            idle_since: None,
-            reference_hps: None,
-            peak_hps: 0.0,
-            joint: None,
-            waiting_for_kernel_retry: false,
-            restoring: None,
-            members: None,
-        }
-    }
-
-    fn change(&mut self, threads: usize, reason: &'static str) -> Decision {
-        self.current = threads;
-        self.recovery_pending = false;
-        self.sampling = false;
-        self.idle_since = None;
-        self.waiting_for_kernel_retry = false;
-        Decision {
-            threads,
-            reason,
-            learned: None,
-        }
-    }
-
-    fn reset(&mut self, now: u64, delay: u64) {
-        self.phase = Phase::Baseline;
-        self.next_up_probe = None;
-        self.sampling = false;
-        self.idle_since = None;
-        self.waiting_for_kernel_retry = false;
-        self.next_trial = now.saturating_add(delay);
-    }
-
-    fn observe_cap(&mut self, now: u64, cap: usize) {
-        if cap <= self.current {
-            self.recovery_pending = false;
-        } else if self.cap_observed && cap > self.previous_cap && self.previous_cap <= self.current
-        {
-            self.recovery_pending = true;
-        }
-        self.cap_observed = true;
-        if cap != self.previous_cap {
-            if cap <= self.current || self.previous_cap <= self.current {
-                self.headroom_since = now;
-            }
-            if cap > self.previous_cap {
-                self.up = true;
-                self.ramp = true;
-                self.next_trial = self.next_trial.min(now.saturating_add(RECOVERY_SECS));
-            }
-            self.previous_cap = cap;
-        }
-    }
-
-    fn restore_kernel(
-        &mut self,
-        now: u64,
-        kernel: CpuKernel,
-        snapshots: &[crate::backend::cpu::CpuAdaptiveSnapshot],
-        action: &mut super::adaptive_kernel::Action,
-    ) {
-        if snapshots
-            .iter()
-            .filter(|s| s.running)
-            .any(|s| s.kernel != kernel || !s.kernel_ready)
-        {
-            action.kernel = Some(kernel);
-            self.restoring = Some((kernel, now));
-            self.sampling = false;
-            self.idle_since = None;
-        }
-    }
-
-    fn cancel_joint(
-        &mut self,
-        kernels: &mut super::adaptive_kernel::Tuner,
-        now: u64,
-        snapshots: &[crate::backend::cpu::CpuAdaptiveSnapshot],
-        cap: usize,
-        actual: usize,
-        allocation_limited: bool,
-    ) -> (super::adaptive_kernel::Action, Option<Decision>) {
-        let joint = self.joint.take().expect("joint comparison exists");
-        let delay = if allocation_limited {
-            RETRY_SECS
-        } else {
-            RECOVERY_SECS
-        };
-        self.restoring = None;
-        self.reset(now, delay);
-        if allocation_limited {
-            self.allocation_retry_at = now + RETRY_SECS;
-        }
-        let mut action = kernels.abort(now);
-        // The kernel tuner's baseline belongs to the candidate count. Restore
-        // the original configuration's kernel on every outer cancellation.
-        action.kernel = Some(joint.base_kernel);
-        action.hold_counts = false;
-        self.restore_kernel(now, joint.base_kernel, snapshots, &mut action);
-        let count = if allocation_limited {
-            actual.min(cap)
-        } else {
-            joint.base.min(cap)
-        };
-        (
-            action,
-            Some(self.change(
-                count,
-                "joint comparison interrupted; restoring safe baseline",
-            )),
-        )
-    }
-
-    fn tick_joint(
-        &mut self,
-        kernels: &mut super::adaptive_kernel::Tuner,
-        now: u64,
-        snapshots: &[crate::backend::cpu::CpuAdaptiveSnapshot],
-        cap: usize,
-        allocation_failed: bool,
-    ) -> (super::adaptive_kernel::Action, Option<Decision>) {
-        let cap = cap.min(self.max);
-        let members: Vec<_> = snapshots
-            .iter()
-            .enumerate()
-            .filter_map(|(index, s)| s.running.then_some(index))
-            .collect();
-        let membership_changed = self.members.as_ref().is_some_and(|old| *old != members);
-        self.members = Some(members);
-        let running: Vec<_> = snapshots.iter().filter(|s| s.running).collect();
-        let actual = running.iter().map(|s| s.threads).min().unwrap_or(0);
-        let allocation_limited = allocation_failed || actual < self.current;
-        let hashes = running.iter().map(|s| s.hashes).sum();
-        let ready = !running.is_empty()
-            && running.iter().all(|s| {
-                s.hashing
-                    && s.warmed == s.threads
-                    && s.resident_bytes == s.threads as u64 * CPU_LANE_MEMORY_BYTES
-            });
-        // Track recovery through kernel holds, but debounce transient headroom
-        // and honor allocation cooldowns before interrupting productive trials.
-        // `cap` is already bounded by the CPU/search maximum above.
-        self.observe_cap(now, cap);
-        if membership_changed {
-            // Aggregate rates from different backend sets are not comparable.
-            // Invalidate once, then let the surviving set tune normally.
-            self.reference_hps = None;
-            self.peak_hps = 0.0;
-            self.up = true;
-            self.ramp = true;
-            self.attempts = 0;
-            self.unsuccessful = 0;
-            let (mut action, decision) = if self.joint.is_some() {
-                self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited)
-            } else {
-                self.restoring = None;
-                let delay = if allocation_limited {
-                    self.allocation_retry_at = now.saturating_add(RETRY_SECS);
-                    RETRY_SECS
-                } else {
-                    RECOVERY_SECS
-                };
-                self.reset(now, delay);
-                (
-                    kernels.abort(now),
-                    Some(self.change(
-                        actual.min(cap),
-                        "active CPU backends changed; restarting comparisons",
-                    )),
-                )
-            };
-            kernels.forget_previous_members(now);
-            action.reset_scores = true;
-            return (action, decision);
-        }
-        let recovering_capacity = self.recovery_pending && now >= self.allocation_retry_at;
-        let recovery_due = recovering_capacity
-            && now >= self.next_trial
-            && now.saturating_sub(self.headroom_since) >= RECOVERY_SECS;
-        let safety_change = (recovery_due && kernels.is_comparing())
-            || cap < actual
-            || actual != self.current
-            || allocation_failed
-            || actual == 0;
-        let backing: Vec<_> = running.iter().map(|s| s.backing_bytes).collect();
-        let joint_invalid = self.joint.as_ref().is_some_and(|j| {
-            j.base.max(j.candidate) > cap
-                || now.saturating_sub(j.started)
-                    >= JOINT_TIMEOUT_SECS.max(
-                        self.window_secs
-                            .saturating_mul(6)
-                            .saturating_add(kernels.joint_budget_secs()),
-                    )
-                || (ready
-                    && !matches!(self.phase, Phase::Probe { .. })
-                    && backing != j.base_backing)
-        });
-        let switch_timeout = self
-            .restoring
-            .is_some_and(|(_, start)| now.saturating_sub(start) >= SWITCH_TIMEOUT_SECS);
-        if self.joint.is_some() && (safety_change || joint_invalid || switch_timeout) {
-            // Capacity that shrinks once a larger count actually allocates (a
-            // 64 GiB host fits 27 arenas plus reserve, but estimates 28 at 21)
-            // must back off like an allocation limit; a 30 s retry re-allocated
-            // and tore down 14 GiB about every 33 s on a 32-core Zen 5 host.
-            let cap_shrank = self
-                .joint
-                .as_ref()
-                .is_some_and(|j| j.base.max(j.candidate) > cap && j.base <= cap);
-            let result =
-                self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited);
-            if cap_shrank && !allocation_limited {
-                self.allocation_retry_at = now.saturating_add(RETRY_SECS);
-                self.next_trial = self.next_trial.max(now.saturating_add(RETRY_SECS));
-            }
-            return result;
-        }
-        if safety_change || switch_timeout {
-            self.restoring = None;
-        }
-        if let Some((kernel, _)) = self.restoring {
-            if ready && running.iter().all(|s| s.kernel == kernel && s.kernel_ready) {
-                self.restoring = None;
-            } else {
-                self.sampling = false;
-                return (
-                    super::adaptive_kernel::Action {
-                        hold_counts: true,
-                        ..Default::default()
-                    },
-                    None,
-                );
-            }
-        }
-        let phase_before = self.phase;
-        let mut action = if safety_change || switch_timeout {
-            kernels.abort(now)
-        } else {
-            kernels.tick(
-                now,
-                snapshots,
-                ready,
-                (matches!(self.phase, Phase::Baseline)
-                    && self.joint.is_none()
-                    && !recovering_capacity)
-                    || matches!(self.phase, Phase::Probe { .. }),
-            )
-        };
-        if action.interrupted && self.joint.is_some() {
-            let (mut cancelled, decision) =
-                self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited);
-            // Cancellation aborts the already-finished inner trial again. Keep
-            // its measured rejection reason rather than losing it in that abort.
-            if action.message.is_some() {
-                cancelled.message = action.message;
-            }
-            return (cancelled, decision);
-        }
-        if matches!(self.phase, Phase::Probe { .. }) && !safety_change {
-            let pending = kernels.retry_pending(now, snapshots);
-            self.waiting_for_kernel_retry |= pending;
-            if self.waiting_for_kernel_retry {
-                // Productive work continues, but an interrupted kernel comparison
-                // is not evidence that this count should keep its incumbent path.
-                // Wait within the existing joint deadline; safety can still cancel.
-                if running.iter().any(|s| !s.hashing) {
-                    let idle = self.idle_since.get_or_insert(now);
-                    if now.saturating_sub(*idle) >= 3 {
-                        return self.cancel_joint(kernels, now, snapshots, cap, actual, false);
-                    }
-                    self.sampling = false;
-                    action.hold_counts = true;
-                    return (action, None);
-                }
-                if !pending && ready && running.iter().all(|s| s.kernel_ready) {
-                    self.waiting_for_kernel_retry = false;
-                } else {
-                    action.hold_counts = true;
-                }
-            }
-        }
-        if action.hold_counts {
-            self.sampling = false;
-            self.idle_since = None;
-        }
-        if action.reset_scores {
-            if matches!(self.phase, Phase::Probe { .. }) {
-                // Keep the original count/kernel baseline while selecting the
-                // candidate's path. Only this window's partial sample is stale.
-                self.sampling = false;
-                self.idle_since = None;
-            } else {
-                self.kernel_changed(now);
-            }
-        }
-        let mut decision = if action.hold_counts && !safety_change {
-            None
-        } else {
-            self.tick(
-                now,
-                hashes,
-                ready && running.iter().all(|s| s.kernel_ready) && action.kernel.is_none(),
-                cap,
-                allocation_failed,
-                actual,
-            )
-        };
-        match (phase_before, self.phase) {
-            (Phase::Baseline, Phase::Probe { base, .. }) => {
-                if self.joint.is_none() {
-                    if let Some(retry_at) =
-                        kernels.retry_at_for_threads(now, snapshots, self.current)
-                    {
-                        // Do not allocate/park workers at an unconfirmed count
-                        // just to wait for its kernel cooldown. Keep mining the
-                        // baseline, then retry with fresh count/kernel samples.
-                        let candidate = self.current;
-                        self.attempts = self.attempts.saturating_sub(1);
-                        self.reset(now, retry_at.saturating_sub(now));
-                        if candidate > base {
-                            self.next_up_probe = Some(candidate);
-                        }
-                        return (
-                            action,
-                            Some(self.change(base, "kernel retry deferred; retaining baseline")),
-                        );
-                    }
-                }
-                if let Some(joint) = self.joint.clone() {
-                    // Second outer A/B/A: use the already-confirmed candidate
-                    // kernel, then wait for acknowledgements before sampling.
-                    self.restore_kernel(
-                        now,
-                        joint.candidate_kernel.unwrap_or(joint.base_kernel),
-                        snapshots,
-                        &mut action,
-                    );
-                } else if let Some(first) = running.first() {
-                    self.joint = Some(JointComparison {
-                        base,
-                        candidate: self.current,
-                        base_kernel: first.kernel,
-                        candidate_kernel: None,
-                        base_backing: backing.clone(),
-                        candidate_backing: None,
-                        started: now,
-                        confirmed_peak: self.peak_hps,
-                        repeat: false,
-                    });
-                }
-            }
-            (Phase::Probe { .. }, Phase::Confirm { .. }) => {
-                if let (Some(mut joint), Some(first)) = (self.joint.clone(), running.first()) {
-                    if joint.repeat
-                        && (joint.candidate_kernel != Some(first.kernel)
-                            || joint.candidate_backing.as_ref() != Some(&backing))
-                    {
-                        return self.cancel_joint(kernels, now, snapshots, cap, actual, false);
-                    }
-                    joint.candidate_kernel = Some(first.kernel);
-                    joint.candidate_backing = Some(backing);
-                    let base_kernel = joint.base_kernel;
-                    self.joint = Some(joint);
-                    self.restore_kernel(now, base_kernel, snapshots, &mut action);
-                }
-            }
-            (Phase::Confirm { .. }, Phase::Baseline) => {
-                if let Some(mut joint) = self.joint.take() {
-                    let accepted = decision
-                        .as_ref()
-                        .is_some_and(|d| d.learned.is_some() && d.threads == joint.candidate);
-                    let candidate_kernel = joint.candidate_kernel.unwrap_or(joint.base_kernel);
-                    if accepted && candidate_kernel != joint.base_kernel && !joint.repeat {
-                        joint.repeat = true;
-                        let base = joint.base;
-                        // The first outer gain is provisional. It must not raise
-                        // the profile floor if the fresh confirmation fails.
-                        self.peak_hps = joint.confirmed_peak;
-                        self.joint = Some(joint);
-                        self.reset(now, 0);
-                        self.reference_hps = None;
-                        decision =
-                            Some(self.change(base, "repeating joint configuration confirmation"));
-                    } else {
-                        let selected = if accepted {
-                            candidate_kernel
-                        } else {
-                            joint.base_kernel
-                        };
-                        self.restore_kernel(now, selected, snapshots, &mut action);
-                    }
-                }
-            }
-            (Phase::Probe { .. }, Phase::Baseline) if self.joint.is_some() => {
-                return self.cancel_joint(kernels, now, snapshots, cap, actual, allocation_limited);
-            }
-            _ => {}
-        }
-        (action, decision)
-    }
-
-    fn kernel_changed(&mut self, now: u64) {
-        // Each count window must use one path, but the profile floor is a joint
-        // throughput frontier. Retain that peak and the discovery/retention
-        // state across confirmed path changes; resetting them can cycle between
-        // a low-count kernel and a high-count kernel under completely steady load.
-        // RAM recovery/backoff timers also remain in force.
-        self.reset(now, 0);
-        self.reference_hps = None;
-    }
-
-    fn tick(
-        &mut self,
-        now: u64,
-        hashes: u64,
-        ready: bool,
-        cap: usize,
-        allocation_failed: bool,
-        actual: usize,
-    ) -> Option<Decision> {
-        let cap = cap.min(self.max);
-        self.observe_cap(now, cap);
-        if allocation_failed || actual < self.current {
-            self.reset(now, RETRY_SECS);
-            self.allocation_retry_at = now.saturating_add(RETRY_SECS);
-            return Some(self.change(actual.min(cap), "allocation limited; retry later"));
-        }
-        if self.current > cap {
-            self.reset(now, RECOVERY_SECS);
-            return Some(self.change(cap, "releasing RAM"));
-        }
-        let comparison_max = match self.phase {
-            Phase::Baseline => self.current,
-            Phase::Probe { base, .. } => base.max(self.current),
-            Phase::Confirm {
-                base, candidate, ..
-            } => base.max(candidate),
-        };
-        if comparison_max > cap {
-            self.reset(now, RECOVERY_SECS);
-            return Some(self.change(
-                self.current.min(cap),
-                "RAM limit changed; discarding comparison",
-            ));
-        }
-        if self.current == 0 {
-            if cap > 0
-                && now >= self.next_trial
-                && now >= self.allocation_retry_at
-                && now.saturating_sub(self.headroom_since) >= RECOVERY_SECS
-            {
-                self.reset(now, 0);
-                return Some(self.change(1, "RAM available; resuming"));
-            }
-            return None;
-        }
-        let floor = self.min.min(cap);
-        if self.current < floor
-            && now >= self.next_trial
-            && now >= self.allocation_retry_at
-            && now.saturating_sub(self.headroom_since) >= RECOVERY_SECS
-        {
-            self.reset(now, 0);
-            return Some(self.change(floor, "restoring configured minimum after RAM recovery"));
-        }
-        if !ready {
-            if self.sampling {
-                // Brief tip changes are part of effective mining throughput.
-                // Keep their wall time; a sustained disconnect invalidates the
-                // comparison instead of keeping an old baseline indefinitely.
-                let idle = self.idle_since.get_or_insert(now);
-                if now.saturating_sub(*idle) < 3 {
-                    return None;
-                }
-                let base = match self.phase {
-                    Phase::Probe { base, .. } | Phase::Confirm { base, .. } => Some(base),
-                    Phase::Baseline => None,
-                };
-                if let Some(base) = base {
-                    self.reset(now, RECOVERY_SECS);
-                    return Some(
-                        self.change(base.min(cap), "work interrupted; discarding comparison"),
-                    );
-                }
-            }
-            self.sampling = false;
-            // Interruptions invalidate an A/B/A comparison, but allow a new
-            // worker to finish warming before its probe window begins.
-            return None;
-        }
-        self.idle_since = None;
-        if !self.sampling {
-            self.window_start = now;
-            self.window_hashes = hashes;
-            self.sampling = true;
-            return None;
-        }
-        let elapsed = now.saturating_sub(self.window_start);
-        let completed = hashes.saturating_sub(self.window_hashes);
-        if elapsed < self.window_secs || completed < CPU_AUTOTUNE_TARGET_HASHES_PER_CANDIDATE {
-            return None;
-        }
-        let hps = completed as f64 / elapsed.max(1) as f64;
-        let sample = CpuAutotuneMeasurement {
-            hashes: completed,
-            elapsed_secs: elapsed as f64,
-            wall_secs: elapsed as f64,
-            hps,
-        };
-        self.sampling = false;
-        match self.phase {
-            Phase::Baseline => {
-                if let Some(old) = self.reference_hps {
-                    let ratio = hps / old;
-                    if (ratio - 1.0).abs() > MAX_DRIFT {
-                        self.next_trial = now;
-                        self.up = true;
-                        self.ramp = true;
-                        self.peak_hps = hps;
-                    } else {
-                        // Track gradual clock/load drift at the same operating
-                        // count without compounding the profile's tolerance.
-                        self.peak_hps *= ratio;
-                    }
-                }
-                self.peak_hps = self.peak_hps.max(hps);
-                self.reference_hps = Some(hps);
-                if now < self.next_trial || now < self.allocation_retry_at {
-                    return None;
-                }
-                let floor = self.min.min(cap);
-                // Mostly local probes, with occasional wider probes to escape
-                // a plateau. All probes still hash useful pool/daemon work.
-                let step = if (self.ramp && self.up) || self.attempts % 6 == 5 {
-                    (self.current / 2).max(1)
-                } else {
-                    1
-                };
-                let can_grow = now.saturating_sub(self.headroom_since) >= RECOVERY_SECS;
-                let farther_probe = self
-                    .next_up_probe
-                    .take()
-                    .filter(|&n| can_grow && n > self.current && n <= cap);
-                let candidate = if let Some(joint) = self.joint.as_ref().filter(|j| j.repeat) {
-                    joint.candidate
-                } else if let Some(threads) = farther_probe {
-                    threads
-                } else if self.up && can_grow && self.current < cap {
-                    self.current.saturating_add(step).min(cap)
-                } else if !self.up && self.current > floor {
-                    self.current.saturating_sub(step).max(floor)
-                } else if can_grow && self.current < cap {
-                    self.current + 1
-                } else if self.current > floor {
-                    self.current - 1
-                } else {
-                    self.next_trial = now + RETRY_SECS;
-                    return Some(Decision {
-                        threads: self.current,
-                        reason: "only feasible count; continuing to watch resources",
-                        learned: Some(vec![(self.current, sample)]),
-                    });
-                };
-                self.attempts += 1;
-                self.phase = Phase::Probe {
-                    base: self.current,
-                    before: sample,
-                };
-                Some(self.change(candidate, "measuring useful mining work"))
-            }
-            Phase::Probe { base, before } => {
-                self.phase = Phase::Confirm {
-                    base,
-                    before,
-                    candidate: self.current,
-                    candidate_sample: sample,
-                };
-                Some(self.change(base.min(cap), "checking baseline again"))
-            }
-            Phase::Confirm {
-                base,
-                before,
-                candidate,
-                candidate_sample,
-            } => {
-                let stable = (hps / before.hps - 1.0).abs() <= MAX_DRIFT;
-                let baseline = merge_cpu_autotune_measurements(before, sample);
-                let previous_peak = self.peak_hps;
-                if stable {
-                    self.peak_hps = self.peak_hps.max(baseline.hps).max(candidate_sample.hps);
-                } else {
-                    self.peak_hps = hps;
-                }
-                let quantization = 1.0 / before.elapsed_secs
-                    + 1.0 / sample.elapsed_secs
-                    + 1.0 / candidate_sample.elapsed_secs;
-                let better = stable
-                    && candidate <= cap
-                    && if candidate < base {
-                        let floor = cpu_autotune_peak_floor_frac(self.profile);
-                        // Fewer workers must beat the baseline's own window-to-window
-                        // spread, so ties inside noise don't shed workers.
-                        let noise = if floor >= 1.0 {
-                            (before.hps - sample.hps).abs()
-                        } else {
-                            0.0
-                        };
-                        candidate_sample.hps >= self.peak_hps * floor + noise
-                    } else {
-                        // Highest hashrate is the default objective: a higher
-                        // count wins on any measured gain over a stable baseline;
-                        // a step margin stalls at the foot of flat plateaus.
-                        candidate_sample.hps > baseline.hps
-                            // Discover the peak initially, then retain fewer
-                            // workers when they already satisfy the profile.
-                            // Probes still update the peak before this choice.
-                            && (self.ramp
-                                || baseline.hps
-                                    < self.peak_hps * cpu_autotune_peak_floor_frac(self.profile))
-                    };
-                // A new peak can justify probing farther even if this candidate
-                // does not justify a larger operating count. This discovers
-                // recovered capacity when load changes leave the baseline's
-                // own rate unchanged, without recommitting known higher counts.
-                let next_up_probe = (stable
-                    && !better
-                    && candidate > base
-                    && candidate < cap
-                    && candidate_sample.hps > previous_peak * 1.02 + quantization)
-                    .then(|| candidate + 1);
-                self.up = if !stable {
-                    true
-                } else if better {
-                    candidate > base
-                } else {
-                    candidate < base
-                };
-                if better || next_up_probe.is_some() {
-                    self.unsuccessful = 0;
-                } else {
-                    self.unsuccessful += 1;
-                    self.ramp = !stable;
-                }
-                self.reset(
-                    now,
-                    if self.unsuccessful < 2 {
-                        RECOVERY_SECS
-                    } else {
-                        RETRY_SECS
-                    },
-                );
-                self.next_up_probe = next_up_probe;
-                let mut decision = self.change(
-                    if better { candidate } else { base.min(cap) },
-                    if !stable {
-                        "load changed; discarding comparison"
-                    } else if better {
-                        "confirmed better setting"
-                    } else {
-                        "keeping confirmed setting"
-                    },
-                );
-                self.reference_hps = Some(if better { candidate_sample.hps } else { hps });
-                if stable {
-                    decision.learned = Some(vec![(base, baseline), (candidate, candidate_sample)]);
-                }
-                Some(decision)
-            }
-        }
-    }
 }
 
 pub(super) struct Controller {
@@ -1144,21 +519,93 @@ struct MemoryPressure {
 #[derive(Default)]
 struct PressureBackoff {
     consecutive: u8,
+    /// The count the pressure level shed to while it has stayed raised.
+    level_ceiling: Option<usize>,
 }
 
+/// Seconds of sustained memory stalls (one tick per second) before shedding a worker.
+/// Faulting in new arenas and reclaiming page cache stalls for a few seconds even
+/// when the new count fits.
+const PRESSURE_TICKS: u8 = 10;
+/// Seconds the pressure level must stay raised after a shed before the next one.
+/// The level can stay raised for minutes while the system reclaims memory.
+const LEVEL_RESHED_TICKS: u8 = 60;
+
 impl PressureBackoff {
-    fn cap(&mut self, pressure: bool, available: usize, current: usize, max: usize) -> usize {
+    /// `available` is the RAM-based arena capacity and `slots` the worker limit.
+    /// Headroom counts RAM only: a worker-slot limit is not memory pressure.
+    fn cap(
+        &mut self,
+        pressure: bool,
+        available: usize,
+        slots: usize,
+        current: usize,
+        max: usize,
+    ) -> usize {
+        self.cap_on(
+            cfg!(target_os = "macos"),
+            pressure,
+            available,
+            slots,
+            current,
+            max,
+        )
+    }
+
+    /// macOS moves memory in and out of its compressor and counts a changing share of
+    /// it as in use, so free-memory arithmetic can fall below the running count with no
+    /// pressure reported. With `level_decides`, the system's pressure level alone
+    /// decides whether running workers go; the arithmetic still limits growth.
+    fn cap_on(
+        &mut self,
+        level_decides: bool,
+        pressure: bool,
+        available: usize,
+        slots: usize,
+        current: usize,
+        max: usize,
+    ) -> usize {
         // First-touch/reclaim can briefly stall while ample clean cache remains
         // available. Require both sustained stalls and tight arena headroom.
-        self.consecutive = if pressure && available <= current {
+        self.consecutive = if pressure && (level_decides || available <= current) {
             self.consecutive.saturating_add(1)
         } else {
             0
         };
-        if self.consecutive >= 3 {
-            available.min(max).min(current.saturating_sub(1))
+        let room = if level_decides {
+            available.max(current)
         } else {
-            available.min(max)
+            available
+        };
+        let cap = room.min(slots).min(max);
+        if level_decides {
+            if !pressure {
+                self.level_ceiling = None;
+                return cap;
+            }
+            let needed = if self.level_ceiling.is_none() {
+                PRESSURE_TICKS
+            } else {
+                LEVEL_RESHED_TICKS
+            };
+            if self.consecutive < needed {
+                // No growth while the level is raised.
+                let hold = self
+                    .level_ceiling
+                    .map_or(current, |ceiling| ceiling.min(current))
+                    .max(1);
+                return cap.min(hold);
+            }
+            // One worker per wait, and the level alone never stops the last one.
+            self.consecutive = 0;
+            let ceiling = current.saturating_sub(1).max(1);
+            self.level_ceiling = Some(ceiling);
+            return cap.min(ceiling);
+        }
+        if self.consecutive >= PRESSURE_TICKS {
+            cap.min(current.saturating_sub(1))
+        } else {
+            cap
         }
     }
 }
@@ -1200,7 +647,23 @@ impl MemoryPressure {
             CloseHandle(handle);
             ok != 0 && low != 0
         }
-        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        #[cfg(target_os = "macos")]
+        {
+            // 1 is normal, 2 warn, 4 critical.
+            let mut level: libc::c_int = 0;
+            let mut size = std::mem::size_of::<libc::c_int>();
+            let ok = unsafe {
+                libc::sysctlbyname(
+                    c"kern.memorystatus_vm_pressure_level".as_ptr(),
+                    (&mut level as *mut libc::c_int).cast(),
+                    &mut size,
+                    std::ptr::null_mut(),
+                    0,
+                )
+            };
+            ok == 0 && level >= 2
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
         {
             false
         }
@@ -1243,6 +706,8 @@ impl Controller {
         backends: Vec<Arc<CpuBackend>>,
         tui: Option<TuiState>,
         telemetry: Option<crate::hardware_telemetry::Recorder>,
+        live_changes: Receiver<super::thread_control::LiveThreadChange>,
+        history: Arc<super::session::SessionHistory>,
     ) -> Result<Self> {
         let (stop, rx) = bounded(1);
         let handle = if backends.is_empty() {
@@ -1252,6 +717,7 @@ impl Controller {
                 thread::Builder::new()
                     .name("cpu-autotune".into())
                     .spawn(move || {
+                        let mut live_changes = live_changes;
                         // Arenas already exist when the controller starts. Use
                         // the same owned-memory accounting as subsequent ticks,
                         // so a large cached count does not look like newly
@@ -1259,35 +725,81 @@ impl Controller {
                         let owned = backends.iter().map(|b| b.adaptive_snapshot())
                             .filter(|s| s.running).map(|s| s.committed_bytes).sum();
                         let (min, max, available) = limits(&cfg, owned);
-                        let slots = backends.iter().filter(|b| b.adaptive_snapshot().running)
-                            .map(|b| b.worker_capacity()).min().unwrap_or(0);
                         let current = backends.iter().filter(|b| b.adaptive_snapshot().running)
                             .map(|b| b.enabled_lanes()).min().unwrap_or(0);
-                        let mut policy = Policy::new(&cfg, current, min, max);
-                        policy.observe_cap(0, available.min(slots));
-                        let mut record = read_seed(&cfg).ok();
-                        discard_cached_scores(&mut record);
                         let host = cpu_autotune_host_fingerprint();
-                        let mut kernels = super::adaptive_kernel::Tuner::new(&cfg, host.clone());
-                        kernels.monitor = telemetry
+                        let plan = super::adaptive_kernel::KernelPlan::new(&cfg, &host);
+                        let record = read_seed(&cfg).ok();
+                        let running_kernel = backends.iter().map(|b| b.adaptive_snapshot())
+                            .find(|s| s.running).map_or(CpuKernel::preferred(), |s| s.kernel);
+                        let saved = record.as_ref().and_then(|r| r.search.clone());
+                        // This machine's own earlier choice outranks the family's start.
+                        let mut has_start = record.is_some();
+                        // A count from an older version without its search
+                        // result, or from a run with other thread limits, is
+                        // only a starting point, so the search looks as widely
+                        // as on a new install.
+                        let resumable = saved.as_ref().is_some_and(|saved| {
+                            saved.bounds.is_none_or(|bounds| bounds == (min.max(1).min(max.max(1)), max.max(1)))
+                        });
+                        let quality = if resumable {
+                            SeedQuality::Measured
+                        } else if family_start(&cfg, &host, max, available) {
+                            SeedQuality::Family
+                        } else {
+                            SeedQuality::Estimate
+                        };
+                        let mut search = Search::new(Params {
+                            seed: Setting { threads: current, kernel: running_kernel },
+                            quality,
+                            min,
+                            max,
+                            down_band: 1.0 - cpu_autotune_peak_floor_frac(cfg.cpu_profile),
+                            candidates: {
+                                let mut candidates = plan.candidates_at(current);
+                                if !candidates.contains(&running_kernel) {
+                                    candidates.insert(0, running_kernel);
+                                }
+                                candidates
+                            },
+                            saved,
+                            build: BuildFacts {
+                                hot_fingerprint: crate::runtime_identity::hash_path_fingerprint(),
+                                kernel_revisions: plan.revisions(),
+                            },
+                            look_at_top: !(quality == SeedQuality::Family
+                                && start_is_core_count(&cfg, &host, current)),
+                        });
+                        let settled_recorder = telemetry.clone();
+                        let mut monitor = telemetry
                             .filter(|_| backends.len() <= seine_telemetry::tuning::MAX_MEMBERS)
                             .map(|recorder| super::adaptive_telemetry::Monitor::new(recorder, &cfg));
+                        let has_other_backends = cfg.backend_specs.iter().any(|s| s.kind != BackendKind::Cpu);
                         let started = Instant::now();
                         let mut failures = 0;
                         let mut pressure = MemoryPressure::default();
                         let mut pressure_backoff = PressureBackoff::default();
                         loop {
-                            match rx.recv_timeout(Duration::from_secs(1)) {
-                                Ok(()) | Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                                    if let Some(monitor) = &mut kernels.monitor {
-                                        let now = started.elapsed().as_secs();
-                                        let snapshots: Vec<_> = backends.iter().map(|b| b.adaptive_snapshot()).collect();
-                                        monitor.observe(now, &snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
-                                        monitor.abort(now, seine_telemetry::tuning::TrialReason::UserInterrupted);
+                            let mut manual = None;
+                            let stopping = crossbeam_channel::select! {
+                                recv(rx) -> _ => true,
+                                recv(live_changes) -> change => {
+                                    match change {
+                                        Ok(change) => manual = Some(change),
+                                        Err(_) => live_changes = crossbeam_channel::never(),
                                     }
-                                    break
+                                    false
+                                },
+                                default(Duration::from_secs(1)) => false,
+                            };
+                            if stopping {
+                                if let Some(monitor) = &mut monitor {
+                                    let now = started.elapsed().as_secs();
+                                    let snapshots: Vec<_> = backends.iter().map(|b| b.adaptive_snapshot()).collect();
+                                    monitor.observe(now, &snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
+                                    monitor.abort(now, seine_telemetry::tuning::TrialReason::UserInterrupted);
                                 }
-                                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+                                break;
                             }
                             let all_snapshots: Vec<_> =
                                 backends.iter().map(|b| b.adaptive_snapshot()).collect();
@@ -1295,7 +807,7 @@ impl Controller {
                             let snapshots: Vec<_> =
                                 all_snapshots.iter().filter(|s| s.running).collect();
                             if snapshots.is_empty() {
-                                if let Some(monitor) = &mut kernels.monitor {
+                                if let Some(monitor) = &mut monitor {
                                     let now = started.elapsed().as_secs();
                                     monitor.observe(now, &all_snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
                                     monitor.abort(now, seine_telemetry::tuning::TrialReason::ExecutionFailure);
@@ -1305,23 +817,57 @@ impl Controller {
                             let slots = backends.iter().zip(&all_snapshots)
                                 .filter(|(_, snapshot)| snapshot.running)
                                 .map(|(backend, _)| backend.worker_capacity()).min().unwrap_or(0);
+                            if backends.iter().any(|backend| backend.blake2b_seen()) {
+                                // BLAKE2b work runs every provisioned worker without
+                                // arenas. Argon2 tuning stops for the rest of the run
+                                // so thread, kernel and telemetry results stay Argon2-only.
+                                if let Some(monitor) = &mut monitor {
+                                    let now = started.elapsed().as_secs();
+                                    monitor.observe(now, &all_snapshots, crate::config::CpuAutotuneResources { parallelism: 0, total_bytes: None, available_bytes: None });
+                                    monitor.abort(now, seine_telemetry::tuning::TrialReason::ContextChanged);
+                                }
+                                if let Some(tui) = &tui {
+                                    if let Ok(mut state) = tui.lock() {
+                                        state.threads = slots * snapshots.len();
+                                        if let Some(control) = &mut state.thread_control {
+                                            control.current_threads = slots;
+                                            control.max_threads = slots;
+                                        }
+                                    }
+                                }
+                                super::ui::detail("MINER", "cpu-autotune | stopped: BLAKE2b work runs every CPU worker");
+                                break;
+                            }
                             let actual = snapshots.iter().map(|s| s.threads).min().unwrap_or(0);
                             let owned = snapshots.iter().map(|s| s.committed_bytes).sum();
                             let count_failures =
                                 snapshots.iter().map(|s| s.allocation_failures).sum();
                             let ((_, available), resources) = crate::config::cpu_autotune_capacity_snapshot(&cfg, owned);
                             let cap =
-                                pressure_backoff.cap(pressure.elevated(), available.min(slots), actual, max);
+                                pressure_backoff.cap(pressure.elevated(), available, slots, actual, max);
                             let now = started.elapsed().as_secs();
-                            if let Some(monitor) = &mut kernels.monitor { monitor.observe(now, &all_snapshots, resources); }
-                            let (action, decision) = policy.tick_joint(
-                                &mut kernels, now, &all_snapshots, cap, count_failures > failures,
-                            );
-                            if let Some(kernel) = action.kernel {
+                            if let Some(monitor) = &mut monitor { monitor.observe(now, &all_snapshots, resources); }
+                            if !has_start
+                                && snapshots.iter().all(|s| s.threads > 0 && s.warmed == s.threads)
+                            {
+                                has_start = true;
+                                if let Some(kernel) = plan.start_for(&all_snapshots) {
+                                    search.adopt_start(kernel);
+                                }
+                            }
+                            if let Some(change) = &manual {
+                                // Pin what was asked for; a passing RAM limit holds
+                                // it lower only until the RAM is free again.
+                                search.set_manual(change.threads.min(slots).min(max).max(1));
+                            }
+                            search.observe_parallelism(now, resources.parallelism);
+                            let rig_hashes = has_other_backends.then(|| history.stats.snapshot().hashes);
+                            let output = search.tick_rig(now, &all_snapshots, cap, count_failures > failures, rig_hashes);
+                            if let Some(kernel) = output.kernel {
                                 for (backend, snapshot) in backends.iter().zip(&all_snapshots) {
                                     if snapshot.running {
                                         if let Err(err) = backend.set_active_kernel(kernel) {
-                                            if let Some(monitor) = &mut kernels.monitor {
+                                            if let Some(monitor) = &mut monitor {
                                                 let observed: Vec<_> = backends.iter().map(|b| b.adaptive_snapshot()).collect();
                                                 monitor.abort_observed(started.elapsed().as_secs(), &observed, resources, seine_telemetry::tuning::TrialReason::ExecutionFailure);
                                             }
@@ -1330,64 +876,64 @@ impl Controller {
                                     }
                                 }
                             }
-                            if let Some(message) = action.message {
-                                info("MINER", format!("cpu-autotune | {message}"));
-                            }
-                            if action.reset_scores {
-                                discard_cached_scores(&mut record);
-                            }
-                            if let Some(decision) = decision {
+                            if let Some(threads) = output.threads {
                                 for (backend, snapshot) in backends.iter().zip(&all_snapshots) {
                                     if snapshot.running {
-                                        backend.set_active_threads(decision.threads);
+                                        backend.set_active_threads(threads);
                                     }
                                 }
-                                info(
-                                    "MINER",
-                                    format!(
-                                        "cpu-autotune | {}{} threads per CPU backend: {} (available={available}, effective cap={cap})",
-                                        if decision.learned.is_some() {
-                                            "done — "
-                                        } else {
-                                            ""
-                                        },
-                                        decision.threads,
-                                        decision.reason
-                                    ),
-                                );
-                                if let Some(values) = decision
-                                    .learned
-                                    .filter(|_| snapshots.len() == backends.len())
-                                {
-                                    let result = save_observation(
-                                        &cfg,
-                                        &host,
-                                        record.as_ref(),
-                                        decision.threads,
-                                        cap,
-                                        max,
-                                        &values,
-                                    );
-                                    match result {
-                                        Ok(saved) => record = Some(saved),
-                                        Err(err) => warn(
-                                            "MINER",
-                                            format!(
-                                                "cpu-autotune | could not save progress: {err:#}"
-                                            ),
-                                        ),
-                                    }
+                            }
+                            if let Some(monitor) = &mut monitor {
+                                report_trial_events(monitor, now, &output.events);
+                            }
+                            for detail in &output.details {
+                                super::ui::detail("MINER", format!("cpu-autotune | {detail}"));
+                            }
+                            for note in &output.notes {
+                                if note.success {
+                                    super::ui::note_success("CPU", &note.text);
+                                } else {
+                                    super::ui::note("CPU", &note.text);
+                                }
+                            }
+                            if output.settled_now {
+                                if let Some(recorder) = &settled_recorder {
+                                    recorder.record_settled(settled_report(&search.settled_summary(), now));
+                                }
+                            }
+                            if output.save {
+                                let saved = search.saved();
+                                if let Err(err) = save_result(&cfg, &host, max, saved) {
+                                    warn("MINER", format!("cpu-autotune | could not save progress: {err:#}"));
                                 }
                             }
                             failures = count_failures;
                             if let Some(tui) = &tui {
                                 if let Ok(mut state) = tui.lock() {
-                                    state.threads = policy.current * snapshots.len();
+                                    let threads = search.target_threads();
+                                    state.threads = threads * snapshots.len();
+                                    let status = search.status(cap);
+                                    state.tuning_status = status_text(&status);
+                                    state.threads_locked = search
+                                        .picks_count()
+                                        .then(|| threads_locked_notice(&status))
+                                        .flatten();
                                     if let Some(control) = &mut state.thread_control {
-                                        control.current_threads = policy.current;
-                                        control.max_threads = cap.max(policy.current);
+                                        let base = search.control_threads();
+                                        control.current_threads = base;
+                                        control.max_threads = cap.max(base);
                                     }
                                 }
+                            }
+                            if let Some(reply) = manual.and_then(|change| change.reply) {
+                                let _ = reply.try_send(format!("CPU threads: {}", search.target_threads()));
+                            }
+                        }
+                        // Nothing tunes after this point, so the keys must not stay locked.
+                        if let Some(tui) = &tui {
+                            if let Ok(mut state) = tui.lock() {
+                                state.tuning_status = None;
+                                state.threads_locked = None;
                             }
                         }
                     })?,
@@ -1410,47 +956,161 @@ impl Drop for Controller {
     }
 }
 
-fn discard_cached_scores(record: &mut Option<CpuAutotuneRecord>) {
-    if let Some(record) = record {
-        // A temporarily RAM-limited run must retain the higher count as a seed,
-        // even though measurements from another path cannot be reused.
-        record.measured_hps = 0.0;
-        record.measurements.clear();
-        record.mining_measurement = false;
+/// What the dashboard says about tuning, next to the thread count.
+pub(super) fn status_text(status: &Status) -> Option<String> {
+    let minutes = |secs: u64| secs.div_ceil(60).max(1);
+    Some(match status {
+        // Mining on the saved result; a different rate starts tuning, with a log line.
+        Status::Checking => "done".to_string(),
+        Status::Tuning {
+            secs_left,
+            testing_update,
+            comparing,
+            ..
+        } => {
+            let time = format!("about {} min left", minutes(*secs_left));
+            match (comparing, testing_update) {
+                (Comparing::Threads(a, b), false) => format!("{a} vs {b} threads, {time}"),
+                (Comparing::Threads(a, b), true) => {
+                    format!("update: {a} vs {b} threads, ~{} min", minutes(*secs_left))
+                }
+                (Comparing::Kernels, false) => format!("trying kernels, {time}"),
+                (Comparing::Kernels, true) => {
+                    format!("update: trying kernels, ~{} min", minutes(*secs_left))
+                }
+                (Comparing::Nothing, false) => time,
+                (Comparing::Nothing, true) => format!("testing update, {time}"),
+            }
+        }
+        Status::Rechecking { current, candidate } if current == candidate => {
+            "done, one more look at kernels".to_string()
+        }
+        Status::Rechecking { current, candidate } => {
+            format!("done, one more look at {current} vs {candidate}")
+        }
+        Status::Settled { .. } => "done".to_string(),
+        Status::LimitedByRam { best, .. } => format!("low on RAM, best is {best} threads"),
+        Status::WaitingForRam => "waiting for RAM".to_string(),
+    })
+}
+
+/// What the thread keys say while tuning picks the count. They work whenever the
+/// count is not moving: done, another look at a close result, on a saved result,
+/// and while RAM is short.
+pub(super) fn threads_locked_notice(status: &Status) -> Option<String> {
+    match status {
+        Status::Tuning { secs_left, .. } => Some(format!(
+            "Tuning is picking the thread count, about {} min left. \
+             To set it yourself, start with --threads N.",
+            secs_left.div_ceil(60).max(1)
+        )),
+        _ => None,
     }
 }
 
-fn save_observation(
+fn settled_report(summary: &SettledSummary, now: u64) -> seine_telemetry::tuning::SettledTuning {
+    use seine_telemetry::tuning::{CurvePoint, SeedSource, SettledTuning};
+    SettledTuning {
+        workers: summary.threads as u32,
+        kernel: summary.kernel.to_string(),
+        hps: summary.hps,
+        settled_ms: now.saturating_mul(1000),
+        comparisons: summary.comparisons,
+        comparing_ms: summary.comparing_secs.min(now).saturating_mul(1000),
+        ram_limited: summary.ram_limited,
+        seed: match summary.quality {
+            SeedQuality::Estimate => SeedSource::Estimate,
+            SeedQuality::Family => SeedSource::Family,
+            SeedQuality::Measured => SeedSource::Measured,
+        },
+        after_update: summary.after_update,
+        curve: summary
+            .curve
+            .iter()
+            .map(|(threads, kernel, hps)| CurvePoint {
+                workers: *threads as u32,
+                kernel: (*kernel).to_string(),
+                hps: *hps,
+            })
+            .collect(),
+    }
+}
+
+fn report_trial_events(
+    monitor: &mut super::adaptive_telemetry::Monitor,
+    now: u64,
+    events: &[TrialEvent],
+) {
+    use seine_telemetry::tuning::{
+        TrialArm, TrialDecision, TrialPolicy, TrialQuantization, TrialReason,
+    };
+    for event in events {
+        match event {
+            TrialEvent::Begin { base, candidate } => monitor.begin_settings(
+                now,
+                *base,
+                *candidate,
+                TrialPolicy {
+                    revision: 2,
+                    minimum_sample_ms: 7_000,
+                    minimum_hashes: 16,
+                    short_sample_ms: None,
+                    short_minimum_hashes: None,
+                    maximum_baseline_drift_bps: 10_000,
+                    required_gain_bps: 25,
+                    quantization: TrialQuantization::ThreeWindowHash,
+                },
+            ),
+            TrialEvent::Open => monitor.window(now),
+            TrialEvent::Discard => monitor.discard_window(),
+            TrialEvent::Close { hashes, secs } => monitor.sample(*hashes, *secs),
+            TrialEvent::End {
+                verdict,
+                applied_candidate,
+            } => {
+                let (decision, reason) = match verdict {
+                    Verdict::Better => (TrialDecision::Gain, TrialReason::Completed),
+                    Verdict::Worse | Verdict::Tie => {
+                        (TrialDecision::NoConfirmedGain, TrialReason::Completed)
+                    }
+                    Verdict::Undecided => (TrialDecision::Inconclusive, TrialReason::BaselineDrift),
+                };
+                let arm = if *applied_candidate {
+                    TrialArm::Candidate
+                } else {
+                    TrialArm::Baseline
+                };
+                monitor.finish_applied(now, decision, reason, arm);
+            }
+            TrialEvent::Abort { idle } => monitor.abort(
+                now,
+                if *idle {
+                    TrialReason::TimeBudget
+                } else {
+                    TrialReason::ContextChanged
+                },
+            ),
+        }
+    }
+}
+
+fn save_result(
     cfg: &Config,
     host: &CpuAutotuneHostFingerprint,
-    previous: Option<&CpuAutotuneRecord>,
-    selected: usize,
-    available: usize,
     max: usize,
-    values: &[(usize, CpuAutotuneMeasurement)],
-) -> Result<CpuAutotuneRecord> {
-    let memory_limited = available < max;
-    let retained = previous
-        .filter(|r| memory_limited && r.selected_threads > available && r.selected_threads <= max);
-    let selected_threads = retained.map_or(selected, |r| r.selected_threads);
-    let divisor = instances(cfg).max(1) as f64;
-    // A retained kernel winner is a count hint, not a measured mining score.
-    // Zero denotes an as-yet unmeasured selected count in this mining record.
-    let measured_hps = retained
-        .filter(|r| r.mining_measurement)
-        .map(|r| r.measured_hps)
-        .unwrap_or_else(|| {
-            values
-                .iter()
-                .find(|(n, _)| *n == selected_threads)
-                .map_or(0.0, |(_, sample)| sample.hps / divisor)
-        });
-    let mut measurements = previous
-        .filter(|r| r.mining_measurement)
-        .map(|r| r.measurements.clone())
-        .unwrap_or_default();
-    for &(n, sample) in values {
-        measurements.insert(n, sample);
+    saved: Saved,
+) -> Result<()> {
+    // A run pinned to one count (--threads) keeps an automatic run's result.
+    let pinned = |bounds: Option<(usize, usize)>| bounds.is_some_and(|(lo, hi)| lo == hi);
+    if pinned(saved.bounds)
+        && read_seed(cfg).is_ok_and(|existing| {
+            existing
+                .search
+                .as_ref()
+                .is_some_and(|search| !pinned(search.bounds))
+        })
+    {
+        return Ok(());
     }
     let record = CpuAutotuneRecord {
         schema_version: CPU_AUTOTUNE_RECORD_SCHEMA_VERSION,
@@ -1460,14 +1120,15 @@ fn save_observation(
         cpu_instances: instances(cfg),
         min_threads: cfg.cpu_autotune_min_threads,
         max_threads: max,
-        selected_threads,
-        measured_hps,
+        selected_threads: saved.threads,
+        measured_hps: saved.hps,
         autotune_secs: cfg.cpu_autotune_secs,
         host_fingerprint: host.clone(),
         timestamp_unix_secs: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
-        measurements,
-        memory_limited,
+        measurements: BTreeMap::new(),
+        memory_limited: saved.ram_limit.is_some(),
         mining_measurement: true,
+        search: Some(saved),
     };
     if let Some(parent) = cfg
         .cpu_autotune_config_path
@@ -1484,12 +1145,59 @@ fn save_observation(
         let _ = fs::remove_file(&temp);
         return Err(err.into());
     }
-    Ok(record)
+    Ok(())
 }
+
+#[cfg(test)]
+#[path = "tuner_sim.rs"]
+mod tuner_sim;
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ryzen_5000_desktops_start_at_their_cores_or_three_quarters_from_twelve() {
+        let vermeer = crate::runtime_identity::CpuIdentity {
+            vendor: Some("AuthenticAMD".into()),
+            family: Some(0x19),
+            model: Some(0x21),
+            ..Default::default()
+        };
+        assert_eq!(super::vermeer_start_for(&vermeer, Some(6)), Some(6));
+        assert_eq!(super::vermeer_start_for(&vermeer, Some(8)), Some(8));
+        assert_eq!(super::vermeer_start_for(&vermeer, Some(12)), Some(9));
+        assert_eq!(super::vermeer_start_for(&vermeer, Some(16)), Some(12));
+        let milan = crate::runtime_identity::CpuIdentity {
+            model: Some(0x01),
+            ..vermeer
+        };
+        assert_eq!(super::vermeer_start_for(&milan, Some(16)), None);
+        let rome = crate::runtime_identity::CpuIdentity {
+            family: Some(0x17),
+            model: Some(0x31),
+            ..milan.clone()
+        };
+        assert_eq!(super::rome_start_for(&rome, Some(64)), Some(48));
+        assert_eq!(super::rome_start_for(&rome, Some(96)), Some(72));
+        assert_eq!(super::rome_start_for(&rome, Some(32)), None);
+        assert_eq!(super::rome_start_for(&milan, Some(64)), None);
+    }
+
+    #[test]
+    fn intel_avx2_streaming_starts_at_every_cpu_except_core_count_models() {
+        let intel = |model| crate::runtime_identity::CpuIdentity {
+            vendor: Some("GenuineIntel".into()),
+            family: Some(6),
+            model: Some(model),
+            ..Default::default()
+        };
+        assert_eq!(super::intel_stream_start_for(&intel(0x3f), 14), None);
+        assert_eq!(super::intel_stream_start_for(&intel(0x9e), 12), None);
+        assert_eq!(super::intel_stream_start_for(&intel(0xa5), 12), None);
+        assert_eq!(super::intel_stream_start_for(&intel(0x4f), 14), Some(14));
+        assert_eq!(super::intel_stream_start_for(&intel(0x97), 12), Some(12));
+    }
 
     #[test]
     fn preparation_keeps_ram_manual_limit_separate_and_rejects_exhausted_pid_budget() {
@@ -1567,29 +1275,13 @@ mod tests {
             "PID slots are not the cache maximum"
         );
         let cached = record(&cfg, 12);
-        assert_eq!(seed_threads(Some(&cached), 1, 16, 3, 16), 3);
+        assert_eq!(seed_threads(Some(&cached), 1, 16, 3, 16, None), 3);
         assert_eq!(cfg.cpu_auto_threads_cap, 1);
         assert_eq!(
-            seed_threads(Some(&cached), 1, 16, 16, 16),
+            seed_threads(Some(&cached), 1, 16, 16, 16, None),
             12,
             "next unrestricted run recovers seed"
         );
-    }
-
-    #[test]
-    fn count_trials_never_exceed_provisioned_slots_even_with_abundant_ram() {
-        let mut p = policy(1);
-        let mut hashes = 0;
-        for now in 0..3000 {
-            hashes += p.current as u64 * 10;
-            let _ = p.tick(now, hashes, true, 2, false, p.current);
-            assert!(p.current <= 2);
-        }
-        assert_eq!(
-            p.max, 16,
-            "resource cap does not replace cache/search maximum"
-        );
-        assert_eq!(p.current, 2);
     }
 
     #[test]
@@ -1655,8 +1347,15 @@ mod tests {
             },
         ));
         backend.start().unwrap();
-        let mut controller =
-            Controller::start(cfg.clone(), vec![Arc::clone(&backend)], None, None).unwrap();
+        let mut controller = Controller::start(
+            cfg.clone(),
+            vec![Arc::clone(&backend)],
+            None,
+            None,
+            crossbeam_channel::never(),
+            Arc::new(super::super::session::SessionHistory::new()),
+        )
+        .unwrap();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             backend
                 .assign_work(WorkAssignment {
@@ -1708,208 +1407,6 @@ mod tests {
         result.unwrap();
     }
 
-    fn sample(hps: f64) -> CpuAutotuneMeasurement {
-        CpuAutotuneMeasurement {
-            hashes: (hps * 30.0) as u64,
-            elapsed_secs: 30.0,
-            wall_secs: 30.0,
-            hps,
-        }
-    }
-
-    fn policy(current: usize) -> Policy {
-        Policy::new(&super::super::tests::test_config(), current, 1, 16)
-    }
-
-    #[test]
-    fn pressure_releases_workers_and_recovery_requires_stable_headroom() {
-        let mut p = policy(8);
-        let d = p.tick(1, 0, true, 2, false, 8).unwrap();
-        assert_eq!(d.threads, 2);
-        assert!(d.learned.is_none());
-        assert_eq!(p.tick(2, 0, true, 0, false, 2).unwrap().threads, 0);
-        assert!(p.tick(3, 0, false, 8, false, 0).is_none());
-        assert!(p.tick(32, 0, false, 8, false, 0).is_none());
-        assert_eq!(p.tick(33, 0, false, 8, false, 0).unwrap().threads, 1);
-    }
-
-    #[test]
-    fn allocation_failure_cools_down_even_when_os_reports_headroom() {
-        let mut p = policy(4);
-        assert_eq!(p.tick(1, 0, false, 16, true, 0).unwrap().threads, 0);
-        assert!(p.tick(299, 0, false, 16, false, 0).is_none());
-        assert_eq!(p.tick(301, 0, false, 16, false, 0).unwrap().threads, 1);
-    }
-
-    #[test]
-    fn fluctuating_ram_does_not_shorten_allocation_failure_backoff() {
-        for initial in [0, 1] {
-            let mut p = policy(4);
-            assert_eq!(
-                p.tick(1, 0, false, 16, true, initial).unwrap().threads,
-                initial
-            );
-            p.tick(2, 0, false, 2, false, initial);
-            p.tick(3, 0, false, 16, false, initial);
-            p.min = 4;
-            assert!(p.tick(299, 0, false, 16, false, initial).is_none());
-            assert_eq!(
-                p.tick(301, 0, false, 16, false, initial).unwrap().threads,
-                if initial == 0 { 1 } else { 4 }
-            );
-        }
-    }
-
-    #[test]
-    fn pressure_backoff_requires_sustained_stalls_and_tight_headroom() {
-        let mut p = PressureBackoff::default();
-        // A user ceiling of two must not conceal room for ten arenas.
-        for _ in 0..10 {
-            assert_eq!(p.cap(true, 10, 2, 2), 2);
-        }
-        for _ in 0..10 {
-            assert_eq!(p.cap(true, 3, 2, 8), 3);
-        }
-        assert_eq!(p.cap(true, 2, 2, 8), 2);
-        assert_eq!(p.cap(true, 2, 2, 8), 2);
-        assert_eq!(p.cap(false, 2, 2, 8), 2);
-        assert_eq!(p.cap(true, 2, 2, 8), 2);
-        assert_eq!(p.cap(true, 2, 2, 8), 2);
-        assert_eq!(p.cap(true, 2, 2, 8), 1);
-        assert_eq!(p.cap(false, 10, 1, 8), 8);
-        // The byte budget can shed workers immediately, including all workers.
-        assert_eq!(p.cap(false, 1, 8, 16), 1);
-        assert_eq!(p.cap(false, 0, 1, 16), 0);
-    }
-
-    #[test]
-    fn recovered_ram_restores_configured_minimum_before_performance_trials() {
-        let mut p = policy(1);
-        p.min = 4;
-        assert!(p.tick(0, 0, false, 8, false, 1).is_none());
-        assert!(p.tick(29, 0, false, 8, false, 1).is_none());
-        assert_eq!(p.tick(30, 0, false, 8, false, 1).unwrap().threads, 4);
-    }
-
-    #[test]
-    fn higher_count_wins_on_small_stable_gain() {
-        for (candidate_hps, expected) in [(100.5, 9), (99.5, 8)] {
-            let mut p = policy(8);
-            p.phase = Phase::Confirm {
-                base: 8,
-                before: sample(100.0),
-                candidate: 9,
-                candidate_sample: sample(candidate_hps),
-            };
-            p.tick(0, 0, true, 16, false, 8);
-            let d = p.tick(30, 3000, true, 16, false, 8).unwrap();
-            assert_eq!(d.threads, expected, "candidate {candidate_hps} H/s");
-        }
-    }
-
-    #[test]
-    fn changed_load_discards_aba_result() {
-        let mut p = policy(4);
-        p.phase = Phase::Confirm {
-            base: 4,
-            before: sample(100.0),
-            candidate: 6,
-            candidate_sample: sample(150.0),
-        };
-        p.tick(0, 0, true, 16, false, 4);
-        let d = p.tick(30, 1800, true, 16, false, 4).unwrap();
-        assert_eq!(d.threads, 4);
-        assert!(d.learned.is_none());
-    }
-
-    #[test]
-    fn default_keeps_faster_workers_while_efficiency_tradeoff_is_opt_in() {
-        for profile in [
-            CpuPerformanceProfile::Balanced,
-            CpuPerformanceProfile::Throughput,
-            CpuPerformanceProfile::Efficiency,
-        ] {
-            let mut p = policy(8);
-            p.profile = profile;
-            p.phase = Phase::Confirm {
-                base: 8,
-                before: sample(100.0),
-                candidate: 4,
-                candidate_sample: sample(99.5),
-            };
-            p.tick(0, 0, true, 16, false, 8);
-            let decision = p.tick(30, 3000, true, 16, false, 8).unwrap();
-            let expected = if profile == CpuPerformanceProfile::Efficiency {
-                4
-            } else {
-                8
-            };
-            assert_eq!(decision.threads, expected, "profile {profile:?}");
-            // The throughput objective never bypasses a real memory limit.
-            assert_eq!(
-                p.tick(31, 3000, true, 2, false, expected).unwrap().threads,
-                2
-            );
-        }
-    }
-
-    #[test]
-    fn network_gap_and_new_memory_cap_invalidate_comparisons() {
-        for memory_drop in [false, true] {
-            let mut p = policy(4);
-            p.phase = Phase::Probe {
-                base: 8,
-                before: sample(100.0),
-            };
-            p.tick(0, 0, true, 16, false, 4);
-            if !memory_drop {
-                assert!(p.tick(1, 10, false, 16, false, 4).is_none());
-            }
-            let d = p
-                .tick(
-                    4,
-                    10,
-                    memory_drop,
-                    if memory_drop { 6 } else { 16 },
-                    false,
-                    4,
-                )
-                .unwrap();
-            assert!(d.learned.is_none());
-            assert!(matches!(p.phase, Phase::Baseline));
-            assert!(d.threads <= if memory_drop { 6 } else { 16 });
-        }
-    }
-
-    #[test]
-    fn productive_trials_find_peak_and_revisit_after_load_changes() {
-        let mut p = policy(4);
-        let mut hashes = 0;
-        let mut learned_high = false;
-        let mut learned_low = false;
-        let mut recovered = false;
-        for now in 0..7200 {
-            let peak: usize = if (2400..4800).contains(&now) { 2 } else { 8 };
-            let hps = (p.current.min(peak) * 20)
-                .saturating_sub(p.current.saturating_sub(peak) * 3)
-                .max(1);
-            hashes += hps as u64;
-            if let Some(d) = p.tick(now, hashes, true, 16, false, p.current) {
-                if d.learned.is_some() {
-                    learned_high |= now < 2400 && d.threads == 8;
-                    learned_low |= (2400..4800).contains(&now) && d.threads == 2;
-                    recovered |= now >= 4800 && d.threads == 8;
-                }
-            }
-        }
-        assert!(learned_high, "must explore above startup count");
-        assert!(learned_low, "must revisit under sustained competing load");
-        assert!(
-            recovered,
-            "a busy interval must not permanently cap throughput"
-        );
-    }
-
     #[test]
     fn constrained_start_provisions_stable_slots_and_keeps_user_ceiling() {
         let mut cfg = super::super::tests::test_config();
@@ -1917,11 +1414,11 @@ mod tests {
         cfg.cpu_autotune_min_threads = 1;
         let (min, max) = worker_bounds(&cfg, 16);
         assert_eq!((min, max), (1, 16));
-        assert_eq!(seed_threads(None, min, max, 1, 1), 1);
-        assert_eq!(seed_threads(None, min, max, 8, 8), 4);
+        assert_eq!(seed_threads(None, min, max, 1, 1, None), 1);
+        assert_eq!(seed_threads(None, min, max, 8, 8, None), 4);
         cfg.cpu_autotune_max_threads = Some(4);
         let (min, max) = worker_bounds(&cfg, 16);
-        let initial = seed_threads(None, min, max, 1, 1);
+        let initial = seed_threads(None, min, max, 1, 1, None);
         let backend =
             CpuBackend::adaptive(initial, max, cfg.cpu_affinity, CpuBackendTuning::default());
         assert_eq!(backend.adaptive_snapshot().threads, 1);
@@ -1937,525 +1434,67 @@ mod tests {
         );
         cfg.cpu_autotune_min_threads = 3;
         assert_eq!(worker_bounds(&cfg, 16), (3, 4));
-        assert_eq!(seed_threads(None, 3, 4, 1, 1), 1);
-        assert_eq!(seed_threads(None, 3, 4, 4, 4), 3);
+        assert_eq!(seed_threads(None, 3, 4, 1, 1, None), 1);
+        assert_eq!(seed_threads(None, 3, 4, 4, 4, None), 4);
     }
 
     #[test]
-    fn recovered_ram_interrupts_constrained_kernel_trial_before_count_growth() {
-        use crate::backend::cpu::CpuAdaptiveSnapshot;
-        use blocknet_pow_kernel::CpuKernel;
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
-            "seine-capacity-recovery-{}.json",
-            std::process::id()
-        ));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let mut kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let mut policy = Policy::new(&cfg, 1, 1, 4);
-        let base = CpuKernel::preferred();
-        let can_trial = CpuKernel::ALL
-            .into_iter()
-            .filter(|k| k.is_supported() && !matches!(k.as_str(), "scalar" | "avx512-256"))
-            .count()
-            >= 2;
-        let mut s = CpuAdaptiveSnapshot {
-            kernel: base,
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
-            threads: 1,
-            committed_bytes: CPU_LANE_MEMORY_BYTES,
-            resident_bytes: CPU_LANE_MEMORY_BYTES,
-            hashes: 0,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: 1,
-        };
-        for now in 0..34 {
-            s.hashes += 100;
-            let (action, _) = policy.tick_joint(&mut kernels, now, &[s], 1, false);
-            if let Some(kernel) = action.kernel {
-                s.kernel = kernel;
-                s.kernel_generation += 1;
+    fn where_the_pressure_level_decides_arithmetic_alone_sheds_nothing() {
+        let mut backoff = PressureBackoff::default();
+        // No pressure: running workers stay, and growth still needs room.
+        assert_eq!(backoff.cap_on(true, false, 10, 16, 11, 16), 11);
+        assert_eq!(backoff.cap_on(true, false, 13, 16, 11, 16), 13);
+        // Sustained pressure sheds even with room by the arithmetic, and
+        // nothing grows while the level is raised.
+        for _ in 0..PRESSURE_TICKS - 1 {
+            assert_eq!(backoff.cap_on(true, true, 14, 16, 11, 16), 11);
+        }
+        assert_eq!(backoff.cap_on(true, true, 14, 16, 11, 16), 10);
+        // A raised level with the arithmetic near zero still sheds one worker
+        // per wait, never all of them at once.
+        let mut backoff = PressureBackoff::default();
+        for available in [0, 1] {
+            for _ in 0..PRESSURE_TICKS - 1 {
+                assert_eq!(backoff.cap_on(true, true, available, 16, 6, 16), 6);
             }
+            assert_eq!(backoff.cap_on(true, true, available, 16, 6, 16), 5);
+            assert_eq!(backoff.cap_on(true, false, available, 16, 5, 16), 5);
         }
-        if can_trial {
-            assert_ne!(s.kernel, base);
-        }
-        let (action, _) = policy.tick_joint(&mut kernels, 34, &[s], 4, false);
-        assert_eq!(action.hold_counts, can_trial);
-        for now in 35..64 {
-            s.hashes += 100;
-            let (action, _) = policy.tick_joint(&mut kernels, now, &[s], 4, false);
-            if let Some(kernel) = action.kernel {
-                s.kernel = kernel;
-                s.kernel_generation += 1;
-            }
-        }
-        let (action, _) = policy.tick_joint(&mut kernels, 64, &[s], 4, false);
-        assert!(!action.hold_counts);
-        assert!(!kernels.is_comparing());
-        if can_trial {
-            assert_eq!(action.kernel, Some(base));
-        }
-        if let Some(kernel) = action.kernel {
-            s.kernel = kernel;
-            s.kernel_generation += 1;
-        }
-        let mut recovered = false;
-        for now in 65..155 {
-            s.hashes += 100 * policy.current as u64;
-            let (_, decision) = policy.tick_joint(&mut kernels, now, &[s], 4, false);
-            if let Some(decision) = decision {
-                assert!(decision.threads <= 4);
-                recovered |= decision.threads > 1;
-            }
-            s.threads = policy.current;
-            s.warmed = policy.current;
-            s.resident_bytes = policy.current as u64 * CPU_LANE_MEMORY_BYTES;
-            s.committed_bytes = s.resident_bytes;
-            s.backing_bytes[3] = s.resident_bytes;
-        }
-        assert!(
-            recovered,
-            "startup memory ceiling must not permanently cap workers"
-        );
-        let _ = fs::remove_file(path);
-    }
-
-    fn recovery_fixture(
-        label: &str,
-    ) -> (
-        std::path::PathBuf,
-        super::super::adaptive_kernel::Tuner,
-        Policy,
-        crate::backend::cpu::CpuAdaptiveSnapshot,
-    ) {
-        use crate::backend::cpu::CpuAdaptiveSnapshot;
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
-            "seine-recovery-{label}-{}.json",
-            std::process::id()
-        ));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let policy = Policy::new(&cfg, 1, 1, 4);
-        let snapshot = CpuAdaptiveSnapshot {
-            kernel: blocknet_pow_kernel::CpuKernel::preferred(),
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
-            threads: 1,
-            committed_bytes: CPU_LANE_MEMORY_BYTES,
-            resident_bytes: CPU_LANE_MEMORY_BYTES,
-            hashes: 0,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: 1,
-        };
-        (path, kernels, policy, snapshot)
+        // Elsewhere the arithmetic is the limit.
+        let mut backoff = PressureBackoff::default();
+        assert_eq!(backoff.cap_on(false, false, 10, 16, 11, 16), 10);
     }
 
     #[test]
-    fn recovery_without_kernel_trial_does_not_start_one_before_count_growth() {
-        let (path, mut kernels, mut policy, mut s) = recovery_fixture("idle");
-        policy.observe_cap(0, 1);
-        let mut recovered = false;
-        for now in 1..90 {
-            s.hashes += 100;
-            let (action, decision) = policy.tick_joint(&mut kernels, now, &[s], 4, false);
+    fn a_pressure_level_that_stays_raised_sheds_slowly_and_keeps_one_worker() {
+        let mut backoff = PressureBackoff::default();
+        let mut current = 8;
+        let mut sheds = Vec::new();
+        for tick in 0..1200u32 {
+            let cap = backoff.cap_on(true, true, 16, 16, current, 16);
             assert!(
-                !action.hold_counts,
-                "fresh kernel trial delayed pending count recovery"
+                sheds.is_empty() || cap <= current,
+                "grew back to {cap} under pressure at {tick}"
             );
-            assert!(!kernels.is_comparing());
-            if let Some(decision) = decision {
-                if decision.threads > 1 {
-                    assert!(now >= RECOVERY_SECS);
-                    recovered = true;
-                    break;
-                }
+            if cap < current {
+                sheds.push(tick);
+                current = cap;
             }
         }
-        assert!(recovered);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn capacity_shrinking_under_a_probe_backs_off_like_an_allocation_limit() {
-        let (path, mut kernels, mut policy, s) = recovery_fixture("shrink");
-        policy.joint = Some(JointComparison {
-            base: 1,
-            candidate: 2,
-            base_kernel: s.kernel,
-            candidate_kernel: None,
-            base_backing: vec![s.backing_bytes],
-            candidate_backing: None,
-            started: 0,
-            confirmed_peak: 0.0,
-            repeat: false,
-        });
-        // The estimate allowed two workers; it reads one once the probe allocates.
-        let (_, decision) = policy.tick_joint(&mut kernels, 10, &[s], 1, false);
-        assert_eq!(decision.expect("probe cancelled").threads, 1);
-        assert!(policy.joint.is_none());
-        assert!(policy.allocation_retry_at >= 10 + RETRY_SECS);
-        assert!(policy.next_trial >= 10 + RETRY_SECS);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn transient_headroom_does_not_abort_active_kernel_trial() {
-        let (path, mut kernels, mut policy, mut s) = recovery_fixture("spike");
-        let (start, _) = policy.tick_joint(&mut kernels, 0, &[s], 1, false);
-        if !start.hold_counts {
-            return;
+        assert_eq!(current, 1);
+        assert_eq!(sheds[0], u32::from(PRESSURE_TICKS) - 1);
+        for pair in sheds.windows(2) {
+            assert!(
+                pair[1] - pair[0] >= u32::from(LEVEL_RESHED_TICKS),
+                "{sheds:?}"
+            );
         }
-        for (now, cap) in [(1, 1), (2, 2), (3, 1)] {
-            s.hashes += 100;
-            let (action, decision) = policy.tick_joint(&mut kernels, now, &[s], cap, false);
-            assert!(action.hold_counts);
-            assert!(decision.is_none());
-            assert!(kernels.is_comparing());
+        // Once the level is normal again, the next shed waits the short time.
+        assert_eq!(backoff.cap_on(true, false, 16, 16, 4, 16), 16);
+        for _ in 0..PRESSURE_TICKS - 1 {
+            assert_eq!(backoff.cap_on(true, true, 16, 16, 4, 16), 4);
         }
-        assert!(!policy.recovery_pending);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn pending_recovery_honors_allocation_cooldown_then_resumes() {
-        let (path, mut kernels, mut policy, mut s) = recovery_fixture("allocation");
-        policy.allocation_retry_at = 200;
-        let mut recovered = false;
-        for now in 0..270 {
-            s.hashes += 100;
-            let cap = if now < 2 { 1 } else { 4 };
-            let (action, decision) = policy.tick_joint(&mut kernels, now, &[s], cap, false);
-            if let Some(kernel) = action.kernel {
-                s.kernel = kernel;
-                s.kernel_generation += 1;
-            }
-            if let Some(decision) = decision {
-                if decision.threads > 1 {
-                    assert!(now >= 200, "allocation retry cooldown was bypassed");
-                    recovered = true;
-                    break;
-                }
-            }
-        }
-        assert!(recovered);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn joint_tuner_finds_count_dependent_kernel_and_preserves_memory_safety() {
-        use crate::backend::cpu::CpuAdaptiveSnapshot;
-        use blocknet_pow_kernel::CpuKernel;
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path =
-            std::env::temp_dir().join(format!("seine-joint-test-{}.json", std::process::id()));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let mut kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let mut p = Policy::new(&cfg, 1, 1, 4);
-        p.profile = CpuPerformanceProfile::Throughput;
-        let mut snapshot = CpuAdaptiveSnapshot {
-            kernel: CpuKernel::Avx512,
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
-            threads: 1,
-            committed_bytes: CPU_LANE_MEMORY_BYTES,
-            resident_bytes: CPU_LANE_MEMORY_BYTES,
-            hashes: 0,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: 1,
-        };
-        let mut learned = Vec::new();
-        for now in 0..7200 {
-            let rates = if snapshot.kernel == CpuKernel::Avx512 {
-                [0, 110, 200, 215, 210]
-            } else {
-                [0, 100, 220, 240, 230]
-            };
-            snapshot.hashes += rates[p.current];
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[snapshot], 4, false);
-            if action.hold_counts {
-                assert!(decision.is_none());
-            }
-            if let Some(kernel) = action.kernel {
-                if kernel != snapshot.kernel {
-                    snapshot.kernel_generation += 1;
-                }
-                snapshot.kernel = kernel;
-            }
-            if let Some(decision) = decision {
-                if now > 3600 && decision.learned.is_some() {
-                    learned.push((decision.threads, snapshot.kernel));
-                }
-            }
-            snapshot.threads = p.current;
-            snapshot.warmed = p.current;
-            snapshot.resident_bytes = p.current as u64 * CPU_LANE_MEMORY_BYTES;
-            snapshot.committed_bytes = snapshot.resident_bytes;
-            snapshot.backing_bytes[3] = snapshot.resident_bytes;
-        }
-        assert!(!learned.is_empty());
-        assert!(
-            learned
-                .iter()
-                .all(|&(count, kernel)| count == 3 && kernel == CpuKernel::Avx2),
-            "{learned:?}"
-        );
-        // Force a new backing context so a kernel trial is active when RAM vanishes.
-        snapshot.backing_bytes.swap(0, 3);
-        let (action, _) = p.tick_joint(&mut kernels, 7201, &[snapshot], 4, false);
-        assert!(action.hold_counts);
-        let (action, decision) = p.tick_joint(&mut kernels, 7202, &[snapshot], 0, false);
-        assert!(!action.hold_counts);
-        assert_eq!(decision.unwrap().threads, 0);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn joint_efficiency_does_not_cycle_between_count_specific_kernels() {
-        use crate::backend::cpu::CpuAdaptiveSnapshot;
-        use blocknet_pow_kernel::CpuKernel;
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
-            "seine-joint-efficiency-{}.json",
-            std::process::id()
-        ));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let mut kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let mut p = Policy::new(&cfg, 1, 1, 8);
-        p.profile = CpuPerformanceProfile::Efficiency;
-        let mut s = CpuAdaptiveSnapshot {
-            kernel: CpuKernel::Avx512,
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
-            threads: 1,
-            committed_bytes: CPU_LANE_MEMORY_BYTES,
-            resident_bytes: CPU_LANE_MEMORY_BYTES,
-            hashes: 0,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: 1,
-        };
-        let mut confirmations = 0;
-        for now in 0..14_400 {
-            let rates = if s.kernel == CpuKernel::Avx512 {
-                [0, 35, 70, 105, 140, 160, 170, 175, 180]
-            } else {
-                [0, 30, 60, 90, 120, 150, 170, 190, 200]
-            };
-            s.hashes += rates[p.current];
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[s], 8, false);
-            if let Some(kernel) = action.kernel {
-                if kernel != s.kernel {
-                    s.kernel_generation += 1;
-                }
-                s.kernel = kernel;
-            }
-            if let Some(d) = decision {
-                if now > 7200 && d.learned.is_some() {
-                    confirmations += 1;
-                    assert_eq!(
-                        d.threads, 5,
-                        "stable count at {now}s, kernel={}, peak={}",
-                        s.kernel, p.peak_hps
-                    );
-                    assert_eq!(s.kernel, CpuKernel::Avx512);
-                }
-            }
-            s.threads = p.current;
-            s.warmed = p.current;
-            s.resident_bytes = p.current as u64 * CPU_LANE_MEMORY_BYTES;
-            s.committed_bytes = s.resident_bytes;
-            s.backing_bytes[3] = s.resident_bytes;
-        }
-        assert!(confirmations >= 10);
-        let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn kernel_score_invalidation_retains_ram_limited_startup_hint() {
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path =
-            std::env::temp_dir().join(format!("seine-joint-seed-test-{}.json", std::process::id()));
-        let mut old = record(&cfg, 8);
-        old.mining_measurement = true;
-        old.measured_hps = 200.0;
-        old.measurements.insert(8, sample(200.0));
-        let mut previous = Some(old);
-        discard_cached_scores(&mut previous);
-        let saved = save_observation(
-            &cfg,
-            &CpuAutotuneHostFingerprint::default(),
-            previous.as_ref(),
-            3,
-            3,
-            8,
-            &[(3, sample(100.0))],
-        )
-        .unwrap();
-        assert_eq!(saved.selected_threads, 8);
-        assert_eq!(saved.measured_hps, 0.0);
-        assert!(!saved.measurements.contains_key(&8));
-        assert!(saved.measurements.contains_key(&3));
-        let _ = fs::remove_file(cfg.cpu_autotune_config_path);
-    }
-
-    #[test]
-    fn kernel_change_preserves_joint_profile_frontier_and_memory_backoff() {
-        let mut p = policy(4);
-        p.reference_hps = Some(100.0);
-        p.peak_hps = 110.0;
-        p.ramp = false;
-        p.next_up_probe = Some(8);
-        p.allocation_retry_at = 500;
-        p.headroom_since = 123;
-        p.kernel_changed(200);
-        assert_eq!(p.reference_hps, None);
-        assert_eq!(p.peak_hps, 110.0);
-        assert!(!p.ramp);
-        assert_eq!(p.next_up_probe, None);
-        assert_eq!(p.allocation_retry_at, 500);
-        assert_eq!(p.headroom_since, 123);
-    }
-
-    #[test]
-    fn efficiency_keeps_qualifying_count_across_sustained_rechecks() {
-        let mut p = policy(4);
-        p.max = 8;
-        p.profile = CpuPerformanceProfile::Efficiency;
-        let rates = [0, 24, 48, 72, 96, 112, 124, 132, 136];
-        let mut hashes = 0;
-        let mut confirmations = 0;
-        for now in 0..14_400 {
-            hashes += rates[p.current];
-            if let Some(d) = p.tick(now, hashes, true, 8, false, p.current) {
-                if now >= 1800 && d.learned.is_some() {
-                    confirmations += 1;
-                    assert_eq!(d.threads, 5, "steady-state confirmation at {now}s");
-                }
-            }
-        }
-        assert!(
-            confirmations >= 20,
-            "exercise repeated rechecks, not one endpoint"
-        );
-    }
-
-    #[test]
-    fn efficiency_rediscovers_peak_after_cpu_load_changes() {
-        let mut p = policy(4);
-        p.max = 8;
-        p.profile = CpuPerformanceProfile::Efficiency;
-        let normal = [0, 24, 48, 72, 96, 112, 124, 132, 136];
-        let loaded = [0, 24, 48, 64, 60, 56, 52, 48, 44];
-        let mut hashes = 0;
-        let mut confirmations = [0; 3];
-        for now in 0..14_400 {
-            let stage = (now / 4800) as usize;
-            hashes += if stage == 1 {
-                loaded[p.current]
-            } else {
-                normal[p.current]
-            };
-            if let Some(d) = p.tick(now, hashes, true, 8, false, p.current) {
-                if now % 4800 >= 1800 && d.learned.is_some() {
-                    confirmations[stage] += 1;
-                    assert_eq!(
-                        d.threads,
-                        if stage == 1 { 2 } else { 5 },
-                        "stage {stage}, {now}s"
-                    );
-                }
-            }
-        }
-        assert!(confirmations.iter().all(|&count| count >= 5));
-    }
-
-    #[test]
-    fn efficiency_rediscovers_peak_after_ram_capacity_returns() {
-        let mut p = policy(2);
-        p.max = 8;
-        p.profile = CpuPerformanceProfile::Efficiency;
-        let rates = [0, 24, 48, 72, 96, 112, 124, 132, 136];
-        let mut hashes = 0;
-        let mut recovered = 0;
-        for now in 0..8000 {
-            let cap = if now < 4000 { 2 } else { 8 };
-            hashes += rates[p.current];
-            if let Some(d) = p.tick(now, hashes, true, cap, false, p.current) {
-                if now >= 6000 && d.learned.is_some() {
-                    recovered += 1;
-                    assert_eq!(d.threads, 5, "recovered capacity at {now}s");
-                }
-            }
-        }
-        assert!(recovered >= 5);
-    }
-
-    #[test]
-    fn efficiency_tolerance_does_not_compound_across_downward_steps() {
-        let mut p = policy(8);
-        p.profile = CpuPerformanceProfile::Efficiency;
-        let mut hashes = 0;
-        let mut last_confirmed = 8;
-        for now in 0..5000 {
-            hashes += p.current.min(8) as u64 * 20;
-            if let Some(d) = p.tick(now, hashes, true, 16, false, p.current) {
-                if d.learned.is_some() {
-                    last_confirmed = d.threads;
-                }
-            }
-        }
-        assert_eq!(
-            last_confirmed, 6,
-            "retain 75% of the measured peak, not 75% per step"
-        );
+        assert_eq!(backoff.cap_on(true, true, 16, 16, 4, 16), 3);
     }
 
     #[test]
@@ -2497,12 +1536,12 @@ mod tests {
     fn cached_start_respects_current_ram_and_explicit_bounds() {
         let cfg = super::super::tests::test_config();
         let r = record(&cfg, 12);
-        assert_eq!(seed_threads(Some(&r), 1, 16, 16, 16), 12);
-        assert_eq!(seed_threads(Some(&r), 1, 16, 3, 16), 3);
-        assert_eq!(seed_threads(Some(&r), 1, 16, 0, 16), 0);
-        assert_eq!(seed_threads(Some(&r), 1, 6, 16, 6), 6);
-        assert_eq!(seed_threads(None, 8, 16, 3, 16), 3);
-        assert_eq!(seed_threads(None, 1, 16, 16, 16), 8);
+        assert_eq!(seed_threads(Some(&r), 1, 16, 16, 16, None), 12);
+        assert_eq!(seed_threads(Some(&r), 1, 16, 3, 16, None), 3);
+        assert_eq!(seed_threads(Some(&r), 1, 16, 0, 16, None), 0);
+        assert_eq!(seed_threads(Some(&r), 1, 6, 16, 6, None), 6);
+        assert_eq!(seed_threads(None, 8, 16, 3, 16, None), 3);
+        assert_eq!(seed_threads(None, 1, 16, 16, 16, None), 8);
     }
 
     #[test]
@@ -2524,6 +1563,7 @@ mod tests {
             family: Some(0x19),
             model: Some(0x11),
             stepping: Some(1),
+            l3_cores: None,
         };
         assert!(full_count_cold_start(&cfg, &host, &identity, 32, 32));
         let mut windows = host.clone();
@@ -2591,6 +1631,7 @@ mod tests {
             family: Some(6),
             model: Some(0x8f),
             stepping: Some(1),
+            l3_cores: None,
         };
         assert!(sapphire_full_count_cold_start(
             &cfg, &host, &identity, 32, 32
@@ -2676,6 +1717,7 @@ mod tests {
             family: Some(0x1a),
             model: Some(0x02),
             stepping: Some(1),
+            l3_cores: None,
         };
         assert!(turin_full_count_cold_start(&cfg, &host, &identity, 32, 32));
         let mut windows = host.clone();
@@ -2730,27 +1772,39 @@ mod tests {
     fn full_count_seed_preserves_cache_and_transient_resource_limits() {
         let cfg = super::super::tests::test_config();
         let cached = record(&cfg, 24);
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, true, None), 32);
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, false, None), 16);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, true, None, None), 32);
+        assert_eq!(initial_threads(None, 1, 32, 32, 32, false, None, None), 16);
         assert_eq!(
-            initial_threads(Some(&cached), 1, 32, 32, 32, true, None),
+            initial_threads(Some(&cached), 1, 32, 32, 32, true, None, None),
             24
         );
-        assert_eq!(initial_threads(Some(&cached), 1, 32, 8, 32, true, None), 8);
-        assert_eq!(initial_threads(None, 1, 32, 8, 32, true, None), 8);
-        assert_eq!(initial_threads(None, 1, 32, 32, 8, true, None), 8);
-        assert_eq!(initial_threads(None, 1, 32, 0, 32, true, None), 0);
+        assert_eq!(
+            initial_threads(Some(&cached), 1, 32, 8, 32, true, None, None),
+            8
+        );
+        assert_eq!(initial_threads(None, 1, 32, 8, 32, true, None, None), 8);
+        assert_eq!(initial_threads(None, 1, 32, 32, 8, true, None, None), 8);
+        assert_eq!(initial_threads(None, 1, 32, 0, 32, true, None, None), 0);
         // Streaming cohorts start at the physical core count, bounded by RAM;
         // cached results and the validated full-count contexts still take precedence.
-        assert_eq!(initial_threads(None, 1, 32, 28, 28, false, Some(32)), 28);
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, false, Some(8)), 8);
-        assert_eq!(initial_threads(None, 1, 32, 6, 32, false, Some(8)), 6);
-        assert_eq!(initial_threads(None, 1, 32, 0, 32, false, Some(8)), 0);
         assert_eq!(
-            initial_threads(Some(&cached), 1, 32, 32, 32, false, Some(8)),
+            initial_threads(None, 1, 32, 28, 28, false, Some(32), None),
+            28
+        );
+        assert_eq!(
+            initial_threads(None, 1, 32, 32, 32, false, Some(8), None),
+            8
+        );
+        assert_eq!(initial_threads(None, 1, 32, 6, 32, false, Some(8), None), 6);
+        assert_eq!(initial_threads(None, 1, 32, 0, 32, false, Some(8), None), 0);
+        assert_eq!(
+            initial_threads(Some(&cached), 1, 32, 32, 32, false, Some(8), None),
             24
         );
-        assert_eq!(initial_threads(None, 1, 32, 32, 32, true, Some(8)), 32);
+        assert_eq!(
+            initial_threads(None, 1, 32, 32, 32, true, Some(8), None),
+            32
+        );
     }
 
     fn record(cfg: &Config, selected_threads: usize) -> CpuAutotuneRecord {
@@ -2770,6 +1824,7 @@ mod tests {
             measurements: BTreeMap::new(),
             memory_limited: false,
             mining_measurement: false,
+            search: None,
         }
     }
 
@@ -2794,25 +1849,23 @@ mod tests {
         let original = record(&cfg, 12);
         let host = original.host_fingerprint.clone();
         assert_eq!(seed_miss_reason(&original, &cfg, &host), None);
+        // These change what a result is worth, not whether it applies: the search
+        // re-checks them.
+        for (field, value) in [
+            ("build_fingerprint", serde_json::json!("new-build")),
+            ("total_memory_bytes", serde_json::json!(1024)),
+            ("kernel_version", serde_json::json!("new-kernel")),
+        ] {
+            let mut saved = serde_json::to_value(&original).unwrap();
+            saved["host_fingerprint"][field] = value;
+            let saved = serde_json::from_value(saved).unwrap();
+            assert_eq!(seed_miss_reason(&saved, &cfg, &host), None);
+        }
         for (field, value, reason) in [
+            ("cpu_brand", serde_json::json!("new-cpu"), "CPU changed"),
             (
-                "build_fingerprint",
-                serde_json::json!("new-build"),
-                "miner build changed",
-            ),
-            (
-                "cpu_brand",
-                serde_json::json!("new-cpu"),
-                "CPU or memory configuration changed",
-            ),
-            (
-                "total_memory_bytes",
-                serde_json::json!(1024),
-                "CPU or memory configuration changed",
-            ),
-            (
-                "kernel_version",
-                serde_json::json!("new-kernel"),
+                "runtime_environment",
+                serde_json::json!("new-runtime"),
                 "operating system or runtime changed",
             ),
             (
@@ -2847,659 +1900,38 @@ mod tests {
     }
 
     #[test]
-    fn constrained_progress_keeps_previous_higher_setting_on_disk() {
-        let mut cfg = super::super::tests::test_config();
-        let path = std::env::temp_dir().join(format!(
-            "seine-adaptive-{}-{}.json",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        cfg.cpu_autotune_config_path = path.clone();
-        let previous = record(&cfg, 12);
-        let saved = save_observation(
-            &cfg,
-            &previous.host_fingerprint,
-            Some(&previous),
-            3,
-            4,
-            16,
-            &[(3, sample(3.0)), (4, sample(2.9))],
-        )
-        .unwrap();
-        let parsed: CpuAutotuneRecord = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        fs::remove_file(&path).unwrap();
-        assert_eq!(saved.selected_threads, 12);
-        assert_eq!(parsed.selected_threads, 12);
-        assert!(parsed.memory_limited);
-        assert_eq!(
-            parsed.measured_hps, 0.0,
-            "do not relabel a kernel score as a mining score"
-        );
-        assert!(parsed.measurements.contains_key(&3));
-        assert_eq!(seed_threads(Some(&parsed), 1, 16, 16, 16), 12);
-    }
-    #[test]
-    fn joint_tuner_crosses_count_kernel_valley() {
-        simulate_crossover(false, false, false);
-    }
-
-    fn joint_fixture(
-        name: &str,
-        base: usize,
-        candidate: usize,
-    ) -> (
-        Policy,
-        super::super::adaptive_kernel::Tuner,
-        crate::backend::cpu::CpuAdaptiveSnapshot,
-    ) {
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path =
-            std::env::temp_dir().join(format!("seine-joint-{name}-{}.json", std::process::id()));
-        let mut p = Policy::new(&cfg, candidate, 1, 16);
-        p.phase = Phase::Probe {
-            base,
-            before: sample(10.0),
-        };
-        p.joint = Some(JointComparison {
-            base,
-            candidate,
-            base_kernel: CpuKernel::Avx512,
-            candidate_kernel: None,
-            base_backing: vec![[0, 0, 0, base as u64 * CPU_LANE_MEMORY_BYTES, 0]],
-            candidate_backing: None,
-            started: 0,
-            confirmed_peak: 10.0,
-            repeat: false,
-        });
-        let kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let s = crate::backend::cpu::CpuAdaptiveSnapshot {
-            kernel: CpuKernel::Avx2,
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, candidate as u64 * CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
-            threads: candidate,
-            committed_bytes: candidate as u64 * CPU_LANE_MEMORY_BYTES,
-            resident_bytes: candidate as u64 * CPU_LANE_MEMORY_BYTES,
-            hashes: 1000,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: candidate,
-        };
-        (p, kernels, s)
-    }
-
-    #[test]
-    fn joint_admission_keeps_baseline_until_candidate_kernel_retry_is_due() {
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        for (base, candidate) in [(8, 12), (12, 11)] {
-            let (mut p, mut kernels, mut s) = joint_fixture("retry-admission", base, candidate);
-            assert!(kernels.tick(0, &[s], true, true).hold_counts);
-            kernels.abort(1);
-            assert_eq!(kernels.retry_at_for_threads(2, &[s], candidate), Some(301));
-            assert_eq!(kernels.retry_at_for_threads(2, &[s], base), None);
-            let mut missing = s;
-            missing.running = false;
-            assert_eq!(
-                kernels.retry_at_for_threads(2, &[missing, s], candidate),
-                None
-            );
-            assert_eq!(kernels.retry_at_for_threads(301, &[s], candidate), None);
-
-            // Isolate outer admission from another baseline kernel search.
-            // Existing tests cover the inner search after a retry expires.
-            kernels.test_candidates(vec![CpuKernel::Avx2]);
-            p.joint = None;
-            p.reset(2, 0);
-            p.current = base;
-            p.up = candidate > base;
-            p.previous_cap = 16;
-            p.cap_observed = true;
-            p.headroom_since = 0;
-            p.recovery_pending = false;
-            s.threads = base;
-            s.warmed = base;
-            s.committed_bytes = base as u64 * CPU_LANE_MEMORY_BYTES;
-            s.resident_bytes = s.committed_bytes;
-            s.backing_bytes = [0, 0, 0, s.committed_bytes, 0];
-            let mut saw_deferral = false;
-            for now in 2..301 {
-                // A changed baseline rate may request earlier discovery. It
-                // must still not enter this candidate before its own cooldown.
-                s.hashes += if base == 8 && now >= 100 { 12 } else { 10 };
-                let (_, decision) = p.tick_joint(&mut kernels, now, &[s], 16, false);
-                if let Some(decision) = decision {
-                    assert_eq!(decision.threads, base);
-                    assert!(decision.learned.is_none());
-                    assert_eq!(decision.reason, "kernel retry deferred; retaining baseline");
-                    saw_deferral = true;
-                }
-                assert_eq!(p.current, base);
-                assert!(p.joint.is_none());
-                assert!(matches!(p.phase, Phase::Baseline));
-            }
-            assert!(saw_deferral);
-            assert_eq!(p.attempts, 0, "waiting is not an attempted comparison");
-            let mut resumed = false;
-            for now in 301..=332 {
-                s.hashes += if base == 8 { 12 } else { 10 };
-                if let (_, Some(decision)) = p.tick_joint(&mut kernels, now, &[s], 16, false) {
-                    assert_eq!(decision.threads, candidate);
-                    assert!(decision.learned.is_none());
-                    assert!(matches!(p.phase, Phase::Probe { .. }));
-                    resumed = true;
-                    break;
-                }
-            }
-            assert!(
-                resumed,
-                "cooldown must permit a fresh probe, not suppress it"
-            );
-        }
-    }
-
-    #[test]
-    fn joint_probe_waits_for_its_own_kernel_retry_without_learning() {
-        if !blocknet_pow_kernel::CpuKernel::Avx512.is_supported()
-            || !blocknet_pow_kernel::CpuKernel::Avx2.is_supported()
-        {
-            return;
-        }
-        let (mut p, mut kernels, mut s) = joint_fixture("retry-coverage", 8, 12);
-        assert!(kernels.tick(0, &[s], true, true).hold_counts);
-        kernels.abort(1);
-        for now in 2..100 {
-            s.hashes += 10;
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[s], 16, false);
-            assert!(
-                action.hold_counts,
-                "uncertain kernel must not be a count score"
-            );
-            assert!(decision.is_none());
-            assert!(matches!(p.phase, Phase::Probe { .. }));
-            assert!(!p.sampling);
-        }
-        assert!(
-            p.tick_joint(&mut kernels, 301, &[s], 16, false)
-                .0
-                .hold_counts
-        );
-        assert!(
-            kernels.is_comparing(),
-            "expiry must permit the kernel retry"
-        );
-        // Memory safety still interrupts the resumed kernel/count comparison.
-        let (_, decision) = p.tick_joint(&mut kernels, 302, &[s], 4, false);
-        assert!(decision.unwrap().threads <= 4);
-        assert!(p.joint.is_none());
-    }
-
-    #[test]
-    fn deferred_joint_probe_still_cancels_on_disconnect_pressure_and_deadline() {
-        if !blocknet_pow_kernel::CpuKernel::Avx512.is_supported()
-            || !blocknet_pow_kernel::CpuKernel::Avx2.is_supported()
-        {
-            return;
-        }
-        for case in [
-            "disconnect",
-            "expiry-disconnect",
-            "post-expiry-disconnect",
-            "pressure",
-            "deadline",
-            "allocation",
-        ] {
-            let (mut p, mut kernels, mut s) = joint_fixture(case, 8, 12);
-            assert!(kernels.tick(0, &[s], true, true).hold_counts);
-            kernels.abort(1);
-            assert!(p.tick_joint(&mut kernels, 2, &[s], 16, false).0.hold_counts);
-            let (now, cap, failed) = match case {
-                "disconnect" | "expiry-disconnect" | "post-expiry-disconnect" => {
-                    s.hashing = false;
-                    let start = match case {
-                        "expiry-disconnect" => 299,
-                        "post-expiry-disconnect" => 302,
-                        _ => 3,
-                    };
-                    p.tick_joint(&mut kernels, start, &[s], 16, false);
-                    (start + 3, 16, false)
-                }
-                "pressure" => (3, 4, false),
-                "allocation" => (3, 16, true),
-                _ => (JOINT_TIMEOUT_SECS, 16, false),
-            };
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[s], cap, failed);
-            let decision = decision.expect(case);
-            assert!(decision.learned.is_none(), "{case}");
-            let expected = if failed {
-                s.threads.min(cap)
-            } else {
-                8.min(cap)
-            };
-            assert_eq!(decision.threads, expected, "{case}");
-            assert_eq!(action.kernel, Some(blocknet_pow_kernel::CpuKernel::Avx512));
-            assert!(p.joint.is_none(), "{case}");
-        }
-    }
-
-    #[test]
-    fn membership_change_preserves_allocation_cooldown() {
-        let (mut p, mut kernels, mut s) = joint_fixture("membership-allocation", 8, 12);
-        p.phase = Phase::Baseline;
-        p.joint = None;
-        p.members = Some(vec![0, 1]);
-        let mut stopped = s;
-        stopped.running = false;
-        s.threads = 3;
-        s.warmed = 3;
-        s.resident_bytes = 3 * CPU_LANE_MEMORY_BYTES;
-        s.committed_bytes = s.resident_bytes;
-        s.backing_bytes[3] = s.resident_bytes;
-        let (action, decision) = p.tick_joint(&mut kernels, 100, &[s, stopped], 16, true);
-        assert!(action.reset_scores);
-        assert_eq!(decision.as_ref().unwrap().threads, 3);
-        assert!(decision.unwrap().learned.is_none());
-        assert_eq!(p.allocation_retry_at, 100 + RETRY_SECS);
-        assert_eq!(p.next_trial, 100 + RETRY_SECS);
-    }
-
-    #[test]
-    fn joint_pressure_and_allocation_failure_restore_original_kernel_without_learning() {
-        for (base, candidate, cap, failed, actual, expected) in [
-            (8, 12, 4, false, 12, 4),
-            (12, 8, 10, false, 8, 10),
-            (8, 12, 16, true, 3, 3),
-            (8, 12, 0, false, 12, 0),
-        ] {
-            let (mut p, mut kernels, mut s) = joint_fixture("pressure", base, candidate);
-            s.threads = actual;
-            let (action, decision) = p.tick_joint(&mut kernels, 100, &[s], cap, failed);
-            let d = decision.unwrap();
-            assert_eq!(action.kernel, Some(CpuKernel::Avx512));
-            assert_eq!(d.threads, expected);
-            assert!(d.learned.is_none());
-            assert!(p.joint.is_none());
-            assert!(!action.hold_counts);
-            if failed {
-                assert_eq!(p.allocation_retry_at, 100 + RETRY_SECS);
-            }
-        }
-    }
-
-    #[test]
-    fn joint_baseline_waits_for_its_kernel_ack_and_rejects_changed_backing() {
-        let (mut p, mut kernels, mut s) = joint_fixture("ack", 8, 12);
-        p.phase = Phase::Confirm {
-            base: 8,
-            before: sample(10.0),
-            candidate: 12,
-            candidate_sample: sample(11.0),
-        };
-        p.current = 8;
-        p.restoring = Some((CpuKernel::Avx512, 1));
-        s.threads = 8;
-        s.warmed = 8;
-        s.resident_bytes = 8 * CPU_LANE_MEMORY_BYTES;
-        s.committed_bytes = s.resident_bytes;
-        s.backing_bytes[3] = s.resident_bytes;
-        let (a, d) = p.tick_joint(&mut kernels, 2, &[s], 16, false);
-        assert!(a.hold_counts && d.is_none() && !p.sampling);
-        s.kernel = CpuKernel::Avx512;
-        s.kernel_ready = false;
-        assert!(p.tick_joint(&mut kernels, 3, &[s], 16, false).0.hold_counts);
-        s.kernel_ready = true;
-        assert!(p.tick_joint(&mut kernels, 4, &[s], 16, false).1.is_none());
-        assert!(p.sampling);
-        s.backing_bytes.swap(0, 3);
-        let (_, d) = p.tick_joint(&mut kernels, 5, &[s], 16, false);
-        assert!(d.unwrap().learned.is_none());
-        assert!(p.joint.is_none());
-    }
-
-    #[test]
-    fn joint_trial_timeout_and_restart_do_not_retain_partial_confirmation() {
-        let (mut p, mut kernels, s) = joint_fixture("timeout", 8, 12);
-        p.joint.as_mut().unwrap().repeat = true;
-        let (a, d) = p.tick_joint(&mut kernels, JOINT_TIMEOUT_SECS, &[s], 16, false);
-        assert_eq!(a.kernel, Some(CpuKernel::Avx512));
-        assert_eq!(d.as_ref().unwrap().threads, 8);
-        assert!(d.unwrap().learned.is_none());
-        assert!(p.joint.is_none());
-        let restarted = Policy::new(&super::super::tests::test_config(), 8, 1, 16);
-        assert!(restarted.joint.is_none() && restarted.restoring.is_none());
-    }
-
-    #[test]
-    fn joint_deadline_allows_explicitly_long_count_windows() {
-        let (mut p, mut kernels, s) = joint_fixture("long-window", 8, 12);
-        p.window_secs = 300;
-        let (_, d) = p.tick_joint(&mut kernels, JOINT_TIMEOUT_SECS, &[s], 16, false);
-        assert!(p.joint.is_some());
-        assert!(d.is_none());
-    }
-
-    #[test]
-    fn interrupted_candidate_kernel_trial_cancels_outer_comparison() {
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        let (mut p, mut kernels, mut s) = joint_fixture("disconnect", 8, 12);
-        // The inner trial's baseline is AVX2; the outer baseline is AVX-512.
-        assert!(p.tick_joint(&mut kernels, 1, &[s], 16, false).0.hold_counts);
-        s.hashing = false;
-        assert!(p.tick_joint(&mut kernels, 2, &[s], 16, false).1.is_none());
-        let (a, d) = p.tick_joint(&mut kernels, 5, &[s], 16, false);
-        assert_eq!(a.kernel, Some(CpuKernel::Avx512));
-        assert_eq!(d.as_ref().unwrap().threads, 8);
-        assert!(d.unwrap().learned.is_none());
-        assert!(p.joint.is_none());
-    }
-
-    #[test]
-    fn noisy_candidate_kernel_preserves_rates_when_outer_trial_is_cancelled() {
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        let (mut p, mut kernels, mut s) = joint_fixture("noise-diagnostic", 8, 12);
-        let mut saw_challenger = false;
-        for now in 1..200 {
-            s.hashes += if s.kernel == CpuKernel::Avx512 {
-                saw_challenger = true;
-                200
-            } else if saw_challenger {
-                120
-            } else {
-                100
-            };
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[s], 16, false);
-            if let Some(decision) = decision {
-                assert!(saw_challenger);
-                assert_eq!(decision.threads, 8);
-                assert!(decision.learned.is_none());
-                assert!(p.joint.is_none());
-                assert_eq!(action.kernel, Some(CpuKernel::Avx512));
-                let message = action.message.expect("keep the inner rejection diagnostic");
-                assert!(message.contains("baseline drifted"), "{message}");
-                assert!(message.contains("avx2 100.00"), "{message}");
-                assert!(message.contains("avx512 200.00"), "{message}");
-                assert!(message.contains("avx2 120.00"), "{message}");
-                return;
-            }
-            if let Some(kernel) = action.kernel {
-                if kernel != s.kernel {
-                    s.kernel_generation += 1;
-                }
-                s.kernel = kernel;
-            }
-        }
-        panic!("noisy comparison did not finish within the fixture budget");
-    }
-
-    #[test]
-    fn joint_tuner_rejects_a_gain_that_disappears_on_repeat() {
-        simulate_crossover(true, false, false);
-    }
-
-    #[test]
-    fn joint_restart_reuses_kernel_evidence_but_repeats_count_comparisons() {
-        simulate_crossover(false, true, false);
-    }
-
-    #[test]
-    fn joint_survivor_finishes_tuning_after_backend_quarantine() {
-        simulate_crossover(false, false, true);
-    }
-
-    fn simulate_crossover(fade_on_repeat: bool, restart_on_repeat: bool, quarantine: bool) {
-        use crate::backend::cpu::CpuAdaptiveSnapshot;
-        use blocknet_pow_kernel::CpuKernel;
-        if !CpuKernel::Avx512.is_supported() || !CpuKernel::Avx2.is_supported() {
-            return;
-        }
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_config_path = std::env::temp_dir().join(format!(
-            "seine-joint-valley-{fade_on_repeat}-{restart_on_repeat}-{quarantine}-{}.json",
-            std::process::id()
-        ));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let mut kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        let mut p = Policy::new(&cfg, 8, 1, 12);
-        let mut s = CpuAdaptiveSnapshot {
-            kernel: CpuKernel::Avx512,
-            kernel_generation: 1,
-            kernel_ready: true,
-            backing_bytes: [0, 0, 0, 8 * CPU_LANE_MEMORY_BYTES, 0],
-            running: true,
+    fn thread_keys_wait_only_while_tuning_picks_the_count() {
+        use super::super::adaptive_search::Comparing;
+        let tuning = Status::Tuning {
             threads: 8,
-            committed_bytes: 8 * CPU_LANE_MEMORY_BYTES,
-            resident_bytes: 8 * CPU_LANE_MEMORY_BYTES,
-            hashes: 0,
-            hashing: true,
-            allocation_failures: 0,
-            warmed: 8,
+            kernel: CpuKernel::Avx2Stream,
+            done: 1,
+            left: 3,
+            secs_left: 250,
+            testing_update: false,
+            comparing: Comparing::Threads(8, 10),
         };
-        let mut accepted = false;
-        let mut visited_candidate_kernel = false;
-        let mut repeats = 0;
-        let mut baseline_returns = 0;
-        let mut restarted = false;
-        let mut hash_remainder = 0;
-        let mut stopped = None;
-        for now in 0..3600 {
-            // Hundredths of H/s model the C5 crossover: full512 peaks
-            // at eight; twelve loses on full512 but wins with established AVX2.
-            if matches!(p.phase, Phase::Confirm { .. }) && p.sampling {
-                assert_eq!(
-                    s.kernel,
-                    CpuKernel::Avx512,
-                    "confirm with original baseline kernel"
-                );
-            }
-            let phase_before = p.phase;
-            let rate = if fade_on_repeat
-                && repeats > 0
-                && s.threads == 12
-                && s.kernel == CpuKernel::Avx2
-            {
-                950
-            } else if s.kernel == CpuKernel::Avx512 {
-                if s.threads <= 8 {
-                    s.threads as u64 * 121 + 4
-                } else {
-                    972 - (s.threads as u64 - 8) * 11
-                }
-            } else {
-                [
-                    0, 108, 216, 324, 432, 540, 648, 756, 865, 907, 946, 990, 1023,
-                ][s.threads]
-            };
-            hash_remainder += rate;
-            s.hashes += hash_remainder / 100;
-            hash_remainder %= 100;
-            visited_candidate_kernel |= s.threads == 12 && s.kernel == CpuKernel::Avx2;
-            let just_stopped = quarantine
-                && stopped.is_none()
-                && matches!(p.phase, Phase::Probe { .. })
-                && kernels.is_comparing();
-            if just_stopped {
-                let mut other = s;
-                // Retain stale counters and an unacknowledged path, as the
-                // controller's full backend list does after quarantine.
-                other.running = false;
-                other.hashing = false;
-                other.kernel_ready = false;
-                other.hashes = 1_000_000;
-                stopped = Some(other);
-            }
-            let snapshots = if quarantine {
-                vec![s, stopped.unwrap_or(s)]
-            } else {
-                vec![s]
-            };
-            let (action, decision) = p.tick_joint(&mut kernels, now, &snapshots, 12, false);
-            if just_stopped {
-                assert!(action.reset_scores);
-                assert!(decision.as_ref().unwrap().learned.is_none());
-                assert!(p.joint.is_none());
-                assert_eq!(p.peak_hps, 0.0, "old aggregate peak must be discarded");
-            }
-            if let Some(kernel) = action.kernel {
-                if kernel != s.kernel {
-                    s.kernel_generation += 1;
-                }
-                s.kernel = kernel;
-            }
-            if matches!(phase_before, Phase::Probe { .. })
-                && matches!(p.phase, Phase::Confirm { .. })
-            {
-                baseline_returns += 1;
-            }
-            if let Some(d) = decision {
-                if d.reason == "repeating joint configuration confirmation" {
-                    assert!(
-                        d.learned.is_none(),
-                        "first joint gain must not reach count cache"
-                    );
-                    repeats += 1;
-                    if restart_on_repeat && !restarted {
-                        // A restart can reuse the fully confirmed kernel cache,
-                        // but has no partially confirmed count winner to resume.
-                        assert!(path.exists());
-                        kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-                            &cfg,
-                            CpuAutotuneHostFingerprint::default(),
-                        );
-                        p = Policy::new(&cfg, 8, 1, 12);
-                        s.kernel = CpuKernel::Avx512;
-                        s.kernel_generation = 1;
-                        s.hashes = 0;
-                        hash_remainder = 0;
-                        restarted = true;
-                    }
-                }
-                accepted |= d.learned.is_some() && d.threads == 12 && s.kernel == CpuKernel::Avx2;
-                if repeats > 0 && d.learned.is_some() {
-                    break;
-                }
-            }
-            s.threads = p.current;
-            s.warmed = p.current;
-            s.resident_bytes = p.current as u64 * CPU_LANE_MEMORY_BYTES;
-            s.committed_bytes = s.resident_bytes;
-            s.backing_bytes[3] = s.resident_bytes;
+        let notice = threads_locked_notice(&tuning).unwrap();
+        assert!(notice.contains("about 5 min left"), "{notice}");
+        assert!(notice.contains("--threads N"), "{notice}");
+        for open in [
+            Status::Checking,
+            Status::Settled {
+                threads: 8,
+                kernel: CpuKernel::Avx2Stream,
+                hps: 7.0,
+            },
+            Status::Rechecking {
+                current: 8,
+                candidate: 9,
+            },
+            Status::LimitedByRam {
+                threads: 4,
+                best: 8,
+            },
+            Status::WaitingForRam,
+        ] {
+            assert_eq!(threads_locked_notice(&open), None, "{open:?}");
         }
-        let _ = fs::remove_file(path);
-        assert!(
-            visited_candidate_kernel,
-            "candidate count was rejected without testing its alternate kernel"
-        );
-        assert_eq!(repeats, 1 + usize::from(restart_on_repeat));
-        if quarantine {
-            assert!(stopped.is_some());
-            assert!(baseline_returns >= 2, "survivor must finish comparisons");
-        } else {
-            assert_eq!(
-                baseline_returns,
-                if restart_on_repeat { 3 } else { 2 },
-                "two complete configuration comparisons required"
-            );
-        }
-        assert_eq!(
-            accepted, !fade_on_repeat,
-            "second comparison controls promotion"
-        );
-        assert_eq!(p.current, if fade_on_repeat { 8 } else { 12 });
-        let expected_peak = if fade_on_repeat { 9.72 } else { 10.23 };
-        assert!((p.peak_hps - expected_peak).abs() < 0.04);
-        assert_eq!(
-            s.kernel,
-            if fade_on_repeat {
-                CpuKernel::Avx512
-            } else {
-                CpuKernel::Avx2
-            }
-        );
-    }
-    #[test]
-    fn joint_three_path_sweep_finishes_before_budget_and_repeats_outer_gain() {
-        let (mut p, _, mut s) = joint_fixture("three-path", 8, 12);
-        let mut cfg = super::super::tests::test_config();
-        cfg.cpu_autotune_secs = 12;
-        cfg.cpu_autotune_config_path =
-            std::env::temp_dir().join(format!("seine-joint-three-{}", std::process::id()));
-        let path = std::path::PathBuf::from(format!(
-            "{}.kernels.json",
-            cfg.cpu_autotune_config_path.display()
-        ));
-        let _ = fs::remove_file(&path);
-        let mut kernels = super::super::adaptive_kernel::Tuner::identity_neutral(
-            &cfg,
-            CpuAutotuneHostFingerprint::default(),
-        );
-        kernels.test_candidates(vec![
-            CpuKernel::Avx512,
-            CpuKernel::Avx2,
-            CpuKernel::Avx512256Stream,
-        ]);
-        p.window_secs = 60;
-        s.kernel = CpuKernel::Avx512;
-        let mut visited = false;
-        let mut repeated = false;
-        let mut accepted = false;
-        let mut finished = 0;
-        for now in 1..1800 {
-            s.hashes += match (s.threads, s.kernel) {
-                (12, CpuKernel::Avx512256Stream) => 1400,
-                (12, CpuKernel::Avx2) => 1200,
-                (12, _) => 1000,
-                _ => 1100,
-            };
-            visited |= s.threads == 12 && s.kernel == CpuKernel::Avx512256Stream;
-            let (action, decision) = p.tick_joint(&mut kernels, now, &[s], 16, false);
-            if let Some(k) = action.kernel {
-                if k != s.kernel {
-                    s.kernel_generation += 1;
-                }
-                s.kernel = k;
-            }
-            if let Some(d) = decision {
-                repeated |= d.reason == "repeating joint configuration confirmation";
-                if d.learned.is_some() && d.threads == 12 && s.kernel == CpuKernel::Avx512256Stream
-                {
-                    accepted = true;
-                    finished = now;
-                    break;
-                }
-            }
-            s.threads = p.current;
-            s.warmed = p.current;
-            s.resident_bytes = p.current as u64 * CPU_LANE_MEMORY_BYTES;
-            s.committed_bytes = s.resident_bytes;
-            s.backing_bytes[3] = s.resident_bytes;
-        }
-        let _ = fs::remove_file(path);
-        assert!(
-            visited && repeated && accepted,
-            "visited={visited} repeated={repeated} accepted={accepted}"
-        );
-        assert!(
-            finished > JOINT_TIMEOUT_SECS,
-            "fixture must exercise the formerly insufficient budget"
-        );
     }
 }
